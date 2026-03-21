@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mercurius &#8544; — AI Literacy Tutor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,300;0,600;0,700;1,300;1,600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,700;1,6..72,300;1,6..72,400;1,6..72,700&family=Petrona:ital,wght@0,400;0,600;1,400;1,600;1,700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green:        #1B4D32;
+      --green-deep:   #061509;
+      --green-dark:   #122e1e;
+      --green-mid:    #133d22;
+      --green-light:  #2a6645;
+      --green-pale:   #edf4ef;
+      --gold:         #C9922A;
+      --gold-light:   #E8B84B;
+      --gold-pale:    #fdf6e3;
+      --gold-dark:    #9a6d18;
+      --white:        #ffffff;
+      --off-white:    #faf8f4;
+      --ink:          #1a1714;
+      --muted:        #6b7a6e;
+      --rule:         #d4e0d8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--off-white);
+      color: var(--ink);
+      font-family: 'Newsreader', Georgia, serif;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--green-deep);
+      background-image:
+        radial-gradient(ellipse 70% 60% at 50% 35%, var(--green-mid) 0%, #061509 65%, #020b04 100%),
+        radial-gradient(ellipse 50% 40% at 15% 90%, rgba(100, 70, 10, 0.25) 0%, transparent 60%);
+      padding: 110px 48px 96px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle warm glow bottom-left, like the screenshot */
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      left: -80px;
+      width: 420px;
+      height: 300px;
+      background: radial-gradient(ellipse, rgba(120, 80, 10, 0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.65);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 18px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-bottom: 44px;
+      position: relative;
+    }
+
+    .hero-monogram {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: var(--green-dark);
+      border: 2px solid var(--gold);
+      box-shadow:
+        0 0 0 8px rgba(201,146,42,0.1),
+        0 0 0 16px rgba(201,146,42,0.05),
+        0 0 80px rgba(201,146,42,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 40px;
+      position: relative;
+    }
+    .hero-monogram span {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+    }
+
+    .hero h1 {
+      font-family: 'Petrona', Georgia, serif;
+      font-size: clamp(3rem, 7vw, 4.8rem);
+      font-weight: 700;
+      font-style: italic;
+      color: var(--white);
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .hero h1 .gold-word {
+      color: var(--gold-light);
+      font-style: italic;
+    }
+
+    .hero-subtitle {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.38);
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .hero-desc {
+      font-family: 'Newsreader', serif;
+      font-size: 1.15rem;
+      color: rgba(255,255,255,0.6);
+      max-width: 480px;
+      margin: 0 auto 52px;
+      line-height: 1.75;
+      position: relative;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      position: relative;
+    }
+    .hero-cta-arrow {
+      animation: nudge 1.6s ease-in-out infinite;
+      display: inline-block;
+    }
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); }
+      50%       { transform: translateX(6px); }
+    }
+
+    /* ── FEATURES SECTION ── */
+    .features-section {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 72px 48px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .section-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--gold-dark);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--rule);
+      max-width: 240px;
+    }
+
+    .features-section h2 {
+      font-family: 'Petrona', Georgia, serif;
+      font-size: 2rem;
+      font-weight: 600;
+      font-style: italic;
+      color: var(--green-dark);
+      margin-bottom: 40px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1px;
+      background: var(--rule);
+      border: 1px solid var(--rule);
+    }
+
+    .feature-card {
+      background: var(--white);
+      padding: 28px 26px;
+    }
+    .feature-card:nth-child(even) {
+      background: var(--off-white);
+    }
+
+    .feature-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: var(--gold-dark);
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--green-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-family: 'Newsreader', serif;
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── TRANSPARENCY SECTION ── */
+    .transparency-section {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 72px 48px;
+      border-bottom: 1px solid var(--rule);
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 60px;
+      align-items: start;
+    }
+
+    .transparency-section .label-col {
+      padding-top: 4px;
+    }
+
+    .transparency-section h2 {
+      font-family: 'Petrona', Georgia, serif;
+      font-size: 2rem;
+      font-weight: 600;
+      font-style: italic;
+      color: var(--green-dark);
+      margin-bottom: 20px;
+    }
+
+    .transparency-section p {
+      font-size: 1rem;
+      color: #4a5a4e;
+      line-height: 1.75;
+      margin-bottom: 16px;
+    }
+
+    .transparency-section p:last-child { margin-bottom: 0; }
+
+    .rule-box {
+      border-left: 3px solid var(--gold);
+      padding: 16px 20px;
+      background: var(--gold-pale);
+      margin-top: 20px;
+    }
+    .rule-box p {
+      font-family: 'Petrona', Georgia, serif;
+      font-style: italic;
+      font-size: 1rem;
+      color: var(--gold-dark);
+      margin: 0;
+    }
+
+    /* ── FOOTER ── */
+    .page-footer {
+      background: var(--green-deep);
+      padding: 40px 48px;
+      text-align: center;
+      border-top: 1px solid rgba(201,146,42,0.3);
+    }
+
+    .page-footer p {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.25);
+      text-transform: uppercase;
+    }
+
+    .page-footer a {
+      color: var(--gold);
+      text-decoration: none;
+    }
+    .page-footer a:hover { color: var(--gold-light); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 720px) {
+      .hero { padding: 80px 28px 72px; }
+      .features-section, .transparency-section { padding: 52px 24px; }
+      .transparency-section { grid-template-columns: 1fr; gap: 24px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .page-footer { padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-badge">Mayo AI Literacy Club</div>
+
+    <div class="hero-monogram">
+      <span>M&#8544;</span>
+    </div>
+
+    <h1>Mercurius <span class="gold-word">&#8544;</span></h1>
+    <p class="hero-subtitle">AI Literacy Tutor</p>
+    <p class="hero-desc">
+      Built to teach critical thinking about AI — not to think for you.
+      Click the gold button below to start a conversation.
+    </p>
+
+    <div class="hero-cta">
+      <span>Open the tutor in the bottom-right corner</span>
+      <span class="hero-cta-arrow">&#8594;</span>
+    </div>
+  </header>
+
+  <!-- FEATURES -->
+  <section class="features-section">
+    <div class="section-label">What Makes It Different</div>
+    <h2>Six Features Built for Critical Thinking</h2>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="feature-num">01</span>
+        <h3>Socratic Method</h3>
+        <p>Asks questions before answering. Forces you to engage with a concept before the AI weighs in.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-num">02</span>
+        <h3>Confidence Meter</h3>
+        <p>Every response shows how certain the AI is. Because confidence and accuracy are not the same thing.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-num">03</span>
+        <h3>Unpack Reasoning</h3>
+        <p>One click asks the AI to explain exactly how it arrived at any answer — including what it might be getting wrong.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-num">04</span>
+        <h3>Bias Flagging</h3>
+        <p>Surface whose perspectives might be missing from any response. Teaches you to interrogate AI outputs, not just accept them.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-num">05</span>
+        <h3>Reflection Cards</h3>
+        <p>Every five messages, a pause prompt asks you to consolidate your thinking before moving on.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-num">06</span>
+        <h3>Session Memory</h3>
+        <p>Mercurius remembers past conversations — so each session builds on the last rather than starting from zero.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRANSPARENCY -->
+  <section class="transparency-section">
+    <div class="label-col">
+      <div class="section-label">Transparency</div>
+    </div>
+    <div>
+      <h2>An AI Teaching AI Skepticism</h2>
+      <p>
+        Mercurius &#8544; is powered by Claude, a large language model made by Anthropic.
+        The irony of using an AI to teach AI skepticism is intentional — and it is a design feature, not a bug.
+      </p>
+      <p>
+        Every interaction is an opportunity to observe how AI actually behaves: how it hedges, where it sounds
+        more confident than it should be, and what it silently assumes. Mercurius is built to make those patterns
+        visible rather than hide them.
+      </p>
+      <p>
+        It will not write your essays. It will not do your homework. It will not give you answers before
+        you have done some thinking yourself.
+      </p>
+      <div class="rule-box">
+        <p>"Here to help you think, not think for you."</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="page-footer">
+    <p>
+      Powered by <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude</a> (Anthropic)
+      &nbsp;·&nbsp; Mayo AI Literacy Club &nbsp;·&nbsp; AI responses may contain errors
+    </p>
+  </footer>
+
+  <!-- Widget configuration -->
+  <script>
+    window.MercuriusConfig = {
+      apiEndpoint: 'http://localhost:3001/api/chat'
+    };
+  </script>
+  <link rel="stylesheet" href="/widget.css">
+  <script src="/widget.js"></script>
+
+</body>
+</html>
