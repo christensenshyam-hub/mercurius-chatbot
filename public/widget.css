@@ -820,6 +820,10 @@
   animation: merc-slide-down 0.2s ease;
 }
 
+.merc-quiz-panel.merc-hidden {
+  display: none;
+}
+
 .merc-quiz-header {
   display: flex;
   align-items: center;
