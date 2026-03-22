@@ -1240,3 +1240,570 @@
   }
   .merc-toggle-label { font-size: 11px; }
 }
+
+/* ============================================================
+   Achievement Toast
+   ============================================================ */
+.merc-achievement-toast {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #122e1e;
+  border: 1px solid #C9922A;
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 9999;
+  pointer-events: none;
+  min-width: 200px;
+  max-width: 300px;
+}
+.merc-achievement-toast.merc-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.merc-toast-icon { font-size: 20px; flex-shrink: 0; }
+.merc-toast-body { display: flex; flex-direction: column; gap: 2px; }
+.merc-toast-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #C9922A;
+}
+.merc-toast-name {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ============================================================
+   Onboarding Overlay
+   ============================================================ */
+.merc-onboard {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 21, 9, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.merc-onboard.merc-onboard-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+.merc-onboard-card {
+  background: #122e1e;
+  border: 1px solid rgba(201,146,42,0.35);
+  border-radius: 14px;
+  padding: 36px 32px 28px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+.merc-onboard-step { display: none; }
+.merc-onboard-step.merc-onboard-step-active { display: block; }
+.merc-onboard-icon {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #C9922A;
+  margin-bottom: 20px;
+}
+.merc-onboard-card h2 {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.merc-onboard-card p {
+  font-size: 13px;
+  color: rgba(241,245,249,0.7);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.merc-onboard-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+.merc-onboard-mode {
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: rgba(241,245,249,0.8);
+  line-height: 1.5;
+}
+.merc-onboard-mode strong { color: #C9922A; }
+.merc-onboard-name-input {
+  width: 100%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(201,146,42,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 13px;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+  outline: none;
+}
+.merc-onboard-name-input:focus { border-color: #C9922A; }
+.merc-onboard-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.merc-onboard-dots { display: flex; gap: 6px; align-items: center; flex: 1; }
+.merc-onboard-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background 0.2s;
+}
+.merc-onboard-dot.active { background: #C9922A; }
+.merc-onboard-next {
+  background: #C9922A;
+  color: #061509;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.merc-onboard-next:hover { background: #E8B84B; }
+.merc-onboard-skip {
+  background: transparent;
+  border: none;
+  color: rgba(241,245,249,0.35);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.merc-onboard-skip:hover { color: rgba(241,245,249,0.6); }
+
+/* ============================================================
+   Display Name in Sidebar
+   ============================================================ */
+.merc-display-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+.merc-display-name {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  color: rgba(241,245,249,0.3);
+  cursor: pointer;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
+}
+.merc-display-name.merc-name-set { color: rgba(201,146,42,0.8); }
+.merc-name-edit-btn {
+  background: none;
+  border: none;
+  color: rgba(241,245,249,0.25);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px;
+  line-height: 1;
+}
+.merc-name-edit-btn:hover { color: #C9922A; }
+.merc-name-inline-input {
+  flex: 1;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(201,146,42,0.4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #fff;
+  font-family: 'Josefin Sans', sans-serif;
+  outline: none;
+  min-width: 0;
+}
+.merc-name-save-btn {
+  background: #C9922A;
+  border: none;
+  border-radius: 4px;
+  color: #061509;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+/* ============================================================
+   Message-level actions (bookmark + share)
+   ============================================================ */
+.merc-msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.merc-msg:hover .merc-msg-actions { opacity: 1; }
+.merc-msg-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(241,245,249,0.35);
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.merc-msg-action-btn:hover {
+  color: #C9922A;
+  background: rgba(201,146,42,0.08);
+}
+
+/* ============================================================
+   Tool panels — shared base styles
+   ============================================================ */
+.merc-tool-panel {
+  padding: 4px 0;
+}
+.merc-tool-instructions {
+  font-size: 12px;
+  color: rgba(241,245,249,0.55);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.merc-tool-textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(201,146,42,0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: rgba(241,245,249,0.9);
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.merc-tool-textarea:focus { border-color: rgba(201,146,42,0.6); }
+.merc-tool-submit-btn {
+  background: #C9922A;
+  color: #061509;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 16px;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 16px;
+  transition: background 0.2s;
+}
+.merc-tool-submit-btn:hover { background: #E8B84B; }
+.merc-tool-submit-btn:disabled { background: rgba(201,146,42,0.35); cursor: not-allowed; }
+
+/* ============================================================
+   Fact Check result
+   ============================================================ */
+.merc-fc-result-card { padding: 4px 0; }
+.merc-fc-verdict {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.merc-fc-summary {
+  font-size: 13px;
+  color: rgba(241,245,249,0.85);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.merc-fc-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.merc-fc-item {
+  font-size: 12px;
+  color: rgba(241,245,249,0.75);
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+}
+.merc-fc-nuances {
+  font-size: 12px;
+  color: rgba(241,245,249,0.6);
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.merc-fc-lesson {
+  background: rgba(201,146,42,0.1);
+  border-left: 3px solid #C9922A;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(241,245,249,0.8);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.55;
+}
+
+/* ============================================================
+   Challenge panel
+   ============================================================ */
+.merc-challenge-card { margin-bottom: 8px; }
+.merc-challenge-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #C9922A;
+  margin-bottom: 8px;
+}
+.merc-challenge-title {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.merc-challenge-desc {
+  font-size: 12px;
+  color: rgba(241,245,249,0.65);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.merc-challenge-questions { margin-bottom: 14px; }
+.merc-challenge-q-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(241,245,249,0.4);
+  margin-bottom: 6px;
+}
+.merc-challenge-questions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.merc-challenge-questions li {
+  font-size: 12px;
+  color: rgba(241,245,249,0.75);
+  line-height: 1.5;
+  padding-left: 12px;
+  position: relative;
+}
+.merc-challenge-questions li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: #C9922A;
+}
+.merc-briefing-card { margin-top: 8px; }
+.merc-briefing-card h4 {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.merc-briefing-date {
+  font-size: 11px;
+  color: #C9922A;
+  margin-bottom: 12px;
+}
+.merc-briefing-bullet {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+}
+.merc-briefing-bullet strong {
+  display: block;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #C9922A;
+  margin-bottom: 4px;
+}
+.merc-briefing-bullet p {
+  font-size: 12px;
+  color: rgba(241,245,249,0.75);
+  line-height: 1.55;
+  margin: 0;
+}
+.merc-briefing-key-q {
+  background: rgba(201,146,42,0.1);
+  border-left: 3px solid #C9922A;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(241,245,249,0.85);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   Curriculum panel
+   ============================================================ */
+.merc-curriculum-panel { display: flex; flex-direction: column; gap: 8px; }
+.merc-unit-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.merc-unit-card:hover {
+  background: rgba(201,146,42,0.08);
+  border-color: rgba(201,146,42,0.3);
+}
+.merc-unit-card.merc-unit-in-progress { border-color: rgba(96,165,250,0.4); }
+.merc-unit-card.merc-unit-complete { border-color: rgba(74,222,128,0.4); }
+.merc-unit-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: #C9922A;
+  flex-shrink: 0;
+  width: 20px;
+}
+.merc-unit-body { flex: 1; min-width: 0; }
+.merc-unit-title {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.merc-unit-desc {
+  font-size: 11px;
+  color: rgba(241,245,249,0.5);
+  line-height: 1.45;
+}
+.merc-unit-status {
+  font-size: 10px;
+  color: rgba(241,245,249,0.4);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Achievements panel
+   ============================================================ */
+.merc-achievements-panel { padding: 4px 0; }
+.merc-achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.merc-achievement-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  text-align: center;
+  cursor: default;
+  transition: background 0.2s;
+}
+.merc-achievement-earned {
+  background: rgba(201,146,42,0.1);
+  border-color: rgba(201,146,42,0.25);
+}
+.merc-achievement-locked {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.06);
+  opacity: 0.5;
+}
+.merc-achievement-icon { font-size: 20px; }
+.merc-achievement-name {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(241,245,249,0.75);
+  line-height: 1.3;
+}
+
+/* ============================================================
+   Bookmarks panel
+   ============================================================ */
+.merc-bookmarks-panel { display: flex; flex-direction: column; gap: 8px; }
+.merc-bookmark-item {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.merc-bookmark-text {
+  font-size: 12px;
+  color: rgba(241,245,249,0.75);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.merc-bookmark-actions { display: flex; gap: 8px; }
+.merc-bookmark-copy, .merc-bookmark-delete {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: rgba(241,245,249,0.5);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 8px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.merc-bookmark-copy:hover { color: #C9922A; border-color: rgba(201,146,42,0.4); }
+.merc-bookmark-delete:hover { color: #f87171; border-color: rgba(248,113,113,0.4); }

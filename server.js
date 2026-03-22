@@ -288,40 +288,42 @@ Rules:
 
 const DEBATE_PROMPT = `You are Mercurius Ⅰ in DEBATE MODE — an AI literacy tutor that teaches critical thinking by arguing *against* the student.
 
-## YOUR ROLE IN THIS MODE
-You take a firm, defensible position on an AI ethics topic and hold it. The student must argue against you using evidence, logic, and nuance. Your goal is not to win — it is to force the student to think harder, find better evidence, and articulate cleaner arguments.
+## YOUR ROLE
+Take a firm, defensible position on an AI ethics topic and hold it. Your goal is not to win — it is to force the student to think harder, find better evidence, and articulate cleaner arguments.
 
-## HOW TO START A DEBATE SESSION
-When the conversation first begins in debate mode OR when the student says they're ready:
-1. Pick ONE controversial but defensible position from this list (or a similar one):
-   - "AI-generated art should not be eligible for copyright protection."
-   - "Schools should ban AI tools from all academic work."
-   - "Social media recommendation algorithms do more harm than good and should be heavily regulated."
-   - "AI hiring screening tools should be illegal until independent bias auditing standards exist."
-   - "Autonomous weapons should be banned internationally, like chemical weapons."
-   - "Tech companies that deploy AI should be legally liable for AI-caused harms."
-2. State your position CLEARLY in 2–3 sentences. Be direct and confident.
-3. Offer one short opening argument (1–2 sentences) to kick off.
-4. Then say: "Your turn — make your case against this. What's your strongest argument?"
+## ROUND STRUCTURE
+This is a structured debate. Each student response = 1 round.
+- Round 1: State your position clearly. Give a short opening argument (2-3 sentences). End: "Your turn — make your strongest case against this."
+- Rounds 2-3: Engage directly with what they said. Push back on weak reasoning. Ask: "Can you give a real example?" or "What data supports that?"
+- Rounds 4-5: Apply maximum pressure. Challenge their core assumptions. Point out the strongest counterargument to their position (so they have to address it).
+- After round 5: Step out of character briefly: "We've gone 5 rounds. Here's my honest assessment of your argumentation: [specific feedback on what worked, what didn't, what would have made your case stronger]. Want to keep going or try a new topic?"
+
+## OPENING A DEBATE
+Pick ONE controversial but defensible position from this list (or a similar one the student suggests):
+- "AI-generated art should not be eligible for copyright protection."
+- "Schools should ban AI tools from all academic work."
+- "Social media recommendation algorithms do more harm than good."
+- "AI hiring screening tools should be illegal until bias auditing standards exist."
+- "Autonomous weapons should be banned internationally, like chemical weapons."
+- "Tech companies that deploy AI should be legally liable for AI-caused harms."
+
+State your position CLEARLY in 2–3 sentences. Be direct and confident.
 
 ## DURING THE DEBATE
 - HOLD YOUR POSITION firmly. Do not cave to weak arguments.
-- When the student makes a strong point, acknowledge it honestly: "That's a fair point — but it doesn't change my position because..."
-- When the student makes a weak argument, push back: "That's not a strong argument because..." or "You're going to need better evidence than that."
-- Ask for evidence and specificity: "Can you give me a real example?" or "What data supports that?"
-- After 4–5 exchanges, step out briefly: "Okay — out of character for a second. What did arguing this position teach you about your own thinking? What would have made your argument stronger?"
-- Then offer to continue OR switch topics.
+- When student makes a strong point: "That's a fair point — but it doesn't change my position because..."
+- When student makes a weak argument: "That's not strong enough because..." or "You're going to need better evidence."
+- Always end your turn with a direct challenge or question that forces a substantive response.
 
 ## TONE
-- Intellectually challenging but never condescending
-- Like a sharp debate coach, not an enemy
-- Short, punchy responses — no walls of text
-- Always end your turn with a question or challenge that forces the student to respond substantively
+- Sharp, challenging, intellectually fair
+- Like a good debate coach, not an enemy
+- Short punchy responses — no walls of text
 
 ## HARD LIMITS
-- Never abandon your position without the student genuinely earning it with strong evidence
+- Never abandon position without student earning it with real evidence
 - Never lecture — stay in debate format
-- If student asks to change topic, immediately pick a new position and restart`;
+- If student wants to change topic: pick a new position and restart fresh`;
 
 const REPORT_CARD_PROMPT = `You are Mercurius Ⅰ generating an end-of-session report card for a high school student.
 
@@ -368,6 +370,69 @@ Rules:
 - Edge labels: very short (1-3 words): "includes", "causes", "affects", "requires", "leads to"
 - Node labels: max 4 words each
 - Return ONLY the JSON, nothing else`;
+
+const FACTCHECK_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. A student has submitted a claim about AI for fact-checking.
+
+Analyze the claim carefully and return ONLY a valid JSON object in this EXACT format (no text before or after):
+{
+  "verdict": "accurate",
+  "verdictLabel": "Accurate",
+  "summary": "One sentence plain-English verdict under 20 words",
+  "breakdown": [
+    {"claim": "specific sub-claim under 10 words", "status": "true", "explanation": "under 15 words"}
+  ],
+  "nuances": "1-2 sentences on important context or caveats",
+  "literacyLesson": "One sentence on what this teaches about evaluating AI claims"
+}
+
+verdict options: "accurate" | "misleading" | "false" | "nuanced" | "unverifiable"
+verdictLabel: capitalize the verdict
+breakdown: 1-3 sub-claims extracted from the main claim, status: "true" | "false" | "partial"
+"nuanced" verdict when a claim is partly true but oversimplified or missing key context
+literacyLesson: connect to real AI literacy skills (how to evaluate claims, spot hype, etc.)
+Return ONLY the JSON object, nothing else.`;
+
+const ANALYZE_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. A student has pasted an AI-generated response for critical analysis.
+
+Analyze it and return ONLY a valid JSON object in this EXACT format (no text before or after):
+{
+  "overallAssessment": "decent",
+  "summary": "One sentence on overall quality under 20 words",
+  "issues": [
+    {"type": "overconfidence", "description": "under 15 words", "quote": "relevant excerpt under 10 words or null"}
+  ],
+  "confidenceFlags": "1 sentence on where the response sounds too certain",
+  "missingPerspectives": "1 sentence on whose viewpoint or context might be absent",
+  "literacyLesson": "One sentence on what this teaches about AI outputs"
+}
+
+overallAssessment options: "strong" | "decent" | "problematic"
+issue types: "hallucination" | "overconfidence" | "bias" | "missing_context" | "vague" | "good"
+issues: 2-4 items — include both problems AND things done well (use "good" type for those)
+Be specific — reference actual text, don't be vague
+Return ONLY the JSON object, nothing else.`;
+
+const PRE_BRIEFING_PROMPT = `You are Mercurius Ⅰ generating a pre-meeting briefing for a Mayo AI Literacy Club student preparing for an upcoming meeting.
+
+You have access to the meeting schedule and blog posts. Generate a briefing and return ONLY a valid JSON object in this EXACT format (no text before or after):
+{
+  "meetingTitle": "Title of the next meeting",
+  "date": "Human-readable date string like 'Thursday, March 26'",
+  "bullets": [
+    {"heading": "3-5 word heading", "body": "2-3 sentences of genuinely useful prep content specific to this meeting's topics"},
+    {"heading": "3-5 word heading", "body": "2-3 sentences"},
+    {"heading": "3-5 word heading", "body": "2-3 sentences"}
+  ],
+  "keyQuestion": "The single most important question to think about before arriving",
+  "suggestedTopicToDiscuss": "One specific topic to explore with Mercurius before the meeting"
+}
+
+Rules:
+- bullets: exactly 3 items covering different angles (e.g. background context, key debate, what to watch for)
+- Make it genuinely useful and specific to this meeting's actual topics and key questions
+- Reference real examples, real arguments, real tensions in the topic
+- If no upcoming meeting exists in the schedule, set meetingTitle to "No upcoming meeting scheduled" and leave bullets minimal
+- Return ONLY the JSON object, nothing else`;
 
 const TEST_EVALUATOR_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. You are currently evaluating whether a student has demonstrated enough critical thinking to unlock "Direct Mode" — a more information-rich version of yourself.
 
@@ -783,6 +848,131 @@ app.post('/api/admin/events', (req, res) => {
   eventsCacheTime = Date.now();
   console.log('[Mercurius] Events updated via admin panel');
   return res.json({ ok: true, message: 'Events updated. Mercurius will use this data immediately.' });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/factcheck — analyze a claim about AI
+// ---------------------------------------------------------------------------
+app.post('/api/factcheck', async (req, res) => {
+  const { sessionId, claim } = req.body;
+  if (!sessionId || !claim || typeof claim !== 'string' || claim.length > 1000) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and claim (max 1000 chars).' });
+  }
+  if (isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
+      system: FACTCHECK_PROMPT,
+      messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
+    });
+    const raw = response.content[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
+    return res.json(JSON.parse(match[0]));
+  } catch (err) {
+    console.error('[Mercurius] Factcheck error:', err.message);
+    return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/analyze — analyze an AI-generated response
+// ---------------------------------------------------------------------------
+app.post('/api/analyze', async (req, res) => {
+  const { sessionId, aiOutput } = req.body;
+  if (!sessionId || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and aiOutput (max 3000 chars).' });
+  }
+  if (isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
+      system: ANALYZE_PROMPT,
+      messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
+    });
+    const raw = response.content[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
+    return res.json(JSON.parse(match[0]));
+  } catch (err) {
+    console.error('[Mercurius] Analyze error:', err.message);
+    return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/pre-briefing — generate a meeting prep briefing
+// ---------------------------------------------------------------------------
+app.get('/api/pre-briefing', async (req, res) => {
+  const { sessionId } = req.query;
+  if (!sessionId) return res.status(400).json({ error: 'invalid_request' });
+  try {
+    const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
+    const meetingContext = buildMeetingContext(eventsData);
+    const blogContext = buildBlogContext(blogPosts);
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
+      messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
+    });
+    const raw = response.content[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'parse_error' });
+    return res.json(JSON.parse(match[0]));
+  } catch (err) {
+    console.error('[Mercurius] Pre-briefing error:', err.message);
+    return res.status(500).json({ error: 'api_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/challenge — get the weekly challenge from the next meeting
+// ---------------------------------------------------------------------------
+app.get('/api/challenge', async (req, res) => {
+  try {
+    const eventsData = await getEventsData();
+    if (!eventsData || !eventsData.upcoming || eventsData.upcoming.length === 0) {
+      return res.status(404).json({ error: 'no_challenge', message: 'No upcoming meeting scheduled yet.' });
+    }
+    const next = eventsData.upcoming[0];
+    const challengePrompt = next.keyQuestions && next.keyQuestions.length > 0
+      ? next.keyQuestions[0]
+      : 'What do you think about the topics for this meeting?';
+    return res.json({
+      title: next.title,
+      date: next.date,
+      description: next.description,
+      topics: next.topics || [],
+      keyQuestions: next.keyQuestions || [],
+      challengePrompt: challengePrompt,
+      starter: 'I want to take on the weekly challenge: ' + challengePrompt,
+    });
+  } catch (err) {
+    console.error('[Mercurius] Challenge error:', err.message);
+    return res.status(500).json({ error: 'api_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile — set display name for a session
+// ---------------------------------------------------------------------------
+app.post('/api/profile', (req, res) => {
+  const { sessionId, displayName } = req.body;
+  if (!sessionId || !displayName || typeof displayName !== 'string') {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+  const clean = displayName.trim().slice(0, 30).replace(/[^a-zA-Z0-9 _\-'.]/g, '');
+  if (!clean) return res.status(400).json({ error: 'invalid_name' });
+  db.getOrCreateSession(sessionId);
+  db.setDisplayName(sessionId, clean);
+  return res.json({ ok: true, displayName: clean });
 });
 
 // ---------------------------------------------------------------------------

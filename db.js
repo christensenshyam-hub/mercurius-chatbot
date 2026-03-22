@@ -51,6 +51,7 @@ db.exec(`
   if (!cols.includes('streak'))             db.exec("ALTER TABLE sessions ADD COLUMN streak INTEGER DEFAULT 1");
   if (!cols.includes('last_session_date'))  db.exec("ALTER TABLE sessions ADD COLUMN last_session_date TEXT DEFAULT NULL");
   if (!cols.includes('total_session_count'))db.exec("ALTER TABLE sessions ADD COLUMN total_session_count INTEGER DEFAULT 1");
+  if (!cols.includes('display_name')) db.exec("ALTER TABLE sessions ADD COLUMN display_name TEXT DEFAULT NULL");
 })();
 
 module.exports = {
@@ -193,7 +194,7 @@ module.exports = {
   // Leaderboard: anonymous
   getLeaderboard() {
     return db.prepare(`
-      SELECT session_id, streak, message_count, unlocked, last_session_date, topics
+      SELECT session_id, streak, message_count, unlocked, last_session_date, topics, display_name
       FROM sessions
       WHERE message_count > 2
       ORDER BY streak DESC, message_count DESC
@@ -205,6 +206,7 @@ module.exports = {
       messages: r.message_count || 0,
       unlocked: !!(r.unlocked),
       lastActive: r.last_session_date,
+      name: r.display_name || null,
     }));
   },
 
@@ -238,6 +240,15 @@ module.exports = {
         lastActive: s.last_session_date,
       })),
     };
+  },
+
+  // Display name
+  getDisplayName(sessionId) {
+    const r = db.prepare('SELECT display_name FROM sessions WHERE session_id = ?').get(sessionId);
+    return r ? r.display_name : null;
+  },
+  setDisplayName(sessionId, name) {
+    db.prepare('UPDATE sessions SET display_name = ? WHERE session_id = ?').run(name, sessionId);
   },
 
   // Events — single-row store (id always = 1)

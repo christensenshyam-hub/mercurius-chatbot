@@ -26,6 +26,11 @@
   var REPORT_CARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/report-card');
   var CONCEPT_MAP_ENDPOINT = API_ENDPOINT.replace('/chat', '/concept-map');
   var LEADERBOARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/leaderboard');
+  var FACTCHECK_ENDPOINT = API_ENDPOINT.replace('/chat', '/factcheck');
+  var ANALYZE_ENDPOINT = API_ENDPOINT.replace('/chat', '/analyze');
+  var CHALLENGE_ENDPOINT = API_ENDPOINT.replace('/chat', '/challenge');
+  var PRE_BRIEFING_ENDPOINT = API_ENDPOINT.replace('/chat', '/pre-briefing');
+  var PROFILE_ENDPOINT = API_ENDPOINT.replace('/chat', '/profile');
 
   // =========================================================================
   // 2. Session ID — persist across browser sessions using localStorage
@@ -84,6 +89,29 @@
   var voiceActive = false;
   var voiceRecognition = null;
   var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'leaderboard' | 'summary' | null
+  var debateRound = 0;
+  var CURRICULUM_UNITS = [
+    { id: 'unit_1', number: '01', title: 'How AI Actually Works', description: 'LLMs, training data, next-token prediction, and why AI sounds confident but can be wrong.', starter: 'I want to start Unit 1: How AI Actually Works. Walk me through what is actually happening when an AI generates a response \u2014 what is next-token prediction?' },
+    { id: 'unit_2', number: '02', title: 'Bias & Fairness', description: 'Where AI bias comes from, real examples like COMPAS and facial recognition, and why "objective algorithm" is a myth.', starter: 'I want to explore Unit 2: Bias & Fairness. Where does bias actually come from in AI systems \u2014 and why is the phrase "objective algorithm" misleading?' },
+    { id: 'unit_3', number: '03', title: 'AI in Society', description: 'AI in hiring, healthcare, criminal justice, and education \u2014 who benefits, who gets harmed, and what the stakes are.', starter: 'I want to dive into Unit 3: AI in Society. What are the biggest real-world impacts AI is having right now, and who is most affected?' },
+    { id: 'unit_4', number: '04', title: 'Prompt Engineering', description: 'How framing changes outputs, few-shot prompting, and how to use AI tools critically rather than passively.', starter: 'I want to work through Unit 4: Prompt Engineering. What do I need to understand to use AI more effectively and critically \u2014 not just get faster answers?' },
+    { id: 'unit_5', number: '05', title: 'Ethics & Alignment', description: 'The hardest problems: alignment, autonomous weapons, corporate responsibility, and what happens when AI fails.', starter: 'I want to explore Unit 5: Ethics & Alignment. What are the most important ethical problems in AI development right now, and why are they so hard to solve?' }
+  ];
+  var ACHIEVEMENTS_DEF = [
+    { id: 'first_chat', icon: '\uD83D\uDCAC', name: 'First Conversation', desc: 'Sent your first message to Mercurius' },
+    { id: 'critical_thinker', icon: '\uD83E\uDDE0', name: 'Critical Thinker', desc: 'Unlocked Direct Mode by demonstrating genuine thinking' },
+    { id: 'debate_starter', icon: '\u2694\uFE0F', name: 'Debate Starter', desc: 'Entered Debate Mode and challenged Mercurius' },
+    { id: 'fact_checker', icon: '\uD83D\uDD0D', name: 'Fact Checker', desc: 'Used the Fact Check tool to verify an AI claim' },
+    { id: 'analyst', icon: '\uD83E\uDD16', name: 'AI Output Analyst', desc: 'Analyzed an AI-generated response critically' },
+    { id: 'meeting_prepper', icon: '\uD83D\uDCCB', name: 'Meeting Prepper', desc: 'Generated a pre-meeting briefing' },
+    { id: 'bookmarker', icon: '\uD83D\uDD16', name: 'Bookmarker', desc: 'Saved your first conversation highlight' },
+    { id: 'streak_3', icon: '\uD83D\uDD25', name: '3-Day Streak', desc: 'Learned with Mercurius 3 days in a row' },
+    { id: 'streak_7', icon: '\u2B50', name: 'Weekly Scholar', desc: 'Kept a 7-day learning streak' },
+    { id: 'deep_diver', icon: '\uD83E\uDD3F', name: 'Deep Diver', desc: 'Sent 20 or more messages in your sessions' },
+    { id: 'challenger', icon: '\u26A1', name: 'Challenger', desc: 'Started the weekly club challenge' },
+    { id: 'quiz_master', icon: '\uD83C\uDFC6', name: 'Quiz Master', desc: 'Scored 3 or more on a comprehension quiz' },
+    { id: 'curriculum_unit', icon: '\uD83C\uDF93', name: 'Curriculum Explorer', desc: 'Started a structured curriculum unit' }
+  ];
 
   var REFLECTION_PROMPTS = [
     '\u23F8 Pause: What\'s something Mercurius \u2160 said that you\'d want to verify yourself?',
@@ -111,6 +139,115 @@
     'It cannot browse the web, remember previous sessions, or learn from your conversations. ' +
     'All responses are AI-generated and may contain errors. ' +
     'This tool is designed to build critical thinking about AI \u2014 not to replace it.';
+
+  // =========================================================================
+  // 4b. localStorage helpers — achievements, curriculum, bookmarks, profile
+  // =========================================================================
+  function getAchievementsLocal() {
+    try { return JSON.parse(localStorage.getItem('merc_achievements') || '[]'); } catch(e) { return []; }
+  }
+  function awardAchievement(id) {
+    var existing = getAchievementsLocal();
+    if (existing.indexOf(id) !== -1) return false; // already have it
+    existing.push(id);
+    localStorage.setItem('merc_achievements', JSON.stringify(existing));
+    return true; // newly earned
+  }
+  function checkAndAwardAchievement(id) {
+    if (awardAchievement(id)) {
+      var def = ACHIEVEMENTS_DEF.filter(function(a) { return a.id === id; })[0];
+      if (def) showAchievementToast(def);
+    }
+  }
+  function getCurriculumProgress() {
+    try { return JSON.parse(localStorage.getItem('merc_curriculum') || '{}'); } catch(e) { return {}; }
+  }
+  function setCurriculumUnit(unitId, status) {
+    var progress = getCurriculumProgress();
+    progress[unitId] = status;
+    localStorage.setItem('merc_curriculum', JSON.stringify(progress));
+  }
+  function getBookmarksLocal() {
+    try { return JSON.parse(localStorage.getItem('merc_bookmarks') || '[]'); } catch(e) { return []; }
+  }
+  function addBookmarkLocal(text, role) {
+    var bookmarks = getBookmarksLocal();
+    var entry = { id: Date.now().toString(), text: text, role: role || 'assistant', savedAt: new Date().toISOString() };
+    bookmarks.unshift(entry);
+    if (bookmarks.length > 50) bookmarks = bookmarks.slice(0, 50);
+    localStorage.setItem('merc_bookmarks', JSON.stringify(bookmarks));
+    return entry;
+  }
+  function removeBookmarkLocal(id) {
+    var bookmarks = getBookmarksLocal().filter(function(b) { return b.id !== id; });
+    localStorage.setItem('merc_bookmarks', JSON.stringify(bookmarks));
+  }
+  function getDisplayNameLocal() {
+    return localStorage.getItem('merc_display_name') || '';
+  }
+  function setDisplayNameLocal(name) {
+    localStorage.setItem('merc_display_name', name || '');
+  }
+
+  function showAchievementToast(def) {
+    var existing = document.getElementById('merc-achievement-toast');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    var toast = document.createElement('div');
+    toast.id = 'merc-achievement-toast';
+    toast.className = 'merc-achievement-toast';
+    toast.innerHTML = '<span class="merc-toast-icon">' + def.icon + '</span>' +
+      '<div class="merc-toast-body">' +
+      '<div class="merc-toast-title">Achievement Unlocked</div>' +
+      '<div class="merc-toast-name">' + escapeHtml(def.name) + '</div>' +
+      '</div>';
+    var panel = document.getElementById('merc-panel');
+    if (panel) panel.appendChild(toast);
+    setTimeout(function() { toast.classList.add('merc-toast-visible'); }, 50);
+    setTimeout(function() {
+      toast.classList.remove('merc-toast-visible');
+      setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
+    }, 3500);
+  }
+
+  var onboardStep = 0;
+  function showOnboarding() {
+    var overlay = document.getElementById('merc-onboard');
+    if (overlay) overlay.classList.add('merc-onboard-visible');
+    updateOnboardStep(0);
+  }
+  function updateOnboardStep(step) {
+    onboardStep = step;
+    var steps = document.querySelectorAll('.merc-onboard-step');
+    steps.forEach(function(s, i) {
+      s.classList.toggle('merc-onboard-step-active', i === step);
+    });
+    var dots = document.querySelectorAll('.merc-onboard-dot');
+    dots.forEach(function(d, i) { d.classList.toggle('active', i === step); });
+    var nextBtn = document.getElementById('merc-onboard-next');
+    if (nextBtn) nextBtn.textContent = step === 2 ? 'Start Exploring' : 'Next \u2192';
+  }
+  function completeOnboarding() {
+    var nameInput = document.getElementById('merc-onboard-name');
+    if (nameInput && nameInput.value.trim()) {
+      var name = nameInput.value.trim().slice(0, 30);
+      setDisplayNameLocal(name);
+      updateDisplayNameInSidebar(name);
+      fetch(PROFILE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionId, displayName: name })
+      }).catch(function() {});
+    }
+    localStorage.setItem('merc_onboarded', '1');
+    var overlay = document.getElementById('merc-onboard');
+    if (overlay) overlay.classList.remove('merc-onboard-visible');
+    checkAndAwardAchievement('first_chat');
+  }
+  function updateDisplayNameInSidebar(name) {
+    var el = document.getElementById('merc-display-name');
+    if (el) el.textContent = name ? name : 'Add your name';
+    el && el.classList.toggle('merc-name-set', !!name);
+  }
 
   // =========================================================================
   // 5. Build DOM
@@ -161,10 +298,20 @@
       '      <button class="merc-tool-btn" id="merc-btn-report"><span class="merc-tool-icon">&#127941;</span> Report Card</button>',
       '      <button class="merc-tool-btn" id="merc-btn-lb"><span class="merc-tool-icon">&#127942;</span> Leaderboard</button>',
       '      <button class="merc-tool-btn" id="merc-btn-summary"><span class="merc-tool-icon">&#128203;</span> Summary</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-factcheck"><span class="merc-tool-icon">&#128269;</span> Fact Check</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-analyze"><span class="merc-tool-icon">&#129302;</span> Analyze Output</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-challenge"><span class="merc-tool-icon">&#9889;</span> Challenge</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-curriculum"><span class="merc-tool-icon">&#127891;</span> Curriculum</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-achievements"><span class="merc-tool-icon">&#127942;</span> Achievements</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-bookmarks"><span class="merc-tool-icon">&#128278;</span> Bookmarks</button>',
       '    </div>',
 
       '  </div>',
       '  <div class="merc-sidebar-footer">',
+      '    <div class="merc-display-name-row" id="merc-display-name-row">',
+      '      <span class="merc-display-name" id="merc-display-name">Add your name</span>',
+      '      <button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>',
+      '    </div>',
       '    <div class="merc-streak-badge merc-hidden" id="merc-header-streak">&#128293; <span id="merc-streak-val"></span> day streak</div>',
       '    <button class="merc-info-btn" id="merc-btn-info">&#8505;&#65039; About Mercurius &#8544;</button>',
       '  </div>',
@@ -220,6 +367,39 @@
       TRANSPARENCY_TEXT,
       '</div>',
 
+      // Onboarding overlay
+      '<div class="merc-onboard" id="merc-onboard">',
+      '  <div class="merc-onboard-card">',
+      '    <div class="merc-onboard-step merc-onboard-step-active" data-step="0">',
+      '      <div class="merc-onboard-icon">M&#8544;</div>',
+      '      <h2>Welcome to Mercurius &#8544;</h2>',
+      '      <p>An AI literacy tutor built by Mayo AI Literacy Club. I\'m here to help you think critically about AI \u2014 not to think for you.</p>',
+      '    </div>',
+      '    <div class="merc-onboard-step" data-step="1">',
+      '      <h2>Three Ways to Learn</h2>',
+      '      <div class="merc-onboard-modes">',
+      '        <div class="merc-onboard-mode"><strong>Socratic</strong> \u2014 I ask questions first to activate your thinking before sharing anything.</div>',
+      '        <div class="merc-onboard-mode"><strong>Direct</strong> \u2014 Unlocked after you demonstrate critical thinking. More depth, more nuance.</div>',
+      '        <div class="merc-onboard-mode"><strong>Debate</strong> \u2014 I take a position on AI ethics and argue against you. Anyone can use this.</div>',
+      '      </div>',
+      '    </div>',
+      '    <div class="merc-onboard-step" data-step="2">',
+      '      <h2>One Last Thing</h2>',
+      '      <p>Add your name so we can personalize your experience. (Completely optional.)</p>',
+      '      <input class="merc-onboard-name-input" id="merc-onboard-name" type="text" placeholder="Your first name or nickname" maxlength="30">',
+      '    </div>',
+      '    <div class="merc-onboard-footer">',
+      '      <div class="merc-onboard-dots">',
+      '        <span class="merc-onboard-dot active"></span>',
+      '        <span class="merc-onboard-dot"></span>',
+      '        <span class="merc-onboard-dot"></span>',
+      '      </div>',
+      '      <button class="merc-onboard-next" id="merc-onboard-next">Next \u2192</button>',
+      '      <button class="merc-onboard-skip" id="merc-onboard-skip">Skip</button>',
+      '    </div>',
+      '  </div>',
+      '</div>',
+
     ].join('');
 
     document.body.appendChild(toggle);
@@ -269,7 +449,13 @@
       map: 'merc-btn-map',
       report: 'merc-btn-report',
       leaderboard: 'merc-btn-lb',
-      summary: 'merc-btn-summary'
+      summary: 'merc-btn-summary',
+      factcheck: 'merc-btn-factcheck',
+      analyze: 'merc-btn-analyze',
+      challenge: 'merc-btn-challenge',
+      curriculum: 'merc-btn-curriculum',
+      achievements: 'merc-btn-achievements',
+      bookmarks: 'merc-btn-bookmarks'
     };
     var activeBtn = document.getElementById(btnIdMap[type]);
     if (activeBtn) activeBtn.classList.add('tool-active');
@@ -280,7 +466,13 @@
       map: '\uD83D\uDCCD Concept Map',
       report: '\uD83C\uDFC6 Report Card',
       leaderboard: '\uD83C\uDFC5 Leaderboard',
-      summary: '\uD83D\uDCCB Summary'
+      summary: '\uD83D\uDCCB Summary',
+      factcheck: '\uD83D\uDD0D Fact Check',
+      analyze: '\uD83E\uDD16 Analyze Output',
+      challenge: '\u26A1 Weekly Challenge',
+      curriculum: '\uD83C\uDF93 Curriculum',
+      achievements: '\uD83C\uDFC5 Achievements',
+      bookmarks: '\uD83D\uDD16 Bookmarks'
     };
     if (title) title.textContent = titles[type] || type;
 
@@ -307,6 +499,18 @@
         loadReportInPanel(body);
       } else if (type === 'leaderboard') {
         loadLeaderboardInPanel(body);
+      } else if (type === 'factcheck') {
+        loadFactCheckPanel(body);
+      } else if (type === 'analyze') {
+        loadAnalyzePanel(body);
+      } else if (type === 'challenge') {
+        loadChallengePanel(body);
+      } else if (type === 'curriculum') {
+        loadCurriculumPanel(body);
+      } else if (type === 'achievements') {
+        loadAchievementsPanel(body);
+      } else if (type === 'bookmarks') {
+        loadBookmarksPanel(body);
       }
     }
   }
@@ -422,6 +626,300 @@
         if (loading) loading.parentNode.removeChild(loading);
         body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
       });
+  }
+
+  function loadFactCheckPanel(body) {
+    body.insertAdjacentHTML('afterbegin',
+      '<div class="merc-tool-panel">' +
+      '<p class="merc-tool-instructions">Paste an AI claim below \u2014 about AI capabilities, hype, policy, or anything you\'ve read. Mercurius will break it down.</p>' +
+      '<textarea class="merc-tool-textarea" id="merc-fc-input" placeholder="e.g. \'AI will replace all programmers by 2030\'" rows="4" maxlength="1000"></textarea>' +
+      '<button class="merc-tool-submit-btn" id="merc-fc-submit">Fact Check This \u2192</button>' +
+      '<div id="merc-fc-result"></div>' +
+      '</div>'
+    );
+    var submitBtn = document.getElementById('merc-fc-submit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function() {
+        var input = document.getElementById('merc-fc-input');
+        if (!input || !input.value.trim()) return;
+        var claim = input.value.trim();
+        var resultEl = document.getElementById('merc-fc-result');
+        if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-loading">Analyzing claim\u2026</p>';
+        submitBtn.disabled = true;
+        fetch(FACTCHECK_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sessionId, claim: claim })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          submitBtn.disabled = false;
+          if (data.error) {
+            if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>';
+            return;
+          }
+          checkAndAwardAchievement('fact_checker');
+          renderFactCheckResult(data, resultEl);
+        })
+        .catch(function() {
+          submitBtn.disabled = false;
+          if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">Connection error \u2014 try again.</p>';
+        });
+      });
+    }
+  }
+
+  function renderFactCheckResult(data, container) {
+    var verdictColors = { accurate: '#4ade80', misleading: '#fbbf24', false: '#f87171', nuanced: '#60a5fa', unverifiable: '#94a3b8' };
+    var color = verdictColors[data.verdict] || '#94a3b8';
+    var html = '<div class="merc-fc-result-card">';
+    html += '<div class="merc-fc-verdict" style="color:' + color + ';">' + escapeHtml(data.verdictLabel || data.verdict || '') + '</div>';
+    html += '<p class="merc-fc-summary">' + escapeHtml(data.summary || '') + '</p>';
+    if (data.breakdown && data.breakdown.length) {
+      html += '<div class="merc-fc-breakdown">';
+      data.breakdown.forEach(function(b) {
+        var icon = b.status === 'true' ? '\u2713' : b.status === 'false' ? '\u2717' : '\u223C';
+        var bcolor = b.status === 'true' ? '#4ade80' : b.status === 'false' ? '#f87171' : '#fbbf24';
+        html += '<div class="merc-fc-item"><span style="color:' + bcolor + '">' + icon + '</span> <strong>' + escapeHtml(b.claim || '') + '</strong> \u2014 ' + escapeHtml(b.explanation || '') + '</div>';
+      });
+      html += '</div>';
+    }
+    if (data.nuances) html += '<p class="merc-fc-nuances"><em>' + escapeHtml(data.nuances) + '</em></p>';
+    if (data.literacyLesson) html += '<div class="merc-fc-lesson">\uD83D\uDCA1 ' + escapeHtml(data.literacyLesson) + '</div>';
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function loadAnalyzePanel(body) {
+    body.insertAdjacentHTML('afterbegin',
+      '<div class="merc-tool-panel">' +
+      '<p class="merc-tool-instructions">Paste any AI-generated response \u2014 from ChatGPT, Gemini, or anywhere else. Mercurius will critique it as an AI literacy exercise.</p>' +
+      '<textarea class="merc-tool-textarea" id="merc-az-input" placeholder="Paste an AI response here\u2026" rows="5" maxlength="3000"></textarea>' +
+      '<button class="merc-tool-submit-btn" id="merc-az-submit">Analyze This \u2192</button>' +
+      '<div id="merc-az-result"></div>' +
+      '</div>'
+    );
+    var submitBtn = document.getElementById('merc-az-submit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function() {
+        var input = document.getElementById('merc-az-input');
+        if (!input || !input.value.trim()) return;
+        var aiOutput = input.value.trim();
+        var resultEl = document.getElementById('merc-az-result');
+        if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-loading">Analyzing\u2026</p>';
+        submitBtn.disabled = true;
+        fetch(ANALYZE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sessionId, aiOutput: aiOutput })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          submitBtn.disabled = false;
+          if (data.error) {
+            if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>';
+            return;
+          }
+          checkAndAwardAchievement('analyst');
+          renderAnalyzeResult(data, resultEl);
+        })
+        .catch(function() {
+          submitBtn.disabled = false;
+          if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>';
+        });
+      });
+    }
+  }
+
+  function renderAnalyzeResult(data, container) {
+    var assessColors = { strong: '#4ade80', decent: '#fbbf24', problematic: '#f87171' };
+    var color = assessColors[data.overallAssessment] || '#94a3b8';
+    var html = '<div class="merc-fc-result-card">';
+    html += '<div class="merc-fc-verdict" style="color:' + color + ';">' + escapeHtml(data.overallAssessment || '') + '</div>';
+    html += '<p class="merc-fc-summary">' + escapeHtml(data.summary || '') + '</p>';
+    if (data.issues && data.issues.length) {
+      var typeIcons = { hallucination: '\uD83D\uDCA1', overconfidence: '\uD83D\uDCC8', bias: '\u2696\uFE0F', missing_context: '\uD83D\uDD73\uFE0F', vague: '\uD83C\uDF2B\uFE0F', good: '\u2705' };
+      html += '<div class="merc-fc-breakdown">';
+      data.issues.forEach(function(issue) {
+        var icon = typeIcons[issue.type] || '\u25CF';
+        html += '<div class="merc-fc-item">' + icon + ' <strong>' + escapeHtml(issue.type || '') + '</strong>: ' + escapeHtml(issue.description || '');
+        if (issue.quote) html += ' <em>\u201C' + escapeHtml(issue.quote) + '\u201D</em>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    if (data.confidenceFlags) html += '<p class="merc-fc-nuances"><strong>Confidence flags:</strong> ' + escapeHtml(data.confidenceFlags) + '</p>';
+    if (data.missingPerspectives) html += '<p class="merc-fc-nuances"><strong>Missing perspectives:</strong> ' + escapeHtml(data.missingPerspectives) + '</p>';
+    if (data.literacyLesson) html += '<div class="merc-fc-lesson">\uD83D\uDCA1 ' + escapeHtml(data.literacyLesson) + '</div>';
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function loadChallengePanel(body) {
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Loading challenge\u2026</p>');
+    fetch(CHALLENGE_ENDPOINT)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        if (data.error) {
+          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'No challenge available yet.') + '</p>');
+          return;
+        }
+        var html = '<div class="merc-challenge-card">';
+        html += '<div class="merc-challenge-label">\u26A1 Weekly Challenge</div>';
+        html += '<h3 class="merc-challenge-title">' + escapeHtml(data.title || '') + '</h3>';
+        html += '<p class="merc-challenge-desc">' + escapeHtml(data.description || '') + '</p>';
+        if (data.keyQuestions && data.keyQuestions.length) {
+          html += '<div class="merc-challenge-questions"><div class="merc-challenge-q-label">Key questions:</div><ul>';
+          data.keyQuestions.forEach(function(q) { html += '<li>' + escapeHtml(q) + '</li>'; });
+          html += '</ul></div>';
+        }
+        html += '<button class="merc-tool-submit-btn merc-challenge-start" id="merc-challenge-start" data-starter="' + escapeAttr(data.starter || '') + '">Start This Challenge \u2192</button>';
+        html += '</div>';
+        body.insertAdjacentHTML('afterbegin', html);
+        var startBtn = document.getElementById('merc-challenge-start');
+        if (startBtn) {
+          startBtn.addEventListener('click', function() {
+            var starter = startBtn.getAttribute('data-starter');
+            closeRightPanel();
+            checkAndAwardAchievement('challenger');
+            if (starter) sendMessage(starter, true);
+          });
+        }
+        // Also add pre-briefing section
+        var briefSection = document.createElement('div');
+        briefSection.className = 'merc-briefing-section';
+        briefSection.innerHTML = '<div class="merc-challenge-label" style="margin-top:20px;">\uD83D\uDCCB Pre-Meeting Briefing</div>' +
+          '<p style="font-size:11px;color:rgba(241,245,249,0.6);margin-bottom:10px;">Get a 3-point prep summary for the meeting.</p>' +
+          '<button class="merc-tool-submit-btn" id="merc-briefing-btn" style="margin-top:0">Generate Briefing \u2192</button>' +
+          '<div id="merc-briefing-result"></div>';
+        body.appendChild(briefSection);
+        var briefBtn = document.getElementById('merc-briefing-btn');
+        if (briefBtn) {
+          briefBtn.addEventListener('click', function() {
+            var resultEl = document.getElementById('merc-briefing-result');
+            if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-loading">Generating briefing\u2026</p>';
+            briefBtn.disabled = true;
+            fetch(PRE_BRIEFING_ENDPOINT + '?sessionId=' + encodeURIComponent(sessionId))
+              .then(function(r) { return r.json(); })
+              .then(function(bdata) {
+                briefBtn.disabled = false;
+                if (resultEl) {
+                  if (bdata.error) {
+                    resultEl.innerHTML = '<p class="merc-quiz-empty">Could not generate briefing.</p>';
+                    return;
+                  }
+                  checkAndAwardAchievement('meeting_prepper');
+                  var bhtml = '<div class="merc-briefing-card">';
+                  bhtml += '<h4>' + escapeHtml(bdata.meetingTitle || '') + '</h4>';
+                  if (bdata.date) bhtml += '<p class="merc-briefing-date">' + escapeHtml(bdata.date) + '</p>';
+                  if (bdata.bullets) bdata.bullets.forEach(function(b) {
+                    bhtml += '<div class="merc-briefing-bullet"><strong>' + escapeHtml(b.heading) + '</strong><p>' + escapeHtml(b.body) + '</p></div>';
+                  });
+                  if (bdata.keyQuestion) bhtml += '<div class="merc-briefing-key-q">\uD83D\uDD11 ' + escapeHtml(bdata.keyQuestion) + '</div>';
+                  bhtml += '</div>';
+                  resultEl.innerHTML = bhtml;
+                }
+              })
+              .catch(function() {
+                briefBtn.disabled = false;
+                if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>';
+              });
+          });
+        }
+      })
+      .catch(function() {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
+      });
+  }
+
+  function loadCurriculumPanel(body) {
+    var progress = getCurriculumProgress();
+    var html = '<div class="merc-curriculum-panel">';
+    html += '<p class="merc-tool-instructions">Five structured learning units. Click any unit to start an in-depth conversation with Mercurius on that topic.</p>';
+    CURRICULUM_UNITS.forEach(function(unit) {
+      var status = progress[unit.id] || 'not_started';
+      var statusLabel = status === 'complete' ? '\u2705 Complete' : status === 'in_progress' ? '\uD83D\uDD04 In Progress' : 'Start \u2192';
+      var statusClass = 'merc-unit-' + status.replace('_', '-');
+      html += '<div class="merc-unit-card ' + statusClass + '" data-unit-id="' + escapeAttr(unit.id) + '" data-starter="' + escapeAttr(unit.starter) + '">';
+      html += '<div class="merc-unit-num">' + escapeHtml(unit.number) + '</div>';
+      html += '<div class="merc-unit-body">';
+      html += '<div class="merc-unit-title">' + escapeHtml(unit.title) + '</div>';
+      html += '<div class="merc-unit-desc">' + escapeHtml(unit.description) + '</div>';
+      html += '</div>';
+      html += '<div class="merc-unit-status">' + statusLabel + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    body.insertAdjacentHTML('afterbegin', html);
+    body.querySelectorAll('.merc-unit-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        var unitId = card.getAttribute('data-unit-id');
+        var starter = card.getAttribute('data-starter');
+        setCurriculumUnit(unitId, 'in_progress');
+        closeRightPanel();
+        checkAndAwardAchievement('curriculum_unit');
+        if (starter) sendMessage(starter, true);
+      });
+    });
+  }
+
+  function loadAchievementsPanel(body) {
+    var earned = getAchievementsLocal();
+    var html = '<div class="merc-achievements-panel">';
+    html += '<p style="font-size:11px;color:rgba(241,245,249,0.5);margin-bottom:14px;">' + earned.length + ' of ' + ACHIEVEMENTS_DEF.length + ' earned</p>';
+    html += '<div class="merc-achievements-grid">';
+    ACHIEVEMENTS_DEF.forEach(function(def) {
+      var isEarned = earned.indexOf(def.id) !== -1;
+      html += '<div class="merc-achievement-item' + (isEarned ? ' merc-achievement-earned' : ' merc-achievement-locked') + '" title="' + escapeAttr(def.desc) + '">';
+      html += '<div class="merc-achievement-icon">' + (isEarned ? def.icon : '\uD83D\uDD12') + '</div>';
+      html += '<div class="merc-achievement-name">' + escapeHtml(def.name) + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+    body.insertAdjacentHTML('afterbegin', html);
+  }
+
+  function loadBookmarksPanel(body) {
+    var bookmarks = getBookmarksLocal();
+    if (bookmarks.length === 0) {
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No bookmarks yet. Click the \uD83D\uDD16 icon on any message to save it here.</p>');
+      return;
+    }
+    var html = '<div class="merc-bookmarks-panel">';
+    bookmarks.forEach(function(bm) {
+      var preview = bm.text.length > 120 ? bm.text.slice(0, 120) + '\u2026' : bm.text;
+      html += '<div class="merc-bookmark-item" data-id="' + escapeAttr(bm.id) + '">';
+      html += '<div class="merc-bookmark-text">' + escapeHtml(preview) + '</div>';
+      html += '<div class="merc-bookmark-actions">';
+      html += '<button class="merc-bookmark-copy" data-text="' + escapeAttr(bm.text) + '">\uD83D\uDCCB Copy</button>';
+      html += '<button class="merc-bookmark-delete" data-id="' + escapeAttr(bm.id) + '">\uD83D\uDDD1\uFE0F</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+    body.insertAdjacentHTML('afterbegin', html);
+    body.querySelectorAll('.merc-bookmark-copy').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var text = btn.getAttribute('data-text');
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(function() {
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = '\uD83D\uDCCB Copy'; }, 1500);
+          }).catch(function(){});
+        }
+      });
+    });
+    body.querySelectorAll('.merc-bookmark-delete').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = btn.getAttribute('data-id');
+        removeBookmarkLocal(id);
+        var item = body.querySelector('.merc-bookmark-item[data-id="' + id + '"]');
+        if (item && item.parentNode) item.parentNode.removeChild(item);
+      });
+    });
   }
 
   // =========================================================================
@@ -555,6 +1053,114 @@
 
     // Initialise mode bar to match stored state
     updateModeBar();
+
+    // New tool buttons
+    var factcheckBtn = document.getElementById('merc-btn-factcheck');
+    if (factcheckBtn) { factcheckBtn.addEventListener('click', function() { openRightPanel('factcheck'); }); }
+    var analyzeBtn = document.getElementById('merc-btn-analyze');
+    if (analyzeBtn) { analyzeBtn.addEventListener('click', function() { openRightPanel('analyze'); }); }
+    var challengeBtn = document.getElementById('merc-btn-challenge');
+    if (challengeBtn) { challengeBtn.addEventListener('click', function() { openRightPanel('challenge'); }); }
+    var curriculumBtn = document.getElementById('merc-btn-curriculum');
+    if (curriculumBtn) { curriculumBtn.addEventListener('click', function() { openRightPanel('curriculum'); }); }
+    var achievementsBtn = document.getElementById('merc-btn-achievements');
+    if (achievementsBtn) { achievementsBtn.addEventListener('click', function() { openRightPanel('achievements'); }); }
+    var bookmarksBtn = document.getElementById('merc-btn-bookmarks');
+    if (bookmarksBtn) { bookmarksBtn.addEventListener('click', function() { openRightPanel('bookmarks'); }); }
+
+    // Display name edit button
+    var nameEditBtn = document.getElementById('merc-name-edit-btn');
+    if (nameEditBtn) {
+      nameEditBtn.addEventListener('click', function() {
+        var row = document.getElementById('merc-display-name-row');
+        var existing = getDisplayNameLocal();
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = existing;
+        input.maxLength = 30;
+        input.className = 'merc-name-inline-input';
+        input.placeholder = 'Your name';
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'merc-name-save-btn';
+        saveBtn.textContent = '\u2713';
+        if (row) {
+          row.innerHTML = '';
+          row.appendChild(input);
+          row.appendChild(saveBtn);
+          input.focus();
+        }
+        function saveName() {
+          var name = input.value.trim().slice(0, 30);
+          setDisplayNameLocal(name);
+          fetch(PROFILE_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionId, displayName: name })
+          }).catch(function(){});
+          if (row) {
+            row.innerHTML = '<span class="merc-display-name' + (name ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(name || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>';
+            var newEditBtn = document.getElementById('merc-name-edit-btn');
+            if (newEditBtn) {
+              newEditBtn.addEventListener('click', function() {
+                var newRow = document.getElementById('merc-display-name-row');
+                var curName = getDisplayNameLocal();
+                var newInput = document.createElement('input');
+                newInput.type = 'text';
+                newInput.value = curName;
+                newInput.maxLength = 30;
+                newInput.className = 'merc-name-inline-input';
+                newInput.placeholder = 'Your name';
+                var newSaveBtn = document.createElement('button');
+                newSaveBtn.className = 'merc-name-save-btn';
+                newSaveBtn.textContent = '\u2713';
+                if (newRow) {
+                  newRow.innerHTML = '';
+                  newRow.appendChild(newInput);
+                  newRow.appendChild(newSaveBtn);
+                  newInput.focus();
+                }
+                function saveNewName() {
+                  var newName = newInput.value.trim().slice(0, 30);
+                  setDisplayNameLocal(newName);
+                  fetch(PROFILE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: sessionId, displayName: newName })
+                  }).catch(function(){});
+                  if (newRow) {
+                    newRow.innerHTML = '<span class="merc-display-name' + (newName ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(newName || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>';
+                  }
+                }
+                newSaveBtn.addEventListener('click', saveNewName);
+                newInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveNewName(); });
+              });
+            }
+          }
+        }
+        saveBtn.addEventListener('click', saveName);
+        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveName(); });
+      });
+    }
+
+    // Onboarding next/skip buttons
+    var onboardNext = document.getElementById('merc-onboard-next');
+    if (onboardNext) {
+      onboardNext.addEventListener('click', function() {
+        if (onboardStep < 2) {
+          updateOnboardStep(onboardStep + 1);
+        } else {
+          completeOnboarding();
+        }
+      });
+    }
+    var onboardSkip = document.getElementById('merc-onboard-skip');
+    if (onboardSkip) {
+      onboardSkip.addEventListener('click', function() {
+        localStorage.setItem('merc_onboarded', '1');
+        var overlay = document.getElementById('merc-onboard');
+        if (overlay) overlay.classList.remove('merc-onboard-visible');
+      });
+    }
   }
 
   function triggerSend() {
@@ -613,11 +1219,25 @@
           localStorage.setItem('merc_mode', 'socratic');
           updateModeBar();
           showUnlockCelebration();
+          checkAndAwardAchievement('critical_thinker');
         } else if (data.mode && data.mode !== currentMode) {
           currentMode = data.mode;
           localStorage.setItem('merc_mode', currentMode);
           updateModeBar();
         }
+
+        // Track debate rounds
+        if (currentMode === 'debate') {
+          debateRound++;
+          if (debateRound === 1) checkAndAwardAchievement('debate_starter');
+        }
+        // Award first_chat on first message
+        if (userMessageCount === 1) checkAndAwardAchievement('first_chat');
+        // Streak achievements
+        if (data.streak >= 3) checkAndAwardAchievement('streak_3');
+        if (data.streak >= 7) checkAndAwardAchievement('streak_7');
+        // Deep diver
+        if ((data.streak || 0) > 0 && userMessageCount >= 20) checkAndAwardAchievement('deep_diver');
 
         // Update streak badge
         if (data.streak && data.streak > 1) {
@@ -734,6 +1354,46 @@
 
     var confidenceEl = buildConfidenceMeter(text);
     var actions = buildActionButtons(text);
+
+    // Bookmark + share button row
+    var msgActions = document.createElement('div');
+    msgActions.className = 'merc-msg-actions';
+
+    var bookmarkBtn = document.createElement('button');
+    bookmarkBtn.className = 'merc-msg-action-btn merc-bookmark-btn';
+    bookmarkBtn.title = 'Save this message';
+    bookmarkBtn.innerHTML = '\uD83D\uDD16';
+    (function(capturedText) {
+      bookmarkBtn.addEventListener('click', function() {
+        addBookmarkLocal(capturedText, 'assistant');
+        bookmarkBtn.innerHTML = '\u2713';
+        bookmarkBtn.style.color = '#4ade80';
+        checkAndAwardAchievement('bookmarker');
+        setTimeout(function() {
+          bookmarkBtn.innerHTML = '\uD83D\uDD16';
+          bookmarkBtn.style.color = '';
+        }, 1500);
+      });
+    })(text);
+
+    var shareBtn = document.createElement('button');
+    shareBtn.className = 'merc-msg-action-btn merc-share-btn';
+    shareBtn.title = 'Copy message';
+    shareBtn.innerHTML = '\uD83D\uDCCB';
+    (function(capturedText) {
+      shareBtn.addEventListener('click', function() {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText('Mercurius \u2160 said:\n\n' + capturedText).then(function() {
+            shareBtn.innerHTML = '\u2713 Copied';
+            setTimeout(function() { shareBtn.innerHTML = '\uD83D\uDCCB'; }, 1500);
+          }).catch(function(){});
+        }
+      });
+    })(text);
+
+    msgActions.appendChild(bookmarkBtn);
+    msgActions.appendChild(shareBtn);
+    wrapper.appendChild(msgActions);
 
     wrapper.appendChild(bubble);
     wrapper.appendChild(ts);
@@ -1124,6 +1784,7 @@
   }
 
   function handleModeSwitchTo(newMode) {
+    if (newMode === 'debate') debateRound = 0;
     if (newMode !== 'debate' && !isUnlocked) return;
     fetch(MODE_ENDPOINT, {
       method: 'POST',
@@ -1265,6 +1926,29 @@
       '</div>';
 
     container.insertAdjacentHTML('afterbegin', '<div class="merc-map-svg">' + svg + '</div>' + legend);
+
+    // Make concept map nodes clickable — click to explore a topic
+    setTimeout(function() {
+      var svgEl = container.querySelector('svg');
+      if (!svgEl) return;
+      nodes.forEach(function(n) {
+        var p = positions[n.id];
+        if (!p) return;
+        // Create invisible clickable overlay circle
+        var clickCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        clickCircle.setAttribute('cx', p.x);
+        clickCircle.setAttribute('cy', p.y);
+        clickCircle.setAttribute('r', '22');
+        clickCircle.setAttribute('fill', 'transparent');
+        clickCircle.setAttribute('style', 'cursor:pointer');
+        clickCircle.setAttribute('title', n.label);
+        clickCircle.addEventListener('click', function() {
+          closeRightPanel();
+          sendMessage('Can we explore "' + n.label + '" more? Tell me about this concept and how it connects to what we\'ve been discussing.', true);
+        });
+        svgEl.appendChild(clickCircle);
+      });
+    }, 50);
   }
 
   function renderReportCard(data, container) {
@@ -1388,6 +2072,17 @@
         body: JSON.stringify({ sessionId: sessionId, mode: currentMode, clientUnlocked: true }),
       }).catch(function () { /* silent — best effort */ });
     }
+
+    // Show onboarding for first-time visitors (after a short delay)
+    if (!localStorage.getItem('merc_onboarded')) {
+      setTimeout(function() {
+        if (isOpen) showOnboarding();
+      }, 1200);
+    }
+
+    // Restore display name
+    var savedName = getDisplayNameLocal();
+    if (savedName) updateDisplayNameInSidebar(savedName);
   }
 
   if (document.readyState === 'loading') {
