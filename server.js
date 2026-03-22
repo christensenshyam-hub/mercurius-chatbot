@@ -26,6 +26,63 @@ const anthropic = new Anthropic({
 });
 
 // ---------------------------------------------------------------------------
+// Events data — fetched from mayoailiteracy.com/events-data.json, cached 1hr
+// ---------------------------------------------------------------------------
+const EVENTS_URL = 'https://mayoailiteracy.com/events-data.json';
+let eventsCache = null;
+let eventsCacheTime = 0;
+
+async function getEventsData() {
+  const now = Date.now();
+  if (eventsCache && now - eventsCacheTime < 3600000) return eventsCache;
+  try {
+    const res = await fetch(EVENTS_URL);
+    if (res.ok) {
+      eventsCache = await res.json();
+      eventsCacheTime = now;
+    }
+  } catch (e) {
+    console.warn('[Mercurius] Could not fetch events-data.json:', e.message);
+  }
+  return eventsCache;
+}
+
+function buildMeetingContext(events) {
+  if (!events) return '';
+  let ctx = '\n\n### MAYO AI LITERACY CLUB — LIVE MEETING SCHEDULE\n';
+  ctx += `Regular meetings: ${events.schedule?.day || 'Every Thursday'} at ${events.schedule?.time || '8:20 AM'}, ${events.schedule?.location || 'MHS Library Classroom'}.\n`;
+
+  if (events.upcoming && events.upcoming.length > 0) {
+    ctx += '\n**UPCOMING MEETINGS:**\n';
+    events.upcoming.forEach(m => {
+      const dateStr = m.date ? new Date(m.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '';
+      ctx += `\n- **${m.title}** (${dateStr})\n`;
+      ctx += `  ${m.description}\n`;
+      if (m.keyQuestions && m.keyQuestions.length) {
+        ctx += `  Key questions for this meeting:\n`;
+        m.keyQuestions.forEach(q => { ctx += `    • ${q}\n`; });
+      }
+      if (m.topics && m.topics.length) {
+        ctx += `  Topics covered: ${m.topics.join(', ')}\n`;
+      }
+      if (m.suggestedReading) {
+        ctx += `  Suggested reading: ${m.suggestedReading}\n`;
+      }
+    });
+  }
+
+  if (events.past && events.past.length > 0) {
+    ctx += '\n**RECENT PAST MEETINGS:**\n';
+    events.past.slice(0, 3).forEach(m => {
+      ctx += `- ${m.title}: ${m.description}\n`;
+    });
+  }
+
+  ctx += '\nWhen a student asks to prep for a meeting, asks about "the next meeting", or uses the meeting prep starter, use this data to give specific, targeted preparation. Reference the actual topics and key questions. Be concrete — not generic.';
+  return ctx;
+}
+
+// ---------------------------------------------------------------------------
 // System prompt — injected on every API call
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -441,7 +498,11 @@ app.post('/api/chat', async (req, res) => {
   let repetitionNote = '';
   if (struggledTopics.length > 0) repetitionNote = `\n\n**SPACED REPETITION — Topics this student has struggled with before:** ${struggledTopics.join(', ')}. Naturally weave one of these back into the conversation if relevant.`;
 
-  systemPrompt = systemPrompt + adaptiveNote + repetitionNote;
+  // Live meeting context — inject into all modes
+  const eventsData = await getEventsData();
+  const meetingContext = buildMeetingContext(eventsData);
+
+  systemPrompt = systemPrompt + adaptiveNote + repetitionNote + meetingContext;
 
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
