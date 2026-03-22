@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mercurius Ⅰ — Teacher Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #122e1e;
+      --navy-mid: #1a3d28;
+      --navy-light: #1f4a30;
+      --gold: #C9922A;
+      --gold-light: #E8B84B;
+      --gold-dim: rgba(201, 146, 42, 0.15);
+      --text: #f1f5f9;
+      --text-muted: rgba(241, 245, 249, 0.6);
+      --border: rgba(201, 146, 42, 0.2);
+    }
+
+    body {
+      background: var(--navy);
+      color: var(--text);
+      font-family: 'Josefin Sans', sans-serif;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* Header */
+    .dash-header {
+      background: rgba(10, 24, 16, 0.98);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .dash-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--gold-dim);
+      border: 2px solid var(--gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+    .dash-header-text h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.02em;
+    }
+    .dash-header-text p {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .dash-header-right {
+      margin-left: auto;
+    }
+    .dash-refresh-btn {
+      padding: 8px 18px;
+      background: var(--gold-dim);
+      border: 1px solid var(--border);
+      color: var(--gold);
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .dash-refresh-btn:hover { background: rgba(201, 146, 42, 0.25); }
+
+    /* Main */
+    .dash-main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    /* Stat cards grid */
+    .dash-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .dash-stat-card {
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+    .dash-stat-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .dash-stat-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1;
+    }
+    .dash-stat-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Section titles */
+    .dash-section-title {
+      font-size: 12px;
+      font-family: 'Space Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(201, 146, 42, 0.7);
+      margin-bottom: 14px;
+    }
+
+    /* Two-column layout for charts + table */
+    .dash-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 768px) {
+      .dash-two-col { grid-template-columns: 1fr; }
+    }
+
+    /* Topic frequency chart */
+    .dash-card {
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .dash-topic-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .dash-topic-row:last-child { margin-bottom: 0; }
+    .dash-topic-name {
+      font-size: 11.5px;
+      color: var(--text);
+      width: 160px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dash-topic-bar-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .dash-topic-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+    .dash-topic-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--gold);
+      width: 20px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .dash-empty {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-style: italic;
+      padding: 8px 0;
+    }
+
+    /* Recent sessions table */
+    .dash-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .dash-table th {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(201, 146, 42, 0.6);
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid rgba(201, 146, 42, 0.2);
+    }
+    .dash-table td {
+      padding: 9px 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .dash-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .dash-unlocked-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(201, 146, 42, 0.12);
+      border: 1px solid rgba(201, 146, 42, 0.3);
+      border-radius: 10px;
+      font-size: 10px;
+      color: var(--gold);
+    }
+    .dash-socratic-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Loading / error states */
+    .dash-loading {
+      text-align: center;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      padding: 48px 0;
+      letter-spacing: 0.06em;
+    }
+    .dash-error {
+      text-align: center;
+      color: #f87171;
+      font-size: 13px;
+      padding: 32px 0;
+    }
+
+    /* Footer */
+    .dash-footer {
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: rgba(201, 146, 42, 0.3);
+      letter-spacing: 0.08em;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="dash-header">
+    <div class="dash-logo">M&#8544;</div>
+    <div class="dash-header-text">
+      <h1>Mercurius &#8544; — Teacher Dashboard</h1>
+      <p>Mayo AI Literacy Club &bull; Live stats</p>
+    </div>
+    <div class="dash-header-right">
+      <button class="dash-refresh-btn" onclick="loadDashboard()">&#8635; Refresh</button>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <div id="dash-root">
+      <div class="dash-loading">Loading dashboard&#8230;</div>
+    </div>
+  </main>
+
+  <script>
+    var API_BASE = window.location.origin;
+
+    function loadDashboard() {
+      var root = document.getElementById('dash-root');
+      root.innerHTML = '<div class="dash-loading">Loading dashboard&#8230;</div>';
+      fetch(API_BASE + '/api/dashboard')
+        .then(function(r) { return r.json(); })
+        .then(function(data) { renderDashboard(data); })
+        .catch(function(e) {
+          root.innerHTML = '<div class="dash-error">Could not load dashboard data. Make sure the server is running.<br><small>' + e.message + '</small></div>';
+        });
+    }
+
+    function renderDashboard(d) {
+      var root = document.getElementById('dash-root');
+      var html = '';
+
+      // Stat cards
+      html += '<div class="dash-stats-grid">';
+      html += statCard('Total Sessions', d.totalSessions, 'All unique student sessions');
+      html += statCard('Unlock Rate', d.unlockRate + '%', d.unlockedCount + ' students reached Direct Mode');
+      html += statCard('Total Messages', d.totalMessages, 'Across all sessions');
+      html += statCard('Avg Msgs / Session', d.avgMessagesPerSession, 'Engagement depth indicator');
+      html += '</div>';
+
+      // Two column: topics + recent sessions
+      html += '<div class="dash-two-col">';
+
+      // Topic frequency
+      html += '<div class="dash-card">';
+      html += '<div class="dash-section-title">Top Topics</div>';
+      if (!d.topTopics || d.topTopics.length === 0) {
+        html += '<p class="dash-empty">No topic data yet.</p>';
+      } else {
+        var maxCount = d.topTopics[0].count || 1;
+        d.topTopics.forEach(function(t) {
+          var pct = Math.round((t.count / maxCount) * 100);
+          html += '<div class="dash-topic-row">';
+          html += '<span class="dash-topic-name">' + escapeHtml(t.topic) + '</span>';
+          html += '<div class="dash-topic-bar-track"><div class="dash-topic-bar-fill" style="width:' + pct + '%"></div></div>';
+          html += '<span class="dash-topic-count">' + t.count + '</span>';
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+
+      // Recent sessions table
+      html += '<div class="dash-card">';
+      html += '<div class="dash-section-title">Recent Sessions</div>';
+      if (!d.recentSessions || d.recentSessions.length === 0) {
+        html += '<p class="dash-empty">No sessions yet.</p>';
+      } else {
+        html += '<table class="dash-table">';
+        html += '<thead><tr><th>Student</th><th>Msgs</th><th>Streak</th><th>Mode</th><th>Last Active</th></tr></thead>';
+        html += '<tbody>';
+        d.recentSessions.forEach(function(s) {
+          html += '<tr>';
+          html += '<td><span class="dash-badge">' + escapeHtml(s.badge) + '</span></td>';
+          html += '<td>' + (s.messages || 0) + '</td>';
+          html += '<td>' + (s.streak || 1) + (s.streak > 1 ? ' \uD83D\uDD25' : '') + '</td>';
+          html += '<td>' + (s.unlocked ? '<span class="dash-unlocked-pill">Direct</span>' : '<span class="dash-socratic-pill">Socratic</span>') + '</td>';
+          html += '<td style="font-family:\'Space Mono\',monospace;font-size:10px;">' + escapeHtml(s.lastActive || '—') + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      html += '</div>'; // end two-col
+
+      html += '<div class="dash-footer">Mercurius &#8544; &mdash; Mayo AI Literacy Club &mdash; Auto-anonymized student data</div>';
+
+      root.innerHTML = html;
+    }
+
+    function statCard(label, value, sub) {
+      return '<div class="dash-stat-card">'
+        + '<div class="dash-stat-label">' + escapeHtml(label) + '</div>'
+        + '<div class="dash-stat-value">' + escapeHtml(String(value)) + '</div>'
+        + '<div class="dash-stat-sub">' + escapeHtml(sub) + '</div>'
+        + '</div>';
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Load on page ready
+    loadDashboard();
+  </script>
+
+</body>
+</html>

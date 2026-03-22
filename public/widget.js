@@ -23,6 +23,9 @@
   var API_ENDPOINT = config.apiEndpoint || 'http://localhost:3000/api/chat';
   var MODE_ENDPOINT = API_ENDPOINT.replace('/chat', '/mode');
   var QUIZ_ENDPOINT = API_ENDPOINT.replace('/chat', '/quiz');
+  var REPORT_CARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/report-card');
+  var CONCEPT_MAP_ENDPOINT = API_ENDPOINT.replace('/chat', '/concept-map');
+  var LEADERBOARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/leaderboard');
 
   // =========================================================================
   // 2. Session ID — persist across browser sessions using localStorage
@@ -83,6 +86,11 @@
   var summaryVisible = false;
   var quizVisible = false;
   var tooltipVisible = false;
+  var mapVisible = false;
+  var reportVisible = false;
+  var leaderboardVisible = false;
+  var voiceActive = false;
+  var voiceRecognition = null;
 
   var REFLECTION_PROMPTS = [
     '⏸ Pause: What\'s something Mercurius Ⅰ said that you\'d want to verify yourself?',
@@ -102,6 +110,7 @@
     { emoji: '🎯', label: 'How do I prompt AI well?' },
     { emoji: '🏫', label: 'AI and education equity' },
     { emoji: '📋', label: 'Prep me for the next club meeting' },
+    { emoji: '⚔️', label: 'Debate me on AI ethics' },
   ];
 
   var TRANSPARENCY_TEXT =
@@ -133,9 +142,13 @@
       '  <div class="merc-header-text">',
       '    <div class="merc-header-title">Mercurius &#8544;</div>',
       '    <div class="merc-header-subtitle">Here to help you think, not think for you</div>',
+      '    <div class="merc-header-streak" id="merc-header-streak"></div>',
       '  </div>',
       '  <div class="merc-header-actions">',
       '    <button class="merc-header-btn" id="merc-btn-quiz"    title="Generate comprehension quiz" aria-label="Quiz">&#128221;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-map"     title="Concept map">&#128205;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-report"  title="Session report card">&#127941;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-lb"      title="Leaderboard" aria-label="Leaderboard">&#127942;</button>',
       '    <button class="merc-header-btn" id="merc-btn-summary" title="Get conversation summary"    aria-label="Conversation summary">&#128203;</button>',
       '    <button class="merc-header-btn" id="merc-btn-info"    title="About Mercurius Ⅰ"          aria-label="About">&#8505;&#65039;</button>',
       '  </div>',
@@ -173,6 +186,33 @@
       '  <div id="merc-quiz-content"></div>',
       '</div>',
 
+      // Concept map panel (hidden by default)
+      '<div class="merc-map-panel merc-hidden" id="merc-map-panel">',
+      '  <div class="merc-quiz-header">',
+      '    <span class="merc-quiz-title" id="merc-map-title">Concept Map</span>',
+      '    <button class="merc-quiz-close" id="merc-map-close">&#10005;</button>',
+      '  </div>',
+      '  <div id="merc-map-content"></div>',
+      '</div>',
+
+      // Report card panel (hidden by default)
+      '<div class="merc-report-panel merc-hidden" id="merc-report-panel">',
+      '  <div class="merc-quiz-header">',
+      '    <span class="merc-quiz-title">Session Report Card</span>',
+      '    <button class="merc-quiz-close" id="merc-report-close">&#10005;</button>',
+      '  </div>',
+      '  <div id="merc-report-content"></div>',
+      '</div>',
+
+      // Leaderboard panel (hidden by default)
+      '<div class="merc-leaderboard-panel merc-hidden" id="merc-leaderboard-panel">',
+      '  <div class="merc-quiz-header">',
+      '    <span class="merc-quiz-title">&#127942; Leaderboard</span>',
+      '    <button class="merc-quiz-close" id="merc-leaderboard-close">&#10005;</button>',
+      '  </div>',
+      '  <div id="merc-leaderboard-content"></div>',
+      '</div>',
+
       // Messages area
       '<div class="merc-messages" id="merc-messages">',
       '  <div class="merc-topic-tags" id="merc-topic-tags">',
@@ -190,6 +230,7 @@
       '    rows="1"',
       '    aria-label="Message input"',
       '  ></textarea>',
+      '  <button id="merc-voice-btn" class="merc-voice-btn" aria-label="Voice input" title="Speak your answer">&#127908;</button>',
       '  <button id="merc-send-btn" class="merc-send-btn" aria-label="Send message">',
       '    <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
       '  </button>',
@@ -316,6 +357,46 @@
         quizVisible = false;
       });
     }
+
+    // Concept map button + close
+    var mapBtn = document.getElementById('merc-btn-map');
+    if (mapBtn) { mapBtn.addEventListener('click', handleConceptMap); }
+    var mapClose = document.getElementById('merc-map-close');
+    if (mapClose) {
+      mapClose.addEventListener('click', function () {
+        var mp = document.getElementById('merc-map-panel');
+        if (mp) mp.classList.add('merc-hidden');
+        mapVisible = false;
+      });
+    }
+
+    // Report card button + close
+    var reportBtn = document.getElementById('merc-btn-report');
+    if (reportBtn) { reportBtn.addEventListener('click', handleReportCard); }
+    var reportClose = document.getElementById('merc-report-close');
+    if (reportClose) {
+      reportClose.addEventListener('click', function () {
+        var rp = document.getElementById('merc-report-panel');
+        if (rp) rp.classList.add('merc-hidden');
+        reportVisible = false;
+      });
+    }
+
+    // Leaderboard button + close
+    var lbBtn = document.getElementById('merc-btn-lb');
+    if (lbBtn) { lbBtn.addEventListener('click', handleLeaderboard); }
+    var lbClose = document.getElementById('merc-leaderboard-close');
+    if (lbClose) {
+      lbClose.addEventListener('click', function () {
+        var lp = document.getElementById('merc-leaderboard-panel');
+        if (lp) lp.classList.add('merc-hidden');
+        leaderboardVisible = false;
+      });
+    }
+
+    // Voice input button
+    var voiceBtn = document.getElementById('merc-voice-btn');
+    if (voiceBtn) { voiceBtn.addEventListener('click', toggleVoiceInput); }
 
     // Mode tab clicks
     var tabSocratic = document.getElementById('merc-tab-socratic');
@@ -1013,6 +1094,12 @@
           updateModeBar();
         }
 
+        // Update streak badge
+        if (data.streak && data.streak > 1) {
+          var badge = document.getElementById('merc-header-streak');
+          if (badge) { badge.textContent = '\uD83D\uDD25 ' + data.streak; badge.style.display = 'inline-flex'; }
+        }
+
         // Always show bot reply
         appendBotMessage(reply);
 
@@ -1220,6 +1307,214 @@
         }
       });
     }
+  }
+
+  // =========================================================================
+  // 19. Concept map
+  // =========================================================================
+  function handleConceptMap() {
+    var panel = document.getElementById('merc-map-panel');
+    if (!panel) return;
+    if (mapVisible) { panel.classList.add('merc-hidden'); mapVisible = false; return; }
+    panel.classList.remove('merc-hidden');
+    mapVisible = true;
+    var content = document.getElementById('merc-map-content');
+    if (conversationHistory.length < 4) {
+      if (content) content.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first.</p>';
+      return;
+    }
+    if (content) content.innerHTML = '<p class="merc-quiz-loading">Building concept map&#8230;</p>';
+    fetch(CONCEPT_MAP_ENDPOINT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sessionId: sessionId}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.error) { if(content) content.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message||'Error') + '</p>'; return; } renderConceptMap(data); })
+      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
+  }
+
+  function renderConceptMap(data) {
+    var content = document.getElementById('merc-map-content');
+    if (!content) return;
+    var title = document.getElementById('merc-map-title');
+    if (title) title.textContent = data.central || 'Concept Map';
+
+    var W = 320, H = 260;
+    var nodes = data.nodes || [];
+    var edges = data.edges || [];
+
+    // Radial layout: central in center, others in circle
+    var cx = W/2, cy = H/2, r = 95;
+    var positions = { central: {x: cx, y: cy} };
+    nodes.forEach(function(n, i) {
+      var angle = (2 * Math.PI * i / nodes.length) - Math.PI/2;
+      positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    });
+
+    var colorMap = { core: '#C9922A', related: '#4ade80', example: '#60a5fa' };
+
+    var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg">';
+
+    // Draw edges
+    edges.forEach(function(e) {
+      var from = e.from === 'central' ? positions.central : positions[e.from];
+      var to = e.to === 'central' ? positions.central : positions[e.to];
+      if (!from || !to) return;
+      var mx = (from.x + to.x)/2, my = (from.y + to.y)/2;
+      svg += '<line x1="'+from.x+'" y1="'+from.y+'" x2="'+to.x+'" y2="'+to.y+'" stroke="rgba(201,146,42,0.3)" stroke-width="1.5"/>';
+      if (e.label) svg += '<text x="'+mx+'" y="'+my+'" fill="rgba(241,245,249,0.4)" font-size="7" text-anchor="middle" dy="-3">'+escapeHtml(e.label)+'</text>';
+    });
+
+    // Draw central node
+    svg += '<circle cx="'+cx+'" cy="'+cy+'" r="28" fill="#C9922A" opacity="0.9"/>';
+    var centralWords = (data.central||'').split(' ');
+    centralWords.forEach(function(w, i) {
+      svg += '<text x="'+cx+'" y="'+(cy - (centralWords.length-1)*6 + i*13)+'" fill="#122e1e" font-size="9" font-weight="700" text-anchor="middle">'+escapeHtml(w)+'</text>';
+    });
+
+    // Draw other nodes
+    nodes.forEach(function(n) {
+      var p = positions[n.id];
+      if (!p) return;
+      var fill = colorMap[n.group] || '#94a3b8';
+      svg += '<circle cx="'+p.x+'" cy="'+p.y+'" r="20" fill="'+fill+'" opacity="0.8"/>';
+      var words = (n.label||'').split(' ');
+      words.slice(0,2).forEach(function(w, i) {
+        svg += '<text x="'+p.x+'" y="'+(p.y - (Math.min(words.length,2)-1)*5 + i*11)+'" fill="#122e1e" font-size="8" font-weight="600" text-anchor="middle">'+escapeHtml(w)+'</text>';
+      });
+    });
+
+    svg += '</svg>';
+
+    // Legend
+    var legend = '<div class="merc-map-legend">'
+      + '<span style="color:#C9922A">&#9679; Core</span>'
+      + '<span style="color:#4ade80">&#9679; Related</span>'
+      + '<span style="color:#60a5fa">&#9679; Example</span>'
+      + '</div>';
+
+    content.innerHTML = '<div class="merc-map-svg">' + svg + '</div>' + legend;
+  }
+
+  // =========================================================================
+  // 19b. Report card
+  // =========================================================================
+  function handleReportCard() {
+    var panel = document.getElementById('merc-report-panel');
+    if (!panel) return;
+    if (reportVisible) { panel.classList.add('merc-hidden'); reportVisible = false; return; }
+    panel.classList.remove('merc-hidden');
+    reportVisible = true;
+    var content = document.getElementById('merc-report-content');
+    if (conversationHistory.length < 4) {
+      if (content) content.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first.</p>';
+      return;
+    }
+    if (content) content.innerHTML = '<p class="merc-quiz-loading">Generating report card&#8230;</p>';
+    fetch(REPORT_CARD_ENDPOINT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sessionId: sessionId}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.error) { if(content) content.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message||'Error') + '</p>'; return; } renderReportCard(data); })
+      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
+  }
+
+  function renderReportCard(data) {
+    var content = document.getElementById('merc-report-content');
+    if (!content) return;
+    var gradeColor = (data.overallGrade||'').startsWith('A') ? '#4ade80' : (data.overallGrade||'').startsWith('B') ? '#C9922A' : '#f87171';
+    var html = '<div class="merc-report-grade" style="color:'+gradeColor+'">'+escapeHtml(data.overallGrade||'B')+'</div>';
+    html += '<p class="merc-report-summary">'+escapeHtml(data.summary||'')+'</p>';
+    html += '<div class="merc-report-bars">';
+    html += '<div class="merc-report-bar-row"><span>Critical Thinking</span><div class="merc-report-bar"><div style="width:'+((data.criticalThinkingScore||0))+'%"></div></div><span>'+((data.criticalThinkingScore||0))+'</span></div>';
+    html += '<div class="merc-report-bar-row"><span>Curiosity</span><div class="merc-report-bar"><div style="width:'+((data.curiosityScore||0))+'%"></div></div><span>'+((data.curiosityScore||0))+'</span></div>';
+    html += '</div>';
+    if (data.strengths && data.strengths.length) {
+      html += '<div class="merc-report-section"><div class="merc-report-section-title" style="color:#4ade80">Strengths</div><ul>';
+      data.strengths.forEach(function(s) { html += '<li>'+escapeHtml(s)+'</li>'; });
+      html += '</ul></div>';
+    }
+    if (data.areasToRevisit && data.areasToRevisit.length) {
+      html += '<div class="merc-report-section"><div class="merc-report-section-title" style="color:#C9922A">Revisit</div><ul>';
+      data.areasToRevisit.forEach(function(s) { html += '<li>'+escapeHtml(s)+'</li>'; });
+      html += '</ul></div>';
+    }
+    if (data.nextSessionSuggestion) {
+      html += '<div class="merc-report-next">Next: '+escapeHtml(data.nextSessionSuggestion)+'</div>';
+    }
+    content.innerHTML = html;
+  }
+
+  // =========================================================================
+  // 19c. Leaderboard
+  // =========================================================================
+  function handleLeaderboard() {
+    var panel = document.getElementById('merc-leaderboard-panel');
+    if (!panel) return;
+    if (leaderboardVisible) { panel.classList.add('merc-hidden'); leaderboardVisible = false; return; }
+    panel.classList.remove('merc-hidden');
+    leaderboardVisible = true;
+    var content = document.getElementById('merc-leaderboard-content');
+    if (content) content.innerHTML = '<p class="merc-quiz-loading">Loading&#8230;</p>';
+    fetch(LEADERBOARD_ENDPOINT, { method: 'GET', headers: {'Content-Type':'application/json'} })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderLeaderboard(data); })
+      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
+  }
+
+  function renderLeaderboard(rows) {
+    var content = document.getElementById('merc-leaderboard-content');
+    if (!content) return;
+    if (!rows || rows.length === 0) { content.innerHTML = '<p class="merc-quiz-empty">No data yet — start chatting!</p>'; return; }
+    var html = '<div class="merc-lb-table">';
+    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>\uD83D\uDD25</span><span>Msgs</span><span>Mode</span></div>';
+    rows.forEach(function(r) {
+      html += '<div class="merc-lb-row">';
+      html += '<span>'+r.rank+'</span>';
+      html += '<span class="merc-lb-badge">'+escapeHtml(r.badge)+'</span>';
+      html += '<span>'+r.streak+'</span>';
+      html += '<span>'+r.messages+'</span>';
+      html += '<span>'+(r.unlocked?'<span style="color:#C9922A">Direct</span>':'Socratic')+'</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  // =========================================================================
+  // 19d. Voice input
+  // =========================================================================
+  function toggleVoiceInput() {
+    var btn = document.getElementById('merc-voice-btn');
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      appendSystemNotice('Voice input is not supported in this browser. Try Chrome.');
+      return;
+    }
+    if (voiceActive && voiceRecognition) {
+      voiceRecognition.stop();
+      voiceActive = false;
+      if (btn) btn.classList.remove('merc-voice-active');
+      return;
+    }
+    var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    voiceRecognition = new SpeechRec();
+    voiceRecognition.continuous = false;
+    voiceRecognition.interimResults = false;
+    voiceRecognition.lang = 'en-US';
+    voiceActive = true;
+    if (btn) btn.classList.add('merc-voice-active');
+    voiceRecognition.onresult = function(e) {
+      var transcript = e.results[0][0].transcript;
+      var ta = document.getElementById('merc-textarea');
+      if (ta) { ta.value = transcript; ta.dispatchEvent(new Event('input')); }
+      voiceActive = false;
+      if (btn) btn.classList.remove('merc-voice-active');
+    };
+    voiceRecognition.onerror = function() {
+      voiceActive = false;
+      if (btn) btn.classList.remove('merc-voice-active');
+      appendSystemNotice('Voice input error — please try again.');
+    };
+    voiceRecognition.onend = function() {
+      voiceActive = false;
+      if (btn) btn.classList.remove('merc-voice-active');
+    };
+    voiceRecognition.start();
   }
 
   // =========================================================================

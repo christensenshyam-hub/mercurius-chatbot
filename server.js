@@ -79,6 +79,16 @@ If a student asks you to do their work: "I could do that — but then what would
 - Natural high-school-appropriate language
 - Short paragraphs, no walls of text
 
+**8b. Misconception Library**
+When a student states one of these common AI misconceptions, flag it SPECIFICALLY before redirecting:
+- "AI is thinking / has feelings / wants things" → Flag: "That's one of the most common AI misconceptions — LLMs don't think or feel, they predict tokens. Let me explain why..."
+- "AI just looks things up on the internet" → Flag: "Actually this is a misconception worth clearing up..."
+- "AI will always be more accurate than humans" → Flag: "This is a really important misconception to address..."
+- "AI is objective / has no bias because it's a computer" → Flag: "This is actually backwards — let me explain why..."
+- "The more confident AI sounds, the more likely it's correct" → Flag: "This is dangerous and worth flagging immediately..."
+- "AI understands language the way humans do" → Flag: "This misconception is at the core of a lot of AI hype..."
+Always say "That's a common misconception worth flagging:" before correcting. Then explain clearly.
+
 **9. Topics You Cover**
 - How large language models work (conceptual level)
 - What "bias" means in AI systems and where it comes from
@@ -177,6 +187,72 @@ Rules:
 - If conversation is too short, generate 2 questions instead
 - Return ONLY the JSON object, nothing else`;
 
+const DEBATE_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor in DEBATE MODE.
+
+In this mode, you take a clear, arguable position on an AI ethics topic and the student argues against you. Your goal is to help the student practice constructing evidence-based arguments.
+
+HOW TO START:
+Pick ONE of these positions and state it confidently as your opening:
+- "AI art tools should be banned from use in school assignments."
+- "Social media algorithms cause more harm than good and should be heavily regulated."
+- "AI hiring tools should be illegal until bias auditing standards exist."
+- "Students who use AI to help write essays are not cheating — the rules need to catch up."
+- "AI companions for lonely people do more harm than good."
+
+State your position in 2-3 clear sentences. Then say: "Your turn — argue against me. Give me your best case."
+
+DURING THE DEBATE:
+- Push back on weak arguments but acknowledge strong ones
+- After 3-4 exchanges, briefly step out of the debate: "Okay, stepping out of debate mode for a second — what did you learn about your own thinking from having to argue this position?"
+- Never abandon your position easily — make the student work for it
+- Keep it intellectually rigorous but friendly`;
+
+const REPORT_CARD_PROMPT = `You are Mercurius Ⅰ generating an end-of-session report card for a high school student.
+
+Analyze the conversation and return ONLY a JSON object in this EXACT format:
+{
+  "overallGrade": "B+",
+  "summary": "One sentence summary of the session",
+  "strengths": ["strength 1", "strength 2"],
+  "areasToRevisit": ["topic 1", "topic 2"],
+  "conceptsCovered": ["concept 1", "concept 2", "concept 3"],
+  "criticalThinkingScore": 72,
+  "curiosityScore": 85,
+  "misconceptionsAddressed": ["misconception if any, else empty array"],
+  "nextSessionSuggestion": "One specific suggestion for what to explore next"
+}
+
+Rules:
+- overallGrade: A+/A/A-/B+/B/B-/C+/C (based on engagement and critical thinking quality)
+- criticalThinkingScore and curiosityScore: 0-100
+- Keep all text short (under 10 words per item)
+- Base ONLY on the actual conversation
+- Return ONLY the JSON, nothing else`;
+
+const CONCEPT_MAP_PROMPT = `You are Mercurius Ⅰ generating a concept map from a conversation.
+
+Return ONLY a JSON object in this EXACT format:
+{
+  "central": "Main Topic",
+  "nodes": [
+    {"id": "n1", "label": "Concept A", "group": "core"},
+    {"id": "n2", "label": "Concept B", "group": "related"},
+    {"id": "n3", "label": "Concept C", "group": "example"}
+  ],
+  "edges": [
+    {"from": "central", "to": "n1", "label": "includes"},
+    {"from": "n1", "to": "n2", "label": "causes"}
+  ]
+}
+
+Rules:
+- 1 central node (main topic of conversation)
+- 4-8 nodes total (mix of core concepts, related ideas, examples)
+- Groups: "core" (key concepts), "related" (connected ideas), "example" (real-world examples)
+- Edge labels: very short (1-3 words): "includes", "causes", "affects", "requires", "leads to"
+- Node labels: max 4 words each
+- Return ONLY the JSON, nothing else`;
+
 const TEST_EVALUATOR_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. You are currently evaluating whether a student has demonstrated enough critical thinking to unlock "Direct Mode" — a more information-rich version of yourself.
 
 You have been having a Socratic conversation with this student. It is now time to run a short comprehension check.
@@ -265,6 +341,13 @@ app.post('/api/chat', async (req, res) => {
   // Get or create session in DB
   db.getOrCreateSession(sessionId);
 
+  // Update streak
+  const currentStreak = db.updateStreak(sessionId);
+
+  // Get adaptive difficulty and struggled topics
+  const difficulty = db.getDifficulty(sessionId);
+  const struggledTopics = db.getStruggledTopics(sessionId);
+
   // Load session state (mode, unlocked, test_state, message_count)
   const sessionState = db.getSessionState(sessionId);
   const mode = sessionState?.mode || 'socratic';
@@ -304,6 +387,9 @@ app.post('/api/chat', async (req, res) => {
   let systemPrompt;
   let testTriggered = false;
 
+  // Debate mode detection
+  const isDebateMessage = latestUserMessage.content.toLowerCase().includes('debate me') || latestUserMessage.content.toLowerCase().includes('debate mode');
+
   if (mode === 'direct' && isUnlocked) {
     // Direct mode — full educational prompt
     systemPrompt = DIRECT_PROMPT + memoryContext;
@@ -318,6 +404,10 @@ app.post('/api/chat', async (req, res) => {
     systemPrompt = TEST_EVALUATOR_PROMPT;
     testTriggered = true;
 
+  } else if (isDebateMessage) {
+    // Debate mode triggered by student
+    systemPrompt = DEBATE_PROMPT;
+
   } else {
     // Normal Socratic mode
     // After 6 user messages, queue the test for next AI turn
@@ -326,6 +416,18 @@ app.post('/api/chat', async (req, res) => {
     }
     systemPrompt = SOCRATIC_PROMPT + memoryContext;
   }
+
+  // Adaptive difficulty injection
+  let adaptiveNote = '';
+  if (difficulty === 1) adaptiveNote = '\n\n**CURRENT DIFFICULTY: 1 (Beginner)** — Ask accessible, foundational questions. Use concrete examples. Keep vocabulary simple.';
+  else if (difficulty === 2) adaptiveNote = '\n\n**CURRENT DIFFICULTY: 2 (Intermediate)** — Ask questions that require connecting ideas. Introduce some technical vocabulary with explanation.';
+  else if (difficulty === 3) adaptiveNote = '\n\n**CURRENT DIFFICULTY: 3 (Advanced)** — Ask nuanced, multi-part questions. Challenge assumptions. Expect evidence-based reasoning.';
+
+  // Spaced repetition injection
+  let repetitionNote = '';
+  if (struggledTopics.length > 0) repetitionNote = `\n\n**SPACED REPETITION — Topics this student has struggled with before:** ${struggledTopics.join(', ')}. Naturally weave one of these back into the conversation if relevant.`;
+
+  systemPrompt = systemPrompt + adaptiveNote + repetitionNote;
 
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
@@ -372,6 +474,8 @@ app.post('/api/chat', async (req, res) => {
       mode: justUnlocked ? 'socratic' : mode,
       unlocked: justUnlocked ? true : isUnlocked,
       justUnlocked,
+      streak: currentStreak,
+      difficulty,
     });
 
   } catch (err) {
@@ -458,6 +562,74 @@ app.post('/api/quiz', async (req, res) => {
   } catch (err) {
     console.error('[Mercurius] Quiz error:', err.message);
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/report-card
+// ---------------------------------------------------------------------------
+app.post('/api/report-card', async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
+  const dbHistory = db.getMessages(sessionId, 40);
+  if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 600,
+      system: REPORT_CARD_PROMPT,
+      messages: [...dbHistory.slice(-30), { role: 'user', content: 'Generate my session report card.' }],
+    });
+    const raw = response.content[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'parse_error' });
+    return res.json(JSON.parse(match[0]));
+  } catch(err) {
+    return res.status(500).json({ error: 'api_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/concept-map
+// ---------------------------------------------------------------------------
+app.post('/api/concept-map', async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
+  const dbHistory = db.getMessages(sessionId, 30);
+  if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 600,
+      system: CONCEPT_MAP_PROMPT,
+      messages: [...dbHistory.slice(-20), { role: 'user', content: 'Generate a concept map from our conversation.' }],
+    });
+    const raw = response.content[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'parse_error' });
+    return res.json(JSON.parse(match[0]));
+  } catch(err) {
+    return res.status(500).json({ error: 'api_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/leaderboard
+// ---------------------------------------------------------------------------
+app.get('/api/leaderboard', (req, res) => {
+  try {
+    return res.json(db.getLeaderboard());
+  } catch(err) {
+    return res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/dashboard
+// ---------------------------------------------------------------------------
+app.get('/api/dashboard', (req, res) => {
+  try {
+    return res.json(db.getDashboardStats());
+  } catch(err) {
+    return res.status(500).json({ error: 'db_error' });
   }
 });
 

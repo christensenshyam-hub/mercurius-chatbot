@@ -40,6 +40,11 @@ db.exec(`
   if (!cols.includes('mode'))       db.exec("ALTER TABLE sessions ADD COLUMN mode TEXT DEFAULT 'socratic'");
   if (!cols.includes('unlocked'))   db.exec("ALTER TABLE sessions ADD COLUMN unlocked INTEGER DEFAULT 0");
   if (!cols.includes('test_state')) db.exec("ALTER TABLE sessions ADD COLUMN test_state TEXT DEFAULT NULL");
+  if (!cols.includes('difficulty_level'))   db.exec("ALTER TABLE sessions ADD COLUMN difficulty_level INTEGER DEFAULT 1");
+  if (!cols.includes('struggled_topics'))   db.exec("ALTER TABLE sessions ADD COLUMN struggled_topics TEXT DEFAULT '[]'");
+  if (!cols.includes('streak'))             db.exec("ALTER TABLE sessions ADD COLUMN streak INTEGER DEFAULT 1");
+  if (!cols.includes('last_session_date'))  db.exec("ALTER TABLE sessions ADD COLUMN last_session_date TEXT DEFAULT NULL");
+  if (!cols.includes('total_session_count'))db.exec("ALTER TABLE sessions ADD COLUMN total_session_count INTEGER DEFAULT 1");
 })();
 
 module.exports = {
@@ -114,8 +119,118 @@ module.exports = {
     db.prepare("UPDATE sessions SET unlocked = 1, mode = 'socratic' WHERE session_id = ?").run(sessionId);
   },
 
+  // Alias for setUnlocked (used by server.js)
+  markUnlocked(sessionId) { this.setUnlocked(sessionId); },
+
   // Update test state: null | 'pending' | 'in_progress' | 'passed' | 'failed'
   setTestState(sessionId, state) {
     db.prepare('UPDATE sessions SET test_state = ? WHERE session_id = ?').run(state, sessionId);
+  },
+
+  // Adaptive difficulty: get/set 1-3
+  getDifficulty(sessionId) {
+    const r = db.prepare('SELECT difficulty_level FROM sessions WHERE session_id = ?').get(sessionId);
+    return r ? (r.difficulty_level || 1) : 1;
+  },
+  setDifficulty(sessionId, level) {
+    const clamped = Math.max(1, Math.min(3, level));
+    db.prepare('UPDATE sessions SET difficulty_level = ? WHERE session_id = ?').run(clamped, sessionId);
+  },
+
+  // Spaced repetition: struggled topics
+  getStruggledTopics(sessionId) {
+    const rows = db.prepare('SELECT struggled_topics FROM sessions WHERE struggled_topics IS NOT NULL AND struggled_topics != ?').all('[]');
+    const all = [];
+    rows.forEach(r => {
+      try { const arr = JSON.parse(r.struggled_topics || '[]'); arr.forEach(t => { if (!all.includes(t)) all.push(t); }); } catch(e){}
+    });
+    return all.slice(0, 5);
+  },
+  addStruggledTopic(sessionId, topic) {
+    const r = db.prepare('SELECT struggled_topics FROM sessions WHERE session_id = ?').get(sessionId);
+    let arr = [];
+    try { arr = JSON.parse(r?.struggled_topics || '[]'); } catch(e){}
+    if (!arr.includes(topic)) arr.push(topic);
+    if (arr.length > 10) arr = arr.slice(-10);
+    db.prepare('UPDATE sessions SET struggled_topics = ? WHERE session_id = ?').run(JSON.stringify(arr), sessionId);
+  },
+
+  // Streak tracking
+  updateStreak(sessionId) {
+    const r = db.prepare('SELECT streak, last_session_date FROM sessions WHERE session_id = ?').get(sessionId);
+    if (!r) return 1;
+    const today = new Date().toISOString().slice(0, 10);
+    if (r.last_session_date === today) return r.streak || 1;
+    let newStreak = 1;
+    if (r.last_session_date) {
+      const last = new Date(r.last_session_date);
+      const now = new Date(today);
+      const diffDays = Math.round((now - last) / 86400000);
+      newStreak = diffDays <= 2 ? (r.streak || 1) + 1 : 1;
+    }
+    db.prepare('UPDATE sessions SET streak = ?, last_session_date = ? WHERE session_id = ?').run(newStreak, today, sessionId);
+    return newStreak;
+  },
+
+  getStreakData(sessionId) {
+    const r = db.prepare('SELECT streak, last_session_date, topics, message_count, unlocked FROM sessions WHERE session_id = ?').get(sessionId);
+    const totalSessions = db.prepare('SELECT COUNT(*) as c FROM sessions WHERE session_id = ?').get(sessionId);
+    return {
+      streak: r?.streak || 1,
+      lastDate: r?.last_session_date,
+      topics: (() => { try { return JSON.parse(r?.topics || '[]'); } catch(e){ return []; } })(),
+      messageCount: r?.message_count || 0,
+      unlocked: !!(r?.unlocked),
+    };
+  },
+
+  // Leaderboard: anonymous
+  getLeaderboard() {
+    return db.prepare(`
+      SELECT session_id, streak, message_count, unlocked, last_session_date, topics
+      FROM sessions
+      WHERE message_count > 2
+      ORDER BY streak DESC, message_count DESC
+      LIMIT 20
+    `).all().map((r, i) => ({
+      rank: i + 1,
+      badge: r.session_id.slice(-4).toUpperCase(),
+      streak: r.streak || 1,
+      messages: r.message_count || 0,
+      unlocked: !!(r.unlocked),
+      lastActive: r.last_session_date,
+    }));
+  },
+
+  // Dashboard stats
+  getDashboardStats() {
+    const total = db.prepare('SELECT COUNT(*) as c FROM sessions').get().c;
+    const unlocked = db.prepare('SELECT COUNT(*) as c FROM sessions WHERE unlocked = 1').get().c;
+    const totalMessages = db.prepare('SELECT COUNT(*) as c FROM messages').get().c;
+    const recentSessions = db.prepare('SELECT session_id, message_count, streak, topics, unlocked, last_session_date FROM sessions ORDER BY last_active DESC LIMIT 20').all();
+    // Aggregate topics
+    const topicCounts = {};
+    recentSessions.forEach(s => {
+      try {
+        const arr = JSON.parse(s.topics || '[]');
+        arr.forEach(t => { topicCounts[t] = (topicCounts[t] || 0) + 1; });
+      } catch(e){}
+    });
+    const topTopics = Object.entries(topicCounts).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([topic, count]) => ({ topic, count }));
+    return {
+      totalSessions: total,
+      unlockedCount: unlocked,
+      unlockRate: total > 0 ? Math.round((unlocked/total)*100) : 0,
+      totalMessages,
+      avgMessagesPerSession: total > 0 ? Math.round(totalMessages/total) : 0,
+      topTopics,
+      recentSessions: recentSessions.map(s => ({
+        badge: s.session_id.slice(-4).toUpperCase(),
+        messages: s.message_count,
+        streak: s.streak || 1,
+        unlocked: !!(s.unlocked),
+        lastActive: s.last_session_date,
+      })),
+    };
   },
 };
