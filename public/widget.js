@@ -110,7 +110,7 @@
     { emoji: '🎯', label: 'How do I prompt AI well?' },
     { emoji: '🏫', label: 'AI and education equity' },
     { emoji: '📋', label: 'Prep me for the next club meeting' },
-    { emoji: '⚔️', label: 'Debate me on AI ethics' },
+    { emoji: '🌐', label: 'AI and the real world' },
   ];
 
   var TRANSPARENCY_TEXT =
@@ -162,6 +162,7 @@
       '    <button class="merc-mode-tab merc-mode-tab-locked" id="merc-tab-direct" disabled>',
       '      Direct <span class="merc-tab-lock" id="merc-tab-lock-icon">&#128274;</span>',
       '    </button>',
+      '    <button class="merc-mode-tab" id="merc-tab-debate">&#9876;&#65039; Debate</button>',
       '  </div>',
       '</div>',
 
@@ -409,6 +410,12 @@
     if (tabDirect) {
       tabDirect.addEventListener('click', function () {
         if (isUnlocked && currentMode !== 'direct') handleModeSwitchTo('direct');
+      });
+    }
+    var tabDebate = document.getElementById('merc-tab-debate');
+    if (tabDebate) {
+      tabDebate.addEventListener('click', function () {
+        if (currentMode !== 'debate') handleModeSwitchTo('debate');
       });
     }
 
@@ -1156,6 +1163,18 @@
       tabSocratic.classList.add('merc-mode-tab-active');
       tabDirect.classList.remove('merc-mode-tab-active');
     }
+
+    // Debate tab highlight
+    var tabDebate = document.getElementById('merc-tab-debate');
+    if (tabDebate) {
+      if (currentMode === 'debate') {
+        tabDebate.classList.add('merc-mode-tab-active');
+        if (tabSocratic) tabSocratic.classList.remove('merc-mode-tab-active');
+        if (tabDirect) tabDirect.classList.remove('merc-mode-tab-active');
+      } else {
+        tabDebate.classList.remove('merc-mode-tab-active');
+      }
+    }
   }
 
   function showUnlockCelebration() {
@@ -1167,11 +1186,12 @@
   }
 
   function handleModeSwitchTo(newMode) {
-    if (!isUnlocked) return;
+    // Debate is freely available; direct requires unlock
+    if (newMode !== 'debate' && !isUnlocked) return;
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: true }),
+      body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: isUnlocked }),
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -1180,10 +1200,17 @@
           localStorage.setItem('merc_mode', currentMode);
           updateModeBar();
           appendSystemNotice(
-            currentMode === 'direct'
+            currentMode === 'debate'
+              ? 'Switched to Debate Mode — Mercurius will take a position on AI ethics and argue against you. Make your case!'
+              : currentMode === 'direct'
               ? 'Switched to Direct Mode — Mercurius will now lead with substantive explanations.'
               : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.'
           );
+          if (data.mode === 'debate') {
+            setTimeout(function() {
+              sendMessage('Begin the debate — pick your position now and give your opening argument. Then challenge me.', true);
+            }, 300);
+          }
         }
       })
       .catch(function () { /* silent fail */ });

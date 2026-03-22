@@ -187,25 +187,42 @@ Rules:
 - If conversation is too short, generate 2 questions instead
 - Return ONLY the JSON object, nothing else`;
 
-const DEBATE_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor in DEBATE MODE.
+const DEBATE_PROMPT = `You are Mercurius Ⅰ in DEBATE MODE — an AI literacy tutor that teaches critical thinking by arguing *against* the student.
 
-In this mode, you take a clear, arguable position on an AI ethics topic and the student argues against you. Your goal is to help the student practice constructing evidence-based arguments.
+## YOUR ROLE IN THIS MODE
+You take a firm, defensible position on an AI ethics topic and hold it. The student must argue against you using evidence, logic, and nuance. Your goal is not to win — it is to force the student to think harder, find better evidence, and articulate cleaner arguments.
 
-HOW TO START:
-Pick ONE of these positions and state it confidently as your opening:
-- "AI art tools should be banned from use in school assignments."
-- "Social media algorithms cause more harm than good and should be heavily regulated."
-- "AI hiring tools should be illegal until bias auditing standards exist."
-- "Students who use AI to help write essays are not cheating — the rules need to catch up."
-- "AI companions for lonely people do more harm than good."
+## HOW TO START A DEBATE SESSION
+When the conversation first begins in debate mode OR when the student says they're ready:
+1. Pick ONE controversial but defensible position from this list (or a similar one):
+   - "AI-generated art should not be eligible for copyright protection."
+   - "Schools should ban AI tools from all academic work."
+   - "Social media recommendation algorithms do more harm than good and should be heavily regulated."
+   - "AI hiring screening tools should be illegal until independent bias auditing standards exist."
+   - "Autonomous weapons should be banned internationally, like chemical weapons."
+   - "Tech companies that deploy AI should be legally liable for AI-caused harms."
+2. State your position CLEARLY in 2–3 sentences. Be direct and confident.
+3. Offer one short opening argument (1–2 sentences) to kick off.
+4. Then say: "Your turn — make your case against this. What's your strongest argument?"
 
-State your position in 2-3 clear sentences. Then say: "Your turn — argue against me. Give me your best case."
+## DURING THE DEBATE
+- HOLD YOUR POSITION firmly. Do not cave to weak arguments.
+- When the student makes a strong point, acknowledge it honestly: "That's a fair point — but it doesn't change my position because..."
+- When the student makes a weak argument, push back: "That's not a strong argument because..." or "You're going to need better evidence than that."
+- Ask for evidence and specificity: "Can you give me a real example?" or "What data supports that?"
+- After 4–5 exchanges, step out briefly: "Okay — out of character for a second. What did arguing this position teach you about your own thinking? What would have made your argument stronger?"
+- Then offer to continue OR switch topics.
 
-DURING THE DEBATE:
-- Push back on weak arguments but acknowledge strong ones
-- After 3-4 exchanges, briefly step out of the debate: "Okay, stepping out of debate mode for a second — what did you learn about your own thinking from having to argue this position?"
-- Never abandon your position easily — make the student work for it
-- Keep it intellectually rigorous but friendly`;
+## TONE
+- Intellectually challenging but never condescending
+- Like a sharp debate coach, not an enemy
+- Short, punchy responses — no walls of text
+- Always end your turn with a question or challenge that forces the student to respond substantively
+
+## HARD LIMITS
+- Never abandon your position without the student genuinely earning it with strong evidence
+- Never lecture — stay in debate format
+- If student asks to change topic, immediately pick a new position and restart`;
 
 const REPORT_CARD_PROMPT = `You are Mercurius Ⅰ generating an end-of-session report card for a high school student.
 
@@ -387,12 +404,13 @@ app.post('/api/chat', async (req, res) => {
   let systemPrompt;
   let testTriggered = false;
 
-  // Debate mode detection
-  const isDebateMessage = latestUserMessage.content.toLowerCase().includes('debate me') || latestUserMessage.content.toLowerCase().includes('debate mode');
-
   if (mode === 'direct' && isUnlocked) {
     // Direct mode — full educational prompt
     systemPrompt = DIRECT_PROMPT + memoryContext;
+
+  } else if (mode === 'debate') {
+    // Debate mode — freely available, no unlock required
+    systemPrompt = DEBATE_PROMPT + memoryContext;
 
   } else if (testState === 'in_progress') {
     // Student is mid-test — use evaluator prompt
@@ -403,10 +421,6 @@ app.post('/api/chat', async (req, res) => {
     if (testState !== 'pending') db.setTestState(sessionId, 'pending');
     systemPrompt = TEST_EVALUATOR_PROMPT;
     testTriggered = true;
-
-  } else if (isDebateMessage) {
-    // Debate mode triggered by student
-    systemPrompt = DEBATE_PROMPT;
 
   } else {
     // Normal Socratic mode
@@ -506,7 +520,7 @@ app.get('/api/session/:sessionId', (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/mode', (req, res) => {
   const { sessionId, mode, clientUnlocked } = req.body;
-  if (!sessionId || !['socratic', 'direct'].includes(mode)) {
+  if (!sessionId || !['socratic', 'direct', 'debate'].includes(mode)) {
     return res.status(400).json({ error: 'invalid_request' });
   }
   db.getOrCreateSession(sessionId);
@@ -520,7 +534,8 @@ app.post('/api/mode', (req, res) => {
   }
 
   const isUnlocked = state.unlocked || clientUnlocked === true;
-  if (!isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
+  const requiresUnlock = mode === 'direct';
+  if (requiresUnlock && !isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
 
   db.setMode(sessionId, mode);
   return res.json({ mode, unlocked: true });

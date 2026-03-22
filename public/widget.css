@@ -175,11 +175,11 @@
 
 .merc-mode-tab {
   flex: 1;
-  padding: 5px 0;
+  padding: 4px 2px;
   border-radius: 7px;
   font-family: 'Space Mono', monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.18s ease;
@@ -215,6 +215,22 @@
 .merc-tab-lock {
   font-size: 10px;
   opacity: 0.5;
+}
+
+/* Debate tab — gold/orange accent */
+#merc-tab-debate {
+  color: rgba(201, 146, 42, 0.8);
+  border: 1px solid rgba(201, 146, 42, 0.3);
+}
+#merc-tab-debate:hover {
+  background: rgba(201, 146, 42, 0.1);
+  color: var(--merc-gold);
+}
+#merc-tab-debate.merc-mode-tab-active {
+  background: var(--merc-gold) !important;
+  color: #122e1e !important;
+  border-color: var(--merc-gold) !important;
+  font-weight: 700;
 }
 
 /* Flash animation on unlock */
