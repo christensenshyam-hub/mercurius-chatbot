@@ -1,5 +1,5 @@
 /**
- * widget.js — Mercurius Ⅰ Self-Contained Chat Widget
+ * widget.js — Mercurius Ⅰ Self-Contained Chat Widget (Full-Screen Redesign)
  *
  * Drop this onto any page alongside widget.css (or let this script inject the
  * CSS link automatically). Reads window.MercuriusConfig for configuration.
@@ -34,7 +34,6 @@
   var sessionId = localStorage.getItem(SESSION_KEY);
   var isReturningStudent = !!sessionId;
   if (!sessionId) {
-    // Generate a simple UUID-like string without crypto dependency
     sessionId =
       'merc_' +
       Math.random().toString(16).slice(2) +
@@ -50,7 +49,6 @@
   (function injectCSS() {
     var cssHref = config.cssHref;
     if (!cssHref) {
-      // Derive the CSS URL from the script tag's src
       var scripts = document.querySelectorAll('script[src]');
       for (var i = 0; i < scripts.length; i++) {
         if (scripts[i].src.indexOf('widget.js') !== -1) {
@@ -59,7 +57,6 @@
         }
       }
     }
-    // Skip if we couldn't find the URL, or if a link with that href already exists
     if (!cssHref) return;
     var existing = document.querySelectorAll('link[rel="stylesheet"]');
     for (var j = 0; j < existing.length; j++) {
@@ -80,168 +77,153 @@
   var isUnlocked = localStorage.getItem('merc_unlocked') === 'true';
   var currentMode = localStorage.getItem('merc_mode') || 'socratic';
   var reflectionIndex = 0;
-  var conversationHistory = []; // [{role, content}, ...] — max 20 stored
+  var conversationHistory = [];
   var summaryFetched = false;
   var summaryMessageCountAtFetch = 0;
-  var summaryVisible = false;
-  var quizVisible = false;
   var tooltipVisible = false;
-  var mapVisible = false;
-  var reportVisible = false;
-  var leaderboardVisible = false;
   var voiceActive = false;
   var voiceRecognition = null;
+  var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'leaderboard' | 'summary' | null
 
   var REFLECTION_PROMPTS = [
-    '⏸ Pause: What\'s something Mercurius Ⅰ said that you\'d want to verify yourself?',
-    '⏸ Pause: In your own words, what\'s the most important thing you\'ve discussed so far?',
-    '⏸ Pause: Has Mercurius Ⅰ said anything that felt too confident? What would you push back on?',
-    '⏸ Pause: Who might be affected by the topic you\'re discussing who wasn\'t mentioned?',
-    '⏸ Pause: What question do you still have that hasn\'t been answered yet?',
-    '⏸ Pause: How would you explain what you\'ve learned to someone who hasn\'t taken this class?',
-    '⏸ Pause: What assumption is Mercurius Ⅰ making that might not apply to everyone?',
-    '⏸ Pause: If Mercurius Ⅰ is wrong about something, how would you find out?',
+    '\u23F8 Pause: What\'s something Mercurius \u2160 said that you\'d want to verify yourself?',
+    '\u23F8 Pause: In your own words, what\'s the most important thing you\'ve discussed so far?',
+    '\u23F8 Pause: Has Mercurius \u2160 said anything that felt too confident? What would you push back on?',
+    '\u23F8 Pause: Who might be affected by the topic you\'re discussing who wasn\'t mentioned?',
+    '\u23F8 Pause: What question do you still have that hasn\'t been answered yet?',
+    '\u23F8 Pause: How would you explain what you\'ve learned to someone who hasn\'t taken this class?',
+    '\u23F8 Pause: What assumption is Mercurius \u2160 making that might not apply to everyone?',
+    '\u23F8 Pause: If Mercurius \u2160 is wrong about something, how would you find out?',
   ];
 
   var STARTER_TOPICS = [
-    { emoji: '🤖', label: 'How does AI actually work?' },
-    { emoji: '⚖️', label: 'Is AI biased?' },
-    { emoji: '📚', label: 'When should I NOT use AI?' },
-    { emoji: '🎯', label: 'How do I prompt AI well?' },
-    { emoji: '🏫', label: 'AI and education equity' },
-    { emoji: '📋', label: 'Prep me for the next club meeting' },
-    { emoji: '🌐', label: 'AI and the real world' },
+    { emoji: '\uD83E\uDD16', label: 'How does AI actually work?' },
+    { emoji: '\u2696\uFE0F', label: 'Is AI biased?' },
+    { emoji: '\uD83D\uDCDA', label: 'When should I NOT use AI?' },
+    { emoji: '\uD83C\uDFAF', label: 'How do I prompt AI well?' },
+    { emoji: '\uD83C\uDFEB', label: 'AI and education equity' },
+    { emoji: '\uD83D\uDCCB', label: 'Prep me for the next club meeting' },
+    { emoji: '\uD83C\uDF10', label: 'AI and the real world' },
   ];
 
   var TRANSPARENCY_TEXT =
-    'Mercurius Ⅰ is powered by Claude, an AI made by Anthropic. ' +
+    'Mercurius \u2160 is powered by Claude, an AI made by Anthropic. ' +
     'It cannot browse the web, remember previous sessions, or learn from your conversations. ' +
     'All responses are AI-generated and may contain errors. ' +
-    'This tool is designed to build critical thinking about AI — not to replace it.';
+    'This tool is designed to build critical thinking about AI \u2014 not to replace it.';
 
   // =========================================================================
   // 5. Build DOM
   // =========================================================================
   function buildWidget() {
-    // --- Toggle button ---
+    // Toggle button
     var toggle = document.createElement('button');
     toggle.id = 'merc-toggle';
-    toggle.setAttribute('aria-label', 'Open Mercurius Ⅰ AI tutor');
+    toggle.setAttribute('aria-label', 'Open Mercurius \u2160 AI tutor');
     toggle.innerHTML = '<span class="merc-monogram">M&#8544;</span>';
 
-    // --- Main panel ---
+    // Main panel — full screen
     var panel = document.createElement('div');
     panel.id = 'merc-panel';
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', 'Mercurius Ⅰ AI literacy tutor');
+    panel.setAttribute('aria-label', 'Mercurius \u2160 AI literacy tutor');
 
     panel.innerHTML = [
-      // Header
-      '<div class="merc-header">',
-      '  <div class="merc-header-avatar">M&#8544;</div>',
-      '  <div class="merc-header-text">',
-      '    <div class="merc-header-title">Mercurius &#8544;</div>',
-      '    <div class="merc-header-subtitle">Here to help you think, not think for you</div>',
-      '    <div class="merc-header-streak" id="merc-header-streak"></div>',
+      // ── Sidebar ──────────────────────────────────────────────
+      '<div class="merc-sidebar">',
+      '  <div class="merc-sidebar-brand">',
+      '    <div class="merc-sidebar-avatar">M&#8544;</div>',
+      '    <div class="merc-sidebar-brand-text">',
+      '      <div class="merc-sidebar-brand-name">Mercurius &#8544;</div>',
+      '      <div class="merc-sidebar-brand-sub">AI LITERACY TUTOR</div>',
+      '    </div>',
       '  </div>',
-      '  <div class="merc-header-actions">',
-      '    <button class="merc-header-btn" id="merc-btn-quiz"    title="Generate comprehension quiz" aria-label="Quiz">&#128221;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-map"     title="Concept map">&#128205;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-report"  title="Session report card">&#127941;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-lb"      title="Leaderboard" aria-label="Leaderboard">&#127942;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-summary" title="Get conversation summary"    aria-label="Conversation summary">&#128203;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-info"    title="About Mercurius Ⅰ"          aria-label="About">&#8505;&#65039;</button>',
+      '  <div class="merc-sidebar-body">',
+
+      '    <div class="merc-sidebar-section">',
+      '      <div class="merc-sidebar-section-label">Mode</div>',
+      '      <button class="merc-mode-btn active" id="merc-tab-socratic">',
+      '        <span class="merc-mode-dot"></span> Socratic',
+      '      </button>',
+      '      <button class="merc-mode-btn" id="merc-tab-direct">',
+      '        <span class="merc-mode-dot"></span> Direct',
+      '        <span class="merc-mode-lock" id="merc-tab-lock-icon">&#128274;</span>',
+      '      </button>',
+      '      <button class="merc-mode-btn" id="merc-tab-debate">',
+      '        <span class="merc-mode-dot"></span> &#9876;&#65039; Debate',
+      '      </button>',
+      '    </div>',
+
+      '    <div class="merc-sidebar-section">',
+      '      <div class="merc-sidebar-section-label">Tools</div>',
+      '      <button class="merc-tool-btn" id="merc-btn-quiz"><span class="merc-tool-icon">&#128221;</span> Quiz</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-map"><span class="merc-tool-icon">&#128205;</span> Concept Map</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-report"><span class="merc-tool-icon">&#127941;</span> Report Card</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-lb"><span class="merc-tool-icon">&#127942;</span> Leaderboard</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-summary"><span class="merc-tool-icon">&#128203;</span> Summary</button>',
+      '    </div>',
+
+      '  </div>',
+      '  <div class="merc-sidebar-footer">',
+      '    <div class="merc-streak-badge merc-hidden" id="merc-header-streak">&#128293; <span id="merc-streak-val"></span> day streak</div>',
+      '    <button class="merc-info-btn" id="merc-btn-info">&#8505;&#65039; About Mercurius &#8544;</button>',
       '  </div>',
       '</div>',
 
-      // Mode selector
-      '<div class="merc-mode-bar" id="merc-mode-bar">',
-      '  <span class="merc-mode-bar-label">MODE</span>',
-      '  <div class="merc-mode-tabs">',
-      '    <button class="merc-mode-tab merc-mode-tab-active" id="merc-tab-socratic">Socratic</button>',
-      '    <button class="merc-mode-tab merc-mode-tab-locked" id="merc-tab-direct" disabled>',
-      '      Direct <span class="merc-tab-lock" id="merc-tab-lock-icon">&#128274;</span>',
-      '    </button>',
-      '    <button class="merc-mode-tab" id="merc-tab-debate">&#9876;&#65039; Debate</button>',
+      // ── Main ─────────────────────────────────────────────────
+      '<div class="merc-main">',
+
+      '  <div class="merc-chat-area">',
+      '    <div class="merc-main-header" id="merc-main-header">',
+      '      <div style="display:flex;align-items:center;gap:10px;">',
+      '        <div class="merc-main-header-title">Here to help you think, not think for you</div>',
+      '        <div class="merc-main-header-mode" id="merc-mode-label">Socratic</div>',
+      '      </div>',
+      '      <button class="merc-close-btn" id="merc-close-btn" aria-label="Close">&#10005;</button>',
+      '    </div>',
+
+      '    <div class="merc-messages" id="merc-messages">',
+      '      <div class="merc-topic-tags" id="merc-topic-tags">',
+      '        <div class="merc-topic-tags-label">Start with a topic</div>',
+      buildTopicTagsHTML(),
+      '      </div>',
+      '    </div>',
+
+      '    <div class="merc-input-area">',
+      '      <button id="merc-voice-btn" class="merc-voice-btn" aria-label="Voice input" title="Speak your answer">&#127908;</button>',
+      '      <textarea id="merc-textarea" class="merc-textarea" placeholder="Ask me anything about AI..." rows="1" aria-label="Message input"></textarea>',
+      '      <button id="merc-send-btn" class="merc-send-btn" aria-label="Send message">',
+      '        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+      '      </button>',
+      '    </div>',
       '  </div>',
+
+      // ── Right panel (shared by all tools) ────────────────────
+      '  <div class="merc-right-panel" id="merc-right-panel">',
+      '    <div class="merc-rp-header">',
+      '      <span class="merc-rp-title" id="merc-rp-title">Panel</span>',
+      '      <button class="merc-rp-close" id="merc-rp-close" aria-label="Close panel">&#10005;</button>',
+      '    </div>',
+      '    <div class="merc-rp-body" id="merc-rp-body">',
+      '      <div class="merc-summary-panel merc-hidden" id="merc-summary-panel">',
+      '        <h4>Conversation Summary</h4>',
+      '        <div id="merc-summary-content" style="color:rgba(241,245,249,0.85);font-size:12.5px;line-height:1.6;"></div>',
+      '      </div>',
+      '    </div>',
+      '  </div>',
+
       '</div>',
 
-      // Tooltip (hidden by default)
+      // Tooltip (absolute positioned inside panel)
       '<div class="merc-tooltip merc-hidden" id="merc-tooltip">',
-      '  <strong style="color: var(--merc-gold); font-size:12px;">About Mercurius &#8544;</strong><br><br>',
+      '  <strong style="color:#C9922A;font-size:12px;">About Mercurius &#8544;</strong><br><br>',
       TRANSPARENCY_TEXT,
       '</div>',
 
-      // Summary panel (hidden by default)
-      '<div class="merc-summary-panel merc-hidden" id="merc-summary-panel">',
-      '  <h4>Conversation Summary</h4>',
-      '  <div id="merc-summary-content" style="color: rgba(241,245,249,0.85); font-size:12.5px; line-height:1.6;"></div>',
-      '</div>',
-
-      // Quiz panel (hidden by default)
-      '<div class="merc-quiz-panel merc-hidden" id="merc-quiz-panel">',
-      '  <div class="merc-quiz-header">',
-      '    <span class="merc-quiz-title" id="merc-quiz-title">Comprehension Check</span>',
-      '    <button class="merc-quiz-close" id="merc-quiz-close" aria-label="Close quiz">&#10005;</button>',
-      '  </div>',
-      '  <div id="merc-quiz-content"></div>',
-      '</div>',
-
-      // Concept map panel (hidden by default)
-      '<div class="merc-map-panel merc-hidden" id="merc-map-panel">',
-      '  <div class="merc-quiz-header">',
-      '    <span class="merc-quiz-title" id="merc-map-title">Concept Map</span>',
-      '    <button class="merc-quiz-close" id="merc-map-close">&#10005;</button>',
-      '  </div>',
-      '  <div id="merc-map-content"></div>',
-      '</div>',
-
-      // Report card panel (hidden by default)
-      '<div class="merc-report-panel merc-hidden" id="merc-report-panel">',
-      '  <div class="merc-quiz-header">',
-      '    <span class="merc-quiz-title">Session Report Card</span>',
-      '    <button class="merc-quiz-close" id="merc-report-close">&#10005;</button>',
-      '  </div>',
-      '  <div id="merc-report-content"></div>',
-      '</div>',
-
-      // Leaderboard panel (hidden by default)
-      '<div class="merc-leaderboard-panel merc-hidden" id="merc-leaderboard-panel">',
-      '  <div class="merc-quiz-header">',
-      '    <span class="merc-quiz-title">&#127942; Leaderboard</span>',
-      '    <button class="merc-quiz-close" id="merc-leaderboard-close">&#10005;</button>',
-      '  </div>',
-      '  <div id="merc-leaderboard-content"></div>',
-      '</div>',
-
-      // Messages area
-      '<div class="merc-messages" id="merc-messages">',
-      '  <div class="merc-topic-tags" id="merc-topic-tags">',
-      '    <div class="merc-topic-tags-label">Start with a topic</div>',
-      buildTopicTagsHTML(),
-      '  </div>',
-      '</div>',
-
-      // Input area
-      '<div class="merc-input-area">',
-      '  <textarea',
-      '    id="merc-textarea"',
-      '    class="merc-textarea"',
-      '    placeholder="Ask me anything about AI..."',
-      '    rows="1"',
-      '    aria-label="Message input"',
-      '  ></textarea>',
-      '  <button id="merc-voice-btn" class="merc-voice-btn" aria-label="Voice input" title="Speak your answer">&#127908;</button>',
-      '  <button id="merc-send-btn" class="merc-send-btn" aria-label="Send message">',
-      '    <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
-      '  </button>',
-      '</div>',
     ].join('');
 
     document.body.appendChild(toggle);
     document.body.appendChild(panel);
-
-    // Attach events after DOM insertion
     attachEvents(toggle, panel);
   }
 
@@ -260,7 +242,190 @@
   }
 
   // =========================================================================
-  // 6. Events
+  // 6. Right panel management
+  // =========================================================================
+  function openRightPanel(type) {
+    var rp = document.getElementById('merc-right-panel');
+    var title = document.getElementById('merc-rp-title');
+    var body = document.getElementById('merc-rp-body');
+    if (!rp || !body) return;
+
+    // If same panel clicked again — close it
+    if (currentRightPanel === type) {
+      closeRightPanel();
+      return;
+    }
+
+    currentRightPanel = type;
+    rp.classList.add('merc-rp-open');
+
+    // Clear active tool state
+    document.querySelectorAll('.merc-tool-btn').forEach(function (b) {
+      b.classList.remove('tool-active');
+    });
+
+    var btnIdMap = {
+      quiz: 'merc-btn-quiz',
+      map: 'merc-btn-map',
+      report: 'merc-btn-report',
+      leaderboard: 'merc-btn-lb',
+      summary: 'merc-btn-summary'
+    };
+    var activeBtn = document.getElementById(btnIdMap[type]);
+    if (activeBtn) activeBtn.classList.add('tool-active');
+
+    // Set title
+    var titles = {
+      quiz: '\uD83D\uDCDD Comprehension Quiz',
+      map: '\uD83D\uDCCD Concept Map',
+      report: '\uD83C\uDFC6 Report Card',
+      leaderboard: '\uD83C\uDFC5 Leaderboard',
+      summary: '\uD83D\uDCCB Summary'
+    };
+    if (title) title.textContent = titles[type] || type;
+
+    // Preserve summary panel in DOM — move it aside temporarily
+    var summaryPanel = document.getElementById('merc-summary-panel');
+
+    // Clear body content but keep summary panel
+    body.innerHTML = '';
+    // Re-create summary panel slot and re-append
+    if (summaryPanel) {
+      body.appendChild(summaryPanel);
+    }
+
+    if (type === 'summary') {
+      if (summaryPanel) summaryPanel.classList.remove('merc-hidden');
+      handleSummaryToggle();
+    } else {
+      if (summaryPanel) summaryPanel.classList.add('merc-hidden');
+      if (type === 'quiz') {
+        loadQuizInPanel(body);
+      } else if (type === 'map') {
+        loadMapInPanel(body);
+      } else if (type === 'report') {
+        loadReportInPanel(body);
+      } else if (type === 'leaderboard') {
+        loadLeaderboardInPanel(body);
+      }
+    }
+  }
+
+  function closeRightPanel() {
+    var rp = document.getElementById('merc-right-panel');
+    if (rp) rp.classList.remove('merc-rp-open');
+    document.querySelectorAll('.merc-tool-btn').forEach(function (b) {
+      b.classList.remove('tool-active');
+    });
+    currentRightPanel = null;
+  }
+
+  function loadQuizInPanel(body) {
+    if (conversationHistory.length < 4) {
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first \u2014 then I can quiz you on what we covered.</p>');
+      return;
+    }
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Generating quiz\u2026</p>');
+    fetch(QUIZ_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        // Remove loading paragraph
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        if (data.error) {
+          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Could not generate quiz.') + '</p>');
+          return;
+        }
+        renderQuiz(data, body);
+      })
+      .catch(function () {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error \u2014 try again.</p>');
+      });
+  }
+
+  function loadMapInPanel(body) {
+    if (conversationHistory.length < 4) {
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first.</p>');
+      return;
+    }
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Building concept map\u2026</p>');
+    fetch(CONCEPT_MAP_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        if (data.error) {
+          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
+          return;
+        }
+        renderConceptMap(data, body);
+      })
+      .catch(function () {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
+      });
+  }
+
+  function loadReportInPanel(body) {
+    if (conversationHistory.length < 4) {
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first.</p>');
+      return;
+    }
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Generating report card\u2026</p>');
+    fetch(REPORT_CARD_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        if (data.error) {
+          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
+          return;
+        }
+        renderReportCard(data, body);
+      })
+      .catch(function () {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
+      });
+  }
+
+  function loadLeaderboardInPanel(body) {
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Loading\u2026</p>');
+    fetch(LEADERBOARD_ENDPOINT, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        renderLeaderboard(data, body);
+      })
+      .catch(function () {
+        var loading = body.querySelector('.merc-quiz-loading');
+        if (loading) loading.parentNode.removeChild(loading);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
+      });
+  }
+
+  // =========================================================================
+  // 7. Events
   // =========================================================================
   function attachEvents(toggle, panel) {
     // Toggle open/close
@@ -277,6 +442,16 @@
       }
     });
 
+    // Main close button (X in header)
+    var closeBtn = document.getElementById('merc-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        isOpen = false;
+        panel.classList.remove('merc-open');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    }
+
     // Topic tags
     var tagsContainer = document.getElementById('merc-topic-tags');
     if (tagsContainer) {
@@ -284,7 +459,6 @@
         var btn = e.target.closest('.merc-tag');
         if (btn) {
           var topic = btn.getAttribute('data-topic');
-          // Remove the tags area so it doesn't clutter
           tagsContainer.parentNode.removeChild(tagsContainer);
           sendMessage(topic);
         }
@@ -309,9 +483,8 @@
         }
       });
       textarea.addEventListener('input', function () {
-        // Auto-expand up to ~3 lines (90px max set in CSS)
         textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 90) + 'px';
+        textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
       });
     }
 
@@ -324,7 +497,6 @@
         tooltipVisible = !tooltipVisible;
         tooltip.classList.toggle('merc-hidden', !tooltipVisible);
       });
-      // Close tooltip on click outside
       document.addEventListener('click', function (e) {
         if (tooltipVisible && !tooltip.contains(e.target) && e.target !== infoBtn) {
           tooltipVisible = false;
@@ -333,65 +505,27 @@
       });
     }
 
-    // Summary panel toggle
-    var summaryBtn = document.getElementById('merc-btn-summary');
-    if (summaryBtn) {
-      summaryBtn.addEventListener('click', function () {
-        handleSummaryToggle();
-      });
-    }
-
-    // Quiz panel toggle
+    // Tool buttons → open right panel
     var quizBtn = document.getElementById('merc-btn-quiz');
-    if (quizBtn) {
-      quizBtn.addEventListener('click', function () {
-        handleQuizToggle();
-      });
-    }
+    if (quizBtn) { quizBtn.addEventListener('click', function () { openRightPanel('quiz'); }); }
 
-    // Quiz close button
-    var quizClose = document.getElementById('merc-quiz-close');
-    if (quizClose) {
-      quizClose.addEventListener('click', function () {
-        var qp = document.getElementById('merc-quiz-panel');
-        if (qp) qp.classList.add('merc-hidden');
-        quizVisible = false;
-      });
-    }
-
-    // Concept map button + close
     var mapBtn = document.getElementById('merc-btn-map');
-    if (mapBtn) { mapBtn.addEventListener('click', handleConceptMap); }
-    var mapClose = document.getElementById('merc-map-close');
-    if (mapClose) {
-      mapClose.addEventListener('click', function () {
-        var mp = document.getElementById('merc-map-panel');
-        if (mp) mp.classList.add('merc-hidden');
-        mapVisible = false;
-      });
-    }
+    if (mapBtn) { mapBtn.addEventListener('click', function () { openRightPanel('map'); }); }
 
-    // Report card button + close
     var reportBtn = document.getElementById('merc-btn-report');
-    if (reportBtn) { reportBtn.addEventListener('click', handleReportCard); }
-    var reportClose = document.getElementById('merc-report-close');
-    if (reportClose) {
-      reportClose.addEventListener('click', function () {
-        var rp = document.getElementById('merc-report-panel');
-        if (rp) rp.classList.add('merc-hidden');
-        reportVisible = false;
-      });
-    }
+    if (reportBtn) { reportBtn.addEventListener('click', function () { openRightPanel('report'); }); }
 
-    // Leaderboard button + close
     var lbBtn = document.getElementById('merc-btn-lb');
-    if (lbBtn) { lbBtn.addEventListener('click', handleLeaderboard); }
-    var lbClose = document.getElementById('merc-leaderboard-close');
-    if (lbClose) {
-      lbClose.addEventListener('click', function () {
-        var lp = document.getElementById('merc-leaderboard-panel');
-        if (lp) lp.classList.add('merc-hidden');
-        leaderboardVisible = false;
+    if (lbBtn) { lbBtn.addEventListener('click', function () { openRightPanel('leaderboard'); }); }
+
+    var summaryBtn = document.getElementById('merc-btn-summary');
+    if (summaryBtn) { summaryBtn.addEventListener('click', function () { openRightPanel('summary'); }); }
+
+    // Right panel close button
+    var rpClose = document.getElementById('merc-rp-close');
+    if (rpClose) {
+      rpClose.addEventListener('click', function () {
+        closeRightPanel();
       });
     }
 
@@ -435,7 +569,7 @@
   }
 
   // =========================================================================
-  // 7. Send message & get reply
+  // 8. Send message & get reply
   // =========================================================================
   function sendMessage(text, isHidden) {
     isHidden = isHidden || false;
@@ -445,19 +579,13 @@
       appendUserMessage(text);
     }
 
-    // Add to history
     conversationHistory.push({ role: 'user', content: text });
     if (conversationHistory.length > 20) {
       conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
     }
 
-    // Disable send while waiting
     setLoading(true);
-
-    // Show typing indicator
     var typingId = showTyping();
-
-    // Build messages payload (last 20)
     var messages = conversationHistory.slice(-20);
 
     fetch(API_ENDPOINT, {
@@ -472,23 +600,45 @@
 
         var reply = data.reply || 'No response received.';
 
-        // Add assistant reply to history
         conversationHistory.push({ role: 'assistant', content: reply });
         if (conversationHistory.length > 20) {
           conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
         }
 
-        if (!isHidden) {
-          appendBotMessage(reply);
-          // Summary is now stale — require re-fetch on next open
-          if (summaryFetched && conversationHistory.length > summaryMessageCountAtFetch + 2) {
-            summaryFetched = false;
+        // Handle unlock event
+        if (data.justUnlocked) {
+          isUnlocked = true;
+          currentMode = 'socratic';
+          localStorage.setItem('merc_unlocked', 'true');
+          localStorage.setItem('merc_mode', 'socratic');
+          updateModeBar();
+          showUnlockCelebration();
+        } else if (data.mode && data.mode !== currentMode) {
+          currentMode = data.mode;
+          localStorage.setItem('merc_mode', currentMode);
+          updateModeBar();
+        }
+
+        // Update streak badge
+        if (data.streak && data.streak > 1) {
+          var badge = document.getElementById('merc-header-streak');
+          var val = document.getElementById('merc-streak-val');
+          if (badge && val) {
+            val.textContent = data.streak;
+            badge.classList.remove('merc-hidden');
           }
         }
 
-        // Inject reflection card every 5 user messages
-        if (!isHidden && userMessageCount > 0 && userMessageCount % 5 === 0) {
-          appendReflectionCard();
+        // Always show bot reply
+        appendBotMessage(reply);
+
+        if (!isHidden) {
+          if (summaryFetched && conversationHistory.length > summaryMessageCountAtFetch + 2) {
+            summaryFetched = false;
+          }
+          if (userMessageCount > 0 && userMessageCount % 5 === 0) {
+            appendReflectionCard();
+          }
         }
 
         scrollToBottom();
@@ -497,18 +647,54 @@
         console.error('[Mercurius] fetch error:', err);
         removeTyping(typingId);
         setLoading(false);
-        if (!isHidden) {
-          appendBotMessage(
-            "I seem to have lost my connection — possibly a network hiccup on either end. " +
-            "This is actually something worth noting: AI tools depend on internet infrastructure, " +
-            "which can fail. Try again in a moment?"
-          );
+        appendBotMessage(
+          'I seem to have lost my connection \u2014 possibly a network hiccup on either end. ' +
+          'This is actually something worth noting: AI tools depend on internet infrastructure, ' +
+          'which can fail. Try again in a moment?'
+        );
+      });
+  }
+
+  // sendHiddenUserVisibleBot — for Unpack/Flag action buttons
+  // Sends a message without a user bubble but DOES show the bot reply.
+  function sendHiddenUserVisibleBot(text) {
+    conversationHistory.push({ role: 'user', content: text });
+    if (conversationHistory.length > 20) {
+      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
+    }
+
+    setLoading(true);
+    var typingId = showTyping();
+    var messages = conversationHistory.slice(-20);
+
+    fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        removeTyping(typingId);
+        setLoading(false);
+        var reply = data.reply || 'No response received.';
+        conversationHistory.push({ role: 'assistant', content: reply });
+        if (conversationHistory.length > 20) {
+          conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
         }
+        appendBotMessage(reply);
+        scrollToBottom();
+      })
+      .catch(function () {
+        removeTyping(typingId);
+        setLoading(false);
+        appendBotMessage(
+          "Connection issue \u2014 couldn't fetch the explanation. Try again in a moment."
+        );
       });
   }
 
   // =========================================================================
-  // 8. DOM helpers — append messages
+  // 9. DOM helpers — append messages
   // =========================================================================
   function appendUserMessage(text) {
     var container = document.getElementById('merc-messages');
@@ -546,10 +732,7 @@
     ts.className = 'merc-timestamp';
     ts.textContent = getTimestamp();
 
-    // Confidence meter
     var confidenceEl = buildConfidenceMeter(text);
-
-    // Action buttons
     var actions = buildActionButtons(text);
 
     wrapper.appendChild(bubble);
@@ -585,8 +768,18 @@
     summaryContent.innerHTML = renderMarkdown(text);
   }
 
+  function appendSystemNotice(text) {
+    var container = document.getElementById('merc-messages');
+    if (!container) return;
+    var el = document.createElement('div');
+    el.className = 'merc-msg merc-msg-notice';
+    el.textContent = text;
+    container.appendChild(el);
+    scrollToBottom();
+  }
+
   // =========================================================================
-  // 9. Typing indicator
+  // 10. Typing indicator
   // =========================================================================
   var typingCounter = 0;
 
@@ -618,53 +811,42 @@
   }
 
   // =========================================================================
-  // 10. Minimal Markdown renderer (no external deps)
+  // 11. Minimal Markdown renderer (no external deps)
   // =========================================================================
   function renderMarkdown(text) {
     if (!text) return '';
 
-    // Escape HTML first to prevent XSS
     var escaped = escapeHtml(text);
 
-    // Process headings: ## Heading → <h3>
     escaped = escaped.replace(/^##\s+(.+)$/gm, '<h3>$1</h3>');
     escaped = escaped.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
 
-    // Bold: **text** or __text__
     escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     escaped = escaped.replace(/__(.+?)__/g, '<strong>$1</strong>');
 
-    // Italic: *text* or _text_ (single, not preceded by letter)
     escaped = escaped.replace(/(?<![*_])\*(?!\s)(.+?)(?<!\s)\*(?![*_])/g, '<em>$1</em>');
     escaped = escaped.replace(/(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g, '<em>$1</em>');
 
-    // Inline code: `code`
     escaped = escaped.replace(/`(.+?)`/g, '<code>$1</code>');
 
-    // Source citations: [SOURCE: text] → styled chip
     escaped = escaped.replace(/\[SOURCE:\s*([^\]]+)\]/g, '<span class="merc-source">&#128279; $1</span>');
 
-    // Unordered lists: lines starting with "- " or "* "
     escaped = escaped.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
     escaped = escaped.replace(/(<li>.*<\/li>(\n|$))+/g, function (m) {
       return '<ul>' + m.replace(/\n$/, '') + '</ul>';
     });
 
-    // Ordered lists: lines starting with "1. " or "2. " etc.
     escaped = escaped.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
     escaped = escaped.replace(/(<li>.*<\/li>(\n|$))+/g, function (m) {
-      // Avoid double-wrapping ul items as ol
       if (m.indexOf('<ul>') !== -1 || m.indexOf('<ol>') !== -1) return m;
       return '<ol>' + m.replace(/\n$/, '') + '</ol>';
     });
 
-    // Double newlines → paragraph breaks
     var parts = escaped.split(/\n\n+/);
     escaped = parts
       .map(function (p) {
         p = p.trim();
         if (!p) return '';
-        // Don't wrap block elements in <p>
         if (/^<(h[2-6]|ul|ol|li|blockquote)/.test(p)) return p;
         return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
       })
@@ -675,30 +857,29 @@
   }
 
   // =========================================================================
-  // 11. Confidence meter
+  // 12. Confidence meter
   // =========================================================================
   function parseConfidence(text) {
     if (!text) return null;
 
     var lower = text.toLowerCase();
 
-    // Explicit percentage like "85%" or "(85%)" or "maybe 85%"
     var pctMatch = text.match(/\b(\d{1,3})%/);
     if (pctMatch) {
       var pct = parseInt(pctMatch[1], 10);
       if (pct >= 0 && pct <= 100) return pct;
     }
 
-    // 50/50
     if (/50\s*\/\s*50/.test(lower)) return 50;
 
-    // Verbal phrases — check most specific first
     if (/\b(quite confident|very confident|highly confident|very sure|pretty confident)\b/.test(lower)) return 82;
     if (/\bconfident\b/.test(lower)) return 70;
     if (/\b(uncertain|not sure|murky|murkier|unclear|not certain|a bit unsure)\b/.test(lower)) return 35;
     if (/\b(i actually don'?t know|i don'?t know|no idea|not sure at all|genuinely don'?t know)\b/.test(lower)) return 15;
+    if (/\b(might|may|possibly|perhaps|could be|probably)\b/.test(lower)) return 55;
+    if (/\b(likely|generally|typically|usually)\b/.test(lower)) return 68;
 
-    return null; // unverified
+    return null;
   }
 
   function buildConfidenceMeter(text) {
@@ -724,7 +905,7 @@
   }
 
   // =========================================================================
-  // 12. Action buttons — Unpack & Flag
+  // 13. Action buttons — Unpack & Flag
   // =========================================================================
   function buildActionButtons(originalText) {
     var el = document.createElement('div');
@@ -737,115 +918,119 @@
 
     var flagBtn = document.createElement('button');
     flagBtn.className = 'merc-action-btn';
-    flagBtn.innerHTML = '&#128681; Flag';
+    flagBtn.innerHTML = '&#128681; Flag bias';
     flagBtn.title = 'Flag potential bias or missing perspectives';
 
-    unpackBtn.addEventListener('click', function () {
+    var hasQuestion = originalText.indexOf('?') !== -1;
+    var whyBtn = null;
+    if (hasQuestion) {
+      whyBtn = document.createElement('button');
+      whyBtn.className = 'merc-action-btn merc-action-btn-why';
+      whyBtn.innerHTML = '&#129300; Why this question?';
+      whyBtn.title = 'Understand the Socratic reasoning behind this question';
+    }
+
+    function disableAll() {
       unpackBtn.disabled = true;
       flagBtn.disabled = true;
-      sendMessage(
-        'Please explain your reasoning for your last response — what assumptions did you make, ' +
-        'how did you arrive at that answer, and what might you be getting wrong?',
-        true
+      if (whyBtn) whyBtn.disabled = true;
+    }
+
+    unpackBtn.addEventListener('click', function () {
+      disableAll();
+      sendHiddenUserVisibleBot(
+        'Please explain your reasoning for your last response \u2014 what assumptions did you make, ' +
+        'how did you arrive at that answer, and what might you be getting wrong?'
       );
-      // Show a visible follow-up after the hidden send resolves
-      // We intercept via the next appendBotMessage via normal flow
     });
 
     flagBtn.addEventListener('click', function () {
-      unpackBtn.disabled = true;
-      flagBtn.disabled = true;
-      sendMessage(
-        'Flag this response for potential bias — what perspectives or groups might this answer overlook?',
-        true
+      disableAll();
+      sendHiddenUserVisibleBot(
+        'Flag this response for potential bias \u2014 what perspectives or groups might this answer overlook? ' +
+        'Be specific about whose voices or experiences are missing.'
       );
     });
 
+    if (whyBtn) {
+      whyBtn.addEventListener('click', function () {
+        disableAll();
+        sendHiddenUserVisibleBot(
+          'You just asked me a Socratic question. Explain your reasoning: ' +
+          'what concept were you trying to get me to discover, why did you choose that question specifically, ' +
+          'and what answer were you hoping to guide me toward?'
+        );
+      });
+    }
+
     el.appendChild(unpackBtn);
     el.appendChild(flagBtn);
+    if (whyBtn) el.appendChild(whyBtn);
     return el;
   }
 
   // =========================================================================
-  // 13. Summary panel
+  // 14. Summary panel
   // =========================================================================
   function handleSummaryToggle() {
-    var panel = document.getElementById('merc-summary-panel');
-    if (!panel) return;
+    // Summary is displayed in the right panel — just fetch/render into it
+    var summaryContent = document.getElementById('merc-summary-content');
 
     var hasNewMessages =
       !summaryFetched ||
       conversationHistory.length > summaryMessageCountAtFetch + 2;
 
-    if (summaryVisible && !hasNewMessages) {
-      // Just hide
-      summaryVisible = false;
-      panel.classList.add('merc-hidden');
+    if (!hasNewMessages && summaryFetched) {
+      // Already have fresh content — nothing to do, just show
       return;
     }
 
-    if (!summaryFetched || hasNewMessages) {
-      // Need to fetch/re-fetch summary
-      if (conversationHistory.length < 2) {
-        // Not enough conversation yet
-        var summaryContent = document.getElementById('merc-summary-content');
+    if (conversationHistory.length < 2) {
+      if (summaryContent) {
+        summaryContent.innerHTML =
+          '<em style="color: rgba(148,163,184,0.7)">Start chatting first \u2014 I\'ll summarize once we\'ve talked a bit.</em>';
+      }
+      return;
+    }
+
+    if (summaryContent) {
+      summaryContent.innerHTML =
+        '<em style="color: rgba(148,163,184,0.5)">Generating summary...</em>';
+    }
+
+    var summaryPrompt =
+      'Please provide a brief summary of our conversation so far in this format:\n\n' +
+      '**Key ideas covered**\n[2-3 bullet points]\n\n' +
+      '**Questions worth thinking more about**\n[1-2 bullet points]\n\n' +
+      '**One thing to verify yourself**\n[1 specific suggestion]\n\n' +
+      'Keep it concise \u2014 this is a learning summary for the student.';
+
+    var messages = conversationHistory.slice(-20).concat([
+      { role: 'user', content: summaryPrompt },
+    ]);
+
+    fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var reply = data.reply || 'Could not generate summary.';
+        appendSummaryBotMessage(reply);
+        summaryFetched = true;
+        summaryMessageCountAtFetch = conversationHistory.length;
+      })
+      .catch(function () {
         if (summaryContent) {
           summaryContent.innerHTML =
-            '<em style="color: rgba(148,163,184,0.7)">Start chatting first — I\'ll summarize once we\'ve talked a bit.</em>';
+            '<em style="color: rgba(239,68,68,0.8)">Could not fetch summary \u2014 try again.</em>';
         }
-        panel.classList.remove('merc-hidden');
-        summaryVisible = true;
-        return;
-      }
-
-      var summaryContent2 = document.getElementById('merc-summary-content');
-      if (summaryContent2) {
-        summaryContent2.innerHTML =
-          '<em style="color: rgba(148,163,184,0.5)">Generating summary...</em>';
-      }
-      panel.classList.remove('merc-hidden');
-      summaryVisible = true;
-
-      // Build a special summary request
-      var summaryPrompt =
-        'Please provide a brief summary of our conversation so far in this format:\n\n' +
-        '**Key ideas covered**\n[2-3 bullet points]\n\n' +
-        '**Questions worth thinking more about**\n[1-2 bullet points]\n\n' +
-        '**One thing to verify yourself**\n[1 specific suggestion]\n\n' +
-        'Keep it concise — this is a learning summary for the student.';
-
-      var messages = conversationHistory.slice(-20).concat([
-        { role: 'user', content: summaryPrompt },
-      ]);
-
-      fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messages, sessionId: sessionId }),
-      })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          var reply = data.reply || 'Could not generate summary.';
-          appendSummaryBotMessage(reply);
-          summaryFetched = true;
-          summaryMessageCountAtFetch = conversationHistory.length;
-        })
-        .catch(function () {
-          var sc = document.getElementById('merc-summary-content');
-          if (sc) {
-            sc.innerHTML =
-              '<em style="color: rgba(239,68,68,0.8)">Could not fetch summary — try again.</em>';
-          }
-        });
-    } else {
-      // Toggle visibility
-      summaryVisible = !summaryVisible;
-      panel.classList.toggle('merc-hidden', !summaryVisible);
-    }
+      });
   }
 
   // =========================================================================
-  // 14. Loading state
+  // 15. Loading state
   // =========================================================================
   function setLoading(loading) {
     isLoading = loading;
@@ -856,7 +1041,7 @@
   }
 
   // =========================================================================
-  // 15. Utilities
+  // 16. Utilities
   // =========================================================================
   function scrollToBottom() {
     var container = document.getElementById('merc-messages');
@@ -891,302 +1076,51 @@
   }
 
   // =========================================================================
-  // 16. Intercept appendBotMessage for hidden (action button) calls
-  //     When isHidden=true in sendMessage, the response still needs to be
-  //     shown as a new bot bubble in the normal messages area.
-  // =========================================================================
-  // (This is handled naturally — hidden messages still push to conversationHistory
-  //  and the fetch callback calls appendBotMessage when isHidden is false.
-  //  However, for Unpack/Flag we pass isHidden=true to avoid a user bubble
-  //  but still want the bot reply to appear. We fix this by distinguishing
-  //  "silent user bubble" from "silent response".)
-
-  // Re-write sendMessage to handle isHidden correctly:
-  // When isHidden=true → skip user bubble, but still show bot reply.
-  // This is already how the code works above. The flag suppresses appendBotMessage
-  // which is undesired for action buttons. Let's use a separate flag.
-
-  // (The code above is already correct: for Unpack/Flag, isHidden=true skips the
-  //  user bubble but the .then() callback calls appendBotMessage when isHidden is
-  //  in scope. Let's verify the closure captures it properly — yes, isHidden is
-  //  captured in the closure by the inner function. The check `if (!isHidden)` in
-  //  the .then() will correctly show bot messages for action button calls because
-  //  isHidden is false in those closures... wait, we passed isHidden=true.
-  //
-  //  We actually WANT the bot reply to show for Unpack/Flag. So we need to change
-  //  the logic: isHidden only suppresses the USER bubble, not the bot reply.
-  //  The reflection card injection should also be suppressed for hidden sends.)
-
-  // The sendMessage function above already handles this correctly:
-  // - When isHidden=true: skip appendUserMessage, skip reflectionCard injection
-  // - Bot reply (appendBotMessage) is NOT gated on isHidden in the .then()
-  // Wait — looking at the code above: `if (!isHidden) { appendBotMessage(reply); }`
-  // This incorrectly suppresses the bot reply for action buttons!
-  // We need to fix this. The solution is already structured correctly if we just
-  // remove the isHidden check on appendBotMessage. But reflection card & user count
-  // increment should be gated. Let me re-examine...
-  //
-  // For Unpack/Flag: we want bot reply to show, but no user bubble, no reflection card.
-  // For normal sends: we want everything.
-  //
-  // The fix: always show bot reply. Only gate user bubble, reflection, and userMessageCount.
-  // This is handled in the re-written sendMessage below — the function body above
-  // already has `if (!isHidden) { appendBotMessage(reply); ... }` which we need to change.
-  //
-  // Since we've already written the function above with this bug, we note it as a known
-  // issue... but actually looking carefully: the .then callback is a closure over isHidden.
-  // When called from Unpack/Flag with isHidden=true, `if (!isHidden)` is false → bot
-  // message NOT shown. Bug confirmed.
-  //
-  // We'll patch this by not writing a new sendMessage but by having the action buttons
-  // call a dedicated function. See sendHiddenUserVisibleBot() below.
-
-  // =========================================================================
-  // Patch: sendHiddenUserVisibleBot — for Unpack/Flag
-  // This sends a message without a user bubble but DOES show the bot reply.
-  // =========================================================================
-  function sendHiddenUserVisibleBot(text) {
-    conversationHistory.push({ role: 'user', content: text });
-    if (conversationHistory.length > 20) {
-      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
-    }
-
-    setLoading(true);
-    var typingId = showTyping();
-
-    var messages = conversationHistory.slice(-20);
-
-    fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
-    })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        removeTyping(typingId);
-        setLoading(false);
-        var reply = data.reply || 'No response received.';
-        conversationHistory.push({ role: 'assistant', content: reply });
-        if (conversationHistory.length > 20) {
-          conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
-        }
-        appendBotMessage(reply);
-        scrollToBottom();
-      })
-      .catch(function () {
-        removeTyping(typingId);
-        setLoading(false);
-        appendBotMessage(
-          "Connection issue — couldn't fetch the explanation. Try again in a moment."
-        );
-      });
-  }
-
-  // =========================================================================
-  // Override buildActionButtons to use sendHiddenUserVisibleBot
-  // (redefine to fix the bug described above)
-  // =========================================================================
-  buildActionButtons = function (originalText) {
-    var el = document.createElement('div');
-    el.className = 'merc-actions';
-
-    var unpackBtn = document.createElement('button');
-    unpackBtn.className = 'merc-action-btn';
-    unpackBtn.innerHTML = '&#128269; Unpack this';
-    unpackBtn.title = 'Ask Mercurius to explain its reasoning';
-
-    var flagBtn = document.createElement('button');
-    flagBtn.className = 'merc-action-btn';
-    flagBtn.innerHTML = '&#128681; Flag bias';
-    flagBtn.title = 'Flag potential bias or missing perspectives';
-
-    // "Why did I ask that?" — only show when message contains a question
-    var hasQuestion = originalText.indexOf('?') !== -1;
-    var whyBtn = null;
-    if (hasQuestion) {
-      whyBtn = document.createElement('button');
-      whyBtn.className = 'merc-action-btn merc-action-btn-why';
-      whyBtn.innerHTML = '&#129300; Why this question?';
-      whyBtn.title = 'Understand the Socratic reasoning behind this question';
-    }
-
-    function disableAll() {
-      unpackBtn.disabled = true;
-      flagBtn.disabled = true;
-      if (whyBtn) whyBtn.disabled = true;
-    }
-
-    unpackBtn.addEventListener('click', function () {
-      disableAll();
-      sendHiddenUserVisibleBot(
-        'Please explain your reasoning for your last response — what assumptions did you make, ' +
-        'how did you arrive at that answer, and what might you be getting wrong?'
-      );
-    });
-
-    flagBtn.addEventListener('click', function () {
-      disableAll();
-      sendHiddenUserVisibleBot(
-        'Flag this response for potential bias — what perspectives or groups might this answer overlook? ' +
-        'Be specific about whose voices or experiences are missing.'
-      );
-    });
-
-    if (whyBtn) {
-      whyBtn.addEventListener('click', function () {
-        disableAll();
-        sendHiddenUserVisibleBot(
-          'You just asked me a Socratic question. Explain your reasoning: ' +
-          'what concept were you trying to get me to discover, why did you choose that question specifically, ' +
-          'and what answer were you hoping to guide me toward?'
-        );
-      });
-    }
-
-    el.appendChild(unpackBtn);
-    el.appendChild(flagBtn);
-    if (whyBtn) el.appendChild(whyBtn);
-    return el;
-  };
-
-  // Also fix the isHidden logic in the original sendMessage to only gate
-  // the user bubble append (the bot reply should ALWAYS show).
-  // We redefine sendMessage here:
-  sendMessage = function (text, isHidden) {
-    isHidden = isHidden || false;
-
-    if (!isHidden) {
-      userMessageCount++;
-      appendUserMessage(text);
-    }
-
-    conversationHistory.push({ role: 'user', content: text });
-    if (conversationHistory.length > 20) {
-      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
-    }
-
-    setLoading(true);
-    var typingId = showTyping();
-
-    var messages = conversationHistory.slice(-20);
-
-    fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
-    })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        removeTyping(typingId);
-        setLoading(false);
-
-        var reply = data.reply || 'No response received.';
-
-        conversationHistory.push({ role: 'assistant', content: reply });
-        if (conversationHistory.length > 20) {
-          conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
-        }
-
-        // Handle unlock event
-        if (data.justUnlocked) {
-          isUnlocked = true;
-          currentMode = 'socratic';
-          localStorage.setItem('merc_unlocked', 'true');
-          localStorage.setItem('merc_mode', 'socratic');
-          updateModeBar();
-          showUnlockCelebration();
-        } else if (data.mode && data.mode !== currentMode) {
-          currentMode = data.mode;
-          localStorage.setItem('merc_mode', currentMode);
-          updateModeBar();
-        }
-
-        // Update streak badge
-        if (data.streak && data.streak > 1) {
-          var badge = document.getElementById('merc-header-streak');
-          if (badge) { badge.textContent = '\uD83D\uDD25 ' + data.streak; badge.style.display = 'inline-flex'; }
-        }
-
-        // Always show bot reply
-        appendBotMessage(reply);
-
-        if (!isHidden) {
-          if (summaryFetched && conversationHistory.length > summaryMessageCountAtFetch + 2) {
-            summaryFetched = false;
-          }
-          if (userMessageCount > 0 && userMessageCount % 5 === 0) {
-            appendReflectionCard();
-          }
-        }
-
-        scrollToBottom();
-      })
-      .catch(function (err) {
-        console.error('[Mercurius] fetch error:', err);
-        removeTyping(typingId);
-        setLoading(false);
-        appendBotMessage(
-          "I seem to have lost my connection — possibly a network hiccup on either end. " +
-          "This is actually something worth noting: AI tools depend on internet infrastructure, " +
-          "which can fail. Try again in a moment?"
-        );
-      });
-  };
-
-  // =========================================================================
   // 17. Mode bar helpers
   // =========================================================================
   function updateModeBar() {
-    var tabSocratic = document.getElementById('merc-tab-socratic');
-    var tabDirect   = document.getElementById('merc-tab-direct');
+    var btnSocratic = document.getElementById('merc-tab-socratic');
+    var btnDirect   = document.getElementById('merc-tab-direct');
+    var btnDebate   = document.getElementById('merc-tab-debate');
     var lockIcon    = document.getElementById('merc-tab-lock-icon');
-    var bar         = document.getElementById('merc-mode-bar');
-    if (!tabSocratic || !tabDirect) return;
+    var modeLabel   = document.getElementById('merc-mode-label');
 
+    if (!btnSocratic || !btnDirect) return;
+
+    // Unlock state
     if (isUnlocked) {
-      // Unlock the Direct tab
-      tabDirect.disabled = false;
-      tabDirect.classList.remove('merc-mode-tab-locked');
+      btnDirect.disabled = false;
       if (lockIcon) lockIcon.textContent = '';
-      bar.classList.add('merc-mode-unlocked');
     } else {
-      tabDirect.disabled = true;
-      tabDirect.classList.add('merc-mode-tab-locked');
+      btnDirect.disabled = true;
       if (lockIcon) lockIcon.innerHTML = '&#128274;';
     }
 
-    // Active tab highlight
-    if (currentMode === 'direct') {
-      tabDirect.classList.add('merc-mode-tab-active');
-      tabSocratic.classList.remove('merc-mode-tab-active');
-    } else {
-      tabSocratic.classList.add('merc-mode-tab-active');
-      tabDirect.classList.remove('merc-mode-tab-active');
-    }
+    // Active states
+    [btnSocratic, btnDirect, btnDebate].forEach(function (b) {
+      if (b) b.classList.remove('active');
+    });
 
-    // Debate tab highlight
-    var tabDebate = document.getElementById('merc-tab-debate');
-    if (tabDebate) {
-      if (currentMode === 'debate') {
-        tabDebate.classList.add('merc-mode-tab-active');
-        if (tabSocratic) tabSocratic.classList.remove('merc-mode-tab-active');
-        if (tabDirect) tabDirect.classList.remove('merc-mode-tab-active');
-      } else {
-        tabDebate.classList.remove('merc-mode-tab-active');
-      }
-    }
+    var activeBtn =
+      currentMode === 'direct' ? btnDirect :
+      currentMode === 'debate' ? btnDebate :
+      btnSocratic;
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Mode label in header
+    var modeNames = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate' };
+    if (modeLabel) modeLabel.textContent = modeNames[currentMode] || 'Socratic';
   }
 
   function showUnlockCelebration() {
-    var bar = document.getElementById('merc-mode-bar');
-    if (bar) {
-      bar.classList.add('merc-unlock-flash');
-      setTimeout(function () { bar.classList.remove('merc-unlock-flash'); }, 1800);
+    var header = document.getElementById('merc-main-header');
+    if (header) {
+      header.classList.add('merc-unlock-flash');
+      setTimeout(function () { header.classList.remove('merc-unlock-flash'); }, 1800);
     }
   }
 
   function handleModeSwitchTo(newMode) {
-    // Debate is freely available; direct requires unlock
     if (newMode !== 'debate' && !isUnlocked) return;
     fetch(MODE_ENDPOINT, {
       method: 'POST',
@@ -1201,14 +1135,14 @@
           updateModeBar();
           appendSystemNotice(
             currentMode === 'debate'
-              ? 'Switched to Debate Mode — Mercurius will take a position on AI ethics and argue against you. Make your case!'
+              ? 'Switched to Debate Mode \u2014 Mercurius will take a position on AI ethics and argue against you. Make your case!'
               : currentMode === 'direct'
-              ? 'Switched to Direct Mode — Mercurius will now lead with substantive explanations.'
-              : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.'
+              ? 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.'
+              : 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
           );
           if (data.mode === 'debate') {
-            setTimeout(function() {
-              sendMessage('Begin the debate — pick your position now and give your opening argument. Then challenge me.', true);
+            setTimeout(function () {
+              sendMessage('Begin the debate \u2014 pick your position now and give your opening argument. Then challenge me.', true);
             }, 300);
           }
         }
@@ -1216,72 +1150,14 @@
       .catch(function () { /* silent fail */ });
   }
 
-  function appendSystemNotice(text) {
-    var container = document.getElementById('merc-messages');
-    if (!container) return;
-    var el = document.createElement('div');
-    el.className = 'merc-msg merc-msg-notice';
-    el.textContent = text;
-    container.appendChild(el);
-    scrollToBottom();
-  }
-
   // =========================================================================
-  // 18. Quiz panel
+  // 18. Render functions (accept container param for right panel)
   // =========================================================================
-  function handleQuizToggle() {
-    var qp = document.getElementById('merc-quiz-panel');
-    if (!qp) return;
-
-    if (quizVisible) {
-      qp.classList.add('merc-hidden');
-      quizVisible = false;
-      return;
-    }
-
-    // Show panel immediately
-    qp.classList.remove('merc-hidden');
-    quizVisible = true;
-
-    if (conversationHistory.length < 4) {
-      var qc = document.getElementById('merc-quiz-content');
-      if (qc) qc.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first — then I can quiz you on what we covered.</p>';
-      return;
-    }
-
-    // Show loading state
-    var qc2 = document.getElementById('merc-quiz-content');
-    if (qc2) qc2.innerHTML = '<p class="merc-quiz-loading">Generating quiz&#8230;</p>';
-
-    fetch(QUIZ_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) {
-          var qce = document.getElementById('merc-quiz-content');
-          if (qce) qce.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Could not generate quiz.') + '</p>';
-          return;
-        }
-        renderQuiz(data);
-      })
-      .catch(function () {
-        var qcf = document.getElementById('merc-quiz-content');
-        if (qcf) qcf.innerHTML = '<p class="merc-quiz-empty">Connection error — try again.</p>';
-      });
-  }
-
-  function renderQuiz(quiz) {
-    var titleEl = document.getElementById('merc-quiz-title');
-    if (titleEl) titleEl.textContent = quiz.title || 'Comprehension Check';
-
-    var content = document.getElementById('merc-quiz-content');
-    if (!content) return;
-
+  function renderQuiz(quiz, container) {
     var questions = quiz.questions || [];
-    var html = '<form id="merc-quiz-form">';
+    var html = '<div style="margin-bottom:8px;color:#C9922A;font-family:\'Josefin Sans\',sans-serif;font-size:12px;font-weight:700;">' +
+      escapeHtml(quiz.title || 'Comprehension Check') + '</div>';
+    html += '<form id="merc-quiz-form">';
 
     questions.forEach(function (q, i) {
       html += '<div class="merc-quiz-q" data-index="' + i + '">';
@@ -1303,9 +1179,8 @@
     html += '<button class="merc-quiz-submit" id="merc-quiz-submit">Check Answers</button>';
     html += '<div class="merc-quiz-result merc-hidden" id="merc-quiz-result"></div>';
 
-    content.innerHTML = html;
+    container.insertAdjacentHTML('afterbegin', html);
 
-    // Attach submit handler
     var submitBtn = document.getElementById('merc-quiz-submit');
     if (submitBtn) {
       submitBtn.addEventListener('click', function () {
@@ -1328,7 +1203,7 @@
         var resultEl = document.getElementById('merc-quiz-result');
         if (resultEl) {
           var pct = Math.round((correct / questions.length) * 100);
-          var msg = pct === 100 ? 'Perfect score!' : pct >= 75 ? 'Great work!' : pct >= 50 ? 'Good effort.' : 'Keep exploring — revisit the topics above.';
+          var msg = pct === 100 ? 'Perfect score!' : pct >= 75 ? 'Great work!' : pct >= 50 ? 'Good effort.' : 'Keep exploring \u2014 revisit the topics above.';
           resultEl.innerHTML = '<span class="merc-quiz-score">' + correct + ' / ' + questions.length + '</span> ' + msg;
           resultEl.classList.remove('merc-hidden');
         }
@@ -1336,42 +1211,15 @@
     }
   }
 
-  // =========================================================================
-  // 19. Concept map
-  // =========================================================================
-  function handleConceptMap() {
-    var panel = document.getElementById('merc-map-panel');
-    if (!panel) return;
-    if (mapVisible) { panel.classList.add('merc-hidden'); mapVisible = false; return; }
-    panel.classList.remove('merc-hidden');
-    mapVisible = true;
-    var content = document.getElementById('merc-map-content');
-    if (conversationHistory.length < 4) {
-      if (content) content.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first.</p>';
-      return;
-    }
-    if (content) content.innerHTML = '<p class="merc-quiz-loading">Building concept map&#8230;</p>';
-    fetch(CONCEPT_MAP_ENDPOINT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sessionId: sessionId}) })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { if (data.error) { if(content) content.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message||'Error') + '</p>'; return; } renderConceptMap(data); })
-      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
-  }
-
-  function renderConceptMap(data) {
-    var content = document.getElementById('merc-map-content');
-    if (!content) return;
-    var title = document.getElementById('merc-map-title');
-    if (title) title.textContent = data.central || 'Concept Map';
-
-    var W = 320, H = 260;
+  function renderConceptMap(data, container) {
+    var W = 380, H = 300;
     var nodes = data.nodes || [];
     var edges = data.edges || [];
 
-    // Radial layout: central in center, others in circle
-    var cx = W/2, cy = H/2, r = 95;
-    var positions = { central: {x: cx, y: cy} };
-    nodes.forEach(function(n, i) {
-      var angle = (2 * Math.PI * i / nodes.length) - Math.PI/2;
+    var cx = W / 2, cy = H / 2, r = 110;
+    var positions = { central: { x: cx, y: cy } };
+    nodes.forEach(function (n, i) {
+      var angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
       positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
     });
 
@@ -1379,132 +1227,90 @@
 
     var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg">';
 
-    // Draw edges
-    edges.forEach(function(e) {
+    edges.forEach(function (e) {
       var from = e.from === 'central' ? positions.central : positions[e.from];
       var to = e.to === 'central' ? positions.central : positions[e.to];
       if (!from || !to) return;
-      var mx = (from.x + to.x)/2, my = (from.y + to.y)/2;
-      svg += '<line x1="'+from.x+'" y1="'+from.y+'" x2="'+to.x+'" y2="'+to.y+'" stroke="rgba(201,146,42,0.3)" stroke-width="1.5"/>';
-      if (e.label) svg += '<text x="'+mx+'" y="'+my+'" fill="rgba(241,245,249,0.4)" font-size="7" text-anchor="middle" dy="-3">'+escapeHtml(e.label)+'</text>';
+      var mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
+      svg += '<line x1="' + from.x + '" y1="' + from.y + '" x2="' + to.x + '" y2="' + to.y + '" stroke="rgba(201,146,42,0.3)" stroke-width="1.5"/>';
+      if (e.label) svg += '<text x="' + mx + '" y="' + my + '" fill="rgba(241,245,249,0.4)" font-size="7" text-anchor="middle" dy="-3">' + escapeHtml(e.label) + '</text>';
     });
 
-    // Draw central node
-    svg += '<circle cx="'+cx+'" cy="'+cy+'" r="28" fill="#C9922A" opacity="0.9"/>';
-    var centralWords = (data.central||'').split(' ');
-    centralWords.forEach(function(w, i) {
-      svg += '<text x="'+cx+'" y="'+(cy - (centralWords.length-1)*6 + i*13)+'" fill="#122e1e" font-size="9" font-weight="700" text-anchor="middle">'+escapeHtml(w)+'</text>';
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="28" fill="#C9922A" opacity="0.9"/>';
+    var centralWords = (data.central || '').split(' ');
+    centralWords.forEach(function (w, i) {
+      svg += '<text x="' + cx + '" y="' + (cy - (centralWords.length - 1) * 6 + i * 13) + '" fill="#122e1e" font-size="9" font-weight="700" text-anchor="middle">' + escapeHtml(w) + '</text>';
     });
 
-    // Draw other nodes
-    nodes.forEach(function(n) {
+    nodes.forEach(function (n) {
       var p = positions[n.id];
       if (!p) return;
       var fill = colorMap[n.group] || '#94a3b8';
-      svg += '<circle cx="'+p.x+'" cy="'+p.y+'" r="20" fill="'+fill+'" opacity="0.8"/>';
-      var words = (n.label||'').split(' ');
-      words.slice(0,2).forEach(function(w, i) {
-        svg += '<text x="'+p.x+'" y="'+(p.y - (Math.min(words.length,2)-1)*5 + i*11)+'" fill="#122e1e" font-size="8" font-weight="600" text-anchor="middle">'+escapeHtml(w)+'</text>';
+      svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="20" fill="' + fill + '" opacity="0.8"/>';
+      var words = (n.label || '').split(' ');
+      words.slice(0, 2).forEach(function (w, i) {
+        svg += '<text x="' + p.x + '" y="' + (p.y - (Math.min(words.length, 2) - 1) * 5 + i * 11) + '" fill="#122e1e" font-size="8" font-weight="600" text-anchor="middle">' + escapeHtml(w) + '</text>';
       });
     });
 
     svg += '</svg>';
 
-    // Legend
-    var legend = '<div class="merc-map-legend">'
-      + '<span style="color:#C9922A">&#9679; Core</span>'
-      + '<span style="color:#4ade80">&#9679; Related</span>'
-      + '<span style="color:#60a5fa">&#9679; Example</span>'
-      + '</div>';
+    var legend = '<div class="merc-map-legend">' +
+      '<span style="color:#C9922A">&#9679; Core</span>' +
+      '<span style="color:#4ade80">&#9679; Related</span>' +
+      '<span style="color:#60a5fa">&#9679; Example</span>' +
+      '</div>';
 
-    content.innerHTML = '<div class="merc-map-svg">' + svg + '</div>' + legend;
+    container.insertAdjacentHTML('afterbegin', '<div class="merc-map-svg">' + svg + '</div>' + legend);
   }
 
-  // =========================================================================
-  // 19b. Report card
-  // =========================================================================
-  function handleReportCard() {
-    var panel = document.getElementById('merc-report-panel');
-    if (!panel) return;
-    if (reportVisible) { panel.classList.add('merc-hidden'); reportVisible = false; return; }
-    panel.classList.remove('merc-hidden');
-    reportVisible = true;
-    var content = document.getElementById('merc-report-content');
-    if (conversationHistory.length < 4) {
-      if (content) content.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first.</p>';
-      return;
-    }
-    if (content) content.innerHTML = '<p class="merc-quiz-loading">Generating report card&#8230;</p>';
-    fetch(REPORT_CARD_ENDPOINT, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sessionId: sessionId}) })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { if (data.error) { if(content) content.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message||'Error') + '</p>'; return; } renderReportCard(data); })
-      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
-  }
-
-  function renderReportCard(data) {
-    var content = document.getElementById('merc-report-content');
-    if (!content) return;
-    var gradeColor = (data.overallGrade||'').startsWith('A') ? '#4ade80' : (data.overallGrade||'').startsWith('B') ? '#C9922A' : '#f87171';
-    var html = '<div class="merc-report-grade" style="color:'+gradeColor+'">'+escapeHtml(data.overallGrade||'B')+'</div>';
-    html += '<p class="merc-report-summary">'+escapeHtml(data.summary||'')+'</p>';
+  function renderReportCard(data, container) {
+    var gradeColor = (data.overallGrade || '').startsWith('A') ? '#4ade80' :
+      (data.overallGrade || '').startsWith('B') ? '#C9922A' : '#f87171';
+    var html = '<div class="merc-report-grade" style="color:' + gradeColor + '">' + escapeHtml(data.overallGrade || 'B') + '</div>';
+    html += '<p class="merc-report-summary">' + escapeHtml(data.summary || '') + '</p>';
     html += '<div class="merc-report-bars">';
-    html += '<div class="merc-report-bar-row"><span>Critical Thinking</span><div class="merc-report-bar"><div style="width:'+((data.criticalThinkingScore||0))+'%"></div></div><span>'+((data.criticalThinkingScore||0))+'</span></div>';
-    html += '<div class="merc-report-bar-row"><span>Curiosity</span><div class="merc-report-bar"><div style="width:'+((data.curiosityScore||0))+'%"></div></div><span>'+((data.curiosityScore||0))+'</span></div>';
+    html += '<div class="merc-report-bar-row"><span>Critical Thinking</span><div class="merc-report-bar"><div style="width:' + (data.criticalThinkingScore || 0) + '%"></div></div><span>' + (data.criticalThinkingScore || 0) + '</span></div>';
+    html += '<div class="merc-report-bar-row"><span>Curiosity</span><div class="merc-report-bar"><div style="width:' + (data.curiosityScore || 0) + '%"></div></div><span>' + (data.curiosityScore || 0) + '</span></div>';
     html += '</div>';
     if (data.strengths && data.strengths.length) {
       html += '<div class="merc-report-section"><div class="merc-report-section-title" style="color:#4ade80">Strengths</div><ul>';
-      data.strengths.forEach(function(s) { html += '<li>'+escapeHtml(s)+'</li>'; });
+      data.strengths.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
       html += '</ul></div>';
     }
     if (data.areasToRevisit && data.areasToRevisit.length) {
       html += '<div class="merc-report-section"><div class="merc-report-section-title" style="color:#C9922A">Revisit</div><ul>';
-      data.areasToRevisit.forEach(function(s) { html += '<li>'+escapeHtml(s)+'</li>'; });
+      data.areasToRevisit.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
       html += '</ul></div>';
     }
     if (data.nextSessionSuggestion) {
-      html += '<div class="merc-report-next">Next: '+escapeHtml(data.nextSessionSuggestion)+'</div>';
+      html += '<div class="merc-report-next">Next: ' + escapeHtml(data.nextSessionSuggestion) + '</div>';
     }
-    content.innerHTML = html;
+    container.insertAdjacentHTML('afterbegin', html);
   }
 
-  // =========================================================================
-  // 19c. Leaderboard
-  // =========================================================================
-  function handleLeaderboard() {
-    var panel = document.getElementById('merc-leaderboard-panel');
-    if (!panel) return;
-    if (leaderboardVisible) { panel.classList.add('merc-hidden'); leaderboardVisible = false; return; }
-    panel.classList.remove('merc-hidden');
-    leaderboardVisible = true;
-    var content = document.getElementById('merc-leaderboard-content');
-    if (content) content.innerHTML = '<p class="merc-quiz-loading">Loading&#8230;</p>';
-    fetch(LEADERBOARD_ENDPOINT, { method: 'GET', headers: {'Content-Type':'application/json'} })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { renderLeaderboard(data); })
-      .catch(function() { if(content) content.innerHTML = '<p class="merc-quiz-empty">Connection error.</p>'; });
-  }
-
-  function renderLeaderboard(rows) {
-    var content = document.getElementById('merc-leaderboard-content');
-    if (!content) return;
-    if (!rows || rows.length === 0) { content.innerHTML = '<p class="merc-quiz-empty">No data yet — start chatting!</p>'; return; }
+  function renderLeaderboard(rows, container) {
+    if (!rows || rows.length === 0) {
+      container.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No data yet \u2014 start chatting!</p>');
+      return;
+    }
     var html = '<div class="merc-lb-table">';
     html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>\uD83D\uDD25</span><span>Msgs</span><span>Mode</span></div>';
-    rows.forEach(function(r) {
+    rows.forEach(function (r) {
       html += '<div class="merc-lb-row">';
-      html += '<span>'+r.rank+'</span>';
-      html += '<span class="merc-lb-badge">'+escapeHtml(r.badge)+'</span>';
-      html += '<span>'+r.streak+'</span>';
-      html += '<span>'+r.messages+'</span>';
-      html += '<span>'+(r.unlocked?'<span style="color:#C9922A">Direct</span>':'Socratic')+'</span>';
+      html += '<span>' + r.rank + '</span>';
+      html += '<span class="merc-lb-badge">' + escapeHtml(r.badge) + '</span>';
+      html += '<span>' + r.streak + '</span>';
+      html += '<span>' + r.messages + '</span>';
+      html += '<span>' + (r.unlocked ? '<span style="color:#C9922A">Direct</span>' : 'Socratic') + '</span>';
       html += '</div>';
     });
     html += '</div>';
-    content.innerHTML = html;
+    container.insertAdjacentHTML('afterbegin', html);
   }
 
   // =========================================================================
-  // 19d. Voice input
+  // 19. Voice input
   // =========================================================================
   function toggleVoiceInput() {
     var btn = document.getElementById('merc-voice-btn');
@@ -1525,19 +1331,19 @@
     voiceRecognition.lang = 'en-US';
     voiceActive = true;
     if (btn) btn.classList.add('merc-voice-active');
-    voiceRecognition.onresult = function(e) {
+    voiceRecognition.onresult = function (e) {
       var transcript = e.results[0][0].transcript;
       var ta = document.getElementById('merc-textarea');
       if (ta) { ta.value = transcript; ta.dispatchEvent(new Event('input')); }
       voiceActive = false;
       if (btn) btn.classList.remove('merc-voice-active');
     };
-    voiceRecognition.onerror = function() {
+    voiceRecognition.onerror = function () {
       voiceActive = false;
       if (btn) btn.classList.remove('merc-voice-active');
-      appendSystemNotice('Voice input error — please try again.');
+      appendSystemNotice('Voice input error \u2014 please try again.');
     };
-    voiceRecognition.onend = function() {
+    voiceRecognition.onend = function () {
       voiceActive = false;
       if (btn) btn.classList.remove('merc-voice-active');
     };
@@ -1548,12 +1354,9 @@
   // 20. Initialize on DOMContentLoaded (or immediately if already loaded)
   // =========================================================================
   function init() {
-    // Prevent double-initialization
     if (document.getElementById('merc-toggle')) return;
     buildWidget();
 
-    // If localStorage says the user is already unlocked, restore that state
-    // to the server (Railway deploys can wipe the DB, losing unlock records)
     if (isUnlocked) {
       fetch(MODE_ENDPOINT, {
         method: 'POST',
