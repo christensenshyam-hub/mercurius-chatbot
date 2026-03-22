@@ -1084,7 +1084,7 @@
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, mode: newMode }),
+      body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: true }),
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -1229,6 +1229,16 @@
     // Prevent double-initialization
     if (document.getElementById('merc-toggle')) return;
     buildWidget();
+
+    // If localStorage says the user is already unlocked, restore that state
+    // to the server (Railway deploys can wipe the DB, losing unlock records)
+    if (isUnlocked) {
+      fetch(MODE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionId, mode: currentMode, clientUnlocked: true }),
+      }).catch(function () { /* silent — best effort */ });
+    }
   }
 
   if (document.readyState === 'loading') {

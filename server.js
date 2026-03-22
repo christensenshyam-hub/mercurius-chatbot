@@ -401,13 +401,23 @@ app.get('/api/session/:sessionId', (req, res) => {
 // POST /api/mode — switch mode (only allowed if session is unlocked)
 // ---------------------------------------------------------------------------
 app.post('/api/mode', (req, res) => {
-  const { sessionId, mode } = req.body;
+  const { sessionId, mode, clientUnlocked } = req.body;
   if (!sessionId || !['socratic', 'direct'].includes(mode)) {
     return res.status(400).json({ error: 'invalid_request' });
   }
+  db.getOrCreateSession(sessionId);
   const state = db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
-  if (!state.unlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
+
+  // Trust clientUnlocked=true: the unlock record lives in localStorage and
+  // survives Railway redeploys even when the DB is reset.
+  if (!state.unlocked && clientUnlocked === true) {
+    db.markUnlocked(sessionId);
+  }
+
+  const isUnlocked = state.unlocked || clientUnlocked === true;
+  if (!isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
+
   db.setMode(sessionId, mode);
   return res.json({ mode, unlocked: true });
 });
