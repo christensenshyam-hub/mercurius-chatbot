@@ -137,11 +137,15 @@
       '  </div>',
       '</div>',
 
-      // Mode bar
+      // Mode selector
       '<div class="merc-mode-bar" id="merc-mode-bar">',
-      '  <span class="merc-mode-lock" id="merc-mode-lock">&#128274;</span>',
-      '  <span class="merc-mode-label" id="merc-mode-label">Socratic Mode</span>',
-      '  <button class="merc-mode-switch merc-hidden" id="merc-mode-switch" title="Switch mode">Switch to Direct</button>',
+      '  <span class="merc-mode-bar-label">MODE</span>',
+      '  <div class="merc-mode-tabs">',
+      '    <button class="merc-mode-tab merc-mode-tab-active" id="merc-tab-socratic">Socratic</button>',
+      '    <button class="merc-mode-tab merc-mode-tab-locked" id="merc-tab-direct" disabled>',
+      '      Direct <span class="merc-tab-lock" id="merc-tab-lock-icon">&#128274;</span>',
+      '    </button>',
+      '  </div>',
       '</div>',
 
       // Tooltip (hidden by default)
@@ -282,10 +286,18 @@
       });
     }
 
-    // Mode switch button
-    var modeSwitchBtn = document.getElementById('merc-mode-switch');
-    if (modeSwitchBtn) {
-      modeSwitchBtn.addEventListener('click', handleModeSwitch);
+    // Mode tab clicks
+    var tabSocratic = document.getElementById('merc-tab-socratic');
+    var tabDirect   = document.getElementById('merc-tab-direct');
+    if (tabSocratic) {
+      tabSocratic.addEventListener('click', function () {
+        if (currentMode !== 'socratic') handleModeSwitchTo('socratic');
+      });
+    }
+    if (tabDirect) {
+      tabDirect.addEventListener('click', function () {
+        if (isUnlocked && currentMode !== 'direct') handleModeSwitchTo('direct');
+      });
     }
 
     // Initialise mode bar to match stored state
@@ -970,26 +982,31 @@
   // 17. Mode bar helpers
   // =========================================================================
   function updateModeBar() {
-    var lockEl   = document.getElementById('merc-mode-lock');
-    var labelEl  = document.getElementById('merc-mode-label');
-    var switchEl = document.getElementById('merc-mode-switch');
-    if (!lockEl || !labelEl || !switchEl) return;
+    var tabSocratic = document.getElementById('merc-tab-socratic');
+    var tabDirect   = document.getElementById('merc-tab-direct');
+    var lockIcon    = document.getElementById('merc-tab-lock-icon');
+    var bar         = document.getElementById('merc-mode-bar');
+    if (!tabSocratic || !tabDirect) return;
 
     if (isUnlocked) {
-      lockEl.textContent = '🔓';
-      if (currentMode === 'direct') {
-        labelEl.textContent = 'Direct Mode';
-        switchEl.textContent = 'Switch to Socratic';
-      } else {
-        labelEl.textContent = 'Socratic Mode';
-        switchEl.textContent = 'Switch to Direct';
-      }
-      switchEl.classList.remove('merc-hidden');
-      document.getElementById('merc-mode-bar').classList.add('merc-mode-unlocked');
+      // Unlock the Direct tab
+      tabDirect.disabled = false;
+      tabDirect.classList.remove('merc-mode-tab-locked');
+      if (lockIcon) lockIcon.textContent = '';
+      bar.classList.add('merc-mode-unlocked');
     } else {
-      lockEl.textContent = '🔒';
-      labelEl.textContent = 'Socratic Mode';
-      switchEl.classList.add('merc-hidden');
+      tabDirect.disabled = true;
+      tabDirect.classList.add('merc-mode-tab-locked');
+      if (lockIcon) lockIcon.innerHTML = '&#128274;';
+    }
+
+    // Active tab highlight
+    if (currentMode === 'direct') {
+      tabDirect.classList.add('merc-mode-tab-active');
+      tabSocratic.classList.remove('merc-mode-tab-active');
+    } else {
+      tabSocratic.classList.add('merc-mode-tab-active');
+      tabDirect.classList.remove('merc-mode-tab-active');
     }
   }
 
@@ -1001,9 +1018,8 @@
     }
   }
 
-  function handleModeSwitch() {
+  function handleModeSwitchTo(newMode) {
     if (!isUnlocked) return;
-    var newMode = currentMode === 'socratic' ? 'direct' : 'socratic';
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

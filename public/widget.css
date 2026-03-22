@@ -148,59 +148,81 @@
    Mode Bar  (.merc-mode-bar)
    ============================================================ */
 .merc-mode-bar {
-  background: rgba(18, 46, 30, 0.95);
-  border-bottom: 1px solid rgba(201, 146, 42, 0.15);
-  padding: 6px 14px;
+  background: rgba(10, 28, 18, 0.98);
+  border-bottom: 1px solid rgba(201, 146, 42, 0.2);
+  padding: 7px 14px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
+  flex-shrink: 0;
+  transition: background 0.4s ease;
+}
+
+.merc-mode-bar-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: rgba(212, 224, 216, 0.35);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.merc-mode-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.merc-mode-tab {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: 7px;
   font-family: 'Space Mono', monospace;
   font-size: 10.5px;
-  flex-shrink: 0;
-  transition: background 0.3s ease;
-}
-
-.merc-mode-lock {
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.merc-mode-label {
-  color: rgba(212, 224, 216, 0.65);
-  flex: 1;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.merc-mode-switch {
-  background: transparent;
-  border: 1px solid rgba(201, 146, 42, 0.45);
-  border-radius: 6px;
-  color: var(--merc-gold);
   cursor: pointer;
-  font-family: 'Space Mono', monospace;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: transparent;
+  color: rgba(212, 224, 216, 0.4);
+}
+
+/* Active tab */
+.merc-mode-tab.merc-mode-tab-active {
+  background: rgba(201, 146, 42, 0.15);
+  border-color: rgba(201, 146, 42, 0.5);
+  color: var(--merc-gold-light);
+}
+
+/* Locked tab */
+.merc-mode-tab.merc-mode-tab-locked {
+  color: rgba(212, 224, 216, 0.2);
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.02);
+}
+
+.merc-mode-tab:not(.merc-mode-tab-locked):not(.merc-mode-tab-active):hover {
+  background: rgba(201, 146, 42, 0.07);
+  border-color: rgba(201, 146, 42, 0.2);
+  color: rgba(232, 184, 75, 0.6);
+}
+
+.merc-tab-lock {
   font-size: 10px;
-  padding: 3px 9px;
-  letter-spacing: 0.03em;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  flex-shrink: 0;
+  opacity: 0.5;
 }
 
-.merc-mode-switch:hover {
-  background: rgba(201, 146, 42, 0.12);
-  border-color: var(--merc-gold);
-}
-
-.merc-mode-bar.merc-mode-unlocked .merc-mode-label {
-  color: rgba(232, 184, 75, 0.85);
-}
-
+/* Flash animation on unlock */
 @keyframes merc-unlock-flash {
-  0%   { background: rgba(18, 46, 30, 0.95); }
-  25%  { background: rgba(201, 146, 42, 0.3); }
-  60%  { background: rgba(201, 146, 42, 0.15); }
-  100% { background: rgba(18, 46, 30, 0.95); }
+  0%   { background: rgba(10, 28, 18, 0.98); }
+  20%  { background: rgba(201, 146, 42, 0.35); }
+  60%  { background: rgba(201, 146, 42, 0.12); }
+  100% { background: rgba(10, 28, 18, 0.98); }
 }
 
 .merc-mode-bar.merc-unlock-flash {
@@ -212,7 +234,7 @@
   text-align: center;
   font-family: 'Space Mono', monospace;
   font-size: 10.5px;
-  color: rgba(201, 146, 42, 0.7);
+  color: rgba(201, 146, 42, 0.65);
   padding: 6px 16px;
   letter-spacing: 0.03em;
   border-top: 1px solid rgba(201, 146, 42, 0.1);
