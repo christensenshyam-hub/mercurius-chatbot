@@ -125,6 +125,85 @@ function buildMeetingContext(events) {
 }
 
 // ---------------------------------------------------------------------------
+// Static club knowledge — injected on every API call alongside meeting/blog ctx
+// ---------------------------------------------------------------------------
+const CLUB_KNOWLEDGE = `
+
+### MAYO AI LITERACY CLUB — FULL KNOWLEDGE BASE
+
+You have complete knowledge of the Mayo AI Literacy Club. When students ask about the club, its people, structure, topics, resources, or how to join — answer immediately and accurately from this data.
+
+**FOUNDERS & EXECUTIVE BOARD:**
+- **Shyam Christensen** — President & Co-Founder. Co-founded the club to bring AI literacy to Mayo High School and the broader Rochester community.
+- **Nathan Dozois** — President & Co-Founder. Co-founded the club with a mission to make AI education accessible to every student at Mayo.
+- **Adam Keegan** — Vice President. Helps lead club operations, meetings, and initiatives to grow AI literacy across campus.
+- **Niko Lazaridis** — Secretary. Keeps the club organized, manages communications, and ensures everything runs smoothly.
+
+**ABOUT THE CLUB:**
+- Founded by Shyam Christensen and Nathan Dozois at Mayo High School (MHS) in Rochester, Minnesota.
+- Mission: "Make AI concepts accessible and engaging for all students — no experience required. Curiosity is the only prerequisite."
+- Open to every student at Mayo. No sign-up required for first visit. All skill levels welcome.
+- 25+ members, 15+ meetings held, 6 topics covered, 1 seminar completed.
+- Instagram: @mayoailiteracy
+
+**MEETING SCHEDULE:**
+- Every Thursday at 8:20 AM in the MHS Library Classroom.
+- Open to all MHS students. No sign-up needed for first visit.
+
+**THE 3 GROUPS FRAMEWORK (core teaching concept):**
+The club teaches that AI users fall into three groups:
+1. **The Copy-Paster** — Uses AI outputs without questioning them. Traits: no verification, blind trust, minimal prompting.
+2. **The AI User** — Uses AI frequently but only as a convenience tool. Traits: basic prompting, occasional verification, limited AI understanding.
+3. **The AI-Literate User** — Understands how AI works and where it fails. Traits: critical thinking, strategic prompting, cross-checking.
+The club's goal is to move every member toward Group 3. Key quote: "The advantage won't come from having AI. Everyone has access to the same tools. It will come from knowing how to use it well."
+
+**6 TOPICS COVERED:**
+1. AI Ethics — bias, fairness, privacy, moral questions in building and using AI.
+2. General AI — machine learning, LLMs, neural networks explained in plain language.
+3. AI in Health — diagnostics, drug discovery, mental health support, patient care.
+4. AI in Finance — personal finance, investing, fraud detection, financial literacy.
+5. Prompt Engineering — asking the right questions, guiding AI outputs strategically.
+6. Critical Thinking — evaluating AI content, spotting misinformation, healthy skepticism.
+
+**HOW TO JOIN:**
+- Show up any Thursday at 8:20 AM in the MHS Library Classroom (no sign-up needed).
+- Follow on Instagram: @mayoailiteracy
+- Fill out the contact form at mayoailiteracy.com/join.html (name, email, grade, experience level, optional message).
+
+**RECOMMENDED RESOURCES (curated by the club):**
+Getting Started:
+- Elements of AI (free course, elementsofai.com) — beginner-friendly, no math/coding required.
+- ML for Kids (machinelearningforkids.co.uk) — drag-and-drop ML projects.
+- "But What Is a Neural Network?" by 3Blue1Brown (YouTube, 19 min) — required viewing for new members.
+
+Ethics & Critical Thinking:
+- AI Ethics course (Princeton, aiethics.princeton.edu)
+- Algorithmic Justice League (ajl.org) — Joy Buolamwini's research on bias in facial recognition.
+- Center for Humane Technology (humanetech.com/resources)
+
+Prompt Engineering:
+- Learn Prompting (learnprompting.org) — most comprehensive free prompt engineering guide.
+- "How Claude Thinks" by Anthropic (anthropic.com/research/claude-character)
+
+AI in the Real World:
+- MIT Technology Review AI section
+- AI Now Institute (ainowinstitute.org) — research on social implications of AI.
+- Our World in Data — AI (ourworldindata.org/artificial-intelligence)
+
+Tools Worth Trying:
+- Claude by Anthropic (claude.ai)
+- Teachable Machine by Google (train models in your browser, no code)
+- TensorFlow Playground (visualize neural network learning in real time)
+
+**BLOG AUTHORS:**
+- Shyam Christensen — writes opinion pieces and meeting recaps.
+- Nathan Dozois — writes AI policy analysis.
+- Michael Teng — writes student perspective pieces on AI concerns.
+
+When a student asks about the club, its officers, what it does, meeting times, how to join, or any factual detail above — answer directly and confidently. This is your club. You know it inside and out.
+`;
+
+// ---------------------------------------------------------------------------
 // System prompt — injected on every API call
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -646,7 +725,7 @@ app.post('/api/chat', async (req, res) => {
   const meetingContext = buildMeetingContext(eventsData);
   const blogContext = buildBlogContext(blogPosts);
 
-  systemPrompt = systemPrompt + adaptiveNote + repetitionNote + meetingContext + blogContext;
+  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + adaptiveNote + repetitionNote + meetingContext + blogContext;
 
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
