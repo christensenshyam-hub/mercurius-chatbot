@@ -771,6 +771,199 @@
 }
 
 /* ============================================================
+   Source Citation Chips
+   ============================================================ */
+.merc-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(201, 146, 42, 0.12);
+  border: 1px solid rgba(201, 146, 42, 0.35);
+  color: var(--merc-gold);
+  font-size: 10.5px;
+  font-family: 'Space Mono', monospace;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin: 0 2px;
+  white-space: nowrap;
+  cursor: default;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   "Why this question?" action button variant
+   ============================================================ */
+.merc-action-btn-why {
+  border-color: rgba(201, 146, 42, 0.5) !important;
+  color: var(--merc-gold) !important;
+}
+.merc-action-btn-why:hover {
+  background: rgba(201, 146, 42, 0.12) !important;
+  border-color: var(--merc-gold) !important;
+}
+
+/* ============================================================
+   Quiz Panel
+   ============================================================ */
+.merc-quiz-panel {
+  margin: 0 12px 8px;
+  background: rgba(18, 46, 30, 0.97);
+  border: 1px solid rgba(201, 146, 42, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: merc-slide-down 0.2s ease;
+}
+
+.merc-quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(201, 146, 42, 0.2);
+  background: rgba(201, 146, 42, 0.08);
+}
+
+.merc-quiz-title {
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--merc-gold);
+}
+
+.merc-quiz-close {
+  background: none;
+  border: none;
+  color: rgba(241, 245, 249, 0.5);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.merc-quiz-close:hover { color: var(--merc-gold); }
+
+#merc-quiz-content {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px 14px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,146,42,0.3) transparent;
+}
+
+.merc-quiz-empty,
+.merc-quiz-loading {
+  color: rgba(241, 245, 249, 0.5);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+  padding: 8px 0;
+  margin: 0;
+}
+
+.merc-quiz-q {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.merc-quiz-q:last-child { border-bottom: none; }
+
+.merc-quiz-qtext {
+  color: rgba(241, 245, 249, 0.9);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.merc-quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.merc-quiz-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(241, 245, 249, 0.75);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.merc-quiz-option:hover {
+  background: rgba(201, 146, 42, 0.08);
+  border-color: rgba(201, 146, 42, 0.2);
+}
+.merc-quiz-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--merc-gold);
+  flex-shrink: 0;
+}
+
+.merc-quiz-explanation {
+  margin-top: 7px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 2px solid var(--merc-gold);
+  border-radius: 0 4px 4px 0;
+  font-size: 11.5px;
+  color: rgba(241, 245, 249, 0.7);
+  line-height: 1.5;
+}
+
+.merc-quiz-correct { opacity: 1; }
+.merc-quiz-correct .merc-quiz-option input:checked + span {
+  color: #4ade80;
+}
+.merc-quiz-wrong .merc-quiz-option input:checked + span {
+  color: #f87171;
+}
+
+.merc-quiz-submit {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 4px 14px 12px;
+  padding: 9px;
+  background: var(--merc-gold);
+  color: var(--merc-navy);
+  border: none;
+  border-radius: 7px;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.merc-quiz-submit:hover { background: var(--merc-gold-light); }
+
+.merc-quiz-result {
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  background: rgba(201, 146, 42, 0.1);
+  border: 1px solid rgba(201, 146, 42, 0.3);
+  border-radius: 7px;
+  font-size: 13px;
+  color: rgba(241, 245, 249, 0.85);
+  text-align: center;
+  animation: merc-fade-in 0.3s ease;
+}
+
+.merc-quiz-score {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--merc-gold);
+  margin-right: 6px;
+}
+
+/* ============================================================
    Mobile — full screen panel
    ============================================================ */
 @media (max-width: 480px) {

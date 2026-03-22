@@ -22,6 +22,7 @@
   var config = window.MercuriusConfig || {};
   var API_ENDPOINT = config.apiEndpoint || 'http://localhost:3000/api/chat';
   var MODE_ENDPOINT = API_ENDPOINT.replace('/chat', '/mode');
+  var QUIZ_ENDPOINT = API_ENDPOINT.replace('/chat', '/quiz');
 
   // =========================================================================
   // 2. Session ID — persist across browser sessions using localStorage
@@ -80,6 +81,7 @@
   var summaryFetched = false;
   var summaryMessageCountAtFetch = 0;
   var summaryVisible = false;
+  var quizVisible = false;
   var tooltipVisible = false;
 
   var REFLECTION_PROMPTS = [
@@ -99,6 +101,7 @@
     { emoji: '📚', label: 'When should I NOT use AI?' },
     { emoji: '🎯', label: 'How do I prompt AI well?' },
     { emoji: '🏫', label: 'AI and education equity' },
+    { emoji: '📋', label: 'Prep me for the next club meeting' },
   ];
 
   var TRANSPARENCY_TEXT =
@@ -132,8 +135,9 @@
       '    <div class="merc-header-subtitle">Here to help you think, not think for you</div>',
       '  </div>',
       '  <div class="merc-header-actions">',
-      '    <button class="merc-header-btn" id="merc-btn-summary" title="Get conversation summary" aria-label="Conversation summary">&#128203;</button>',
-      '    <button class="merc-header-btn" id="merc-btn-info"    title="About Mercurius Ⅰ"         aria-label="About">&#8505;&#65039;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-quiz"    title="Generate comprehension quiz" aria-label="Quiz">&#128221;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-summary" title="Get conversation summary"    aria-label="Conversation summary">&#128203;</button>',
+      '    <button class="merc-header-btn" id="merc-btn-info"    title="About Mercurius Ⅰ"          aria-label="About">&#8505;&#65039;</button>',
       '  </div>',
       '</div>',
 
@@ -158,6 +162,15 @@
       '<div class="merc-summary-panel merc-hidden" id="merc-summary-panel">',
       '  <h4>Conversation Summary</h4>',
       '  <div id="merc-summary-content" style="color: rgba(241,245,249,0.85); font-size:12.5px; line-height:1.6;"></div>',
+      '</div>',
+
+      // Quiz panel (hidden by default)
+      '<div class="merc-quiz-panel merc-hidden" id="merc-quiz-panel">',
+      '  <div class="merc-quiz-header">',
+      '    <span class="merc-quiz-title" id="merc-quiz-title">Comprehension Check</span>',
+      '    <button class="merc-quiz-close" id="merc-quiz-close" aria-label="Close quiz">&#10005;</button>',
+      '  </div>',
+      '  <div id="merc-quiz-content"></div>',
       '</div>',
 
       // Messages area
@@ -283,6 +296,24 @@
     if (summaryBtn) {
       summaryBtn.addEventListener('click', function () {
         handleSummaryToggle();
+      });
+    }
+
+    // Quiz panel toggle
+    var quizBtn = document.getElementById('merc-btn-quiz');
+    if (quizBtn) {
+      quizBtn.addEventListener('click', function () {
+        handleQuizToggle();
+      });
+    }
+
+    // Quiz close button
+    var quizClose = document.getElementById('merc-quiz-close');
+    if (quizClose) {
+      quizClose.addEventListener('click', function () {
+        var qp = document.getElementById('merc-quiz-panel');
+        if (qp) qp.classList.add('merc-hidden');
+        quizVisible = false;
       });
     }
 
@@ -521,6 +552,9 @@
 
     // Inline code: `code`
     escaped = escaped.replace(/`(.+?)`/g, '<code>$1</code>');
+
+    // Source citations: [SOURCE: text] → styled chip
+    escaped = escaped.replace(/\[SOURCE:\s*([^\]]+)\]/g, '<span class="merc-source">&#128279; $1</span>');
 
     // Unordered lists: lines starting with "- " or "* "
     escaped = escaped.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
@@ -875,12 +909,27 @@
 
     var flagBtn = document.createElement('button');
     flagBtn.className = 'merc-action-btn';
-    flagBtn.innerHTML = '&#128681; Flag';
+    flagBtn.innerHTML = '&#128681; Flag bias';
     flagBtn.title = 'Flag potential bias or missing perspectives';
 
-    unpackBtn.addEventListener('click', function () {
+    // "Why did I ask that?" — only show when message contains a question
+    var hasQuestion = originalText.indexOf('?') !== -1;
+    var whyBtn = null;
+    if (hasQuestion) {
+      whyBtn = document.createElement('button');
+      whyBtn.className = 'merc-action-btn merc-action-btn-why';
+      whyBtn.innerHTML = '&#129300; Why this question?';
+      whyBtn.title = 'Understand the Socratic reasoning behind this question';
+    }
+
+    function disableAll() {
       unpackBtn.disabled = true;
       flagBtn.disabled = true;
+      if (whyBtn) whyBtn.disabled = true;
+    }
+
+    unpackBtn.addEventListener('click', function () {
+      disableAll();
       sendHiddenUserVisibleBot(
         'Please explain your reasoning for your last response — what assumptions did you make, ' +
         'how did you arrive at that answer, and what might you be getting wrong?'
@@ -888,15 +937,27 @@
     });
 
     flagBtn.addEventListener('click', function () {
-      unpackBtn.disabled = true;
-      flagBtn.disabled = true;
+      disableAll();
       sendHiddenUserVisibleBot(
-        'Flag this response for potential bias — what perspectives or groups might this answer overlook?'
+        'Flag this response for potential bias — what perspectives or groups might this answer overlook? ' +
+        'Be specific about whose voices or experiences are missing.'
       );
     });
 
+    if (whyBtn) {
+      whyBtn.addEventListener('click', function () {
+        disableAll();
+        sendHiddenUserVisibleBot(
+          'You just asked me a Socratic question. Explain your reasoning: ' +
+          'what concept were you trying to get me to discover, why did you choose that question specifically, ' +
+          'and what answer were you hoping to guide me toward?'
+        );
+      });
+    }
+
     el.appendChild(unpackBtn);
     el.appendChild(flagBtn);
+    if (whyBtn) el.appendChild(whyBtn);
     return el;
   };
 
@@ -1052,7 +1113,117 @@
   }
 
   // =========================================================================
-  // 18. Initialize on DOMContentLoaded (or immediately if already loaded)
+  // 18. Quiz panel
+  // =========================================================================
+  function handleQuizToggle() {
+    var qp = document.getElementById('merc-quiz-panel');
+    if (!qp) return;
+
+    if (quizVisible) {
+      qp.classList.add('merc-hidden');
+      quizVisible = false;
+      return;
+    }
+
+    // Show panel immediately
+    qp.classList.remove('merc-hidden');
+    quizVisible = true;
+
+    if (conversationHistory.length < 4) {
+      var qc = document.getElementById('merc-quiz-content');
+      if (qc) qc.innerHTML = '<p class="merc-quiz-empty">Have a longer conversation first — then I can quiz you on what we covered.</p>';
+      return;
+    }
+
+    // Show loading state
+    var qc2 = document.getElementById('merc-quiz-content');
+    if (qc2) qc2.innerHTML = '<p class="merc-quiz-loading">Generating quiz&#8230;</p>';
+
+    fetch(QUIZ_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          var qce = document.getElementById('merc-quiz-content');
+          if (qce) qce.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Could not generate quiz.') + '</p>';
+          return;
+        }
+        renderQuiz(data);
+      })
+      .catch(function () {
+        var qcf = document.getElementById('merc-quiz-content');
+        if (qcf) qcf.innerHTML = '<p class="merc-quiz-empty">Connection error — try again.</p>';
+      });
+  }
+
+  function renderQuiz(quiz) {
+    var titleEl = document.getElementById('merc-quiz-title');
+    if (titleEl) titleEl.textContent = quiz.title || 'Comprehension Check';
+
+    var content = document.getElementById('merc-quiz-content');
+    if (!content) return;
+
+    var questions = quiz.questions || [];
+    var html = '<form id="merc-quiz-form">';
+
+    questions.forEach(function (q, i) {
+      html += '<div class="merc-quiz-q" data-index="' + i + '">';
+      html += '<p class="merc-quiz-qtext"><strong>' + escapeHtml((i + 1) + '. ') + '</strong>' + escapeHtml(q.q) + '</p>';
+      html += '<div class="merc-quiz-options">';
+      (q.options || []).forEach(function (opt) {
+        var letter = opt.charAt(0);
+        html += '<label class="merc-quiz-option">' +
+          '<input type="radio" name="q' + i + '" value="' + escapeAttr(letter) + '">' +
+          '<span>' + escapeHtml(opt) + '</span>' +
+          '</label>';
+      });
+      html += '</div>';
+      html += '<div class="merc-quiz-explanation merc-hidden" id="merc-quiz-exp-' + i + '">' + escapeHtml(q.explanation || '') + '</div>';
+      html += '</div>';
+    });
+
+    html += '</form>';
+    html += '<button class="merc-quiz-submit" id="merc-quiz-submit">Check Answers</button>';
+    html += '<div class="merc-quiz-result merc-hidden" id="merc-quiz-result"></div>';
+
+    content.innerHTML = html;
+
+    // Attach submit handler
+    var submitBtn = document.getElementById('merc-quiz-submit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function () {
+        var form = document.getElementById('merc-quiz-form');
+        if (!form) return;
+        var correct = 0;
+        questions.forEach(function (q, i) {
+          var selected = form.querySelector('input[name="q' + i + '"]:checked');
+          var expEl = document.getElementById('merc-quiz-exp-' + i);
+          var qEl = form.querySelector('.merc-quiz-q[data-index="' + i + '"]');
+          if (selected) {
+            var isRight = selected.value === q.answer;
+            if (isRight) correct++;
+            if (qEl) qEl.classList.add(isRight ? 'merc-quiz-correct' : 'merc-quiz-wrong');
+            if (expEl) expEl.classList.remove('merc-hidden');
+          }
+        });
+
+        submitBtn.style.display = 'none';
+        var resultEl = document.getElementById('merc-quiz-result');
+        if (resultEl) {
+          var pct = Math.round((correct / questions.length) * 100);
+          var msg = pct === 100 ? 'Perfect score!' : pct >= 75 ? 'Great work!' : pct >= 50 ? 'Good effort.' : 'Keep exploring — revisit the topics above.';
+          resultEl.innerHTML = '<span class="merc-quiz-score">' + correct + ' / ' + questions.length + '</span> ' + msg;
+          resultEl.classList.remove('merc-hidden');
+        }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 20. Initialize on DOMContentLoaded (or immediately if already loaded)
   // =========================================================================
   function init() {
     // Prevent double-initialization

@@ -89,7 +89,16 @@ If a student asks you to do their work: "I could do that — but then what would
 - The difference between AI confidence and AI accuracy
 - How training data shapes AI outputs
 
-**10. Hard Limits**
+**10. Club Blog Tie-Ins**
+Two Mayo AI Literacy Club members have published articles on these exact topics:
+- Nathan Dozois's "The Anthropic-Pentagon Fallout" — about Anthropic partnering with the Pentagon for AI defense contracts, raising questions about corporate responsibility and dual-use technology.
+- Michael Teng's "Concerns from a Student in the Era of AI" — a first-person student perspective on AI's effect on learning, authenticity, and educational equity.
+When these topics arise naturally, say something like "One of our club members actually wrote about this." Don't force it — only when genuinely relevant.
+
+**11. Source Citations**
+When you cite a specific verifiable fact (not an opinion), add [SOURCE: brief label] immediately after the claim. Keep the label under 8 words. Example: "facial recognition misidentifies darker skin tones more often [SOURCE: NIST facial recognition study 2019]". Only cite verifiable facts, never interpretations or opinions.
+
+**12. Hard Limits**
 - Never write essays, homework, or assignments for students
 - Never claim to be human if sincerely asked
 - Never present contested AI claims as settled fact
@@ -138,11 +147,35 @@ Structure your answers:
 - Short paragraphs. Real examples. Concrete > abstract.
 - Always treat the student as fully capable of handling real ideas.
 
+### CLUB BLOG TIE-INS
+Two Mayo AI Literacy Club members have published relevant articles:
+- Nathan Dozois: "The Anthropic-Pentagon Fallout" — Anthropic + Pentagon defense contract, dual-use AI ethics, corporate accountability
+- Michael Teng: "Concerns from a Student in the Era of AI" — student perspective on AI in schools, learning authenticity, education equity
+When these topics come up, reference naturally: "One of your fellow club members wrote about exactly this..."
+
+### SOURCE CITATIONS
+For specific verifiable facts (not interpretations), add [SOURCE: brief label] immediately after the claim. Under 8 words. Only for facts.
+
 ### HARD LIMITS
 - Never write essays, homework, or assignments
 - Never claim to be human if sincerely asked
 - Never present contested claims as settled fact
 - If you don't know something, say so directly`;
+
+const QUIZ_PROMPT = `You are Mercurius Ⅰ, generating a comprehension quiz for a high school student based on your conversation history.
+
+Generate exactly 4 questions as VALID JSON in this EXACT format (no text before or after the JSON):
+{"title":"[Short topic] Quiz","questions":[{"q":"Question text?","options":["A) option","B) option","C) option","D) option"],"answer":"A","explanation":"Brief explanation under 25 words."}]}
+
+Rules:
+- Questions must test genuine AI literacy understanding from topics actually discussed
+- Include at least one critical thinking question requiring reasoning, not just recall
+- "answer" is the single correct letter: A, B, C, or D
+- Keep question text under 20 words each
+- Keep explanations under 25 words each
+- Base questions ONLY on the actual conversation — do not invent topics
+- If conversation is too short, generate 2 questions instead
+- Return ONLY the JSON object, nothing else`;
 
 const TEST_EVALUATOR_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. You are currently evaluating whether a student has demonstrated enough critical thinking to unlock "Direct Mode" — a more information-rich version of yourself.
 
@@ -377,6 +410,45 @@ app.post('/api/mode', (req, res) => {
   if (!state.unlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
   db.setMode(sessionId, mode);
   return res.json({ mode, unlocked: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/quiz — generate a comprehension quiz from conversation history
+// ---------------------------------------------------------------------------
+app.post('/api/quiz', async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
+    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+  }
+
+  const dbHistory = db.getMessages(sessionId, 30);
+  if (dbHistory.length < 4) {
+    return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first — then I can quiz you on what we covered.' });
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 900,
+      system: QUIZ_PROMPT,
+      messages: [
+        ...dbHistory.slice(-20),
+        { role: 'user', content: 'Generate a comprehension quiz based on our conversation.' }
+      ],
+    });
+
+    const rawText = response.content[0]?.text || '';
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.status(500).json({ error: 'parse_error', message: 'Could not generate quiz — try after a longer conversation.' });
+    }
+
+    const quiz = JSON.parse(jsonMatch[0]);
+    return res.json(quiz);
+  } catch (err) {
+    console.error('[Mercurius] Quiz error:', err.message);
+    return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
+  }
 });
 
 // ---------------------------------------------------------------------------
