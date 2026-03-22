@@ -32,6 +32,10 @@ const EVENTS_URL = 'https://mayoailiteracy.com/events-data.json';
 let eventsCache = null;
 let eventsCacheTime = 0;
 
+const BLOG_URL = 'https://mayoailiteracy.com/blog-content.json';
+let blogCache = null;
+let blogCacheTime = 0;
+
 async function getEventsData() {
   const now = Date.now();
 
@@ -55,6 +59,34 @@ async function getEventsData() {
     console.warn('[Mercurius] Could not fetch events-data.json:', e.message);
   }
   return eventsCache;
+}
+
+async function getBlogContent() {
+  const now = Date.now();
+  if (blogCache && now - blogCacheTime < 3600000) return blogCache;
+  try {
+    const res = await fetch(BLOG_URL);
+    if (res.ok) {
+      blogCache = await res.json();
+      blogCacheTime = now;
+    }
+  } catch (e) {
+    console.warn('[Mercurius] Could not fetch blog-content.json:', e.message);
+  }
+  return blogCache;
+}
+
+function buildBlogContext(posts) {
+  if (!posts || posts.length === 0) return '';
+  let ctx = '\n\n### MAYO AI LITERACY CLUB — BLOG LIBRARY\n';
+  ctx += 'You have full access to the following club blog posts. Quote them directly, reference specific arguments, and connect them to conversations naturally.\n\n';
+  posts.forEach(p => {
+    ctx += `---\n**"${p.title}"** by ${p.author} (${p.date}) [${p.category}]\n`;
+    ctx += `Summary: ${p.summary}\n`;
+    ctx += `Full content:\n${p.content}\n\n`;
+  });
+  ctx += '---\nWhen a student discusses a topic covered in one of these posts, reference it naturally: "One of our club members wrote about exactly this..." or "There\'s a piece on our blog that goes deep on this." You can quote specific lines.';
+  return ctx;
 }
 
 function buildMeetingContext(events) {
@@ -508,11 +540,12 @@ app.post('/api/chat', async (req, res) => {
   let repetitionNote = '';
   if (struggledTopics.length > 0) repetitionNote = `\n\n**SPACED REPETITION — Topics this student has struggled with before:** ${struggledTopics.join(', ')}. Naturally weave one of these back into the conversation if relevant.`;
 
-  // Live meeting context — inject into all modes
-  const eventsData = await getEventsData();
+  // Live meeting context + blog library — injected into all modes
+  const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
   const meetingContext = buildMeetingContext(eventsData);
+  const blogContext = buildBlogContext(blogPosts);
 
-  systemPrompt = systemPrompt + adaptiveNote + repetitionNote + meetingContext;
+  systemPrompt = systemPrompt + adaptiveNote + repetitionNote + meetingContext + blogContext;
 
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
