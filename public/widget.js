@@ -120,7 +120,7 @@
     var toggle = document.createElement('button');
     toggle.id = 'merc-toggle';
     toggle.setAttribute('aria-label', 'Open Mercurius \u2160 AI tutor');
-    toggle.innerHTML = '<span class="merc-monogram">M&#8544;</span>';
+    toggle.innerHTML = '<span class="merc-monogram">M&#8544;</span><span class="merc-toggle-label">Ask Mercurius</span><span class="merc-toggle-dot"></span>';
 
     // Main panel — full screen
     var panel = document.createElement('div');
