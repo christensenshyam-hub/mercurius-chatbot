@@ -771,6 +771,9 @@
   function appendSystemNotice(text) {
     var container = document.getElementById('merc-messages');
     if (!container) return;
+    // Remove starter chips if still visible
+    var tags = document.getElementById('merc-topic-tags');
+    if (tags && tags.parentNode) tags.parentNode.removeChild(tags);
     var el = document.createElement('div');
     el.className = 'merc-msg merc-msg-notice';
     el.textContent = text;
