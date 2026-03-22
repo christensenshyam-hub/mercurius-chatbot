@@ -32,6 +32,12 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
+
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
 `);
 
 // Migrate existing DB: add new columns if missing
@@ -232,5 +238,21 @@ module.exports = {
         lastActive: s.last_session_date,
       })),
     };
+  },
+
+  // Events — single-row store (id always = 1)
+  getEventsFromDB() {
+    const row = db.prepare('SELECT data FROM events WHERE id = 1').get();
+    if (!row) return null;
+    try { return JSON.parse(row.data); } catch(e) { return null; }
+  },
+  setEventsInDB(data) {
+    const json = JSON.stringify(data);
+    const now = Date.now();
+    db.prepare('INSERT INTO events (id, data, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at').run(json, now);
+  },
+  getEventsUpdatedAt() {
+    const row = db.prepare('SELECT updated_at FROM events WHERE id = 1').get();
+    return row ? row.updated_at : null;
   },
 };

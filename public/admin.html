@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mercurius Admin — Meeting Editor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a1f11;
+      color: #faf8f4;
+      font-family: 'Josefin Sans', sans-serif;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .header {
+      max-width: 720px;
+      margin: 0 auto 36px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid rgba(201,146,42,0.3);
+      padding-bottom: 24px;
+    }
+
+    .header-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #122e1e;
+      border: 2px solid #C9922A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #C9922A;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #faf8f4;
+    }
+    .header p {
+      font-size: 12px;
+      color: rgba(250,248,244,0.5);
+      margin-top: 2px;
+      letter-spacing: 0.03em;
+    }
+
+    /* Login screen */
+    #login-screen {
+      max-width: 400px;
+      margin: 80px auto 0;
+      background: #122e1e;
+      border: 1px solid rgba(201,146,42,0.25);
+      border-radius: 16px;
+      padding: 36px 32px;
+      text-align: center;
+    }
+
+    #login-screen h2 {
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #C9922A;
+      margin-bottom: 24px;
+    }
+
+    /* Main editor */
+    #editor-screen { max-width: 720px; margin: 0 auto; display: none; }
+
+    .card {
+      background: #122e1e;
+      border: 1px solid rgba(201,146,42,0.2);
+      border-radius: 14px;
+      padding: 28px 28px 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #C9922A;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .form-row.full { grid-template-columns: 1fr; }
+
+    label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(250,248,244,0.5);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(201,146,42,0.2);
+      border-radius: 8px;
+      color: #faf8f4;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+      resize: vertical;
+    }
+
+    input[type="text"]:focus,
+    input[type="date"]:focus,
+    input[type="password"]:focus,
+    textarea:focus {
+      border-color: #C9922A;
+    }
+
+    textarea { min-height: 80px; }
+    textarea.tall { min-height: 120px; }
+
+    .field-hint {
+      font-size: 10px;
+      color: rgba(250,248,244,0.35);
+      margin-top: 4px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 22px;
+      border-radius: 8px;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #C9922A;
+      color: #0a1f11;
+    }
+    .btn-primary:hover { background: #E8B84B; }
+
+    .btn-secondary {
+      background: transparent;
+      color: rgba(250,248,244,0.6);
+      border: 1px solid rgba(201,146,42,0.25);
+    }
+    .btn-secondary:hover { border-color: #C9922A; color: #C9922A; }
+
+    .btn-danger {
+      background: transparent;
+      color: rgba(248,113,113,0.7);
+      border: 1px solid rgba(248,113,113,0.2);
+      font-size: 11px;
+      padding: 7px 14px;
+    }
+    .btn-danger:hover { border-color: #f87171; color: #f87171; }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .status-bar {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: 'Space Mono', monospace;
+      display: none;
+      margin-top: 16px;
+    }
+    .status-bar.success { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: #4ade80; }
+    .status-bar.error   { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #f87171; }
+    .status-bar.loading { background: rgba(201,146,42,0.1); border: 1px solid rgba(201,146,42,0.3); color: #C9922A; }
+
+    .last-updated {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: rgba(250,248,244,0.3);
+      margin-top: 6px;
+    }
+
+    /* Past meetings list */
+    .past-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .past-item-info { flex: 1; }
+    .past-item-date { font-size: 10px; color: #C9922A; font-family: 'Space Mono', monospace; margin-bottom: 4px; }
+    .past-item-title { font-size: 13px; }
+    .past-item-desc { font-size: 11px; color: rgba(250,248,244,0.5); margin-top: 2px; }
+
+    .add-past-btn { margin-top: 10px; }
+
+    hr { border: none; border-top: 1px solid rgba(201,146,42,0.15); margin: 4px 0 16px; }
+
+    .preview-box {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(201,146,42,0.15);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10.5px;
+      color: rgba(250,248,244,0.6);
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">M&#8544;</div>
+  <div>
+    <h1>Mercurius Admin</h1>
+    <p>Meeting Editor — changes take effect immediately</p>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <h2>Admin Access</h2>
+  <div style="margin-bottom:16px;">
+    <label for="pw-input">Password</label>
+    <input type="password" id="pw-input" placeholder="Enter admin password" autofocus>
+  </div>
+  <button class="btn btn-primary" onclick="login()" style="width:100%">Sign In</button>
+  <div class="status-bar" id="login-status"></div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor-screen">
+
+  <!-- NEXT MEETING -->
+  <div class="card">
+    <div class="card-title">&#128197; Next Meeting</div>
+
+    <div class="form-row">
+      <div>
+        <label for="next-date">Date</label>
+        <input type="date" id="next-date">
+      </div>
+      <div>
+        <label for="next-time">Time</label>
+        <input type="text" id="next-time" placeholder="8:20 AM">
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div>
+        <label for="next-title">Meeting Title</label>
+        <input type="text" id="next-title" placeholder="e.g. Ethical Dilemmas: Decisions That Will Define the Future">
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div>
+        <label for="next-desc">Description</label>
+        <textarea id="next-desc" placeholder="What will this meeting cover? (shown on events page and used by Mercurius)"></textarea>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="next-topics">Topics <span style="text-transform:none;font-size:9px">(comma-separated)</span></label>
+        <textarea id="next-topics" placeholder="AI bias, autonomous vehicles, surveillance..."></textarea>
+        <p class="field-hint">Mercurius uses these to connect conversations to the meeting</p>
+      </div>
+      <div>
+        <label for="next-reading">Suggested Reading</label>
+        <textarea id="next-reading" placeholder="e.g. Nathan Dozois's Anthropic-Pentagon article is relevant here"></textarea>
+        <p class="field-hint">Mercurius will recommend this when prepping students</p>
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div>
+        <label for="next-questions">Key Discussion Questions <span style="text-transform:none;font-size:9px">(one per line)</span></label>
+        <textarea id="next-questions" class="tall" placeholder="Who is morally responsible when an autonomous system causes harm?&#10;Should AI ever make life-or-death decisions without human override?&#10;How do we program ethics into machines when humans disagree on ethics?"></textarea>
+        <p class="field-hint">Mercurius will use these to prep students for the meeting</p>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="next-location">Location</label>
+        <input type="text" id="next-location" value="MHS Library Classroom">
+      </div>
+      <div>
+        <label for="next-label">Label</label>
+        <input type="text" id="next-label" value="Next Meeting">
+      </div>
+    </div>
+  </div>
+
+  <!-- REGULAR SCHEDULE -->
+  <div class="card">
+    <div class="card-title">&#128336; Regular Schedule</div>
+    <div class="form-row">
+      <div>
+        <label for="sched-day">Day</label>
+        <input type="text" id="sched-day" placeholder="Every Thursday">
+      </div>
+      <div>
+        <label for="sched-time">Time</label>
+        <input type="text" id="sched-time" placeholder="8:20 AM">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="sched-location">Location</label>
+        <input type="text" id="sched-location" placeholder="MHS Library Classroom">
+      </div>
+      <div>
+        <label for="sched-open">Open To</label>
+        <input type="text" id="sched-open" placeholder="All MHS Students">
+      </div>
+    </div>
+  </div>
+
+  <!-- PAST MEETINGS -->
+  <div class="card">
+    <div class="card-title">&#128196; Past Meetings</div>
+    <div id="past-list"></div>
+    <button class="btn btn-secondary add-past-btn" onclick="addPastMeeting()">+ Add Past Meeting</button>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="card">
+    <div class="card-title">&#128190; Save &amp; Publish</div>
+    <p style="font-size:12px;color:rgba(250,248,244,0.5);margin-bottom:16px;">
+      Saves to the server database. Mercurius updates instantly — no restart needed.
+    </p>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="saveEvents()">&#10003; Save &amp; Update Mercurius</button>
+      <button class="btn btn-secondary" onclick="previewJSON()">Preview JSON</button>
+    </div>
+    <div class="status-bar" id="save-status"></div>
+    <div class="last-updated" id="last-updated-label"></div>
+    <div class="preview-box" id="json-preview" style="display:none"></div>
+  </div>
+
+</div>
+
+<script>
+  var adminPassword = '';
+  var pastMeetings = [];
+
+  // ── Login ──────────────────────────────────────────────────────────────────
+  document.getElementById('pw-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') login();
+  });
+
+  function login() {
+    var pw = document.getElementById('pw-input').value.trim();
+    if (!pw) return;
+    adminPassword = pw;
+    showStatus('login-status', 'loading', 'Checking…');
+
+    fetch('/api/admin/events', {
+      headers: { 'x-admin-password': pw }
+    })
+    .then(function(r) {
+      if (r.status === 401) throw new Error('Wrong password.');
+      return r.json();
+    })
+    .then(function(res) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('editor-screen').style.display = 'block';
+      if (res.data) populateForm(res.data);
+      if (res.updatedAt) {
+        document.getElementById('last-updated-label').textContent =
+          'Last saved: ' + new Date(res.updatedAt).toLocaleString();
+      }
+    })
+    .catch(function(e) {
+      showStatus('login-status', 'error', e.message || 'Login failed.');
+    });
+  }
+
+  // ── Populate form from existing data ──────────────────────────────────────
+  function populateForm(data) {
+    var s = data.schedule || {};
+    document.getElementById('sched-day').value      = s.day || 'Every Thursday';
+    document.getElementById('sched-time').value     = s.time || '8:20 AM';
+    document.getElementById('sched-location').value = s.location || 'MHS Library Classroom';
+    document.getElementById('sched-open').value     = s.openTo || 'All MHS Students';
+
+    var upcoming = (data.upcoming || [])[0] || {};
+    document.getElementById('next-date').value      = upcoming.date || '';
+    document.getElementById('next-time').value      = upcoming.time || '8:20 AM';
+    document.getElementById('next-title').value     = upcoming.title || '';
+    document.getElementById('next-desc').value      = upcoming.description || '';
+    document.getElementById('next-location').value  = upcoming.location || 'MHS Library Classroom';
+    document.getElementById('next-label').value     = upcoming.label || 'Next Meeting';
+    document.getElementById('next-topics').value    = (upcoming.topics || []).join(', ');
+    document.getElementById('next-reading').value   = upcoming.suggestedReading || '';
+    document.getElementById('next-questions').value = (upcoming.keyQuestions || []).join('\n');
+
+    pastMeetings = data.past || [];
+    renderPastList();
+  }
+
+  // ── Past meetings ──────────────────────────────────────────────────────────
+  function renderPastList() {
+    var container = document.getElementById('past-list');
+    if (pastMeetings.length === 0) {
+      container.innerHTML = '<p style="font-size:12px;color:rgba(250,248,244,0.3);margin-bottom:12px;">No past meetings yet.</p>';
+      return;
+    }
+    container.innerHTML = pastMeetings.map(function(m, i) {
+      return '<div class="past-item">' +
+        '<div class="past-item-info">' +
+          '<div class="past-item-date">' + (m.date || '') + '</div>' +
+          '<div class="past-item-title">' + escHtml(m.title || '') + '</div>' +
+          '<div class="past-item-desc">' + escHtml((m.description || '').slice(0, 100)) + (m.description && m.description.length > 100 ? '…' : '') + '</div>' +
+        '</div>' +
+        '<button class="btn btn-danger" onclick="removePast(' + i + ')">Remove</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function addPastMeeting() {
+    var date  = prompt('Meeting date (YYYY-MM-DD):');
+    if (!date) return;
+    var title = prompt('Meeting title:');
+    if (!title) return;
+    var desc  = prompt('Short description:') || '';
+    var recap = prompt('Recap URL (optional, leave blank to skip):') || '';
+    pastMeetings.unshift({ date: date, title: title, description: desc, recapUrl: recap || undefined });
+    renderPastList();
+  }
+
+  function removePast(i) {
+    if (!confirm('Remove "' + pastMeetings[i].title + '"?')) return;
+    pastMeetings.splice(i, 1);
+    renderPastList();
+  }
+
+  // ── Build data object ──────────────────────────────────────────────────────
+  function buildData() {
+    var questions = document.getElementById('next-questions').value
+      .split('\n').map(function(q) { return q.trim(); }).filter(Boolean);
+
+    var topics = document.getElementById('next-topics').value
+      .split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+
+    var nextDate = document.getElementById('next-date').value;
+
+    var upcoming = [];
+    if (document.getElementById('next-title').value.trim()) {
+      upcoming.push({
+        date: nextDate,
+        label: document.getElementById('next-label').value.trim() || 'Next Meeting',
+        title: document.getElementById('next-title').value.trim(),
+        description: document.getElementById('next-desc').value.trim(),
+        topics: topics,
+        keyQuestions: questions,
+        suggestedReading: document.getElementById('next-reading').value.trim() || undefined,
+        location: document.getElementById('next-location').value.trim() || 'MHS Library Classroom',
+        time: document.getElementById('next-time').value.trim() || '8:20 AM',
+      });
+    }
+
+    return {
+      schedule: {
+        day:      document.getElementById('sched-day').value.trim()      || 'Every Thursday',
+        time:     document.getElementById('sched-time').value.trim()     || '8:20 AM',
+        location: document.getElementById('sched-location').value.trim() || 'MHS Library Classroom',
+        openTo:   document.getElementById('sched-open').value.trim()     || 'All MHS Students',
+      },
+      upcoming: upcoming,
+      past: pastMeetings,
+    };
+  }
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  function saveEvents() {
+    var data = buildData();
+    showStatus('save-status', 'loading', 'Saving…');
+    document.getElementById('json-preview').style.display = 'none';
+
+    fetch('/api/admin/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPassword,
+      },
+      body: JSON.stringify({ data: data }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.ok) {
+        showStatus('save-status', 'success', '✓ Saved. Mercurius is now using the updated meeting data.');
+        document.getElementById('last-updated-label').textContent = 'Last saved: ' + new Date().toLocaleString();
+      } else {
+        showStatus('save-status', 'error', res.message || 'Save failed.');
+      }
+    })
+    .catch(function() {
+      showStatus('save-status', 'error', 'Connection error — try again.');
+    });
+  }
+
+  // ── Preview JSON ───────────────────────────────────────────────────────────
+  function previewJSON() {
+    var box = document.getElementById('json-preview');
+    var visible = box.style.display !== 'none';
+    if (visible) { box.style.display = 'none'; return; }
+    box.textContent = JSON.stringify(buildData(), null, 2);
+    box.style.display = 'block';
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function showStatus(id, type, msg) {
+    var el = document.getElementById(id);
+    el.className = 'status-bar ' + type;
+    el.textContent = msg;
+    el.style.display = 'block';
+    if (type === 'success') setTimeout(function() { el.style.display = 'none'; }, 5000);
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

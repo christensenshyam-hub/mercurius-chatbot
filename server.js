@@ -34,6 +34,16 @@ let eventsCacheTime = 0;
 
 async function getEventsData() {
   const now = Date.now();
+
+  // 1. Check SQLite first — admin-set data always wins
+  const dbEvents = db.getEventsFromDB();
+  if (dbEvents) {
+    eventsCache = dbEvents;
+    eventsCacheTime = now;
+    return eventsCache;
+  }
+
+  // 2. Fall back to cached Netlify fetch (refresh every hour)
   if (eventsCache && now - eventsCacheTime < 3600000) return eventsCache;
   try {
     const res = await fetch(EVENTS_URL);
@@ -707,6 +717,39 @@ app.get('/api/dashboard', (req, res) => {
   } catch(err) {
     return res.status(500).json({ error: 'db_error' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Admin — GET current events data
+// ---------------------------------------------------------------------------
+app.get('/api/admin/events', (req, res) => {
+  const pw = req.headers['x-admin-password'];
+  if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const data = db.getEventsFromDB();
+  const updatedAt = db.getEventsUpdatedAt();
+  res.json({ data: data || eventsCache, updatedAt });
+});
+
+// ---------------------------------------------------------------------------
+// Admin — POST update events data (saves to SQLite, invalidates cache)
+// ---------------------------------------------------------------------------
+app.post('/api/admin/events', (req, res) => {
+  const pw = req.headers['x-admin-password'];
+  if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { data } = req.body;
+  if (!data || typeof data !== 'object') {
+    return res.status(400).json({ error: 'invalid_data', message: 'Provide a data object.' });
+  }
+  db.setEventsInDB(data);
+  // Bust memory cache so next request picks up new data immediately
+  eventsCache = data;
+  eventsCacheTime = Date.now();
+  console.log('[Mercurius] Events updated via admin panel');
+  return res.json({ ok: true, message: 'Events updated. Mercurius will use this data immediately.' });
 });
 
 // ---------------------------------------------------------------------------
