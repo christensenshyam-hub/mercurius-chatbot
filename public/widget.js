@@ -1360,6 +1360,17 @@
     if (document.getElementById('merc-toggle')) return;
     buildWidget();
 
+    // Auto-open mode: hide the toggle and open the panel immediately
+    var autoOpen = window.MercuriusConfig && window.MercuriusConfig.autoOpen;
+    if (autoOpen) {
+      var toggle = document.getElementById('merc-toggle');
+      var panel  = document.getElementById('merc-panel');
+      if (toggle) toggle.style.display = 'none';
+      if (panel)  { panel.classList.add('merc-open'); isOpen = true; }
+      var ta = document.getElementById('merc-textarea');
+      if (ta) setTimeout(function () { ta.focus(); }, 280);
+    }
+
     if (isUnlocked) {
       fetch(MODE_ENDPOINT, {
         method: 'POST',
