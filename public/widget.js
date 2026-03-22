@@ -1371,6 +1371,16 @@
       if (ta) setTimeout(function () { ta.focus(); }, 280);
     }
 
+    // Expose global open function for in-page buttons
+    window.MercuriusOpen = function () {
+      var panel  = document.getElementById('merc-panel');
+      var toggle = document.getElementById('merc-toggle');
+      if (panel)  { panel.classList.add('merc-open'); isOpen = true; }
+      if (toggle) toggle.style.display = 'none';
+      var ta = document.getElementById('merc-textarea');
+      if (ta) setTimeout(function () { ta.focus(); }, 280);
+    };
+
     if (isUnlocked) {
       fetch(MODE_ENDPOINT, {
         method: 'POST',
