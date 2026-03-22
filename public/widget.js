@@ -21,6 +21,7 @@
   // =========================================================================
   var config = window.MercuriusConfig || {};
   var API_ENDPOINT = config.apiEndpoint || 'http://localhost:3000/api/chat';
+  var MODE_ENDPOINT = API_ENDPOINT.replace('/chat', '/mode');
 
   // =========================================================================
   // 2. Session ID — persist across browser sessions using localStorage
@@ -72,6 +73,8 @@
   var isOpen = false;
   var isLoading = false;
   var userMessageCount = 0;
+  var isUnlocked = localStorage.getItem('merc_unlocked') === 'true';
+  var currentMode = localStorage.getItem('merc_mode') || 'socratic';
   var reflectionIndex = 0;
   var conversationHistory = []; // [{role, content}, ...] — max 20 stored
   var summaryFetched = false;
@@ -132,6 +135,13 @@
       '    <button class="merc-header-btn" id="merc-btn-summary" title="Get conversation summary" aria-label="Conversation summary">&#128203;</button>',
       '    <button class="merc-header-btn" id="merc-btn-info"    title="About Mercurius Ⅰ"         aria-label="About">&#8505;&#65039;</button>',
       '  </div>',
+      '</div>',
+
+      // Mode bar
+      '<div class="merc-mode-bar" id="merc-mode-bar">',
+      '  <span class="merc-mode-lock" id="merc-mode-lock">&#128274;</span>',
+      '  <span class="merc-mode-label" id="merc-mode-label">Socratic Mode</span>',
+      '  <button class="merc-mode-switch merc-hidden" id="merc-mode-switch" title="Switch mode">Switch to Direct</button>',
       '</div>',
 
       // Tooltip (hidden by default)
@@ -271,6 +281,15 @@
         handleSummaryToggle();
       });
     }
+
+    // Mode switch button
+    var modeSwitchBtn = document.getElementById('merc-mode-switch');
+    if (modeSwitchBtn) {
+      modeSwitchBtn.addEventListener('click', handleModeSwitch);
+    }
+
+    // Initialise mode bar to match stored state
+    updateModeBar();
   }
 
   function triggerSend() {
@@ -907,9 +926,21 @@
           conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
         }
 
-        // Always show bot reply (even for hidden sends like action buttons
-        // that are routed through sendHiddenUserVisibleBot; regular sends
-        // always have isHidden=false anyway)
+        // Handle unlock event
+        if (data.justUnlocked) {
+          isUnlocked = true;
+          currentMode = 'socratic';
+          localStorage.setItem('merc_unlocked', 'true');
+          localStorage.setItem('merc_mode', 'socratic');
+          updateModeBar();
+          showUnlockCelebration();
+        } else if (data.mode && data.mode !== currentMode) {
+          currentMode = data.mode;
+          localStorage.setItem('merc_mode', currentMode);
+          updateModeBar();
+        }
+
+        // Always show bot reply
         appendBotMessage(reply);
 
         if (!isHidden) {
@@ -936,7 +967,76 @@
   };
 
   // =========================================================================
-  // 17. Initialize on DOMContentLoaded (or immediately if already loaded)
+  // 17. Mode bar helpers
+  // =========================================================================
+  function updateModeBar() {
+    var lockEl   = document.getElementById('merc-mode-lock');
+    var labelEl  = document.getElementById('merc-mode-label');
+    var switchEl = document.getElementById('merc-mode-switch');
+    if (!lockEl || !labelEl || !switchEl) return;
+
+    if (isUnlocked) {
+      lockEl.textContent = '🔓';
+      if (currentMode === 'direct') {
+        labelEl.textContent = 'Direct Mode';
+        switchEl.textContent = 'Switch to Socratic';
+      } else {
+        labelEl.textContent = 'Socratic Mode';
+        switchEl.textContent = 'Switch to Direct';
+      }
+      switchEl.classList.remove('merc-hidden');
+      document.getElementById('merc-mode-bar').classList.add('merc-mode-unlocked');
+    } else {
+      lockEl.textContent = '🔒';
+      labelEl.textContent = 'Socratic Mode';
+      switchEl.classList.add('merc-hidden');
+    }
+  }
+
+  function showUnlockCelebration() {
+    var bar = document.getElementById('merc-mode-bar');
+    if (bar) {
+      bar.classList.add('merc-unlock-flash');
+      setTimeout(function () { bar.classList.remove('merc-unlock-flash'); }, 1800);
+    }
+  }
+
+  function handleModeSwitch() {
+    if (!isUnlocked) return;
+    var newMode = currentMode === 'socratic' ? 'direct' : 'socratic';
+    fetch(MODE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId, mode: newMode }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.mode) {
+          currentMode = data.mode;
+          localStorage.setItem('merc_mode', currentMode);
+          updateModeBar();
+          appendSystemNotice(
+            currentMode === 'direct'
+              ? 'Switched to Direct Mode — Mercurius will now lead with substantive explanations.'
+              : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.'
+          );
+        }
+      })
+      .catch(function () { /* silent fail */ });
+  }
+
+  function appendSystemNotice(text) {
+    var container = document.getElementById('merc-messages');
+    if (!container) return;
+    var el = document.createElement('div');
+    el.className = 'merc-msg merc-msg-notice';
+    el.textContent = text;
+    container.appendChild(el);
+    scrollToBottom();
+  }
+
+  // =========================================================================
+  // 18. Initialize on DOMContentLoaded (or immediately if already loaded)
   // =========================================================================
   function init() {
     // Prevent double-initialization

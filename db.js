@@ -16,7 +16,10 @@ db.exec(`
     last_active INTEGER NOT NULL,
     message_count INTEGER DEFAULT 0,
     topics TEXT DEFAULT '[]',
-    student_name TEXT DEFAULT NULL
+    student_name TEXT DEFAULT NULL,
+    mode TEXT DEFAULT 'socratic',
+    unlocked INTEGER DEFAULT 0,
+    test_state TEXT DEFAULT NULL
   );
 
   CREATE TABLE IF NOT EXISTS messages (
@@ -30,6 +33,14 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
 `);
+
+// Migrate existing DB: add new columns if missing
+(function migrate() {
+  const cols = db.prepare('PRAGMA table_info(sessions)').all().map(c => c.name);
+  if (!cols.includes('mode'))       db.exec("ALTER TABLE sessions ADD COLUMN mode TEXT DEFAULT 'socratic'");
+  if (!cols.includes('unlocked'))   db.exec("ALTER TABLE sessions ADD COLUMN unlocked INTEGER DEFAULT 0");
+  if (!cols.includes('test_state')) db.exec("ALTER TABLE sessions ADD COLUMN test_state TEXT DEFAULT NULL");
+})();
 
 module.exports = {
   // Get or create a session
@@ -86,5 +97,25 @@ module.exports = {
   // Get all session IDs (for memory lookup)
   getAllSessionIds() {
     return db.prepare('SELECT session_id FROM sessions ORDER BY last_active DESC').all().map(r => r.session_id);
-  }
+  },
+
+  // Get mode/unlock state for a session
+  getSessionState(sessionId) {
+    return db.prepare('SELECT mode, unlocked, test_state, message_count FROM sessions WHERE session_id = ?').get(sessionId);
+  },
+
+  // Set mode ('socratic' | 'direct') — only allowed if unlocked
+  setMode(sessionId, mode) {
+    db.prepare('UPDATE sessions SET mode = ? WHERE session_id = ?').run(mode, sessionId);
+  },
+
+  // Mark session as unlocked
+  setUnlocked(sessionId) {
+    db.prepare("UPDATE sessions SET unlocked = 1, mode = 'socratic' WHERE session_id = ?").run(sessionId);
+  },
+
+  // Update test state: null | 'pending' | 'in_progress' | 'passed' | 'failed'
+  setTestState(sessionId, state) {
+    db.prepare('UPDATE sessions SET test_state = ? WHERE session_id = ?').run(state, sessionId);
+  },
 };

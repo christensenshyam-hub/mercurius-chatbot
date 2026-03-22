@@ -145,6 +145,82 @@
 }
 
 /* ============================================================
+   Mode Bar  (.merc-mode-bar)
+   ============================================================ */
+.merc-mode-bar {
+  background: rgba(18, 46, 30, 0.95);
+  border-bottom: 1px solid rgba(201, 146, 42, 0.15);
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10.5px;
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.merc-mode-lock {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.merc-mode-label {
+  color: rgba(212, 224, 216, 0.65);
+  flex: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.merc-mode-switch {
+  background: transparent;
+  border: 1px solid rgba(201, 146, 42, 0.45);
+  border-radius: 6px;
+  color: var(--merc-gold);
+  cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 3px 9px;
+  letter-spacing: 0.03em;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.merc-mode-switch:hover {
+  background: rgba(201, 146, 42, 0.12);
+  border-color: var(--merc-gold);
+}
+
+.merc-mode-bar.merc-mode-unlocked .merc-mode-label {
+  color: rgba(232, 184, 75, 0.85);
+}
+
+@keyframes merc-unlock-flash {
+  0%   { background: rgba(18, 46, 30, 0.95); }
+  25%  { background: rgba(201, 146, 42, 0.3); }
+  60%  { background: rgba(201, 146, 42, 0.15); }
+  100% { background: rgba(18, 46, 30, 0.95); }
+}
+
+.merc-mode-bar.merc-unlock-flash {
+  animation: merc-unlock-flash 1.8s ease forwards;
+}
+
+/* Notice messages (mode switch confirmations) */
+.merc-msg-notice {
+  text-align: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 10.5px;
+  color: rgba(201, 146, 42, 0.7);
+  padding: 6px 16px;
+  letter-spacing: 0.03em;
+  border-top: 1px solid rgba(201, 146, 42, 0.1);
+  border-bottom: 1px solid rgba(201, 146, 42, 0.1);
+  margin: 4px 0;
+}
+
+/* ============================================================
    Header  (.merc-header)
    ============================================================ */
 .merc-header {
