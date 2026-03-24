@@ -32,6 +32,7 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
+  CREATE INDEX IF NOT EXISTS idx_sessions_leaderboard ON sessions(message_count, streak);
 
   CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY CHECK(id = 1),

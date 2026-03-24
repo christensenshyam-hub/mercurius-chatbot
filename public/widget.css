@@ -199,7 +199,7 @@
 
 .merc-sidebar-brand-sub {
   font-family: 'Space Mono', monospace;
-  font-size: 8.5px;
+  font-size: 9.5px;
   color: rgba(201, 146, 42, 0.6);
   white-space: nowrap;
   margin-top: 1px;
@@ -223,7 +223,7 @@
 
 .merc-sidebar-section-label {
   font-family: 'Josefin Sans', sans-serif;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -757,7 +757,7 @@
 }
 
 .merc-textarea::placeholder {
-  color: rgba(250, 248, 244, 0.25);
+  color: rgba(250, 248, 244, 0.45);
 }
 
 .merc-send-btn {
@@ -1807,3 +1807,87 @@
 }
 .merc-bookmark-copy:hover { color: #C9922A; border-color: rgba(201,146,42,0.4); }
 .merc-bookmark-delete:hover { color: #f87171; border-color: rgba(248,113,113,0.4); }
+
+/* ============================================================
+   Focus-visible outlines (accessibility)
+   ============================================================ */
+#merc-panel button:focus-visible,
+#merc-panel a:focus-visible,
+#merc-panel input:focus-visible,
+#merc-panel textarea:focus-visible {
+  outline: 2px solid #C9922A;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Loading spinner
+   ============================================================ */
+@keyframes merc-spin {
+  to { transform: rotate(360deg); }
+}
+.merc-quiz-loading::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(201, 146, 42, 0.2);
+  border-top-color: #C9922A;
+  border-radius: 50%;
+  animation: merc-spin 0.7s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   Leaderboard: highlight current user
+   ============================================================ */
+.merc-lb-row.merc-lb-me {
+  background: rgba(201, 146, 42, 0.12);
+  border-left: 3px solid #C9922A;
+}
+
+/* ============================================================
+   Curriculum progress bar + mark complete button
+   ============================================================ */
+.merc-curriculum-progress {
+  margin-bottom: 14px;
+}
+.merc-curriculum-progress-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: rgba(241, 245, 249, 0.5);
+  margin-bottom: 6px;
+}
+.merc-curriculum-progress-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.merc-curriculum-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #C9922A, #E8B84B);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.merc-unit-complete-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 5px 10px;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #C9922A;
+  background: rgba(201, 146, 42, 0.1);
+  border: 1px solid rgba(201, 146, 42, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.merc-unit-complete-btn:hover {
+  background: rgba(201, 146, 42, 0.2);
+  border-color: rgba(201, 146, 42, 0.5);
+}

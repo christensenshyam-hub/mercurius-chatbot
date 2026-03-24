@@ -838,31 +838,54 @@
 
   function loadCurriculumPanel(body) {
     var progress = getCurriculumProgress();
+    var completedCount = 0;
+    CURRICULUM_UNITS.forEach(function(u) { if (progress[u.id] === 'complete') completedCount++; });
     var html = '<div class="merc-curriculum-panel">';
-    html += '<p class="merc-tool-instructions">Five structured learning units. Click any unit to start an in-depth conversation with Mercurius on that topic.</p>';
+    // Progress bar
+    html += '<div class="merc-curriculum-progress">';
+    html += '<div class="merc-curriculum-progress-text">' + completedCount + ' / ' + CURRICULUM_UNITS.length + ' units completed</div>';
+    html += '<div class="merc-curriculum-progress-bar"><div class="merc-curriculum-progress-fill" style="width:' + Math.round((completedCount / CURRICULUM_UNITS.length) * 100) + '%"></div></div>';
+    html += '</div>';
+    html += '<p class="merc-tool-instructions">Five structured learning units. Click any unit to start a conversation on that topic.</p>';
     CURRICULUM_UNITS.forEach(function(unit) {
       var status = progress[unit.id] || 'not_started';
       var statusLabel = status === 'complete' ? '\u2705 Complete' : status === 'in_progress' ? '\uD83D\uDD04 In Progress' : 'Start \u2192';
       var statusClass = 'merc-unit-' + status.replace('_', '-');
-      html += '<div class="merc-unit-card ' + statusClass + '" data-unit-id="' + escapeAttr(unit.id) + '" data-starter="' + escapeAttr(unit.starter) + '">';
+      html += '<div class="merc-unit-card ' + statusClass + '" data-unit-id="' + escapeAttr(unit.id) + '" data-starter="' + escapeAttr(unit.starter) + '" data-status="' + status + '">';
       html += '<div class="merc-unit-num">' + escapeHtml(unit.number) + '</div>';
       html += '<div class="merc-unit-body">';
       html += '<div class="merc-unit-title">' + escapeHtml(unit.title) + '</div>';
       html += '<div class="merc-unit-desc">' + escapeHtml(unit.description) + '</div>';
       html += '</div>';
       html += '<div class="merc-unit-status">' + statusLabel + '</div>';
+      if (status === 'in_progress') {
+        html += '<button class="merc-unit-complete-btn" data-unit-id="' + escapeAttr(unit.id) + '">Mark Complete</button>';
+      }
       html += '</div>';
     });
     html += '</div>';
     body.insertAdjacentHTML('afterbegin', html);
+    // Click handlers for starting units
     body.querySelectorAll('.merc-unit-card').forEach(function(card) {
-      card.addEventListener('click', function() {
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('merc-unit-complete-btn')) return;
         var unitId = card.getAttribute('data-unit-id');
         var starter = card.getAttribute('data-starter');
-        setCurriculumUnit(unitId, 'in_progress');
+        var status = card.getAttribute('data-status');
+        if (status !== 'complete') setCurriculumUnit(unitId, 'in_progress');
         closeRightPanel();
         checkAndAwardAchievement('curriculum_unit');
         if (starter) sendMessage(starter, true);
+      });
+    });
+    // Click handlers for mark complete buttons
+    body.querySelectorAll('.merc-unit-complete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var unitId = btn.getAttribute('data-unit-id');
+        setCurriculumUnit(unitId, 'complete');
+        body.innerHTML = '';
+        loadCurriculumPanel(body);
       });
     });
   }
@@ -871,6 +894,9 @@
     var earned = getAchievementsLocal();
     var html = '<div class="merc-achievements-panel">';
     html += '<p style="font-size:11px;color:rgba(241,245,249,0.5);margin-bottom:14px;">' + earned.length + ' of ' + ACHIEVEMENTS_DEF.length + ' earned</p>';
+    if (earned.length === 0) {
+      html += '<p style="font-size:12px;color:rgba(241,245,249,0.4);margin-bottom:16px;font-style:italic;">Start chatting with Mercurius to earn your first achievement!</p>';
+    }
     html += '<div class="merc-achievements-grid">';
     ACHIEVEMENTS_DEF.forEach(function(def) {
       var isEarned = earned.indexOf(def.id) !== -1;
@@ -1237,7 +1263,7 @@
         if (data.streak >= 3) checkAndAwardAchievement('streak_3');
         if (data.streak >= 7) checkAndAwardAchievement('streak_7');
         // Deep diver
-        if ((data.streak || 0) > 0 && userMessageCount >= 20) checkAndAwardAchievement('deep_diver');
+        if (userMessageCount >= 20) checkAndAwardAchievement('deep_diver');
 
         // Update streak badge
         if (data.streak && data.streak > 1) {
@@ -1783,6 +1809,22 @@
     }
   }
 
+  function showModeToast(label) {
+    var existing = document.getElementById('merc-mode-toast');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    var toast = document.createElement('div');
+    toast.id = 'merc-mode-toast';
+    toast.className = 'merc-achievement-toast';
+    toast.innerHTML = '<div class="merc-toast-body"><div class="merc-toast-name">Mode: ' + escapeHtml(label) + '</div></div>';
+    var panel = document.getElementById('merc-panel');
+    if (panel) panel.appendChild(toast);
+    setTimeout(function() { toast.classList.add('merc-toast-visible'); }, 50);
+    setTimeout(function() {
+      toast.classList.remove('merc-toast-visible');
+      setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
+    }, 2000);
+  }
+
   function handleModeSwitchTo(newMode) {
     if (newMode === 'debate') debateRound = 0;
     if (newMode !== 'debate' && !isUnlocked) return;
@@ -1804,6 +1846,8 @@
               ? 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.'
               : 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
           );
+          var modeLabels = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate' };
+          showModeToast(modeLabels[currentMode] || currentMode);
           if (data.mode === 'debate') {
             setTimeout(function () {
               sendMessage('Begin the debate \u2014 pick your position now and give your opening argument. Then challenge me.', true);
@@ -1870,6 +1914,17 @@
           var msg = pct === 100 ? 'Perfect score!' : pct >= 75 ? 'Great work!' : pct >= 50 ? 'Good effort.' : 'Keep exploring \u2014 revisit the topics above.';
           resultEl.innerHTML = '<span class="merc-quiz-score">' + correct + ' / ' + questions.length + '</span> ' + msg;
           resultEl.classList.remove('merc-hidden');
+          if (correct >= 3) checkAndAwardAchievement('quiz_master');
+          // Add retry button
+          var retryBtn = document.createElement('button');
+          retryBtn.className = 'merc-quiz-submit';
+          retryBtn.textContent = 'Try Another Quiz';
+          retryBtn.style.marginTop = '10px';
+          retryBtn.addEventListener('click', function() {
+            var rpBody = document.querySelector('.merc-rp-body');
+            if (rpBody) { rpBody.innerHTML = ''; loadQuizInPanel(rpBody); }
+          });
+          resultEl.parentNode.insertBefore(retryBtn, resultEl.nextSibling);
         }
       });
     }
@@ -1981,12 +2036,14 @@
       container.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No data yet \u2014 start chatting!</p>');
       return;
     }
+    var myBadge = sessionId.slice(-4).toUpperCase();
     var html = '<div class="merc-lb-table">';
     html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>\uD83D\uDD25</span><span>Msgs</span><span>Mode</span></div>';
     rows.forEach(function (r) {
-      html += '<div class="merc-lb-row">';
+      var isMe = r.badge === myBadge;
+      html += '<div class="merc-lb-row' + (isMe ? ' merc-lb-me' : '') + '">';
       html += '<span>' + r.rank + '</span>';
-      html += '<span class="merc-lb-badge">' + escapeHtml(r.badge) + '</span>';
+      html += '<span class="merc-lb-badge">' + escapeHtml(r.name || r.badge) + (isMe ? ' <span style="font-size:9px;opacity:0.6">(you)</span>' : '') + '</span>';
       html += '<span>' + r.streak + '</span>';
       html += '<span>' + r.messages + '</span>';
       html += '<span>' + (r.unlocked ? '<span style="color:#C9922A">Direct</span>' : 'Socratic') + '</span>';

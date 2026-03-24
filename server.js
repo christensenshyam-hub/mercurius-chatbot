@@ -634,6 +634,12 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
+  // Sanitize user input
+  const lastMsg = clientMessages[clientMessages.length - 1];
+  if (lastMsg && lastMsg.content && typeof lastMsg.content === 'string') {
+    lastMsg.content = lastMsg.content.slice(0, 2000);
+  }
+
   // Get or create session in DB
   db.getOrCreateSession(sessionId);
 
@@ -883,10 +889,10 @@ app.post('/api/report-card', async (req, res) => {
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'parse_error' });
+    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate report card — try after a longer conversation.' });
     return res.json(JSON.parse(match[0]));
   } catch(err) {
-    return res.status(500).json({ error: 'api_error' });
+    return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
 });
 
@@ -906,10 +912,10 @@ app.post('/api/concept-map', async (req, res) => {
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'parse_error' });
+    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate concept map — try after a longer conversation.' });
     return res.json(JSON.parse(match[0]));
   } catch(err) {
-    return res.status(500).json({ error: 'api_error' });
+    return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
 });
 
@@ -1042,11 +1048,11 @@ app.get('/api/pre-briefing', async (req, res) => {
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'parse_error' });
+    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
     console.error('[Mercurius] Pre-briefing error:', err.message);
-    return res.status(500).json({ error: 'api_error' });
+    return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
 });
 
