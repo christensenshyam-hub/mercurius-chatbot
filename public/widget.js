@@ -93,47 +93,77 @@
   var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'leaderboard' | 'summary' | null
   var debateRound = 0;
   var CURRICULUM_UNITS = [
-    { id: 'unit_1', number: '01', title: 'How AI Actually Works', description: 'LLMs, training data, next-token prediction, and why AI sounds confident but can be wrong.', starter: 'I want to start Unit 1: How AI Actually Works. Walk me through what is actually happening when an AI generates a response \u2014 what is next-token prediction?' },
-    { id: 'unit_2', number: '02', title: 'Bias & Fairness', description: 'Where AI bias comes from, real examples like COMPAS and facial recognition, and why "objective algorithm" is a myth.', starter: 'I want to explore Unit 2: Bias & Fairness. Where does bias actually come from in AI systems \u2014 and why is the phrase "objective algorithm" misleading?' },
-    { id: 'unit_3', number: '03', title: 'AI in Society', description: 'AI in hiring, healthcare, criminal justice, and education \u2014 who benefits, who gets harmed, and what the stakes are.', starter: 'I want to dive into Unit 3: AI in Society. What are the biggest real-world impacts AI is having right now, and who is most affected?' },
-    { id: 'unit_4', number: '04', title: 'Prompt Engineering', description: 'How framing changes outputs, few-shot prompting, and how to use AI tools critically rather than passively.', starter: 'I want to work through Unit 4: Prompt Engineering. What do I need to understand to use AI more effectively and critically \u2014 not just get faster answers?' },
-    { id: 'unit_5', number: '05', title: 'Ethics & Alignment', description: 'The hardest problems: alignment, autonomous weapons, corporate responsibility, and what happens when AI fails.', starter: 'I want to explore Unit 5: Ethics & Alignment. What are the most important ethical problems in AI development right now, and why are they so hard to solve?' }
+    { id: 'unit_1', number: '01', title: 'How AI Actually Works', description: 'LLMs, training data, next-token prediction, and why AI sounds confident but can be wrong.',
+      lessons: [
+        { id: 'u1_l1', title: 'What happens when you type a prompt', objective: 'Understand tokenization and next-token prediction.', starter: '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.' },
+        { id: 'u1_l2', title: 'Training data and where knowledge comes from', objective: 'Understand how LLMs are trained and what their knowledge actually is.', starter: '[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM\'s knowledge comes from \u2014 training data, RLHF, and fine-tuning. After the explanation, give me an exercise to test my understanding.' },
+        { id: 'u1_l3', title: 'Why AI sounds confident but can be wrong', objective: 'Understand hallucination and the confidence-accuracy gap.', starter: '[CURRICULUM: Unit 1, Lesson 3] Teach me about AI hallucination and why LLMs can sound confident even when wrong. Give a concrete example, then an exercise where I have to identify a potential hallucination.' },
+        { id: 'u1_l4', title: 'Unit review and application', objective: 'Apply everything from Unit 1 to a real scenario.', starter: '[CURRICULUM: Unit 1, Lesson 4 - Review] Give me a comprehensive exercise that tests everything from Unit 1: tokenization, training data, and hallucination. Then grade my performance and tell me what to revisit.' }
+      ]},
+    { id: 'unit_2', number: '02', title: 'Bias & Fairness', description: 'Where AI bias comes from, real examples like COMPAS and facial recognition, and why "objective algorithm" is a myth.',
+      lessons: [
+        { id: 'u2_l1', title: 'Where bias enters AI systems', objective: 'Understand the pipeline of bias: data, design, deployment.', starter: '[CURRICULUM: Unit 2, Lesson 1] Walk me through how bias enters AI systems at each stage \u2014 data collection, model design, and deployment. After explaining, give me an exercise.' },
+        { id: 'u2_l2', title: 'Case study: COMPAS and criminal justice', objective: 'Analyze a real-world case of algorithmic bias.', starter: '[CURRICULUM: Unit 2, Lesson 2] Teach me about the COMPAS algorithm and what went wrong. Present the case, then give me an exercise where I analyze the tradeoffs involved.' },
+        { id: 'u2_l3', title: 'Facial recognition and representation', objective: 'Understand bias in computer vision systems.', starter: '[CURRICULUM: Unit 2, Lesson 3] Explain the bias problems in facial recognition systems \u2014 the Gender Shades study and Joy Buolamwini\'s work. Then give me an exercise.' },
+        { id: 'u2_l4', title: 'Unit review: building a bias audit', objective: 'Apply bias analysis to a new scenario.', starter: '[CURRICULUM: Unit 2, Lesson 4 - Review] Give me a scenario where an AI system is being deployed and have me conduct a bias audit. Grade my analysis and provide detailed feedback.' }
+      ]},
+    { id: 'unit_3', number: '03', title: 'AI in Society', description: 'AI in hiring, healthcare, criminal justice, and education \u2014 who benefits, who gets harmed, and what the stakes are.',
+      lessons: [
+        { id: 'u3_l1', title: 'AI in hiring and employment', objective: 'Understand automated hiring tools and their consequences.', starter: '[CURRICULUM: Unit 3, Lesson 1] Teach me how AI is used in hiring \u2014 resume screening, video interviews, personality analysis. What are the benefits and what can go wrong? Then give me an exercise.' },
+        { id: 'u3_l2', title: 'AI in healthcare', objective: 'Evaluate AI applications in medical contexts.', starter: '[CURRICULUM: Unit 3, Lesson 2] Walk me through how AI is used in healthcare \u2014 diagnostics, drug discovery, triage. What are the stakes when it fails? Give me an exercise after.' },
+        { id: 'u3_l3', title: 'AI in education', objective: 'Think critically about AI tools in learning.', starter: '[CURRICULUM: Unit 3, Lesson 3] How is AI changing education \u2014 tutoring, grading, plagiarism detection? What should students and teachers be aware of? Give me an exercise.' },
+        { id: 'u3_l4', title: 'Unit review: stakeholder analysis', objective: 'Map who benefits and who is harmed by an AI system.', starter: '[CURRICULUM: Unit 3, Lesson 4 - Review] Present me with a real AI deployment scenario and have me do a full stakeholder analysis: who benefits, who is harmed, what are the power dynamics. Grade my work.' }
+      ]},
+    { id: 'unit_4', number: '04', title: 'Prompt Engineering', description: 'How framing changes outputs, few-shot prompting, and how to use AI tools critically rather than passively.',
+      lessons: [
+        { id: 'u4_l1', title: 'How framing changes everything', objective: 'Learn how different phrasings produce different outputs.', starter: '[CURRICULUM: Unit 4, Lesson 1] Show me how the way I phrase a prompt completely changes the output. Give me examples of the same question asked 3 different ways with different results. Then give me a practice exercise.' },
+        { id: 'u4_l2', title: 'Few-shot prompting and chain-of-thought', objective: 'Master intermediate prompting techniques.', starter: '[CURRICULUM: Unit 4, Lesson 2] Teach me few-shot prompting and chain-of-thought techniques. Explain each with examples, then give me exercises where I practice both.' },
+        { id: 'u4_l3', title: 'Critical prompting: getting AI to admit uncertainty', objective: 'Learn how to prompt for honesty, not just answers.', starter: '[CURRICULUM: Unit 4, Lesson 3] Teach me how to prompt AI to be more honest \u2014 asking for confidence levels, requesting counterarguments, forcing nuance. Give me exercises to practice.' },
+        { id: 'u4_l4', title: 'Unit review: prompt challenge', objective: 'Solve a real problem using advanced prompting.', starter: '[CURRICULUM: Unit 4, Lesson 4 - Review] Give me a challenging real-world task and have me write the best prompt I can for it. Then critique my prompt and suggest improvements. Grade my technique.' }
+      ]},
+    { id: 'unit_5', number: '05', title: 'Ethics & Alignment', description: 'The hardest problems: alignment, autonomous weapons, corporate responsibility, and what happens when AI fails.',
+      lessons: [
+        { id: 'u5_l1', title: 'The alignment problem', objective: 'Understand why aligning AI with human values is hard.', starter: '[CURRICULUM: Unit 5, Lesson 1] Explain the alignment problem in AI \u2014 what it is, why it is hard, and what the stakes are. Use concrete examples. Then give me an exercise.' },
+        { id: 'u5_l2', title: 'Autonomous weapons and lethal AI', objective: 'Grapple with the ethics of autonomous weapons systems.', starter: '[CURRICULUM: Unit 5, Lesson 2] Teach me about autonomous weapons and the debate around lethal AI decision-making. Present both sides, then give me a scenario-based exercise.' },
+        { id: 'u5_l3', title: 'Corporate responsibility and open vs. closed AI', objective: 'Understand who controls AI and why it matters.', starter: '[CURRICULUM: Unit 5, Lesson 3] Walk me through the debate about open vs. closed AI models and corporate responsibility. Who should control AI development? Exercise after.' },
+        { id: 'u5_l4', title: 'Final review: your AI ethics framework', objective: 'Build a personal ethical framework for AI.', starter: '[CURRICULUM: Unit 5, Lesson 4 - Final Review] Have me build my own AI ethics framework from everything I have learned across all 5 units. Ask me hard questions, challenge my reasoning, and grade the result.' }
+      ]}
   ];
   var ACHIEVEMENTS_DEF = [
-    { id: 'first_chat', icon: '\uD83D\uDCAC', name: 'First Conversation', desc: 'Sent your first message to Mercurius' },
-    { id: 'critical_thinker', icon: '\uD83E\uDDE0', name: 'Critical Thinker', desc: 'Unlocked Direct Mode by demonstrating genuine thinking' },
-    { id: 'debate_starter', icon: '\u2694\uFE0F', name: 'Debate Starter', desc: 'Entered Debate Mode and challenged Mercurius' },
-    { id: 'fact_checker', icon: '\uD83D\uDD0D', name: 'Fact Checker', desc: 'Used the Fact Check tool to verify an AI claim' },
-    { id: 'analyst', icon: '\uD83E\uDD16', name: 'AI Output Analyst', desc: 'Analyzed an AI-generated response critically' },
-    { id: 'meeting_prepper', icon: '\uD83D\uDCCB', name: 'Meeting Prepper', desc: 'Generated a pre-meeting briefing' },
-    { id: 'bookmarker', icon: '\uD83D\uDD16', name: 'Bookmarker', desc: 'Saved your first conversation highlight' },
-    { id: 'streak_3', icon: '\uD83D\uDD25', name: '3-Day Streak', desc: 'Learned with Mercurius 3 days in a row' },
-    { id: 'streak_7', icon: '\u2B50', name: 'Weekly Scholar', desc: 'Kept a 7-day learning streak' },
-    { id: 'deep_diver', icon: '\uD83E\uDD3F', name: 'Deep Diver', desc: 'Sent 20 or more messages in your sessions' },
-    { id: 'challenger', icon: '\u26A1', name: 'Challenger', desc: 'Started the weekly club challenge' },
-    { id: 'quiz_master', icon: '\uD83C\uDFC6', name: 'Quiz Master', desc: 'Scored 3 or more on a comprehension quiz' },
-    { id: 'curriculum_unit', icon: '\uD83C\uDF93', name: 'Curriculum Explorer', desc: 'Started a structured curriculum unit' }
+    { id: 'first_chat', icon: 'I', name: 'First Conversation', desc: 'Sent your first message to Mercurius' },
+    { id: 'critical_thinker', icon: 'II', name: 'Critical Thinker', desc: 'Unlocked Direct Mode by demonstrating genuine thinking' },
+    { id: 'debate_starter', icon: 'III', name: 'Debate Starter', desc: 'Entered Debate Mode and challenged Mercurius' },
+    { id: 'fact_checker', icon: 'IV', name: 'Fact Checker', desc: 'Used the Fact Check tool to verify an AI claim' },
+    { id: 'analyst', icon: 'V', name: 'AI Output Analyst', desc: 'Analyzed an AI-generated response critically' },
+    { id: 'meeting_prepper', icon: 'VI', name: 'Meeting Prepper', desc: 'Generated a pre-meeting briefing' },
+    { id: 'bookmarker', icon: 'VII', name: 'Bookmarker', desc: 'Saved your first conversation highlight' },
+    { id: 'streak_3', icon: 'VIII', name: '3-Day Streak', desc: 'Learned with Mercurius 3 days in a row' },
+    { id: 'streak_7', icon: 'IX', name: 'Weekly Scholar', desc: 'Kept a 7-day learning streak' },
+    { id: 'deep_diver', icon: 'X', name: 'Deep Diver', desc: 'Sent 20 or more messages in your sessions' },
+    { id: 'challenger', icon: 'XI', name: 'Challenger', desc: 'Started the weekly club challenge' },
+    { id: 'quiz_master', icon: 'XII', name: 'Quiz Master', desc: 'Scored 3 or more on a comprehension quiz' },
+    { id: 'curriculum_unit', icon: 'XIII', name: 'Curriculum Explorer', desc: 'Started a structured curriculum unit' }
   ];
 
   var REFLECTION_PROMPTS = [
-    '\u23F8 Pause: What\'s something Mercurius \u2160 said that you\'d want to verify yourself?',
-    '\u23F8 Pause: In your own words, what\'s the most important thing you\'ve discussed so far?',
-    '\u23F8 Pause: Has Mercurius \u2160 said anything that felt too confident? What would you push back on?',
-    '\u23F8 Pause: Who might be affected by the topic you\'re discussing who wasn\'t mentioned?',
-    '\u23F8 Pause: What question do you still have that hasn\'t been answered yet?',
-    '\u23F8 Pause: How would you explain what you\'ve learned to someone who hasn\'t taken this class?',
-    '\u23F8 Pause: What assumption is Mercurius \u2160 making that might not apply to everyone?',
-    '\u23F8 Pause: If Mercurius \u2160 is wrong about something, how would you find out?',
+    'Pause: What\'s something Mercurius \u2160 said that you\'d want to verify yourself?',
+    'Pause: In your own words, what\'s the most important thing you\'ve discussed so far?',
+    'Pause: Has Mercurius \u2160 said anything that felt too confident? What would you push back on?',
+    'Pause: Who might be affected by the topic you\'re discussing who wasn\'t mentioned?',
+    'Pause: What question do you still have that hasn\'t been answered yet?',
+    'Pause: How would you explain what you\'ve learned to someone who hasn\'t taken this class?',
+    'Pause: What assumption is Mercurius \u2160 making that might not apply to everyone?',
+    'Pause: If Mercurius \u2160 is wrong about something, how would you find out?',
   ];
 
   var STARTER_TOPICS = [
-    { emoji: '\uD83E\uDD16', label: 'How does AI actually work?' },
-    { emoji: '\u2696\uFE0F', label: 'Is AI biased?' },
-    { emoji: '\uD83D\uDCDA', label: 'When should I NOT use AI?' },
-    { emoji: '\uD83C\uDFAF', label: 'How do I prompt AI well?' },
-    { emoji: '\uD83C\uDFEB', label: 'AI and education equity' },
-    { emoji: '\uD83D\uDCCB', label: 'Prep me for the next club meeting' },
-    { emoji: '\uD83C\uDF10', label: 'AI and the real world' },
+    { emoji: '', label: 'How does AI actually work?' },
+    { emoji: '', label: 'Is AI biased?' },
+    { emoji: '', label: 'When should I NOT use AI?' },
+    { emoji: '', label: 'How do I prompt AI well?' },
+    { emoji: '', label: 'AI and education equity' },
+    { emoji: '', label: 'Prep me for the next club meeting' },
+    { emoji: '', label: 'AI and the real world' },
   ];
 
   var TRANSPARENCY_TEXT =
@@ -240,7 +270,7 @@
         body: JSON.stringify({ sessionId: sessionId, displayName: name })
       }).catch(function() {});
     }
-    localStorage.setItem('merc_onboarded', '1');
+    safeSetItem('merc_onboarded', '1');
     var overlay = document.getElementById('merc-onboard');
     if (overlay) overlay.classList.remove('merc-onboard-visible');
     checkAndAwardAchievement('first_chat');
@@ -286,36 +316,36 @@
       '      </button>',
       '      <button class="merc-mode-btn" id="merc-tab-direct">',
       '        <span class="merc-mode-dot"></span> Direct',
-      '        <span class="merc-mode-lock" id="merc-tab-lock-icon">&#128274;</span>',
+      '        <span class="merc-mode-lock" id="merc-tab-lock-icon">Locked</span>',
       '      </button>',
       '      <button class="merc-mode-btn" id="merc-tab-debate">',
-      '        <span class="merc-mode-dot"></span> &#9876;&#65039; Debate',
+      '        <span class="merc-mode-dot"></span> Debate',
       '      </button>',
       '    </div>',
 
       '    <div class="merc-sidebar-section">',
       '      <div class="merc-sidebar-section-label">Tools</div>',
-      '      <button class="merc-tool-btn" id="merc-btn-quiz"><span class="merc-tool-icon">&#128221;</span> Quiz</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-map"><span class="merc-tool-icon">&#128205;</span> Concept Map</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-report"><span class="merc-tool-icon">&#127941;</span> Report Card</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-lb"><span class="merc-tool-icon">&#127942;</span> Leaderboard</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-summary"><span class="merc-tool-icon">&#128203;</span> Summary</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-factcheck"><span class="merc-tool-icon">&#128269;</span> Fact Check</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-analyze"><span class="merc-tool-icon">&#129302;</span> Analyze Output</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-challenge"><span class="merc-tool-icon">&#9889;</span> Challenge</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-curriculum"><span class="merc-tool-icon">&#127891;</span> Curriculum</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-achievements"><span class="merc-tool-icon">&#127942;</span> Achievements</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-bookmarks"><span class="merc-tool-icon">&#128278;</span> Bookmarks</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-quiz">Quiz</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-map">Concept Map</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-report">Report Card</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-lb">Leaderboard</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-summary">Summary</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-factcheck">Fact Check</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-analyze">Analyze Output</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-challenge">Challenge</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-curriculum">Curriculum</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-achievements">Achievements</button>',
+      '      <button class="merc-tool-btn" id="merc-btn-bookmarks">Bookmarks</button>',
       '    </div>',
 
       '  </div>',
       '  <div class="merc-sidebar-footer">',
       '    <div class="merc-display-name-row" id="merc-display-name-row">',
       '      <span class="merc-display-name" id="merc-display-name">Add your name</span>',
-      '      <button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>',
+      '      <button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>',
       '    </div>',
-      '    <div class="merc-streak-badge merc-hidden" id="merc-header-streak">&#128293; <span id="merc-streak-val"></span> day streak</div>',
-      '    <button class="merc-info-btn" id="merc-btn-info">&#8505;&#65039; About Mercurius &#8544;</button>',
+      '    <div class="merc-streak-badge merc-hidden" id="merc-header-streak"><span id="merc-streak-val"></span> day streak</div>',
+      '    <button class="merc-info-btn" id="merc-btn-info">About Mercurius \u2160</button>',
       '  </div>',
       '</div>',
 
@@ -339,7 +369,7 @@
       '    </div>',
 
       '    <div class="merc-input-area">',
-      '      <button id="merc-voice-btn" class="merc-voice-btn" aria-label="Voice input" title="Speak your answer">&#127908;</button>',
+      '      <button id="merc-voice-btn" class="merc-voice-btn" aria-label="Voice input" title="Speak your answer">MIC</button>',
       '      <textarea id="merc-textarea" class="merc-textarea" placeholder="Ask me anything about AI..." rows="1" aria-label="Message input"></textarea>',
       '      <button id="merc-send-btn" class="merc-send-btn" aria-label="Send message">',
       '        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
@@ -464,17 +494,17 @@
 
     // Set title
     var titles = {
-      quiz: '\uD83D\uDCDD Comprehension Quiz',
-      map: '\uD83D\uDCCD Concept Map',
-      report: '\uD83C\uDFC6 Report Card',
-      leaderboard: '\uD83C\uDFC5 Leaderboard',
-      summary: '\uD83D\uDCCB Summary',
-      factcheck: '\uD83D\uDD0D Fact Check',
-      analyze: '\uD83E\uDD16 Analyze Output',
-      challenge: '\u26A1 Weekly Challenge',
-      curriculum: '\uD83C\uDF93 Curriculum',
-      achievements: '\uD83C\uDFC5 Achievements',
-      bookmarks: '\uD83D\uDD16 Bookmarks'
+      quiz: 'Comprehension Quiz',
+      map: 'Concept Map',
+      report: 'Report Card',
+      leaderboard: 'Leaderboard',
+      summary: 'Summary',
+      factcheck: 'Fact Check',
+      analyze: 'Analyze Output',
+      challenge: 'Weekly Challenge',
+      curriculum: 'Curriculum',
+      achievements: 'Achievements',
+      bookmarks: 'Bookmarks'
     };
     if (title) title.textContent = titles[type] || type;
 
@@ -687,7 +717,7 @@
       html += '</div>';
     }
     if (data.nuances) html += '<p class="merc-fc-nuances"><em>' + escapeHtml(data.nuances) + '</em></p>';
-    if (data.literacyLesson) html += '<div class="merc-fc-lesson">\uD83D\uDCA1 ' + escapeHtml(data.literacyLesson) + '</div>';
+    if (data.literacyLesson) html += '<div class="merc-fc-lesson">' + escapeHtml(data.literacyLesson) + '</div>';
     html += '</div>';
     container.innerHTML = html;
   }
@@ -740,7 +770,7 @@
     html += '<div class="merc-fc-verdict" style="color:' + color + ';">' + escapeHtml(data.overallAssessment || '') + '</div>';
     html += '<p class="merc-fc-summary">' + escapeHtml(data.summary || '') + '</p>';
     if (data.issues && data.issues.length) {
-      var typeIcons = { hallucination: '\uD83D\uDCA1', overconfidence: '\uD83D\uDCC8', bias: '\u2696\uFE0F', missing_context: '\uD83D\uDD73\uFE0F', vague: '\uD83C\uDF2B\uFE0F', good: '\u2705' };
+      var typeIcons = { hallucination: '\u2022', overconfidence: '\u2022', bias: '\u2022', missing_context: '\u2022', vague: '\u2022', good: '\u2713' };
       html += '<div class="merc-fc-breakdown">';
       data.issues.forEach(function(issue) {
         var icon = typeIcons[issue.type] || '\u25CF';
@@ -752,7 +782,7 @@
     }
     if (data.confidenceFlags) html += '<p class="merc-fc-nuances"><strong>Confidence flags:</strong> ' + escapeHtml(data.confidenceFlags) + '</p>';
     if (data.missingPerspectives) html += '<p class="merc-fc-nuances"><strong>Missing perspectives:</strong> ' + escapeHtml(data.missingPerspectives) + '</p>';
-    if (data.literacyLesson) html += '<div class="merc-fc-lesson">\uD83D\uDCA1 ' + escapeHtml(data.literacyLesson) + '</div>';
+    if (data.literacyLesson) html += '<div class="merc-fc-lesson">' + escapeHtml(data.literacyLesson) + '</div>';
     html += '</div>';
     container.innerHTML = html;
   }
@@ -792,7 +822,7 @@
         // Also add pre-briefing section
         var briefSection = document.createElement('div');
         briefSection.className = 'merc-briefing-section';
-        briefSection.innerHTML = '<div class="merc-challenge-label" style="margin-top:20px;">\uD83D\uDCCB Pre-Meeting Briefing</div>' +
+        briefSection.innerHTML = '<div class="merc-challenge-label" style="margin-top:20px;">Pre-Meeting Briefing</div>' +
           '<p style="font-size:11px;color:rgba(241,245,249,0.6);margin-bottom:10px;">Get a 3-point prep summary for the meeting.</p>' +
           '<button class="merc-tool-submit-btn" id="merc-briefing-btn" style="margin-top:0">Generate Briefing \u2192</button>' +
           '<div id="merc-briefing-result"></div>';
@@ -819,7 +849,7 @@
                   if (bdata.bullets) bdata.bullets.forEach(function(b) {
                     bhtml += '<div class="merc-briefing-bullet"><strong>' + escapeHtml(b.heading) + '</strong><p>' + escapeHtml(b.body) + '</p></div>';
                   });
-                  if (bdata.keyQuestion) bhtml += '<div class="merc-briefing-key-q">\uD83D\uDD11 ' + escapeHtml(bdata.keyQuestion) + '</div>';
+                  if (bdata.keyQuestion) bhtml += '<div class="merc-briefing-key-q">' + escapeHtml(bdata.keyQuestion) + '</div>';
                   bhtml += '</div>';
                   resultEl.innerHTML = bhtml;
                 }
@@ -838,56 +868,116 @@
       });
   }
 
+  function getLessonProgress() {
+    try { return JSON.parse(localStorage.getItem('merc_lessons') || '{}'); } catch(e) { return {}; }
+  }
+  function setLessonComplete(lessonId) {
+    var p = getLessonProgress();
+    p[lessonId] = 'complete';
+    safeSetItem('merc_lessons', JSON.stringify(p));
+  }
+  function countUnitLessonsDone(unit) {
+    var p = getLessonProgress();
+    var done = 0;
+    (unit.lessons || []).forEach(function(l) { if (p[l.id] === 'complete') done++; });
+    return done;
+  }
+  function isUnitComplete(unit) {
+    return unit.lessons && countUnitLessonsDone(unit) === unit.lessons.length;
+  }
+
+  var curriculumExpandedUnit = null;
+
   function loadCurriculumPanel(body) {
     var progress = getCurriculumProgress();
-    var completedCount = 0;
-    CURRICULUM_UNITS.forEach(function(u) { if (progress[u.id] === 'complete') completedCount++; });
+    var totalLessons = 0;
+    var completedLessons = 0;
+    CURRICULUM_UNITS.forEach(function(u) {
+      if (u.lessons) { totalLessons += u.lessons.length; completedLessons += countUnitLessonsDone(u); }
+    });
     var html = '<div class="merc-curriculum-panel">';
-    // Progress bar
+    // Overall progress
     html += '<div class="merc-curriculum-progress">';
-    html += '<div class="merc-curriculum-progress-text">' + completedCount + ' / ' + CURRICULUM_UNITS.length + ' units completed</div>';
-    html += '<div class="merc-curriculum-progress-bar"><div class="merc-curriculum-progress-fill" style="width:' + Math.round((completedCount / CURRICULUM_UNITS.length) * 100) + '%"></div></div>';
+    html += '<div class="merc-curriculum-progress-text">' + completedLessons + ' / ' + totalLessons + ' lessons completed</div>';
+    html += '<div class="merc-curriculum-progress-bar"><div class="merc-curriculum-progress-fill" style="width:' + Math.round((completedLessons / totalLessons) * 100) + '%"></div></div>';
     html += '</div>';
-    html += '<p class="merc-tool-instructions">Five structured learning units. Click any unit to start a conversation on that topic.</p>';
+    html += '<p class="merc-tool-instructions">Five units, each with structured lessons. Expand a unit to see its lesson plan.</p>';
     CURRICULUM_UNITS.forEach(function(unit) {
-      var status = progress[unit.id] || 'not_started';
-      var statusLabel = status === 'complete' ? '\u2705 Complete' : status === 'in_progress' ? '\uD83D\uDD04 In Progress' : 'Start \u2192';
-      var statusClass = 'merc-unit-' + status.replace('_', '-');
-      html += '<div class="merc-unit-card ' + statusClass + '" data-unit-id="' + escapeAttr(unit.id) + '" data-starter="' + escapeAttr(unit.starter) + '" data-status="' + status + '">';
+      var lessonsDone = countUnitLessonsDone(unit);
+      var total = unit.lessons ? unit.lessons.length : 0;
+      var unitDone = lessonsDone === total;
+      var isExpanded = curriculumExpandedUnit === unit.id;
+      var unitStatus = unitDone ? 'complete' : lessonsDone > 0 ? 'in_progress' : 'not_started';
+      html += '<div class="merc-unit-card merc-unit-' + unitStatus.replace('_', '-') + '">';
+      html += '<div class="merc-unit-header" data-unit-id="' + escapeAttr(unit.id) + '">';
       html += '<div class="merc-unit-num">' + escapeHtml(unit.number) + '</div>';
       html += '<div class="merc-unit-body">';
       html += '<div class="merc-unit-title">' + escapeHtml(unit.title) + '</div>';
       html += '<div class="merc-unit-desc">' + escapeHtml(unit.description) + '</div>';
       html += '</div>';
-      html += '<div class="merc-unit-status">' + statusLabel + '</div>';
-      if (status === 'in_progress') {
-        html += '<button class="merc-unit-complete-btn" data-unit-id="' + escapeAttr(unit.id) + '">Mark Complete</button>';
+      html += '<div class="merc-unit-status">' + lessonsDone + '/' + total + '</div>';
+      html += '</div>';
+      // Lessons list (expandable)
+      html += '<div class="merc-lessons-list' + (isExpanded ? '' : ' merc-hidden') + '" data-unit-lessons="' + escapeAttr(unit.id) + '">';
+      if (unit.lessons) {
+        var lessonProg = getLessonProgress();
+        unit.lessons.forEach(function(lesson, idx) {
+          var lDone = lessonProg[lesson.id] === 'complete';
+          var isNext = !lDone && (idx === 0 || lessonProg[unit.lessons[idx - 1].id] === 'complete');
+          html += '<div class="merc-lesson-row' + (lDone ? ' merc-lesson-done' : '') + (isNext ? ' merc-lesson-next' : '') + '">';
+          html += '<div class="merc-lesson-num">' + (idx + 1) + '</div>';
+          html += '<div class="merc-lesson-info">';
+          html += '<div class="merc-lesson-title">' + escapeHtml(lesson.title) + '</div>';
+          html += '<div class="merc-lesson-obj">' + escapeHtml(lesson.objective) + '</div>';
+          html += '</div>';
+          if (lDone) {
+            html += '<div class="merc-lesson-status merc-lesson-status-done">\u2713</div>';
+          } else if (isNext) {
+            html += '<button class="merc-lesson-start-btn" data-lesson-id="' + escapeAttr(lesson.id) + '" data-starter="' + escapeAttr(lesson.starter) + '" data-unit-id="' + escapeAttr(unit.id) + '">Start</button>';
+          } else {
+            html += '<div class="merc-lesson-status merc-lesson-status-locked">\u2014</div>';
+          }
+          html += '</div>';
+        });
       }
+      html += '</div>';
       html += '</div>';
     });
     html += '</div>';
     body.insertAdjacentHTML('afterbegin', html);
-    // Click handlers for starting units
-    body.querySelectorAll('.merc-unit-card').forEach(function(card) {
-      card.addEventListener('click', function(e) {
-        if (e.target.classList.contains('merc-unit-complete-btn')) return;
-        var unitId = card.getAttribute('data-unit-id');
-        var starter = card.getAttribute('data-starter');
-        var status = card.getAttribute('data-status');
-        if (status !== 'complete') setCurriculumUnit(unitId, 'in_progress');
+    // Expand/collapse unit
+    body.querySelectorAll('.merc-unit-header').forEach(function(header) {
+      header.addEventListener('click', function() {
+        var unitId = header.getAttribute('data-unit-id');
+        var lessonsList = body.querySelector('[data-unit-lessons="' + unitId + '"]');
+        if (lessonsList) {
+          var isHidden = lessonsList.classList.contains('merc-hidden');
+          // Collapse all first
+          body.querySelectorAll('.merc-lessons-list').forEach(function(ll) { ll.classList.add('merc-hidden'); });
+          if (isHidden) {
+            lessonsList.classList.remove('merc-hidden');
+            curriculumExpandedUnit = unitId;
+          } else {
+            curriculumExpandedUnit = null;
+          }
+        }
+      });
+    });
+    // Start lesson buttons
+    body.querySelectorAll('.merc-lesson-start-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var lessonId = btn.getAttribute('data-lesson-id');
+        var starter = btn.getAttribute('data-starter');
+        var unitId = btn.getAttribute('data-unit-id');
+        setLessonComplete(lessonId);
+        setCurriculumUnit(unitId, 'in_progress');
+        if (isUnitComplete(CURRICULUM_UNITS.filter(function(u) { return u.id === unitId; })[0])) {
+          setCurriculumUnit(unitId, 'complete');
+        }
         closeRightPanel();
         checkAndAwardAchievement('curriculum_unit');
         if (starter) sendMessage(starter, true);
-      });
-    });
-    // Click handlers for mark complete buttons
-    body.querySelectorAll('.merc-unit-complete-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var unitId = btn.getAttribute('data-unit-id');
-        setCurriculumUnit(unitId, 'complete');
-        body.innerHTML = '';
-        loadCurriculumPanel(body);
       });
     });
   }
@@ -903,7 +993,7 @@
     ACHIEVEMENTS_DEF.forEach(function(def) {
       var isEarned = earned.indexOf(def.id) !== -1;
       html += '<div class="merc-achievement-item' + (isEarned ? ' merc-achievement-earned' : ' merc-achievement-locked') + '" title="' + escapeAttr(def.desc) + '">';
-      html += '<div class="merc-achievement-icon">' + (isEarned ? def.icon : '\uD83D\uDD12') + '</div>';
+      html += '<div class="merc-achievement-icon">' + (isEarned ? def.icon : '\u2014') + '</div>';
       html += '<div class="merc-achievement-name">' + escapeHtml(def.name) + '</div>';
       html += '</div>';
     });
@@ -914,7 +1004,7 @@
   function loadBookmarksPanel(body) {
     var bookmarks = getBookmarksLocal();
     if (bookmarks.length === 0) {
-      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No bookmarks yet. Click the \uD83D\uDD16 icon on any message to save it here.</p>');
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No bookmarks yet. Click Save on any message to save it here.</p>');
       return;
     }
     var html = '<div class="merc-bookmarks-panel">';
@@ -923,8 +1013,8 @@
       html += '<div class="merc-bookmark-item" data-id="' + escapeAttr(bm.id) + '">';
       html += '<div class="merc-bookmark-text">' + escapeHtml(preview) + '</div>';
       html += '<div class="merc-bookmark-actions">';
-      html += '<button class="merc-bookmark-copy" data-text="' + escapeAttr(bm.text) + '">\uD83D\uDCCB Copy</button>';
-      html += '<button class="merc-bookmark-delete" data-id="' + escapeAttr(bm.id) + '">\uD83D\uDDD1\uFE0F</button>';
+      html += '<button class="merc-bookmark-copy" data-text="' + escapeAttr(bm.text) + '">Copy</button>';
+      html += '<button class="merc-bookmark-delete" data-id="' + escapeAttr(bm.id) + '">Delete</button>';
       html += '</div></div>';
     });
     html += '</div>';
@@ -935,7 +1025,7 @@
         if (navigator.clipboard) {
           navigator.clipboard.writeText(text).then(function() {
             btn.textContent = 'Copied!';
-            setTimeout(function() { btn.textContent = '\uD83D\uDCCB Copy'; }, 1500);
+            setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
           }).catch(function(){});
         }
       });
@@ -1126,7 +1216,7 @@
             body: JSON.stringify({ sessionId: sessionId, displayName: name })
           }).catch(function(){});
           if (row) {
-            row.innerHTML = '<span class="merc-display-name' + (name ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(name || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>';
+            row.innerHTML = '<span class="merc-display-name' + (name ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(name || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
             var newEditBtn = document.getElementById('merc-name-edit-btn');
             if (newEditBtn) {
               newEditBtn.addEventListener('click', function() {
@@ -1156,7 +1246,7 @@
                     body: JSON.stringify({ sessionId: sessionId, displayName: newName })
                   }).catch(function(){});
                   if (newRow) {
-                    newRow.innerHTML = '<span class="merc-display-name' + (newName ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(newName || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">&#9998;</button>';
+                    newRow.innerHTML = '<span class="merc-display-name' + (newName ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(newName || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
                   }
                 }
                 newSaveBtn.addEventListener('click', saveNewName);
@@ -1184,7 +1274,7 @@
     var onboardSkip = document.getElementById('merc-onboard-skip');
     if (onboardSkip) {
       onboardSkip.addEventListener('click', function() {
-        localStorage.setItem('merc_onboarded', '1');
+        safeSetItem('merc_onboarded', '1');
         var overlay = document.getElementById('merc-onboard');
         if (overlay) overlay.classList.remove('merc-onboard-visible');
       });
@@ -1390,7 +1480,7 @@
     var bookmarkBtn = document.createElement('button');
     bookmarkBtn.className = 'merc-msg-action-btn merc-bookmark-btn';
     bookmarkBtn.title = 'Save this message';
-    bookmarkBtn.innerHTML = '\uD83D\uDD16';
+    bookmarkBtn.innerHTML = 'Save';
     (function(capturedText) {
       bookmarkBtn.addEventListener('click', function() {
         addBookmarkLocal(capturedText, 'assistant');
@@ -1398,7 +1488,7 @@
         bookmarkBtn.style.color = '#4ade80';
         checkAndAwardAchievement('bookmarker');
         setTimeout(function() {
-          bookmarkBtn.innerHTML = '\uD83D\uDD16';
+          bookmarkBtn.innerHTML = 'Save';
           bookmarkBtn.style.color = '';
         }, 1500);
       });
@@ -1407,13 +1497,13 @@
     var shareBtn = document.createElement('button');
     shareBtn.className = 'merc-msg-action-btn merc-share-btn';
     shareBtn.title = 'Copy message';
-    shareBtn.innerHTML = '\uD83D\uDCCB';
+    shareBtn.innerHTML = 'Copy';
     (function(capturedText) {
       shareBtn.addEventListener('click', function() {
         if (navigator.clipboard) {
           navigator.clipboard.writeText('Mercurius \u2160 said:\n\n' + capturedText).then(function() {
             shareBtn.innerHTML = '\u2713 Copied';
-            setTimeout(function() { shareBtn.innerHTML = '\uD83D\uDCCB'; }, 1500);
+            setTimeout(function() { shareBtn.innerHTML = 'Copy'; }, 1500);
           }).catch(function(){});
         }
       });
@@ -1520,7 +1610,7 @@
 
     escaped = escaped.replace(/`(.+?)`/g, '<code>$1</code>');
 
-    escaped = escaped.replace(/\[SOURCE:\s*([^\]]+)\]/g, '<span class="merc-source">&#128279; $1</span>');
+    escaped = escaped.replace(/\[SOURCE:\s*([^\]]+)\]/g, '<span class="merc-source">$1</span>');
 
     escaped = escaped.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
     escaped = escaped.replace(/(<li>.*<\/li>(\n|$))+/g, function (m) {
@@ -1604,12 +1694,12 @@
 
     var unpackBtn = document.createElement('button');
     unpackBtn.className = 'merc-action-btn';
-    unpackBtn.innerHTML = '&#128269; Unpack this';
+    unpackBtn.innerHTML = 'Unpack this';
     unpackBtn.title = 'Ask Mercurius to explain its reasoning';
 
     var flagBtn = document.createElement('button');
     flagBtn.className = 'merc-action-btn';
-    flagBtn.innerHTML = '&#128681; Flag bias';
+    flagBtn.innerHTML = 'Flag bias';
     flagBtn.title = 'Flag potential bias or missing perspectives';
 
     var hasQuestion = originalText.indexOf('?') !== -1;
@@ -1617,7 +1707,7 @@
     if (hasQuestion) {
       whyBtn = document.createElement('button');
       whyBtn.className = 'merc-action-btn merc-action-btn-why';
-      whyBtn.innerHTML = '&#129300; Why this question?';
+      whyBtn.innerHTML = 'Why this question?';
       whyBtn.title = 'Understand the Socratic reasoning behind this question';
     }
 
@@ -1784,7 +1874,7 @@
       if (lockIcon) lockIcon.textContent = '';
     } else {
       btnDirect.disabled = true;
-      if (lockIcon) lockIcon.innerHTML = '&#128274;';
+      if (lockIcon) lockIcon.innerHTML = 'Locked';
     }
 
     // Active states
@@ -1977,9 +2067,9 @@
     svg += '</svg>';
 
     var legend = '<div class="merc-map-legend">' +
-      '<span style="color:#C9922A">&#9679; Core</span>' +
-      '<span style="color:#4ade80">&#9679; Related</span>' +
-      '<span style="color:#60a5fa">&#9679; Example</span>' +
+      '<span style="color:#C9922A">\u2022 Core</span>' +
+      '<span style="color:#4ade80">\u2022 Related</span>' +
+      '<span style="color:#60a5fa">\u2022 Example</span>' +
       '</div>';
 
     container.insertAdjacentHTML('afterbegin', '<div class="merc-map-svg">' + svg + '</div>' + legend);
@@ -2040,7 +2130,7 @@
     }
     var myBadge = sessionId.slice(-4).toUpperCase();
     var html = '<div class="merc-lb-table">';
-    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>\uD83D\uDD25</span><span>Msgs</span><span>Mode</span></div>';
+    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>Streak</span><span>Msgs</span><span>Mode</span></div>';
     rows.forEach(function (r) {
       var isMe = r.badge === myBadge;
       html += '<div class="merc-lb-row' + (isMe ? ' merc-lb-me' : '') + '">';
@@ -2134,7 +2224,7 @@
     }
 
     // Show onboarding for first-time visitors (after a short delay)
-    if (!localStorage.getItem('merc_onboarded')) {
+    if (!safeGetItem('merc_onboarded')) {
       setTimeout(function() {
         if (isOpen) showOnboarding();
       }, 1200);
