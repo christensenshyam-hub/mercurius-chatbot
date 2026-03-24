@@ -36,7 +36,9 @@
   // 2. Session ID — persist across browser sessions using localStorage
   // =========================================================================
   var SESSION_KEY = 'merc_session_id';
-  var sessionId = localStorage.getItem(SESSION_KEY);
+  function safeGetItem(key) { try { return localStorage.getItem(key); } catch(e) { return null; } }
+  function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) {} }
+  var sessionId = safeGetItem(SESSION_KEY);
   var isReturningStudent = !!sessionId;
   if (!sessionId) {
     sessionId =
@@ -45,7 +47,7 @@
       Math.random().toString(16).slice(2) +
       '_' +
       Date.now().toString(16);
-    localStorage.setItem(SESSION_KEY, sessionId);
+    safeSetItem(SESSION_KEY, sessionId);
   }
 
   // =========================================================================
@@ -79,8 +81,8 @@
   var isOpen = false;
   var isLoading = false;
   var userMessageCount = 0;
-  var isUnlocked = localStorage.getItem('merc_unlocked') === 'true';
-  var currentMode = localStorage.getItem('merc_mode') || 'socratic';
+  var isUnlocked = safeGetItem('merc_unlocked') === 'true';
+  var currentMode = safeGetItem('merc_mode') || 'socratic';
   var reflectionIndex = 0;
   var conversationHistory = [];
   var summaryFetched = false;
@@ -2042,10 +2044,10 @@
     rows.forEach(function (r) {
       var isMe = r.badge === myBadge;
       html += '<div class="merc-lb-row' + (isMe ? ' merc-lb-me' : '') + '">';
-      html += '<span>' + r.rank + '</span>';
+      html += '<span>' + escapeHtml(String(r.rank)) + '</span>';
       html += '<span class="merc-lb-badge">' + escapeHtml(r.name || r.badge) + (isMe ? ' <span style="font-size:9px;opacity:0.6">(you)</span>' : '') + '</span>';
-      html += '<span>' + r.streak + '</span>';
-      html += '<span>' + r.messages + '</span>';
+      html += '<span>' + escapeHtml(String(r.streak)) + '</span>';
+      html += '<span>' + escapeHtml(String(r.messages)) + '</span>';
       html += '<span>' + (r.unlocked ? '<span style="color:#C9922A">Direct</span>' : 'Socratic') + '</span>';
       html += '</div>';
     });
@@ -2076,6 +2078,7 @@
     voiceActive = true;
     if (btn) btn.classList.add('merc-voice-active');
     voiceRecognition.onresult = function (e) {
+      if (!e.results || !e.results[0] || !e.results[0][0]) return;
       var transcript = e.results[0][0].transcript;
       var ta = document.getElementById('merc-textarea');
       if (ta) { ta.value = transcript; ta.dispatchEvent(new Event('input')); }

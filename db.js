@@ -147,12 +147,8 @@ module.exports = {
 
   // Spaced repetition: struggled topics
   getStruggledTopics(sessionId) {
-    const rows = db.prepare('SELECT struggled_topics FROM sessions WHERE struggled_topics IS NOT NULL AND struggled_topics != ?').all('[]');
-    const all = [];
-    rows.forEach(r => {
-      try { const arr = JSON.parse(r.struggled_topics || '[]'); arr.forEach(t => { if (!all.includes(t)) all.push(t); }); } catch(e){}
-    });
-    return all.slice(0, 5);
+    const r = db.prepare('SELECT struggled_topics FROM sessions WHERE session_id = ? AND struggled_topics IS NOT NULL AND struggled_topics != ?').get(sessionId, '[]');
+    try { return JSON.parse(r?.struggled_topics || '[]').slice(0, 5); } catch(e) { return []; }
   },
   addStruggledTopic(sessionId, topic) {
     const r = db.prepare('SELECT struggled_topics FROM sessions WHERE session_id = ?').get(sessionId);
@@ -182,7 +178,7 @@ module.exports = {
 
   getStreakData(sessionId) {
     const r = db.prepare('SELECT streak, last_session_date, topics, message_count, unlocked FROM sessions WHERE session_id = ?').get(sessionId);
-    const totalSessions = db.prepare('SELECT COUNT(*) as c FROM sessions WHERE session_id = ?').get(sessionId);
+    const totalSessions = db.prepare('SELECT COUNT(*) as c FROM sessions').get();
     return {
       streak: r?.streak || 1,
       lastDate: r?.last_session_date,
