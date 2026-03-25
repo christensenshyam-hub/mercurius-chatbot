@@ -2069,34 +2069,33 @@
   function handleModeSwitchTo(newMode) {
     if (newMode === 'debate') debateRound = 0;
     if (newMode === 'direct' && !isUnlocked) return;
+
+    // Immediately switch the UI (optimistic update — don't wait for server)
+    currentMode = newMode;
+    safeSetItem('merc_mode', currentMode);
+    updateModeBar();
+
+    var modeNotices = {
+      debate: 'Switched to Debate Mode \u2014 Mercurius will take a position and argue against you. Make your case!',
+      direct: 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.',
+      socratic: 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
+    };
+    appendSystemNotice(modeNotices[newMode] || 'Mode switched.');
+    showModeToast({ socratic: 'Socratic', direct: 'Direct', debate: 'Debate' }[newMode] || newMode);
+
+    // Tell server (fire-and-forget — UI is already updated)
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: isUnlocked }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.mode) {
-          currentMode = data.mode;
-          localStorage.setItem('merc_mode', currentMode);
-          updateModeBar();
-          appendSystemNotice(
-            currentMode === 'debate'
-              ? 'Switched to Debate Mode \u2014 Mercurius will take a position on AI ethics and argue against you. Make your case!'
-              : currentMode === 'direct'
-              ? 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.'
-              : 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
-          );
-          var modeLabels = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate' };
-          showModeToast(modeLabels[currentMode] || currentMode);
-          if (data.mode === 'debate') {
-            setTimeout(function () {
-              sendMessage('Begin the debate \u2014 pick your position now and give your opening argument. Then challenge me.', true);
-            }, 300);
-          }
-        }
-      })
-      .catch(function () { /* silent fail */ });
+    }).catch(function () {});
+
+    // Auto-start debate if entering debate mode
+    if (newMode === 'debate') {
+      setTimeout(function () {
+        sendMessage('Begin the debate \u2014 pick your position now and give your opening argument. Then challenge me.', true);
+      }, 400);
+    }
   }
 
   // =========================================================================
