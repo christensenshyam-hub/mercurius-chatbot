@@ -92,6 +92,71 @@
   var voiceRecognition = null;
   var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'leaderboard' | 'summary' | null
   var debateRound = 0;
+  var currentConversationId = null;
+
+  // ── Conversation history helpers ──
+  function getConversationList() {
+    try { return JSON.parse(localStorage.getItem('merc_convos') || '[]'); } catch(e) { return []; }
+  }
+  function saveCurrentConversation() {
+    if (conversationHistory.length < 2) return; // don't save empty chats
+    var list = getConversationList();
+    var firstUserMsg = '';
+    for (var i = 0; i < conversationHistory.length; i++) {
+      if (conversationHistory[i].role === 'user') { firstUserMsg = conversationHistory[i].content; break; }
+    }
+    var title = firstUserMsg.slice(0, 60) || 'Untitled';
+    if (title.length === 60) title += '...';
+    var entry = {
+      id: currentConversationId || ('conv_' + Date.now()),
+      title: title,
+      mode: currentMode,
+      messages: conversationHistory.slice(),
+      date: new Date().toISOString(),
+      messageCount: conversationHistory.length
+    };
+    // Update existing or prepend
+    var found = false;
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].id === entry.id) { list[j] = entry; found = true; break; }
+    }
+    if (!found) list.unshift(entry);
+    // Keep max 20 conversations
+    if (list.length > 20) list = list.slice(0, 20);
+    safeSetItem('merc_convos', JSON.stringify(list));
+    currentConversationId = entry.id;
+  }
+  function loadConversation(convo) {
+    conversationHistory = convo.messages.slice();
+    currentConversationId = convo.id;
+    userMessageCount = 0;
+    for (var i = 0; i < conversationHistory.length; i++) {
+      if (conversationHistory[i].role === 'user') userMessageCount++;
+    }
+    // Rebuild chat UI
+    var container = document.getElementById('merc-messages');
+    if (!container) return;
+    container.innerHTML = '';
+    for (var j = 0; j < conversationHistory.length; j++) {
+      var msg = conversationHistory[j];
+      if (msg.role === 'user') appendUserMessage(msg.content);
+      else if (msg.role === 'assistant') appendBotMessage(msg.content);
+    }
+    scrollToBottom();
+  }
+  function startNewConversation() {
+    saveCurrentConversation();
+    conversationHistory = [];
+    currentConversationId = 'conv_' + Date.now();
+    userMessageCount = 0;
+    var container = document.getElementById('merc-messages');
+    if (container) {
+      container.innerHTML = '';
+      // Re-add starter topics
+      container.innerHTML = '<div class="merc-topic-tags" id="merc-topic-tags"><div class="merc-topic-tags-label">Start with a topic</div>' + buildTopicTagsHTML() + '</div>';
+      attachTopicTagListeners();
+    }
+  }
   var CURRICULUM_UNITS = [
     { id: 'unit_1', number: '01', title: 'How AI Actually Works', description: 'LLMs, training data, next-token prediction, and why AI sounds confident but can be wrong.',
       lessons: [
@@ -338,6 +403,12 @@
       '      <button class="merc-tool-btn" id="merc-btn-bookmarks">Bookmarks</button>',
       '    </div>',
 
+      '    <div class="merc-sidebar-section">',
+      '      <div class="merc-sidebar-section-label">History</div>',
+      '      <button class="merc-tool-btn merc-new-chat-btn" id="merc-btn-new-chat">+ New Chat</button>',
+      '      <div class="merc-history-list" id="merc-history-list"></div>',
+      '    </div>',
+
       '  </div>',
       '  <div class="merc-sidebar-footer">',
       '    <div class="merc-display-name-row" id="merc-display-name-row">',
@@ -451,6 +522,72 @@
         '</button>'
       );
     }).join('');
+  }
+
+  function attachTopicTagListeners() {
+    var tagsContainer = document.getElementById('merc-topic-tags');
+    if (tagsContainer) {
+      tagsContainer.addEventListener('click', function (e) {
+        var btn = e.target.closest('.merc-tag');
+        if (btn) {
+          var topic = btn.getAttribute('data-topic');
+          tagsContainer.parentNode.removeChild(tagsContainer);
+          sendMessage(topic);
+        }
+      });
+    }
+  }
+
+  function renderHistoryList() {
+    var container = document.getElementById('merc-history-list');
+    if (!container) return;
+    var list = getConversationList();
+    if (list.length === 0) {
+      container.innerHTML = '<div class="merc-history-empty">No past conversations</div>';
+      return;
+    }
+    var html = '';
+    list.slice(0, 10).forEach(function(convo) {
+      var d = new Date(convo.date);
+      var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var isActive = convo.id === currentConversationId ? ' merc-history-active' : '';
+      html += '<button class="merc-history-item' + isActive + '" data-convo-id="' + escapeAttr(convo.id) + '">';
+      html += '<span class="merc-history-title">' + escapeHtml(convo.title) + '</span>';
+      html += '<span class="merc-history-meta">' + dateStr + ' \u00b7 ' + convo.messageCount + ' msgs</span>';
+      html += '</button>';
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('.merc-history-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var id = item.getAttribute('data-convo-id');
+        var convos = getConversationList();
+        for (var i = 0; i < convos.length; i++) {
+          if (convos[i].id === id) { loadConversation(convos[i]); renderHistoryList(); break; }
+        }
+      });
+    });
+  }
+
+  function showOfflineOverlay() {
+    if (document.getElementById('merc-offline-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'merc-offline-overlay';
+    overlay.innerHTML = '<div class="merc-offline-box">' +
+      '<div class="merc-offline-icon">/ /</div>' +
+      '<div class="merc-offline-title">You are offline</div>' +
+      '<div class="merc-offline-desc">Mercurius needs internet to think. Check your connection and try again.</div>' +
+      '<button class="merc-offline-retry" id="merc-offline-retry">Retry</button>' +
+      '</div>';
+    var panel = document.getElementById('merc-panel');
+    if (panel) panel.appendChild(overlay);
+    else document.body.appendChild(overlay);
+    var retryBtn = document.getElementById('merc-offline-retry');
+    if (retryBtn) retryBtn.addEventListener('click', function() { window.location.reload(); });
+  }
+
+  function hideOfflineOverlay() {
+    var overlay = document.getElementById('merc-offline-overlay');
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
   }
 
   // =========================================================================
@@ -1072,17 +1209,24 @@
     }
 
     // Topic tags
-    var tagsContainer = document.getElementById('merc-topic-tags');
-    if (tagsContainer) {
-      tagsContainer.addEventListener('click', function (e) {
-        var btn = e.target.closest('.merc-tag');
-        if (btn) {
-          var topic = btn.getAttribute('data-topic');
-          tagsContainer.parentNode.removeChild(tagsContainer);
-          sendMessage(topic);
-        }
+    attachTopicTagListeners();
+
+    // New chat button
+    var newChatBtn = document.getElementById('merc-btn-new-chat');
+    if (newChatBtn) {
+      newChatBtn.addEventListener('click', function() {
+        startNewConversation();
+        renderHistoryList();
       });
     }
+
+    // Render saved conversation history in sidebar
+    renderHistoryList();
+
+    // Offline detection overlay
+    window.addEventListener('offline', showOfflineOverlay);
+    window.addEventListener('online', hideOfflineOverlay);
+    if (!navigator.onLine) showOfflineOverlay();
 
     // Send button
     var sendBtn = document.getElementById('merc-send-btn');
@@ -1381,6 +1525,10 @@
             appendReflectionCard();
           }
         }
+
+        // Auto-save conversation to history
+        saveCurrentConversation();
+        renderHistoryList();
 
         scrollToBottom();
       })
@@ -2193,6 +2341,46 @@
   // =========================================================================
   // 20. Initialize on DOMContentLoaded (or immediately if already loaded)
   // =========================================================================
+  // ── Thursday meeting push notification ──
+  function scheduleMeetingReminder() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    var now = new Date();
+    var dayOfWeek = now.getDay(); // 0=Sun, 4=Thu
+    // Find next Thursday at 7:50 AM (30 min before 8:20 meeting)
+    var daysUntilThursday = (4 - dayOfWeek + 7) % 7;
+    if (daysUntilThursday === 0) {
+      // It's Thursday — check if we're before 7:50
+      var target = new Date(now);
+      target.setHours(7, 50, 0, 0);
+      if (now >= target) daysUntilThursday = 7; // Already past, schedule next week
+    }
+    var nextThursday = new Date(now);
+    nextThursday.setDate(now.getDate() + daysUntilThursday);
+    nextThursday.setHours(7, 50, 0, 0);
+    var msUntil = nextThursday.getTime() - now.getTime();
+    // Only schedule if within 7 days (don't hold timers forever)
+    if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
+      setTimeout(function() {
+        // Check we still have permission
+        if (Notification.permission === 'granted') {
+          var notif = new Notification('Mayo AI Literacy Club', {
+            body: 'Club meets in 30 minutes. Want to prep with Mercurius?',
+            icon: '/icons/icon-192.png',
+            tag: 'meeting-reminder',
+            requireInteraction: true
+          });
+          notif.addEventListener('click', function() {
+            window.focus();
+            if (typeof MercuriusOpen === 'function') MercuriusOpen();
+            notif.close();
+          });
+          // Schedule the next one
+          scheduleMeetingReminder();
+        }
+      }, msUntil);
+    }
+  }
+
   function init() {
     if (document.getElementById('merc-toggle')) return;
     buildWidget();
@@ -2236,6 +2424,20 @@
     // Restore display name
     var savedName = getDisplayNameLocal();
     if (savedName) updateDisplayNameInSidebar(savedName);
+
+    // Initialize conversation ID for this session
+    currentConversationId = 'conv_' + Date.now();
+
+    // Request notification permission (non-blocking)
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Delay to avoid annoying users on first load
+      setTimeout(function() {
+        if (isOpen) Notification.requestPermission();
+      }, 30000);
+    }
+
+    // Schedule Thursday meeting reminder check
+    scheduleMeetingReminder();
   }
 
   if (document.readyState === 'loading') {
