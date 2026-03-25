@@ -1485,11 +1485,9 @@
           updateModeBar();
           showUnlockCelebration();
           checkAndAwardAchievement('critical_thinker');
-        } else if (data.mode && data.mode !== currentMode) {
-          currentMode = data.mode;
-          localStorage.setItem('merc_mode', currentMode);
-          updateModeBar();
         }
+        // Note: do NOT override currentMode from chat response — the user
+        // may have switched modes while the request was in flight.
 
         // Track debate rounds
         if (currentMode === 'debate') {
