@@ -17,6 +17,7 @@ const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
+const MODEL = 'claude-sonnet-4-6';
 
 // ---------------------------------------------------------------------------
 // Anthropic client
@@ -40,7 +41,7 @@ async function getEventsData() {
   const now = Date.now();
 
   // 1. Check SQLite first — admin-set data always wins
-  const dbEvents = db.getEventsFromDB();
+  const dbEvents = await db.getEventsFromDB();
   if (dbEvents) {
     eventsCache = dbEvents;
     eventsCacheTime = now;
@@ -609,19 +610,47 @@ Direct Mode gives students access to deeper, more substantive responses. To earn
 Tone: warm, honest, genuinely rooting for them.`;
 
 // ---------------------------------------------------------------------------
-// Rate limiter (in-memory map resets on server restart — acceptable)
+// Rate limiter — per-session (in-memory, resets on restart)
 // ---------------------------------------------------------------------------
 const rateLimitMap = {};
 
-// Rate limit: check message count in last 60 seconds from DB
 function isRateLimited(sessionId) {
   if (!rateLimitMap[sessionId]) rateLimitMap[sessionId] = [];
   const now = Date.now();
   rateLimitMap[sessionId] = rateLimitMap[sessionId].filter(t => now - t < 60000);
-  if (rateLimitMap[sessionId].length >= 10) return true;
+  if (rateLimitMap[sessionId].length >= 20) return true;
   rateLimitMap[sessionId].push(now);
   return false;
 }
+
+// Clean up stale sessions every 5 minutes to prevent memory leak
+setInterval(() => {
+  const cutoff = Date.now() - 300000;
+  for (const key in rateLimitMap) {
+    rateLimitMap[key] = rateLimitMap[key].filter(t => t > cutoff);
+    if (rateLimitMap[key].length === 0) delete rateLimitMap[key];
+  }
+}, 300000);
+
+// ---------------------------------------------------------------------------
+// Global IP-based rate limiter — protects against abuse from unknown sources
+// ---------------------------------------------------------------------------
+const rateLimit = require('express-rate-limit');
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,             // 60 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited', message: 'Too many requests. Try again in a moment.' },
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,             // 15 chat messages per minute per IP (Anthropic calls are expensive)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited', message: 'Slow down — try again in a moment.' },
+});
 
 // ---------------------------------------------------------------------------
 // CORS — only allow the configured origin (or all origins in dev if not set)
@@ -652,10 +681,13 @@ app.use(express.json({ limit: '32kb' }));
 // Serve static files from the public directory
 app.use(express.static(require('path').join(__dirname, 'public')));
 
+// Apply global rate limiter to all API routes
+app.use('/api/', globalLimiter);
+
 // ---------------------------------------------------------------------------
 // POST /api/chat
 // ---------------------------------------------------------------------------
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', chatLimiter, async (req, res) => {
   const { messages: clientMessages, sessionId } = req.body;
 
   if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
@@ -681,24 +713,24 @@ app.post('/api/chat', async (req, res) => {
   }
 
   // Get or create session in DB
-  db.getOrCreateSession(sessionId);
+  await db.getOrCreateSession(sessionId);
 
   // Update streak
-  const currentStreak = db.updateStreak(sessionId);
+  const currentStreak = await db.updateStreak(sessionId);
 
   // Get adaptive difficulty and struggled topics
-  const difficulty = db.getDifficulty(sessionId);
-  const struggledTopics = db.getStruggledTopics(sessionId);
+  const difficulty = await db.getDifficulty(sessionId);
+  const struggledTopics = await db.getStruggledTopics(sessionId);
 
   // Load session state (mode, unlocked, test_state, message_count)
-  const sessionState = db.getSessionState(sessionId);
+  const sessionState = await db.getSessionState(sessionId);
   const mode = sessionState?.mode || 'socratic';
   const isUnlocked = !!(sessionState?.unlocked);
   let testState = sessionState?.test_state || null;
   const msgCount = sessionState?.message_count || 0;
 
   // Load full history from DB
-  const dbHistory = db.getMessages(sessionId, 50);
+  const dbHistory = await db.getMessages(sessionId, 50);
 
   // Get the latest user message (last in clientMessages)
   const latestUserMessage = clientMessages[clientMessages.length - 1];
@@ -707,12 +739,12 @@ app.post('/api/chat', async (req, res) => {
   }
 
   // Save the new user message to DB
-  db.saveMessage(sessionId, 'user', latestUserMessage.content);
+  await db.saveMessage(sessionId, 'user', latestUserMessage.content);
 
   // Build memory context from past sessions
   let memoryContext = '';
   try {
-    const pastSessions = db.getPastSessions(sessionId, 2);
+    const pastSessions = await db.getPastSessions(sessionId, 2);
     if (pastSessions.length > 0) {
       memoryContext = `\n\n### STUDENT MEMORY (from previous sessions):\n`;
       pastSessions.forEach((s, i) => {
@@ -751,7 +783,7 @@ app.post('/api/chat', async (req, res) => {
 
   } else if (testState === 'pending' || (!isUnlocked && msgCount >= 6 && testState === null)) {
     // Time to trigger the test
-    if (testState !== 'pending') db.setTestState(sessionId, 'pending');
+    if (testState !== 'pending') await db.setTestState(sessionId, 'pending');
     systemPrompt = TEST_EVALUATOR_PROMPT;
     testTriggered = true;
 
@@ -759,7 +791,7 @@ app.post('/api/chat', async (req, res) => {
     // Normal Socratic mode
     // After 6 user messages, queue the test for next AI turn
     if (!isUnlocked && msgCount >= 6 && testState === null) {
-      db.setTestState(sessionId, 'pending');
+      await db.setTestState(sessionId, 'pending');
     }
     systemPrompt = SOCRATIC_PROMPT + memoryContext;
   }
@@ -792,46 +824,133 @@ app.post('/api/chat', async (req, res) => {
     // Socratic & Debate: shorter, punchier. Direct: more depth.
     const maxTokens = mode === 'direct' ? 1200 : 800;
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: trimmed,
-    });
+    const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
-    let reply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
+    if (wantsStream) {
+      // -----------------------------------------------------------------------
+      // SSE streaming path (mobile app)
+      // -----------------------------------------------------------------------
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
 
-    // ---------------------------------------------------------------------------
-    // Detect test outcome markers and update state
-    // ---------------------------------------------------------------------------
-    let justUnlocked = false;
+      const stream = anthropic.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: trimmed,
+      });
 
-    if (reply.startsWith('[TEST_PASSED]')) {
-      reply = reply.replace(/^\[TEST_PASSED\]\n?/, '');
-      db.setUnlocked(sessionId);
-      db.setTestState(sessionId, 'passed');
-      justUnlocked = true;
-    } else if (reply.startsWith('[TEST_FAILED]')) {
-      reply = reply.replace(/^\[TEST_FAILED\]\n?/, '');
-      db.setTestState(sessionId, null); // reset so they can try again later
-    } else if (testState === 'pending' || testTriggered) {
-      // Mercurius has now asked the test questions — move to in_progress
-      db.setTestState(sessionId, 'in_progress');
+      let fullText = '';
+
+      // Helper to safely write to SSE response
+      const safeWrite = (data) => {
+        if (!res.writableEnded) {
+          try { res.write(data); } catch (e) { /* response closed */ }
+        }
+      };
+
+      stream.on('text', (text) => {
+        fullText += text;
+        safeWrite(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`);
+      });
+
+      stream.on('end', async () => {
+        let reply = fullText || "I seem to have lost my train of thought. Try asking again?";
+        let justUnlocked = false;
+
+        if (reply.startsWith('[TEST_PASSED]')) {
+          reply = reply.replace(/^\[TEST_PASSED\]\n?/, '');
+          await db.setUnlocked(sessionId);
+          await db.setTestState(sessionId, 'passed');
+          justUnlocked = true;
+        } else if (reply.startsWith('[TEST_FAILED]')) {
+          reply = reply.replace(/^\[TEST_FAILED\]\n?/, '');
+          await db.setTestState(sessionId, null);
+        } else if (testState === 'pending' || testTriggered) {
+          await db.setTestState(sessionId, 'in_progress');
+        }
+
+        await db.saveMessage(sessionId, 'assistant', reply);
+
+        safeWrite(`data: ${JSON.stringify({
+          type: 'complete',
+          reply,
+          sessionId,
+          mode: justUnlocked ? 'socratic' : mode,
+          unlocked: justUnlocked ? true : isUnlocked,
+          justUnlocked,
+          streak: currentStreak,
+          difficulty,
+        })}\n\n`);
+
+        safeWrite('data: [DONE]\n\n');
+        if (!res.writableEnded) {
+          try { res.end(); } catch (e) { /* already ended */ }
+        }
+      });
+
+      stream.on('error', (err) => {
+        console.error('[Mercurius] Stream error:', err.message);
+        if (!res.writableEnded) {
+          try {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+            res.end();
+          } catch (e) { /* response already closed */ }
+        }
+      });
+
+      req.on('close', () => {
+        stream.abort();
+      });
+
+    } else {
+      // -----------------------------------------------------------------------
+      // Standard JSON path (widget — existing behavior, unchanged)
+      // -----------------------------------------------------------------------
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: trimmed,
+      });
+
+      let reply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
+
+      // -----------------------------------------------------------------------
+      // Detect test outcome markers and update state
+      // -----------------------------------------------------------------------
+      let justUnlocked = false;
+
+      if (reply.startsWith('[TEST_PASSED]')) {
+        reply = reply.replace(/^\[TEST_PASSED\]\n?/, '');
+        await db.setUnlocked(sessionId);
+        await db.setTestState(sessionId, 'passed');
+        justUnlocked = true;
+      } else if (reply.startsWith('[TEST_FAILED]')) {
+        reply = reply.replace(/^\[TEST_FAILED\]\n?/, '');
+        await db.setTestState(sessionId, null); // reset so they can try again later
+      } else if (testState === 'pending' || testTriggered) {
+        // Mercurius has now asked the test questions — move to in_progress
+        await db.setTestState(sessionId, 'in_progress');
+      }
+
+      // Save assistant reply to DB
+      await db.saveMessage(sessionId, 'assistant', reply);
+
+      // Return mode info so the widget can update UI
+      return res.json({
+        reply,
+        sessionId,
+        mode: justUnlocked ? 'socratic' : mode,
+        unlocked: justUnlocked ? true : isUnlocked,
+        justUnlocked,
+        streak: currentStreak,
+        difficulty,
+      });
     }
-
-    // Save assistant reply to DB
-    db.saveMessage(sessionId, 'assistant', reply);
-
-    // Return mode info so the widget can update UI
-    return res.json({
-      reply,
-      sessionId,
-      mode: justUnlocked ? 'socratic' : mode,
-      unlocked: justUnlocked ? true : isUnlocked,
-      justUnlocked,
-      streak: currentStreak,
-      difficulty,
-    });
 
   } catch (err) {
     console.error('[Mercurius] Anthropic API error:', err.message);
@@ -845,11 +964,11 @@ app.post('/api/chat', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/session/:sessionId
 // ---------------------------------------------------------------------------
-app.get('/api/session/:sessionId', (req, res) => {
+app.get('/api/session/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
   try {
-    const stats = db.getSessionStats(sessionId);
-    const recentMessages = db.getMessages(sessionId, 10);
+    const stats = await db.getSessionStats(sessionId);
+    const recentMessages = await db.getMessages(sessionId, 10);
     res.json({ stats, recentMessages });
   } catch (e) {
     res.status(500).json({ error: 'db_error' });
@@ -859,26 +978,26 @@ app.get('/api/session/:sessionId', (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/mode — switch mode (only allowed if session is unlocked)
 // ---------------------------------------------------------------------------
-app.post('/api/mode', (req, res) => {
+app.post('/api/mode', async (req, res) => {
   const { sessionId, mode, clientUnlocked } = req.body;
   if (!sessionId || !['socratic', 'direct', 'debate'].includes(mode)) {
     return res.status(400).json({ error: 'invalid_request' });
   }
-  db.getOrCreateSession(sessionId);
-  const state = db.getSessionState(sessionId);
+  await db.getOrCreateSession(sessionId);
+  const state = await db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
 
   // Trust clientUnlocked=true: the unlock record lives in localStorage and
   // survives Railway redeploys even when the DB is reset.
   if (!state.unlocked && clientUnlocked === true) {
-    db.markUnlocked(sessionId);
+    await db.markUnlocked(sessionId);
   }
 
   const isUnlocked = state.unlocked || clientUnlocked === true;
   const requiresUnlock = mode === 'direct';
   if (requiresUnlock && !isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
 
-  db.setMode(sessionId, mode);
+  await db.setMode(sessionId, mode);
   return res.json({ mode, unlocked: true });
 });
 
@@ -891,7 +1010,7 @@ app.post('/api/quiz', async (req, res) => {
     return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
 
-  const dbHistory = db.getMessages(sessionId, 30);
+  const dbHistory = await db.getMessages(sessionId, 30);
   if (dbHistory.length < 4) {
     return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first — then I can quiz you on what we covered.' });
   }
@@ -927,7 +1046,7 @@ app.post('/api/quiz', async (req, res) => {
 app.post('/api/report-card', async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
-  const dbHistory = db.getMessages(sessionId, 40);
+  const dbHistory = await db.getMessages(sessionId, 40);
   if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
   try {
     const response = await anthropic.messages.create({
@@ -950,7 +1069,7 @@ app.post('/api/report-card', async (req, res) => {
 app.post('/api/concept-map', async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
-  const dbHistory = db.getMessages(sessionId, 30);
+  const dbHistory = await db.getMessages(sessionId, 30);
   if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
   try {
     const response = await anthropic.messages.create({
@@ -970,9 +1089,9 @@ app.post('/api/concept-map', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/leaderboard
 // ---------------------------------------------------------------------------
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
   try {
-    return res.json(db.getLeaderboard());
+    return res.json(await db.getLeaderboard());
   } catch(err) {
     return res.status(500).json({ error: 'db_error' });
   }
@@ -981,9 +1100,9 @@ app.get('/api/leaderboard', (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/dashboard
 // ---------------------------------------------------------------------------
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   try {
-    return res.json(db.getDashboardStats());
+    return res.json(await db.getDashboardStats());
   } catch(err) {
     return res.status(500).json({ error: 'db_error' });
   }
@@ -992,20 +1111,20 @@ app.get('/api/dashboard', (req, res) => {
 // ---------------------------------------------------------------------------
 // Admin — GET current events data
 // ---------------------------------------------------------------------------
-app.get('/api/admin/events', (req, res) => {
+app.get('/api/admin/events', async (req, res) => {
   const pw = req.headers['x-admin-password'];
   if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  const data = db.getEventsFromDB();
-  const updatedAt = db.getEventsUpdatedAt();
+  const data = await db.getEventsFromDB();
+  const updatedAt = await db.getEventsUpdatedAt();
   res.json({ data: data || eventsCache, updatedAt });
 });
 
 // ---------------------------------------------------------------------------
 // Admin — POST update events data (saves to SQLite, invalidates cache)
 // ---------------------------------------------------------------------------
-app.post('/api/admin/events', (req, res) => {
+app.post('/api/admin/events', async (req, res) => {
   const pw = req.headers['x-admin-password'];
   if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -1014,7 +1133,7 @@ app.post('/api/admin/events', (req, res) => {
   if (!data || typeof data !== 'object') {
     return res.status(400).json({ error: 'invalid_data', message: 'Provide a data object.' });
   }
-  db.setEventsInDB(data);
+  await db.setEventsInDB(data);
   // Bust memory cache so next request picks up new data immediately
   eventsCache = data;
   eventsCacheTime = Date.now();
@@ -1025,7 +1144,7 @@ app.post('/api/admin/events', (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/factcheck — analyze a claim about AI
 // ---------------------------------------------------------------------------
-app.post('/api/factcheck', async (req, res) => {
+app.post('/api/factcheck', chatLimiter, async (req, res) => {
   const { sessionId, claim } = req.body;
   if (!sessionId || !claim || typeof claim !== 'string' || claim.length > 1000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and claim (max 1000 chars).' });
@@ -1053,7 +1172,7 @@ app.post('/api/factcheck', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/analyze — analyze an AI-generated response
 // ---------------------------------------------------------------------------
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', chatLimiter, async (req, res) => {
   const { sessionId, aiOutput } = req.body;
   if (!sessionId || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and aiOutput (max 3000 chars).' });
@@ -1135,15 +1254,15 @@ app.get('/api/challenge', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/profile — set display name for a session
 // ---------------------------------------------------------------------------
-app.post('/api/profile', (req, res) => {
+app.post('/api/profile', async (req, res) => {
   const { sessionId, displayName } = req.body;
   if (!sessionId || !displayName || typeof displayName !== 'string') {
     return res.status(400).json({ error: 'invalid_request' });
   }
   const clean = displayName.trim().slice(0, 30).replace(/[^a-zA-Z0-9 _\-'.]/g, '');
   if (!clean) return res.status(400).json({ error: 'invalid_name' });
-  db.getOrCreateSession(sessionId);
-  db.setDisplayName(sessionId, clean);
+  await db.getOrCreateSession(sessionId);
+  await db.setDisplayName(sessionId, clean);
   return res.json({ ok: true, displayName: clean });
 });
 
@@ -1168,9 +1287,14 @@ app.use('/api/*', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`\n✦  Mercurius Ⅰ is running`);
-  console.log(`   Local:   http://localhost:${PORT}`);
-  console.log(`   Allowed origin: ${ALLOWED_ORIGIN}`);
-  console.log(`   Model: claude-sonnet-4-6\n`);
+db.initSchema().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n✦  Mercurius Ⅰ is running`);
+    console.log(`   Local:   http://localhost:${PORT}`);
+    console.log(`   Allowed origin: ${ALLOWED_ORIGIN}`);
+    console.log(`   Model: ${MODEL}\n`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });
