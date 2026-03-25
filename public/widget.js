@@ -1058,9 +1058,12 @@
       }
     });
 
-    // Main close button (X in header)
+    // Main close button (X in header) — hide entirely in standalone PWA mode
     var closeBtn = document.getElementById('merc-close-btn');
-    if (closeBtn) {
+    var isStandalonePWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (closeBtn && isStandalonePWA) {
+      closeBtn.style.display = 'none';
+    } else if (closeBtn) {
       closeBtn.addEventListener('click', function () {
         isOpen = false;
         panel.classList.remove('merc-open');
