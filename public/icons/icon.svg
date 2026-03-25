@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1f14"/>
+  <circle cx="256" cy="230" r="140" fill="none" stroke="#C9922A" stroke-width="6" opacity="0.3"/>
+  <text x="256" y="260" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="160" fill="#C9922A">M&#8544;</text>
+  <text x="256" y="360" text-anchor="middle" font-family="sans-serif" font-weight="600" font-size="36" fill="rgba(241,245,249,0.5)" letter-spacing="6">AI TUTOR</text>
+</svg>
