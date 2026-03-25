@@ -240,6 +240,18 @@ Every question you ask should have a clear pedagogical purpose. If it doesn't �
 - If they're stuck or frustrated: Give them a foothold — a fact, an example, an analogy — then ask again from higher ground.
 - If they ask a factual question with a clear answer: Give the answer, then ask the interesting follow-up. Don't waste their time.
 
+**CRITICAL: Adapt to answer quality in real-time.**
+Read every student response and calibrate your next move:
+
+- **Shallow/vague answer** ("I think AI is bad" / "yeah" / "idk"): Don't accept it. Push harder with a specific, concrete question. "Bad how? Give me one specific example of AI causing harm to a real person." Make them work.
+- **Surface-level correct** ("AI is biased because of training data"): They know the buzzword but maybe not the depth. Test it: "OK — but WHERE in the training data pipeline does bias enter? Can you point to a specific stage?"
+- **Thoughtful but incomplete**: Validate what's good, then extend. "That's a strong point about representation. But you're missing something — what happens AFTER the data is collected? The model architecture matters too."
+- **Genuinely insightful**: Acknowledge it honestly ("That's sharper than most adults I talk to"), then go deeper. Push toward the frontier of the topic — the part that doesn't have easy answers.
+- **Confidently wrong**: Don't sugarcoat it. "Actually, that's a common misconception — and an important one to catch." Correct clearly, then ask them to reason through WHY the misconception is appealing.
+- **Copy-pasted or AI-generated response**: Call it out directly. "That reads like you asked another AI and pasted it here. This only works if you're doing the thinking. Try again — in your own words, what do you actually understand about this?"
+
+Never give the same depth of response to a lazy answer as to a thoughtful one. Reward effort with depth.
+
 **Socratic strategies to use:**
 - *Counterexample*: "You said AI can't be creative. But what about [example] — does that change your answer?"
 - *Reductio*: "If that's true, wouldn't it also mean [uncomfortable implication]?"
@@ -610,6 +622,102 @@ Direct Mode gives students access to deeper, more substantive responses. To earn
 Tone: warm, honest, genuinely rooting for them.`;
 
 // ---------------------------------------------------------------------------
+// Curated source library — real URLs for Mercurius to cite
+// ---------------------------------------------------------------------------
+const SOURCE_LIBRARY = `
+
+### CURATED SOURCE LIBRARY
+When discussing these topics, cite the real source with its URL so students can verify and read more.
+
+**AI Bias & Fairness:**
+- ProPublica COMPAS investigation: "Machine Bias" (propublica.org/article/machine-bias-risk-assessments-in-criminal-sentencing)
+- Joy Buolamwini's Gender Shades study: gendershades.org
+- Algorithmic Justice League: ajl.org
+- "Datasheets for Datasets" by Gebru et al: arxiv.org/abs/1803.09010
+
+**How LLMs Work:**
+- "Attention Is All You Need" (original Transformer paper): arxiv.org/abs/1706.03762
+- 3Blue1Brown neural network explainer: youtube.com/watch?v=aircAruvnKk
+- Anthropic's research on Claude: anthropic.com/research
+- "On the Dangers of Stochastic Parrots" by Bender et al: dl.acm.org/doi/10.1145/3442188.3445922
+
+**AI Ethics & Policy:**
+- Stanford HAI AI Index Report: aiindex.stanford.edu
+- AI Now Institute annual reports: ainowinstitute.org
+- UNESCO AI Ethics Recommendation: unesco.org/en/artificial-intelligence/recommendation-ethics
+- The White House Executive Order on AI (Oct 2023): whitehouse.gov/briefing-room/presidential-actions/2023/10/30/executive-order-on-the-safe-secure-and-trustworthy-development-and-use-of-artificial-intelligence
+
+**AI in Healthcare:**
+- FDA AI/ML-enabled medical devices list: fda.gov/medical-devices/software-medical-device-samd/artificial-intelligence-and-machine-learning-aiml-enabled-medical-devices
+- "AI in Health Care" — National Academy of Medicine: nam.edu/programs/value-science-driven-health-care/artificial-intelligence-special-publication
+
+**AI in Education:**
+- UNESCO guidance on AI in education: unesco.org/en/digital-education/artificial-intelligence
+- Stanford "AI + Education" research: hai.stanford.edu/research/ai-education
+
+**Prompt Engineering:**
+- Learn Prompting: learnprompting.org
+- Anthropic's prompt engineering guide: docs.anthropic.com/en/docs/build-with-claude/prompt-engineering
+
+**AI Safety & Alignment:**
+- Anthropic's core views on AI safety: anthropic.com/research/core-views-on-ai-safety
+- "Concrete Problems in AI Safety": arxiv.org/abs/1606.06565
+- Center for AI Safety: safe.ai
+
+**General AI Literacy:**
+- Elements of AI (free course): elementsofai.com
+- MIT Technology Review AI section: technologyreview.com/topic/artificial-intelligence
+- Our World in Data — AI: ourworldindata.org/artificial-intelligence
+
+When you reference a source, format it as: [SOURCE: Title — domain.com/path]
+Only cite sources from this list. If a topic isn't covered here, don't fabricate a URL — just say what you know and suggest the student search for it.
+`;
+
+// ---------------------------------------------------------------------------
+// Background memory extraction — runs after each response, non-blocking
+// ---------------------------------------------------------------------------
+async function extractAndSaveMemories(sessionId, userMessage, assistantReply, mode) {
+  try {
+    const memoryPrompt = `Analyze this student-AI exchange and extract key memories to store for future sessions.
+
+Student message: "${userMessage.slice(0, 500)}"
+AI response: "${assistantReply.slice(0, 500)}"
+Mode: ${mode}
+
+Return a JSON array of memory objects. Each object has "type" and "content".
+Types: "interest" (topic they're interested in), "strength" (something they understood well), "struggle" (something they got wrong or found hard), "insight" (a good point they made), "misconception" (an AI misconception they had), "topic" (the topic discussed), "position" (a stance they took in debate)
+
+Rules:
+- Only include genuinely notable items, not generic observations
+- Keep content under 50 characters each
+- Return 0-3 items max (empty array [] if nothing notable)
+- Return ONLY valid JSON array, nothing else
+
+Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"struggle","content":"confused training data with retrieval"}]`;
+
+    const response = await new Anthropic().messages.create({
+      model: 'claude-haiku-3',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: memoryPrompt }],
+    });
+
+    const text = response.content[0]?.text?.trim();
+    if (!text) return;
+
+    const memories = JSON.parse(text);
+    if (!Array.isArray(memories)) return;
+
+    for (const mem of memories.slice(0, 3)) {
+      if (mem.type && mem.content && typeof mem.content === 'string') {
+        await db.saveMemory(sessionId, mem.type, mem.content.slice(0, 100));
+      }
+    }
+  } catch (e) {
+    // Silent fail — memory extraction is best-effort
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Rate limiter — per-session (in-memory, resets on restart)
 // ---------------------------------------------------------------------------
 const rateLimitMap = {};
@@ -741,17 +849,21 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   // Save the new user message to DB
   await db.saveMessage(sessionId, 'user', latestUserMessage.content);
 
-  // Build memory context from past sessions
+  // Build rich memory profile from persistent student memory
   let memoryContext = '';
   try {
-    const pastSessions = await db.getPastSessions(sessionId, 2);
-    if (pastSessions.length > 0) {
-      memoryContext = `\n\n### STUDENT MEMORY (from previous sessions):\n`;
-      pastSessions.forEach((s, i) => {
-        const excerpt = s.messages ? s.messages.split(' ||| ').slice(0, 3).join(' ... ') : '';
-        if (excerpt) memoryContext += `\nPast session ${i + 1}: "${excerpt.slice(0, 300)}..."\n`;
-      });
-      memoryContext += `\nReference past discussions naturally when relevant.`;
+    memoryContext = await db.buildMemoryProfile(sessionId);
+    // Also include recent conversation excerpts as fallback
+    if (!memoryContext) {
+      const pastSessions = await db.getPastSessions(sessionId, 2);
+      if (pastSessions.length > 0) {
+        memoryContext = `\n\n### STUDENT MEMORY (from previous sessions):\n`;
+        pastSessions.forEach((s, i) => {
+          const excerpt = s.messages ? s.messages.split(' ||| ').slice(0, 3).join(' ... ') : '';
+          if (excerpt) memoryContext += `\nPast session ${i + 1}: "${excerpt.slice(0, 300)}..."\n`;
+        });
+        memoryContext += `\nReference past discussions naturally when relevant.`;
+      }
     }
   } catch (e) { /* continue without memory */ }
 
@@ -811,7 +923,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   const meetingContext = buildMeetingContext(eventsData);
   const blogContext = buildBlogContext(blogPosts);
 
-  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + adaptiveNote + repetitionNote + meetingContext + blogContext;
+  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + SOURCE_LIBRARY + adaptiveNote + repetitionNote + meetingContext + blogContext;
 
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
@@ -939,6 +1051,9 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply);
+
+      // Background: extract and save memories (non-blocking)
+      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch(() => {});
 
       // Return mode info so the widget can update UI
       return res.json({

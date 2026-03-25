@@ -86,6 +86,15 @@ async function initSchema() {
         data TEXT NOT NULL,
         updated_at BIGINT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS student_memory (
+        id SERIAL PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        memory_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_session ON student_memory(session_id, memory_type);
     `);
   } else {
     sqliteDb.exec(`
@@ -114,6 +123,14 @@ async function initSchema() {
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS student_memory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        memory_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_session ON student_memory(session_id, memory_type);
     `);
     // Migrate existing SQLite DB: add new columns if missing
     const cols = sqliteDb.prepare('PRAGMA table_info(sessions)').all().map(c => c.name);
@@ -344,5 +361,66 @@ module.exports = {
   async getEventsUpdatedAt() {
     const row = await queryOne('SELECT updated_at FROM events WHERE id = 1');
     return row ? row.updated_at : null;
+  },
+
+  // ─── Student memory (persistent across sessions) ───
+
+  async saveMemory(sessionId, type, content) {
+    const now = Date.now();
+    await query('INSERT INTO student_memory (session_id, memory_type, content, created_at) VALUES (?, ?, ?, ?)',
+      [sessionId, type, content, now]);
+  },
+
+  async getMemories(sessionId, limit = 20) {
+    return await query(
+      'SELECT memory_type, content, created_at FROM student_memory WHERE session_id = ? ORDER BY created_at DESC LIMIT ?',
+      [sessionId, limit]
+    );
+  },
+
+  async getMemoriesByType(sessionId, type, limit = 10) {
+    return await query(
+      'SELECT content, created_at FROM student_memory WHERE session_id = ? AND memory_type = ? ORDER BY created_at DESC LIMIT ?',
+      [sessionId, type, limit]
+    );
+  },
+
+  async buildMemoryProfile(sessionId) {
+    const memories = await this.getMemories(sessionId, 30);
+    if (memories.length === 0) return '';
+
+    const byType = {};
+    memories.forEach(m => {
+      if (!byType[m.memory_type]) byType[m.memory_type] = [];
+      byType[m.memory_type].push(m.content);
+    });
+
+    let profile = '\n\n### STUDENT MEMORY PROFILE\n';
+    profile += 'You remember the following about this student from past conversations. Use this naturally — reference it when relevant, build on it, never repeat information they already know.\n\n';
+
+    if (byType.interest) {
+      profile += '**Interests:** ' + byType.interest.join(', ') + '\n';
+    }
+    if (byType.strength) {
+      profile += '**Strengths:** ' + byType.strength.join(', ') + '\n';
+    }
+    if (byType.struggle) {
+      profile += '**Areas they struggled with:** ' + byType.struggle.join(', ') + '\n';
+    }
+    if (byType.insight) {
+      profile += '**Key insights they had:** ' + byType.insight.slice(0, 5).join(' | ') + '\n';
+    }
+    if (byType.misconception) {
+      profile += '**Misconceptions corrected:** ' + byType.misconception.join(', ') + '\n';
+    }
+    if (byType.topic) {
+      profile += '**Topics explored:** ' + [...new Set(byType.topic)].join(', ') + '\n';
+    }
+    if (byType.position) {
+      profile += '**Positions taken in debate:** ' + byType.position.slice(0, 3).join(' | ') + '\n';
+    }
+
+    profile += '\nDo NOT repeat things they already know. Build on their existing knowledge. If they struggled with something before, revisit it gently when the topic comes up again.';
+    return profile;
   },
 };
