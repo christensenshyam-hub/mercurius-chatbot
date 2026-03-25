@@ -2070,7 +2070,7 @@
 
   function handleModeSwitchTo(newMode) {
     if (newMode === 'debate') debateRound = 0;
-    if (newMode !== 'debate' && !isUnlocked) return;
+    if (newMode === 'direct' && !isUnlocked) return;
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
