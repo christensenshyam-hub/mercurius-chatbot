@@ -2070,32 +2070,65 @@
     if (newMode === 'debate') debateRound = 0;
     if (newMode === 'direct' && !isUnlocked) return;
 
-    // Immediately switch the UI (optimistic update — don't wait for server)
+    var leavingDebate = (currentMode === 'debate' && newMode !== 'debate');
+    var enteringDebate = (currentMode !== 'debate' && newMode === 'debate');
+
+    // Update state
     currentMode = newMode;
     safeSetItem('merc_mode', currentMode);
     updateModeBar();
 
-    var modeNotices = {
-      debate: 'Switched to Debate Mode \u2014 Mercurius will take a position and argue against you. Make your case!',
-      direct: 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.',
-      socratic: 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
-    };
-    appendSystemNotice(modeNotices[newMode] || 'Mode switched.');
+    var container = document.getElementById('merc-messages');
+    if (!container) return;
+
+    if (enteringDebate) {
+      // Clear chat and show debate-specific UI
+      container.innerHTML = '';
+      var debateIntro = document.createElement('div');
+      debateIntro.className = 'merc-msg merc-msg-notice';
+      debateIntro.innerHTML = '<strong>Debate Mode</strong> — Mercurius will take a position and coach you through a structured argument. Your reasoning skills will be graded.';
+      container.appendChild(debateIntro);
+
+      // Auto-start the debate
+      setTimeout(function () {
+        sendMessage('I want to debate. Present me with 3 topic options to choose from, then we\'ll begin.', true);
+      }, 400);
+
+    } else if (leavingDebate) {
+      // Clear debate messages and restore normal chat
+      container.innerHTML = '';
+      var notice = document.createElement('div');
+      notice.className = 'merc-msg merc-msg-notice';
+      notice.textContent = newMode === 'direct'
+        ? 'Switched to Direct Mode — Mercurius will now lead with substantive explanations.'
+        : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.';
+      container.appendChild(notice);
+
+      // Rebuild starter topic tags
+      var tags = document.createElement('div');
+      tags.className = 'merc-topic-tags';
+      tags.id = 'merc-topic-tags';
+      tags.innerHTML = '<div class="merc-topic-tags-label">Start with a topic</div>' + buildTopicTagsHTML();
+      container.appendChild(tags);
+      attachTopicTagListeners();
+
+    } else {
+      // Normal mode switch (socratic <-> direct)
+      var modeNotices = {
+        direct: 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.',
+        socratic: 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
+      };
+      appendSystemNotice(modeNotices[newMode] || 'Mode switched.');
+    }
+
     showModeToast({ socratic: 'Socratic', direct: 'Direct', debate: 'Debate' }[newMode] || newMode);
 
-    // Tell server (fire-and-forget — UI is already updated)
+    // Tell server
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: isUnlocked }),
     }).catch(function () {});
-
-    // Auto-start debate if entering debate mode
-    if (newMode === 'debate') {
-      setTimeout(function () {
-        sendMessage('Begin the debate \u2014 pick your position now and give your opening argument. Then challenge me.', true);
-      }, 400);
-    }
   }
 
   // =========================================================================
