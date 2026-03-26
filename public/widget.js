@@ -386,6 +386,9 @@
       '      <button class="merc-mode-btn" id="merc-tab-debate">',
       '        <span class="merc-mode-dot"></span> Debate',
       '      </button>',
+      '      <button class="merc-mode-btn" id="merc-tab-discussion">',
+      '        <span class="merc-mode-dot"></span> Discussion',
+      '      </button>',
       '    </div>',
 
       '    <div class="merc-sidebar-section">',
@@ -1315,6 +1318,12 @@
         if (currentMode !== 'debate') handleModeSwitchTo('debate');
       });
     }
+    var tabDiscussion = document.getElementById('merc-tab-discussion');
+    if (tabDiscussion) {
+      tabDiscussion.addEventListener('click', function () {
+        if (currentMode !== 'discussion') handleModeSwitchTo('discussion');
+      });
+    }
 
     // Initialise mode bar to match stored state
     updateModeBar();
@@ -2009,11 +2018,12 @@
   // 17. Mode bar helpers
   // =========================================================================
   function updateModeBar() {
-    var btnSocratic = document.getElementById('merc-tab-socratic');
-    var btnDirect   = document.getElementById('merc-tab-direct');
-    var btnDebate   = document.getElementById('merc-tab-debate');
-    var lockIcon    = document.getElementById('merc-tab-lock-icon');
-    var modeLabel   = document.getElementById('merc-mode-label');
+    var btnSocratic   = document.getElementById('merc-tab-socratic');
+    var btnDirect     = document.getElementById('merc-tab-direct');
+    var btnDebate     = document.getElementById('merc-tab-debate');
+    var btnDiscussion = document.getElementById('merc-tab-discussion');
+    var lockIcon      = document.getElementById('merc-tab-lock-icon');
+    var modeLabel     = document.getElementById('merc-mode-label');
 
     if (!btnSocratic || !btnDirect) return;
 
@@ -2027,18 +2037,19 @@
     }
 
     // Active states
-    [btnSocratic, btnDirect, btnDebate].forEach(function (b) {
+    [btnSocratic, btnDirect, btnDebate, btnDiscussion].forEach(function (b) {
       if (b) b.classList.remove('active');
     });
 
     var activeBtn =
       currentMode === 'direct' ? btnDirect :
       currentMode === 'debate' ? btnDebate :
+      currentMode === 'discussion' ? btnDiscussion :
       btnSocratic;
     if (activeBtn) activeBtn.classList.add('active');
 
     // Mode label in header
-    var modeNames = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate' };
+    var modeNames = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate', discussion: 'Discussion' };
     if (modeLabel) modeLabel.textContent = modeNames[currentMode] || 'Socratic';
   }
 
@@ -2070,8 +2081,10 @@
     if (newMode === 'debate') debateRound = 0;
     if (newMode === 'direct' && !isUnlocked) return;
 
-    var leavingDebate = (currentMode === 'debate' && newMode !== 'debate');
+    var specialModes = ['debate', 'discussion'];
+    var leavingSpecial = (specialModes.indexOf(currentMode) !== -1 && specialModes.indexOf(newMode) === -1);
     var enteringDebate = (currentMode !== 'debate' && newMode === 'debate');
+    var enteringDiscussion = (currentMode !== 'discussion' && newMode === 'discussion');
 
     // Update state
     currentMode = newMode;
@@ -2089,13 +2102,24 @@
       debateIntro.innerHTML = '<strong>Debate Mode</strong> — Mercurius will take a position and coach you through a structured argument. Your reasoning skills will be graded.';
       container.appendChild(debateIntro);
 
-      // Auto-start the debate
       setTimeout(function () {
         sendMessage('I want to debate. Present me with 3 topic options to choose from, then we\'ll begin.', true);
       }, 400);
 
-    } else if (leavingDebate) {
-      // Clear debate messages and restore normal chat
+    } else if (enteringDiscussion) {
+      // Clear chat and show discussion-specific UI
+      container.innerHTML = '';
+      var discussIntro = document.createElement('div');
+      discussIntro.className = 'merc-msg merc-msg-notice';
+      discussIntro.innerHTML = '<strong>Discussion Mode</strong> — Mercurius will pose a hard AI question and score the quality of your reasoning on 5 dimensions. Think carefully before you answer.';
+      container.appendChild(discussIntro);
+
+      setTimeout(function () {
+        sendMessage('Start a discussion. Pose a provocative AI question and I\'ll give you my reasoning.', true);
+      }, 400);
+
+    } else if (leavingSpecial) {
+      // Clear special mode messages and restore normal chat
       container.innerHTML = '';
       var notice = document.createElement('div');
       notice.className = 'merc-msg merc-msg-notice';
@@ -2104,7 +2128,6 @@
         : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.';
       container.appendChild(notice);
 
-      // Rebuild starter topic tags
       var tags = document.createElement('div');
       tags.className = 'merc-topic-tags';
       tags.id = 'merc-topic-tags';
@@ -2121,7 +2144,7 @@
       appendSystemNotice(modeNotices[newMode] || 'Mode switched.');
     }
 
-    showModeToast({ socratic: 'Socratic', direct: 'Direct', debate: 'Debate' }[newMode] || newMode);
+    showModeToast({ socratic: 'Socratic', direct: 'Direct', debate: 'Debate', discussion: 'Discussion' }[newMode] || newMode);
 
     // Tell server
     fetch(MODE_ENDPOINT, {
