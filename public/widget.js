@@ -286,24 +286,31 @@
     localStorage.setItem('merc_display_name', name || '');
   }
 
-  function showAchievementToast(def) {
-    var existing = document.getElementById('merc-achievement-toast');
+  function showToast(html, duration) {
+    var existing = document.getElementById('merc-toast');
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     var toast = document.createElement('div');
-    toast.id = 'merc-achievement-toast';
+    toast.id = 'merc-toast';
     toast.className = 'merc-achievement-toast';
-    toast.innerHTML = '<span class="merc-toast-icon">' + def.icon + '</span>' +
-      '<div class="merc-toast-body">' +
-      '<div class="merc-toast-title">Achievement Unlocked</div>' +
-      '<div class="merc-toast-name">' + escapeHtml(def.name) + '</div>' +
-      '</div>';
+    toast.innerHTML = html;
     var panel = document.getElementById('merc-panel');
     if (panel) panel.appendChild(toast);
     setTimeout(function() { toast.classList.add('merc-toast-visible'); }, 50);
     setTimeout(function() {
       toast.classList.remove('merc-toast-visible');
       setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
-    }, 3500);
+    }, duration || 2500);
+  }
+
+  function showAchievementToast(def) {
+    showToast(
+      '<span class="merc-toast-icon">' + def.icon + '</span>' +
+      '<div class="merc-toast-body">' +
+      '<div class="merc-toast-title">Achievement Unlocked</div>' +
+      '<div class="merc-toast-name">' + escapeHtml(def.name) + '</div>' +
+      '</div>',
+      3500
+    );
   }
 
   var onboardStep = 0;
@@ -696,108 +703,75 @@
     currentRightPanel = null;
   }
 
-  function loadQuizInPanel(body) {
-    if (conversationHistory.length < 4) {
-      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first \u2014 then I can quiz you on what we covered.</p>');
+  function removeLoadingFromPanel(body) {
+    var el = body.querySelector('.merc-quiz-loading');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function loadPanelWithFetch(body, opts) {
+    if (opts.minHistory && conversationHistory.length < opts.minHistory) {
+      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + (opts.emptyMsg || 'Have a longer conversation first.') + '</p>');
       return;
     }
-    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Generating quiz\u2026</p>');
-    fetch(QUIZ_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        // Remove loading paragraph
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
+    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">' + (opts.loadingMsg || 'Loading...') + '</p>');
+    var fetchOpts = { method: opts.method || 'POST', headers: { 'Content-Type': 'application/json' } };
+    if (opts.body) fetchOpts.body = JSON.stringify(opts.body);
+    fetch(opts.endpoint, fetchOpts)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        removeLoadingFromPanel(body);
         if (data.error) {
-          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Could not generate quiz.') + '</p>');
+          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
           return;
         }
-        renderQuiz(data, body);
+        opts.render(data, body);
       })
-      .catch(function () {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error \u2014 try again.</p>');
+      .catch(function() {
+        removeLoadingFromPanel(body);
+        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error — try again.</p>');
       });
+  }
+
+  function loadQuizInPanel(body) {
+    loadPanelWithFetch(body, {
+      minHistory: 4,
+      emptyMsg: 'Have a longer conversation first \u2014 then I can quiz you on what we covered.',
+      loadingMsg: 'Generating quiz\u2026',
+      endpoint: QUIZ_ENDPOINT,
+      body: { sessionId: sessionId },
+      render: renderQuiz
+    });
   }
 
   function loadMapInPanel(body) {
-    if (conversationHistory.length < 4) {
-      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first.</p>');
-      return;
-    }
-    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Building concept map\u2026</p>');
-    fetch(CONCEPT_MAP_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        if (data.error) {
-          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
-          return;
-        }
-        renderConceptMap(data, body);
-      })
-      .catch(function () {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
-      });
+    loadPanelWithFetch(body, {
+      minHistory: 4,
+      emptyMsg: 'Have a longer conversation first.',
+      loadingMsg: 'Building concept map\u2026',
+      endpoint: CONCEPT_MAP_ENDPOINT,
+      body: { sessionId: sessionId },
+      render: renderConceptMap
+    });
   }
 
   function loadReportInPanel(body) {
-    if (conversationHistory.length < 4) {
-      body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Have a longer conversation first.</p>');
-      return;
-    }
-    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Generating report card\u2026</p>');
-    fetch(REPORT_CARD_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        if (data.error) {
-          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
-          return;
-        }
-        renderReportCard(data, body);
-      })
-      .catch(function () {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
-      });
+    loadPanelWithFetch(body, {
+      minHistory: 4,
+      emptyMsg: 'Have a longer conversation first.',
+      loadingMsg: 'Generating report card\u2026',
+      endpoint: REPORT_CARD_ENDPOINT,
+      body: { sessionId: sessionId },
+      render: renderReportCard
+    });
   }
 
   function loadLeaderboardInPanel(body) {
-    body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-loading">Loading\u2026</p>');
-    fetch(LEADERBOARD_ENDPOINT, {
+    loadPanelWithFetch(body, {
+      loadingMsg: 'Loading\u2026',
+      endpoint: LEADERBOARD_ENDPOINT,
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        renderLeaderboard(data, body);
-      })
-      .catch(function () {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
-        body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
-      });
+      render: renderLeaderboard
+    });
   }
 
   function loadFactCheckPanel(body) {
@@ -932,8 +906,7 @@
     fetch(CHALLENGE_ENDPOINT)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
+        removeLoadingFromPanel(body);
         if (data.error) {
           body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'No challenge available yet.') + '</p>');
           return;
@@ -1002,8 +975,7 @@
         }
       })
       .catch(function() {
-        var loading = body.querySelector('.merc-quiz-loading');
-        if (loading) loading.parentNode.removeChild(loading);
+        removeLoadingFromPanel(body);
         body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">Connection error.</p>');
       });
   }
@@ -1112,7 +1084,11 @@
         var unitId = btn.getAttribute('data-unit-id');
         setLessonComplete(lessonId);
         setCurriculumUnit(unitId, 'in_progress');
-        if (isUnitComplete(CURRICULUM_UNITS.filter(function(u) { return u.id === unitId; })[0])) {
+        var matchedUnit = null;
+        for (var k = 0; k < CURRICULUM_UNITS.length; k++) {
+          if (CURRICULUM_UNITS[k].id === unitId) { matchedUnit = CURRICULUM_UNITS[k]; break; }
+        }
+        if (matchedUnit && isUnitComplete(matchedUnit)) {
           setCurriculumUnit(unitId, 'complete');
         }
         closeRightPanel();
@@ -2069,19 +2045,10 @@
   }
 
   function showModeToast(label) {
-    var existing = document.getElementById('merc-mode-toast');
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-    var toast = document.createElement('div');
-    toast.id = 'merc-mode-toast';
-    toast.className = 'merc-achievement-toast';
-    toast.innerHTML = '<div class="merc-toast-body"><div class="merc-toast-name">Mode: ' + escapeHtml(label) + '</div></div>';
-    var panel = document.getElementById('merc-panel');
-    if (panel) panel.appendChild(toast);
-    setTimeout(function() { toast.classList.add('merc-toast-visible'); }, 50);
-    setTimeout(function() {
-      toast.classList.remove('merc-toast-visible');
-      setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
-    }, 2000);
+    showToast(
+      '<div class="merc-toast-body"><div class="merc-toast-name">Mode: ' + escapeHtml(label) + '</div></div>',
+      2000
+    );
   }
 
   function handleModeSwitchTo(newMode) {
@@ -2402,6 +2369,7 @@
   // 20. Initialize on DOMContentLoaded (or immediately if already loaded)
   // =========================================================================
   // ── Thursday meeting push notification ──
+  var meetingReminderTimeout = null;
   function scheduleMeetingReminder() {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     var now = new Date();
@@ -2420,7 +2388,7 @@
     var msUntil = nextThursday.getTime() - now.getTime();
     // Only schedule if within 7 days (don't hold timers forever)
     if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
-      setTimeout(function() {
+      meetingReminderTimeout = setTimeout(function() {
         // Check we still have permission
         if (Notification.permission === 'granted') {
           var notif = new Notification('Mayo AI Literacy Club', {
@@ -2487,10 +2455,10 @@
     try { convos = JSON.parse(safeGetItem('merc_convos') || '[]'); } catch(e) {}
     if (convos.length > 0 && safeGetItem('merc_onboarded')) {
       var lastConvo = convos[0];
-      if (lastConvo && lastConvo.preview) {
+      if (lastConvo && lastConvo.title) {
         var welcomeEl = document.createElement('div');
         welcomeEl.className = 'merc-msg merc-msg-notice';
-        welcomeEl.textContent = 'Welcome back. Last time: "' + lastConvo.preview.slice(0, 80) + '..."';
+        welcomeEl.textContent = 'Welcome back. Last time: "' + lastConvo.title.slice(0, 80) + '..."';
         var container = document.getElementById('merc-messages');
         if (container) {
           var tags = document.getElementById('merc-topic-tags');

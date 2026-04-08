@@ -126,6 +126,26 @@ function buildMeetingContext(events) {
 }
 
 // ---------------------------------------------------------------------------
+// History limit constants — single source of truth for all slice sizes
+// ---------------------------------------------------------------------------
+const HISTORY_LIMITS = { CHAT: 50, QUIZ: 30, REPORT: 40, MAP: 30, FACTCHECK: 20 };
+
+// ---------------------------------------------------------------------------
+// Shared prompt fragments — extracted to avoid repetition across modes
+// ---------------------------------------------------------------------------
+const CONFIDENCE_CALIBRATION = `## CONFIDENCE CALIBRATION (show in every substantive response)
+After any factual claim or recommendation, include a brief confidence signal:
+- High confidence (85%+): state it naturally — "This is well-established..."
+- Medium confidence (50-84%): flag it — "I'm fairly confident, but there's real debate about..."
+- Low confidence (<50%): be explicit — "Honestly, I'm not sure about this. Here's my best reasoning, but verify it."
+Never project uniform confidence. Students should SEE you modeling intellectual honesty.`;
+
+const HARD_LIMITS_BASE = `- Never write essays, homework, or assignments for students
+- Never claim to be human
+- Never present contested claims as settled
+- If you don't know, say so`;
+
+// ---------------------------------------------------------------------------
 // Static club knowledge — injected on every API call alongside meeting/blog ctx
 // ---------------------------------------------------------------------------
 const CLUB_KNOWLEDGE = `
@@ -309,17 +329,9 @@ Any topic related to AI literacy: how AI works technically, where it fails, soci
 You're especially good at connecting abstract AI concepts to things students already care about — social media, college admissions, music, games, jobs, fairness.
 
 ## HARD LIMITS
-- Never write essays, homework, or assignments for students
-- Never claim to be human
-- Never present contested claims as settled
-- If you don't know, say so — and suggest where to look
+${HARD_LIMITS_BASE} — and suggest where to look
 
-## CONFIDENCE CALIBRATION (show in every substantive response)
-After any factual claim or recommendation, include a brief confidence signal:
-- High confidence (85%+): state it naturally — "This is well-established..."
-- Medium confidence (50-84%): flag it — "I'm fairly confident, but there's real debate about..."
-- Low confidence (<50%): be explicit — "Honestly, I'm not sure about this. Here's my best reasoning, but verify it."
-Never project uniform confidence. Students should SEE you modeling intellectual honesty.`;
+${CONFIDENCE_CALIBRATION}`;
 
 const DIRECT_PROMPT = `You are Mercurius Ⅰ — an AI literacy tutor for the Mayo AI Literacy Club. This student earned Direct Mode by demonstrating real critical thinking. They've proven they can engage seriously. Give them your best.
 
@@ -390,17 +402,9 @@ Direct Mode should feel like a genuine upgrade — not just longer answers. Make
 The student should feel that earning Direct Mode was worth the effort. Every response should prove it.
 
 ## HARD LIMITS
-- Never write essays, homework, or assignments
-- Never claim to be human
-- Never present contested claims as settled
-- If you don't know, say so — tell them specifically what to search for
+${HARD_LIMITS_BASE} — tell them specifically what to search for
 
-## CONFIDENCE CALIBRATION (show in every substantive response)
-After any factual claim or recommendation, include a brief confidence signal:
-- High confidence (85%+): state it naturally — "This is well-established..."
-- Medium confidence (50-84%): flag it — "I'm fairly confident, but there's real debate about..."
-- Low confidence (<50%): be explicit — "Honestly, I'm not sure about this. Here's my best reasoning, but verify it."
-Never project uniform confidence. Students should SEE you modeling intellectual honesty.`;
+${CONFIDENCE_CALIBRATION}`;
 
 const QUIZ_PROMPT = `You are Mercurius Ⅰ, generating a comprehension quiz for a high school student based on your conversation history.
 
@@ -511,12 +515,7 @@ SHORT responses. 2-3 punchy paragraphs max. Always end with a direct challenge o
 - If they want to stop, stop immediately and give feedback
 - Debate mode does NOT require Direct Mode unlock — it's freely available
 
-## CONFIDENCE CALIBRATION (show in every substantive response)
-After any factual claim or recommendation, include a brief confidence signal:
-- High confidence (85%+): state it naturally — "This is well-established..."
-- Medium confidence (50-84%): flag it — "I'm fairly confident, but there's real debate about..."
-- Low confidence (<50%): be explicit — "Honestly, I'm not sure about this. Here's my best reasoning, but verify it."
-Never project uniform confidence. Students should SEE you modeling intellectual honesty.`;
+${CONFIDENCE_CALIBRATION}`;
 
 const REPORT_CARD_PROMPT = `You are Mercurius Ⅰ generating an end-of-session report card for a high school student.
 
@@ -843,12 +842,7 @@ SHORT. Score feedback should be concise and scannable. Don't write essays about 
 - Never accept "I don't know" without pushing: "You don't have to be right. Just reason through it."
 - Score honestly — inflated scores teach nothing
 
-## CONFIDENCE CALIBRATION (show in every substantive response)
-After any factual claim or recommendation, include a brief confidence signal:
-- High confidence (85%+): state it naturally — "This is well-established..."
-- Medium confidence (50-84%): flag it — "I'm fairly confident, but there's real debate about..."
-- Low confidence (<50%): be explicit — "Honestly, I'm not sure about this. Here's my best reasoning, but verify it."
-Never project uniform confidence. Students should SEE you modeling intellectual honesty.`;
+${CONFIDENCE_CALIBRATION}`;
 
 const TEST_EVALUATOR_PROMPT = `You are Mercurius Ⅰ, evaluating whether a student is ready for Direct Mode.
 
@@ -943,8 +937,8 @@ Rules:
 
 Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"struggle","content":"confused training data with retrieval"}]`;
 
-    const response = await new Anthropic().messages.create({
-      model: 'claude-haiku-3',
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-haiku-latest',
       max_tokens: 200,
       messages: [{ role: 'user', content: memoryPrompt }],
     });
@@ -963,6 +957,50 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
   } catch (e) {
     // Silent fail — memory extraction is best-effort
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helper — generate JSON from conversation history (used by quiz, report, map)
+// ---------------------------------------------------------------------------
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel }) {
+  const dbHistory = await db.getMessages(sessionId, historyLimit);
+  if (dbHistory.length < minMessages) {
+    return { error: 'insufficient_history', message: 'Have a longer conversation first.' };
+  }
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [...dbHistory.slice(-(historyLimit - 10)), { role: 'user', content: userMessage }],
+  });
+  const raw = response.content[0]?.text || '';
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) {
+    return { error: 'parse_error', message: `Could not generate ${errorLabel} — try after a longer conversation.` };
+  }
+  return JSON.parse(match[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Helper — detect [TEST_PASSED]/[TEST_FAILED] markers and update DB state
+// ---------------------------------------------------------------------------
+async function processTestOutcome(reply, sessionId, testState, testTriggered) {
+  let processedReply = reply;
+  let justUnlocked = false;
+
+  if (processedReply.startsWith('[TEST_PASSED]')) {
+    processedReply = processedReply.replace(/^\[TEST_PASSED\]\n?/, '');
+    await db.setUnlocked(sessionId);
+    await db.setTestState(sessionId, 'passed');
+    justUnlocked = true;
+  } else if (processedReply.startsWith('[TEST_FAILED]')) {
+    processedReply = processedReply.replace(/^\[TEST_FAILED\]\n?/, '');
+    await db.setTestState(sessionId, null);
+  } else if (testState === 'pending' || testTriggered) {
+    await db.setTestState(sessionId, 'in_progress');
+  }
+
+  return { reply: processedReply, justUnlocked };
 }
 
 // ---------------------------------------------------------------------------
@@ -1076,22 +1114,18 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   // Get or create session in DB
   await db.getOrCreateSession(sessionId);
 
-  // Update streak
-  const currentStreak = await db.updateStreak(sessionId);
-
-  // Get adaptive difficulty and struggled topics
-  const difficulty = await db.getDifficulty(sessionId);
-  const struggledTopics = await db.getStruggledTopics(sessionId);
-
-  // Load session state (mode, unlocked, test_state, message_count)
-  const sessionState = await db.getSessionState(sessionId);
+  // Fetch streak, difficulty, struggled topics, session state, and history in parallel
+  const [currentStreak, difficulty, struggledTopics, sessionState, dbHistory] = await Promise.all([
+    db.updateStreak(sessionId),
+    db.getDifficulty(sessionId),
+    db.getStruggledTopics(sessionId),
+    db.getSessionState(sessionId),
+    db.getMessages(sessionId, HISTORY_LIMITS.CHAT),
+  ]);
   const mode = sessionState?.mode || 'socratic';
   const isUnlocked = !!(sessionState?.unlocked);
   let testState = sessionState?.test_state || null;
   const msgCount = sessionState?.message_count || 0;
-
-  // Load full history from DB
-  const dbHistory = await db.getMessages(sessionId, 50);
 
   // Get the latest user message (last in clientMessages)
   const latestUserMessage = clientMessages[clientMessages.length - 1];
@@ -1235,20 +1269,9 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       });
 
       stream.on('end', async () => {
-        let reply = fullText || "I seem to have lost my train of thought. Try asking again?";
-        let justUnlocked = false;
-
-        if (reply.startsWith('[TEST_PASSED]')) {
-          reply = reply.replace(/^\[TEST_PASSED\]\n?/, '');
-          await db.setUnlocked(sessionId);
-          await db.setTestState(sessionId, 'passed');
-          justUnlocked = true;
-        } else if (reply.startsWith('[TEST_FAILED]')) {
-          reply = reply.replace(/^\[TEST_FAILED\]\n?/, '');
-          await db.setTestState(sessionId, null);
-        } else if (testState === 'pending' || testTriggered) {
-          await db.setTestState(sessionId, 'in_progress');
-        }
+        const rawReply = fullText || "I seem to have lost my train of thought. Try asking again?";
+        const outcome = await processTestOutcome(rawReply, sessionId, testState, testTriggered);
+        const { reply, justUnlocked } = outcome;
 
         await db.saveMessage(sessionId, 'assistant', reply);
 
@@ -1294,25 +1317,8 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         messages: trimmed,
       });
 
-      let reply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
-
-      // -----------------------------------------------------------------------
-      // Detect test outcome markers and update state
-      // -----------------------------------------------------------------------
-      let justUnlocked = false;
-
-      if (reply.startsWith('[TEST_PASSED]')) {
-        reply = reply.replace(/^\[TEST_PASSED\]\n?/, '');
-        await db.setUnlocked(sessionId);
-        await db.setTestState(sessionId, 'passed');
-        justUnlocked = true;
-      } else if (reply.startsWith('[TEST_FAILED]')) {
-        reply = reply.replace(/^\[TEST_FAILED\]\n?/, '');
-        await db.setTestState(sessionId, null); // reset so they can try again later
-      } else if (testState === 'pending' || testTriggered) {
-        // Mercurius has now asked the test questions — move to in_progress
-        await db.setTestState(sessionId, 'in_progress');
-      }
+      const rawReply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
+      const { reply, justUnlocked } = await processTestOutcome(rawReply, sessionId, testState, testTriggered);
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply);
@@ -1355,6 +1361,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
     const recentMessages = await db.getMessages(sessionId, 10);
     res.json({ stats, recentMessages });
   } catch (e) {
+    console.error('[Mercurius] Session fetch error:', e.message);
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1393,31 +1400,18 @@ app.post('/api/quiz', async (req, res) => {
   if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
     return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
-
-  const dbHistory = await db.getMessages(sessionId, 30);
-  if (dbHistory.length < 4) {
-    return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first — then I can quiz you on what we covered.' });
-  }
-
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 900,
-      system: QUIZ_PROMPT,
-      messages: [
-        ...dbHistory.slice(-20),
-        { role: 'user', content: 'Generate a comprehension quiz based on our conversation.' }
-      ],
+    const result = await generateFromHistory(sessionId, {
+      historyLimit: HISTORY_LIMITS.QUIZ,
+      minMessages: 4,
+      systemPrompt: QUIZ_PROMPT,
+      userMessage: 'Generate a comprehension quiz based on our conversation.',
+      maxTokens: 900,
+      errorLabel: 'quiz',
     });
-
-    const rawText = response.content[0]?.text || '';
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return res.status(500).json({ error: 'parse_error', message: 'Could not generate quiz — try after a longer conversation.' });
-    }
-
-    const quiz = JSON.parse(jsonMatch[0]);
-    return res.json(quiz);
+    if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error) return res.status(500).json(result);
+    return res.json(result);
   } catch (err) {
     console.error('[Mercurius] Quiz error:', err.message);
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
@@ -1430,19 +1424,20 @@ app.post('/api/quiz', async (req, res) => {
 app.post('/api/report-card', async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
-  const dbHistory = await db.getMessages(sessionId, 40);
-  if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6', max_tokens: 600,
-      system: REPORT_CARD_PROMPT,
-      messages: [...dbHistory.slice(-30), { role: 'user', content: 'Generate my session report card.' }],
+    const result = await generateFromHistory(sessionId, {
+      historyLimit: HISTORY_LIMITS.REPORT,
+      minMessages: 4,
+      systemPrompt: REPORT_CARD_PROMPT,
+      userMessage: 'Generate my session report card.',
+      maxTokens: 600,
+      errorLabel: 'report card',
     });
-    const raw = response.content[0]?.text || '';
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate report card — try after a longer conversation.' });
-    return res.json(JSON.parse(match[0]));
+    if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error) return res.status(500).json(result);
+    return res.json(result);
   } catch(err) {
+    console.error('[Mercurius] Report card error:', err.message);
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
 });
@@ -1453,19 +1448,20 @@ app.post('/api/report-card', async (req, res) => {
 app.post('/api/concept-map', async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
-  const dbHistory = await db.getMessages(sessionId, 30);
-  if (dbHistory.length < 4) return res.status(400).json({ error: 'insufficient_history', message: 'Have a longer conversation first.' });
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6', max_tokens: 600,
-      system: CONCEPT_MAP_PROMPT,
-      messages: [...dbHistory.slice(-20), { role: 'user', content: 'Generate a concept map from our conversation.' }],
+    const result = await generateFromHistory(sessionId, {
+      historyLimit: HISTORY_LIMITS.MAP,
+      minMessages: 4,
+      systemPrompt: CONCEPT_MAP_PROMPT,
+      userMessage: 'Generate a concept map from our conversation.',
+      maxTokens: 600,
+      errorLabel: 'concept map',
     });
-    const raw = response.content[0]?.text || '';
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate concept map — try after a longer conversation.' });
-    return res.json(JSON.parse(match[0]));
+    if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error) return res.status(500).json(result);
+    return res.json(result);
   } catch(err) {
+    console.error('[Mercurius] Concept map error:', err.message);
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
 });
@@ -1477,6 +1473,7 @@ app.get('/api/leaderboard', async (req, res) => {
   try {
     return res.json(await db.getLeaderboard());
   } catch(err) {
+    console.error('[Mercurius] Leaderboard error:', err.message);
     return res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1488,6 +1485,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     return res.json(await db.getDashboardStats());
   } catch(err) {
+    console.error('[Mercurius] Dashboard error:', err.message);
     return res.status(500).json({ error: 'db_error' });
   }
 });
