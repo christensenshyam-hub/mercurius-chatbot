@@ -2071,3 +2071,53 @@
   padding: 8px 10px;
   font-style: italic;
 }
+
+/* ============================================================
+   Streaming cursor + offline fallback
+   ============================================================ */
+.merc-stream-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background: #C9922A;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: merc-blink 0.8s step-end infinite;
+}
+@keyframes merc-blink {
+  50% { opacity: 0; }
+}
+.merc-msg-streaming .merc-bubble {
+  border-color: rgba(201, 146, 42, 0.3);
+}
+.merc-offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  background: #7f1d1d;
+  color: #fecaca;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px 16px;
+  display: none;
+}
+.merc-offline-banner.merc-visible {
+  display: block;
+}
+.merc-offline-retry {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 11px;
+  padding: 3px 12px;
+  border-radius: 4px;
+  margin-left: 10px;
+  cursor: pointer;
+}
+.merc-offline-retry:hover {
+  background: rgba(255,255,255,0.25);
+}

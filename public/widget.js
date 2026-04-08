@@ -370,6 +370,7 @@
     panel.setAttribute('aria-label', 'Mercurius \u2160 AI literacy tutor');
 
     panel.innerHTML = [
+      '<div class="merc-offline-banner" id="merc-offline-banner">You\'re offline — Mercurius needs internet to think. <button class="merc-offline-retry" onclick="location.reload()">Retry</button></div>',
       // ── Sidebar ──────────────────────────────────────────────
       '<div class="merc-sidebar">',
       '  <div class="merc-sidebar-brand">',
@@ -1446,92 +1447,151 @@
 
     fetch(API_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
       body: JSON.stringify({ messages: messages, sessionId: sessionId }),
     })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        removeTyping(typingId);
-        setLoading(false);
+    .then(function(res) {
+      if (!res.ok) return res.json().then(function(e) { throw new Error(e.reply || 'Server error'); });
+      var contentType = res.headers.get('content-type') || '';
 
-        var reply = data.reply || 'No response received.';
+      // Non-streaming fallback
+      if (!contentType.includes('text/event-stream') || !res.body) {
+        return res.json().then(function(data) {
+          removeTyping(typingId);
+          setLoading(false);
+          handleChatResponse(data, isHidden);
+        });
+      }
 
-        conversationHistory.push({ role: 'assistant', content: reply });
-        if (conversationHistory.length > 20) {
-          conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
-        }
+      // SSE streaming
+      removeTyping(typingId);
+      var streamBubble = createStreamBubble();
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var fullText = '';
+      var completeData = null;
 
-        // Handle unlock event
-        if (data.justUnlocked) {
-          isUnlocked = true;
-          currentMode = 'socratic';
-          localStorage.setItem('merc_unlocked', 'true');
-          localStorage.setItem('merc_mode', 'socratic');
-          updateModeBar();
-          showUnlockCelebration();
-          checkAndAwardAchievement('critical_thinker');
-        }
-        // Note: do NOT override currentMode from chat response — the user
-        // may have switched modes while the request was in flight.
-
-        // Track debate rounds
-        if (currentMode === 'debate') {
-          debateRound++;
-          if (debateRound === 1) checkAndAwardAchievement('debate_starter');
-        }
-        // Award first_chat on first message
-        if (userMessageCount === 1) checkAndAwardAchievement('first_chat');
-        // Streak achievements
-        if (data.streak >= 3) checkAndAwardAchievement('streak_3');
-        if (data.streak >= 7) checkAndAwardAchievement('streak_7');
-        // Deep diver
-        if (userMessageCount >= 20) checkAndAwardAchievement('deep_diver');
-
-        // Update streak badge
-        if (data.streak && data.streak > 1) {
-          var badge = document.getElementById('merc-header-streak');
-          var val = document.getElementById('merc-streak-val');
-          if (badge && val) {
-            val.textContent = data.streak;
-            badge.classList.remove('merc-hidden');
+      function pump() {
+        return reader.read().then(function(result) {
+          if (result.done) {
+            setLoading(false);
+            if (completeData) {
+              finalizeStreamBubble(streamBubble, completeData.reply || fullText);
+              completeData._streamRendered = true;
+              handleChatResponse(completeData, isHidden);
+            } else {
+              finalizeStreamBubble(streamBubble, fullText);
+            }
+            return;
           }
-        }
-
-        // Session summary suggestion
-        if (data.suggestSummary) {
-          setTimeout(function() {
-            appendSystemNotice('You\'ve been at this for a while. Want a summary of what you\'ve covered? Click Summary in the sidebar.');
-          }, 1500);
-        }
-
-        // Always show bot reply
-        appendBotMessage(reply);
-
-        if (!isHidden) {
-          if (summaryFetched && conversationHistory.length > summaryMessageCountAtFetch + 2) {
-            summaryFetched = false;
+          buffer += decoder.decode(result.value, { stream: true });
+          var lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (line.startsWith('data: ')) {
+              var payload = line.slice(6);
+              if (payload === '[DONE]') continue;
+              try {
+                var parsed = JSON.parse(payload);
+                if (parsed.type === 'delta') {
+                  fullText += parsed.text;
+                  updateStreamBubble(streamBubble, fullText);
+                } else if (parsed.type === 'complete') {
+                  completeData = parsed;
+                } else if (parsed.type === 'error') {
+                  setLoading(false);
+                  removeStreamBubble(streamBubble);
+                  appendBotMessage('Error: ' + (parsed.error || 'Unknown error'));
+                  return;
+                }
+              } catch(e) {}
+            }
           }
-          if (userMessageCount > 0 && userMessageCount % 5 === 0) {
-            appendReflectionCard();
-          }
-        }
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(function(err) {
+      console.error('[Mercurius] fetch error:', err);
+      removeTyping(typingId);
+      setLoading(false);
+      appendBotMessage('Connection error — try again in a moment.');
+    });
+  }
 
-        // Auto-save conversation to history
-        saveCurrentConversation();
-        renderHistoryList();
+  function handleChatResponse(data, isHidden) {
+    var reply = data.reply || 'No response received.';
 
-        scrollToBottom();
-      })
-      .catch(function (err) {
-        console.error('[Mercurius] fetch error:', err);
-        removeTyping(typingId);
-        setLoading(false);
-        appendBotMessage(
-          'I seem to have lost my connection \u2014 possibly a network hiccup on either end. ' +
-          'This is actually something worth noting: AI tools depend on internet infrastructure, ' +
-          'which can fail. Try again in a moment?'
-        );
-      });
+    conversationHistory.push({ role: 'assistant', content: reply });
+    if (conversationHistory.length > 20) {
+      conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
+    }
+
+    // Handle unlock event
+    if (data.justUnlocked) {
+      isUnlocked = true;
+      currentMode = 'socratic';
+      localStorage.setItem('merc_unlocked', 'true');
+      localStorage.setItem('merc_mode', 'socratic');
+      updateModeBar();
+      showUnlockCelebration();
+      checkAndAwardAchievement('critical_thinker');
+    }
+    // Note: do NOT override currentMode from chat response — the user
+    // may have switched modes while the request was in flight.
+
+    // Track debate rounds
+    if (currentMode === 'debate') {
+      debateRound++;
+      if (debateRound === 1) checkAndAwardAchievement('debate_starter');
+    }
+    // Award first_chat on first message
+    if (userMessageCount === 1) checkAndAwardAchievement('first_chat');
+    // Streak achievements
+    if (data.streak >= 3) checkAndAwardAchievement('streak_3');
+    if (data.streak >= 7) checkAndAwardAchievement('streak_7');
+    // Deep diver
+    if (userMessageCount >= 20) checkAndAwardAchievement('deep_diver');
+
+    // Update streak badge
+    if (data.streak && data.streak > 1) {
+      var badge = document.getElementById('merc-header-streak');
+      var val = document.getElementById('merc-streak-val');
+      if (badge && val) {
+        val.textContent = data.streak;
+        badge.classList.remove('merc-hidden');
+      }
+    }
+
+    // Session summary suggestion
+    if (data.suggestSummary) {
+      setTimeout(function() {
+        appendSystemNotice('You\'ve been at this for a while. Want a summary of what you\'ve covered? Click Summary in the sidebar.');
+      }, 1500);
+    }
+
+    // Always show bot reply (skip if streaming already rendered it)
+    if (!data._streamRendered) {
+      appendBotMessage(reply);
+    }
+
+    if (!isHidden) {
+      if (summaryFetched && conversationHistory.length > summaryMessageCountAtFetch + 2) {
+        summaryFetched = false;
+      }
+      if (userMessageCount > 0 && userMessageCount % 5 === 0) {
+        appendReflectionCard();
+      }
+    }
+
+    // Auto-save conversation to history
+    saveCurrentConversation();
+    renderHistoryList();
+
+    scrollToBottom();
   }
 
   // sendHiddenUserVisibleBot — for Unpack/Flag action buttons
@@ -1594,6 +1654,45 @@
     wrapper.appendChild(ts);
     container.appendChild(wrapper);
     scrollToBottom();
+  }
+
+  function createStreamBubble() {
+    var container = document.getElementById('merc-messages');
+    if (!container) return null;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'merc-msg merc-msg-bot merc-msg-streaming';
+    var bubble = document.createElement('div');
+    bubble.className = 'merc-bubble';
+    bubble.innerHTML = '<span class="merc-stream-cursor"></span>';
+    wrapper.appendChild(bubble);
+    container.appendChild(wrapper);
+    scrollToBottom();
+    return wrapper;
+  }
+
+  function updateStreamBubble(wrapper, text) {
+    if (!wrapper) return;
+    var bubble = wrapper.querySelector('.merc-bubble');
+    if (bubble) {
+      bubble.innerHTML = renderMarkdown(text) + '<span class="merc-stream-cursor"></span>';
+      scrollToBottom();
+    }
+  }
+
+  function finalizeStreamBubble(wrapper, text) {
+    if (!wrapper) return;
+    wrapper.classList.remove('merc-msg-streaming');
+    var bubble = wrapper.querySelector('.merc-bubble');
+    if (bubble) {
+      bubble.innerHTML = renderMarkdown(text);
+      // Add action buttons
+      var actions = buildActionButtons(text);
+      if (actions) wrapper.insertBefore(actions, bubble);
+    }
+  }
+
+  function removeStreamBubble(wrapper) {
+    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
   }
 
   function appendBotMessage(text) {
@@ -2484,6 +2583,21 @@
 
     // Schedule Thursday meeting reminder check
     scheduleMeetingReminder();
+
+    // Offline detection
+    window.addEventListener('offline', function() {
+      var banner = document.getElementById('merc-offline-banner');
+      if (banner) banner.classList.add('merc-visible');
+    });
+    window.addEventListener('online', function() {
+      var banner = document.getElementById('merc-offline-banner');
+      if (banner) banner.classList.remove('merc-visible');
+    });
+    // Check on load
+    if (!navigator.onLine) {
+      var offBanner = document.getElementById('merc-offline-banner');
+      if (offBanner) offBanner.classList.add('merc-visible');
+    }
   }
 
   if (document.readyState === 'loading') {
