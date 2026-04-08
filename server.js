@@ -9,6 +9,7 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -25,6 +26,7 @@ function isValidSessionId(id) {
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
+const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
 
 // ---------------------------------------------------------------------------
 // Anthropic client
@@ -944,23 +946,28 @@ Rules:
 
 Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"struggle","content":"confused training data with retrieval"}]`;
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-latest',
-      max_tokens: 200,
-      messages: [{ role: 'user', content: memoryPrompt }],
-      timeout: 30000,
-    });
+    try {
+      const response = await anthropic.messages.create({
+        model: MEMORY_MODEL,
+        max_tokens: 200,
+        timeout: 10000,
+        messages: [{ role: 'user', content: memoryPrompt }],
+      });
 
-    const text = response.content[0]?.text?.trim();
-    if (!text) return;
+      const text = response.content[0]?.text?.trim();
+      if (!text) return;
 
-    const memories = JSON.parse(text);
-    if (!Array.isArray(memories)) return;
+      const memories = JSON.parse(text);
+      if (!Array.isArray(memories)) return;
 
-    for (const mem of memories.slice(0, 3)) {
-      if (mem.type && mem.content && typeof mem.content === 'string') {
-        await db.saveMemory(sessionId, mem.type, mem.content.slice(0, 100));
+      for (const mem of memories.slice(0, 3)) {
+        if (mem.type && mem.content && typeof mem.content === 'string') {
+          await db.saveMemory(sessionId, mem.type, mem.content.slice(0, 100));
+        }
       }
+    } catch (e) {
+      console.warn('[Mercurius] Memory extraction failed (model: ' + MEMORY_MODEL + '):', e.message);
+      // Graceful degradation — memory extraction is best-effort
     }
   } catch (e) {
     console.warn('[Mercurius] Memory extraction failed:', e.message);
@@ -1062,6 +1069,27 @@ const chatLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
+// Prompt injection defense — detect common injection patterns
+// ---------------------------------------------------------------------------
+const INJECTION_PATTERNS = [
+  /\[SYSTEM\s*:/i,
+  /\[INST\s*\]/i,
+  /<<\s*SYS\s*>>/i,
+  /ignore\s+(all\s+)?previous\s+instructions/i,
+  /forget\s+(all\s+)?(your\s+)?instructions/i,
+  /you\s+are\s+now\s+/i,
+  /new\s+instructions?\s*:/i,
+  /override\s+(system|safety)/i,
+  /jailbreak/i,
+  /DAN\s+mode/i,
+];
+
+function containsInjectionAttempt(text) {
+  if (!text || typeof text !== 'string') return false;
+  return INJECTION_PATTERNS.some(p => p.test(text));
+}
+
+// ---------------------------------------------------------------------------
 // CORS — only allow the configured origin (or all origins in dev if not set)
 // ---------------------------------------------------------------------------
 const corsOptions = {
@@ -1085,12 +1113,19 @@ const corsOptions = {
     return callback(new Error(`CORS: origin ${origin} not allowed`), false);
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password', 'x-trace-id'],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '32kb' }));
+
+// Request tracing — assign correlation ID to every request
+app.use((req, res, next) => {
+  req.traceId = req.headers['x-trace-id'] || crypto.randomUUID();
+  res.setHeader('x-trace-id', req.traceId);
+  next();
+});
 
 // Serve static files from the public directory
 app.use(express.static(require('path').join(__dirname, 'public')));
@@ -1124,6 +1159,12 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   const lastMsg = clientMessages[clientMessages.length - 1];
   if (lastMsg && lastMsg.content && typeof lastMsg.content === 'string') {
     lastMsg.content = lastMsg.content.slice(0, 2000);
+  }
+
+  if (containsInjectionAttempt(lastMsg.content)) {
+    console.warn(`[${req.traceId}] Prompt injection attempt detected from session ${sessionId}`);
+    // Don't block — log and let the system prompt handle it. But add a defense note.
+    // The system prompt's instructions take priority over user messages.
   }
 
   // Get or create session in DB
@@ -1310,7 +1351,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 
       stream.on('error', (err) => {
         clearTimeout(streamTimeout);
-        console.error('[Mercurius] Stream error:', err.message);
+        console.error(`[${req.traceId}] Stream error:`, err.message);
         if (!res.writableEnded) {
           try {
             res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
@@ -1361,7 +1402,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
     }
 
   } catch (err) {
-    console.error('[Mercurius] Anthropic API error:', err.message);
+    console.error(`[${req.traceId}] Anthropic API error:`, err.message);
     return res.status(500).json({
       error: 'api_error',
       reply: "Hmm, something went wrong on my end — which is itself a good reminder that AI systems fail. Try again in a moment."
@@ -1382,7 +1423,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
     const recentMessages = await db.getMessages(sessionId, 10);
     res.json({ stats, recentMessages });
   } catch (e) {
-    console.error('[Mercurius] Session fetch error:', e.message);
+    console.error(`[${req.traceId}] Session fetch error:`, e.message);
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1431,7 +1472,7 @@ app.post('/api/quiz', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
-    console.error('[Mercurius] Quiz error:', err.message);
+    console.error(`[${req.traceId}] Quiz error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
   }
 });
@@ -1455,7 +1496,7 @@ app.post('/api/report-card', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
-    console.error('[Mercurius] Report card error:', err.message);
+    console.error(`[${req.traceId}] Report card error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
 });
@@ -1479,7 +1520,7 @@ app.post('/api/concept-map', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
-    console.error('[Mercurius] Concept map error:', err.message);
+    console.error(`[${req.traceId}] Concept map error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
 });
@@ -1491,7 +1532,7 @@ app.get('/api/leaderboard', async (req, res) => {
   try {
     return res.json(await db.getLeaderboard());
   } catch(err) {
-    console.error('[Mercurius] Leaderboard error:', err.message);
+    console.error(`[${req.traceId}] Leaderboard error:`, err.message);
     return res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1503,7 +1544,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     return res.json(await db.getDashboardStats());
   } catch(err) {
-    console.error('[Mercurius] Dashboard error:', err.message);
+    console.error(`[${req.traceId}] Dashboard error:`, err.message);
     return res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1567,7 +1608,7 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error('[Mercurius] Factcheck error:', err.message);
+    console.error(`[${req.traceId}] Factcheck error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
   }
 });
@@ -1596,7 +1637,7 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error('[Mercurius] Analyze error:', err.message);
+    console.error(`[${req.traceId}] Analyze error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
   }
 });
@@ -1623,7 +1664,7 @@ app.get('/api/pre-briefing', async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error('[Mercurius] Pre-briefing error:', err.message);
+    console.error(`[${req.traceId}] Pre-briefing error:`, err.message);
     return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
 });
@@ -1651,7 +1692,7 @@ app.get('/api/challenge', async (req, res) => {
       starter: 'I want to take on the weekly challenge: ' + challengePrompt,
     });
   } catch (err) {
-    console.error('[Mercurius] Challenge error:', err.message);
+    console.error(`[${req.traceId}] Challenge error:`, err.message);
     return res.status(500).json({ error: 'api_error' });
   }
 });
@@ -1674,12 +1715,24 @@ app.post('/api/profile', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Health check
 // ---------------------------------------------------------------------------
-app.get('/api/health', (_req, res) => {
-  res.json({
+app.get('/api/health', async (_req, res) => {
+  const health = {
     status: 'ok',
-    service: 'Mercurius Ⅰ',
+    uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
-  });
+    db: 'unknown',
+    memory: Math.floor(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+  };
+  try {
+    // Test DB connectivity
+    await db.getSessionStats('health-check-probe');
+    health.db = 'connected';
+  } catch (e) {
+    health.db = 'error: ' + e.message;
+    health.status = 'degraded';
+  }
+  const statusCode = health.status === 'ok' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // ---------------------------------------------------------------------------
