@@ -69,7 +69,7 @@ export function ModeSelector() {
 
     setSwitching(true);
     try {
-      const result = await changeMode(sessionId, modeId, unlocked);
+      const result = await changeMode(sessionId, modeId);
       if (result.error === 'locked') {
         Alert.alert('Mode Locked', 'Complete the comprehension check to unlock Direct mode.');
       } else {

@@ -1,185 +1,156 @@
 import { ChatResponse, EventData, BlogPost } from '../types';
 
 const PRODUCTION_URL = 'https://mercurius-chatbot-production.up.railway.app';
+const REQUEST_TIMEOUT_MS = 30000;
 
 function getBaseUrl(): string {
   return PRODUCTION_URL;
 }
 
+/**
+ * Fetch wrapper with timeout and structured error handling.
+ * All API calls go through this to ensure consistent behavior.
+ */
+async function apiFetch(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    return res;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Parse a JSON response, throwing a descriptive error on failure.
+ */
+async function parseJsonResponse<T>(res: Response, context: string): Promise<T> {
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body.reply || body.error || body.message || '';
+    } catch {}
+    throw new Error(detail || `${context}: server returned ${res.status}`);
+  }
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+export async function sendChatMessage(
+  messages: Array<{ role: string; content: string }>,
+  sessionId: string
+): Promise<ChatResponse> {
+  const res = await apiFetch('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages, sessionId }),
+  });
+  return parseJsonResponse<ChatResponse>(res, 'Chat');
+}
+
+// ---------------------------------------------------------------------------
+// Mode switching
+// ---------------------------------------------------------------------------
+
 export async function changeMode(
   sessionId: string,
-  mode: string,
-  clientUnlocked: boolean
+  mode: string
 ): Promise<{ mode: string; unlocked: boolean; error?: string }> {
   try {
-    const res = await fetch(`${getBaseUrl()}/api/mode`, {
+    const res = await apiFetch('/api/mode', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, mode, clientUnlocked }),
+      body: JSON.stringify({ sessionId, mode }),
     });
     const data = await res.json();
     if (!res.ok) {
       return { mode: 'socratic', unlocked: false, error: data.error || data.message };
     }
     return data;
-  } catch {
-    return { mode, unlocked: clientUnlocked, error: 'Network error' };
-  }
-}
-
-export async function sendChatMessage(
-  messages: Array<{ role: string; content: string }>,
-  sessionId: string
-): Promise<ChatResponse> {
-  const url = `${getBaseUrl()}/api/chat`;
-  console.log('[Mercurius API] POST', url, 'sessionId:', sessionId);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, sessionId }),
-    });
-    console.log('[Mercurius API] status:', res.status, 'content-type:', res.headers.get('content-type'));
-    const text = await res.text();
-    console.log('[Mercurius API] raw response:', text.substring(0, 200));
-    if (!res.ok) {
-      let err: any = {};
-      try { err = JSON.parse(text); } catch {}
-      throw new Error(err.reply || err.error || `Server error ${res.status}`);
-    }
-    return JSON.parse(text);
   } catch (e: any) {
-    console.error('[Mercurius API] FETCH ERROR:', e.message, e);
-    throw e;
+    return { mode, unlocked: false, error: e.name === 'AbortError' ? 'Request timed out' : 'Network error' };
   }
 }
 
-export async function sendChatMessageStreaming(
-  messages: Array<{ role: string; content: string }>,
+// ---------------------------------------------------------------------------
+// Tools: Quiz, Report Card, Leaderboard
+// ---------------------------------------------------------------------------
+
+export async function fetchQuiz(
   sessionId: string,
-  onDelta: (text: string) => void,
-  onComplete: (data: ChatResponse) => void,
-  onError: (error: string) => void,
-  signal?: AbortSignal
-): Promise<void> {
-  try {
-    // Never request streaming — use regular JSON for maximum compatibility
-    const res = await fetch(`${getBaseUrl()}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ messages, sessionId }),
-      signal,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      onError(err.reply || err.error || `Server error ${res.status}`);
-      return;
-    }
-
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('text/event-stream') && res.body) {
-      // SSE streaming via ReadableStream
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let gotComplete = false;
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.type === 'delta') {
-                  onDelta(parsed.text);
-                } else if (parsed.type === 'complete') {
-                  onComplete(parsed);
-                  gotComplete = true;
-                } else if (parsed.type === 'error') {
-                  onError(parsed.error);
-                  return;
-                }
-              } catch {
-                // Non-JSON SSE line, skip
-              }
-            }
-          }
-        }
-      } catch (readErr: any) {
-        if (readErr.name !== 'AbortError' && !gotComplete) {
-          onError(readErr.message || 'Stream read error');
-        }
-      }
-    } else {
-      // Non-streaming JSON response — immediate
-      const data: ChatResponse = await res.json();
-      onComplete(data);
-    }
-  } catch (err: any) {
-    if (err.name !== 'AbortError') {
-      onError(err.message || 'Network error');
-    }
-  }
-}
-
-export async function fetchQuiz(sessionId: string, messages: Array<{ role: string; content: string }>): Promise<string> {
-  const res = await fetch(`${getBaseUrl()}/api/quiz`, {
+  messages: Array<{ role: string; content: string }>
+): Promise<string> {
+  const res = await apiFetch('/api/quiz', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId, messages }),
   });
-  const data = await res.json();
+  const data = await parseJsonResponse<{ quiz?: string; reply?: string }>(res, 'Quiz');
   return data.quiz || data.reply || '';
 }
 
-export async function fetchReportCard(sessionId: string, messages: Array<{ role: string; content: string }>): Promise<string> {
-  const res = await fetch(`${getBaseUrl()}/api/report-card`, {
+export async function fetchReportCard(
+  sessionId: string,
+  messages: Array<{ role: string; content: string }>
+): Promise<string> {
+  const res = await apiFetch('/api/report-card', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId, messages }),
   });
-  const data = await res.json();
+  const data = await parseJsonResponse<{ report?: string; reply?: string }>(res, 'Report card');
   return data.report || data.reply || '';
 }
 
 export async function fetchLeaderboard(): Promise<any[]> {
-  const res = await fetch(`${getBaseUrl()}/api/leaderboard`);
-  const data = await res.json();
+  const res = await apiFetch('/api/leaderboard');
+  const data = await parseJsonResponse<{ leaderboard?: any[] }>(res, 'Leaderboard');
   return data.leaderboard || [];
 }
+
+// ---------------------------------------------------------------------------
+// Club data (static JSON from Netlify — no auth needed)
+// ---------------------------------------------------------------------------
 
 export async function fetchEvents(): Promise<EventData | null> {
   try {
     const res = await fetch('https://mayoailiteracy.com/events-data.json');
-    if (res.ok) return res.json();
-  } catch {}
-  return null;
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchBlogPosts(): Promise<BlogPost[]> {
   try {
     const res = await fetch('https://mayoailiteracy.com/blog-content.json');
-    if (res.ok) return res.json();
-  } catch {}
-  return [];
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${getBaseUrl()}/api/health`);
+    const res = await apiFetch('/api/health');
     return res.ok;
   } catch {
     return false;
