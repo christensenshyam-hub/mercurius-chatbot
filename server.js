@@ -991,6 +991,11 @@ const corsOptions = {
     // In development, if ALLOWED_ORIGIN is not set, allow everything
     if (!process.env.ALLOWED_ORIGIN) return callback(null, true);
 
+    // Allow mobile app requests (React Native, Expo, capacitor)
+    if (origin === 'null' || origin.startsWith('exp://') || origin.startsWith('capacitor://') || origin.startsWith('file://')) {
+      return callback(null, true);
+    }
+
     // Support comma-separated list of allowed origins
     const allowed = ALLOWED_ORIGIN.split(',').map((o) => o.trim());
     if (allowed.includes(origin)) {
@@ -999,7 +1004,7 @@ const corsOptions = {
     return callback(new Error(`CORS: origin ${origin} not allowed`), false);
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password'],
   credentials: true,
 };
 
