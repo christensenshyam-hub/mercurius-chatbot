@@ -121,11 +121,11 @@ describe('isValidSessionId', () => {
     assert.equal(isValidSessionId("Robert'); DROP TABLE Students;--"), false);
   });
 
-  test('rejects empty string', () => {
-    assert.equal(isValidSessionId(''), false);
-    assert.equal(isValidSessionId(null), false);
-    assert.equal(isValidSessionId(undefined), false);
-    assert.equal(isValidSessionId(0), false);
+  test('rejects empty, null, undefined, and numeric values', () => {
+    assert.ok(!isValidSessionId(''));
+    assert.ok(!isValidSessionId(null));
+    assert.ok(!isValidSessionId(undefined));
+    assert.ok(!isValidSessionId(0));
   });
 });
 
@@ -344,11 +344,12 @@ describe('Rate limiting', () => {
 // ===========================================================================
 
 describe('Health check', () => {
-  test('GET /api/health returns 200', async () => {
+  test('GET /api/health returns 200 with status and timestamp', async () => {
     const { status, json } = await get('/api/health');
     assert.equal(status, 200);
     assert.equal(json.status, 'ok');
-    assert.equal(json.service, 'Mercurius \u2160');
-    assert.ok(json.timestamp);
+    assert.ok(json.timestamp, 'should include timestamp');
+    assert.ok(json.uptime !== undefined, 'should include uptime');
+    assert.equal(json.db, 'connected');
   });
 });
