@@ -36,8 +36,8 @@
   // 2. Session ID — persist across browser sessions using localStorage
   // =========================================================================
   var SESSION_KEY = 'merc_session_id';
-  function safeGetItem(key) { try { return localStorage.getItem(key); } catch(e) { return null; } }
-  function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) {} }
+  function safeGetItem(key) { try { return localStorage.getItem(key); } catch(e) { console.warn('[Mercurius]', e); return null; } }
+  function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) { console.warn('[Mercurius]', e); } }
   var sessionId = safeGetItem(SESSION_KEY);
   var isReturningStudent = !!sessionId;
   if (!sessionId) {
@@ -96,7 +96,7 @@
 
   // ── Conversation history helpers ──
   function getConversationList() {
-    try { return JSON.parse(localStorage.getItem('merc_convos') || '[]'); } catch(e) { return []; }
+    try { return JSON.parse(localStorage.getItem('merc_convos') || '[]'); } catch(e) { console.warn('[Mercurius]', e); return []; }
   }
   function saveCurrentConversation() {
     if (conversationHistory.length < 2) return; // don't save empty chats
@@ -241,7 +241,7 @@
   // 4b. localStorage helpers — achievements, curriculum, bookmarks, profile
   // =========================================================================
   function getAchievementsLocal() {
-    try { return JSON.parse(localStorage.getItem('merc_achievements') || '[]'); } catch(e) { return []; }
+    try { return JSON.parse(localStorage.getItem('merc_achievements') || '[]'); } catch(e) { console.warn('[Mercurius]', e); return []; }
   }
   function awardAchievement(id) {
     var existing = getAchievementsLocal();
@@ -257,7 +257,7 @@
     }
   }
   function getCurriculumProgress() {
-    try { return JSON.parse(localStorage.getItem('merc_curriculum') || '{}'); } catch(e) { return {}; }
+    try { return JSON.parse(localStorage.getItem('merc_curriculum') || '{}'); } catch(e) { console.warn('[Mercurius]', e); return {}; }
   }
   function setCurriculumUnit(unitId, status) {
     var progress = getCurriculumProgress();
@@ -265,7 +265,7 @@
     localStorage.setItem('merc_curriculum', JSON.stringify(progress));
   }
   function getBookmarksLocal() {
-    try { return JSON.parse(localStorage.getItem('merc_bookmarks') || '[]'); } catch(e) { return []; }
+    try { return JSON.parse(localStorage.getItem('merc_bookmarks') || '[]'); } catch(e) { console.warn('[Mercurius]', e); return []; }
   }
   function addBookmarkLocal(text, role) {
     var bookmarks = getBookmarksLocal();
@@ -340,7 +340,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionId, displayName: name })
-      }).catch(function() {});
+      }).catch(function(e) { console.warn('[Mercurius]', e); });
     }
     safeSetItem('merc_onboarded', '1');
     var overlay = document.getElementById('merc-onboard');
@@ -370,7 +370,7 @@
     panel.setAttribute('aria-label', 'Mercurius \u2160 AI literacy tutor');
 
     panel.innerHTML = [
-      '<div class="merc-offline-banner" id="merc-offline-banner">You\'re offline — Mercurius needs internet to think. <button class="merc-offline-retry" onclick="location.reload()">Retry</button></div>',
+      '<div class="merc-offline-banner" id="merc-offline-banner">You\'re offline — Mercurius needs internet to think. <button class="merc-offline-retry">Retry</button></div>',
       // ── Sidebar ──────────────────────────────────────────────
       '<div class="merc-sidebar">',
       '  <div class="merc-sidebar-brand">',
@@ -542,7 +542,7 @@
         var btn = e.target.closest('.merc-tag');
         if (btn) {
           var topic = btn.getAttribute('data-topic');
-          tagsContainer.parentNode.removeChild(tagsContainer);
+          if (tagsContainer.parentNode) tagsContainer.parentNode.removeChild(tagsContainer);
           sendMessage(topic);
         }
       });
@@ -982,7 +982,7 @@
   }
 
   function getLessonProgress() {
-    try { return JSON.parse(localStorage.getItem('merc_lessons') || '{}'); } catch(e) { return {}; }
+    try { return JSON.parse(localStorage.getItem('merc_lessons') || '{}'); } catch(e) { console.warn('[Mercurius]', e); return {}; }
   }
   function setLessonComplete(lessonId) {
     var p = getLessonProgress();
@@ -1143,7 +1143,7 @@
           navigator.clipboard.writeText(text).then(function() {
             btn.textContent = 'Copied!';
             setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-          }).catch(function(){});
+          }).catch(function(e) { console.warn('[Mercurius]', e); });
         }
       });
     });
@@ -1347,7 +1347,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: sessionId, displayName: name })
-          }).catch(function(){});
+          }).catch(function(e) { console.warn('[Mercurius]', e); });
           if (row) {
             row.innerHTML = '<span class="merc-display-name' + (name ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(name || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
             var newEditBtn = document.getElementById('merc-name-edit-btn');
@@ -1377,7 +1377,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId: sessionId, displayName: newName })
-                  }).catch(function(){});
+                  }).catch(function(e) { console.warn('[Mercurius]', e); });
                   if (newRow) {
                     newRow.innerHTML = '<span class="merc-display-name' + (newName ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(newName || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
                   }
@@ -1471,6 +1471,7 @@
       var buffer = '';
       var fullText = '';
       var completeData = null;
+      var lastStreamUpdate = 0;
 
       function pump() {
         return reader.read().then(function(result) {
@@ -1497,7 +1498,11 @@
                 var parsed = JSON.parse(payload);
                 if (parsed.type === 'delta') {
                   fullText += parsed.text;
-                  updateStreamBubble(streamBubble, fullText);
+                  var now = Date.now();
+                  if (now - lastStreamUpdate > 80) {
+                    updateStreamBubble(streamBubble, fullText);
+                    lastStreamUpdate = now;
+                  }
                 } else if (parsed.type === 'complete') {
                   completeData = parsed;
                 } else if (parsed.type === 'error') {
@@ -1506,7 +1511,7 @@
                   appendBotMessage('Error: ' + (parsed.error || 'Unknown error'));
                   return;
                 }
-              } catch(e) {}
+              } catch(e) { console.warn('[Mercurius]', e); }
             }
           }
           return pump();
@@ -1611,7 +1616,10 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: messages, sessionId: sessionId }),
     })
-      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Server error: ' + res.status);
+        return res.json();
+      })
       .then(function (data) {
         removeTyping(typingId);
         setLoading(false);
@@ -1744,7 +1752,7 @@
           navigator.clipboard.writeText('--- Mercurius \u2160 ---\n\n' + capturedText + '\n\n--- mayoailiteracy.com/mercurius ---').then(function() {
             shareBtn.innerHTML = '\u2713 Copied';
             setTimeout(function() { shareBtn.innerHTML = 'Copy'; }, 1500);
-          }).catch(function(){});
+          }).catch(function(e) { console.warn('[Mercurius]', e); });
         }
       });
     })(text);
@@ -1828,7 +1836,7 @@
   function removeTyping(id) {
     if (!id) return;
     var el = document.getElementById(id);
-    if (el) el.parentNode.removeChild(el);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
   // =========================================================================
@@ -1907,6 +1915,10 @@
     var confidence = parseConfidence(text);
     var el = document.createElement('div');
     el.className = 'merc-confidence';
+
+    if (confidence !== null) {
+      confidence = Math.max(0, Math.min(100, confidence));
+    }
 
     if (confidence === null) {
       el.innerHTML = '<div class="merc-confidence-unverified">Confidence: unverified</div>';
@@ -2035,7 +2047,10 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: messages, sessionId: sessionId }),
     })
-      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Server error: ' + res.status);
+        return res.json();
+      })
       .then(function (data) {
         var reply = data.reply || 'Could not generate summary.';
         appendSummaryBotMessage(reply);
@@ -2224,7 +2239,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: isUnlocked }),
-    }).catch(function () {});
+    }).catch(function (e) { console.warn('[Mercurius]', e); });
   }
 
   // =========================================================================
@@ -2437,6 +2452,10 @@
       if (btn) btn.classList.remove('merc-voice-active');
       return;
     }
+    if (voiceRecognition) {
+      try { voiceRecognition.abort(); } catch(e) { console.warn('[Mercurius]', e); }
+      voiceRecognition = null;
+    }
     var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     voiceRecognition = new SpeechRec();
     voiceRecognition.continuous = false;
@@ -2538,7 +2557,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionId, mode: currentMode, clientUnlocked: true }),
-      }).catch(function () { /* silent — best effort */ });
+      }).catch(function (e) { console.warn('[Mercurius]', e); });
     }
 
     // Immediate-value onboarding: auto-send starter message for first-time visitors
@@ -2551,7 +2570,7 @@
 
     // Returning user context
     var convos = [];
-    try { convos = JSON.parse(safeGetItem('merc_convos') || '[]'); } catch(e) {}
+    try { convos = JSON.parse(safeGetItem('merc_convos') || '[]'); } catch(e) { console.warn('[Mercurius]', e); }
     if (convos.length > 0 && safeGetItem('merc_onboarded')) {
       var lastConvo = convos[0];
       if (lastConvo && lastConvo.title) {
@@ -2584,6 +2603,10 @@
     // Schedule Thursday meeting reminder check
     scheduleMeetingReminder();
 
+    // Offline banner retry button
+    var retryBtn = document.querySelector('.merc-offline-retry');
+    if (retryBtn) retryBtn.addEventListener('click', function() { window.location.reload(); });
+
     // Offline detection
     window.addEventListener('offline', function() {
       var banner = document.getElementById('merc-offline-banner');
@@ -2598,6 +2621,12 @@
       var offBanner = document.getElementById('merc-offline-banner');
       if (offBanner) offBanner.classList.add('merc-visible');
     }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+      if (meetingReminderTimeout) clearTimeout(meetingReminderTimeout);
+      if (voiceRecognition) { try { voiceRecognition.abort(); } catch(e) { console.warn('[Mercurius]', e); } }
+    });
   }
 
   if (document.readyState === 'loading') {

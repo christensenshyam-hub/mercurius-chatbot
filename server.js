@@ -16,6 +16,13 @@ const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ---------------------------------------------------------------------------
+// Session ID validation helper
+// ---------------------------------------------------------------------------
+function isValidSessionId(id) {
+  return id && typeof id === 'string' && id.length <= 64 && /^[a-zA-Z0-9_-]+$/.test(id);
+}
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
 
@@ -941,6 +948,7 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
       model: 'claude-3-5-haiku-latest',
       max_tokens: 200,
       messages: [{ role: 'user', content: memoryPrompt }],
+      timeout: 30000,
     });
 
     const text = response.content[0]?.text?.trim();
@@ -955,7 +963,7 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
       }
     }
   } catch (e) {
-    // Silent fail — memory extraction is best-effort
+    console.warn('[Mercurius] Memory extraction failed:', e.message);
   }
 }
 
@@ -972,13 +980,20 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: [...dbHistory.slice(-(historyLimit - 10)), { role: 'user', content: userMessage }],
+    timeout: 30000,
   });
   const raw = response.content[0]?.text || '';
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    return { error: 'parse_error', message: `Could not generate ${errorLabel} — try after a longer conversation.` };
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e1) {
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (!match) {
+      return { error: 'parse_error', message: `Could not generate ${errorLabel} — try after a longer conversation.` };
+    }
+    parsed = JSON.parse(match[0]);
   }
-  return JSON.parse(match[0]);
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,7 +1104,7 @@ app.use('/api/', globalLimiter);
 app.post('/api/chat', chatLimiter, async (req, res) => {
   const { messages: clientMessages, sessionId } = req.body;
 
-  if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
+  if (!isValidSessionId(sessionId)) {
     return res.status(400).json({ error: 'invalid_session', reply: 'Session ID missing or invalid.' });
   }
 
@@ -1152,7 +1167,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         memoryContext += `\nReference past discussions naturally when relevant.`;
       }
     }
-  } catch (e) { /* continue without memory */ }
+  } catch (e) { console.warn('[Mercurius] Memory profile build failed:', e.message); }
 
   // Welcome-back context for returning users
   if (dbHistory.length <= 1 && memoryContext.length > 50) {
@@ -1185,22 +1200,19 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
     // Discussion mode — reasoning evaluation, freely available
     systemPrompt = DISCUSSION_PROMPT + memoryContext;
 
-  } else if (testState === 'in_progress') {
-    // Student is mid-test — use evaluator prompt
-    systemPrompt = TEST_EVALUATOR_PROMPT;
-
-  } else if (testState === 'pending' || (!isUnlocked && msgCount >= 6 && testState === null)) {
+  } else if (!isUnlocked && testState === null && msgCount >= 6) {
     // Time to trigger the test
-    if (testState !== 'pending') await db.setTestState(sessionId, 'pending');
+    await db.setTestState(sessionId, 'pending');
     systemPrompt = TEST_EVALUATOR_PROMPT;
     testTriggered = true;
 
+  } else if (testState === 'pending' || testState === 'in_progress') {
+    // Student is mid-test — use evaluator prompt
+    systemPrompt = TEST_EVALUATOR_PROMPT;
+    if (testState === 'pending') testTriggered = true;
+
   } else {
     // Normal Socratic mode
-    // After 6 user messages, queue the test for next AI turn
-    if (!isUnlocked && msgCount >= 6 && testState === null) {
-      await db.setTestState(sessionId, 'pending');
-    }
     systemPrompt = SOCRATIC_PROMPT + memoryContext;
   }
 
@@ -1247,19 +1259,22 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         'Connection': 'keep-alive',
       });
 
+      const streamAbort = new AbortController();
+      const streamTimeout = setTimeout(() => streamAbort.abort(), 45000);
+
       const stream = anthropic.messages.stream({
         model: 'claude-sonnet-4-6',
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: trimmed,
-      });
+      }, { signal: streamAbort.signal });
 
       let fullText = '';
 
       // Helper to safely write to SSE response
       const safeWrite = (data) => {
         if (!res.writableEnded) {
-          try { res.write(data); } catch (e) { /* response closed */ }
+          try { res.write(data); } catch (e) { console.warn('[Mercurius] SSE write failed:', e.message); }
         }
       };
 
@@ -1269,6 +1284,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       });
 
       stream.on('end', async () => {
+        clearTimeout(streamTimeout);
         const rawReply = fullText || "I seem to have lost my train of thought. Try asking again?";
         const outcome = await processTestOutcome(rawReply, sessionId, testState, testTriggered);
         const { reply, justUnlocked } = outcome;
@@ -1288,17 +1304,18 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 
         safeWrite('data: [DONE]\n\n');
         if (!res.writableEnded) {
-          try { res.end(); } catch (e) { /* already ended */ }
+          try { res.end(); } catch (e) { console.warn('[Mercurius] SSE end failed:', e.message); }
         }
       });
 
       stream.on('error', (err) => {
+        clearTimeout(streamTimeout);
         console.error('[Mercurius] Stream error:', err.message);
         if (!res.writableEnded) {
           try {
             res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
             res.end();
-          } catch (e) { /* response already closed */ }
+          } catch (e) { console.warn('[Mercurius] SSE error-write failed:', e.message); }
         }
       });
 
@@ -1315,6 +1332,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: trimmed,
+        timeout: 30000,
       });
 
       const rawReply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
@@ -1324,7 +1342,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       await db.saveMessage(sessionId, 'assistant', reply);
 
       // Background: extract and save memories (non-blocking)
-      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch(() => {});
+      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { console.warn('[Mercurius] Background memory save failed:', e.message); });
 
       // Session summary suggestion — after 8+ exchanges, hint to the user
       const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0 && !testTriggered;
@@ -1356,6 +1374,9 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 // ---------------------------------------------------------------------------
 app.get('/api/session/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+  }
   try {
     const stats = await db.getSessionStats(sessionId);
     const recentMessages = await db.getMessages(sessionId, 10);
@@ -1370,26 +1391,23 @@ app.get('/api/session/:sessionId', async (req, res) => {
 // POST /api/mode — switch mode (only allowed if session is unlocked)
 // ---------------------------------------------------------------------------
 app.post('/api/mode', async (req, res) => {
-  const { sessionId, mode, clientUnlocked } = req.body;
+  const { sessionId, mode } = req.body;
   if (!sessionId || !['socratic', 'direct', 'debate', 'discussion'].includes(mode)) {
     return res.status(400).json({ error: 'invalid_request' });
+  }
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
   await db.getOrCreateSession(sessionId);
   const state = await db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
 
-  // Trust clientUnlocked=true: the unlock record lives in localStorage and
-  // survives Railway redeploys even when the DB is reset.
-  if (!state.unlocked && clientUnlocked === true) {
-    await db.markUnlocked(sessionId);
-  }
-
-  const isUnlocked = state.unlocked || clientUnlocked === true;
+  const isUnlocked = !!state.unlocked;
   const requiresUnlock = mode === 'direct';
   if (requiresUnlock && !isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
 
   await db.setMode(sessionId, mode);
-  return res.json({ mode, unlocked: true });
+  return res.json({ mode, unlocked: isUnlocked });
 });
 
 // ---------------------------------------------------------------------------
@@ -1397,7 +1415,7 @@ app.post('/api/mode', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/quiz', async (req, res) => {
   const { sessionId } = req.body;
-  if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 64) {
+  if (!isValidSessionId(sessionId)) {
     return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
   try {
@@ -1423,7 +1441,7 @@ app.post('/api/quiz', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/report-card', async (req, res) => {
   const { sessionId } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
+  if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.REPORT,
@@ -1447,7 +1465,7 @@ app.post('/api/report-card', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/concept-map', async (req, res) => {
   const { sessionId } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'invalid_session' });
+  if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.MAP,
@@ -1495,7 +1513,8 @@ app.get('/api/dashboard', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.get('/api/admin/events', async (req, res) => {
   const pw = req.headers['x-admin-password'];
-  if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
+  const adminPw = process.env.ADMIN_PASSWORD;
+  if (!adminPw || pw !== adminPw) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   const data = await db.getEventsFromDB();
@@ -1508,7 +1527,8 @@ app.get('/api/admin/events', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/admin/events', async (req, res) => {
   const pw = req.headers['x-admin-password'];
-  if (pw !== (process.env.ADMIN_PASSWORD || 'mayo-admin')) {
+  const adminPw = process.env.ADMIN_PASSWORD;
+  if (!adminPw || pw !== adminPw) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   const { data } = req.body;
@@ -1528,8 +1548,8 @@ app.post('/api/admin/events', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/factcheck', chatLimiter, async (req, res) => {
   const { sessionId, claim } = req.body;
-  if (!sessionId || !claim || typeof claim !== 'string' || claim.length > 1000) {
-    return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and claim (max 1000 chars).' });
+  if (!isValidSessionId(sessionId) || !claim || typeof claim !== 'string' || claim.length > 1000) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
   }
   if (isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
@@ -1540,6 +1560,7 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
       max_tokens: 700,
       system: FACTCHECK_PROMPT,
       messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
+      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
@@ -1556,8 +1577,8 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/analyze', chatLimiter, async (req, res) => {
   const { sessionId, aiOutput } = req.body;
-  if (!sessionId || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
-    return res.status(400).json({ error: 'invalid_request', message: 'Provide sessionId and aiOutput (max 3000 chars).' });
+  if (!isValidSessionId(sessionId) || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and aiOutput (max 3000 chars).' });
   }
   if (isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
@@ -1568,6 +1589,7 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
       max_tokens: 700,
       system: ANALYZE_PROMPT,
       messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
+      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
@@ -1584,7 +1606,7 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
 // ---------------------------------------------------------------------------
 app.get('/api/pre-briefing', async (req, res) => {
   const { sessionId } = req.query;
-  if (!sessionId) return res.status(400).json({ error: 'invalid_request' });
+  if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_request', message: 'Session ID missing or invalid.' });
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
     const meetingContext = buildMeetingContext(eventsData);
@@ -1594,6 +1616,7 @@ app.get('/api/pre-briefing', async (req, res) => {
       max_tokens: 800,
       system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
       messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
+      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
@@ -1638,8 +1661,8 @@ app.get('/api/challenge', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/profile', async (req, res) => {
   const { sessionId, displayName } = req.body;
-  if (!sessionId || !displayName || typeof displayName !== 'string') {
-    return res.status(400).json({ error: 'invalid_request' });
+  if (!isValidSessionId(sessionId) || !displayName || typeof displayName !== 'string') {
+    return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId and displayName required.' });
   }
   const clean = displayName.trim().slice(0, 30).replace(/[^a-zA-Z0-9 _\-'.]/g, '');
   if (!clean) return res.status(400).json({ error: 'invalid_name' });
@@ -1669,8 +1692,9 @@ app.use('/api/*', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
+let server;
 db.initSchema().then(() => {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`\n✦  Mercurius Ⅰ is running`);
     console.log(`   Local:   http://localhost:${PORT}`);
     console.log(`   Allowed origin: ${ALLOWED_ORIGIN}`);
@@ -1679,4 +1703,15 @@ db.initSchema().then(() => {
 }).catch(err => {
   console.error('Failed to initialize database:', err);
   process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+  console.log('[Mercurius] Graceful shutdown...');
+  if (server) server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10000);
+});
+process.on('SIGINT', () => {
+  console.log('[Mercurius] Interrupted');
+  if (server) server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5000);
 });
