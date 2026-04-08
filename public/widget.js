@@ -1521,6 +1521,13 @@
           }
         }
 
+        // Session summary suggestion
+        if (data.suggestSummary) {
+          setTimeout(function() {
+            appendSystemNotice('You\'ve been at this for a while. Want a summary of what you\'ve covered? Click Summary in the sidebar.');
+          }, 1500);
+        }
+
         // Always show bot reply
         appendBotMessage(reply);
 
@@ -1659,7 +1666,7 @@
     (function(capturedText) {
       shareBtn.addEventListener('click', function() {
         if (navigator.clipboard) {
-          navigator.clipboard.writeText('Mercurius \u2160 said:\n\n' + capturedText).then(function() {
+          navigator.clipboard.writeText('--- Mercurius \u2160 ---\n\n' + capturedText + '\n\n--- mayoailiteracy.com/mercurius ---').then(function() {
             shareBtn.innerHTML = '\u2713 Copied';
             setTimeout(function() { shareBtn.innerHTML = 'Copy'; }, 1500);
           }).catch(function(){});
@@ -2467,11 +2474,29 @@
       }).catch(function () { /* silent — best effort */ });
     }
 
-    // Show onboarding for first-time visitors (after a short delay)
+    // Immediate-value onboarding: auto-send starter message for first-time visitors
     if (!safeGetItem('merc_onboarded')) {
+      safeSetItem('merc_onboarded', '1');
       setTimeout(function() {
-        if (isOpen) showOnboarding();
-      }, 1200);
+        sendMessage('This is my first time using Mercurius. Introduce yourself briefly and ask me one interesting question about AI to get started.', true);
+      }, 800);
+    }
+
+    // Returning user context
+    var convos = [];
+    try { convos = JSON.parse(safeGetItem('merc_convos') || '[]'); } catch(e) {}
+    if (convos.length > 0 && safeGetItem('merc_onboarded')) {
+      var lastConvo = convos[0];
+      if (lastConvo && lastConvo.preview) {
+        var welcomeEl = document.createElement('div');
+        welcomeEl.className = 'merc-msg merc-msg-notice';
+        welcomeEl.textContent = 'Welcome back. Last time: "' + lastConvo.preview.slice(0, 80) + '..."';
+        var container = document.getElementById('merc-messages');
+        if (container) {
+          var tags = document.getElementById('merc-topic-tags');
+          if (tags) container.insertBefore(welcomeEl, tags);
+        }
+      }
     }
 
     // Restore display name
