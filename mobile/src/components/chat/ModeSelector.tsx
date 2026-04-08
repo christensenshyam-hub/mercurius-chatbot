@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../ui/Icon';
 import { useTheme } from '../../theme';
 import { useSessionStore } from '../../stores/useSessionStore';
@@ -93,38 +94,59 @@ export function ModeSelector() {
             key={m.id}
             onPress={() => handleModeChange(m.id, m.locked)}
             disabled={switching}
-            style={({ pressed }) => [
-              styles.pill,
-              {
-                backgroundColor: isActive ? colors.accent : 'transparent',
-                borderColor: isActive ? colors.accent : colors.border,
-                opacity: isLocked ? 0.4 : (pressed ? 0.8 : 1),
-              },
-            ]}
+            style={{ opacity: isLocked ? 0.4 : 1 }}
           >
-            <Icon
-              name={isLocked ? 'lock-closed' : m.icon}
-              size={13}
-              color={isActive ? '#fff' : colors.textSecondary}
-            />
-            <View>
-              <Text
-                style={[
-                  styles.label,
-                  {
-                    color: isActive ? '#fff' : colors.text,
-                    fontWeight: isActive ? '600' : '500',
-                  },
-                ]}
-              >
-                {m.label}
-              </Text>
-              {isActive && (
-                <Text style={[styles.desc, { color: isActive ? 'rgba(255,255,255,0.7)' : colors.textSecondary }]}>
-                  {isLocked ? 'Locked' : m.desc}
-                </Text>
-              )}
-            </View>
+            {({ pressed }) => {
+              const pillStyle = [
+                styles.pill,
+                {
+                  backgroundColor: isActive ? 'transparent' : colors.surfaceElevated,
+                  borderColor: isActive ? 'transparent' : colors.border,
+                  opacity: pressed ? 0.8 : 1,
+                  overflow: 'hidden' as const,
+                },
+              ];
+
+              const innerContent = (
+                <>
+                  <Icon
+                    name={isLocked ? 'lock-closed' : m.icon}
+                    size={13}
+                    color={isActive ? '#fff' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.label,
+                      {
+                        color: isActive ? '#fff' : colors.text,
+                        fontWeight: isActive ? '600' : '500',
+                      },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </>
+              );
+
+              if (isActive) {
+                return (
+                  <LinearGradient
+                    colors={['#C9922A', '#b8841f']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.pill, { borderColor: 'transparent' }]}
+                  >
+                    {innerContent}
+                  </LinearGradient>
+                );
+              }
+
+              return (
+                <View style={pillStyle}>
+                  {innerContent}
+                </View>
+              );
+            }}
           </Pressable>
         );
       })}
@@ -135,7 +157,8 @@ export function ModeSelector() {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
     paddingVertical: 8,
     gap: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -143,9 +166,9 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
     borderWidth: 1,
     gap: 6,
   },

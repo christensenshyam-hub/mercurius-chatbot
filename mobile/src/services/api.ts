@@ -1,8 +1,9 @@
-import { useSettingsStore } from '../stores/useSettingsStore';
 import { ChatResponse, EventData, BlogPost } from '../types';
 
+const PRODUCTION_URL = 'https://mercurius-chatbot-production.up.railway.app';
+
 function getBaseUrl(): string {
-  return useSettingsStore.getState().serverUrl;
+  return PRODUCTION_URL;
 }
 
 export async function changeMode(
@@ -30,16 +31,27 @@ export async function sendChatMessage(
   messages: Array<{ role: string; content: string }>,
   sessionId: string
 ): Promise<ChatResponse> {
-  const res = await fetch(`${getBaseUrl()}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, sessionId }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.reply || err.error || `Server error ${res.status}`);
+  const url = `${getBaseUrl()}/api/chat`;
+  console.log('[Mercurius API] POST', url, 'sessionId:', sessionId);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, sessionId }),
+    });
+    console.log('[Mercurius API] status:', res.status, 'content-type:', res.headers.get('content-type'));
+    const text = await res.text();
+    console.log('[Mercurius API] raw response:', text.substring(0, 200));
+    if (!res.ok) {
+      let err: any = {};
+      try { err = JSON.parse(text); } catch {}
+      throw new Error(err.reply || err.error || `Server error ${res.status}`);
+    }
+    return JSON.parse(text);
+  } catch (e: any) {
+    console.error('[Mercurius API] FETCH ERROR:', e.message, e);
+    throw e;
   }
-  return res.json();
 }
 
 export async function sendChatMessageStreaming(
