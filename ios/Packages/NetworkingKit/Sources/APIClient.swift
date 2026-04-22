@@ -8,16 +8,11 @@ import Foundation
 /// - Translate `URLSession`/HTTP responses into `APIError` cases.
 /// - Decode and validate response bodies.
 ///
-/// Features hold a single `APIClient` instance (typically injected at the
-/// app root). The client is an `actor` so shared mutable state (e.g.
-/// `URLSession`, trace IDs) is isolated correctly under Swift's strict
-/// concurrency checking.
-public actor APIClient {
-    private let environment: APIEnvironment
-    private let session: URLSession
-    private let sessionIdentity: SessionIdentity
-    private let decoder: JSONDecoder
-    private let encoder: JSONEncoder
+/// Immutable, `Sendable`, safe to share across tasks.
+public final class APIClient: Sendable {
+    let environment: APIEnvironment
+    let urlSession: URLSession
+    let sessionIdentity: SessionIdentity
 
     public init(
         environment: APIEnvironment = .production,
@@ -30,17 +25,13 @@ public actor APIClient {
         let config = sessionConfiguration
         config.timeoutIntervalForRequest = environment.requestTimeout
         config.timeoutIntervalForResource = environment.requestTimeout * 2
-        config.waitsForConnectivity = false  // fail fast on offline
-        self.session = URLSession(configuration: config)
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        self.decoder = decoder
-
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        self.encoder = encoder
+        config.waitsForConnectivity = false
+        self.urlSession = URLSession(configuration: config)
     }
+
+    // Convenience accessors used by `APIClient+Chat`.
+    var environmentBaseURL: URL { environment.baseURL }
+    var streamingTimeout: TimeInterval { environment.streamingTimeout }
 
     // MARK: - Health
 
@@ -74,6 +65,7 @@ public actor APIClient {
 
         if let body {
             do {
+                let encoder = JSONEncoder()
                 request.httpBody = try encoder.encode(body)
             } catch {
                 throw APIError.invalidRequest(reason: "Failed to encode body")
@@ -95,8 +87,6 @@ public actor APIClient {
         request.timeoutInterval = environment.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        // Trace ID helps correlate iOS issues with server logs.
         request.setValue(UUID().uuidString, forHTTPHeaderField: "x-trace-id")
 
         return request
@@ -109,7 +99,7 @@ public actor APIClient {
         let response: URLResponse
 
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await urlSession.data(for: request)
         } catch let urlError as URLError {
             throw Self.mapURLError(urlError)
         } catch is CancellationError {
@@ -125,6 +115,7 @@ public actor APIClient {
         try Self.validate(statusCode: http.statusCode, data: data)
 
         do {
+            let decoder = JSONDecoder()
             return try decoder.decode(Response.self, from: data)
         } catch {
             throw APIError.decoding(underlying: String(describing: error))

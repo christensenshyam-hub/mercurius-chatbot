@@ -33,20 +33,24 @@ targets:
       - path: Mercurius
     resources:
       - Mercurius/Resources/Assets.xcassets
-    postCompileScripts:
+    postBuildScripts:
       - name: Strip extended attributes (macOS workaround for codesign)
         script: |
-          # macOS adds com.apple.FinderInfo / com.apple.provenance to files
-          # during write. Stripped codesign (-) rejects these. This phase
-          # runs before the codesign phase, so clearing them here is safe.
-          if [ -d "${CODESIGNING_FOLDER_PATH}" ]; then
-            /usr/bin/xattr -cr "${CODESIGNING_FOLDER_PATH}"
+          # macOS adds com.apple.FinderInfo / com.apple.provenance to
+          # files during write. Stripped codesign (-) rejects these.
+          # Run as the last script phase so it executes AFTER Copy
+          # Bundle Resources (which also re-adds xattrs) and right
+          # before codesign.
+          if [ -d "${TARGET_BUILD_DIR}" ]; then
+            /usr/bin/xattr -cr "${TARGET_BUILD_DIR}"
           fi
         basedOnDependencyAnalysis: false
         runOnlyWhenInstalling: false
     dependencies:
       - package: LocalPackages
         product: AppFeature
+      - package: LocalPackages
+        product: ChatFeature
       - package: LocalPackages
         product: DesignSystem
       - package: LocalPackages
@@ -80,6 +84,14 @@ targets:
       - target: Mercurius
       - package: LocalPackages
         product: NetworkingKit
+    postCompileScripts:
+      - name: Strip extended attributes (macOS workaround for codesign)
+        script: |
+          if [ -d "${TARGET_BUILD_DIR}" ]; then
+            /usr/bin/xattr -cr "${TARGET_BUILD_DIR}"
+          fi
+        basedOnDependencyAnalysis: false
+        runOnlyWhenInstalling: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native.tests
@@ -95,6 +107,9 @@ schemes:
       config: Debug
     test:
       config: Debug
+      # NOTE: SPM package tests are NOT included here — xcodegen can't
+      # reference them in schemes. Run them with:
+      #   cd Packages && swift test
       targets:
         - MercuriusTests
     profile:

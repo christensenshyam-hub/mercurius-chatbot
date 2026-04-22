@@ -3,11 +3,22 @@ import PackageDescription
 
 let package = Package(
     name: "LocalPackages",
-    platforms: [.iOS(.v17)],
+    // macOS listed alongside iOS so `swift test` can run the logic
+    // tests from the command line. The app itself only ships for iOS.
+    // macOS 14 matches the iOS 17-era SwiftUI API surface we depend on.
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
+        .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
+    ],
+    dependencies: [
+        // Third-party markdown renderer. Chosen over Apple's
+        // AttributedString(markdown:) because Claude's responses
+        // use headings, lists, and code fences that AttributedString
+        // silently drops.
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", from: "2.4.0"),
     ],
     targets: [
         // MARK: DesignSystem
@@ -32,10 +43,26 @@ let package = Package(
             path: "NetworkingKit/Tests"
         ),
 
+        // MARK: ChatFeature
+        .target(
+            name: "ChatFeature",
+            dependencies: [
+                "DesignSystem",
+                "NetworkingKit",
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+            ],
+            path: "ChatFeature/Sources"
+        ),
+        .testTarget(
+            name: "ChatFeatureTests",
+            dependencies: ["ChatFeature"],
+            path: "ChatFeature/Tests"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
-            dependencies: ["DesignSystem", "NetworkingKit"],
+            dependencies: ["DesignSystem", "NetworkingKit", "ChatFeature"],
             path: "AppFeature/Sources"
         ),
         .testTarget(
