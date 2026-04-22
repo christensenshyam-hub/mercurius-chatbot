@@ -50,7 +50,14 @@ struct MessageBubbleView: View {
             .foregroundStyle(BrandColor.userBubbleText)
             .padding(.vertical, BrandSpacing.md)
             .padding(.horizontal, BrandSpacing.lg)
-            .background(BrandColor.userBubble, in: userShape)
+            .background(
+                LinearGradient(
+                    colors: [BrandColor.userBubbleTop, BrandColor.userBubbleBottom],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: userShape
+            )
     }
 
     private var assistantBubble: some View {

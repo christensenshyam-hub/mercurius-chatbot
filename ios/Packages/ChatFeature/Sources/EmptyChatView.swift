@@ -17,10 +17,8 @@ struct EmptyChatView: View {
         VStack(spacing: BrandSpacing.xl) {
             Spacer()
 
-            VStack(spacing: BrandSpacing.sm) {
-                Text("Mercurius Ⅰ")
-                    .font(BrandFont.title)
-                    .foregroundStyle(BrandColor.text)
+            VStack(spacing: BrandSpacing.md) {
+                BrandLogo(style: .full, size: 180)
 
                 Text("Here to help you think, not think for you.")
                     .font(BrandFont.caption)

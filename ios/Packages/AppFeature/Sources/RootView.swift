@@ -44,10 +44,7 @@ public struct RootView: View {
 
     private var loadingView: some View {
         VStack(spacing: BrandSpacing.lg) {
-            monogram
-            Text("Mercurius Ⅰ")
-                .font(BrandFont.title)
-                .foregroundStyle(BrandColor.text)
+            BrandLogo(style: .full, size: 240)
             ProgressView().controlSize(.small)
         }
         .accessibilityElement(children: .combine)
@@ -73,19 +70,6 @@ public struct RootView: View {
             .frame(maxWidth: 200)
         }
         .padding(BrandSpacing.xl)
-    }
-
-    private var monogram: some View {
-        ZStack {
-            Circle()
-                .fill(BrandColor.surface)
-                .frame(width: 72, height: 72)
-                .overlay(Circle().strokeBorder(BrandColor.accent, lineWidth: 2))
-            Text("MⅠ")
-                .font(BrandFont.title)
-                .foregroundStyle(BrandColor.accent)
-        }
-        .accessibilityHidden(true)
     }
 
     // MARK: - Bootstrap

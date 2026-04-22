@@ -47,6 +47,7 @@ final class FakeChatClient: ChatStreaming, @unchecked Sendable {
 private func makeModel(client: FakeChatClient, sessionId: String = "test-session") -> ChatViewModel {
     ChatViewModel(
         chatClient: client,
+        modeClient: FakeModeClient(),
         sessionIdProvider: { sessionId }
     )
 }
@@ -208,6 +209,7 @@ struct ChatViewModelErrorTests {
         let client = FakeChatClient()
         let model = ChatViewModel(
             chatClient: client,
+            modeClient: FakeModeClient(),
             sessionIdProvider: { throw BadSession() }
         )
         model.draft = "Hello"

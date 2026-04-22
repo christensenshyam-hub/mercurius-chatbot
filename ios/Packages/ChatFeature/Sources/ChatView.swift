@@ -22,6 +22,8 @@ public struct ChatView: View {
 
             VStack(spacing: 0) {
                 header
+                ModeSelectorView(model: model)
+                    .background(BrandColor.background)
                 Divider().overlay(BrandColor.border)
 
                 if model.messages.isEmpty {
@@ -60,9 +62,9 @@ public struct ChatView: View {
 
     private var header: some View {
         HStack(spacing: BrandSpacing.md) {
-            monogram
+            BrandLogo(style: .mark, size: 32)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Mercurius Ⅰ")
+                Text("Mercurius AI")
                     .font(BrandFont.subheading)
                     .foregroundStyle(BrandColor.text)
                 Text("AI LITERACY TUTOR")
@@ -75,19 +77,6 @@ public struct ChatView: View {
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.vertical, BrandSpacing.md)
         .background(BrandColor.background)
-    }
-
-    private var monogram: some View {
-        ZStack {
-            Circle()
-                .fill(BrandColor.surface)
-                .frame(width: 32, height: 32)
-                .overlay(Circle().strokeBorder(BrandColor.accent, lineWidth: 1.5))
-            Text("MⅠ")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(BrandColor.accent)
-        }
-        .accessibilityHidden(true)
     }
 }
 

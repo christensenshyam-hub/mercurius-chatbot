@@ -27,6 +27,19 @@ public final class ChatViewModel {
     public var draft: String = ""
     public private(set) var phase: Phase = .idle
 
+    /// Active teaching mode. Defaults to Socratic on first launch;
+    /// updated from the server on each `complete` event and on
+    /// successful `switchMode(to:)` calls.
+    public private(set) var currentMode: ChatMode = .socratic
+
+    /// Whether Direct Mode is unlocked for this session. Defaults to
+    /// false; updated from the server's `unlocked` flag.
+    public private(set) var isUnlocked: Bool = false
+
+    /// State of an in-flight mode switch, used by the UI to disable
+    /// pills and show a progress indicator.
+    public private(set) var modeSwitchInFlight: ChatMode?
+
     public enum Phase: Equatable, Sendable {
         /// No request in flight.
         case idle
@@ -42,6 +55,7 @@ public final class ChatViewModel {
     // MARK: - Dependencies
 
     private let chatClient: ChatStreaming
+    private let modeClient: ModeChanging
     private let sessionIdProvider: @Sendable () throws -> String
 
     // MARK: - Private
@@ -55,17 +69,20 @@ public final class ChatViewModel {
     public convenience init(apiClient: APIClient, sessionIdentity: SessionIdentity) {
         self.init(
             chatClient: apiClient,
+            modeClient: apiClient,
             sessionIdProvider: { try sessionIdentity.current() }
         )
     }
 
-    /// Designated initializer — useful in tests, where a stub client
+    /// Designated initializer — useful in tests, where stub clients
     /// and a fixed session id can be injected.
     public init(
         chatClient: ChatStreaming,
+        modeClient: ModeChanging,
         sessionIdProvider: @escaping @Sendable () throws -> String
     ) {
         self.chatClient = chatClient
+        self.modeClient = modeClient
         self.sessionIdProvider = sessionIdProvider
     }
 
@@ -149,6 +166,75 @@ public final class ChatViewModel {
         )
     }
 
+    /// Ask the server to switch the active teaching mode.
+    ///
+    /// Client-side guard: requesting Direct while locked returns an
+    /// `APIError.unauthorized` — mapped to a user-facing error rather
+    /// than silently dropping. The server is still the source of truth.
+    ///
+    /// Returns a discardable error for callers that want to surface it;
+    /// the UI typically just reads `modeSwitchError` instead.
+    public private(set) var modeSwitchError: String?
+
+    @discardableResult
+    public func switchMode(to mode: ChatMode) async -> Bool {
+        guard mode != currentMode else { return true }
+        guard modeSwitchInFlight == nil else { return false }
+
+        // Client-side pre-check: don't even call the server for Direct
+        // if we know we're locked. Saves a round trip + 403.
+        if mode.requiresUnlock && !isUnlocked {
+            modeSwitchError = "Pass the Socratic comprehension check to unlock Direct Mode."
+            return false
+        }
+
+        modeSwitchError = nil
+        modeSwitchInFlight = mode
+
+        let sessionId: String
+        do {
+            sessionId = try sessionIdProvider()
+        } catch {
+            modeSwitchInFlight = nil
+            modeSwitchError = "Could not resolve session."
+            return false
+        }
+
+        do {
+            let result = try await modeClient.changeMode(to: mode, sessionId: sessionId)
+            if let parsed = ChatMode(rawValue: result.mode) {
+                currentMode = parsed
+            }
+            if result.unlocked { isUnlocked = true }
+            modeSwitchInFlight = nil
+            return true
+        } catch APIError.unauthorized {
+            modeSwitchInFlight = nil
+            modeSwitchError = "Pass the Socratic comprehension check to unlock Direct Mode."
+            return false
+        } catch let error as APIError {
+            modeSwitchInFlight = nil
+            modeSwitchError = error.userFacingMessage
+            return false
+        } catch {
+            modeSwitchInFlight = nil
+            modeSwitchError = "Could not change mode. Try again."
+            return false
+        }
+    }
+
+    /// Dismiss the current mode-switch error from the UI.
+    public func clearModeSwitchError() {
+        modeSwitchError = nil
+    }
+
+    /// Test-only hook. Not exposed publicly; tests in the same package
+    /// can call it via `@testable import`. The underscore prefix marks
+    /// it as non-production API.
+    func _testing_markUnlocked() {
+        isUnlocked = true
+    }
+
     // MARK: - Streaming
 
     private func runStream(assistantId: UUID) async {
@@ -183,6 +269,11 @@ public final class ChatViewModel {
 
                 case .complete(let response):
                     finalize(assistantId: assistantId, fullReply: response.reply)
+                    // Server is the source of truth for mode + unlock.
+                    if let serverMode = ChatMode(rawValue: response.mode) {
+                        currentMode = serverMode
+                    }
+                    if response.unlocked { isUnlocked = true }
                     phase = .idle
                     return
 
