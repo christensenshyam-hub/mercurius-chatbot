@@ -1,0 +1,80 @@
+name: Server
+
+# Runs the Node backend test suite on every push to main and every
+# PR targeting main. Complements .github/workflows/ios.yml, which
+# only covers the iOS tree — a regression to server.js or lib/*
+# would not have triggered any CI before this workflow existed.
+#
+# Scope:
+#   * `npm test` via `node --test tests/*.test.js` — 83 tests across
+#     pino redaction, Zod schema units, model-allowlist units,
+#     Prometheus metric unit tests, and the full server-spawning
+#     integration suite.
+#   * Runs on ubuntu-latest. The server does not require macOS —
+#     better-sqlite3 builds from source on Linux just fine, and CI
+#     time is a fraction of the macOS-runner cost.
+#
+# Explicitly NOT in scope:
+#   * Node side of coverage reporting — future follow-up.
+#   * Load testing / perf benchmarks — those are a different
+#     category of signal.
+#   * Deploy gating — we only test here. Deploy still happens
+#     via Railway's own push-triggered pipeline.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel earlier in-progress runs on the same ref when a new commit
+# lands — mirrors the ios workflow's behavior.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node tests (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Match the local dev toolchain (22) + the current LTS (20)
+        # so the test surface catches anything that breaks between
+        # versions. Node 22 is the current "Active LTS"; 20 is
+        # "Maintenance LTS" through April 2026.
+        node-version: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          # Enables the built-in npm cache — action uses
+          # `package-lock.json`'s hash as the cache key so installs
+          # are reproducible across runs.
+          cache: npm
+
+      - name: Print toolchain
+        run: |
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        # `npm ci` fails fast if package-lock.json is out of sync
+        # with package.json — better than `npm install` in CI.
+        run: npm ci
+
+      - name: Run tests
+        # The test runner spawns the server as a child process and
+        # hits it via fetch. NODE_ENV=test silences the pino logger
+        # (see lib/logger.js) so test output stays clean.
+        run: npm test
+        env:
+          NODE_ENV: test
