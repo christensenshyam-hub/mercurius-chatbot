@@ -97,7 +97,13 @@ let package = Package(
         .testTarget(
             name: "ClubFeatureTests",
             dependencies: ["ClubFeature", "NetworkingKit"],
-            path: "ClubFeature/Tests"
+            path: "ClubFeature/Tests",
+            resources: [
+                // Real production JSON captured from mayoailiteracy.com.
+                // Wire-contract tests decode these to catch server-side
+                // schema drift before users hit it.
+                .process("Fixtures"),
+            ]
         ),
 
         // MARK: SettingsFeature
