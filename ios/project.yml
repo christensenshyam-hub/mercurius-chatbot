@@ -24,6 +24,9 @@ settings:
 packages:
   LocalPackages:
     path: Packages
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.17.0"
 
 targets:
   Mercurius:
@@ -92,6 +95,18 @@ targets:
       - target: Mercurius
       - package: LocalPackages
         product: NetworkingKit
+      - package: LocalPackages
+        product: DesignSystem
+      - package: LocalPackages
+        product: ChatFeature
+      - package: LocalPackages
+        product: CurriculumFeature
+      - package: LocalPackages
+        product: ClubFeature
+      - package: LocalPackages
+        product: SettingsFeature
+      - package: SnapshotTesting
+        product: SnapshotTesting
     postCompileScripts:
       - name: Strip extended attributes (macOS workaround for codesign)
         script: |
