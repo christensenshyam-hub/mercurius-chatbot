@@ -31,11 +31,13 @@ public struct RootView: View {
                 ChatView(
                     apiClient: env.apiClient,
                     sessionIdentity: env.sessionIdentity,
+                    chatStore: env.chatStore,
                     settingsPresenter: { [env] in
                         AnyView(
                             SettingsSheet(
                                 sessionIdentity: env.sessionIdentity,
-                                themeStore: env.themeStore
+                                themeStore: env.themeStore,
+                                chatStore: env.chatStore
                             )
                         )
                     }

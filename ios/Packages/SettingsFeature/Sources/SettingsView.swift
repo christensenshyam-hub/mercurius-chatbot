@@ -51,7 +51,7 @@ public struct SettingsView: View {
                     Task { await model.resetSession() }
                 }
             } message: {
-                Text("This clears your session ID on this device. Your streak, leaderboard rank, and chat memory on the server won't be deleted, but future activity won't be associated with them.")
+                Text("This clears your session ID and your chat history on this device. Your streak, leaderboard rank, and chat memory on the server won't be deleted, but future activity won't be associated with them.")
             }
             .alert(
                 "Couldn't reset",

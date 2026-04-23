@@ -81,6 +81,11 @@ public final class SettingsViewModel {
     private let sessionStorage: SessionResetting
     public let themeStore: ThemePreferenceStore
 
+    /// Optional hook for resetting app-side state that isn't owned by
+    /// `SettingsFeature` — e.g. clearing the persisted chat history.
+    /// Runs synchronously alongside the session reset.
+    private let extraReset: (@MainActor () -> Void)?
+
     // MARK: - Theme projection
 
     /// Computed binding so SwiftUI pickers can read and write through
@@ -95,10 +100,12 @@ public final class SettingsViewModel {
     public init(
         sessionStorage: SessionResetting,
         themeStore: ThemePreferenceStore,
-        bundle: Bundle = .main
+        bundle: Bundle = .main,
+        extraReset: (@MainActor () -> Void)? = nil
     ) {
         self.sessionStorage = sessionStorage
         self.themeStore = themeStore
+        self.extraReset = extraReset
         self.appVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
         self.buildNumber = (bundle.infoDictionary?["CFBundleVersion"] as? String) ?? "—"
     }
@@ -129,8 +136,11 @@ public final class SettingsViewModel {
 
         do {
             try sessionStorage.reset()
-            // Immediately generate a fresh one so the app has a valid
-            // session to use on the next request.
+            // Clear any extra app-side state the host wired up
+            // (e.g. persisted chat history).
+            extraReset?()
+            // Immediately generate a fresh session so the app has
+            // a valid one for the next request.
             sessionId = try sessionStorage.current()
             return true
         } catch {

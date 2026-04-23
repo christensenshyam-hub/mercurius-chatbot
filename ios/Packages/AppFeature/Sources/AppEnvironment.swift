@@ -1,5 +1,6 @@
 import Foundation
 import NetworkingKit
+import PersistenceKit
 import SettingsFeature
 
 /// The app's composition root — a single place where singletons are
@@ -15,6 +16,11 @@ public final class AppEnvironment: ObservableObject {
     /// it in Settings.
     public let themeStore: ThemePreferenceStore
 
+    /// Disk-backed chat history. `nil` only if SwiftData fails to
+    /// initialize its container — in that case the app still runs,
+    /// just without persistent conversations.
+    public let chatStore: ChatStore?
+
     public init(environment: APIEnvironment = .production) {
         let identity = SessionIdentity()
         self.sessionIdentity = identity
@@ -23,5 +29,18 @@ public final class AppEnvironment: ObservableObject {
             sessionIdentity: identity
         )
         self.themeStore = ThemePreferenceStore()
+
+        // SwiftData container construction can throw; we degrade
+        // gracefully rather than crash. A failed persistence layer
+        // is worse UX than a non-persistent chat, not the other way
+        // around.
+        do {
+            self.chatStore = try SwiftDataChatStore()
+        } catch {
+            // Surface to the console so the issue is visible in logs,
+            // but keep the app running.
+            print("[Mercurius] SwiftData init failed — falling back to in-memory store. Error: \(error)")
+            self.chatStore = InMemoryChatStore()
+        }
     }
 }

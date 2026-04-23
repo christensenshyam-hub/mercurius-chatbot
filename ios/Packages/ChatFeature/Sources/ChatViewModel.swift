@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import NetworkingKit
+import PersistenceKit
 
 /// View model for the chat screen.
 ///
@@ -57,20 +58,28 @@ public final class ChatViewModel {
     private let chatClient: ChatStreaming
     private let modeClient: ModeChanging
     private let sessionIdProvider: @Sendable () throws -> String
+    private let store: ChatStore?
 
     // MARK: - Private
 
     private var streamingTask: Task<Void, Never>?
+    private var conversationId: UUID?
 
     // MARK: - Init
 
-    /// Production initializer — takes the real `APIClient` and a
-    /// `SessionIdentity`.
-    public convenience init(apiClient: APIClient, sessionIdentity: SessionIdentity) {
+    /// Production initializer — takes the real `APIClient`, a
+    /// `SessionIdentity`, and (optionally) a persistence store so
+    /// conversations survive app kills.
+    public convenience init(
+        apiClient: APIClient,
+        sessionIdentity: SessionIdentity,
+        store: ChatStore? = nil
+    ) {
         self.init(
             chatClient: apiClient,
             modeClient: apiClient,
-            sessionIdProvider: { try sessionIdentity.current() }
+            sessionIdProvider: { try sessionIdentity.current() },
+            store: store
         )
     }
 
@@ -79,11 +88,62 @@ public final class ChatViewModel {
     public init(
         chatClient: ChatStreaming,
         modeClient: ModeChanging,
-        sessionIdProvider: @escaping @Sendable () throws -> String
+        sessionIdProvider: @escaping @Sendable () throws -> String,
+        store: ChatStore? = nil
     ) {
         self.chatClient = chatClient
         self.modeClient = modeClient
         self.sessionIdProvider = sessionIdProvider
+        self.store = store
+        hydrateFromStore()
+    }
+
+    /// Load the latest persisted conversation, if any. Runs on init
+    /// so the UI can render immediately without a loading flicker.
+    private func hydrateFromStore() {
+        guard let store else { return }
+        if let existingId = store.latestConversationId() {
+            conversationId = existingId
+            let stored = store.loadMessages(conversationId: existingId)
+            messages = stored.compactMap { record -> ChatMessage? in
+                guard let role = ChatMessage.Role(rawValue: record.role) else {
+                    return nil  // skip unknown roles rather than crashing
+                }
+                return ChatMessage(
+                    id: record.id,
+                    role: role,
+                    content: record.content,
+                    createdAt: record.createdAt,
+                    status: .idle
+                )
+            }
+        } else {
+            conversationId = store.createConversation()
+        }
+    }
+
+    /// Ensure a conversation exists and return its id. Creates one
+    /// lazily if the store is present but no conversation has been
+    /// opened yet. Returns `nil` if no store is attached.
+    private func ensureConversationId() -> UUID? {
+        guard let store else { return nil }
+        if let existing = conversationId { return existing }
+        let fresh = store.createConversation()
+        conversationId = fresh
+        return fresh
+    }
+
+    private func persistMessage(_ message: ChatMessage) {
+        guard let store, let convoId = ensureConversationId() else { return }
+        store.append(
+            StoredMessage(
+                id: message.id,
+                role: message.role.rawValue,
+                content: message.content,
+                createdAt: message.createdAt
+            ),
+            to: convoId
+        )
     }
 
     // MARK: - Actions
@@ -113,6 +173,7 @@ public final class ChatViewModel {
 
         let userMessage = ChatMessage(role: .user, content: text)
         messages.append(userMessage)
+        persistMessage(userMessage)
         draft = ""
 
         let assistantPlaceholder = ChatMessage(
@@ -325,11 +386,13 @@ public final class ChatViewModel {
         // any deltas were dropped.
         messages[idx].content = fullReply
         messages[idx].status = .idle
+        persistMessage(messages[idx])
     }
 
     private func finalizeFromDeltas(assistantId: UUID) {
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
         messages[idx].status = .idle
+        persistMessage(messages[idx])
     }
 
     private func markCurrentFailed(reason: String, isRetryable: Bool, assistantId: UUID?) {

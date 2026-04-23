@@ -54,6 +54,8 @@ targets:
       - package: LocalPackages
         product: SettingsFeature
       - package: LocalPackages
+        product: PersistenceKit
+      - package: LocalPackages
         product: DesignSystem
       - package: LocalPackages
         product: NetworkingKit

@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
+        .library(name: "PersistenceKit", targets: ["PersistenceKit"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
@@ -44,12 +45,25 @@ let package = Package(
             path: "NetworkingKit/Tests"
         ),
 
+        // MARK: PersistenceKit
+        .target(
+            name: "PersistenceKit",
+            dependencies: ["NetworkingKit"],
+            path: "PersistenceKit/Sources"
+        ),
+        .testTarget(
+            name: "PersistenceKitTests",
+            dependencies: ["PersistenceKit"],
+            path: "PersistenceKit/Tests"
+        ),
+
         // MARK: ChatFeature
         .target(
             name: "ChatFeature",
             dependencies: [
                 "DesignSystem",
                 "NetworkingKit",
+                "PersistenceKit",
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             path: "ChatFeature/Sources"

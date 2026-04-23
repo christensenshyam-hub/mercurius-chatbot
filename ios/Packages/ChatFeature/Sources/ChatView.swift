@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import NetworkingKit
+import PersistenceKit
 
 /// The root chat screen. Owns the view model and composes the message
 /// list, input bar, and empty state.
@@ -30,12 +31,14 @@ public struct ChatView: View {
     public init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
+        chatStore: ChatStore? = nil,
         settingsPresenter: (@MainActor () -> AnyView)? = nil
     ) {
         _model = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
-                sessionIdentity: sessionIdentity
+                sessionIdentity: sessionIdentity,
+                store: chatStore
             )
         )
         self.apiClient = apiClient
