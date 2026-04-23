@@ -25,6 +25,7 @@ const {
 } = require('./lib/schemas');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
+const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1037,47 +1038,27 @@ async function processTestOutcome(reply, sessionId, testState, testTriggered) {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiter — per-session (in-memory, resets on restart)
+// Rate limiting
+//
+// Three limiters, all built from lib/rateLimiter.js so they share the
+// same backing store. With REDIS_URL unset (current Railway config)
+// these are in-memory, identical to the pre-Phase-5 behavior. With
+// REDIS_URL set, every replica reads + writes the same counters, so
+// limits are consistent after horizontal scaling.
+//
+//   1. globalLimiter  — 60 req/min per IP across all /api/*
+//   2. chatLimiter    — 15 req/min per IP on /api/chat only
+//                       (Anthropic calls are expensive)
+//   3. isRateLimited  — 20 req/min per session (set by the client
+//                       in Keychain; survives IP rotation on mobile)
 // ---------------------------------------------------------------------------
-const rateLimitMap = {};
 
-function isRateLimited(sessionId) {
-  if (!rateLimitMap[sessionId]) rateLimitMap[sessionId] = [];
-  const now = Date.now();
-  rateLimitMap[sessionId] = rateLimitMap[sessionId].filter(t => now - t < 60000);
-  if (rateLimitMap[sessionId].length >= 20) return true;
-  rateLimitMap[sessionId].push(now);
-  return false;
-}
+const globalLimiter = ipLimiter('global', { windowMs: 60 * 1000, max: 60 });
+const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: 15 });
 
-// Clean up stale sessions every 5 minutes to prevent memory leak
-setInterval(() => {
-  const cutoff = Date.now() - 300000;
-  for (const key in rateLimitMap) {
-    rateLimitMap[key] = rateLimitMap[key].filter(t => t > cutoff);
-    if (rateLimitMap[key].length === 0) delete rateLimitMap[key];
-  }
-}, 300000);
-
-// ---------------------------------------------------------------------------
-// Global IP-based rate limiter — protects against abuse from unknown sources
-// ---------------------------------------------------------------------------
-const rateLimit = require('express-rate-limit');
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 60,             // 60 requests per minute per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'rate_limited', message: 'Too many requests. Try again in a moment.' },
-});
-
-const chatLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 15,             // 15 chat messages per minute per IP (Anthropic calls are expensive)
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'rate_limited', message: 'Slow down — try again in a moment.' },
-});
+// `isRateLimited(sessionId)` is now async because the Redis path
+// is. Callers `await` it.
+const isRateLimited = sessionLimiter(60 * 1000, 20);
 
 // ---------------------------------------------------------------------------
 // Prompt injection defense — detect common injection patterns
@@ -1172,7 +1153,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const chosenModel = picked.model;
 
   // Rate limit
-  if (isRateLimited(sessionId)) {
+  if (await isRateLimited(sessionId)) {
     return res.status(429).json({
       error: 'rate_limited',
       reply: "You're moving fast! Take 60 seconds to think about what we've discussed so far, then come back."
@@ -1605,7 +1586,7 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
   if (!isValidSessionId(sessionId) || !claim || typeof claim !== 'string' || claim.length > 1000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
   }
-  if (isRateLimited(sessionId)) {
+  if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
   try {
@@ -1634,7 +1615,7 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
   if (!isValidSessionId(sessionId) || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and aiOutput (max 3000 chars).' });
   }
-  if (isRateLimited(sessionId)) {
+  if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
   try {
