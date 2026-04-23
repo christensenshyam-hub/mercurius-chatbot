@@ -33,7 +33,10 @@ public struct RootView: View {
                     sessionIdentity: env.sessionIdentity,
                     settingsPresenter: { [env] in
                         AnyView(
-                            SettingsSheet(sessionIdentity: env.sessionIdentity)
+                            SettingsSheet(
+                                sessionIdentity: env.sessionIdentity,
+                                themeStore: env.themeStore
+                            )
                         )
                     }
                 )
@@ -43,6 +46,7 @@ public struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
+        .preferredColorScheme(env.themeStore.theme.colorScheme)
         .task { await bootstrap() }
     }
 

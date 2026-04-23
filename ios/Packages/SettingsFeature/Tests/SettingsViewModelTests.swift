@@ -42,7 +42,12 @@ private func makeModel(
     prefs: InMemoryPreferenceStore = InMemoryPreferenceStore(),
     bundle: Bundle = .main
 ) -> SettingsViewModel {
-    SettingsViewModel(sessionStorage: storage, preferences: prefs, bundle: bundle)
+    let themeStore = ThemePreferenceStore(preferences: prefs)
+    return SettingsViewModel(
+        sessionStorage: storage,
+        themeStore: themeStore,
+        bundle: bundle
+    )
 }
 
 // MARK: - Tests

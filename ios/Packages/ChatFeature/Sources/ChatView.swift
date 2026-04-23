@@ -7,6 +7,20 @@ import NetworkingKit
 public struct ChatView: View {
     @State private var model: ChatViewModel
     @State private var showSettings = false
+    @State private var activeTool: ActiveTool?
+
+    private enum ActiveTool: Identifiable {
+        case quiz, reportCard
+        var id: String {
+            switch self {
+            case .quiz: return "quiz"
+            case .reportCard: return "reportCard"
+            }
+        }
+    }
+
+    private let apiClient: APIClient
+    private let sessionIdentity: SessionIdentity
 
     /// Closure the host app provides to surface the Settings screen.
     /// Kept as a closure so `ChatFeature` doesn't depend on
@@ -24,6 +38,8 @@ public struct ChatView: View {
                 sessionIdentity: sessionIdentity
             )
         )
+        self.apiClient = apiClient
+        self.sessionIdentity = sessionIdentity
         self.settingsPresenter = settingsPresenter
     }
 
@@ -84,6 +100,7 @@ public struct ChatView: View {
                     .foregroundStyle(BrandColor.textSecondary)
             }
             Spacer()
+            toolsMenuButton
             if settingsPresenter != nil {
                 Button {
                     showSettings = true
@@ -91,18 +108,79 @@ public struct ChatView: View {
                     Image(systemName: "gearshape")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(BrandColor.textSecondary)
-                        .frame(width: 44, height: 44)  // ≥44pt hit target
+                        .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("Settings")
             }
         }
         .padding(.leading, BrandSpacing.lg)
-        .padding(.trailing, BrandSpacing.sm)
+        .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
         .sheet(isPresented: $showSettings) {
             settingsPresenter?()
         }
+        .sheet(item: $activeTool) { tool in
+            switch tool {
+            case .quiz:
+                QuizView(
+                    model: QuizViewModel(
+                        tools: apiClient,
+                        sessionIdProvider: { [sessionIdentity] in
+                            try sessionIdentity.current()
+                        }
+                    ),
+                    dismissAction: { activeTool = nil }
+                )
+            case .reportCard:
+                ReportCardView(
+                    model: ReportCardViewModel(
+                        tools: apiClient,
+                        sessionIdProvider: { [sessionIdentity] in
+                            try sessionIdentity.current()
+                        }
+                    ),
+                    dismissAction: { activeTool = nil }
+                )
+            }
+        }
+    }
+
+    private var toolsMenuButton: some View {
+        Menu {
+            Button {
+                activeTool = .quiz
+            } label: {
+                Label("Generate Quiz", systemImage: "checkmark.rectangle.stack")
+            }
+            .disabled(!hasEnoughConversation)
+
+            Button {
+                activeTool = .reportCard
+            } label: {
+                Label("Report Card", systemImage: "chart.bar.doc.horizontal")
+            }
+            .disabled(!hasEnoughConversation)
+
+            if !hasEnoughConversation {
+                Divider()
+                Text("Chat a bit more to unlock tools.")
+            }
+        } label: {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(BrandColor.textSecondary)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Tools")
+    }
+
+    /// The server rejects quiz / report-card requests if the conversation
+    /// has fewer than 4 messages. Match that client-side for fast
+    /// feedback and to avoid a pointless round-trip.
+    private var hasEnoughConversation: Bool {
+        model.messages.filter { $0.role == .user }.count >= 2
+            && model.messages.count >= 4
     }
 }
 

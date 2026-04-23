@@ -69,9 +69,6 @@ public final class SettingsViewModel {
     // MARK: - Observable state
 
     public private(set) var sessionId: String = ""
-    public var theme: ThemePreference {
-        didSet { preferences.set(theme.rawValue, for: Keys.theme) }
-    }
     public private(set) var isResetInProgress: Bool = false
     public private(set) var resetErrorMessage: String?
 
@@ -82,23 +79,28 @@ public final class SettingsViewModel {
     // MARK: - Dependencies
 
     private let sessionStorage: SessionResetting
-    private let preferences: PreferenceStore
+    public let themeStore: ThemePreferenceStore
+
+    // MARK: - Theme projection
+
+    /// Computed binding so SwiftUI pickers can read and write through
+    /// the shared `ThemePreferenceStore`. Writes propagate app-wide.
+    public var theme: ThemePreference {
+        get { themeStore.theme }
+        set { themeStore.theme = newValue }
+    }
 
     // MARK: - Init
 
     public init(
         sessionStorage: SessionResetting,
-        preferences: PreferenceStore = UserDefaultsPreferenceStore(),
+        themeStore: ThemePreferenceStore,
         bundle: Bundle = .main
     ) {
         self.sessionStorage = sessionStorage
-        self.preferences = preferences
+        self.themeStore = themeStore
         self.appVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
         self.buildNumber = (bundle.infoDictionary?["CFBundleVersion"] as? String) ?? "—"
-
-        let stored = preferences.string(for: Keys.theme)
-            .flatMap(ThemePreference.init(rawValue:))
-        self.theme = stored ?? .system
     }
 
     // MARK: - Actions
@@ -139,11 +141,5 @@ public final class SettingsViewModel {
 
     public func clearResetError() {
         resetErrorMessage = nil
-    }
-
-    // MARK: - Keys
-
-    private enum Keys {
-        static let theme = "com.mayoailiteracy.mercurius.theme"
     }
 }

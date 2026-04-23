@@ -8,12 +8,16 @@ import SettingsFeature
 /// shouldn't know about presentation mode.
 struct SettingsSheet: View {
     let sessionIdentity: SessionIdentity
+    let themeStore: ThemePreferenceStore
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         SettingsView(
-            model: SettingsViewModel(sessionStorage: sessionIdentity),
+            model: SettingsViewModel(
+                sessionStorage: sessionIdentity,
+                themeStore: themeStore
+            ),
             dismissAction: { dismiss() }
         )
     }

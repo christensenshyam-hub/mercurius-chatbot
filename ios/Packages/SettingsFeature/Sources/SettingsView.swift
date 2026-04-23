@@ -41,7 +41,6 @@ public struct SettingsView: View {
                         .foregroundStyle(BrandColor.accent)
                 }
             }
-            .preferredColorScheme(model.theme.colorScheme)
             .task { model.loadSessionId() }
             .alert(
                 "Start over?",
