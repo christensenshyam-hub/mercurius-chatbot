@@ -44,4 +44,74 @@ final class PerformanceTests: XCTestCase {
             XCUIApplication().launch()
         }
     }
+
+    @MainActor
+    func testSeededChatScrollPerformance() throws {
+        // Launches the app with `-SeedDemoChat`, which swaps in an
+        // InMemoryChatStore pre-populated with 50 messages. Measures
+        // wall-clock time + memory during a fast swipe-up / swipe-down
+        // cycle against the message list. Signal comes from the
+        // LazyVStack creating and tearing down cells under scroll
+        // pressure.
+
+        let app = XCUIApplication()
+        app.launchArguments += ["-SeedDemoChat"]
+        app.launch()
+
+        // Wait for boot.
+        XCTAssertTrue(
+            app.staticTexts["Mercurius AI"].waitForExistence(timeout: 15),
+            "App did not reach the chat screen"
+        )
+
+        // Anchor on the scroll view that holds the message list.
+        // SwiftUI ScrollView renders as an XCUIElement.Type.scrollView.
+        let scrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(scrollView.waitForExistence(timeout: 5), "Chat scroll view missing after boot")
+
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+
+        measure(
+            metrics: [XCTClockMetric(), XCTMemoryMetric(application: app)],
+            options: options
+        ) {
+            // Up twice, down twice — enough to force many LazyVStack
+            // cell creations and a couple of layout re-passes.
+            scrollView.swipeUp(velocity: .fast)
+            scrollView.swipeUp(velocity: .fast)
+            scrollView.swipeDown(velocity: .fast)
+            scrollView.swipeDown(velocity: .fast)
+        }
+    }
+
+    @MainActor
+    func testSeededChatMemoryFootprint() throws {
+        // Separate from scroll perf — this one measures peak memory at
+        // rest with a populated conversation visible. Catches leaks
+        // introduced by ChatViewModel or message bubble renderers
+        // without a scroll gesture adding variance.
+        let app = XCUIApplication()
+        app.launchArguments += ["-SeedDemoChat"]
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Mercurius AI"].waitForExistence(timeout: 15),
+            "App did not reach the chat screen"
+        )
+
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+
+        measure(
+            metrics: [XCTMemoryMetric(application: app)],
+            options: options
+        ) {
+            // `XCTMemoryMetric` samples during the block. Give the
+            // layout a moment to settle and the view model to hydrate
+            // from the seeded store.
+            _ = app.staticTexts.count
+            Thread.sleep(forTimeInterval: 0.3)
+        }
+    }
 }
