@@ -1,6 +1,7 @@
 # Mercurius Ⅰ — AI Literacy Tutoring Chatbot
 
 [![iOS](https://github.com/christensenshyam-hub/mercurius-chatbot/actions/workflows/ios.yml/badge.svg)](https://github.com/christensenshyam-hub/mercurius-chatbot/actions/workflows/ios.yml)
+[![Server](https://github.com/christensenshyam-hub/mercurius-chatbot/actions/workflows/server.yml/badge.svg)](https://github.com/christensenshyam-hub/mercurius-chatbot/actions/workflows/server.yml)
 
 A full-stack chatbot tutor designed to help high school students think critically about AI systems — including the one they're talking to. Built with Express, the Anthropic Claude API, and a self-contained vanilla JS/CSS widget that embeds on any website. A native iOS companion app lives under `ios/`.
 
