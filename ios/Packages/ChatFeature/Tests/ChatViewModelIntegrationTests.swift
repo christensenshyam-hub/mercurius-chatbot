@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import ChatFeature
 @testable import NetworkingKit
+@testable import PersistenceKit
 
 // MARK: - Controllable chat client
 //
@@ -473,6 +474,120 @@ struct ServerDrivenStateTests {
 
         await waitFor("phase idle") { model.phase == .idle }
         #expect(model.currentMode == .socratic, "Unknown modes mustn't silently unset the current one")
+    }
+}
+
+// MARK: - startNewConversation
+
+@Suite("ChatViewModel.startNewConversation")
+@MainActor
+struct StartNewConversationTests {
+
+    @Test("Clears messages, draft, and returns phase to .idle")
+    func clearsState() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+
+        // Put the model into a non-idle state with messages.
+        model.draft = "Hi"
+        model.send()
+        await client.emit(sampleComplete(reply: "Hello!"))
+        await waitFor("first exchange done") { model.phase == .idle }
+        #expect(model.messages.count == 2)
+        model.draft = "drafting something"  // unsent draft
+        #expect(model.phase == .idle)
+
+        model.startNewConversation()
+
+        #expect(model.messages.isEmpty)
+        #expect(model.draft.isEmpty)
+        #expect(model.phase == .idle)
+    }
+
+    @Test("Mode and unlock state are preserved")
+    func preservesPreferences() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+
+        // Mark unlocked + switch mode via a server reply.
+        model.draft = "Hi"
+        model.send()
+        await client.emit(sampleComplete(reply: "ok", mode: "debate", unlocked: true))
+        await waitFor("first exchange done") { model.phase == .idle }
+        #expect(model.currentMode == .debate)
+        #expect(model.isUnlocked)
+
+        model.startNewConversation()
+
+        #expect(model.currentMode == .debate, "Mode should survive startNewConversation()")
+        #expect(model.isUnlocked, "Unlock state should survive startNewConversation()")
+    }
+
+    @Test("Cancels an in-flight stream silently (no failure bubble)")
+    func cancelsInFlightStream() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+
+        model.draft = "Starting something"
+        model.send()
+        await client.emit(.delta(text: "Some"))
+        await waitFor("first delta arrived") {
+            model.messages.last?.content == "Some"
+        }
+        #expect(model.phase == .streaming)
+
+        model.startNewConversation()
+
+        // No "Cancelled." bubble should remain — unlike `cancel()`,
+        // this is a clean slate, not a stop button.
+        #expect(model.messages.isEmpty)
+        #expect(model.phase == .idle)
+    }
+
+    @Test("With a store, creates a new conversation record")
+    func createsNewConversation() async {
+        let store = InMemoryChatStore()
+        let client = ControllableChatClient()
+        let model = ChatViewModel(
+            chatClient: client,
+            modeClient: FakeModeClient(),
+            sessionIdProvider: { "sid" },
+            store: store
+        )
+
+        // Send a message to persist something in the first conversation.
+        model.draft = "first convo"
+        model.send()
+        await client.emit(sampleComplete(reply: "ok"))
+        await waitFor("first exchange done") { model.phase == .idle }
+
+        let firstConvoId = store.latestConversationId()
+        #expect(firstConvoId != nil)
+        #expect(store.loadMessages(conversationId: firstConvoId!).count == 2)
+
+        model.startNewConversation()
+
+        let secondConvoId = store.latestConversationId()
+        #expect(secondConvoId != nil)
+        #expect(secondConvoId != firstConvoId, "A new conversation should be created")
+        #expect(store.loadMessages(conversationId: secondConvoId!).isEmpty)
+        // First conversation is preserved in history.
+        #expect(store.loadMessages(conversationId: firstConvoId!).count == 2)
+    }
+
+    @Test("Without a store, still clears state without crashing")
+    func noStoreIsFine() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)  // no store
+
+        model.draft = "Hi"
+        model.send()
+        await client.emit(sampleComplete(reply: "ok"))
+        await waitFor("first exchange done") { model.phase == .idle }
+
+        model.startNewConversation()
+        #expect(model.messages.isEmpty)
+        #expect(model.phase == .idle)
     }
 }
 

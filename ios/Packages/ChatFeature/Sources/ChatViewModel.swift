@@ -227,6 +227,30 @@ public final class ChatViewModel {
         )
     }
 
+    /// Start a fresh conversation.
+    ///
+    /// - Cancels any in-flight streaming task silently (no "Cancelled"
+    ///   bubble is left behind — unlike `cancel()`, which is for the
+    ///   user pressing stop during a reply).
+    /// - Clears all visible messages and the draft.
+    /// - Resets `phase` to `.idle`.
+    /// - If a persistence store is attached, opens a brand-new
+    ///   conversation record. Prior conversations stay on disk so
+    ///   history could be surfaced later, but are no longer shown.
+    ///
+    /// Mode and unlock state are **preserved** on purpose — they're user
+    /// preferences that shouldn't be disturbed by starting a new chat.
+    public func startNewConversation() {
+        streamingTask?.cancel()
+        streamingTask = nil
+        messages = []
+        draft = ""
+        phase = .idle
+        if let store {
+            conversationId = store.createConversation()
+        }
+    }
+
     /// Ask the server to switch the active teaching mode.
     ///
     /// Client-side guard: requesting Direct while locked returns an

@@ -29,6 +29,11 @@ struct AppShellView: View {
     @State private var chatModel: ChatViewModel
     @State private var progress = CurriculumProgressStore()
 
+    /// Lesson the user asked to start while the chat had existing
+    /// messages. Drives a confirmation alert that lets them choose
+    /// whether to start fresh or add to the current conversation.
+    @State private var pendingLesson: Lesson?
+
     enum Tab: Hashable { case chat, curriculum }
 
     init(
@@ -63,6 +68,23 @@ struct AppShellView: View {
                 .tag(Tab.curriculum)
         }
         .tint(BrandColor.accent)
+        // Confirmation alert for starting a lesson on top of an existing
+        // conversation. The `.alert(presenting:)` form binds to an optional
+        // so the alert only shows while `pendingLesson` is non-nil.
+        .alert(
+            "Start this lesson?",
+            isPresented: Binding(
+                get: { pendingLesson != nil },
+                set: { if !$0 { pendingLesson = nil } }
+            ),
+            presenting: pendingLesson
+        ) { lesson in
+            Button("New chat") { startLesson(lesson, inNewChat: true) }
+            Button("Add to current") { startLesson(lesson, inNewChat: false) }
+            Button("Cancel", role: .cancel) { pendingLesson = nil }
+        } message: { lesson in
+            Text("\"\(lesson.title)\" — would you like a clean slate for this lesson, or add it to your current conversation?")
+        }
     }
 
     // MARK: - Tabs
@@ -87,19 +109,38 @@ struct AppShellView: View {
     private var curriculumTab: some View {
         CurriculumView(
             progress: progress,
-            onStartLesson: { lesson in
-                // Queue the starter into the chat view model, switch
-                // to the Chat tab, then send. The view model handles
-                // the actual network request.
-                chatModel.draft = lesson.starter
-                progress.markCompleted(lesson.id)
-                selectedTab = .chat
-                // Defer send slightly so the tab swap animates first.
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(300))
-                    chatModel.send()
-                }
-            }
+            onStartLesson: handleStartLesson
         )
+    }
+
+    // MARK: - Lesson launch
+
+    /// Curriculum tapped a lesson. If the chat has existing messages we
+    /// ask the user whether to keep that conversation or start fresh;
+    /// otherwise we just kick the lesson off immediately.
+    private func handleStartLesson(_ lesson: Lesson) {
+        if chatModel.messages.isEmpty {
+            startLesson(lesson, inNewChat: false)
+        } else {
+            pendingLesson = lesson
+        }
+    }
+
+    /// Run the lesson's starter. If `inNewChat` is true, the existing
+    /// conversation is archived (preserved in the store) and a fresh
+    /// one is opened before the starter is sent.
+    private func startLesson(_ lesson: Lesson, inNewChat: Bool) {
+        pendingLesson = nil
+        if inNewChat {
+            chatModel.startNewConversation()
+        }
+        chatModel.draft = lesson.starter
+        progress.markCompleted(lesson.id)
+        selectedTab = .chat
+        // Defer send slightly so the tab swap animates first.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            chatModel.send()
+        }
     }
 }
