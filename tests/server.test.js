@@ -394,3 +394,60 @@ describe('Health check', () => {
     assert.equal(json.db, 'connected');
   });
 });
+
+// ===========================================================================
+// 7. Prometheus metrics endpoint
+// ===========================================================================
+
+describe('GET /metrics', () => {
+  async function getText(path) {
+    const res = await fetch(`${BASE_URL}${path}`);
+    const text = await res.text();
+    return { status: res.status, text, contentType: res.headers.get('content-type') };
+  }
+
+  test('serves text/plain Prometheus exposition format', async () => {
+    const { status, text, contentType } = await getText('/metrics');
+    assert.equal(status, 200);
+    assert.match(contentType || '', /^text\/plain/);
+    assert.match(contentType || '', /version=/);
+    // The body should start with `# HELP` per the exposition format.
+    assert.ok(text.startsWith('# HELP'), 'body must start with a HELP line');
+  });
+
+  test('exposes core HTTP metrics', async () => {
+    // Prime one request so the counters emit at least one sample.
+    await get('/api/health');
+    const { text } = await getText('/metrics');
+    assert.ok(text.includes('http_requests_total'));
+    assert.ok(text.includes('http_request_duration_seconds_bucket'));
+    assert.ok(text.includes('http_request_duration_seconds_count'));
+    assert.ok(text.includes('http_request_duration_seconds_sum'));
+  });
+
+  test('service label is applied globally', async () => {
+    const { text } = await getText('/metrics');
+    assert.ok(text.includes('service="mercurius"'));
+  });
+
+  test('counts 400 responses against the matched route', async () => {
+    // Send a known-bad request to /api/chat → validation 400.
+    await post('/api/chat', { messages: [] });
+    const { text } = await getText('/metrics');
+    // We don't pin an exact count since other tests also hit /api/chat —
+    // we just assert the label combination appears at least once.
+    assert.match(
+      text,
+      /http_requests_total\{[^}]*route="\/api\/chat"[^}]*status="400"[^}]*\}\s+\d+/,
+    );
+  });
+
+  test('collapses unknown routes into the `unmatched` bucket', async () => {
+    await get('/api/totally-nonexistent-route');
+    const { text } = await getText('/metrics');
+    assert.match(
+      text,
+      /http_requests_total\{[^}]*route="unmatched"[^}]*\}\s+\d+/,
+    );
+  });
+});

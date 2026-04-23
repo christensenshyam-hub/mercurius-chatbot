@@ -24,6 +24,7 @@ const {
   ConceptMapRequest,
 } = require('./lib/schemas');
 const { pickModel } = require('./lib/modelAllowlist');
+const metrics = require('./lib/metrics');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1136,6 +1137,14 @@ app.use((req, res, next) => {
   res.setHeader('x-trace-id', req.traceId);
   next();
 });
+
+// Prometheus metrics observer — runs on every response. Must come
+// before any route handler so the `res.finish` hook captures the
+// final status code + duration. The /metrics endpoint itself is
+// also a counted request (minor self-observation noise but
+// immaterial at any scrape rate).
+app.use(metrics.observe());
+metrics.mount(app, '/metrics');
 
 // Serve static files from the public directory
 app.use(express.static(require('path').join(__dirname, 'public')));
