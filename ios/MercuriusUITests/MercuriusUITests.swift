@@ -121,13 +121,15 @@ final class MercuriusUITests: XCTestCase {
 
         app.buttons["Curriculum"].tap()
 
-        // `navigationTitle("Curriculum")` inside the NavigationStack renders
-        // as a static text. Distinct from the tab-bar button label because
-        // they live on different elements (navigation bar vs. tab bar).
-        let progressHeader = app.staticTexts["Overall progress"]
+        // The navigation bar title is the sturdiest anchor: on iOS 17 it
+        // surfaces as a staticText; on iOS 18+ the List section header
+        // "Overall progress" is accessibility role `.header`, not
+        // `.staticText`, so matching against staticTexts misses it. The
+        // navigation bar name is consistent across versions.
+        let navBar = app.navigationBars["Curriculum"].firstMatch
         XCTAssertTrue(
-            progressHeader.waitForExistence(timeout: Self.lookupTimeout),
-            "Curriculum tab did not present the progress section"
+            navBar.waitForExistence(timeout: Self.lookupTimeout),
+            "Curriculum tab did not present its NavigationStack (navigationTitle 'Curriculum' missing)"
         )
     }
 
@@ -137,7 +139,9 @@ final class MercuriusUITests: XCTestCase {
         waitForBootComplete(app)
 
         app.buttons["Curriculum"].tap()
-        _ = app.staticTexts["Overall progress"].waitForExistence(timeout: Self.lookupTimeout)
+        // Same iOS 18 accessibility quirk as in the test above — gate on
+        // the navigation bar, not the section header.
+        _ = app.navigationBars["Curriculum"].firstMatch.waitForExistence(timeout: Self.lookupTimeout)
 
         // These strings come straight from `MercuriusCurriculum.units` —
         // if a unit title is renamed, update here too. Intentional: keeps
@@ -223,11 +227,19 @@ final class MercuriusUITests: XCTestCase {
 
         app.buttons["Settings"].tap()
 
-        // Settings sheet uses Form sections with headers "Appearance",
-        // "Session", "About". Header text surfaces as static text.
+        // The sheet's navigation bar "Settings" and its toolbar "Done"
+        // button are stable anchors across iOS versions. Form section
+        // headers ("Appearance", "Session", "About") render as
+        // accessibility role `.header` on iOS 18+, so matching against
+        // `staticTexts` misses them.
+        let sheetNavBar = app.navigationBars["Settings"].firstMatch
         XCTAssertTrue(
-            app.staticTexts["Appearance"].waitForExistence(timeout: Self.lookupTimeout),
-            "Settings sheet did not present the Appearance section"
+            sheetNavBar.waitForExistence(timeout: Self.lookupTimeout),
+            "Settings sheet did not present — Settings navigation bar missing"
+        )
+        XCTAssertTrue(
+            app.buttons["Done"].exists,
+            "Settings sheet opened but the Done toolbar button is missing"
         )
 
         // Close via the Done toolbar button and confirm we return to chat.
