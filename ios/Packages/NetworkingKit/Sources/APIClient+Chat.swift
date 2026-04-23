@@ -11,88 +11,84 @@ extension APIClient {
     ///   error mid-stream,
     /// - or throws `APIError` if the transport fails.
     ///
-    /// The stream is cancellable: if the consuming task is cancelled,
-    /// the underlying URLSession request is cancelled too.
-    ///
-    /// - Parameters:
-    ///   - messages: full conversation history to send (incl. the new
-    ///     user message as the last item).
-    ///   - sessionId: the current device's session identifier.
+    /// Implementation notes:
+    /// - We use a `URLSessionDataDelegate` (not `URLSession.bytes(for:)`)
+    ///   because the latter has a documented buffering issue over HTTP/2
+    ///   SSE on iOS 17 that can delay events by seconds or drop them
+    ///   entirely.
+    /// - Each call creates a dedicated `URLSession` with our delegate,
+    ///   which is invalidated when the task completes. That's the
+    ///   supported pattern for per-request delegates.
     public func streamChat(
         messages: [ChatMessageDTO],
         sessionId: String
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    try await performStream(
-                        messages: messages,
-                        sessionId: sessionId,
-                        continuation: continuation
-                    )
-                    continuation.finish()
-                } catch is CancellationError {
-                    continuation.finish(throwing: APIError.cancelled)
-                } catch let error as APIError {
-                    continuation.finish(throwing: error)
-                } catch let error as URLError {
-                    continuation.finish(throwing: Self.mapURLError(error))
-                } catch {
-                    continuation.finish(throwing: APIError.unknown(underlying: String(describing: error)))
-                }
+            let request: URLRequest
+            do {
+                request = try Self.buildChatRequest(
+                    baseURL: environmentBaseURL,
+                    timeout: streamingTimeout,
+                    messages: messages,
+                    sessionId: sessionId
+                )
+            } catch {
+                continuation.finish(throwing: error)
+                return
             }
 
-            continuation.onTermination = { _ in task.cancel() }
+            let delegate = SSEDataDelegate(continuation: continuation)
+            let config = URLSessionConfiguration.ephemeral
+            config.timeoutIntervalForRequest = streamingTimeout
+            config.timeoutIntervalForResource = streamingTimeout * 2
+            config.waitsForConnectivity = false
+            // Disable response caching — SSE responses should never be
+            // cached, and cache lookups can delay delivery.
+            config.urlCache = nil
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+
+            let session = URLSession(
+                configuration: config,
+                delegate: delegate,
+                delegateQueue: nil
+            )
+
+            let task = session.dataTask(with: request)
+            task.resume()
+
+            continuation.onTermination = { _ in
+                task.cancel()
+                session.invalidateAndCancel()
+            }
         }
     }
 
-    private func performStream(
+    // MARK: - Request construction
+
+    private static func buildChatRequest(
+        baseURL: URL,
+        timeout: TimeInterval,
         messages: [ChatMessageDTO],
-        sessionId: String,
-        continuation: AsyncThrowingStream<ChatStreamEvent, Error>.Continuation
-    ) async throws {
-        let url = environmentBaseURL.appendingPathComponent("api/chat")
+        sessionId: String
+    ) throws -> URLRequest {
+        let url = baseURL.appendingPathComponent("api/chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = streamingTimeout
+        request.timeoutInterval = timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue(UUID().uuidString, forHTTPHeaderField: "x-trace-id")
 
-        let body = ChatRequestBody(messages: messages, sessionId: sessionId)
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (bytes, response) = try await urlSession.bytes(for: request)
-
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.unknown(underlying: "Non-HTTP response")
+        struct Body: Encodable {
+            let messages: [ChatMessageDTO]
+            let sessionId: String
         }
-
-        // If the server returned a non-200 response, it's JSON (not SSE).
-        // Read the full body, then translate to an APIError.
-        if !(200...299).contains(http.statusCode) {
-            let data = try await Self.drain(bytes: bytes)
-            try APIClient.validate(statusCode: http.statusCode, data: data)
-            return  // unreachable — validate threw
+        do {
+            request.httpBody = try JSONEncoder().encode(Body(messages: messages, sessionId: sessionId))
+        } catch {
+            throw APIError.invalidRequest(reason: "Failed to encode chat body")
         }
-
-        var parser = SSEParser()
-        for try await line in bytes.lines {
-            if Task.isCancelled { throw CancellationError() }
-
-            guard let payload = parser.append(line: line) else { continue }
-            if let event = try parseChatEvent(from: payload) {
-                continuation.yield(event)
-            }
-        }
-    }
-
-    private static func drain(bytes: URLSession.AsyncBytes) async throws -> Data {
-        var data = Data()
-        for try await byte in bytes {
-            data.append(byte)
-            if data.count > 64_000 { break }  // defend against runaway bodies
-        }
-        return data
+        return request
     }
 }
