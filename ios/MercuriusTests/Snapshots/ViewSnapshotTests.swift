@@ -186,6 +186,102 @@ final class ViewSnapshotTests: XCTestCase {
             )
         )
     }
+
+    // MARK: - MessageBubbleView
+    //
+    // Covers each visual state of a message bubble. Before this, the
+    // file was at 0% on both the SPM pathway (SPM tests don't render
+    // SwiftUI) and the xcodebuild pathway (UI tests never trigger send
+    // so no bubbles are constructed).
+
+    func testMessageBubbleUserShort() {
+        let message = ChatMessage(role: .user, content: "Teach me about AI alignment.")
+        let view = bubbleFrame(MessageBubbleView(message: message))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 90)
+            )
+        )
+    }
+
+    func testMessageBubbleUserLong() {
+        let message = ChatMessage(
+            role: .user,
+            content: "I don't really understand how training data influences what an LLM says. Can you walk me through it with a concrete example?"
+        )
+        let view = bubbleFrame(MessageBubbleView(message: message))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 160)
+            )
+        )
+    }
+
+    func testMessageBubbleAssistantPlain() {
+        let message = ChatMessage(
+            role: .assistant,
+            content: "The alignment problem is about getting AI behavior to match human intent."
+        )
+        let view = bubbleFrame(MessageBubbleView(message: message))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 120)
+            )
+        )
+    }
+
+    func testMessageBubbleAssistantTyping() {
+        // Empty content + streaming = typing indicator. The TypingDots
+        // animation starts in `onAppear`, so the initial snapshot frame
+        // captures the dots in their baseline (non-animated) state.
+        let message = ChatMessage(
+            role: .assistant,
+            content: "",
+            status: .streaming
+        )
+        let view = bubbleFrame(MessageBubbleView(message: message))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 80)
+            )
+        )
+    }
+
+    func testMessageBubbleAssistantFailed() {
+        let message = ChatMessage(
+            role: .assistant,
+            content: "Partial response before the connection dropped.",
+            status: .failed(reason: "Network error. Try again.")
+        )
+        let view = bubbleFrame(MessageBubbleView(message: message))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 160)
+            )
+        )
+    }
+}
+
+// MARK: - View helpers
+
+/// Wrap a MessageBubbleView in the same padding + background a real
+/// chat list provides, so the snapshot matches what ships in the app.
+@MainActor
+private func bubbleFrame<V: View>(_ content: V) -> some View {
+    content
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(BrandColor.background)
 }
 
 // MARK: - Helpers

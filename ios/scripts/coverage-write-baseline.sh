@@ -61,12 +61,28 @@ fi
   echo "| SPM packages (\`swift test\`) | ${spm_lines_pct:-n/a} |"
   echo "| Xcode app target (\`xcodebuild test\`) | ${xcode_app_pct:-n/a} |"
   echo
-  echo "## Per-framework (xcodebuild)"
+  echo "## Two pathways, one codebase"
   echo
-  echo "Covers everything linked into the test-run process, including the"
-  echo "SPM packages that the app embeds. Third-party packages (e.g."
-  echo "\`SnapshotTesting\`) appear with low coverage because we exercise"
-  echo "our own code through them, not their internals."
+  echo "Every file is potentially exercised by two independent test"
+  echo "pipelines — read the numbers as MAX(SPM, xcodebuild), not as"
+  echo "either one alone:"
+  echo
+  echo "- **SPM** (\`swift test\` on macOS) covers view models, networking,"
+  echo "  persistence, parsers — anything that doesn't need a SwiftUI"
+  echo "  runtime. Reports per-file % with line coverage."
+  echo "- **xcodebuild** on iOS Simulator covers views through"
+  echo "  snapshot + XCUITest. Reports per-framework % aggregated across"
+  echo "  all files in each package product."
+  echo
+  echo "Known rows to ignore:"
+  echo
+  echo "- \`NetworkingKit  0  0.00% (0/0)\` in the xcodebuild table is the"
+  echo "  empty \`*_PackageProduct\` wrapper, not the module. NetworkingKit"
+  echo "  is thoroughly covered by the SPM pathway — see spm-summary.txt."
+  echo "- \`SnapshotTesting\` low coverage is expected — we ship our code"
+  echo "  through that library, we don't test its internals."
+  echo
+  echo "## Per-framework (xcodebuild)"
   echo
   echo '```'
   if [ -f "${XCODE_SUMMARY}" ]; then
@@ -81,17 +97,6 @@ fi
   echo "- Full per-file SPM report: \`build/coverage/spm-summary.txt\`"
   echo "- Full per-framework xcodebuild report: \`build/coverage/xcode-summary.txt\`"
   echo "- Raw xcresult bundle: \`build/coverage/xcode.xcresult\` (open in Xcode for the interactive viewer)"
-  echo
-  echo "## Scope notes"
-  echo
-  echo "- SPM coverage ignores \`.build/\`, \`Tests/\`, and \`Fixtures/\` dirs."
-  echo "- SPM-only tests run with \`swift test\` on macOS. The xcodebuild"
-  echo "  run exercises the same modules from the iOS simulator, so"
-  echo "  numbers differ by pathway rather than being strictly additive."
-  echo "- Views that are only rendered through SwiftUI surface (most"
-  echo "  \`*View.swift\` files) score 0% on the SPM side because SPM"
-  echo "  tests don't boot a SwiftUI runtime. They're covered by the"
-  echo "  xcodebuild snapshot + UI test run instead."
 } > "${OUT}"
 
 echo "Wrote ${OUT}"

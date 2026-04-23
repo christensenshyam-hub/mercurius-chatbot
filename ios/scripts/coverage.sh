@@ -78,19 +78,35 @@ run_xcode() {
   local xcresult="${BUILD_DIR}/xcode.xcresult"
   rm -rf "${xcresult}"
 
+  # Coverage data is captured even when individual tests fail, so
+  # don't treat a test-run failure as a coverage-run failure — we
+  # still want the summary. Capture the exit code and pass it through
+  # at the end so CI can still see red.
+  local xcode_status=0
   xcodebuild test \
     -project Mercurius.xcodeproj \
     -scheme Mercurius \
     -destination "${SIMULATOR}" \
     -enableCodeCoverage YES \
     -resultBundlePath "${xcresult}" \
-    >/dev/null
+    >/dev/null \
+    || xcode_status=$?
+
+  if [ ! -d "${xcresult}" ]; then
+    echo "  xcresult bundle not produced — coverage unavailable (exit=${xcode_status})."
+    return "${xcode_status}"
+  fi
 
   # Extract a text report. `xcrun xccov view --report` is the Apple
   # interface into xcresult coverage data.
   xcrun xccov view --report --only-targets "${xcresult}" \
     | tee "${BUILD_DIR}/xcode-summary.txt"
   echo
+
+  if [ "${xcode_status}" -ne 0 ]; then
+    echo "  NOTE: xcodebuild test exited ${xcode_status} — coverage captured anyway."
+  fi
+  return 0
 }
 
 case "${MODE}" in
