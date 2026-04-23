@@ -109,13 +109,20 @@ public struct ChatView: View {
         HStack(spacing: BrandSpacing.md) {
             BrandLogo(style: .mark, size: 32)
             VStack(alignment: .leading, spacing: 0) {
+                // `lineLimit(1) + minimumScaleFactor` caps growth at extreme
+                // Dynamic Type sizes so the brand header doesn't wrap onto
+                // three lines and push content out of the safe area.
                 Text("Mercurius AI")
                     .font(BrandFont.subheading)
                     .foregroundStyle(BrandColor.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Text("AI LITERACY TUTOR")
                     .font(BrandFont.caption)
                     .tracking(1.5)
                     .foregroundStyle(BrandColor.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             Spacer()
             toolsMenuButton

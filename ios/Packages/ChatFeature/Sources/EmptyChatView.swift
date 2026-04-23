@@ -14,31 +14,37 @@ struct EmptyChatView: View {
     ]
 
     var body: some View {
-        VStack(spacing: BrandSpacing.xl) {
-            Spacer()
+        // Wrapped in a ScrollView so that at accessibility Dynamic Type sizes
+        // the logo + starter prompts remain reachable even when they exceed
+        // the screen height. Centered with top/bottom spacers at normal sizes.
+        ScrollView {
+            VStack(spacing: BrandSpacing.xl) {
+                Spacer(minLength: BrandSpacing.xl)
 
-            VStack(spacing: BrandSpacing.md) {
-                BrandLogo(style: .full, size: 180)
+                VStack(spacing: BrandSpacing.md) {
+                    BrandLogo(style: .full, size: 180)
 
-                Text("Here to help you think, not think for you.")
-                    .font(BrandFont.caption)
-                    .italic()
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
+                    Text("Here to help you think, not think for you.")
+                        .font(BrandFont.caption)
+                        .italic()
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
 
-            VStack(spacing: BrandSpacing.sm) {
-                ForEach(suggestions, id: \.self) { prompt in
-                    SuggestionButton(prompt: prompt) {
-                        onSuggestion(prompt)
+                VStack(spacing: BrandSpacing.sm) {
+                    ForEach(suggestions, id: \.self) { prompt in
+                        SuggestionButton(prompt: prompt) {
+                            onSuggestion(prompt)
+                        }
                     }
                 }
+                .padding(.horizontal, BrandSpacing.lg)
+
+                Spacer(minLength: BrandSpacing.xl)
             }
             .padding(.horizontal, BrandSpacing.lg)
-
-            Spacer()
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, BrandSpacing.lg)
     }
 }
 
@@ -55,6 +61,8 @@ private struct SuggestionButton: View {
                 Text(prompt)
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, BrandSpacing.md)
                     .padding(.trailing, BrandSpacing.md)

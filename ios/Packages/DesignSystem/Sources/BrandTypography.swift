@@ -2,47 +2,37 @@ import SwiftUI
 
 /// Mercurius typography scale.
 ///
-/// All styles use `.font(BrandFont.xxx)` modifiers that scale with Dynamic
-/// Type. Never use raw `Font.system(size:)` in features — always go through
-/// this file so sizes stay consistent and accessible.
+/// Every style is built from a `Font.TextStyle` so it scales automatically
+/// with the user's Dynamic Type setting — including the accessibility sizes.
+/// Never use `Font.system(size:)` for reading text in features; route through
+/// this file so sizes stay consistent and scale for users who need them to.
+///
+/// Note: the pre-iOS-16 workaround in this file (a `.with(relativeTo:)` helper
+/// that silently returned `self`) was a no-op — Dynamic Type did NOT scale.
+/// The `Font.system(_:design:weight:)` API used below is the supported path
+/// from iOS 16 onward, which is below our iOS 17 deployment target.
 public enum BrandFont {
     /// Largest display text (onboarding headers, big empty states).
-    public static let largeTitle = Font.system(size: 34, weight: .bold, design: .default)
-        .with(relativeTo: .largeTitle)
+    /// Scales from `.largeTitle`.
+    public static let largeTitle = Font.system(.largeTitle, design: .default, weight: .bold)
 
-    /// Screen / section titles.
-    public static let title = Font.system(size: 22, weight: .bold, design: .default)
-        .with(relativeTo: .title2)
+    /// Screen / section titles. Scales from `.title2`.
+    public static let title = Font.system(.title2, design: .default, weight: .bold)
 
-    /// Subheadings and prominent labels.
-    public static let subheading = Font.system(size: 17, weight: .semibold, design: .default)
-        .with(relativeTo: .headline)
+    /// Subheadings and prominent labels. Scales from `.headline`.
+    public static let subheading = Font.system(.headline, design: .default, weight: .semibold)
 
-    /// Default reading text for body copy and messages.
-    public static let body = Font.system(size: 16, weight: .regular, design: .default)
-        .with(relativeTo: .body)
+    /// Default reading text for body copy and messages. Scales from `.body`.
+    public static let body = Font.system(.body, design: .default, weight: .regular)
 
-    /// Emphasis within body text.
-    public static let bodyEmphasized = Font.system(size: 16, weight: .semibold, design: .default)
-        .with(relativeTo: .body)
+    /// Emphasis within body text. Same scaling as `.body`, heavier weight.
+    public static let bodyEmphasized = Font.system(.body, design: .default, weight: .semibold)
 
-    /// Supporting text, timestamps, chip labels.
-    public static let caption = Font.system(size: 13, weight: .regular, design: .default)
-        .with(relativeTo: .footnote)
+    /// Supporting text, timestamps, chip labels. Scales from `.footnote`.
+    public static let caption = Font.system(.footnote, design: .default, weight: .regular)
 
-    /// Small monospaced, used only for code fences.
-    public static let mono = Font.system(size: 13, weight: .regular, design: .monospaced)
-        .with(relativeTo: .footnote)
-}
-
-private extension Font {
-    /// Attach a Dynamic Type reference style so the size scales.
-    func with(relativeTo textStyle: Font.TextStyle) -> Font {
-        // `Font.system(size:weight:design:)` + `.leading(.standard)` does not
-        // scale with Dynamic Type out of the box. Using `.scaledFont` via the
-        // ViewModifier path is the supported way.
-        self
-    }
+    /// Small monospaced, used only for code fences. Scales from `.footnote`.
+    public static let mono = Font.system(.footnote, design: .monospaced, weight: .regular)
 }
 
 /// Standard spacing scale. Use these instead of raw numbers.
