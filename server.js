@@ -23,6 +23,7 @@ const {
   ReportCardRequest,
   ConceptMapRequest,
 } = require('./lib/schemas');
+const { pickModel } = require('./lib/modelAllowlist');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1147,7 +1148,19 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
-  const { messages: clientMessages, sessionId } = req.validated;
+  const { messages: clientMessages, sessionId, model: requestedModel } = req.validated;
+
+  // Model allowlist — if the caller named a model, it must be permitted.
+  // Otherwise we fall through to the server default (MODEL).
+  const picked = pickModel(requestedModel, MODEL);
+  if (picked.error) {
+    logger.forRequest(req).warn({ requestedModel, reason: picked.error }, 'model not on allowlist');
+    return res.status(400).json({
+      error: 'invalid_model',
+      reply: 'That model is not available on this server.',
+    });
+  }
+  const chosenModel = picked.model;
 
   // Rate limit
   if (isRateLimited(sessionId)) {
@@ -1306,7 +1319,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const streamTimeout = setTimeout(() => streamAbort.abort(), 45000);
 
       const stream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-6',
+        model: chosenModel,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: trimmed,
@@ -1371,7 +1384,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // Standard JSON path (widget — existing behavior, unchanged)
       // -----------------------------------------------------------------------
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: chosenModel,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: trimmed,

@@ -183,6 +183,47 @@ describe('POST /api/chat — input validation', () => {
     // error (500) due to the placeholder key. It should NOT be 400 for length.
     assert.notEqual(status, 400, 'Server should truncate, not reject, long content');
   });
+
+  test('rejects messages with non-string content (Zod catches)', async () => {
+    const { status, json } = await post('/api/chat', {
+      sessionId: makeSessionId(),
+      messages: [{ role: 'user', content: 42 }],
+    });
+    assert.equal(status, 400);
+    assert.equal(json.error, 'invalid_messages');
+  });
+
+  test('rejects messages with unknown role (Zod enum catches)', async () => {
+    const { status, json } = await post('/api/chat', {
+      sessionId: makeSessionId(),
+      messages: [{ role: 'tool', content: 'hi' }],
+    });
+    assert.equal(status, 400);
+    assert.equal(json.error, 'invalid_messages');
+  });
+
+  test('rejects off-allowlist model with 400 invalid_model', async () => {
+    const { status, json } = await post('/api/chat', {
+      sessionId: makeSessionId(),
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'gpt-5-ultra-expensive',
+    });
+    assert.equal(status, 400);
+    assert.equal(json.error, 'invalid_model');
+  });
+
+  test('accepts an allowlisted model override (proceeds past 400)', async () => {
+    // Spec: if the override matches the server default it passes the
+    // allowlist check. The downstream Anthropic call then fails with
+    // the placeholder key and returns 500, not 400. The important
+    // assertion is that the model-check path didn't reject.
+    const { status } = await post('/api/chat', {
+      sessionId: makeSessionId(),
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'claude-sonnet-4-6',
+    });
+    assert.notEqual(status, 400, 'on-allowlist model must not be rejected at validation');
+  });
 });
 
 // ===========================================================================
