@@ -285,6 +285,83 @@ Returns server status.
 
 ---
 
+## Native iOS App
+
+`ios/` contains a full native Swift/SwiftUI companion app that talks to the same backend. It isn't a re-packaging of the web widget — it's an architecturally independent build designed to ship through the App Store.
+
+### Architecture
+
+Modular Swift Package Manager layout under `ios/Packages/`:
+
+| Module | Responsibility |
+|---|---|
+| `DesignSystem` | Brand colors, typography (Dynamic-Type-aware), logo, reusable buttons |
+| `NetworkingKit` | `APIClient`, session identity, SSE streaming, typed `APIError`, keychain wrapper |
+| `PersistenceKit` | SwiftData-backed chat history + in-memory fallback |
+| `ChatFeature` | Chat view model, message list, mode selector, quiz + report-card tools |
+| `CurriculumFeature` | 5 units × 4 lessons, progress store with forward-compatible migrations |
+| `ClubFeature` | Schedule / upcoming meetings / blog, pulled live from `mayoailiteracy.com` |
+| `SettingsFeature` | Theme preference, session reset |
+| `AppFeature` | Composition root — `AppEnvironment`, `RootView`, `AppShellView` (TabView) |
+| `ArchitectureTests` | Dependency-graph validator against a pinned `manifest.json` fixture |
+
+Dependencies flow strictly downward. `ArchitectureTests` enforces the layering at test time — a PR that adds a cross-feature import gets caught.
+
+The Xcode project itself is generated from `ios/project.yml` via [xcodegen](https://github.com/yonaskolb/XcodeGen), so nothing is committed that can't be rebuilt from source.
+
+### Building + running
+
+Prerequisites: **Xcode 16+**, **xcodegen** (`brew install xcodegen`).
+
+```bash
+cd ios
+xcodegen generate
+open Mercurius.xcodeproj
+```
+
+Run on the **iPhone 16** simulator (iOS 17+). No API key configuration is needed inside the app — it points at `mercurius-chatbot-production.up.railway.app` by default.
+
+### Test suite
+
+Four layers of coverage, all driven by the `Mercurius` scheme:
+
+| Layer | Tool | Count |
+|---|---|---|
+| Swift Testing (`@Test`) — SPM packages | `swift test --parallel` from `ios/Packages` | 204 across 41 suites |
+| XCTest unit + snapshot (MercuriusTests) | `xcodebuild test` | 24 |
+| XCUITest end-to-end (MercuriusUITests) | `xcodebuild test` | 10 |
+| Performance (MercuriusUITests) | `xcodebuild test` — local only, skipped in CI | 3 |
+
+Every PR runs the full matrix on GitHub Actions (`.github/workflows/ios.yml`). The badge above reflects the latest run.
+
+```bash
+# SPM tests (fast, runs on host macOS)
+cd ios/Packages && swift test --parallel
+
+# Everything iOS-sim-side
+cd ios && xcodebuild test \
+  -project Mercurius.xcodeproj \
+  -scheme Mercurius \
+  -destination 'platform=iOS Simulator,name=iPhone 16'
+```
+
+Coverage baseline regenerates via `ios/scripts/coverage.sh refresh-baseline`; current numbers live in `ios/docs/COVERAGE.md`.
+
+### Distinctive iOS features
+
+- **Full Dynamic Type support**, including accessibility sizes (canary snapshot tests catch layout regressions).
+- **SSE streaming via `URLSessionDataDelegate`** — works around a known iOS 17 buffering bug in `URLSession.bytes(for:)` over HTTP/2 SSE.
+- **End-to-end HTTP tests via `StubURLProtocol`** — every error code (401, 429, 500, offline, timeout), every happy path, and mid-stream chunks split across packet boundaries.
+- **Snapshot tests for every ChatFeature view state** (bubbles, typing indicator, failure, quiz, report card) at light + dark + XXL Dynamic Type.
+- **Performance baselines** for cold launch, chat scroll, and memory footprint (via a `-SeedDemoChat` launch arg that pre-populates the chat store).
+- **Privacy manifest** declaring no tracking, no tracking domains, and a single required-reason API (`UserDefaults`, `CA92.1`).
+
+### App Store readiness
+
+`ios/docs/APP_STORE.md` is the full submission checklist with every remaining human-action gate called out explicitly — reserve the bundle identifier, set `DEVELOPMENT_TEAM`, publish a privacy-policy URL, capture screenshots, then run the archive + validate one-liner.
+
+---
+
 ## License
 
 MIT. Use freely in educational contexts.
