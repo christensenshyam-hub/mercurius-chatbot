@@ -14,6 +14,7 @@ const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('./db');
+const logger = require('./lib/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,7 +67,7 @@ async function getEventsData() {
       eventsCacheTime = now;
     }
   } catch (e) {
-    console.warn('[Mercurius] Could not fetch events-data.json:', e.message);
+    logger.warn({ err: e.message }, 'could not fetch events-data.json');
   }
   return eventsCache;
 }
@@ -81,7 +82,7 @@ async function getBlogContent() {
       blogCacheTime = now;
     }
   } catch (e) {
-    console.warn('[Mercurius] Could not fetch blog-content.json:', e.message);
+    logger.warn({ err: e.message }, 'could not fetch blog-content.json');
   }
   return blogCache;
 }
@@ -966,11 +967,11 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
         }
       }
     } catch (e) {
-      console.warn('[Mercurius] Memory extraction failed (model: ' + MEMORY_MODEL + '):', e.message);
+      logger.warn({ err: e.message, model: MEMORY_MODEL }, 'memory extraction failed');
       // Graceful degradation — memory extraction is best-effort
     }
   } catch (e) {
-    console.warn('[Mercurius] Memory extraction failed:', e.message);
+    logger.warn({ err: e.message }, 'memory extraction failed');
   }
 }
 
@@ -1162,7 +1163,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   }
 
   if (containsInjectionAttempt(lastMsg.content)) {
-    console.warn(`[${req.traceId}] Prompt injection attempt detected from session ${sessionId}`);
+    logger.forRequest(req).warn({ sessionId }, 'prompt injection attempt detected');
     // Don't block — log and let the system prompt handle it. But add a defense note.
     // The system prompt's instructions take priority over user messages.
   }
@@ -1208,7 +1209,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         memoryContext += `\nReference past discussions naturally when relevant.`;
       }
     }
-  } catch (e) { console.warn('[Mercurius] Memory profile build failed:', e.message); }
+  } catch (e) { logger.warn({ err: e.message }, 'memory profile build failed'); }
 
   // Welcome-back context for returning users
   if (dbHistory.length <= 1 && memoryContext.length > 50) {
@@ -1315,7 +1316,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       // Helper to safely write to SSE response
       const safeWrite = (data) => {
         if (!res.writableEnded) {
-          try { res.write(data); } catch (e) { console.warn('[Mercurius] SSE write failed:', e.message); }
+          try { res.write(data); } catch (e) { logger.warn({ err: e.message }, 'SSE write failed'); }
         }
       };
 
@@ -1345,18 +1346,18 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 
         safeWrite('data: [DONE]\n\n');
         if (!res.writableEnded) {
-          try { res.end(); } catch (e) { console.warn('[Mercurius] SSE end failed:', e.message); }
+          try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
       });
 
       stream.on('error', (err) => {
         clearTimeout(streamTimeout);
-        console.error(`[${req.traceId}] Stream error:`, err.message);
+        logger.forRequest(req).error({ err: err.message }, 'stream error');
         if (!res.writableEnded) {
           try {
             res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
             res.end();
-          } catch (e) { console.warn('[Mercurius] SSE error-write failed:', e.message); }
+          } catch (e) { logger.warn({ err: e.message }, 'SSE error-write failed'); }
         }
       });
 
@@ -1383,7 +1384,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       await db.saveMessage(sessionId, 'assistant', reply);
 
       // Background: extract and save memories (non-blocking)
-      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { console.warn('[Mercurius] Background memory save failed:', e.message); });
+      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { logger.warn({ err: e.message }, 'background memory save failed'); });
 
       // Session summary suggestion — after 8+ exchanges, hint to the user
       const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0 && !testTriggered;
@@ -1402,7 +1403,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
     }
 
   } catch (err) {
-    console.error(`[${req.traceId}] Anthropic API error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Anthropic API error');
     return res.status(500).json({
       error: 'api_error',
       reply: "Hmm, something went wrong on my end — which is itself a good reminder that AI systems fail. Try again in a moment."
@@ -1423,7 +1424,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
     const recentMessages = await db.getMessages(sessionId, 10);
     res.json({ stats, recentMessages });
   } catch (e) {
-    console.error(`[${req.traceId}] Session fetch error:`, e.message);
+    logger.forRequest(req).error({ err: e.message }, 'Session fetch error');
     res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1472,7 +1473,7 @@ app.post('/api/quiz', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
-    console.error(`[${req.traceId}] Quiz error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Quiz error');
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
   }
 });
@@ -1496,7 +1497,7 @@ app.post('/api/report-card', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
-    console.error(`[${req.traceId}] Report card error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Report card error');
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
 });
@@ -1520,7 +1521,7 @@ app.post('/api/concept-map', async (req, res) => {
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
-    console.error(`[${req.traceId}] Concept map error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Concept map error');
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
 });
@@ -1532,7 +1533,7 @@ app.get('/api/leaderboard', async (req, res) => {
   try {
     return res.json(await db.getLeaderboard());
   } catch(err) {
-    console.error(`[${req.traceId}] Leaderboard error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Leaderboard error');
     return res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1544,7 +1545,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     return res.json(await db.getDashboardStats());
   } catch(err) {
-    console.error(`[${req.traceId}] Dashboard error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Dashboard error');
     return res.status(500).json({ error: 'db_error' });
   }
 });
@@ -1580,7 +1581,7 @@ app.post('/api/admin/events', async (req, res) => {
   // Bust memory cache so next request picks up new data immediately
   eventsCache = data;
   eventsCacheTime = Date.now();
-  console.log('[Mercurius] Events updated via admin panel');
+  logger.info('events updated via admin panel');
   return res.json({ ok: true, message: 'Events updated. Mercurius will use this data immediately.' });
 });
 
@@ -1608,7 +1609,7 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error(`[${req.traceId}] Factcheck error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Factcheck error');
     return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
   }
 });
@@ -1637,7 +1638,7 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error(`[${req.traceId}] Analyze error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Analyze error');
     return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
   }
 });
@@ -1664,7 +1665,7 @@ app.get('/api/pre-briefing', async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
-    console.error(`[${req.traceId}] Pre-briefing error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'pre-briefing error');
     return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
 });
@@ -1692,7 +1693,7 @@ app.get('/api/challenge', async (req, res) => {
       starter: 'I want to take on the weekly challenge: ' + challengePrompt,
     });
   } catch (err) {
-    console.error(`[${req.traceId}] Challenge error:`, err.message);
+    logger.forRequest(req).error({ err: err.message }, 'Challenge error');
     return res.status(500).json({ error: 'api_error' });
   }
 });
@@ -1748,23 +1749,29 @@ app.use('/api/*', (_req, res) => {
 let server;
 db.initSchema().then(() => {
   server = app.listen(PORT, () => {
-    console.log(`\n✦  Mercurius Ⅰ is running`);
-    console.log(`   Local:   http://localhost:${PORT}`);
-    console.log(`   Allowed origin: ${ALLOWED_ORIGIN}`);
-    console.log(`   Model: ${MODEL}\n`);
+    logger.info(
+      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL },
+      'Mercurius Ⅰ is running'
+    );
+    // Keep a single stdout line the integration-test spawner can grep
+    // for — the test expects the literal word "Mercurius" to know the
+    // server is ready. Structured logs with level INFO also match.
+    if (process.env.NODE_ENV !== 'production') {
+      process.stdout.write(`Mercurius ready on http://localhost:${PORT}\n`);
+    }
   });
 }).catch(err => {
-  console.error('Failed to initialize database:', err);
+  logger.error({ err: err.message }, 'failed to initialize database');
   process.exit(1);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[Mercurius] Graceful shutdown...');
+  logger.info('graceful shutdown');
   if (server) server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10000);
 });
 process.on('SIGINT', () => {
-  console.log('[Mercurius] Interrupted');
+  logger.info('interrupted');
   if (server) server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);
 });

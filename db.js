@@ -1,5 +1,7 @@
 'use strict';
 
+const logger = require('./lib/logger');
+
 // ─── Database abstraction: PostgreSQL (production) or SQLite (local dev) ───
 const DATABASE_URL = process.env.DATABASE_URL;
 const USE_PG = !!DATABASE_URL;
@@ -14,13 +16,13 @@ if (USE_PG) {
     max: 10,
     idleTimeoutMillis: 30000,
   });
-  console.log('  DB: PostgreSQL (persistent)');
+  logger.info({ driver: 'pg' }, 'db driver: PostgreSQL (persistent)');
 } else {
   const Database = require('better-sqlite3');
   const path = require('path');
   sqliteDb = new Database(path.join(__dirname, 'mercurius.db'));
   sqliteDb.pragma('journal_mode = WAL');
-  console.log('  DB: SQLite (ephemeral)');
+  logger.info({ driver: 'sqlite' }, 'db driver: SQLite (ephemeral)');
 }
 
 // ─── Helper: run a query ───
