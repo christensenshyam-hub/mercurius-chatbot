@@ -1,0 +1,121 @@
+name: iOS
+
+# Runs the native-app test suite on every push to main and every PR
+# targeting main. Two jobs in parallel:
+#
+#   * spm       — `swift test` on the macOS host. Covers every SPM
+#                 package test target (174 tests / 37 suites) plus
+#                 ArchitectureTests which validate the package
+#                 dependency graph against the pinned manifest.json
+#                 fixture.
+#
+#   * xcode     — `xcodebuild test` on an iOS Simulator. Runs
+#                 MercuriusTests (smoke test + view snapshots) and
+#                 MercuriusUITests (end-to-end accessibility-API
+#                 driven flows). Snapshot tests are SKIPPED in CI —
+#                 reference images were captured on a specific local
+#                 simulator/OS combo, and pixel diffs against a
+#                 runner-simulator would flake without adding value
+#                 until we pin the sim explicitly in a follow-up.
+#
+# What this workflow intentionally does NOT do yet:
+#   * Run the live-network-dependent tests (none of the committed
+#     tests require network — the Club fixture is pinned and every
+#     other HTTP path uses StubURLProtocol — but leaving this note
+#     here in case future changes reintroduce a live dep).
+#   * Publish coverage to Codecov or similar. `scripts/coverage.sh`
+#     regenerates the baseline locally; wiring it into CI is a
+#     Phase 4b follow-up.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual runs from the Actions UI.
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a new one comes in —
+# avoids burning minutes on obsolete commits after a quick push-push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spm:
+    name: SPM tests
+    # macOS runner — `swift test` is fine on Linux for pure-Swift
+    # packages, but NetworkingKit uses the URLSession data-delegate
+    # path and DesignSystem uses UIColor shims, so we stay on macOS.
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        # Pin Xcode 16+ — swift-testing (`import Testing`, `@Test`,
+        # `#expect`) is a required dep of our test suite and didn't
+        # ship in Xcode 15. Update this pin when bumping
+        # swift-tools-version in Package.swift.
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Print toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: Swift package tests (incl. ArchitectureTests)
+        working-directory: ios/Packages
+        run: swift test --parallel
+
+  xcode:
+    name: Xcode scheme tests
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install toolchain (xcodegen, xcbeautify)
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Mercurius.xcodeproj
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: List available iOS simulators
+        # Diagnostic output for when the destination filter below
+        # breaks on an image update. Keeps the cause visible in logs.
+        run: xcrun simctl list devices available | head -40
+
+      - name: Run Xcode tests
+        working-directory: ios
+        # - `OS=latest` + a commonly-stocked iPhone name avoids
+        #   hard-pinning a sim that image updates may remove.
+        # - `-skip-testing:MercuriusTests/ViewSnapshotTests` — snapshot
+        #   references were recorded on a specific local sim (iPhone 16
+        #   iOS 26.x) and will not match a GitHub runner sim 1:1. Move
+        #   them to CI when we pin a reference sim.
+        # - `set -o pipefail` so a failing xcodebuild still fails the
+        #   step even though its output flows through xcbeautify.
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Mercurius.xcodeproj \
+            -scheme Mercurius \
+            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 15' \
+            -skip-testing:MercuriusTests/ViewSnapshotTests \
+            -resultBundlePath build/TestResults.xcresult \
+            | xcbeautify
+
+      - name: Upload xcresult bundle on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: ios/build/TestResults.xcresult
+          retention-days: 7
