@@ -36,6 +36,11 @@ targets:
       - path: Mercurius
     resources:
       - Mercurius/Resources/Assets.xcassets
+      # Privacy manifest — required by the App Store since May 2024.
+      # Declares: no tracking, the two data types we collect
+      # (session id + chat content, neither linked to user identity),
+      # and our one required-reason API use (UserDefaults, CA92.1).
+      - Mercurius/Resources/PrivacyInfo.xcprivacy
     postBuildScripts:
       - name: Strip extended attributes (macOS workaround for codesign)
         script: |
@@ -77,9 +82,18 @@ targets:
         UIStatusBarStyle: UIStatusBarStyleDefault
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Declare encryption compliance: we use only HTTPS/TLS over
+        # URLSession, which is exempt from US export review. Setting
+        # this to false skips the annual compliance questionnaire on
+        # every App Store submission.
         ITSAppUsesNonExemptEncryption: false
+        # Keep ATS strict: HTTPS only, no arbitrary loads. Our backend
+        # is hosted on Railway (https) and the club JSON lives on the
+        # mayoailiteracy.com TLS cert.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+        # App Store Connect category. Drives where users discover us.
+        LSApplicationCategoryType: public.app-category.education
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native

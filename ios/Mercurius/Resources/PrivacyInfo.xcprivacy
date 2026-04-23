@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!--
+        We do not perform tracking in Apple's sense of the word: no ad
+        networks, no third-party analytics, no cross-app identity. The
+        session identifier we persist in Keychain is a random 32-char
+        device-scoped string; it is not linked to any user identity,
+        email, or device advertising identifier.
+    -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+
+    <!-- No outbound traffic to any third-party tracking domains. -->
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+
+    <!--
+        Data we collect, by Apple's privacy-label taxonomy:
+
+        1. User ID — the device-scoped session identifier. Sent to the
+           Mercurius backend on every request so conversations can be
+           stitched together across sessions on the same device. Not
+           linked to any real-world identity and not used for tracking.
+
+        2. Other User Content — the content of chat messages. Sent to
+           the Mercurius backend so the LLM (Claude via Anthropic) can
+           respond. Used only for app functionality. Not linked to a
+           real-world identity and not used for tracking.
+    -->
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeUserID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
+
+    <!--
+        Required-reason APIs Apple wants every app to declare when
+        called directly by app code. Only one applies to us today:
+
+        UserDefaults (NSPrivacyAccessedAPICategoryUserDefaults):
+            Used by SettingsFeature/ThemePreferenceStore and
+            CurriculumFeature/ProgressStore to persist small
+            on-device preferences (theme choice, completed lessons).
+            Reason code CA92.1 — "Access info from same app".
+
+        Keychain (Security framework) — not on Apple's required-reason
+        list. SecRandomCopyBytes likewise not listed.
+
+        SwiftData / CoreData — any required-reason file-timestamp access
+        happens inside Apple's frameworks, which Apple discloses itself;
+        app-level manifest only covers what our own code calls directly.
+    -->
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+
+</dict>
+</plist>
