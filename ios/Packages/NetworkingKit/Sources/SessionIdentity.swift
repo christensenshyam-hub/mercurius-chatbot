@@ -12,12 +12,12 @@ import Foundation
 /// same device? No — Keychain **does** survive reinstalls on iOS, which
 /// is what we want for streak / leaderboard continuity.
 public final class SessionIdentity: @unchecked Sendable {
-    private let keychain: Keychain
+    private let keychain: KeychainStore
     private let key = "session_id"
     private let lock = NSLock()
     private var cached: String?
 
-    public init(keychain: Keychain = Keychain()) {
+    public init(keychain: KeychainStore = Keychain()) {
         self.keychain = keychain
     }
 

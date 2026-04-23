@@ -1,6 +1,17 @@
 import Foundation
 import Security
 
+/// Narrow protocol so callers can substitute a fake at test time
+/// without depending on the real iOS Keychain. Production code uses
+/// the concrete `Keychain` via the default parameter; tests that
+/// exercise keychain-dependent state machines (`SessionIdentityTests`)
+/// pass an in-memory conforming type.
+public protocol KeychainStore: Sendable {
+    func set(_ value: String, for key: String) throws
+    func get(_ key: String) throws -> String
+    func delete(_ key: String) throws
+}
+
 /// A minimal, explicit wrapper around the iOS Keychain for storing short
 /// string secrets (e.g. session identifiers).
 ///
@@ -10,7 +21,7 @@ import Security
 /// - Scoped to the app via `kSecAttrService`; no cross-app sharing.
 /// - Uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so secrets
 ///   survive restarts but do not sync to iCloud or leave the device.
-public struct Keychain: Sendable {
+public struct Keychain: Sendable, KeychainStore {
     public enum KeychainError: Error, Equatable {
         case itemNotFound
         case unexpectedData
