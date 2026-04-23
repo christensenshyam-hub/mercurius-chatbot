@@ -52,6 +52,8 @@ targets:
       - package: LocalPackages
         product: ChatFeature
       - package: LocalPackages
+        product: CurriculumFeature
+      - package: LocalPackages
         product: SettingsFeature
       - package: LocalPackages
         product: PersistenceKit

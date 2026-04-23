@@ -28,19 +28,11 @@ public struct RootView: View {
             case .loading:
                 loadingView
             case .ready:
-                ChatView(
+                AppShellView(
                     apiClient: env.apiClient,
                     sessionIdentity: env.sessionIdentity,
                     chatStore: env.chatStore,
-                    settingsPresenter: { [env] in
-                        AnyView(
-                            SettingsSheet(
-                                sessionIdentity: env.sessionIdentity,
-                                themeStore: env.themeStore,
-                                chatStore: env.chatStore
-                            )
-                        )
-                    }
+                    themeStore: env.themeStore
                 )
                 .transition(.opacity)
             case .failed(let reason):

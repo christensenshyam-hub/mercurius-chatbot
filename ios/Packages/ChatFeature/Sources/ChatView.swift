@@ -46,6 +46,21 @@ public struct ChatView: View {
         self.settingsPresenter = settingsPresenter
     }
 
+    /// Alternate initializer used by `AppShellView`: share an existing
+    /// ViewModel across tabs so the conversation survives tab switches
+    /// and curriculum starters can push messages into the live chat.
+    public init(
+        model: ChatViewModel,
+        apiClient: APIClient,
+        sessionIdentity: SessionIdentity,
+        settingsPresenter: (@MainActor () -> AnyView)? = nil
+    ) {
+        _model = State(initialValue: model)
+        self.apiClient = apiClient
+        self.sessionIdentity = sessionIdentity
+        self.settingsPresenter = settingsPresenter
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             BrandColor.background.ignoresSafeArea()
