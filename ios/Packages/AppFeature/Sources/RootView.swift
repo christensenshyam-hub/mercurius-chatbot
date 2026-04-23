@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import ChatFeature
+import SettingsFeature
 
 /// Root view of the app. Resolves the session id in the background, then
 /// hands off to `ChatView`. If the session id cannot be resolved, shows
@@ -29,7 +30,12 @@ public struct RootView: View {
             case .ready:
                 ChatView(
                     apiClient: env.apiClient,
-                    sessionIdentity: env.sessionIdentity
+                    sessionIdentity: env.sessionIdentity,
+                    settingsPresenter: { [env] in
+                        AnyView(
+                            SettingsSheet(sessionIdentity: env.sessionIdentity)
+                        )
+                    }
                 )
                 .transition(.opacity)
             case .failed(let reason):

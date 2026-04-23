@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
+        .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
     ],
     dependencies: [
@@ -59,10 +60,22 @@ let package = Package(
             path: "ChatFeature/Tests"
         ),
 
+        // MARK: SettingsFeature
+        .target(
+            name: "SettingsFeature",
+            dependencies: ["DesignSystem", "NetworkingKit"],
+            path: "SettingsFeature/Sources"
+        ),
+        .testTarget(
+            name: "SettingsFeatureTests",
+            dependencies: ["SettingsFeature"],
+            path: "SettingsFeature/Tests"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
-            dependencies: ["DesignSystem", "NetworkingKit", "ChatFeature"],
+            dependencies: ["DesignSystem", "NetworkingKit", "ChatFeature", "SettingsFeature"],
             path: "AppFeature/Sources"
         ),
         .testTarget(

@@ -52,6 +52,8 @@ targets:
       - package: LocalPackages
         product: ChatFeature
       - package: LocalPackages
+        product: SettingsFeature
+      - package: LocalPackages
         product: DesignSystem
       - package: LocalPackages
         product: NetworkingKit

@@ -6,14 +6,25 @@ import NetworkingKit
 /// list, input bar, and empty state.
 public struct ChatView: View {
     @State private var model: ChatViewModel
+    @State private var showSettings = false
 
-    public init(apiClient: APIClient, sessionIdentity: SessionIdentity) {
+    /// Closure the host app provides to surface the Settings screen.
+    /// Kept as a closure so `ChatFeature` doesn't depend on
+    /// `SettingsFeature` — composition lives in `AppFeature`.
+    private let settingsPresenter: (@MainActor () -> AnyView)?
+
+    public init(
+        apiClient: APIClient,
+        sessionIdentity: SessionIdentity,
+        settingsPresenter: (@MainActor () -> AnyView)? = nil
+    ) {
         _model = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity
             )
         )
+        self.settingsPresenter = settingsPresenter
     }
 
     public var body: some View {
@@ -73,10 +84,25 @@ public struct ChatView: View {
                     .foregroundStyle(BrandColor.textSecondary)
             }
             Spacer()
+            if settingsPresenter != nil {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .frame(width: 44, height: 44)  // ≥44pt hit target
+                }
+                .accessibilityLabel("Settings")
+            }
         }
-        .padding(.horizontal, BrandSpacing.lg)
-        .padding(.vertical, BrandSpacing.md)
+        .padding(.leading, BrandSpacing.lg)
+        .padding(.trailing, BrandSpacing.sm)
+        .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
+        .sheet(isPresented: $showSettings) {
+            settingsPresenter?()
+        }
     }
 }
 
