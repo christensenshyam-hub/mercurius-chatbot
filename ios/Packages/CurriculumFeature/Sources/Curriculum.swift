@@ -210,4 +210,36 @@ public enum MercuriusCurriculum {
     public static var allLessons: [Lesson] {
         units.flatMap { $0.lessons }
     }
+
+    // MARK: - Versioning + migrations
+    //
+    // The curriculum is hand-authored static data; any time we rename or
+    // reorder lesson ids (e.g. "u1_l1" → "u1_intro") we bump `version` and
+    // add an entry to `migrations(from:to:)` below. `CurriculumProgressStore`
+    // stores the curriculum version alongside the completed-id set, and
+    // on load it runs every migration from the stored version up to the
+    // current one — so a user's hard-won lesson completions survive
+    // curriculum reshuffles rather than orphaning to dead ids.
+
+    /// Monotonic version stamp for the curriculum content. Bump whenever
+    /// a lesson id is renamed, reordered, or removed — i.e. anything that
+    /// would orphan existing stored progress.
+    public static let version: Int = 1
+
+    /// Per-step migration map: returns the set of `oldId → newId`
+    /// rewrites that should apply when moving from `from` to `from + 1`.
+    /// Missing keys = no change for that id.
+    ///
+    /// Example for a future bump:
+    /// ```
+    /// case 1:
+    ///     return ["u1_l1": "u1_intro", "u1_l2": "u1_tokens"]
+    /// ```
+    public static func migrations(stepFrom from: Int) -> [String: String] {
+        switch from {
+        // No migrations yet — v1 is the only shipped curriculum version.
+        default:
+            return [:]
+        }
+    }
 }

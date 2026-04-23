@@ -128,4 +128,121 @@ struct CurriculumProgressStoreTests {
         let store = CurriculumProgressStore(preferences: prefs)
         #expect(store.completedIds.isEmpty)
     }
+
+    @Test("Orphaned ids (not in current curriculum) are excluded from totalCompleted()")
+    func orphansFilteredFromCount() {
+        // Seed storage as though the user completed two current lessons
+        // plus one lesson id that no longer exists.
+        let prefs = InMemoryPreferenceStore()
+        let seeded = ["u1_l1", "u1_l2", "u_ghost_l1"]
+        let json = try! JSONEncoder().encode(seeded)
+        prefs.set(String(data: json, encoding: .utf8)!, for: "com.mayoailiteracy.mercurius.curriculumProgress")
+        prefs.set(String(MercuriusCurriculum.version), for: "com.mayoailiteracy.mercurius.curriculumProgress.version")
+
+        let store = CurriculumProgressStore(preferences: prefs)
+
+        // Orphan is preserved in storage (future app version could
+        // restore the lesson and recover the user's progress).
+        #expect(store.completedIds.contains("u_ghost_l1"))
+        // But totalCompleted() only counts ids that match a current lesson.
+        #expect(store.totalCompleted() == 2)
+    }
+
+    @Test("Saving stamps the current curriculum version")
+    func saveStampsVersion() {
+        let prefs = InMemoryPreferenceStore()
+        let store = CurriculumProgressStore(preferences: prefs)
+        store.markCompleted("u1_l1")
+        let storedVersion = prefs.string(for: "com.mayoailiteracy.mercurius.curriculumProgress.version")
+        #expect(storedVersion == String(MercuriusCurriculum.version))
+    }
+
+    @Test("Legacy storage without a version key still loads cleanly at current version")
+    func legacyDataLoads() {
+        // Pre-migration data: no version key stored. The store treats
+        // missing-version as 0 and runs every migration from 0 upward,
+        // but since v1 has no migrations the end state equals the start.
+        let prefs = InMemoryPreferenceStore()
+        let seeded = ["u1_l1"]
+        let json = try! JSONEncoder().encode(seeded)
+        prefs.set(String(data: json, encoding: .utf8)!, for: "com.mayoailiteracy.mercurius.curriculumProgress")
+        // No version key — simulates legacy data from before this phase.
+
+        let store = CurriculumProgressStore(preferences: prefs)
+
+        #expect(store.completedIds == ["u1_l1"])
+        // After init with migration, the version key should be written.
+        #expect(prefs.string(for: "com.mayoailiteracy.mercurius.curriculumProgress.version") == String(MercuriusCurriculum.version))
+    }
+}
+
+@Suite("CurriculumProgressStore migration")
+@MainActor
+struct CurriculumProgressStoreMigrationTests {
+
+    @Test("applyMigrations with from == to is a no-op")
+    func noOpWhenVersionsMatch() {
+        let result = CurriculumProgressStore.applyMigrations(
+            ids: ["u1_l1", "u1_l2"],
+            from: 1,
+            to: 1,
+            migrationProvider: { _ in ["u1_l1": "renamed"] }
+        )
+        #expect(result == ["u1_l1", "u1_l2"], "No migration should run when versions are equal")
+    }
+
+    @Test("applyMigrations rewrites ids according to the map")
+    func rewritesIds() {
+        let result = CurriculumProgressStore.applyMigrations(
+            ids: ["u1_l1", "u1_l2", "u2_l1"],
+            from: 1,
+            to: 2,
+            migrationProvider: { step in
+                step == 1 ? ["u1_l1": "u1_intro", "u1_l2": "u1_tokens"] : [:]
+            }
+        )
+        #expect(result == ["u1_intro", "u1_tokens", "u2_l1"])
+    }
+
+    @Test("applyMigrations runs every intervening step (1 → 3 applies step 1 AND step 2)")
+    func multiStepMigration() {
+        let result = CurriculumProgressStore.applyMigrations(
+            ids: ["a"],
+            from: 0,
+            to: 3,
+            migrationProvider: { step in
+                switch step {
+                case 0: return ["a": "b"]
+                case 1: return ["b": "c"]
+                case 2: return ["c": "d"]
+                default: return [:]
+                }
+            }
+        )
+        #expect(result == ["d"], "Every step in [from, to) should apply in order")
+    }
+
+    @Test("applyMigrations dedupes when both old and new id are present in storage")
+    func dedupesAcrossMigration() {
+        // User has both "old" and "new" — happens if they ran a beta
+        // that introduced the new id before the renamed version shipped.
+        let result = CurriculumProgressStore.applyMigrations(
+            ids: ["old", "new", "unrelated"],
+            from: 1,
+            to: 2,
+            migrationProvider: { step in step == 1 ? ["old": "new"] : [:] }
+        )
+        #expect(result == ["new", "unrelated"], "Duplicate-after-mapping should be collapsed")
+    }
+
+    @Test("Empty migration maps pass ids through unchanged")
+    func emptyMapsPassThrough() {
+        let result = CurriculumProgressStore.applyMigrations(
+            ids: ["u1_l1"],
+            from: 0,
+            to: 5,
+            migrationProvider: { _ in [:] }
+        )
+        #expect(result == ["u1_l1"])
+    }
 }
