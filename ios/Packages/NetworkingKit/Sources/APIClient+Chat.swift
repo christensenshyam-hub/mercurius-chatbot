@@ -46,6 +46,15 @@ extension APIClient {
             // cached, and cache lookups can delay delivery.
             config.urlCache = nil
             config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            // Carry over any custom URLProtocol classes from the main
+            // session configuration. This is how the test suite plumbs a
+            // `StubURLProtocol` into the streaming path — set it once on
+            // the APIClient's init and it reaches every URLSession the
+            // client spins up, including this ephemeral one.
+            if let customProtocols = urlSession.configuration.protocolClasses,
+               !customProtocols.isEmpty {
+                config.protocolClasses = customProtocols + (config.protocolClasses ?? [])
+            }
 
             let session = URLSession(
                 configuration: config,
