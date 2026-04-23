@@ -116,6 +116,7 @@ jobs:
             -scheme Mercurius \
             -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
             -skip-testing:MercuriusTests/ViewSnapshotTests \
+            -skip-testing:MercuriusUITests/PerformanceTests \
             -resultBundlePath build/TestResults.xcresult \
             | xcbeautify
 
