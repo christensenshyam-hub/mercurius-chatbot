@@ -134,7 +134,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AppFeatureTests",
-            dependencies: ["AppFeature"],
+            dependencies: ["AppFeature", "PersistenceKit"],
             path: "AppFeature/Tests"
         ),
 

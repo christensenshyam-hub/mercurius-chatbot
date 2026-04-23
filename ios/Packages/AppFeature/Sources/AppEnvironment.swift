@@ -27,7 +27,21 @@ public final class AppEnvironment: ObservableObject {
     /// just without persistent conversations.
     public let chatStore: ChatStore?
 
-    public init(environment: APIEnvironment = .production) {
+    public convenience init(environment: APIEnvironment = .production) {
+        // Default production init: disk-backed SwiftData, fall back to
+        // in-memory on throw. The init below has `chatStore: nil` fall
+        // through to this default.
+        self.init(environment: environment, chatStore: Self.makeDefaultChatStore())
+    }
+
+    /// Inject a pre-built `ChatStore` — used by tests that run in
+    /// contexts without a resolvable `Bundle.main.bundleIdentifier`
+    /// (e.g. `swift test` on a CI runner), where SwiftData's default
+    /// disk-backed container crashes with a fatal error inside Apple's
+    /// framework rather than throwing — we can't catch a `fatalError`,
+    /// so we have to avoid calling into SwiftData at all in those
+    /// contexts.
+    public init(environment: APIEnvironment = .production, chatStore: ChatStore?) {
         let identity = SessionIdentity()
         self.sessionIdentity = identity
         self.apiClient = APIClient(
@@ -36,18 +50,19 @@ public final class AppEnvironment: ObservableObject {
         )
         self.clubClient = ClubDataClient()
         self.themeStore = ThemePreferenceStore()
+        self.chatStore = chatStore
+    }
 
-        // SwiftData container construction can throw; we degrade
-        // gracefully rather than crash. A failed persistence layer
-        // is worse UX than a non-persistent chat, not the other way
-        // around.
+    /// Constructs the production default `ChatStore` — disk-backed
+    /// SwiftData, falling through to `InMemoryChatStore` if SwiftData's
+    /// `ModelContainer` init throws. Logs the failure to the console so
+    /// the reason is still visible.
+    private static func makeDefaultChatStore() -> ChatStore? {
         do {
-            self.chatStore = try SwiftDataChatStore()
+            return try SwiftDataChatStore()
         } catch {
-            // Surface to the console so the issue is visible in logs,
-            // but keep the app running.
             print("[Mercurius] SwiftData init failed — falling back to in-memory store. Error: \(error)")
-            self.chatStore = InMemoryChatStore()
+            return InMemoryChatStore()
         }
     }
 }

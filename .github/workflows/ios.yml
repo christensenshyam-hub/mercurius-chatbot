@@ -94,20 +94,27 @@ jobs:
 
       - name: Run Xcode tests
         working-directory: ios
-        # - `OS=latest` + a commonly-stocked iPhone name avoids
-        #   hard-pinning a sim that image updates may remove.
-        # - `-skip-testing:MercuriusTests/ViewSnapshotTests` — snapshot
-        #   references were recorded on a specific local sim (iPhone 16
-        #   iOS 26.x) and will not match a GitHub runner sim 1:1. Move
-        #   them to CI when we pin a reference sim.
-        # - `set -o pipefail` so a failing xcodebuild still fails the
-        #   step even though its output flows through xcbeautify.
+        # Destination:
+        #   * `OS=latest` picks the newest installed runtime (macos-14
+        #     runners at the time of writing ship iOS 18.x).
+        #   * `name=iPhone 16` — under iOS 18 the common base device
+        #     stocked on GitHub runners is the iPhone 16 family.
+        #     iPhone 15 sims are only installed under iOS 17 runtimes,
+        #     so the combination of `OS=latest` + `iPhone 15` resolves
+        #     to nothing on current images.
+        # Skips:
+        #   * `MercuriusTests/ViewSnapshotTests` — pixel references were
+        #     recorded on a specific local sim and will not match a
+        #     GitHub runner sim 1:1 without pinning.
+        # Pipe:
+        #   * `set -o pipefail` so a failing xcodebuild fails the step
+        #     even after flowing through xcbeautify.
         run: |
           set -o pipefail
           xcodebuild test \
             -project Mercurius.xcodeproj \
             -scheme Mercurius \
-            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 15' \
+            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
             -skip-testing:MercuriusTests/ViewSnapshotTests \
             -resultBundlePath build/TestResults.xcresult \
             | xcbeautify

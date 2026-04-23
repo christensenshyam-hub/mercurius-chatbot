@@ -607,6 +607,12 @@
             "AppFeature",
             null
           ]
+        },
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
         }
       ],
       "exclude" : [
@@ -634,7 +640,14 @@
       "packageAccess" : true,
       "path" : "ArchitectureTests/Tests",
       "resources" : [
+        {
+          "path" : "Fixtures",
+          "rule" : {
+            "process" : {
 
+            }
+          }
+        }
       ],
       "settings" : [
 
