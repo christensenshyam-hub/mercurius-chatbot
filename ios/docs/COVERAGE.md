@@ -1,6 +1,6 @@
 # Coverage baseline
 
-_Last refreshed: 2026-04-23 14:01:20Z_
+_Last refreshed: 2026-04-23 15:19:58Z_
 
 Regenerate with:
 
@@ -12,7 +12,7 @@ cd ios && scripts/coverage.sh refresh-baseline
 
 | Surface | Line coverage |
 |---|---|
-| SPM packages (`swift test`) | 21.99% |
+| SPM packages (`swift test`) | 23.61% |
 | Xcode app target (`xcodebuild test`) | 100.00% |
 
 ## Two pathways, one codebase
