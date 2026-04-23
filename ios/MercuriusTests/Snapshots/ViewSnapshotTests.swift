@@ -187,6 +187,46 @@ final class ViewSnapshotTests: XCTestCase {
         )
     }
 
+    // MARK: - Dynamic Type coverage expansion
+    //
+    // Phase 3f's layout caps (lineLimit + minimumScaleFactor on the
+    // chat header) prevent overflow at extreme accessibility sizes.
+    // The `testEmptyChatViewAccessibilityXXL` snapshot is one canary;
+    // these add two more screens — Curriculum and Chat-with-mode-pills
+    // — so a future layout regression at XXL is visible in whichever
+    // screen it affects, not just the empty chat.
+
+    func testCurriculumListAtAccessibilityXXL() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferences())
+        let view = CurriculumView(progress: progress, onStartLesson: { _ in })
+            .environment(\.dynamicTypeSize, .accessibility3)
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .device(config: .iPhone13)
+            )
+        )
+    }
+
+    func testModeSelectorAtAccessibilityXXL() {
+        // The mode selector is a horizontal pill scroller — at XXL the
+        // pills grow vertically and horizontally. The ScrollView should
+        // keep them reachable; this snapshot catches any future
+        // layout break (e.g. someone switching to a non-scrolling HStack).
+        let model = makeChatModel()
+        let view = ModeSelectorView(model: model)
+            .background(BrandColor.background)
+            .environment(\.dynamicTypeSize, .accessibility3)
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 393, height: 80)
+            )
+        )
+    }
+
     // MARK: - MessageBubbleView
     //
     // Covers each visual state of a message bubble. Before this, the
@@ -522,6 +562,17 @@ private final class LoadedToolsClient: ToolsProviding, @unchecked Sendable {
 }
 
 // MARK: - Helpers
+
+/// Minimal `PreferenceStore` conforming to the SettingsFeature
+/// protocol — lets us build a `CurriculumProgressStore` in a
+/// snapshot test without touching real UserDefaults.
+private final class InMemoryPreferences: PreferenceStore, @unchecked Sendable {
+    private var storage: [String: String] = [:]
+    func string(for key: String) -> String? { storage[key] }
+    func set(_ value: String?, for key: String) {
+        if let value { storage[key] = value } else { storage.removeValue(forKey: key) }
+    }
+}
 
 @MainActor
 private func makeChatModel() -> ChatViewModel {

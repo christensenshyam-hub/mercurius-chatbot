@@ -1,8 +1,17 @@
 import Foundation
+import OSLog
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
 import ClubFeature
+
+/// Shared logger for app-level diagnostics. Surfaces in Console.app
+/// under the `com.mayoailiteracy.mercurius` subsystem when filtered
+/// by subsystem.
+private let log = Logger(
+    subsystem: "com.mayoailiteracy.mercurius",
+    category: "AppEnvironment"
+)
 
 /// The app's composition root — a single place where singletons are
 /// constructed and injected into feature modules. Features never reach
@@ -61,7 +70,11 @@ public final class AppEnvironment: ObservableObject {
         do {
             return try SwiftDataChatStore()
         } catch {
-            print("[Mercurius] SwiftData init failed — falling back to in-memory store. Error: \(error)")
+            // Surface to os_log rather than stdout so Console.app / `log
+            // stream` picks it up with structured metadata. The user
+            // still gets a working app via the InMemoryChatStore
+            // fallback; they just lose chat persistence across kills.
+            log.error("SwiftData init failed — falling back to in-memory store. \(error.localizedDescription, privacy: .public)")
             return InMemoryChatStore()
         }
     }
