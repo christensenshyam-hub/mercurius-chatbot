@@ -1,6 +1,6 @@
 # Coverage baseline
 
-_Last refreshed: 2026-04-23 13:41:22Z_
+_Last refreshed: 2026-04-23 14:01:20Z_
 
 Regenerate with:
 
@@ -41,12 +41,14 @@ Known rows to ignore:
 ```
 ID Name                    # Source Files Coverage           
 -- ----------------------- -------------- ------------------ 
-0  ChatFeature             11             36.53% (1033/2828) 
-1  ClubFeature             6              45.49% (343/754)   
-2  Mercurius.app           1              100.00% (13/13)    
-3  MercuriusTests.xctest   2              94.86% (240/253)   
-4  MercuriusUITests.xctest 1              93.98% (203/216)   
-5  NetworkingKit           0              0.00% (0/0)        
+0  AppFeature              4              70.07% (206/294)   
+1  ChatFeature             11             78.29% (2214/2828) 
+2  DesignSystem            0              0.00% (0/0)        
+3  Mercurius.app           1              100.00% (13/13)    
+4  MercuriusTests.xctest   2              95.73% (448/468)   
+5  MercuriusUITests.xctest 1              93.98% (203/216)   
+6  NetworkingKit           0              0.00% (0/0)        
+7  SettingsFeature         0              0.00% (0/0)        
 
 ```
 
