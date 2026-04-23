@@ -15,6 +15,14 @@ const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('./db');
 const logger = require('./lib/logger');
+const {
+  validate,
+  ChatRequest,
+  ModeRequest,
+  QuizRequest,
+  ReportCardRequest,
+  ConceptMapRequest,
+} = require('./lib/schemas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1137,16 +1145,9 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 // POST /api/chat
 // ---------------------------------------------------------------------------
-app.post('/api/chat', chatLimiter, async (req, res) => {
-  const { messages: clientMessages, sessionId } = req.body;
-
-  if (!isValidSessionId(sessionId)) {
-    return res.status(400).json({ error: 'invalid_session', reply: 'Session ID missing or invalid.' });
-  }
-
-  if (!clientMessages || !Array.isArray(clientMessages) || clientMessages.length === 0) {
-    return res.status(400).json({ error: 'invalid_messages', reply: 'No messages provided.' });
-  }
+app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), async (req, res) => {
+  // Schema guarantees shape + types; handler-level validation removed.
+  const { messages: clientMessages, sessionId } = req.validated;
 
   // Rate limit
   if (isRateLimited(sessionId)) {
@@ -1432,14 +1433,8 @@ app.get('/api/session/:sessionId', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/mode — switch mode (only allowed if session is unlocked)
 // ---------------------------------------------------------------------------
-app.post('/api/mode', async (req, res) => {
-  const { sessionId, mode } = req.body;
-  if (!sessionId || !['socratic', 'direct', 'debate', 'discussion'].includes(mode)) {
-    return res.status(400).json({ error: 'invalid_request' });
-  }
-  if (!isValidSessionId(sessionId)) {
-    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
-  }
+app.post('/api/mode', validate(ModeRequest, { endpoint: '/api/mode' }), async (req, res) => {
+  const { sessionId, mode } = req.validated;
   await db.getOrCreateSession(sessionId);
   const state = await db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
@@ -1455,11 +1450,8 @@ app.post('/api/mode', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/quiz — generate a comprehension quiz from conversation history
 // ---------------------------------------------------------------------------
-app.post('/api/quiz', async (req, res) => {
-  const { sessionId } = req.body;
-  if (!isValidSessionId(sessionId)) {
-    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
-  }
+app.post('/api/quiz', validate(QuizRequest, { endpoint: '/api/quiz' }), async (req, res) => {
+  const { sessionId } = req.validated;
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.QUIZ,
@@ -1481,9 +1473,8 @@ app.post('/api/quiz', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/report-card
 // ---------------------------------------------------------------------------
-app.post('/api/report-card', async (req, res) => {
-  const { sessionId } = req.body;
-  if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+app.post('/api/report-card', validate(ReportCardRequest, { endpoint: '/api/report-card' }), async (req, res) => {
+  const { sessionId } = req.validated;
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.REPORT,
@@ -1505,9 +1496,8 @@ app.post('/api/report-card', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/concept-map
 // ---------------------------------------------------------------------------
-app.post('/api/concept-map', async (req, res) => {
-  const { sessionId } = req.body;
-  if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+app.post('/api/concept-map', validate(ConceptMapRequest, { endpoint: '/api/concept-map' }), async (req, res) => {
+  const { sessionId } = req.validated;
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.MAP,
