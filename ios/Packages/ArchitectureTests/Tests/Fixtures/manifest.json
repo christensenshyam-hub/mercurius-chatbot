@@ -1,0 +1,654 @@
+{
+  "cLanguageStandard" : null,
+  "cxxLanguageStandard" : null,
+  "defaultLocalization" : null,
+  "dependencies" : [
+    {
+      "sourceControl" : [
+        {
+          "identity" : "swift-markdown-ui",
+          "location" : {
+            "remote" : [
+              {
+                "urlString" : "https://github.com/gonzalezreal/swift-markdown-ui.git"
+              }
+            ]
+          },
+          "productFilter" : null,
+          "requirement" : {
+            "range" : [
+              {
+                "lowerBound" : "2.4.0",
+                "upperBound" : "3.0.0"
+              }
+            ]
+          },
+          "traits" : [
+            {
+              "name" : "default"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "name" : "LocalPackages",
+  "packageKind" : {
+    "root" : [
+      "/Users/shyamchristensen/Desktop/mercurius-chatbot/ios/Packages"
+    ]
+  },
+  "pkgConfig" : null,
+  "platforms" : [
+    {
+      "options" : [
+
+      ],
+      "platformName" : "ios",
+      "version" : "17.0"
+    },
+    {
+      "options" : [
+
+      ],
+      "platformName" : "macos",
+      "version" : "14.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "DesignSystem",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "DesignSystem"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "NetworkingKit",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "NetworkingKit"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "PersistenceKit",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "PersistenceKit"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "ChatFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "ChatFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "CurriculumFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "CurriculumFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "ClubFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "ClubFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "SettingsFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "SettingsFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "AppFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "AppFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "providers" : null,
+  "swiftLanguageVersions" : null,
+  "targets" : [
+    {
+      "dependencies" : [
+
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "DesignSystem",
+      "packageAccess" : true,
+      "path" : "DesignSystem/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "DesignSystemTests",
+      "packageAccess" : true,
+      "path" : "DesignSystem/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "NetworkingKit",
+      "packageAccess" : true,
+      "path" : "NetworkingKit/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "NetworkingKitTests",
+      "packageAccess" : true,
+      "path" : "NetworkingKit/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "PersistenceKit",
+      "packageAccess" : true,
+      "path" : "PersistenceKit/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "PersistenceKitTests",
+      "packageAccess" : true,
+      "path" : "PersistenceKit/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
+        },
+        {
+          "product" : [
+            "MarkdownUI",
+            "swift-markdown-ui",
+            null,
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "ChatFeature",
+      "packageAccess" : true,
+      "path" : "ChatFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "ChatFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "ChatFeatureTests",
+      "packageAccess" : true,
+      "path" : "ChatFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "SettingsFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "CurriculumFeature",
+      "packageAccess" : true,
+      "path" : "CurriculumFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "CurriculumFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "SettingsFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "CurriculumFeatureTests",
+      "packageAccess" : true,
+      "path" : "CurriculumFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "ClubFeature",
+      "packageAccess" : true,
+      "path" : "ClubFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "ClubFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "ClubFeatureTests",
+      "packageAccess" : true,
+      "path" : "ClubFeature/Tests",
+      "resources" : [
+        {
+          "path" : "Fixtures",
+          "rule" : {
+            "process" : {
+
+            }
+          }
+        }
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "SettingsFeature",
+      "packageAccess" : true,
+      "path" : "SettingsFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "SettingsFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "SettingsFeatureTests",
+      "packageAccess" : true,
+      "path" : "SettingsFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "ChatFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "CurriculumFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "ClubFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "SettingsFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "AppFeature",
+      "packageAccess" : true,
+      "path" : "AppFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "AppFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "AppFeatureTests",
+      "packageAccess" : true,
+      "path" : "AppFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "ArchitectureTests",
+      "packageAccess" : true,
+      "path" : "ArchitectureTests/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    }
+  ],
+  "toolsVersion" : {
+    "_version" : "5.10.0",
+    "experimentalFeatures" : [
+
+    ]
+  },
+  "traits" : [
+
+  ]
+}

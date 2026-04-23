@@ -137,5 +137,21 @@ let package = Package(
             dependencies: ["AppFeature"],
             path: "AppFeature/Tests"
         ),
+
+        // MARK: ArchitectureTests
+        //
+        // Meta-tests that validate the package's dependency graph itself.
+        // Deliberately has no target dependencies — it reads a pinned
+        // `manifest.json` fixture (generated offline from
+        // `swift package dump-package`) and asserts the graph matches
+        // what we intend. Regenerate the fixture whenever Package.swift
+        // changes, via:
+        //   swift package dump-package > \
+        //     ArchitectureTests/Tests/Fixtures/manifest.json
+        .testTarget(
+            name: "ArchitectureTests",
+            path: "ArchitectureTests/Tests",
+            resources: [.process("Fixtures")]
+        ),
     ]
 )
