@@ -156,9 +156,16 @@ schemes:
       config: Debug
     test:
       config: Debug
+      # Gather code-coverage data every time this scheme's tests run.
+      # `scripts/coverage.sh` drives a full run and extracts a summary;
+      # Xcode's own report viewer also works out of the box. We
+      # intentionally omit `coverageTargets:` so every linked framework
+      # (including all SPM package products) gets instrumented, not
+      # just the thin Mercurius.app shell.
+      gatherCoverageData: true
       # NOTE: SPM package tests are NOT included here — xcodegen can't
       # reference them in schemes. Run them with:
-      #   cd Packages && swift test
+      #   cd Packages && swift test --enable-code-coverage
       # UI tests live in MercuriusUITests. Run selectively via:
       #   xcodebuild test -only-testing:MercuriusUITests -scheme Mercurius ...
       targets:

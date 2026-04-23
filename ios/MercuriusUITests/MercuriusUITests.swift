@@ -178,8 +178,12 @@ final class MercuriusUITests: XCTestCase {
             "Is AI biased? Where does the bias come from?",
         ]
         for prompt in prompts {
+            // Generous timeout — under code-coverage instrumentation the
+            // initial render can exceed a few-second wait. Only the first
+            // lookup pays this cost; subsequent ones find the button
+            // already in the accessibility tree.
             XCTAssertTrue(
-                app.buttons[prompt].waitForExistence(timeout: 3),
+                app.buttons[prompt].waitForExistence(timeout: 10),
                 "Starter prompt button '\(prompt)' missing from empty chat state"
             )
         }

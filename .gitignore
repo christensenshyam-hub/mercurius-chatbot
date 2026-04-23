@@ -5,3 +5,7 @@ node_modules/
 *.db-wal
 desktop/
 mobile/
+
+# iOS coverage reports — docs/COVERAGE.md is committed; raw data is not.
+ios/build/
+*.xcresult
