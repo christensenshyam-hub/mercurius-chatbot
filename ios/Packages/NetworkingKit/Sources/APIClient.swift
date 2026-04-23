@@ -123,8 +123,14 @@ public final class APIClient: Sendable {
     }
 
     // MARK: - Response validation
+    //
+    // `validate` and `mapURLError` are `public static` so sibling networking
+    // layers in other packages (e.g. `ClubFeature.ClubDataClient`, which
+    // fetches static JSON off mayoailiteracy.com directly and doesn't need
+    // the full `APIClient`) can share the same status-code → `APIError`
+    // mapping. Keeps error UX consistent across every network call in the app.
 
-    static func validate(statusCode: Int, data: Data) throws {
+    public static func validate(statusCode: Int, data: Data) throws {
         switch statusCode {
         case 200...299:
             return
@@ -142,7 +148,7 @@ public final class APIClient: Sendable {
         }
     }
 
-    static func mapURLError(_ error: URLError) -> APIError {
+    public static func mapURLError(_ error: URLError) -> APIError {
         switch error.code {
         case .notConnectedToInternet, .dataNotAllowed:
             return .offline

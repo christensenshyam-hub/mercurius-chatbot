@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import ChatFeature
 import CurriculumFeature
+import ClubFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
@@ -11,9 +12,8 @@ import SettingsFeature
 /// conversation — and so lessons tapped in the Curriculum tab can
 /// push a starter message into the existing chat.
 ///
-/// Two tabs for now: Chat and Curriculum. Settings stays as a sheet
-/// accessible from the Chat tab's header; promoting Settings to a
-/// tab would be warranted if we added Club/Profile later.
+/// Three tabs: Chat, Curriculum, Club. Settings stays as a sheet
+/// accessible from the Chat tab's header.
 struct AppShellView: View {
 
     // MARK: - Dependencies (from AppEnvironment)
@@ -22,36 +22,43 @@ struct AppShellView: View {
     let sessionIdentity: SessionIdentity
     let chatStore: ChatStore?
     let themeStore: ThemePreferenceStore
+    let clubClient: ClubDataProviding
 
     // MARK: - Shared state
 
     @State private var selectedTab: Tab = .chat
     @State private var chatModel: ChatViewModel
     @State private var progress = CurriculumProgressStore()
+    @State private var clubModel: ClubViewModel
 
     /// Lesson the user asked to start while the chat had existing
     /// messages. Drives a confirmation alert that lets them choose
     /// whether to start fresh or add to the current conversation.
     @State private var pendingLesson: Lesson?
 
-    enum Tab: Hashable { case chat, curriculum }
+    enum Tab: Hashable { case chat, curriculum, club }
 
     init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
         chatStore: ChatStore?,
-        themeStore: ThemePreferenceStore
+        themeStore: ThemePreferenceStore,
+        clubClient: ClubDataProviding
     ) {
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
         self.chatStore = chatStore
         self.themeStore = themeStore
+        self.clubClient = clubClient
         _chatModel = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity,
                 store: chatStore
             )
+        )
+        _clubModel = State(
+            initialValue: ClubViewModel(client: clubClient)
         )
     }
 
@@ -66,6 +73,10 @@ struct AppShellView: View {
             curriculumTab
                 .tabItem { Label("Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
+
+            clubTab
+                .tabItem { Label("Club", systemImage: "person.3") }
+                .tag(Tab.club)
         }
         .tint(BrandColor.accent)
         // Confirmation alert for starting a lesson on top of an existing
@@ -111,6 +122,10 @@ struct AppShellView: View {
             progress: progress,
             onStartLesson: handleStartLesson
         )
+    }
+
+    private var clubTab: some View {
+        ClubView(model: clubModel)
     }
 
     // MARK: - Lesson launch

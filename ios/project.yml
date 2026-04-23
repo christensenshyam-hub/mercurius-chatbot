@@ -54,6 +54,8 @@ targets:
       - package: LocalPackages
         product: CurriculumFeature
       - package: LocalPackages
+        product: ClubFeature
+      - package: LocalPackages
         product: SettingsFeature
       - package: LocalPackages
         product: PersistenceKit

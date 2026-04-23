@@ -74,7 +74,7 @@ final class MercuriusUITests: XCTestCase {
     }
 
     @MainActor
-    func testTabBarHasChatAndCurriculumTabs() {
+    func testTabBarHasAllThreeTabs() {
         let app = launchApp()
         waitForBootComplete(app)
 
@@ -83,9 +83,28 @@ final class MercuriusUITests: XCTestCase {
         // override doesn't silently break the test.
         let chatTab = app.buttons.matching(NSPredicate(format: "label == 'Chat'")).firstMatch
         let curriculumTab = app.buttons.matching(NSPredicate(format: "label == 'Curriculum'")).firstMatch
+        let clubTab = app.buttons.matching(NSPredicate(format: "label == 'Club'")).firstMatch
 
         XCTAssertTrue(chatTab.exists, "Chat tab button missing")
         XCTAssertTrue(curriculumTab.exists, "Curriculum tab button missing")
+        XCTAssertTrue(clubTab.exists, "Club tab button missing")
+    }
+
+    @MainActor
+    func testSwitchingToClubTabShowsClubTitle() {
+        let app = launchApp()
+        waitForBootComplete(app)
+
+        app.buttons["Club"].tap()
+
+        // `navigationTitle("Club")` renders as a static text inside the
+        // navigation bar. It's distinct from the tab-bar button label
+        // because they live on different elements.
+        let clubTitle = app.navigationBars["Club"].firstMatch
+        XCTAssertTrue(
+            clubTitle.waitForExistence(timeout: 5),
+            "Club tab did not present the Club navigation title"
+        )
     }
 
     @MainActor

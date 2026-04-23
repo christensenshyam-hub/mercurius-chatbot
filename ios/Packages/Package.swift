@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "PersistenceKit", targets: ["PersistenceKit"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
+        .library(name: "ClubFeature", targets: ["ClubFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
     ],
@@ -87,6 +88,18 @@ let package = Package(
             path: "CurriculumFeature/Tests"
         ),
 
+        // MARK: ClubFeature
+        .target(
+            name: "ClubFeature",
+            dependencies: ["DesignSystem", "NetworkingKit"],
+            path: "ClubFeature/Sources"
+        ),
+        .testTarget(
+            name: "ClubFeatureTests",
+            dependencies: ["ClubFeature", "NetworkingKit"],
+            path: "ClubFeature/Tests"
+        ),
+
         // MARK: SettingsFeature
         .target(
             name: "SettingsFeature",
@@ -108,6 +121,7 @@ let package = Package(
                 "PersistenceKit",
                 "ChatFeature",
                 "CurriculumFeature",
+                "ClubFeature",
                 "SettingsFeature",
             ],
             path: "AppFeature/Sources"

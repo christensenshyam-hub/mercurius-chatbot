@@ -32,7 +32,8 @@ public struct RootView: View {
                     apiClient: env.apiClient,
                     sessionIdentity: env.sessionIdentity,
                     chatStore: env.chatStore,
-                    themeStore: env.themeStore
+                    themeStore: env.themeStore,
+                    clubClient: env.clubClient
                 )
                 .transition(.opacity)
             case .failed(let reason):
