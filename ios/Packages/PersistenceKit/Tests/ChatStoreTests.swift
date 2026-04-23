@@ -81,7 +81,19 @@ struct InMemoryChatStoreTests {
     }
 }
 
-@Suite("SwiftDataChatStore (in-memory container)")
+/// Under `swift test` on GitHub-hosted macOS runners (Xcode 16.2 at
+/// time of writing), SwiftData's `ModelContainer(for:...)` fatals with
+/// "Unable to determine Bundle Name" — even for `isStoredInMemoryOnly`.
+/// The same code path works fine locally and under `xcodebuild test`
+/// on the simulator (where the test host app provides a real bundle).
+/// We skip on CI only — these behaviors are still exercised by the
+/// xcodebuild MercuriusTests run on every CI invocation.
+private let isRunningUnderCI: Bool = ProcessInfo.processInfo.environment["CI"] == "true"
+
+@Suite(
+    "SwiftDataChatStore (in-memory container)",
+    .disabled(if: isRunningUnderCI, "SwiftData ModelContainer fatals under swift test on CI (Xcode 16.2). Covered by the xcodebuild simulator run instead.")
+)
 @MainActor
 struct SwiftDataChatStoreTests {
 

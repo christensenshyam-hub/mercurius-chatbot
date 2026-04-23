@@ -54,10 +54,17 @@ final class MercuriusUITests: XCTestCase {
         return app
     }
 
+    /// Default existence-wait timeout. GitHub-hosted macOS runners are
+    /// meaningfully slower than local dev machines, especially for the
+    /// first render after a tap (tab switch, sheet present). 8s gives
+    /// ample headroom without blowing total runtime — most lookups
+    /// resolve in well under 1s once the element is in the tree.
+    static let lookupTimeout: TimeInterval = 8
+
     /// Wait for the bootstrap phase to finish — the custom header with the
     /// brand text "Mercurius AI" is the reliable signal.
     @MainActor
-    private func waitForBootComplete(_ app: XCUIApplication, timeout: TimeInterval = 10) {
+    private func waitForBootComplete(_ app: XCUIApplication, timeout: TimeInterval = 15) {
         let header = app.staticTexts["Mercurius AI"]
         XCTAssertTrue(
             header.waitForExistence(timeout: timeout),
@@ -102,7 +109,7 @@ final class MercuriusUITests: XCTestCase {
         // because they live on different elements.
         let clubTitle = app.navigationBars["Club"].firstMatch
         XCTAssertTrue(
-            clubTitle.waitForExistence(timeout: 5),
+            clubTitle.waitForExistence(timeout: Self.lookupTimeout),
             "Club tab did not present the Club navigation title"
         )
     }
@@ -119,7 +126,7 @@ final class MercuriusUITests: XCTestCase {
         // they live on different elements (navigation bar vs. tab bar).
         let progressHeader = app.staticTexts["Overall progress"]
         XCTAssertTrue(
-            progressHeader.waitForExistence(timeout: 3),
+            progressHeader.waitForExistence(timeout: Self.lookupTimeout),
             "Curriculum tab did not present the progress section"
         )
     }
@@ -130,7 +137,7 @@ final class MercuriusUITests: XCTestCase {
         waitForBootComplete(app)
 
         app.buttons["Curriculum"].tap()
-        _ = app.staticTexts["Overall progress"].waitForExistence(timeout: 3)
+        _ = app.staticTexts["Overall progress"].waitForExistence(timeout: Self.lookupTimeout)
 
         // These strings come straight from `MercuriusCurriculum.units` —
         // if a unit title is renamed, update here too. Intentional: keeps
@@ -157,7 +164,7 @@ final class MercuriusUITests: XCTestCase {
                 }
             }
             XCTAssertTrue(
-                cell.waitForExistence(timeout: 2),
+                cell.waitForExistence(timeout: Self.lookupTimeout),
                 "Unit title '\(title)' not found on Curriculum tab even after scrolling"
             )
         }
@@ -219,14 +226,14 @@ final class MercuriusUITests: XCTestCase {
         // Settings sheet uses Form sections with headers "Appearance",
         // "Session", "About". Header text surfaces as static text.
         XCTAssertTrue(
-            app.staticTexts["Appearance"].waitForExistence(timeout: 3),
+            app.staticTexts["Appearance"].waitForExistence(timeout: Self.lookupTimeout),
             "Settings sheet did not present the Appearance section"
         )
 
         // Close via the Done toolbar button and confirm we return to chat.
         app.buttons["Done"].tap()
         XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: 3),
+            app.staticTexts["Mercurius AI"].waitForExistence(timeout: Self.lookupTimeout),
             "Dismissing settings did not return focus to the chat header"
         )
     }
