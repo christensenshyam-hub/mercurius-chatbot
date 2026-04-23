@@ -103,12 +103,38 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native.tests
         GENERATE_INFOPLIST_FILE: YES
 
+  MercuriusUITests:
+    # XCUITest bundle — exercises the app end-to-end through the
+    # accessibility API. These tests do NOT require network: all the
+    # flows covered (boot, tab switch, starter prompt presence, settings
+    # sheet, mode selector, Dynamic Type scaling) are client-side only.
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: MercuriusUITests
+    dependencies:
+      - target: Mercurius
+    postCompileScripts:
+      - name: Strip extended attributes (macOS workaround for codesign)
+        script: |
+          if [ -d "${TARGET_BUILD_DIR}" ]; then
+            /usr/bin/xattr -cr "${TARGET_BUILD_DIR}"
+          fi
+        basedOnDependencyAnalysis: false
+        runOnlyWhenInstalling: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Mercurius
+
 schemes:
   Mercurius:
     build:
       targets:
         Mercurius: all
         MercuriusTests: [test]
+        MercuriusUITests: [test]
     run:
       config: Debug
     test:
@@ -116,8 +142,11 @@ schemes:
       # NOTE: SPM package tests are NOT included here — xcodegen can't
       # reference them in schemes. Run them with:
       #   cd Packages && swift test
+      # UI tests live in MercuriusUITests. Run selectively via:
+      #   xcodebuild test -only-testing:MercuriusUITests -scheme Mercurius ...
       targets:
         - MercuriusTests
+        - MercuriusUITests
     profile:
       config: Release
     analyze:
