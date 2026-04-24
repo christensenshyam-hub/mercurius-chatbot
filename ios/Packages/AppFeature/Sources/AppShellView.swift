@@ -101,12 +101,13 @@ struct AppShellView: View {
             model: chatModel,
             apiClient: apiClient,
             sessionIdentity: sessionIdentity,
-            settingsPresenter: { [sessionIdentity, themeStore, chatStore] in
+            settingsPresenter: { [sessionIdentity, themeStore, chatStore, chatModel] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
                         themeStore: themeStore,
-                        chatStore: chatStore
+                        chatStore: chatStore,
+                        chatModel: chatModel
                     )
                 )
             },
