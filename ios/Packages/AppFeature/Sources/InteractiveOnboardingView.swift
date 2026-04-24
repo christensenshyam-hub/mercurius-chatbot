@@ -321,26 +321,32 @@ private struct BrandIntroStep: View {
     let onContinue: () -> Void
 
     var body: some View {
-        VStack(spacing: BrandSpacing.xxl) {
+        VStack(spacing: BrandSpacing.xl) {
             Spacer()
 
-            BrandLogo(style: .full, size: 220)
+            // `.full` already embeds the "Mercurius AI / AI LITERACY
+            // TUTOR" wordmark, so the welcome text below is sized at
+            // `title` (not `largeTitle`) — anything larger fights the
+            // logo's own wordmark for attention and on a standard
+            // iPhone width overflows the safe area on one line.
+            BrandLogo(style: .full, size: 180)
                 .accessibilityHidden(true)
 
             VStack(spacing: BrandSpacing.md) {
                 Text("Welcome to Mercurius AI")
-                    .font(BrandFont.largeTitle)
+                    .font(BrandFont.title)
                     .foregroundStyle(BrandColor.text)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.85)
 
                 Text("Your AI literacy tutor for learning how to use AI effectively, ethically, and intelligently.")
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, BrandSpacing.xl)
             }
+            .padding(.horizontal, BrandSpacing.xl)
 
             Spacer()
 
