@@ -62,8 +62,6 @@ targets:
       - package: LocalPackages
         product: CurriculumFeature
       - package: LocalPackages
-        product: ClubFeature
-      - package: LocalPackages
         product: SettingsFeature
       - package: LocalPackages
         product: PersistenceKit
@@ -115,8 +113,6 @@ targets:
         product: ChatFeature
       - package: LocalPackages
         product: CurriculumFeature
-      - package: LocalPackages
-        product: ClubFeature
       - package: LocalPackages
         product: SettingsFeature
       - package: SnapshotTesting

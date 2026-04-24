@@ -4,7 +4,6 @@ import SnapshotTesting
 @testable import DesignSystem
 @testable import NetworkingKit
 @testable import ChatFeature
-@testable import ClubFeature
 @testable import CurriculumFeature
 @testable import SettingsFeature
 

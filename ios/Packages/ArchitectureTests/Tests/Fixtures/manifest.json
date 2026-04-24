@@ -127,20 +127,6 @@
       }
     },
     {
-      "name" : "ClubFeature",
-      "settings" : [
-
-      ],
-      "targets" : [
-        "ClubFeature"
-      ],
-      "type" : {
-        "library" : [
-          "automatic"
-        ]
-      }
-    },
-    {
       "name" : "SettingsFeature",
       "settings" : [
 
@@ -442,71 +428,6 @@
       "exclude" : [
 
       ],
-      "name" : "ClubFeature",
-      "packageAccess" : true,
-      "path" : "ClubFeature/Sources",
-      "resources" : [
-
-      ],
-      "settings" : [
-
-      ],
-      "type" : "regular"
-    },
-    {
-      "dependencies" : [
-        {
-          "byName" : [
-            "ClubFeature",
-            null
-          ]
-        },
-        {
-          "byName" : [
-            "NetworkingKit",
-            null
-          ]
-        }
-      ],
-      "exclude" : [
-
-      ],
-      "name" : "ClubFeatureTests",
-      "packageAccess" : true,
-      "path" : "ClubFeature/Tests",
-      "resources" : [
-        {
-          "path" : "Fixtures",
-          "rule" : {
-            "process" : {
-
-            }
-          }
-        }
-      ],
-      "settings" : [
-
-      ],
-      "type" : "test"
-    },
-    {
-      "dependencies" : [
-        {
-          "byName" : [
-            "DesignSystem",
-            null
-          ]
-        },
-        {
-          "byName" : [
-            "NetworkingKit",
-            null
-          ]
-        }
-      ],
-      "exclude" : [
-
-      ],
       "name" : "SettingsFeature",
       "packageAccess" : true,
       "path" : "SettingsFeature/Sources",
@@ -570,12 +491,6 @@
         {
           "byName" : [
             "CurriculumFeature",
-            null
-          ]
-        },
-        {
-          "byName" : [
-            "ClubFeature",
             null
           ]
         },

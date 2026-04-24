@@ -269,9 +269,19 @@ final class MercuriusUITests: XCTestCase {
 
     @MainActor
     func testFirstModeTapShowsDescriptionSheet() {
-        // `bypassModeDescriptions: false` turns off the launch-arg
-        // bypass so the first-time sheet flow is exercised.
-        let app = launchApp(bypassModeDescriptions: false)
+        // Per-mode `NO` overrides force every flag to false via the
+        // UserDefaults argument domain — without them a prior sim
+        // session that persisted `seenModeDescription.debate=true` would
+        // mask the first-tap behavior we're trying to assert.
+        let app = launchApp(
+            extraArgs: [
+                "-seenModeDescription.socratic", "NO",
+                "-seenModeDescription.direct", "NO",
+                "-seenModeDescription.debate", "NO",
+                "-seenModeDescription.discussion", "NO",
+            ],
+            bypassModeDescriptions: false
+        )
         waitForBootComplete(app)
 
         // Tap Debate — it's unlocked and guaranteed present. Socratic
@@ -285,35 +295,50 @@ final class MercuriusUITests: XCTestCase {
         XCTAssertTrue(debatePill.waitForExistence(timeout: Self.lookupTimeout))
         debatePill.tap()
 
-        // Sheet identity: a navigation bar titled "Debate" + a visible
-        // "Got it" button. Both are stable anchors across iOS versions.
+        // Sheet identity: the "Got it" primary button is visible.
         let gotIt = app.buttons["Got it"]
         XCTAssertTrue(
             gotIt.waitForExistence(timeout: Self.lookupTimeout),
             "First tap on Debate should present the description sheet (Got it button missing)"
         )
 
-        // Dismissing via Got it should mark the mode seen AND select it.
+        // Got it dismisses the sheet.
         gotIt.tap()
-
-        // After dismissal the sheet is gone → Got it no longer exists
-        // in the accessibility tree.
         XCTAssertFalse(
             app.buttons["Got it"].waitForExistence(timeout: 1),
             "Sheet should be dismissed after Got it"
         )
+    }
 
-        // Second tap on the same mode must NOT present the sheet again.
-        // Re-query the pill because mode selection may re-render it.
-        let debatePillAfter = app.buttons.matching(
+    @MainActor
+    func testAlreadySeenModeTapDoesNotShowSheet() {
+        // Complement of `testFirstModeTapShowsDescriptionSheet`: assert
+        // that once a mode is marked seen, tapping it does NOT re-present
+        // the sheet.
+        //
+        // Done as a separate launch rather than tap-Got-it-then-tap-again
+        // in one launch because the UserDefaults argument domain wins
+        // over any runtime `markSeen` write — the app would persist the
+        // flag correctly, but `hasSeen` still reads `NO` from the
+        // argument domain for the duration of the process. Two launches
+        // with different initial states sidesteps that.
+        let app = launchApp(
+            extraArgs: [
+                "-seenModeDescription.debate", "YES",
+            ],
+            bypassModeDescriptions: false
+        )
+        waitForBootComplete(app)
+
+        let debatePill = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH 'Debate'")
         ).firstMatch
-        XCTAssertTrue(debatePillAfter.waitForExistence(timeout: Self.lookupTimeout))
-        debatePillAfter.tap()
+        XCTAssertTrue(debatePill.waitForExistence(timeout: Self.lookupTimeout))
+        debatePill.tap()
 
         XCTAssertFalse(
             app.buttons["Got it"].waitForExistence(timeout: 1),
-            "Second tap on a mode that's already been seen must NOT re-present the description sheet"
+            "Tapping a mode whose description has already been seen must NOT re-present the sheet"
         )
     }
 

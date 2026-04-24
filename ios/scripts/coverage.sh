@@ -4,8 +4,7 @@
 # Runs, in order:
 #   1. SPM package tests via `swift test --enable-code-coverage`
 #      (covers: DesignSystem, NetworkingKit, PersistenceKit,
-#      ChatFeature, CurriculumFeature, ClubFeature, SettingsFeature,
-#      AppFeature).
+#      ChatFeature, CurriculumFeature, SettingsFeature, AppFeature).
 #   2. Xcode MercuriusTests + MercuriusUITests via `xcodebuild test`
 #      with `-enableCodeCoverage YES` (covers the app shell and
 #      the XCUITest flows).

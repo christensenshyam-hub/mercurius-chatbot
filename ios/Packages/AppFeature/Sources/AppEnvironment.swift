@@ -3,7 +3,6 @@ import OSLog
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
-import ClubFeature
 
 /// Shared logger for app-level diagnostics. Surfaces in Console.app
 /// under the `com.mayoailiteracy.mercurius` subsystem when filtered
@@ -20,11 +19,6 @@ private let log = Logger(
 public final class AppEnvironment: ObservableObject {
     public let apiClient: APIClient
     public let sessionIdentity: SessionIdentity
-
-    /// Fetches the club's public JSON (events + blog). Independent of
-    /// `apiClient` because these assets live on `mayoailiteracy.com`,
-    /// not on the Mercurius server.
-    public let clubClient: ClubDataProviding
 
     /// App-wide theme preference. Observed by `RootView` so the chosen
     /// color scheme propagates everywhere the moment the user changes
@@ -80,7 +74,6 @@ public final class AppEnvironment: ObservableObject {
             environment: environment,
             sessionIdentity: identity
         )
-        self.clubClient = ClubDataClient()
         self.themeStore = ThemePreferenceStore()
         self.chatStore = chatStore
     }

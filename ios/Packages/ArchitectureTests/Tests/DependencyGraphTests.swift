@@ -94,7 +94,6 @@ private func loadManifest() throws -> Manifest {
 private let featureModules: Set<String> = [
     "ChatFeature",
     "CurriculumFeature",
-    "ClubFeature",
     "SettingsFeature",
 ]
 
