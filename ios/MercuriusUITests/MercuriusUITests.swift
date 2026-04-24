@@ -61,14 +61,40 @@ final class MercuriusUITests: XCTestCase {
     /// resolve in well under 1s once the element is in the tree.
     static let lookupTimeout: TimeInterval = 8
 
-    /// Wait for the bootstrap phase to finish — the custom header with the
-    /// brand text "Mercurius AI" is the reliable signal.
+    /// Wait for the bootstrap phase to finish AND advance past the
+    /// HomeView entry screen into the main TabView.
+    ///
+    /// Post-launch flow is: loading spinner → HomeView → (user taps
+    /// Start Chat) → AppShellView / TabView. The `"Mercurius AI"`
+    /// staticText in the chat header is our reliable "we are in the
+    /// app" signal — it exists only once the TabView is on screen.
+    /// Nearly every test cares about TabView-level affordances, so
+    /// this helper does both boot-wait and Start-Chat tap by default.
+    /// Pass `enterApp: false` for tests that want to assert on
+    /// HomeView itself.
     @MainActor
-    private func waitForBootComplete(_ app: XCUIApplication, timeout: TimeInterval = 15) {
+    private func waitForBootComplete(
+        _ app: XCUIApplication,
+        enterApp: Bool = true,
+        timeout: TimeInterval = 15
+    ) {
+        // First: HomeView's "Start Chat" button is the post-bootstrap
+        // ready signal. Appears once RootView flips from .loading to
+        // .ready.
+        let startChat = app.buttons["Start Chat"]
+        XCTAssertTrue(
+            startChat.waitForExistence(timeout: timeout),
+            "App never reached HomeView — Start Chat button did not appear within \(timeout)s"
+        )
+        guard enterApp else { return }
+
+        // Tap through to the TabView. The chat header's "Mercurius AI"
+        // staticText is the reliable signal we've landed there.
+        startChat.tap()
         let header = app.staticTexts["Mercurius AI"]
         XCTAssertTrue(
             header.waitForExistence(timeout: timeout),
-            "App never reached the ready state — header 'Mercurius AI' did not appear within \(timeout)s"
+            "Did not reach the chat tab — 'Mercurius AI' header missing \(timeout)s after Start Chat"
         )
     }
 

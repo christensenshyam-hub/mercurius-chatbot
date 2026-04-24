@@ -12,6 +12,17 @@ public struct RootView: View {
 
     @State private var bootstrapState: BootstrapState = .loading
 
+    /// Flips true when the user taps **Start Chat** on the home
+    /// screen. Drives the transition from `HomeView` to the main
+    /// `AppShellView`. Not persisted — each cold launch begins at
+    /// Home by design (it's the first screen users see, and we'd
+    /// rather reintroduce the framing every launch than drop
+    /// straight into mid-conversation chat).
+    @State private var hasEnteredApp: Bool = false
+
+    /// Drives the "How it works" sheet presented from HomeView.
+    @State private var showHowItWorks = false
+
     private enum BootstrapState: Equatable {
         case loading
         case ready(sessionId: String)
@@ -28,21 +39,43 @@ public struct RootView: View {
             case .loading:
                 loadingView
             case .ready:
-                AppShellView(
-                    apiClient: env.apiClient,
-                    sessionIdentity: env.sessionIdentity,
-                    chatStore: env.chatStore,
-                    themeStore: env.themeStore,
-                    clubClient: env.clubClient
-                )
-                .transition(.opacity)
+                readyContent
+                    .transition(.opacity)
             case .failed(let reason):
                 failureView(reason: reason)
             }
         }
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
+        .animation(.easeInOut(duration: 0.25), value: hasEnteredApp)
         .preferredColorScheme(env.themeStore.theme.colorScheme)
         .task { await bootstrap() }
+        .sheet(isPresented: $showHowItWorks) {
+            HowItWorksView(dismiss: { showHowItWorks = false })
+        }
+    }
+
+    /// Post-bootstrap content — either the HomeView entry point or
+    /// the full TabView once the user's past it. Split out so the
+    /// `switch` above stays readable and the two child views can
+    /// animate cleanly via `.transition`.
+    @ViewBuilder
+    private var readyContent: some View {
+        if hasEnteredApp {
+            AppShellView(
+                apiClient: env.apiClient,
+                sessionIdentity: env.sessionIdentity,
+                chatStore: env.chatStore,
+                themeStore: env.themeStore,
+                clubClient: env.clubClient
+            )
+            .transition(.opacity)
+        } else {
+            HomeView(
+                onStartChat: { hasEnteredApp = true },
+                onHowItWorks: { showHowItWorks = true }
+            )
+            .transition(.opacity)
+        }
     }
 
     // MARK: - States

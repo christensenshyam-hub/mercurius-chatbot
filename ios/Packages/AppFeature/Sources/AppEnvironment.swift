@@ -41,16 +41,28 @@ public final class AppEnvironment: ObservableObject {
         // in-memory on throw. The init below has `chatStore: nil` fall
         // through to this default.
         //
-        // Performance-test hook: `-SeedDemoChat` on the launch args
-        // swaps in an in-memory store preloaded with ~50 messages so
-        // `MercuriusUITests/PerformanceTests` can measure scroll time
-        // and memory in a non-trivial chat state. Safe to leave
-        // unconditional — launch args are settable only by the
-        // launcher (Xcode / XCUITest / Instruments), never by users
-        // via the home screen.
-        let store = Self.shouldSeedDemoChat()
-            ? Self.makeDemoSeededChatStore()
-            : Self.makeDefaultChatStore()
+        // Launch-arg hooks — all settable only by the launcher (Xcode /
+        // XCUITest / Instruments), never by users from the home screen:
+        //   -SeedDemoChat  → InMemoryChatStore preloaded with ~50 msgs
+        //                    (used by PerformanceTests for realistic
+        //                    scroll / memory measurements).
+        //   -UITests YES   → empty InMemoryChatStore. MercuriusUITests
+        //                    assumes a clean slate each run — without
+        //                    this the disk-backed SwiftData store from a
+        //                    prior simulator session makes EmptyChatView
+        //                    skip, which breaks the starter-prompts test.
+        //
+        // Order matters: -SeedDemoChat wins over -UITests so the perf
+        // suite can still pass both flags if it ever wants the clean-
+        // simulator guarantee without losing its seeded history.
+        let store: ChatStore?
+        if Self.shouldSeedDemoChat() {
+            store = Self.makeDemoSeededChatStore()
+        } else if Self.shouldUseCleanInMemoryStore() {
+            store = InMemoryChatStore()
+        } else {
+            store = Self.makeDefaultChatStore()
+        }
         self.init(environment: environment, chatStore: store)
     }
 
@@ -98,8 +110,20 @@ public final class AppEnvironment: ObservableObject {
     /// scroll perf + memory in a realistic state.
     static let seedDemoChatArgument = "-SeedDemoChat"
 
+    /// Launch-argument flag the UITest harness passes (`-UITests YES`) to
+    /// force a clean, in-memory ChatStore. Without this, a persisted
+    /// SwiftData store from a prior simulator session bleeds through
+    /// into the test run — EmptyChatView doesn't render and assertions
+    /// against starter-prompt buttons fail non-deterministically
+    /// depending on the simulator's history.
+    static let uiTestArgument = "-UITests"
+
     private static func shouldSeedDemoChat() -> Bool {
         ProcessInfo.processInfo.arguments.contains(seedDemoChatArgument)
+    }
+
+    private static func shouldUseCleanInMemoryStore() -> Bool {
+        ProcessInfo.processInfo.arguments.contains(uiTestArgument)
     }
 
     /// Build an `InMemoryChatStore` preloaded with a 50-message

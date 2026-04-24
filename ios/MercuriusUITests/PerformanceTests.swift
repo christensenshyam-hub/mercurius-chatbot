@@ -25,6 +25,24 @@ import XCTest
 /// takes about 45-60 seconds per metric on a local dev machine.
 final class PerformanceTests: XCTestCase {
 
+    /// Post-launch: advance past HomeView into the main TabView so
+    /// the subsequent scroll / memory measurements are against the
+    /// real chat screen. Cold-launch measurement (below) doesn't
+    /// use this — it's deliberately measuring the whole bootstrap.
+    @MainActor
+    private func enterAppFromHome(_ app: XCUIApplication, timeout: TimeInterval = 15) {
+        let startChat = app.buttons["Start Chat"]
+        XCTAssertTrue(
+            startChat.waitForExistence(timeout: timeout),
+            "HomeView never rendered — Start Chat button missing after \(timeout)s"
+        )
+        startChat.tap()
+        XCTAssertTrue(
+            app.staticTexts["Mercurius AI"].waitForExistence(timeout: timeout),
+            "Did not reach the chat screen after tapping Start Chat"
+        )
+    }
+
     @MainActor
     func testColdLaunchTime() throws {
         // `XCTApplicationLaunchMetric()` reports total time from process
@@ -58,11 +76,9 @@ final class PerformanceTests: XCTestCase {
         app.launchArguments += ["-SeedDemoChat"]
         app.launch()
 
-        // Wait for boot.
-        XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: 15),
-            "App did not reach the chat screen"
-        )
+        // Walk past HomeView → TabView so the scroll target is the
+        // populated chat message list.
+        enterAppFromHome(app)
 
         // Anchor on the scroll view that holds the message list.
         // SwiftUI ScrollView renders as an XCUIElement.Type.scrollView.
@@ -95,10 +111,7 @@ final class PerformanceTests: XCTestCase {
         app.launchArguments += ["-SeedDemoChat"]
         app.launch()
 
-        XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: 15),
-            "App did not reach the chat screen"
-        )
+        enterAppFromHome(app)
 
         let options = XCTMeasureOptions()
         options.iterationCount = 3
