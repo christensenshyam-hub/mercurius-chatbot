@@ -57,7 +57,17 @@ final class MercuriusUITests: XCTestCase {
         // `ModeDescriptionStore.globalBypassKey`. Tests that need to
         // exercise the first-tap flow pass `bypassModeDescriptions: false`
         // so the flag isn't set.
-        var defaults = ["-UITests", "YES", "-hasSeenOnboarding", "YES"]
+        //
+        // `-hasSeenChatInputHint YES` suppresses the first-launch hint
+        // that sits between EmptyChatView and the ChatInputBar — the
+        // starter-prompts test doesn't care about the hint's presence
+        // and it would just add layout noise to every other test that
+        // boots into the empty chat.
+        var defaults = [
+            "-UITests", "YES",
+            "-hasSeenOnboarding", "YES",
+            "-hasSeenChatInputHint", "YES",
+        ]
         if bypassModeDescriptions {
             defaults += ["-seenAllModeDescriptions", "YES"]
         }
@@ -307,6 +317,46 @@ final class MercuriusUITests: XCTestCase {
         XCTAssertFalse(
             app.buttons["Got it"].waitForExistence(timeout: 1),
             "Sheet should be dismissed after Got it"
+        )
+    }
+
+    @MainActor
+    func testEmptyChatHintVisibleOnFirstLaunch() {
+        // Force the hint flag to false via the argument domain. The
+        // extraArgs slot wins over the defaults list because it's
+        // appended after. This simulates a first-launch user who has
+        // never dismissed the hint.
+        let app = launchApp(
+            extraArgs: ["-hasSeenChatInputHint", "NO"]
+        )
+        waitForBootComplete(app)
+
+        // The dismiss button is the reliable accessibility anchor —
+        // if it's in the tree, the hint rendered.
+        XCTAssertTrue(
+            app.buttons["Dismiss hint"].waitForExistence(timeout: Self.lookupTimeout),
+            "Empty-chat hint should appear on a first-launch (unseen) state — Dismiss button missing"
+        )
+    }
+
+    @MainActor
+    func testEmptyChatHintHiddenWhenAlreadySeen() {
+        // The default `launchApp()` already passes
+        // `-hasSeenChatInputHint YES`, which simulates a returning
+        // user who dismissed the hint on a prior session.
+        //
+        // The dismissal side-effect itself (tap Dismiss → flag flips
+        // → hint disappears) isn't verified here because the
+        // UserDefaults argument domain wins over runtime writes, so
+        // a within-process dismissal is not observable. This pair
+        // of tests (visible-when-unseen / hidden-when-seen) covers
+        // both initial states the user can actually reach.
+        let app = launchApp()
+        waitForBootComplete(app)
+
+        XCTAssertFalse(
+            app.buttons["Dismiss hint"].waitForExistence(timeout: 1),
+            "Hint must not appear for a user who has already dismissed it"
         )
     }
 

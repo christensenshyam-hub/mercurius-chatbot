@@ -10,6 +10,13 @@ public struct ChatView: View {
     @State private var showSettings = false
     @State private var activeTool: ActiveTool?
 
+    /// First-launch hint above the input bar. Visible only when the
+    /// chat is empty AND the user hasn't dismissed it once. The X
+    /// button on the hint is the only explicit dismissal path;
+    /// sending a first message implicitly hides it because
+    /// `model.messages.isEmpty` flips to false.
+    @AppStorage(ChatInputHint.storageKey) private var hasSeenChatInputHint: Bool = false
+
     private enum ActiveTool: Identifiable {
         case quiz, reportCard
         var id: String {
@@ -96,6 +103,11 @@ public struct ChatView: View {
                     )
                 }
 
+                if model.messages.isEmpty && !hasSeenChatInputHint {
+                    ChatInputHint(onDismiss: dismissChatInputHint)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 ChatInputBar(
                     text: Binding(
                         get: { model.draft },
@@ -107,6 +119,14 @@ public struct ChatView: View {
                 )
             }
         }
+        // Animate the hint's appearance + dismissal so the transition
+        // doesn't snap when `hasSeenChatInputHint` flips. Scoped to
+        // just that state so other view churn isn't animated.
+        .animation(.easeInOut(duration: 0.25), value: hasSeenChatInputHint)
+    }
+
+    private func dismissChatInputHint() {
+        hasSeenChatInputHint = true
     }
 
     private var isSending: Bool {

@@ -37,6 +37,7 @@ final class PerformanceTests: XCTestCase {
         "-UITests", "YES",
         "-hasSeenOnboarding", "YES",
         "-seenAllModeDescriptions", "YES",
+        "-hasSeenChatInputHint", "YES",
     ]
 
     /// Post-launch: advance past HomeView into the main TabView so
