@@ -25,6 +25,17 @@ import XCTest
 /// takes about 45-60 seconds per metric on a local dev machine.
 final class PerformanceTests: XCTestCase {
 
+    /// Launch arguments every perf test passes. `-hasSeenOnboarding`
+    /// flips the `@AppStorage` flag in the process's argument-domain
+    /// UserDefaults, bypassing OnboardingView so measurements land on
+    /// the real app surface — not on an onboarding pager. Cold-launch
+    /// measurement uses these too so bootstrap time is comparable to
+    /// what a returning user sees, not what a fresh install sees.
+    static let defaultLaunchArgs = [
+        "-UITests", "YES",
+        "-hasSeenOnboarding", "YES",
+    ]
+
     /// Post-launch: advance past HomeView into the main TabView so
     /// the subsequent scroll / memory measurements are against the
     /// real chat screen. Cold-launch measurement (below) doesn't
@@ -59,7 +70,9 @@ final class PerformanceTests: XCTestCase {
         options.iterationCount = 5
 
         measure(metrics: [metric], options: options) {
-            XCUIApplication().launch()
+            let app = XCUIApplication()
+            app.launchArguments += Self.defaultLaunchArgs
+            app.launch()
         }
     }
 
@@ -73,7 +86,7 @@ final class PerformanceTests: XCTestCase {
         // pressure.
 
         let app = XCUIApplication()
-        app.launchArguments += ["-SeedDemoChat"]
+        app.launchArguments += Self.defaultLaunchArgs + ["-SeedDemoChat"]
         app.launch()
 
         // Walk past HomeView → TabView so the scroll target is the
@@ -108,7 +121,7 @@ final class PerformanceTests: XCTestCase {
         // introduced by ChatViewModel or message bubble renderers
         // without a scroll gesture adding variance.
         let app = XCUIApplication()
-        app.launchArguments += ["-SeedDemoChat"]
+        app.launchArguments += Self.defaultLaunchArgs + ["-SeedDemoChat"]
         app.launch()
 
         enterAppFromHome(app)

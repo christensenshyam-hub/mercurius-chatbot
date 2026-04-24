@@ -23,6 +23,17 @@ public struct RootView: View {
     /// Drives the "How it works" sheet presented from HomeView.
     @State private var showHowItWorks = false
 
+    /// First-launch onboarding gate. Persisted by `OnboardingView`
+    /// via the same `@AppStorage` key, which means the moment the
+    /// user taps Skip or Get Started this value flips and the
+    /// `readyContent` branch below re-renders into `HomeView` — no
+    /// callback wiring needed.
+    ///
+    /// The argument-domain form `"-hasSeenOnboarding YES"` is how the
+    /// UITest + PerformanceTest launch args bypass onboarding so they
+    /// can assert directly against the HomeView / TabView state.
+    @AppStorage(OnboardingView.storageKey) private var hasSeenOnboarding: Bool = false
+
     private enum BootstrapState: Equatable {
         case loading
         case ready(sessionId: String)
@@ -47,6 +58,7 @@ public struct RootView: View {
         }
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
         .animation(.easeInOut(duration: 0.25), value: hasEnteredApp)
+        .animation(.easeInOut(duration: 0.25), value: hasSeenOnboarding)
         .preferredColorScheme(env.themeStore.theme.colorScheme)
         .task { await bootstrap() }
         .sheet(isPresented: $showHowItWorks) {
@@ -54,13 +66,20 @@ public struct RootView: View {
         }
     }
 
-    /// Post-bootstrap content — either the HomeView entry point or
-    /// the full TabView once the user's past it. Split out so the
-    /// `switch` above stays readable and the two child views can
-    /// animate cleanly via `.transition`.
+    /// Post-bootstrap content. Three possible states:
+    /// 1. `!hasSeenOnboarding` → `OnboardingView` (first launch only).
+    /// 2. `hasEnteredApp == false` → `HomeView` (every launch after
+    ///    onboarding is complete).
+    /// 3. `hasEnteredApp == true`  → `AppShellView` (the main TabView).
+    ///
+    /// Split out so the `switch` above stays readable and each child
+    /// view gets a clean `.transition(.opacity)` crossfade.
     @ViewBuilder
     private var readyContent: some View {
-        if hasEnteredApp {
+        if !hasSeenOnboarding {
+            OnboardingView()
+                .transition(.opacity)
+        } else if hasEnteredApp {
             AppShellView(
                 apiClient: env.apiClient,
                 sessionIdentity: env.sessionIdentity,

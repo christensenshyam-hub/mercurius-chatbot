@@ -44,7 +44,15 @@ final class MercuriusUITests: XCTestCase {
         extraArgs: [String] = []
     ) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-UITests", "YES"] + extraArgs
+        // `-hasSeenOnboarding YES` uses UserDefaults' argument domain to
+        // flip the `@AppStorage("hasSeenOnboarding")` flag for this
+        // process only. Without it, a freshly-installed test build lands
+        // on OnboardingView and every test that expects HomeView /
+        // TabView state would have to swipe through 3 pages first.
+        app.launchArguments += [
+            "-UITests", "YES",
+            "-hasSeenOnboarding", "YES",
+        ] + extraArgs
         if let contentSize {
             // Dynamic Type sizes passed as a standard iOS preferred content
             // size category — e.g. "UICTContentSizeCategoryAccessibilityL".
