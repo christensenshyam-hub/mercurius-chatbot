@@ -90,10 +90,21 @@ public struct ChatView: View {
                 Divider().overlay(BrandColor.border)
 
                 if model.messages.isEmpty {
-                    EmptyChatView { suggestion in
-                        model.draft = suggestion
-                        model.send()
-                    }
+                    EmptyChatView(
+                        suggestions: ModePromptProvider.prompts(for: model.currentMode),
+                        onSuggestion: { suggestion in
+                            model.draft = suggestion
+                            model.send()
+                        }
+                    )
+                    // Re-key the view on the active mode so a mode
+                    // switch crossfades the prompt chips rather than
+                    // snap-replacing them. Cheap and obvious to the
+                    // eye; tells the user "the suggestions just
+                    // changed because of what you tapped."
+                    .id(model.currentMode)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: model.currentMode)
                     .frame(maxHeight: .infinity)
                 } else {
                     MessageListView(

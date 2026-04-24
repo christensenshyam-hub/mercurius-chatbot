@@ -3,15 +3,15 @@ import DesignSystem
 
 /// Shown when the chat has no messages. Offers a few starter prompts
 /// so users don't stare at an empty input field wondering what to ask.
+///
+/// Suggestions are passed in by the host (typically `ChatView` reading
+/// `ModePromptProvider.prompts(for: model.currentMode)`) so the chips
+/// re-render whenever the active mode changes. Keeping the data flow
+/// inside the parent — rather than letting EmptyChatView observe the
+/// model directly — keeps this view dumb and previewable in isolation.
 struct EmptyChatView: View {
+    let suggestions: [String]
     let onSuggestion: (String) -> Void
-
-    private let suggestions: [String] = [
-        "How does an LLM actually work?",
-        "Is AI biased? Where does the bias come from?",
-        "When should I NOT use AI?",
-        "How do I write a better prompt?",
-    ]
 
     var body: some View {
         // Wrapped in a ScrollView so that at accessibility Dynamic Type sizes

@@ -96,7 +96,7 @@ final class ViewSnapshotTests: XCTestCase {
     // MARK: - EmptyChatView
 
     func testEmptyChatViewLight() {
-        let view = EmptyChatView { _ in }
+        let view = EmptyChatView(suggestions: ModePromptProvider.socraticPrompts, onSuggestion: { _ in })
             .background(BrandColor.background)
         assertSnapshot(
             of: view,
@@ -109,7 +109,7 @@ final class ViewSnapshotTests: XCTestCase {
     }
 
     func testEmptyChatViewDark() {
-        let view = EmptyChatView { _ in }
+        let view = EmptyChatView(suggestions: ModePromptProvider.socraticPrompts, onSuggestion: { _ in })
             .background(BrandColor.background)
         assertSnapshot(
             of: view,
@@ -126,7 +126,7 @@ final class ViewSnapshotTests: XCTestCase {
         // guards keep the header readable. If the cap ever disappears
         // (e.g. someone drops `lineLimit(1) + minimumScaleFactor`), the
         // snapshot diff shows the regression visually.
-        let view = EmptyChatView { _ in }
+        let view = EmptyChatView(suggestions: ModePromptProvider.socraticPrompts, onSuggestion: { _ in })
             .background(BrandColor.background)
             .environment(\.dynamicTypeSize, .accessibility3)
         assertSnapshot(
