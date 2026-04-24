@@ -28,11 +28,19 @@ public struct ChatView: View {
     /// `SettingsFeature` — composition lives in `AppFeature`.
     private let settingsPresenter: (@MainActor () -> AnyView)?
 
+    /// Optional escape hatch: if provided, renders a leading "Home"
+    /// button in the header that invokes this closure. `AppFeature`
+    /// wires it up to return the user to the branded HomeView so the
+    /// chat tab never feels like a dead-end. Left optional so
+    /// previews / tests / any future non-TabView host can omit it.
+    private let onGoHome: (@MainActor () -> Void)?
+
     public init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
         chatStore: ChatStore? = nil,
-        settingsPresenter: (@MainActor () -> AnyView)? = nil
+        settingsPresenter: (@MainActor () -> AnyView)? = nil,
+        onGoHome: (@MainActor () -> Void)? = nil
     ) {
         _model = State(
             initialValue: ChatViewModel(
@@ -44,6 +52,7 @@ public struct ChatView: View {
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
         self.settingsPresenter = settingsPresenter
+        self.onGoHome = onGoHome
     }
 
     /// Alternate initializer used by `AppShellView`: share an existing
@@ -53,12 +62,14 @@ public struct ChatView: View {
         model: ChatViewModel,
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
-        settingsPresenter: (@MainActor () -> AnyView)? = nil
+        settingsPresenter: (@MainActor () -> AnyView)? = nil,
+        onGoHome: (@MainActor () -> Void)? = nil
     ) {
         _model = State(initialValue: model)
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
         self.settingsPresenter = settingsPresenter
+        self.onGoHome = onGoHome
     }
 
     public var body: some View {
@@ -107,6 +118,19 @@ public struct ChatView: View {
 
     private var header: some View {
         HStack(spacing: BrandSpacing.md) {
+            if let onGoHome {
+                Button {
+                    onGoHome()
+                } label: {
+                    Image(systemName: "house")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Home")
+                .accessibilityHint("Return to the Mercurius home screen")
+            }
+
             BrandLogo(style: .mark, size: 32)
             VStack(alignment: .leading, spacing: 0) {
                 // `lineLimit(1) + minimumScaleFactor` caps growth at extreme
@@ -138,7 +162,10 @@ public struct ChatView: View {
                 .accessibilityLabel("Settings")
             }
         }
-        .padding(.leading, BrandSpacing.lg)
+        // When the Home button is present it brings its own leading
+        // padding via its 44pt hit target; otherwise pad to match the
+        // previous look.
+        .padding(.leading, onGoHome == nil ? BrandSpacing.lg : 4)
         .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)

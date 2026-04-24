@@ -10,7 +10,7 @@ struct EmptyChatView: View {
         "How does an LLM actually work?",
         "Is AI biased? Where does the bias come from?",
         "When should I NOT use AI?",
-        "Prep me for the next club meeting.",
+        "How do I write a better prompt?",
     ]
 
     var body: some View {

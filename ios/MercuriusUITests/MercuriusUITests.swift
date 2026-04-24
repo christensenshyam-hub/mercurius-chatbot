@@ -115,7 +115,7 @@ final class MercuriusUITests: XCTestCase {
     }
 
     @MainActor
-    func testTabBarHasAllThreeTabs() {
+    func testTabBarHasChatAndCurriculum() {
         let app = launchApp()
         waitForBootComplete(app)
 
@@ -124,27 +124,31 @@ final class MercuriusUITests: XCTestCase {
         // override doesn't silently break the test.
         let chatTab = app.buttons.matching(NSPredicate(format: "label == 'Chat'")).firstMatch
         let curriculumTab = app.buttons.matching(NSPredicate(format: "label == 'Curriculum'")).firstMatch
-        let clubTab = app.buttons.matching(NSPredicate(format: "label == 'Club'")).firstMatch
 
         XCTAssertTrue(chatTab.exists, "Chat tab button missing")
         XCTAssertTrue(curriculumTab.exists, "Curriculum tab button missing")
-        XCTAssertTrue(clubTab.exists, "Club tab button missing")
     }
 
     @MainActor
-    func testSwitchingToClubTabShowsClubTitle() {
+    func testChatHeaderExposesHomeButton() {
         let app = launchApp()
         waitForBootComplete(app)
 
-        app.buttons["Club"].tap()
-
-        // `navigationTitle("Club")` renders as a static text inside the
-        // navigation bar. It's distinct from the tab-bar button label
-        // because they live on different elements.
-        let clubTitle = app.navigationBars["Club"].firstMatch
+        // The Home button is the escape hatch out of the TabView back
+        // to HomeView. It carries an explicit accessibility label so
+        // VoiceOver users can find it.
+        let home = app.buttons["Home"]
         XCTAssertTrue(
-            clubTitle.waitForExistence(timeout: Self.lookupTimeout),
-            "Club tab did not present the Club navigation title"
+            home.waitForExistence(timeout: Self.lookupTimeout),
+            "Home button missing from chat header — user would feel trapped in the TabView"
+        )
+
+        // Tapping it should take us back to HomeView, which we
+        // recognize by the Start Chat button that only exists there.
+        home.tap()
+        XCTAssertTrue(
+            app.buttons["Start Chat"].waitForExistence(timeout: Self.lookupTimeout),
+            "Tapping Home from chat did not return to HomeView"
         )
     }
 

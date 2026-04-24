@@ -100,7 +100,7 @@ struct HowItWorksView: View {
     }
 
     private var note: some View {
-        Text("Built by students at the Mayo AI Literacy Club.")
+        Text("Learn AI effectively, ethically, and intelligently.")
             .font(BrandFont.caption)
             .foregroundStyle(BrandColor.textSecondary)
             .padding(.top, BrandSpacing.lg)

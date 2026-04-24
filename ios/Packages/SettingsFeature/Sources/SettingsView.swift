@@ -115,18 +115,6 @@ public struct SettingsView: View {
     private var aboutSection: some View {
         Section("About") {
             LabeledRow(title: "Version", value: "\(model.appVersion) (\(model.buildNumber))")
-            LabeledRow(title: "Built by", value: "Mayo AI Literacy Club")
-
-            Link(destination: URL(string: "https://mayoailiteracy.com")!) {
-                HStack {
-                    Text("mayoailiteracy.com")
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .foregroundStyle(BrandColor.accent)
-                        .accessibilityHidden(true)
-                }
-            }
-            .accessibilityLabel("Open mayoailiteracy.com in Safari")
 
             Text("Mercurius AI is an AI literacy tutor — built to help you think critically about AI, not think for you.")
                 .font(.footnote)

@@ -3,11 +3,23 @@ import DesignSystem
 
 // MARK: - Page model
 
+/// The hero visual for an onboarding page. Modeled as an enum so the
+/// first (brand-intro) page can render the full Mercurius logo while
+/// later (tutorial) pages use SF Symbols — without branching renderer
+/// logic at call sites.
+enum OnboardingPageHero: Equatable {
+    /// Show the `BrandLogo(style: .full, ...)` asset at a size that
+    /// reads as a brand intro. Used for page 1 only.
+    case logo(size: CGFloat)
+    /// Show an SF Symbol rendered in the accent gradient.
+    case symbol(String)
+}
+
 /// Content for a single onboarding page. Broken out as a value type so
 /// the pages array is easy to read and the page view has a single,
 /// typed input.
 struct OnboardingPage: Equatable {
-    let symbol: String
+    let hero: OnboardingPageHero
     let title: String
     let body: String
 }
@@ -53,18 +65,22 @@ public struct OnboardingView: View {
     public init() {}
 
     private static let pages: [OnboardingPage] = [
+        // Page 1 is deliberately brand-first, not tutorial-first. The
+        // full Mercurius logo + a welcome line give new users a clear
+        // "this is the app I installed" signal before any explainer
+        // copy lands on pages 2-3.
         OnboardingPage(
-            symbol: "brain.head.profile",
-            title: "Learn AI the right way",
-            body: "Understand how AI works and how to use it effectively."
+            hero: .logo(size: 200),
+            title: "Welcome to Mercurius AI",
+            body: "Your AI literacy tutor for learning how to use AI effectively, ethically, and intelligently."
         ),
         OnboardingPage(
-            symbol: "questionmark.bubble",
+            hero: .symbol("questionmark.bubble"),
             title: "Ask better questions",
             body: "Get smarter answers by learning how to prompt AI."
         ),
         OnboardingPage(
-            symbol: "checkmark.shield",
+            hero: .symbol("checkmark.shield"),
             title: "Think critically",
             body: "AI can be wrong. Always verify important information."
         ),
@@ -158,16 +174,7 @@ struct OnboardingPageView: View {
         VStack(spacing: BrandSpacing.xxl) {
             Spacer(minLength: BrandSpacing.xxl)
 
-            Image(systemName: page.symbol)
-                .font(.system(size: 80, weight: .regular))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [BrandColor.accent, BrandColor.accentLight],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .accessibilityHidden(true)
+            hero
 
             VStack(spacing: BrandSpacing.md) {
                 Text(page.title)
@@ -192,6 +199,26 @@ struct OnboardingPageView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(page.title). \(page.body)")
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        switch page.hero {
+        case .logo(let size):
+            BrandLogo(style: .full, size: size)
+                .accessibilityHidden(true)
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 80, weight: .regular))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [BrandColor.accent, BrandColor.accentLight],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .accessibilityHidden(true)
+        }
     }
 }
 

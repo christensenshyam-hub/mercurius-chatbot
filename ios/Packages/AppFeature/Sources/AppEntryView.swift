@@ -22,8 +22,11 @@ import SettingsFeature
 ///    affordances. Not persisted: every cold launch begins here.
 ///
 /// 3. **App shell** — `hasEnteredApp`. The main `TabView`
-///    (Chat / Curriculum / Club). Shown once the user taps
-///    Start Chat.
+///    (Chat / Curriculum). Shown once the user taps Start Chat.
+///    The chat header carries a Home button that flips
+///    `hasEnteredApp` back to false so the user always has a way
+///    back to the Home screen — they never feel trapped in the
+///    tab view.
 ///
 /// The animations are declared once at this view's root so the
 /// child views can each use a bare `.transition(.opacity)` and
@@ -71,7 +74,7 @@ struct AppEntryView: View {
                 sessionIdentity: env.sessionIdentity,
                 chatStore: env.chatStore,
                 themeStore: env.themeStore,
-                clubClient: env.clubClient
+                onGoHome: { hasEnteredApp = false }
             )
             .transition(.opacity)
         } else {
