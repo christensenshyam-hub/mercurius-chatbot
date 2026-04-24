@@ -9,3 +9,7 @@ mobile/
 # iOS coverage reports — docs/COVERAGE.md is committed; raw data is not.
 ios/build/
 *.xcresult
+
+# Personal dev-env launch config (e.g. hard-coded home paths for node).
+# launch.json contents are developer-specific, not team-wide.
+.claude/launch.json
