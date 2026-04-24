@@ -128,7 +128,10 @@ public final class AppEnvironment: ObservableObject {
     /// measurements are comparable across invocations.
     private static func makeDemoSeededChatStore() -> ChatStore {
         let store = InMemoryChatStore()
-        let convoId = store.createConversation()
+        // Seeded conversation is tagged Socratic — the default mode the
+        // performance tests exercise. If perf tests ever care about
+        // other modes, seed one per mode here.
+        let convoId = store.createConversation(mode: .socratic)
         let start = Date().addingTimeInterval(-60 * 60)  // 1 hour ago
 
         let userPrompts = [

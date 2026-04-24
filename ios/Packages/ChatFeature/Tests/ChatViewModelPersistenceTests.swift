@@ -28,7 +28,7 @@ struct ChatViewModelPersistenceTests {
     @Test("Init with pre-populated store hydrates messages in order")
     func hydratesFromStore() {
         let store = InMemoryChatStore()
-        let convoId = store.createConversation()
+        let convoId = store.createConversation(mode: .socratic)
         let t0 = Date()
         store.append(
             StoredMessage(id: UUID(), role: "user", content: "hi", createdAt: t0),
@@ -56,7 +56,7 @@ struct ChatViewModelPersistenceTests {
     @Test("Messages with unknown roles in the store are skipped, not crashes")
     func ignoresUnknownRoles() {
         let store = InMemoryChatStore()
-        let convoId = store.createConversation()
+        let convoId = store.createConversation(mode: .socratic)
         store.append(
             StoredMessage(id: UUID(), role: "robot", content: "bleep", createdAt: Date()),
             to: convoId

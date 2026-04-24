@@ -100,12 +100,22 @@ public final class ChatViewModel {
 
     /// Load the latest persisted conversation, if any. Runs on init
     /// so the UI can render immediately without a loading flicker.
+    ///
+    /// Mode-resume policy: pick the conversation that was most
+    /// recently updated across every mode and adopt ITS mode as the
+    /// current one. That way a user who was in Debate when the app
+    /// quit lands back in Debate on relaunch — without any persisted
+    /// "current mode" pref of our own. The server's mode is still the
+    /// source of truth for backend behavior; `switchMode` syncs them.
     private func hydrateFromStore() {
         guard let store else { return }
-        if let existingId = store.latestConversationId() {
+        if let existingId = store.latestConversationId(),
+           let convo = store.loadConversation(conversationId: existingId) {
             conversationId = existingId
-            let stored = store.loadMessages(conversationId: existingId)
-            messages = stored.compactMap { record -> ChatMessage? in
+            if let parsed = ChatMode(rawValue: convo.mode) {
+                currentMode = parsed
+            }
+            messages = convo.messages.compactMap { record -> ChatMessage? in
                 guard let role = ChatMessage.Role(rawValue: record.role) else {
                     return nil  // skip unknown roles rather than crashing
                 }
@@ -118,17 +128,20 @@ public final class ChatViewModel {
                 )
             }
         } else {
-            conversationId = store.createConversation()
+            // Fresh install / cleared store: open the first conversation
+            // in the default mode.
+            conversationId = store.createConversation(mode: currentMode)
         }
     }
 
-    /// Ensure a conversation exists and return its id. Creates one
-    /// lazily if the store is present but no conversation has been
-    /// opened yet. Returns `nil` if no store is attached.
+    /// Ensure a conversation exists and return its id. Creates one in
+    /// the current mode lazily if the store is present but no
+    /// conversation has been opened yet. Returns `nil` if no store is
+    /// attached.
     private func ensureConversationId() -> UUID? {
         guard let store else { return nil }
         if let existing = conversationId { return existing }
-        let fresh = store.createConversation()
+        let fresh = store.createConversation(mode: currentMode)
         conversationId = fresh
         return fresh
     }
@@ -240,6 +253,8 @@ public final class ChatViewModel {
     ///
     /// Mode and unlock state are **preserved** on purpose — they're user
     /// preferences that shouldn't be disturbed by starting a new chat.
+    /// The new record is always tagged with `currentMode` so the
+    /// "every conversation is mode-locked" invariant holds.
     public func startNewConversation() {
         streamingTask?.cancel()
         streamingTask = nil
@@ -247,7 +262,66 @@ public final class ChatViewModel {
         draft = ""
         phase = .idle
         if let store {
-            conversationId = store.createConversation()
+            conversationId = store.createConversation(mode: currentMode)
+        }
+    }
+
+    /// Reopen an archived conversation by id. Loads its messages,
+    /// adopts its mode (firing the server-side switchMode if the mode
+    /// differs from the current one), and makes it the active thread.
+    ///
+    /// No-op if the store is missing or the id is unknown.
+    /// Cancels any in-flight stream before swapping — letting the
+    /// stream finish into a different conversation than the user
+    /// is now looking at would be confusing.
+    @discardableResult
+    public func openConversation(id: UUID) async -> Bool {
+        guard let store, let convo = store.loadConversation(conversationId: id) else {
+            return false
+        }
+
+        streamingTask?.cancel()
+        streamingTask = nil
+        phase = .idle
+        draft = ""
+
+        // Adopt mode FIRST (server side) so the conversation we're
+        // about to render matches the model's behavior. Use the
+        // private `_serverSyncMode` rather than the public
+        // `switchMode` so the latter's "swap to latest in mode"
+        // step doesn't fight us — we want to load THIS specific
+        // conversation, not the most recent one in its mode.
+        //
+        // If the server-side switch fails we still load the
+        // conversation (the user explicitly asked to reopen it)
+        // and surface the error via `modeSwitchError`. Subsequent
+        // sends would hit the wrong server mode in that edge case,
+        // but the UI makes the failure visible.
+        if let mode = ChatMode(rawValue: convo.mode), mode != currentMode {
+            await _serverSyncMode(to: mode)
+        }
+
+        applyLoadedConversation(convo)
+        return true
+    }
+
+    /// Lightweight read of the saved conversation list, used by the
+    /// Chat History screen. Returns an empty list if no store is
+    /// attached.
+    public func archivedConversations() -> [ConversationSummary] {
+        store?.listConversations() ?? []
+    }
+
+    /// Delete an archived conversation. If the deleted one is the
+    /// active conversation, behavior matches `startNewConversation`
+    /// for the current mode so the chat surface doesn't end up
+    /// pointing at a phantom id.
+    public func deleteConversation(id: UUID) {
+        guard let store else { return }
+        let wasActive = (conversationId == id)
+        store.delete(conversationId: id)
+        if wasActive {
+            startNewConversation()
         }
     }
 
@@ -263,6 +337,25 @@ public final class ChatViewModel {
 
     @discardableResult
     public func switchMode(to mode: ChatMode) async -> Bool {
+        let succeeded = await _serverSyncMode(to: mode)
+        if succeeded {
+            // Mode-switch (via the pill) feels like switching
+            // workspaces — the chat thread changes too, not just a
+            // setting somewhere off-screen. `openConversation` calls
+            // `_serverSyncMode` directly and bypasses this swap so
+            // it can load a specific archived conversation.
+            swapActiveConversation(forMode: currentMode)
+        }
+        return succeeded
+    }
+
+    /// Server side of the mode switch — talks to the backend,
+    /// updates `currentMode` / `isUnlocked` / `modeSwitchError` /
+    /// `modeSwitchInFlight`. Does NOT touch `conversationId` or
+    /// `messages`; the caller decides whether to swap the active
+    /// thread.
+    @discardableResult
+    private func _serverSyncMode(to mode: ChatMode) async -> Bool {
         guard mode != currentMode else { return true }
         guard modeSwitchInFlight == nil else { return false }
 
@@ -305,6 +398,38 @@ public final class ChatViewModel {
             modeSwitchInFlight = nil
             modeSwitchError = "Could not change mode. Try again."
             return false
+        }
+    }
+
+    /// Swap the visible thread to the latest conversation in `mode`,
+    /// creating a fresh one if no prior conversation exists for that
+    /// mode. Used by the public `switchMode` and by tests.
+    private func swapActiveConversation(forMode mode: ChatMode) {
+        guard let store else { return }
+        if let id = store.latestConversationId(in: mode),
+           let convo = store.loadConversation(conversationId: id) {
+            applyLoadedConversation(convo)
+        } else {
+            let newId = store.createConversation(mode: mode)
+            conversationId = newId
+            messages = []
+        }
+    }
+
+    /// Apply an already-fetched conversation: update id + hydrate
+    /// in-memory messages. Shared by `swapActiveConversation` and
+    /// `openConversation`.
+    private func applyLoadedConversation(_ convo: StoredConversation) {
+        conversationId = convo.id
+        messages = convo.messages.compactMap { record -> ChatMessage? in
+            guard let role = ChatMessage.Role(rawValue: record.role) else { return nil }
+            return ChatMessage(
+                id: record.id,
+                role: role,
+                content: record.content,
+                createdAt: record.createdAt,
+                status: .idle
+            )
         }
     }
 

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import NetworkingKit
 @testable import PersistenceKit
 
 @Suite("InMemoryChatStore")
@@ -15,19 +16,19 @@ struct InMemoryChatStoreTests {
     @Test("createConversation returns a fresh id each time")
     func createReturnsUniqueIds() {
         let store = InMemoryChatStore()
-        let a = store.createConversation()
-        let b = store.createConversation()
+        let a = store.createConversation(mode: .socratic)
+        let b = store.createConversation(mode: .socratic)
         #expect(a != b)
     }
 
     @Test("latestConversationId reflects the most recently touched conversation")
     func latestFollowsActivity() async {
         let store = InMemoryChatStore()
-        let a = store.createConversation()
+        let a = store.createConversation(mode: .socratic)
         // Slight delay so updatedAt differs; touching `b` via append
         // bumps its updatedAt.
         try? await Task.sleep(for: .milliseconds(5))
-        let b = store.createConversation()
+        let b = store.createConversation(mode: .socratic)
         #expect(store.latestConversationId() == b)
 
         try? await Task.sleep(for: .milliseconds(5))
@@ -41,7 +42,7 @@ struct InMemoryChatStoreTests {
     @Test("Messages are returned chronologically")
     func messagesOrdered() {
         let store = InMemoryChatStore()
-        let id = store.createConversation()
+        let id = store.createConversation(mode: .socratic)
         let t0 = Date()
         let m1 = StoredMessage(id: UUID(), role: "user", content: "first", createdAt: t0.addingTimeInterval(2))
         let m2 = StoredMessage(id: UUID(), role: "user", content: "second", createdAt: t0.addingTimeInterval(1))
@@ -70,7 +71,7 @@ struct InMemoryChatStoreTests {
     @Test("deleteAll clears everything")
     func deleteAllClears() {
         let store = InMemoryChatStore()
-        let id = store.createConversation()
+        let id = store.createConversation(mode: .socratic)
         store.append(
             StoredMessage(id: UUID(), role: "user", content: "x", createdAt: Date()),
             to: id
@@ -78,6 +79,95 @@ struct InMemoryChatStoreTests {
         store.deleteAll()
         #expect(store.latestConversationId() == nil)
         #expect(store.loadMessages(conversationId: id).isEmpty)
+    }
+
+    // MARK: - Multi-session: per-mode lookup
+
+    @Test("latestConversationId(in:) is mode-scoped")
+    func latestPerMode() async {
+        let store = InMemoryChatStore()
+        let socratic = store.createConversation(mode: .socratic)
+        try? await Task.sleep(for: .milliseconds(2))
+        let debate = store.createConversation(mode: .debate)
+        try? await Task.sleep(for: .milliseconds(2))
+        let discussion = store.createConversation(mode: .discussion)
+
+        #expect(store.latestConversationId(in: .socratic) == socratic)
+        #expect(store.latestConversationId(in: .debate) == debate)
+        #expect(store.latestConversationId(in: .discussion) == discussion)
+        #expect(store.latestConversationId(in: .direct) == nil)
+
+        // Touching the Socratic conversation must not move the Debate
+        // pointer — modes don't share state.
+        try? await Task.sleep(for: .milliseconds(2))
+        store.append(
+            StoredMessage(id: UUID(), role: "user", content: "hi", createdAt: Date()),
+            to: socratic
+        )
+        #expect(store.latestConversationId(in: .socratic) == socratic)
+        #expect(store.latestConversationId(in: .debate) == debate)
+    }
+
+    // MARK: - Multi-session: loadConversation + listConversations
+
+    @Test("loadConversation surfaces the mode the conversation was created in")
+    func loadCarriesMode() {
+        let store = InMemoryChatStore()
+        let id = store.createConversation(mode: .debate)
+        let convo = store.loadConversation(conversationId: id)
+        #expect(convo?.mode == ChatMode.debate.rawValue)
+    }
+
+    @Test("listConversations returns summaries sorted updatedAt-descending")
+    func listSortedByRecency() async {
+        let store = InMemoryChatStore()
+        let a = store.createConversation(mode: .socratic)
+        try? await Task.sleep(for: .milliseconds(5))
+        let b = store.createConversation(mode: .debate)
+
+        // Touch a — pushes it to the top.
+        try? await Task.sleep(for: .milliseconds(5))
+        store.append(
+            StoredMessage(id: UUID(), role: "user", content: "ping", createdAt: Date()),
+            to: a
+        )
+
+        let summaries = store.listConversations()
+        #expect(summaries.map(\.id) == [a, b])
+        #expect(summaries.first?.mode == ChatMode.socratic.rawValue)
+        #expect(summaries.first?.title == "ping")
+    }
+
+    @Test("Summary title falls back to 'New chat' when no user messages exist")
+    func summaryFallbackTitle() {
+        let store = InMemoryChatStore()
+        let id = store.createConversation(mode: .socratic)
+        // Only an assistant message — title shouldn't pick it up.
+        store.append(
+            StoredMessage(id: UUID(), role: "assistant", content: "Hello there.", createdAt: Date()),
+            to: id
+        )
+        #expect(store.listConversations().first?.title == "New chat")
+    }
+
+    @Test("delete(conversationId:) removes one conversation, leaves others")
+    func deleteSingle() {
+        let store = InMemoryChatStore()
+        let a = store.createConversation(mode: .socratic)
+        let b = store.createConversation(mode: .debate)
+
+        store.delete(conversationId: a)
+
+        #expect(store.loadConversation(conversationId: a) == nil)
+        #expect(store.loadConversation(conversationId: b) != nil)
+    }
+
+    @Test("delete(conversationId:) is a no-op on unknown id")
+    func deleteUnknownIsNoOp() {
+        let store = InMemoryChatStore()
+        let kept = store.createConversation(mode: .socratic)
+        store.delete(conversationId: UUID())
+        #expect(store.loadConversation(conversationId: kept) != nil)
     }
 }
 
@@ -100,7 +190,7 @@ struct SwiftDataChatStoreTests {
     @Test("Round-trips conversations and messages")
     func basicRoundTrip() throws {
         let store = try SwiftDataChatStore.inMemory()
-        let id = store.createConversation()
+        let id = store.createConversation(mode: .socratic)
         #expect(store.latestConversationId() == id)
 
         let msg = StoredMessage(
@@ -117,10 +207,41 @@ struct SwiftDataChatStoreTests {
         #expect(loaded.first?.role == "user")
     }
 
+    @Test("Mode is persisted on the conversation record")
+    func modeRoundTrip() throws {
+        let store = try SwiftDataChatStore.inMemory()
+        let id = store.createConversation(mode: .debate)
+        let convo = store.loadConversation(conversationId: id)
+        #expect(convo?.mode == ChatMode.debate.rawValue)
+    }
+
+    @Test("listConversations returns every persisted conversation")
+    func listRoundTrip() throws {
+        let store = try SwiftDataChatStore.inMemory()
+        _ = store.createConversation(mode: .socratic)
+        _ = store.createConversation(mode: .discussion)
+        let list = store.listConversations()
+        #expect(list.count == 2)
+        #expect(Set(list.map(\.mode)) == [
+            ChatMode.socratic.rawValue,
+            ChatMode.discussion.rawValue,
+        ])
+    }
+
+    @Test("delete(conversationId:) removes the row from disk")
+    func deleteRoundTrip() throws {
+        let store = try SwiftDataChatStore.inMemory()
+        let a = store.createConversation(mode: .socratic)
+        let b = store.createConversation(mode: .debate)
+        store.delete(conversationId: a)
+        #expect(store.loadConversation(conversationId: a) == nil)
+        #expect(store.loadConversation(conversationId: b) != nil)
+    }
+
     @Test("deleteAll removes conversations and messages")
     func deleteAll() throws {
         let store = try SwiftDataChatStore.inMemory()
-        let id = store.createConversation()
+        let id = store.createConversation(mode: .socratic)
         store.append(
             StoredMessage(id: UUID(), role: "user", content: "x", createdAt: Date()),
             to: id
