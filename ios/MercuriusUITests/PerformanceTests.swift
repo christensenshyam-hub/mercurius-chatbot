@@ -27,10 +27,11 @@ final class PerformanceTests: XCTestCase {
 
     /// Launch arguments every perf test passes. `-hasSeenOnboarding`
     /// flips the `@AppStorage` flag in the process's argument-domain
-    /// UserDefaults, bypassing OnboardingView so measurements land on
-    /// the real app surface — not on an onboarding pager. Cold-launch
-    /// measurement uses these too so bootstrap time is comparable to
-    /// what a returning user sees, not what a fresh install sees.
+    /// UserDefaults, bypassing InteractiveOnboardingView so measurements
+    /// land on the real app surface — not on the tutorial flow.
+    /// Cold-launch measurement uses these too so bootstrap time is
+    /// comparable to what a returning user sees, not what a fresh
+    /// install sees.
     static let defaultLaunchArgs = [
         "-UITests", "YES",
         "-hasSeenOnboarding", "YES",

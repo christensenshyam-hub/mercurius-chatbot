@@ -47,8 +47,9 @@ final class MercuriusUITests: XCTestCase {
         // `-hasSeenOnboarding YES` uses UserDefaults' argument domain to
         // flip the `@AppStorage("hasSeenOnboarding")` flag for this
         // process only. Without it, a freshly-installed test build lands
-        // on OnboardingView and every test that expects HomeView /
-        // TabView state would have to swipe through 3 pages first.
+        // on InteractiveOnboardingView and every test that expects
+        // HomeView / TabView state would have to walk through the
+        // 7-step tutorial first.
         app.launchArguments += [
             "-UITests", "YES",
             "-hasSeenOnboarding", "YES",

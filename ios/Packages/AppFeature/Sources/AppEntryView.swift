@@ -12,7 +12,7 @@ import SettingsFeature
 ///
 /// 1. **Onboarding** — `!hasSeenOnboarding`. Shown only on first
 ///    launch. Uses `@AppStorage("hasSeenOnboarding")` via
-///    `OnboardingView.storageKey`, which `OnboardingView` flips to
+///    `InteractiveOnboardingView.storageKey`, which `InteractiveOnboardingView` flips to
 ///    `true` when the user taps Skip or Get Started. No callback
 ///    wiring — the shared UserDefaults value propagates through
 ///    `@AppStorage` to every observer automatically.
@@ -43,7 +43,7 @@ import SettingsFeature
 struct AppEntryView: View {
     @EnvironmentObject private var env: AppEnvironment
 
-    @AppStorage(OnboardingView.storageKey) private var hasSeenOnboarding: Bool = false
+    @AppStorage(InteractiveOnboardingView.storageKey) private var hasSeenOnboarding: Bool = false
 
     /// Flips true when the user taps **Start Chat** on HomeView.
     /// In-memory only: every cold launch restarts at Home (by design
@@ -66,7 +66,7 @@ struct AppEntryView: View {
     @ViewBuilder
     private var content: some View {
         if !hasSeenOnboarding {
-            OnboardingView()
+            InteractiveOnboardingView()
                 .transition(.opacity)
         } else if hasEnteredApp {
             AppShellView(
