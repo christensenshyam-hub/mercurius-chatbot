@@ -11,6 +11,14 @@ struct ModeSelectorView: View {
 
     @State private var showLockedAlert = false
 
+    /// The description sheet presented the first time the user taps a
+    /// mode. `nil` when no sheet is active. Set by `handleTap(...)`
+    /// when the tapped mode hasn't been seen yet; cleared when the
+    /// user acknowledges (or closes). `ModeDescription` is
+    /// `Identifiable` so `.sheet(item:)` drives presentation directly
+    /// off this binding without a separate `isPresented` flag.
+    @State private var pendingDescription: ModeDescription?
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: BrandSpacing.sm) {
@@ -36,6 +44,17 @@ struct ModeSelectorView: View {
             Button("OK", role: .cancel) { model.clearModeSwitchError() }
         } message: {
             Text(model.modeSwitchError ?? "")
+        }
+        .sheet(item: $pendingDescription) { description in
+            ModeDescriptionSheet(description: description) {
+                // Acknowledge handler: fires after the sheet dismisses
+                // and the mode is marked seen. For unlocked modes we
+                // proceed into the mode; for locked ones the user
+                // learned what it is — no selection happens but the
+                // subsequent-tap locked alert will fire if they try
+                // again.
+                continueIntoMode(description.mode)
+            }
         }
     }
 
@@ -110,11 +129,39 @@ struct ModeSelectorView: View {
 
     // MARK: - Actions
 
+    /// Tap flow per mode, first time vs. subsequent:
+    ///
+    /// - **First tap, unlocked mode**: show the description sheet;
+    ///   `continueIntoMode(_:)` runs after dismiss and performs the
+    ///   mode switch.
+    /// - **First tap, locked mode**: show the description sheet. The
+    ///   sheet itself explains why the mode is locked; no alert
+    ///   follows.
+    /// - **Subsequent tap, unlocked mode**: switch directly (no sheet,
+    ///   matches pre-existing behavior).
+    /// - **Subsequent tap, locked mode**: locked alert (matches
+    ///   pre-existing behavior).
     private func handleTap(mode: ChatMode, isLocked: Bool) {
+        if !ModeDescriptionStore.hasSeen(mode) {
+            pendingDescription = ModeDescription.description(for: mode)
+            return
+        }
+
         if isLocked {
             showLockedAlert = true
             return
         }
+        Task { await model.switchMode(to: mode) }
+    }
+
+    /// Run after the description sheet is acknowledged. `markSeen`
+    /// already happened inside the sheet's Got-it action, so this
+    /// just performs the post-sheet side effect — select the mode
+    /// for unlocked ones; no-op for locked (the user has now been
+    /// told what the mode is and why it's locked).
+    private func continueIntoMode(_ mode: ChatMode) {
+        let isLocked = mode.requiresUnlock && !model.isUnlocked
+        guard !isLocked else { return }
         Task { await model.switchMode(to: mode) }
     }
 }

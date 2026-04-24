@@ -41,7 +41,8 @@ final class MercuriusUITests: XCTestCase {
     @MainActor
     private func launchApp(
         contentSize: String? = nil,
-        extraArgs: [String] = []
+        extraArgs: [String] = [],
+        bypassModeDescriptions: Bool = true
     ) -> XCUIApplication {
         let app = XCUIApplication()
         // `-hasSeenOnboarding YES` uses UserDefaults' argument domain to
@@ -50,10 +51,17 @@ final class MercuriusUITests: XCTestCase {
         // on InteractiveOnboardingView and every test that expects
         // HomeView / TabView state would have to walk through the
         // 7-step tutorial first.
-        app.launchArguments += [
-            "-UITests", "YES",
-            "-hasSeenOnboarding", "YES",
-        ] + extraArgs
+        //
+        // `-seenAllModeDescriptions YES` is the equivalent bypass for
+        // the first-time mode description sheets — see
+        // `ModeDescriptionStore.globalBypassKey`. Tests that need to
+        // exercise the first-tap flow pass `bypassModeDescriptions: false`
+        // so the flag isn't set.
+        var defaults = ["-UITests", "YES", "-hasSeenOnboarding", "YES"]
+        if bypassModeDescriptions {
+            defaults += ["-seenAllModeDescriptions", "YES"]
+        }
+        app.launchArguments += defaults + extraArgs
         if let contentSize {
             // Dynamic Type sizes passed as a standard iOS preferred content
             // size category — e.g. "UICTContentSizeCategoryAccessibilityL".
@@ -257,6 +265,56 @@ final class MercuriusUITests: XCTestCase {
                 "Mode pill for '\(mode)' missing"
             )
         }
+    }
+
+    @MainActor
+    func testFirstModeTapShowsDescriptionSheet() {
+        // `bypassModeDescriptions: false` turns off the launch-arg
+        // bypass so the first-time sheet flow is exercised.
+        let app = launchApp(bypassModeDescriptions: false)
+        waitForBootComplete(app)
+
+        // Tap Debate — it's unlocked and guaranteed present. Socratic
+        // is the default active mode so tapping it is a no-op path
+        // (the user has already 'selected' it), and Direct is locked
+        // which has its own branch; Debate is the cleanest first-tap
+        // case for this assertion.
+        let debatePill = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Debate'")
+        ).firstMatch
+        XCTAssertTrue(debatePill.waitForExistence(timeout: Self.lookupTimeout))
+        debatePill.tap()
+
+        // Sheet identity: a navigation bar titled "Debate" + a visible
+        // "Got it" button. Both are stable anchors across iOS versions.
+        let gotIt = app.buttons["Got it"]
+        XCTAssertTrue(
+            gotIt.waitForExistence(timeout: Self.lookupTimeout),
+            "First tap on Debate should present the description sheet (Got it button missing)"
+        )
+
+        // Dismissing via Got it should mark the mode seen AND select it.
+        gotIt.tap()
+
+        // After dismissal the sheet is gone → Got it no longer exists
+        // in the accessibility tree.
+        XCTAssertFalse(
+            app.buttons["Got it"].waitForExistence(timeout: 1),
+            "Sheet should be dismissed after Got it"
+        )
+
+        // Second tap on the same mode must NOT present the sheet again.
+        // Re-query the pill because mode selection may re-render it.
+        let debatePillAfter = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Debate'")
+        ).firstMatch
+        XCTAssertTrue(debatePillAfter.waitForExistence(timeout: Self.lookupTimeout))
+        debatePillAfter.tap()
+
+        XCTAssertFalse(
+            app.buttons["Got it"].waitForExistence(timeout: 1),
+            "Second tap on a mode that's already been seen must NOT re-present the description sheet"
+        )
     }
 
     @MainActor
