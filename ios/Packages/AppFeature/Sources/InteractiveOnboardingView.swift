@@ -30,6 +30,21 @@ enum OnboardingStep: Int, CaseIterable {
     var next: OnboardingStep? {
         OnboardingStep(rawValue: rawValue + 1)
     }
+
+    /// Short, stable identifier used in telemetry events. Kept as a
+    /// switch (not `String(describing:)`) so a rename of a case
+    /// doesn't silently change the analytics series.
+    var telemetryName: String {
+        switch self {
+        case .brandIntro: return "brandIntro"
+        case .startChat:  return "startChat"
+        case .askQuestion: return "askQuestion"
+        case .response:   return "response"
+        case .critical:   return "critical"
+        case .homeNav:    return "homeNav"
+        case .finish:     return "finish"
+        }
+    }
 }
 
 // MARK: - InteractiveOnboardingView
@@ -94,6 +109,7 @@ public struct InteractiveOnboardingView: View {
             .animation(.easeInOut(duration: 0.3), value: step)
         }
         .tint(BrandColor.accent)
+        .onAppear { OnboardingTelemetry.started() }
     }
 
     // MARK: - Progress bar
@@ -164,7 +180,18 @@ public struct InteractiveOnboardingView: View {
             PromptPickerStep(
                 selectedPrompt: $selectedPrompt,
                 typedPrompt: $typedPrompt,
-                onContinue: advance
+                onContinue: {
+                    // Log what flavor of input was submitted before
+                    // advancing. Distinguish "chip" (one of the three
+                    // canned prompts) vs "typed" (arbitrary user text)
+                    // without logging the typed body — privacy-safe.
+                    if let picked = selectedPrompt, !picked.isEmpty {
+                        OnboardingTelemetry.promptSelected(source: "chip", prompt: picked)
+                    } else {
+                        OnboardingTelemetry.promptSelected(source: "typed", prompt: "<typed>")
+                    }
+                    advance()
+                }
             )
         case .response:
             ResponseStep(
@@ -175,10 +202,16 @@ public struct InteractiveOnboardingView: View {
         case .critical:
             VerificationStep(
                 isChecked: $hasVerifiedCritical,
-                onContinue: advance
+                onContinue: {
+                    OnboardingTelemetry.criticalThinkingAcknowledged()
+                    advance()
+                }
             )
         case .homeNav:
-            HomeNavStep(onTapMockHome: advance)
+            HomeNavStep(onTapMockHome: {
+                OnboardingTelemetry.mockHomeTapped()
+                advance()
+            })
         case .finish:
             FinishStep(onFinish: finish)
         }
@@ -240,6 +273,10 @@ public struct InteractiveOnboardingView: View {
 
     private func advance() {
         if let next = step.next {
+            OnboardingTelemetry.stepAdvanced(
+                from: step.telemetryName,
+                to: next.telemetryName
+            )
             step = next
         } else {
             finish()
@@ -247,6 +284,15 @@ public struct InteractiveOnboardingView: View {
     }
 
     private func finish() {
+        // Two routes lead here: the Finish step's CTA (natural
+        // completion) and the Skip button in the header at any
+        // step. Disambiguate via current step — only `.finish`
+        // means they saw every screen.
+        if step == .finish {
+            OnboardingTelemetry.completed()
+        } else {
+            OnboardingTelemetry.skipped(atStep: step.telemetryName)
+        }
         hasSeenOnboarding = true
     }
 }
