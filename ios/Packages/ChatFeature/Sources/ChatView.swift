@@ -118,19 +118,6 @@ public struct ChatView: View {
 
     private var header: some View {
         HStack(spacing: BrandSpacing.md) {
-            if let onGoHome {
-                Button {
-                    onGoHome()
-                } label: {
-                    Image(systemName: "house")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(BrandColor.textSecondary)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Home")
-                .accessibilityHint("Return to the Mercurius home screen")
-            }
-
             BrandLogo(style: .mark, size: 32)
             VStack(alignment: .leading, spacing: 0) {
                 // `lineLimit(1) + minimumScaleFactor` caps growth at extreme
@@ -161,11 +148,25 @@ public struct ChatView: View {
                 }
                 .accessibilityLabel("Settings")
             }
+            // Home is the rightmost trailing item so it reads as
+            // "exit this context" rather than an in-screen control
+            // — mirroring how Cancel/Done sit at the trailing edge
+            // of iOS toolbars. Separated visually by being the last
+            // item in the HStack.
+            if let onGoHome {
+                Button {
+                    onGoHome()
+                } label: {
+                    Image(systemName: "house")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Home")
+                .accessibilityHint("Return to the Mercurius home screen")
+            }
         }
-        // When the Home button is present it brings its own leading
-        // padding via its 44pt hit target; otherwise pad to match the
-        // previous look.
-        .padding(.leading, onGoHome == nil ? BrandSpacing.lg : 4)
+        .padding(.leading, BrandSpacing.lg)
         .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
