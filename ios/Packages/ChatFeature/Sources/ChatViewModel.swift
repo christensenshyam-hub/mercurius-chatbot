@@ -488,7 +488,16 @@ public final class ChatViewModel {
                     return
 
                 case .streamError(let message):
-                    markCurrentFailed(reason: message, isRetryable: true, assistantId: assistantId)
+                    // Server-side and upstream errors sometimes arrive
+                    // with raw JSON / status-code-prefixed bodies baked
+                    // into the SSE error event. Sanitize before
+                    // showing — internal API JSON is never useful to a
+                    // student.
+                    markCurrentFailed(
+                        reason: Self.sanitize(streamErrorMessage: message),
+                        isRetryable: true,
+                        assistantId: assistantId
+                    )
                     return
                 }
             }
@@ -542,6 +551,55 @@ public final class ChatViewModel {
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
         messages[idx].status = .idle
         persistMessage(messages[idx])
+    }
+
+    /// Defensive sanitizer for the message that arrives via an SSE
+    /// `error` event. Three cases, in priority order:
+    ///
+    /// 1. **Recognized billing / quota errors** (Anthropic credits,
+    ///    Stripe-style "billing", or `invalid_request_error` from
+    ///    upstream) → a service-down message. The student can't fix
+    ///    this; surfacing the raw text just embarrasses us.
+    /// 2. **Anything that looks like raw JSON** (starts with `{` /
+    ///    `[`, or `<status_code> {…}`) → a generic "can't reach the AI"
+    ///    message. JSON is never appropriate UI text.
+    /// 3. **Otherwise** → trust it and pass through (covers the
+    ///    legitimate "rate limit" / "upstream_timeout" / etc. cases
+    ///    where the server already produces user-readable strings).
+    ///
+    /// Internal so unit tests in the same package can pin the
+    /// individual branches; `static` because it has no view-model
+    /// state dependency.
+    static func sanitize(streamErrorMessage raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+
+        // 1. Known billing / quota signatures.
+        let billingMarkers = [
+            "credit balance",
+            "billing",
+            "invalid_request_error",
+            "insufficient_quota",
+        ]
+        if billingMarkers.contains(where: lowered.contains) {
+            return "Mercurius can't reach the AI right now. We're aware — please try again in a few minutes."
+        }
+
+        // 2. Any JSON-shaped payload — "{...}", "[...]", or
+        //    "<digits> {..." (a status-code prefix from a layer that
+        //    unhelpfully concatenated the response body).
+        let firstChar = trimmed.first
+        let looksLikeJSON = firstChar == "{" || firstChar == "["
+        let looksLikeStatusPrefixedJSON: Bool = {
+            guard let firstChar, firstChar.isNumber else { return false }
+            return trimmed.contains("{") || trimmed.contains("[")
+        }()
+        if looksLikeJSON || looksLikeStatusPrefixedJSON {
+            return "Mercurius can't reach the AI right now. Please try again."
+        }
+
+        // 3. Trust the server's text.
+        return trimmed.isEmpty ? "Something went wrong. Try again." : trimmed
     }
 
     private func markCurrentFailed(reason: String, isRetryable: Bool, assistantId: UUID?) {

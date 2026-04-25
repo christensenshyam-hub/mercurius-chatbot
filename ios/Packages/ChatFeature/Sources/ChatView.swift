@@ -8,7 +8,6 @@ import PersistenceKit
 public struct ChatView: View {
     @State private var model: ChatViewModel
     @State private var showSettings = false
-    @State private var showChatHistory = false
     @State private var activeTool: ActiveTool?
 
     /// First-launch hint above the input bar. Visible only when the
@@ -168,37 +167,11 @@ public struct ChatView: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer()
-            // "New Chat" — explicit, single-tap. Always present:
-            // even mid-conversation a student should be one tap
-            // away from a fresh thread. Mode is preserved by
-            // `startNewConversation()` so the new chat stays in
-            // the user's current context.
-            Button {
-                model.startNewConversation()
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("New chat")
-            .accessibilityHint("Archives the current conversation and starts a new one in \(model.currentMode.displayName) Mode")
-
-            // "Chat History" — open every saved conversation in a
-            // mode-grouped list. Less frequent than New Chat so it
-            // sits to its right; still surfaced directly in the
-            // header to keep navigation a single tap.
-            Button {
-                showChatHistory = true
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Chat history")
-            .accessibilityHint("Browse and reopen previous conversations")
-
+            // New Chat and Chat History both live in the bottom tab
+            // bar (see `AppShellView`) — surfacing them there matches
+            // the user's mental model of "common chat actions are in
+            // the bar." The header keeps just analytical Tools +
+            // settings + Home so it doesn't get visually crowded.
             toolsMenuButton
             if settingsPresenter != nil {
                 Button {
@@ -260,35 +233,9 @@ public struct ChatView: View {
                 )
             }
         }
-        .sheet(isPresented: $showChatHistory) {
-            // Wrapped in NavigationStack so ChatHistoryView gets the
-            // navigation title + filter pill chrome it expects.
-            NavigationStack {
-                ChatHistoryView(
-                    load: { model.archivedConversations() },
-                    onSelect: { id in
-                        showChatHistory = false
-                        // Defer the open slightly so the sheet
-                        // dismissal animation runs cleanly before
-                        // the chat thread re-renders.
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(200))
-                            await model.openConversation(id: id)
-                        }
-                    },
-                    onDelete: { id in
-                        model.deleteConversation(id: id)
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { showChatHistory = false }
-                            .accessibilityHint("Closes the chat history list")
-                    }
-                }
-            }
-            .tint(BrandColor.accent)
-        }
+        // Chat History presentation is owned by `AppShellView`
+        // (the TabView host) so the History tab item there can
+        // drive it without coupling ChatView to the action.
     }
 
     private var toolsMenuButton: some View {
