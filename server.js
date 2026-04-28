@@ -30,6 +30,17 @@ const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Railway terminates TLS at one hop and forwards via X-Forwarded-For.
+// Without this, every request's `req.ip` is the proxy's IP — meaning
+// every IP-based rate limiter (`globalLimiter`, `chatLimiter`) treats
+// the entire internet as one shared bucket, which either locks out
+// legitimate users on the first bad-actor burst or never trips.
+//
+// `trust proxy: 1` honors only the FIRST entry in X-Forwarded-For —
+// `true` would trust the whole chain, which is itself a forgeable
+// rate-limit-bypass vector.
+app.set('trust proxy', 1);
+
 // ---------------------------------------------------------------------------
 // Session ID validation helper
 // ---------------------------------------------------------------------------
@@ -1092,8 +1103,14 @@ const corsOptions = {
     // In development, if ALLOWED_ORIGIN is not set, allow everything
     if (!process.env.ALLOWED_ORIGIN) return callback(null, true);
 
-    // Allow mobile app requests (React Native, Expo, capacitor)
-    if (origin === 'null' || origin.startsWith('exp://') || origin.startsWith('capacitor://') || origin.startsWith('file://')) {
+    // Allow mobile-app schemes (Expo, Capacitor). The native iOS app
+    // sends no Origin header at all and is already handled by the
+    // `if (!origin)` branch above. We deliberately do NOT allow
+    // `origin === 'null'` here — that string comes from sandboxed
+    // iframes, file:// pages, and opaque-origin browser contexts,
+    // and combined with `credentials: true` it would create a CORS
+    // exfiltration path if the API ever sets cookies.
+    if (origin.startsWith('exp://') || origin.startsWith('capacitor://') || origin.startsWith('file://')) {
       return callback(null, true);
     }
 
