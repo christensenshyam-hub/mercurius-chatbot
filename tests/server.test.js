@@ -485,3 +485,68 @@ describe('GET /metrics', () => {
     );
   });
 });
+
+// ===========================================================================
+// 8. Hardening — security headers, admin limiter, /health no-leak
+// ===========================================================================
+
+describe('Hardening', () => {
+  test('helmet emits baseline security headers on every response', async () => {
+    const { headers } = await get('/api/health');
+    // Helmet's defaults — assert the load-bearing ones; the full set
+    // is internal to helmet and shouldn't be tested exhaustively.
+    assert.equal(
+      headers.get('x-content-type-options'),
+      'nosniff',
+      'X-Content-Type-Options should disable MIME sniffing',
+    );
+    assert.ok(
+      headers.get('x-frame-options'),
+      'X-Frame-Options should be set (clickjacking defense)',
+    );
+    assert.ok(
+      headers.get('strict-transport-security'),
+      'HSTS should be set so browsers refuse downgrade to HTTP',
+    );
+    // X-Powered-By: Express is removed by helmet's hidePoweredBy.
+    assert.equal(
+      headers.get('x-powered-by'),
+      null,
+      'X-Powered-By should be hidden so we don\'t advertise Express version',
+    );
+  });
+
+  test('/api/health body never carries driver internals (regardless of status)', async () => {
+    // The leak invariant we care about: whatever /api/health returns
+    // (200 connected, 503 degraded, 429 rate-limited from earlier
+    // tests sharing this IP), its body must NOT carry SQLite/pg
+    // internals or the literal "error: <message>" shape we used to
+    // emit. Asserts purely on the response body — independent of
+    // status — so reordering tests doesn't affect this invariant.
+    const { json } = await get('/api/health');
+    assert.ok(
+      !/error:\s|sqlite|postgres|\bstack\b|\.db\b|\/Users\//i.test(
+        JSON.stringify(json),
+      ),
+      'Health body must not include driver internals: ' + JSON.stringify(json),
+    );
+  });
+
+  test('admin endpoint rate-limits at 10 req/min per IP', async () => {
+    // Burst 11 admin requests — all rejected (no password) but they
+    // still count against the limiter. The 11th in the same window
+    // must come back 429 with our legacy rate_limited envelope.
+    const statuses = [];
+    for (let i = 0; i < 11; i++) {
+      const { status, json } = await get('/api/admin/events');
+      statuses.push({ status, error: json?.error });
+    }
+    const last = statuses[statuses.length - 1];
+    assert.equal(
+      last.status,
+      429,
+      `11th admin request should hit the limiter — got ${last.status}: ${JSON.stringify(statuses.slice(-3))}`,
+    );
+    assert.equal(last.error, 'rate_limited', 'legacy rate-limit envelope preserved');
+  });
+});

@@ -12,6 +12,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('./db');
 const logger = require('./lib/logger');
@@ -40,6 +41,18 @@ const PORT = process.env.PORT || 3000;
 // `true` would trust the whole chain, which is itself a forgeable
 // rate-limit-bypass vector.
 app.set('trust proxy', 1);
+
+// Baseline security headers on every response — including 4xx/5xx and
+// static-file responses. Helmet's defaults add X-Content-Type-Options,
+// X-Frame-Options, Strict-Transport-Security, Referrer-Policy, etc.
+//
+// CSP is disabled deliberately: this server is a JSON API plus a few
+// static files (`/public/widget.js`, `/public/sw.js`) that are loaded
+// cross-origin into other sites whose own CSP governs the script's
+// execution context. A CSP header on our origin's responses would
+// have no effect on the embedding page and would only complicate
+// any debugging dashboard we host here later.
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // ---------------------------------------------------------------------------
 // Session ID validation helper
@@ -1066,6 +1079,53 @@ async function processTestOutcome(reply, sessionId, testState, testTriggered) {
 
 const globalLimiter = ipLimiter('global', { windowMs: 60 * 1000, max: 60 });
 const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: 15 });
+// Admin endpoints get their own much tighter bucket so an attacker
+// can't credential-stuff against the shared admin password under
+// the cover of the broader 60/min `globalLimiter`. 10/min/IP keeps
+// brute-force impractical (the real defense is password entropy)
+// while accommodating the realistic operator flow: load the panel,
+// stage edits, save — easily 5–8 requests in a burst.
+const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
+
+// ---------------------------------------------------------------------------
+// Admin auth — shared-password header with constant-time compare
+// ---------------------------------------------------------------------------
+//
+// Why a helper instead of inlining `pw !== adminPw` at each route:
+//  - Centralizes the constant-time compare so a future endpoint can't
+//    silently regress to a string `===` (which leaks the byte-by-byte
+//    comparison time and is, in theory, exploitable over a low-jitter
+//    network).
+//  - Makes "is the admin password configured at all?" a single check;
+//    if `ADMIN_PASSWORD` is unset on the deploy, every admin request
+//    now gets a clean 401 instead of accidentally matching the empty
+//    string.
+//
+// Length-leak caveat: comparing buffer length before `timingSafeEqual`
+// (which requires equal-length inputs or it throws) does leak the
+// admin password's length to a determined attacker. That's the
+// universal tradeoff for the API; protecting the contents matters far
+// more than hiding the length.
+function adminAuthOk(headerValue) {
+  const adminPw = process.env.ADMIN_PASSWORD;
+  if (!adminPw || typeof headerValue !== 'string') return false;
+  if (headerValue.length !== adminPw.length) return false;
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(headerValue),
+      Buffer.from(adminPw)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/// Express middleware enforcing admin-only access. Returns 401 for any
+/// missing/wrong password without revealing which it was.
+function requireAdmin(req, res, next) {
+  if (adminAuthOk(req.headers['x-admin-password'])) return next();
+  return res.status(401).json({ error: 'unauthorized' });
+}
 
 // `isRateLimited(sessionId)` is now async because the Redis path
 // is. Callers `await` it.
@@ -1563,12 +1623,7 @@ app.get('/api/dashboard', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Admin — GET current events data
 // ---------------------------------------------------------------------------
-app.get('/api/admin/events', async (req, res) => {
-  const pw = req.headers['x-admin-password'];
-  const adminPw = process.env.ADMIN_PASSWORD;
-  if (!adminPw || pw !== adminPw) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+app.get('/api/admin/events', adminLimiter, requireAdmin, async (_req, res) => {
   const data = await db.getEventsFromDB();
   const updatedAt = await db.getEventsUpdatedAt();
   res.json({ data: data || eventsCache, updatedAt });
@@ -1577,12 +1632,7 @@ app.get('/api/admin/events', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Admin — POST update events data (saves to SQLite, invalidates cache)
 // ---------------------------------------------------------------------------
-app.post('/api/admin/events', async (req, res) => {
-  const pw = req.headers['x-admin-password'];
-  const adminPw = process.env.ADMIN_PASSWORD;
-  if (!adminPw || pw !== adminPw) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+app.post('/api/admin/events', adminLimiter, requireAdmin, async (req, res) => {
   const { data } = req.body;
   if (!data || typeof data !== 'object') {
     return res.status(400).json({ error: 'invalid_data', message: 'Provide a data object.' });
@@ -1739,7 +1789,12 @@ app.get('/api/health', async (_req, res) => {
     await db.getSessionStats('health-check-probe');
     health.db = 'connected';
   } catch (e) {
-    health.db = 'error: ' + e.message;
+    // Don't leak the underlying driver error to the public health
+    // probe — it can carry SQLite paths or pg connection strings.
+    // Internal observability still has the full error via the log
+    // line below; the public payload only sees the degraded status.
+    logger.warn({ err: e.message }, '/api/health DB probe failed');
+    health.db = 'error';
     health.status = 'degraded';
   }
   const statusCode = health.status === 'ok' ? 200 : 503;
@@ -1751,6 +1806,35 @@ app.get('/api/health', async (_req, res) => {
 // ---------------------------------------------------------------------------
 app.use('/api/*', (_req, res) => {
   res.status(404).json({ error: 'not_found', reply: "That route doesn't exist." });
+});
+
+// ---------------------------------------------------------------------------
+// Last-resort error handler
+//
+// Express's default handler renders the stack trace to the client when
+// `NODE_ENV` is anything other than 'production'. That's an easy way
+// to leak source paths and library internals if a deploy ever forgets
+// to set `NODE_ENV=production`. This handler ensures stack traces NEVER
+// reach the client regardless of the deploy's env config — they go to
+// the structured log only.
+//
+// Must be registered with the 4-arg signature for Express to recognize
+// it as an error handler (not regular middleware).
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  logger.forRequest(req).error(
+    { err: err.message, stack: err.stack },
+    'unhandled error'
+  );
+  // SSE streams may have already written headers and started a body;
+  // calling res.status() / res.json() at that point is a no-op or a
+  // crash on different Node versions. Bail out cleanly.
+  if (res.headersSent) return;
+  res.status(500).json({
+    error: 'server_error',
+    reply: "Something went wrong on our end. Try again in a moment.",
+  });
 });
 
 // ---------------------------------------------------------------------------
