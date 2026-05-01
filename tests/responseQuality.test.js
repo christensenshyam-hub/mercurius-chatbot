@@ -89,6 +89,19 @@ describe('RESPONSE_MODE_BUDGETS', () => {
     assert.ok(cap >= 80 && cap <= 120, `one_line cap should be 80–120, got ${cap}`);
   });
 
+  test('concise cap is in the 200–300 range (tightened May 2026)', () => {
+    // The pre-tightening cap was 400; QA found that still felt long on
+    // mobile. New range pulls it to 200–300 so the model is forced to
+    // land in 2–4 sentences. Drift higher than 300 = regression.
+    const cap = RESPONSE_MODE_BUDGETS.concise.maxTokens;
+    assert.ok(cap >= 200 && cap <= 300, `concise cap should be 200–300, got ${cap}`);
+  });
+
+  test('balanced cap is in the 500–700 range (sits comfortably above concise)', () => {
+    const cap = RESPONSE_MODE_BUDGETS.balanced.maxTokens;
+    assert.ok(cap >= 500 && cap <= 700, `balanced cap should be 500–700, got ${cap}`);
+  });
+
   test('deep cap is in the 1000–1400 range from the spec', () => {
     const cap = RESPONSE_MODE_BUDGETS.deep.maxTokens;
     assert.ok(cap >= 1000 && cap <= 1400, `deep cap should be 1000–1400, got ${cap}`);

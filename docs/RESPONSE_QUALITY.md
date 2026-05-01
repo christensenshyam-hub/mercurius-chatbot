@@ -36,9 +36,15 @@ budget. Defined once in [`lib/responseQuality.js`](../lib/responseQuality.js).
 | Mode | `max_tokens` | `temperature` | When |
 | --- | ---: | ---: | --- |
 | `one_line` | 120 | 0.3 | Quick facts, short rewrites. Reserved for explicit one-liner asks. |
-| `concise` | 400 | 0.4 | **Default.** 3–6 sentences or a tight bulleted list. The mobile-native answer. |
-| `balanced` | 700 | 0.6 | Moderate depth — a mid-length explanation with one example. |
+| `concise` | **250** | 0.4 | **Default.** 2–4 sentences or 3–4 tight bullets. The mobile-native answer. |
+| `balanced` | 600 | 0.6 | Moderate depth — a mid-length explanation with one example. |
 | `deep` | 1400 | 0.7 | Used when the user taps **Explain more**. Layered, thorough, but explicitly told not to repeat what was already said. |
+
+> **History:** the original ship set `concise` to 400 and `balanced`
+> to 700. Pre-TestFlight QA found `concise` at 400 still felt
+> long-winded on a phone, so May 2026 the budgets were tightened to
+> the values above and the preamble's default length dropped from
+> "3–6 sentences" to "2–4 sentences".
 
 Lower temperature on the short modes keeps them on-task; higher
 temperature on `deep` allows for more synthesis-style output where
