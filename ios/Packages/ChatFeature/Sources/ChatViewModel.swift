@@ -215,20 +215,50 @@ public final class ChatViewModel {
         }
     }
 
-    /// "Explain more" — re-asks the model to expand on the most recent
-    /// answer with a `deep` token budget. The user-side message is
-    /// visible in the thread (matches user expectations: they see what
-    /// they sent), and the server prepends an "expand without repeating"
-    /// instruction when `responseMode == "deep"`.
+    /// "Explain more" — asks the model to expand on the previous reply
+    /// with a `deep` token budget. The instruction is sent on the wire
+    /// as an injected user turn but NEVER added to the visible chat
+    /// thread or to local persistence. From the user's perspective,
+    /// tapping the button just produces a new, deeper assistant reply
+    /// in place — no "Explain more" message appears in their history.
     ///
-    /// No-op if the chat is empty or a request is already in flight.
+    /// Server-side that injected turn does land in the SQLite memory
+    /// table on the chat path, which is fine — that table feeds the
+    /// model's memory profile and isn't replayed into the user-visible
+    /// conversation.
+    ///
+    /// No-op if the chat is empty, the last turn isn't from the
+    /// assistant, or a request is already in flight.
     public func explainMore() {
-        guard !messages.isEmpty else { return }
+        guard let last = messages.last, last.role == .assistant else { return }
+        guard !last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if case .sending = phase { return }
         if case .streaming = phase { return }
 
-        draft = "Explain more — go deeper, don't repeat what you already said."
-        send(responseMode: .deep)
+        // Drop a previous failed bubble if there is one, mirroring
+        // `send()`'s housekeeping.
+        if case .failed = phase,
+           let trailing = messages.last,
+           trailing.role == .assistant,
+           case .failed = trailing.status {
+            messages.removeLast()
+        }
+
+        let placeholder = ChatMessage(role: .assistant, content: "", status: .streaming)
+        messages.append(placeholder)
+        let assistantId = placeholder.id
+
+        phase = .sending
+        lastResponseMode = .deep
+
+        let instruction = "Explain more — go deeper on the same topic. Don't repeat what you already said."
+        streamingTask = Task { [weak self] in
+            await self?.runStream(
+                assistantId: assistantId,
+                responseMode: .deep,
+                injectedUserTurn: instruction
+            )
+        }
     }
 
     /// Retry the last send after a failure. The last user message stays
@@ -475,7 +505,16 @@ public final class ChatViewModel {
 
     // MARK: - Streaming
 
-    private func runStream(assistantId: UUID, responseMode: ResponseMode) async {
+    /// `injectedUserTurn`: an extra user-role wire message appended to
+    /// the request history but NOT shown in the local chat UI. Used by
+    /// `explainMore()` so the "go deeper, don't repeat" instruction
+    /// reaches the model without polluting the visible thread. Nil
+    /// for normal sends.
+    private func runStream(
+        assistantId: UUID,
+        responseMode: ResponseMode,
+        injectedUserTurn: String? = nil
+    ) async {
         let sessionId: String
         do {
             sessionId = try sessionIdProvider()
@@ -488,9 +527,12 @@ public final class ChatViewModel {
             return
         }
 
-        let history = messages
+        var history = messages
             .filter { $0.id != assistantId }
             .map(\.dto)
+        if let injectedUserTurn {
+            history.append(ChatMessageDTO(role: "user", content: injectedUserTurn))
+        }
 
         do {
             let stream = chatClient.streamChat(

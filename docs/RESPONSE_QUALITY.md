@@ -76,16 +76,30 @@ contracts that conflict with the 3–6 sentence default:
 The first answer is concise. If the user wants depth, they tap
 **Explain more** below the assistant's last bubble. That:
 
-1. Sends a new user message — `"Explain more — go deeper, don't repeat
-   what you already said."` — visible in the thread (no hidden
-   payloads).
-2. Sets `response_mode: "deep"` on the wire.
-3. The server appends an `EXPAND-MODE NOTE` to the system prompt asking
-   the model to layer rather than restate.
-4. The next turn snaps back to `.concise`.
+1. Cancels nothing visible. The user's chat history is unchanged —
+   no synthetic "Explain more" message lands in the thread.
+2. Sends the request with `response_mode: "deep"` and a wire-only
+   injected user turn carrying the instruction `"Explain more — go
+   deeper on the same topic. Don't repeat what you already said."`
+   The server sees that turn (and saves it to the memory table for
+   downstream context) but the iOS chat UI never displays it.
+3. The server appends an `EXPAND-MODE NOTE` to the system prompt
+   reinforcing the don't-repeat-yourself directive.
+4. The next user-typed message defaults back to `.concise`. Deep is
+   one-shot, never sticky.
 
-Implemented in `ChatViewModel.explainMore()`; the affordance is
-rendered by `MessageListView.explainMoreFooter`.
+Implemented in `ChatViewModel.explainMore()` (which calls
+`runStream(..., injectedUserTurn:)`); the affordance is rendered
+by `MessageListView.explainMoreFooter`.
+
+### Why the instruction is hidden
+
+Earlier iteration appended a literal user message to the thread for
+honesty. In TestFlight QA that read as a junk message students
+hadn't typed. Hiding the instruction trades that for a slight
+asymmetry between client view and server memory — acceptable
+because the server's memory profile isn't replayed verbatim into
+the chat UI.
 
 ## Why concise is the default
 

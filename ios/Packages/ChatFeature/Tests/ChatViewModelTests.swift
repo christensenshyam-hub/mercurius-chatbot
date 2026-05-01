@@ -343,6 +343,83 @@ struct ChatViewModelResponseModeTests {
                 "explainMore() with no prior messages must not send")
     }
 
+    @Test("explainMore() does NOT add a visible user message to the thread")
+    func explainMoreIsHidden() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(minimalReply())])
+        let model = makeModel(client: client)
+
+        model.draft = "What is an LLM?"
+        model.send()
+        try await waitUntilSettled(model)
+        let beforeCount = model.messages.count
+        #expect(beforeCount == 2, "Should have 1 user + 1 assistant after the seed turn")
+
+        client.outcome = .events([.complete(minimalReply())])
+        model.explainMore()
+        try await waitUntilSettled(model)
+
+        // Only ONE new message landed in the visible thread — the
+        // assistant reply. No "Explain more" user bubble.
+        #expect(model.messages.count == beforeCount + 1)
+        #expect(model.messages.last?.role == .assistant)
+
+        let visibleUserContent = model.messages
+            .filter { $0.role == .user }
+            .map(\.content)
+        #expect(!visibleUserContent.contains(where: { $0.lowercased().contains("explain more") }),
+                "The Explain More instruction must stay off the visible thread")
+    }
+
+    @Test("explainMore() injects the instruction on the wire (so the model sees it)")
+    func explainMoreInjectsOnWire() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(minimalReply())])
+        let model = makeModel(client: client)
+
+        model.draft = "What is an LLM?"
+        model.send()
+        try await waitUntilSettled(model)
+
+        client.outcome = .events([.complete(minimalReply())])
+        model.explainMore()
+        try await waitUntilSettled(model)
+
+        // The second request's wire history must contain the injected
+        // user turn with the "Explain more" instruction even though
+        // the local chat state never saw it.
+        let secondRequest = client.receivedMessages.last ?? []
+        let injected = secondRequest.last
+        #expect(injected?.role == "user")
+        #expect(injected?.content.lowercased().contains("explain more") == true)
+    }
+
+    @Test("After explainMore, a user-typed send returns to .concise")
+    func deepToConciseTransition() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(minimalReply())])
+        let model = makeModel(client: client)
+
+        model.draft = "What is an LLM?"
+        model.send()
+        try await waitUntilSettled(model)
+
+        client.outcome = .events([.complete(minimalReply())])
+        model.explainMore()
+        try await waitUntilSettled(model)
+        #expect(client.receivedResponseModes.last == .deep)
+
+        // The very next user-typed send must default to .concise.
+        // `deep` is one-shot; it never gets stuck.
+        client.outcome = .events([.complete(minimalReply())])
+        model.draft = "What about GPT-3?"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(client.receivedResponseModes.last == .concise,
+                "A user-typed send after explainMore must default to .concise — deep is one-shot")
+    }
+
     @Test("Retry reuses the last responseMode")
     func retryReusesResponseMode() async throws {
         let client = FakeChatClient()
