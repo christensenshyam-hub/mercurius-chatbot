@@ -578,7 +578,8 @@ private func makeChatModel() -> ChatViewModel {
     final class StubChatClient: ChatStreaming, @unchecked Sendable {
         func streamChat(
             messages: [ChatMessageDTO],
-            sessionId: String
+            sessionId: String,
+            responseMode: ResponseMode
         ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
             AsyncThrowingStream { continuation in continuation.finish() }
         }

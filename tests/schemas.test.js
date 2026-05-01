@@ -15,6 +15,7 @@ const {
   SessionId,
   ChatMessage,
   ChatMode,
+  ResponseMode,
   ChatRequest,
   ModeRequest,
   QuizRequest,
@@ -142,6 +143,48 @@ describe('QuizRequest', () => {
 
   test('rejects missing sessionId', () => {
     assert.ok(!QuizRequest.safeParse({ messages: [] }).success);
+  });
+});
+
+describe('ResponseMode', () => {
+  test('accepts the four canonical modes', () => {
+    for (const m of ['one_line', 'concise', 'balanced', 'deep']) {
+      assert.ok(ResponseMode.safeParse(m).success, `expected ${m} to parse`);
+    }
+  });
+
+  test('rejects unknown values', () => {
+    assert.ok(!ResponseMode.safeParse('verbose').success);
+    assert.ok(!ResponseMode.safeParse('OneLine').success);
+    assert.ok(!ResponseMode.safeParse('').success);
+  });
+
+  test('rejects non-string types', () => {
+    assert.ok(!ResponseMode.safeParse(42).success);
+    assert.ok(!ResponseMode.safeParse(null).success);
+  });
+});
+
+describe('ChatRequest with responseMode', () => {
+  const base = { sessionId: 'abc', messages: [{ role: 'user', content: 'hi' }] };
+
+  test('accepts each response_mode', () => {
+    for (const m of ['one_line', 'concise', 'balanced', 'deep']) {
+      const out = ChatRequest.safeParse({ ...base, responseMode: m });
+      assert.ok(out.success, `expected ${m} to parse on ChatRequest`);
+      assert.equal(out.data.responseMode, m);
+    }
+  });
+
+  test('responseMode is optional — omit is valid (handler defaults to concise)', () => {
+    const out = ChatRequest.safeParse(base);
+    assert.ok(out.success);
+    assert.equal(out.data.responseMode, undefined);
+  });
+
+  test('invalid responseMode returns 400-mapped error', () => {
+    const bad = ChatRequest.safeParse({ ...base, responseMode: 'verbose' });
+    assert.ok(!bad.success);
   });
 });
 

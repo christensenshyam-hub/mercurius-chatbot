@@ -23,10 +23,17 @@ const {
   QuizRequest,
   ReportCardRequest,
   ConceptMapRequest,
+  ResponseMode,
 } = require('./lib/schemas');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
+const {
+  RESPONSE_MODE_BUDGETS,
+  EXPAND_MODE_NOTE,
+  resolveResponseMode,
+  qualityPrefix,
+} = require('./lib/responseQuality');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -189,6 +196,12 @@ const HARD_LIMITS_BASE = `- Never write essays, homework, or assignments for stu
 - Never claim to be human
 - Never present contested claims as settled
 - If you don't know, say so`;
+
+// Response-quality preamble + per-mode rules + token/temp budgets live
+// in `lib/responseQuality.js` so the helpers can be unit-tested without
+// spawning the server. Imported above; the chat handler only consumes
+// `qualityPrefix`, `resolveResponseMode`, `RESPONSE_MODE_BUDGETS`, and
+// `EXPAND_MODE_NOTE`.
 
 // ---------------------------------------------------------------------------
 // Static club knowledge — injected on every API call alongside meeting/blog ctx
@@ -1215,7 +1228,13 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
-  const { messages: clientMessages, sessionId, model: requestedModel } = req.validated;
+  const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode } = req.validated;
+
+  // Resolve the response-mode dial (concise / balanced / deep / one_line).
+  // Missing → 'concise' (mobile default). Already-validated by Zod, but
+  // `resolveResponseMode` is defensive in case the schema ever loosens.
+  const responseMode = resolveResponseMode(rawResponseMode);
+  const responseBudget = RESPONSE_MODE_BUDGETS[responseMode];
 
   // Model allowlist — if the caller named a model, it must be permitted.
   // Otherwise we fall through to the server default (MODEL).
@@ -1359,6 +1378,22 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   systemPrompt = systemPrompt + CLUB_KNOWLEDGE + SOURCE_LIBRARY + personalizationNote + meetingContext + blogContext;
 
+  // Prepend the universal response-quality preamble + per-mode rules
+  // so the model reads concision + format guidance FIRST, before the
+  // deeper pedagogical material. Curriculum mode is exempted: it has
+  // its own structured-lesson contract that explicitly wants
+  // teach → exercise → feedback turns, which would conflict with the
+  // 3-6 sentence default. Test-evaluator mode is also exempt — it has
+  // a fixed marker contract ([TEST_PASSED] / [TEST_FAILED]).
+  if (!isCurriculumMsg && !testTriggered) {
+    systemPrompt = qualityPrefix(mode) + systemPrompt;
+  }
+
+  // "Explain more" path: append the don't-repeat-yourself nudge.
+  if (responseMode === 'deep') {
+    systemPrompt += EXPAND_MODE_NOTE;
+  }
+
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
     ? [...dbHistory, { role: 'user', content: latestUserMessage.content }]
@@ -1367,8 +1402,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const trimmed = apiMessages.slice(-40);
 
   try {
-    // Socratic & Debate: shorter, punchier. Direct: more depth.
-    const maxTokens = mode === 'direct' ? 1200 : (mode === 'discussion' ? 1000 : 800);
+    // Token + temperature now come from the response-mode budget —
+    // see `RESPONSE_MODE_BUDGETS`. The previous mode-keyed heuristic
+    // (direct → 1200 / discussion → 1000 / others → 800) is gone:
+    // mode controls *posture*, response_mode controls *length*.
+    const { maxTokens, temperature } = responseBudget;
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
@@ -1388,6 +1426,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const stream = anthropic.messages.stream({
         model: chosenModel,
         max_tokens: maxTokens,
+        temperature,
         system: systemPrompt,
         messages: trimmed,
       }, { signal: streamAbort.signal });
@@ -1453,6 +1492,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const response = await anthropic.messages.create({
         model: chosenModel,
         max_tokens: maxTokens,
+        temperature,
         system: systemPrompt,
         messages: trimmed,
         timeout: 30000,

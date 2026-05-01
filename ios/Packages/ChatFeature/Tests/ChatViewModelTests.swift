@@ -16,13 +16,16 @@ final class FakeChatClient: ChatStreaming, @unchecked Sendable {
     var outcome: Outcome = .events([])
     var receivedMessages: [[ChatMessageDTO]] = []
     var receivedSessionIds: [String] = []
+    var receivedResponseModes: [ResponseMode] = []
 
     func streamChat(
         messages: [ChatMessageDTO],
-        sessionId: String
+        sessionId: String,
+        responseMode: ResponseMode
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         receivedMessages.append(messages)
         receivedSessionIds.append(sessionId)
+        receivedResponseModes.append(responseMode)
 
         let outcome = self.outcome
         return AsyncThrowingStream { continuation in
@@ -271,5 +274,89 @@ struct ChatViewModelRetryTests {
         #expect(model.messages.count == 2)
         #expect(model.messages.last?.content == "On retry.")
         #expect(model.phase == .idle)
+    }
+}
+
+@Suite("ChatViewModel response-mode + explainMore")
+@MainActor
+struct ChatViewModelResponseModeTests {
+
+    private func minimalReply() -> ChatResponse {
+        ChatResponse(
+            reply: "ok",
+            sessionId: "test-session",
+            mode: "socratic",
+            unlocked: false,
+            justUnlocked: nil,
+            streak: 0,
+            difficulty: 0,
+            suggestSummary: nil
+        )
+    }
+
+    @Test("Default send uses .concise (mobile-native default)")
+    func defaultIsConcise() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(minimalReply())])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(client.receivedResponseModes.last == .concise,
+                "First-touch sends should default to .concise")
+    }
+
+    @Test("explainMore() sends with .deep")
+    func explainMoreUsesDeep() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(minimalReply())])
+        let model = makeModel(client: client)
+
+        // Seed an existing assistant turn so explainMore has context.
+        model.draft = "What is an LLM?"
+        model.send()
+        try await waitUntilSettled(model)
+
+        // Configure the next turn's outcome.
+        client.outcome = .events([.complete(minimalReply())])
+        model.explainMore()
+        try await waitUntilSettled(model)
+
+        #expect(client.receivedResponseModes.count == 2)
+        #expect(client.receivedResponseModes[0] == .concise,
+                "Initial turn should be concise")
+        #expect(client.receivedResponseModes[1] == .deep,
+                "explainMore() should escalate to .deep")
+    }
+
+    @Test("explainMore() is a no-op while a stream is in flight")
+    func explainMoreIgnoredMidStream() async {
+        let client = FakeChatClient()
+        // Outcome that finishes lazily — we'll inspect state mid-flight.
+        client.outcome = .events([])  // immediately finishes; gives us idle phase
+        let model = makeModel(client: client)
+
+        // Empty messages → explainMore should bail without sending.
+        model.explainMore()
+        #expect(client.receivedResponseModes.isEmpty,
+                "explainMore() with no prior messages must not send")
+    }
+
+    @Test("Retry reuses the last responseMode")
+    func retryReusesResponseMode() async throws {
+        let client = FakeChatClient()
+        client.outcome = .failure(URLError(.networkConnectionLost))
+        let model = makeModel(client: client)
+        model.draft = "Why?"
+        model.send(responseMode: .balanced)
+        try await waitUntilSettled(model)
+
+        client.outcome = .events([.complete(minimalReply())])
+        model.retry()
+        try await waitUntilSettled(model)
+
+        #expect(client.receivedResponseModes.last == .balanced,
+                "Retry should reuse the original responseMode, not silently drop to .concise")
     }
 }

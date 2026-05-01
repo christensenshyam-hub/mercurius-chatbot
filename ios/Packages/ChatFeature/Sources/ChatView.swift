@@ -110,7 +110,8 @@ public struct ChatView: View {
                     MessageListView(
                         messages: model.messages,
                         phase: model.phase,
-                        onRetry: { model.retry() }
+                        onRetry: { model.retry() },
+                        onExplainMore: { model.explainMore() }
                     )
                 }
 
@@ -282,6 +283,7 @@ struct MessageListView: View {
     let messages: [ChatMessage]
     let phase: ChatViewModel.Phase
     let onRetry: () -> Void
+    let onExplainMore: () -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -295,6 +297,14 @@ struct MessageListView: View {
                     if case .failed(_, let isRetryable) = phase, isRetryable {
                         retryFooter
                             .id("retry-footer")
+                    } else if shouldShowExplainMore {
+                        // Soft footer surfaced after the assistant has
+                        // finished a turn and the user is idle. Mirrors
+                        // the spec's "first answer concise; user taps
+                        // for depth" loop. Disabled while sending so
+                        // taps don't queue alongside an in-flight send.
+                        explainMoreFooter
+                            .id("explain-more-footer")
                     }
                 }
                 .padding(.vertical, BrandSpacing.md)
@@ -331,5 +341,50 @@ struct MessageListView: View {
             Spacer()
         }
         .padding(.bottom, BrandSpacing.sm)
+    }
+
+    /// Visible when the conversation is idle and the most recent reply
+    /// was from the assistant — invites the user to ask for more depth
+    /// without re-typing. Wires to `ChatViewModel.explainMore()` which
+    /// re-issues the chat request with `responseMode = .deep`.
+    private var explainMoreFooter: some View {
+        HStack {
+            Spacer()
+            Button(action: onExplainMore) {
+                Label("Explain more", systemImage: "text.alignleft")
+                    .font(BrandFont.caption)
+                    .padding(.vertical, BrandSpacing.sm)
+                    .padding(.horizontal, BrandSpacing.md)
+                    .background(BrandColor.surface)
+                    .foregroundStyle(BrandColor.accent)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)
+                    )
+                    .clipShape(Capsule())
+            }
+            .frame(minHeight: 44)
+            .accessibilityLabel("Explain more")
+            .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
+            Spacer()
+        }
+        .padding(.top, BrandSpacing.xs)
+        .padding(.bottom, BrandSpacing.sm)
+    }
+
+    /// Show the Explain More footer only when:
+    ///   - we're not in a failure state (retry footer takes priority),
+    ///   - we're idle (not mid-stream — otherwise tapping queues a
+    ///     send while another is in flight, which `send()` already
+    ///     no-ops but the affordance reads as broken),
+    ///   - the last message is a non-empty assistant turn.
+    private var shouldShowExplainMore: Bool {
+        guard case .idle = phase else { return false }
+        guard let last = messages.last else { return false }
+        guard last.role == .assistant else { return false }
+        guard !last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        return true
     }
 }

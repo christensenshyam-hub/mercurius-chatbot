@@ -65,6 +65,11 @@ public final class ChatViewModel {
     private var streamingTask: Task<Void, Never>?
     private var conversationId: UUID?
 
+    /// Response-mode used by the most recent `send` call. `retry()`
+    /// reuses this so a failed deep request retries deep, not as a
+    /// concise one-off. Defaults to `.concise` (the mobile default).
+    private var lastResponseMode: ResponseMode = .concise
+
     // MARK: - Init
 
     /// Production initializer — takes the real `APIClient`, a
@@ -166,7 +171,12 @@ public final class ChatViewModel {
     /// No-op if the draft is empty or a request is already in flight.
     /// After a previous failure, sending a new message drops the failed
     /// assistant bubble so the history stays clean.
-    public func send() {
+    ///
+    /// `responseMode` controls the answer's length / depth. The default
+    /// is `.concise` — the mobile-native short answer. The "Explain
+    /// more" affordance flips this to `.deep` for one round; see
+    /// `explainMore()`.
+    public func send(responseMode: ResponseMode = .concise) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
@@ -198,10 +208,27 @@ public final class ChatViewModel {
         let assistantId = assistantPlaceholder.id
 
         phase = .sending
+        lastResponseMode = responseMode
 
         streamingTask = Task { [weak self] in
-            await self?.runStream(assistantId: assistantId)
+            await self?.runStream(assistantId: assistantId, responseMode: responseMode)
         }
+    }
+
+    /// "Explain more" — re-asks the model to expand on the most recent
+    /// answer with a `deep` token budget. The user-side message is
+    /// visible in the thread (matches user expectations: they see what
+    /// they sent), and the server prepends an "expand without repeating"
+    /// instruction when `responseMode == "deep"`.
+    ///
+    /// No-op if the chat is empty or a request is already in flight.
+    public func explainMore() {
+        guard !messages.isEmpty else { return }
+        if case .sending = phase { return }
+        if case .streaming = phase { return }
+
+        draft = "Explain more — go deeper, don't repeat what you already said."
+        send(responseMode: .deep)
     }
 
     /// Retry the last send after a failure. The last user message stays
@@ -223,8 +250,9 @@ public final class ChatViewModel {
         phase = .sending
 
         let assistantId = placeholder.id
+        let responseMode = lastResponseMode
         streamingTask = Task { [weak self] in
-            await self?.runStream(assistantId: assistantId)
+            await self?.runStream(assistantId: assistantId, responseMode: responseMode)
         }
     }
 
@@ -447,7 +475,7 @@ public final class ChatViewModel {
 
     // MARK: - Streaming
 
-    private func runStream(assistantId: UUID) async {
+    private func runStream(assistantId: UUID, responseMode: ResponseMode) async {
         let sessionId: String
         do {
             sessionId = try sessionIdProvider()
@@ -465,7 +493,11 @@ public final class ChatViewModel {
             .map(\.dto)
 
         do {
-            let stream = chatClient.streamChat(messages: history, sessionId: sessionId)
+            let stream = chatClient.streamChat(
+                messages: history,
+                sessionId: sessionId,
+                responseMode: responseMode
+            )
             var sawAnyDelta = false
 
             for try await event in stream {

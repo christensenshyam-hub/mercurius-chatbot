@@ -33,7 +33,8 @@ final class ControllableChatClient: ChatStreaming, @unchecked Sendable {
 
     func streamChat(
         messages: [ChatMessageDTO],
-        sessionId: String
+        sessionId: String,
+        responseMode: ResponseMode
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         lock.lock()
         callCount += 1

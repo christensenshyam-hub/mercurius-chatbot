@@ -21,7 +21,8 @@ extension APIClient {
     ///   supported pattern for per-request delegates.
     public func streamChat(
         messages: [ChatMessageDTO],
-        sessionId: String
+        sessionId: String,
+        responseMode: ResponseMode
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let request: URLRequest
@@ -30,7 +31,8 @@ extension APIClient {
                     baseURL: environmentBaseURL,
                     timeout: streamingTimeout,
                     messages: messages,
-                    sessionId: sessionId
+                    sessionId: sessionId,
+                    responseMode: responseMode
                 )
             } catch {
                 continuation.finish(throwing: error)
@@ -78,7 +80,8 @@ extension APIClient {
         baseURL: URL,
         timeout: TimeInterval,
         messages: [ChatMessageDTO],
-        sessionId: String
+        sessionId: String,
+        responseMode: ResponseMode
     ) throws -> URLRequest {
         let url = baseURL.appendingPathComponent("api/chat")
         var request = URLRequest(url: url)
@@ -92,9 +95,14 @@ extension APIClient {
         struct Body: Encodable {
             let messages: [ChatMessageDTO]
             let sessionId: String
+            let responseMode: String
         }
         do {
-            request.httpBody = try JSONEncoder().encode(Body(messages: messages, sessionId: sessionId))
+            request.httpBody = try JSONEncoder().encode(Body(
+                messages: messages,
+                sessionId: sessionId,
+                responseMode: responseMode.rawValue
+            ))
         } catch {
             throw APIError.invalidRequest(reason: "Failed to encode chat body")
         }
