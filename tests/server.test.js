@@ -549,4 +549,19 @@ describe('Hardening', () => {
     );
     assert.equal(last.error, 'rate_limited', 'legacy rate-limit envelope preserved');
   });
+
+  test('oversized body returns 413, not 500', async () => {
+    // Regression: the global error handler I added in the harden
+    // sweep was flattening every middleware error to 500, which
+    // hid legitimate "you sent too much" signals from the client.
+    // express.json's `limit: '32kb'` raises a PayloadTooLargeError
+    // with `err.status = 413` — the handler must preserve it.
+    const giant = 'x'.repeat(40_000);  // > 32kb after JSON encoding
+    const { status, json } = await post('/api/chat', {
+      sessionId: 'oversize-probe',
+      messages: [{ role: 'user', content: giant }],
+    });
+    assert.equal(status, 413, `oversized body should be 413, got ${status}`);
+    assert.equal(json?.error, 'payload_too_large');
+  });
 });

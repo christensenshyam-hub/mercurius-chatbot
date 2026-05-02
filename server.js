@@ -1866,18 +1866,45 @@ app.use('/api/*', (_req, res) => {
 // ---------------------------------------------------------------------------
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
+  // Preserve known HTTP status codes from middleware errors. Body-parser
+  // attaches `err.status` for things like PayloadTooLargeError (413) and
+  // entity.parse.failed (400); without this passthrough every legitimate
+  // 4xx from middleware shows up as a 500 to the client, which both
+  // misleads clients and hides real server-error rates in metrics.
+  const knownStatus = (typeof err.status === 'number' && err.status >= 400 && err.status < 600)
+    ? err.status
+    : 500;
+
   logger.forRequest(req).error(
-    { err: err.message, stack: err.stack },
+    { err: err.message, stack: err.stack, status: knownStatus, type: err.type },
     'unhandled error'
   );
+
   // SSE streams may have already written headers and started a body;
   // calling res.status() / res.json() at that point is a no-op or a
   // crash on different Node versions. Bail out cleanly.
   if (res.headersSent) return;
-  res.status(500).json({
-    error: 'server_error',
-    reply: "Something went wrong on our end. Try again in a moment.",
-  });
+
+  // Map common middleware error types to client-friendly envelopes
+  // that match the existing wire contract (`error` + `reply` keys).
+  let envelope;
+  switch (knownStatus) {
+    case 413:
+      envelope = { error: 'payload_too_large', reply: 'That message is too long. Try a shorter prompt.' };
+      break;
+    case 400:
+      envelope = { error: 'invalid_request', reply: 'Bad request.' };
+      break;
+    case 401:
+      envelope = { error: 'unauthorized', reply: 'Unauthorized.' };
+      break;
+    case 403:
+      envelope = { error: 'forbidden', reply: 'Forbidden.' };
+      break;
+    default:
+      envelope = { error: 'server_error', reply: "Something went wrong on our end. Try again in a moment." };
+  }
+  res.status(knownStatus).json(envelope);
 });
 
 // ---------------------------------------------------------------------------
