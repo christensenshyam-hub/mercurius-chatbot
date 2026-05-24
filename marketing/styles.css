@@ -283,6 +283,22 @@ p:last-child { margin-bottom: 0; }
   color: var(--navy);
 }
 
+/* Active page highlight — set on the nav link via aria-current.
+   Selector is intentionally aria-attribute-based so adding/removing
+   "active" state is a single attribute toggle, no class management. */
+.site-nav a[aria-current="page"] {
+  color: var(--navy);
+  font-weight: 600;
+}
+.site-nav a[aria-current="page"]::after {
+  content: "";
+  display: block;
+  height: 2px;
+  margin-top: 4px;
+  background: var(--gradient);
+  border-radius: 2px;
+}
+
 .cta-pill {
   padding: 0.5rem 1rem;
   background: var(--gradient);
@@ -673,6 +689,115 @@ p:last-child { margin-bottom: 0; }
   margin-top: var(--space-5);
 }
 
+/* --------- Page hero (detail pages) ----------
+   Smaller than the homepage hero — gets you into the content fast
+   without recomputing brand identity each click. */
+.page-hero {
+  padding: var(--space-7) 0 var(--space-6);
+  text-align: center;
+  position: relative;
+}
+.page-hero .container { max-width: 820px; }
+.page-hero h1 {
+  font-size: clamp(2rem, 4vw + 0.8rem, 3.4rem);
+  margin-bottom: var(--space-4);
+}
+.page-hero .lede {
+  margin: 0 auto;
+  color: var(--ink-soft);
+}
+
+/* --------- "What's inside" grid on the home page ----------
+   A table of contents in card form. Replaces the inline sections
+   the page used to render directly. */
+.toc-grid {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: 1fr;
+}
+
+.toc-card {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+.toc-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--lavender);
+  box-shadow: 0 4px 8px rgba(11, 19, 48, 0.04),
+              0 16px 36px rgba(11, 19, 48, 0.08);
+}
+.toc-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.toc-card h3 { margin-bottom: var(--space-3); }
+.toc-card p { color: var(--ink-soft); margin: 0 0 var(--space-4); }
+.toc-card .toc-arrow {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-small);
+  color: var(--violet);
+  letter-spacing: 0.02em;
+}
+.toc-card .toc-arrow::after {
+  content: " →";
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+.toc-card:hover .toc-arrow::after {
+  transform: translateX(3px);
+}
+
+/* --------- "Next" cross-link bar at the bottom of detail pages ----- */
+.next-strip {
+  background: var(--surface);
+  border-top: 1px solid var(--border-soft);
+  padding: var(--space-7) 0;
+}
+.next-strip .container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.next-strip .eyebrow { margin: 0; }
+.next-strip h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+.next-strip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: var(--violet);
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border: 1px solid var(--violet);
+  border-radius: var(--radius-pill);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.next-strip-link:hover {
+  background: var(--violet);
+  color: #fff;
+}
+.next-strip-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 /* --------- Footer --------- */
 .site-footer {
   background: var(--navy);
@@ -729,6 +854,15 @@ p:last-child { margin-bottom: 0; }
   .steps {
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-5);
+  }
+
+  .toc-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .next-strip .container {
+    flex-direction: row;
+    align-items: center;
   }
 
   .footer-inner {

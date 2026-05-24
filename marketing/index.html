@@ -13,45 +13,29 @@
   />
   <link rel="canonical" href="https://mercurius.ai/" />
 
-  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Mercurius AI — AI literacy tutor for independent thinkers" />
-  <meta
-    property="og:description"
-    content="Understand AI. Think for yourself. The AI literacy tutor that helps you ask better questions and build real understanding."
-  />
+  <meta property="og:description" content="Understand AI. Think for yourself. The AI literacy tutor that helps you ask better questions and build real understanding." />
   <meta property="og:image" content="/assets/mercurius-logo.png" />
   <meta property="og:image:width" content="1024" />
   <meta property="og:image:height" content="1024" />
   <meta property="og:url" content="https://mercurius.ai/" />
   <meta property="og:site_name" content="Mercurius AI" />
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Mercurius AI — AI literacy tutor for independent thinkers" />
   <meta name="twitter:description" content="Understand AI. Think for yourself." />
   <meta name="twitter:image" content="/assets/mercurius-logo.png" />
 
-  <!-- Favicon — re-uses the cropped icon asset -->
   <link rel="icon" type="image/png" sizes="512x512" href="/assets/mercurius-icon.png" />
   <link rel="apple-touch-icon" href="/assets/mercurius-icon.png" />
 
-  <!-- Fonts. Pre-connect first so the round trip starts in parallel
-       with HTML parse. font-display:swap is the default for Google
-       Fonts; lets text render in the system fallback until the web
-       font lands — no layout shift, good LCP. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap"
-  />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
 
   <link rel="stylesheet" href="/styles.css" />
 
-  <!-- Structured data: identifies this as the Organization + a
-       SoftwareApplication for AI literacy. Improves rich-result eligibility
-       on Google. -->
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -67,27 +51,17 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <!-- Header / navigation. Sticky so the primary CTA stays reachable
-       as the user scrolls long sections. -->
   <header class="site-header" role="banner">
     <div class="container header-inner">
-      <a class="brand" href="#" aria-label="Mercurius AI home">
-        <img
-          src="/assets/mercurius-icon.png"
-          alt=""
-          width="40"
-          height="22"
-          class="brand-mark"
-          aria-hidden="true"
-        />
+      <a class="brand" href="/" aria-label="Mercurius AI home">
+        <img src="/assets/mercurius-icon.png" alt="" width="40" height="22" class="brand-mark" aria-hidden="true" />
         <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
       </a>
-
       <nav class="site-nav" aria-label="Primary">
-        <a href="#features">Features</a>
-        <a href="#modes">Modes</a>
-        <a href="#how-it-works">How it works</a>
-        <a href="#audience">Who it's for</a>
+        <a href="/features.html">Features</a>
+        <a href="/modes.html">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/audience.html">Who it's for</a>
         <a class="cta-pill" href="#cta">Start Learning</a>
       </nav>
     </div>
@@ -96,11 +70,6 @@
   <main id="main">
     <!-- ─────────────────────────────────────────────────────────────
          HERO
-         The first screen has to land the positioning in two beats:
-         (1) what you DO with the app, (2) what makes it different.
-         Big serif headline carries (1); the supporting sentence
-         carries (2). Two CTAs — Start Learning is the conversion;
-         Explore Features is the "tell me more first" path.
          ───────────────────────────────────────────────────────────── -->
     <section class="hero" aria-labelledby="hero-headline">
       <div class="hero-bg" aria-hidden="true"></div>
@@ -112,21 +81,17 @@
             Think for <span class="text-gradient">Yourself.</span>
           </h1>
           <p class="lede">
-            Mercurius AI helps learners ask better questions, challenge ideas, and build
-            real understanding in the age of artificial intelligence.
+            Mercurius AI helps learners ask better questions, challenge ideas, and
+            build real understanding in the age of artificial intelligence.
           </p>
           <div class="cta-row">
             <a class="btn btn-primary" href="#cta">Start Learning</a>
-            <a class="btn btn-ghost" href="#features">Explore Features</a>
+            <a class="btn btn-ghost" href="/features.html">Explore Features</a>
           </div>
-          <p class="hero-tagline" aria-hidden="false">
-            Here to help you think, not think for you.
-          </p>
+          <p class="hero-tagline">Here to help you think, not think for you.</p>
         </div>
 
         <div class="hero-art" aria-hidden="true">
-          <!-- The logo carries its own wordmark; presented at a large
-               but restrained size. Width / height set to avoid CLS. -->
           <img
             src="/assets/mercurius-logo.png"
             alt=""
@@ -141,356 +106,57 @@
     </section>
 
     <!-- ─────────────────────────────────────────────────────────────
-         VALUE PROPOSITION
-         Three cards. Each one re-frames the same core idea (don't
-         outsource your thinking) from a slightly different angle so
-         the message lands without feeling like repetition.
+         "WHAT'S INSIDE" — table-of-contents grid that links to the
+         five detail pages. Replaces the inline sections the page
+         used to render in one big scroll.
          ───────────────────────────────────────────────────────────── -->
-    <section id="features" class="section" aria-labelledby="features-heading">
+    <section class="section section-soft" aria-labelledby="toc-heading">
       <div class="container">
         <header class="section-head">
-          <p class="eyebrow">What it does</p>
-          <h2 id="features-heading" class="section-title">
-            Built to teach thinking, not replace it.
-          </h2>
+          <p class="eyebrow">What's inside</p>
+          <h2 id="toc-heading" class="section-title">Five short reads.</h2>
           <p class="section-sub">
-            Most AI products give you answers. Mercurius gives you the muscle to
-            evaluate them.
+            Each page covers one part of how Mercurius works and why we built it
+            the way we did. Read in any order.
           </p>
         </header>
 
-        <div class="grid-3">
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-                <path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </div>
-            <h3 class="card-title">Socratic learning</h3>
-            <p class="card-body">
-              Guided questions, not instant answers. Every conversation pushes you
-              one step further than you came in.
-            </p>
-          </article>
+        <div class="toc-grid">
+          <a class="toc-card" href="/features.html">
+            <h3>Features</h3>
+            <p>Socratic learning, critical thinking, AI literacy — the three pillars and what they mean in practice.</p>
+            <span class="toc-arrow">Read</span>
+          </a>
 
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-                <path d="M12 2l9 4v6c0 5-4 9-9 10-5-1-9-5-9-10V6l9-4z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-            </div>
-            <h3 class="card-title">Critical thinking</h3>
-            <p class="card-body">
-              Ask, evaluate, understand. Mercurius flags confidence, surfaces
-              tradeoffs, and never presents contested claims as settled.
-            </p>
-          </article>
+          <a class="toc-card" href="/modes.html">
+            <h3>Modes</h3>
+            <p>Socratic, Direct, Debate, Discussion. One conversation, four pedagogical postures.</p>
+            <span class="toc-arrow">Read</span>
+          </a>
 
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-                <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-                <path d="M9 7h6M9 11h6" />
-              </svg>
-            </div>
-            <h3 class="card-title">AI literacy</h3>
-            <p class="card-body">
-              Learn how AI actually works, when to use it, and when not. The same
-              concepts experts argue about — in language built for students.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
+          <a class="toc-card" href="/how-it-works.html">
+            <h3>How it works</h3>
+            <p>Ask, explore, understand. The three-beat loop that shapes every Mercurius session.</p>
+            <span class="toc-arrow">Read</span>
+          </a>
 
-    <!-- ─────────────────────────────────────────────────────────────
-         MODES
-         Mirrors the in-app pill row. Clicking a pill swaps the
-         description panel — gives a sense of the product without a
-         screenshot. Defaults to Socratic (the app's default mode).
-         ───────────────────────────────────────────────────────────── -->
-    <section id="modes" class="section section-soft" aria-labelledby="modes-heading">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow">How it teaches</p>
-          <h2 id="modes-heading" class="section-title">Four ways to learn.</h2>
-          <p class="section-sub">
-            One conversation, four pedagogical postures. Pick the one that fits
-            what you're trying to do.
-          </p>
-        </header>
+          <a class="toc-card" href="/trust.html">
+            <h3>Responsibility</h3>
+            <p>What we promise, what we don't, and why honesty about AI's limits is the whole product.</p>
+            <span class="toc-arrow">Read</span>
+          </a>
 
-        <div class="modes" role="tablist" aria-label="Learning modes">
-          <button
-            class="mode-pill is-active"
-            role="tab"
-            aria-selected="true"
-            aria-controls="mode-panel-socratic"
-            id="mode-tab-socratic"
-            data-mode="socratic"
-          >
-            Socratic
-          </button>
-          <button
-            class="mode-pill is-locked"
-            role="tab"
-            aria-selected="false"
-            aria-controls="mode-panel-direct"
-            id="mode-tab-direct"
-            data-mode="direct"
-          >
-            Direct
-            <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-              width="11" height="11" aria-hidden="true">
-              <rect x="5" y="11" width="14" height="10" rx="2" />
-              <path d="M8 11V7a4 4 0 018 0v4" />
-            </svg>
-          </button>
-          <button
-            class="mode-pill"
-            role="tab"
-            aria-selected="false"
-            aria-controls="mode-panel-debate"
-            id="mode-tab-debate"
-            data-mode="debate"
-          >
-            Debate
-          </button>
-          <button
-            class="mode-pill"
-            role="tab"
-            aria-selected="false"
-            aria-controls="mode-panel-discussion"
-            id="mode-tab-discussion"
-            data-mode="discussion"
-          >
-            Discussion
-          </button>
-        </div>
-
-        <div class="mode-panels">
-          <div
-            class="mode-panel is-active"
-            id="mode-panel-socratic"
-            role="tabpanel"
-            aria-labelledby="mode-tab-socratic"
-          >
-            <h3>Socratic</h3>
-            <p>
-              The default. Mercurius asks questions back instead of handing you the
-              answer. Use this when you want to <em>learn</em> how to think through
-              a problem, not just collect a result.
-            </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "How does an LLM actually work?"
-            </p>
-          </div>
-
-          <div
-            class="mode-panel"
-            id="mode-panel-direct"
-            role="tabpanel"
-            aria-labelledby="mode-tab-direct"
-            hidden
-          >
-            <h3>Direct</h3>
-            <p>
-              Plain, efficient answers — no Socratic detours. Unlocks after you
-              demonstrate critical thinking in Socratic Mode, so the depth feels
-              earned rather than handed over.
-            </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "Give me the formula for exponential decay."
-            </p>
-          </div>
-
-          <div
-            class="mode-panel"
-            id="mode-panel-debate"
-            role="tabpanel"
-            aria-labelledby="mode-tab-debate"
-            hidden
-          >
-            <h3>Debate</h3>
-            <p>
-              You take a position; Mercurius pushes the other side. Responses come
-              structured as claim, warrant, impact, and rebuttal angle — punchy
-              enough for speech prep or live cross-examination.
-            </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "Argue against the claim that AI will replace teachers."
-            </p>
-          </div>
-
-          <div
-            class="mode-panel"
-            id="mode-panel-discussion"
-            role="tabpanel"
-            aria-labelledby="mode-tab-discussion"
-            hidden
-          >
-            <h3>Discussion</h3>
-            <p>
-              Conversational and balanced. Mercurius treats you as a thinking
-              partner — surfacing tradeoffs and tensions, not verdicts.
-            </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "What perspectives matter most when thinking about AI bias?"
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─────────────────────────────────────────────────────────────
-         HOW IT WORKS
-         Three numbered steps. Deliberately under-designed: cleaner
-         than the typical feature-product "wave + screenshot" pattern.
-         ───────────────────────────────────────────────────────────── -->
-    <section id="how-it-works" class="section" aria-labelledby="how-heading">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow">How it works</p>
-          <h2 id="how-heading" class="section-title">Ask better questions.</h2>
-          <p class="section-sub">
-            Three beats. The same loop, every time you open the app.
-          </p>
-        </header>
-
-        <ol class="steps">
-          <li class="step">
-            <span class="step-num" aria-hidden="true">01</span>
-            <h3 class="step-title">Ask</h3>
-            <p class="step-body">
-              Pick a starter prompt or type your own. Mercurius reads what you
-              actually mean, not just what you typed.
-            </p>
-          </li>
-          <li class="step">
-            <span class="step-num" aria-hidden="true">02</span>
-            <h3 class="step-title">Explore</h3>
-            <p class="step-body">
-              Guided reasoning, calibrated confidence, and honest pushback when
-              your thinking gets sloppy.
-            </p>
-          </li>
-          <li class="step">
-            <span class="step-num" aria-hidden="true">03</span>
-            <h3 class="step-title">Understand</h3>
-            <p class="step-body">
-              Walk away with durable knowledge — not a copy-pasteable answer you'd
-              forget by morning.
-            </p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- ─────────────────────────────────────────────────────────────
-         TRUST / ETHICS
-         Honest, non-flashy commitments. No fake numbers, no fake
-         certifications. Worded so each line is something the
-         product actually does today.
-         ───────────────────────────────────────────────────────────── -->
-    <section id="trust" class="section section-soft" aria-labelledby="trust-heading">
-      <div class="container trust-grid">
-        <div class="trust-copy">
-          <p class="eyebrow">Responsibility</p>
-          <h2 id="trust-heading" class="section-title">
-            Built for responsible learning.
-          </h2>
-          <p class="section-sub">
-            We don't promise the future of AI is risk-free. We do promise the
-            tutor is honest about what it is.
-          </p>
-        </div>
-        <ul class="trust-list">
-          <li>
-            <strong>Learning-first design.</strong> Won't write your homework. Will
-            help you understand how to think about it.
-          </li>
-          <li>
-            <strong>Calibrated honesty.</strong> Every substantive reply carries a
-            confidence signal — high, medium, low, "I'm not sure."
-          </li>
-          <li>
-            <strong>Bias awareness.</strong> Mercurius is upfront about the limits
-            of its training data and the perspectives it might be missing.
-          </li>
-          <li>
-            <strong>Academic integrity.</strong> Asking for an essay redirects to
-            the thinking behind it.
-          </li>
-          <li>
-            <strong>Privacy-conscious.</strong> No personal data required. Local
-            chat history stays on your device.
-          </li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ─────────────────────────────────────────────────────────────
-         AUDIENCE
-         Four cards. Each one re-pitches the product for that
-         specific reader. Schools card is intentionally simpler — it
-         signals "we're ready to talk" without overstating capability.
-         ───────────────────────────────────────────────────────────── -->
-    <section id="audience" class="section" aria-labelledby="audience-heading">
-      <div class="container">
-        <header class="section-head">
-          <p class="eyebrow">Who it's for</p>
-          <h2 id="audience-heading" class="section-title">
-            AI literacy for independent thinkers.
-          </h2>
-        </header>
-
-        <div class="grid-4">
-          <article class="audience-card">
-            <h3>Students</h3>
-            <p>
-              Learn faster by learning to ask better questions. Build real
-              understanding instead of a stack of unverified answers.
-            </p>
-          </article>
-          <article class="audience-card">
-            <h3>Teachers</h3>
-            <p>
-              A tool that strengthens critical thinking instead of undermining it —
-              the AI that pushes students to do the work, not skip it.
-            </p>
-          </article>
-          <article class="audience-card">
-            <h3>Parents</h3>
-            <p>
-              AI literacy without dependency. A tutor designed so your child walks
-              away knowing more, not less.
-            </p>
-          </article>
-          <article class="audience-card">
-            <h3>Schools</h3>
-            <p>
-              Want to bring Mercurius to your classroom or curriculum? We're
-              talking with educators about pilots and partnerships.
-            </p>
-          </article>
+          <a class="toc-card" href="/audience.html">
+            <h3>Who it's for</h3>
+            <p>Students, teachers, parents, and schools — and what each gets from a tutor that refuses to do the work for you.</p>
+            <span class="toc-arrow">Read</span>
+          </a>
         </div>
       </div>
     </section>
 
     <!-- ─────────────────────────────────────────────────────────────
          FINAL CTA
-         Closing — a single bold line, a single button.
          ───────────────────────────────────────────────────────────── -->
     <section id="cta" class="section cta-section" aria-labelledby="cta-heading">
       <div class="container cta-inner">
@@ -511,24 +177,17 @@
   <footer class="site-footer" role="contentinfo">
     <div class="container footer-inner">
       <div>
-        <a class="brand" href="#" aria-label="Mercurius AI home">
-          <img
-            src="/assets/mercurius-icon.png"
-            alt=""
-            width="32"
-            height="18"
-            class="brand-mark"
-            aria-hidden="true"
-          />
+        <a class="brand" href="/" aria-label="Mercurius AI home">
+          <img src="/assets/mercurius-icon.png" alt="" width="32" height="18" class="brand-mark" aria-hidden="true" />
           <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
         </a>
         <p class="footer-tagline">Guided, not given.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
-        <a href="#features">Features</a>
-        <a href="#modes">Modes</a>
-        <a href="#how-it-works">How it works</a>
-        <a href="#trust">Responsibility</a>
+        <a href="/features.html">Features</a>
+        <a href="/modes.html">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/trust.html">Responsibility</a>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
     </div>

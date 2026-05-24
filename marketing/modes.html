@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B1330" />
+
+  <title>Modes — Mercurius AI</title>
+  <meta name="description" content="Socratic, Direct, Debate, Discussion. Four pedagogical postures, one conversation. Pick the one that fits what you're trying to do." />
+  <link rel="canonical" href="https://mercurius.ai/modes.html" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Modes — Mercurius AI" />
+  <meta property="og:description" content="Four ways to learn. One conversation." />
+  <meta property="og:image" content="/assets/mercurius-logo.png" />
+  <meta property="og:url" content="https://mercurius.ai/modes.html" />
+  <meta property="og:site_name" content="Mercurius AI" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Modes — Mercurius AI" />
+  <meta name="twitter:description" content="Four ways to learn. One conversation." />
+  <meta name="twitter:image" content="/assets/mercurius-logo.png" />
+
+  <link rel="icon" type="image/png" sizes="512x512" href="/assets/mercurius-icon.png" />
+  <link rel="apple-touch-icon" href="/assets/mercurius-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mercurius AI home">
+        <img src="/assets/mercurius-icon.png" alt="" width="40" height="22" class="brand-mark" aria-hidden="true" />
+        <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="/features.html">Features</a>
+        <a href="/modes.html" aria-current="page">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/audience.html">Who it's for</a>
+        <a class="cta-pill" href="/#cta">Start Learning</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="container">
+        <p class="eyebrow">Modes</p>
+        <h1 id="page-heading" class="display">
+          Four ways to <span class="text-gradient">learn.</span>
+        </h1>
+        <p class="lede">
+          One conversation, four pedagogical postures. Pick the one that fits
+          what you're trying to do.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Mode selector">
+      <div class="container">
+        <div class="modes" role="tablist" aria-label="Learning modes">
+          <button class="mode-pill is-active" role="tab" aria-selected="true"
+            aria-controls="mode-panel-socratic" id="mode-tab-socratic" data-mode="socratic">
+            Socratic
+          </button>
+          <button class="mode-pill is-locked" role="tab" aria-selected="false"
+            aria-controls="mode-panel-direct" id="mode-tab-direct" data-mode="direct">
+            Direct
+            <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path d="M8 11V7a4 4 0 018 0v4" />
+            </svg>
+          </button>
+          <button class="mode-pill" role="tab" aria-selected="false"
+            aria-controls="mode-panel-debate" id="mode-tab-debate" data-mode="debate">
+            Debate
+          </button>
+          <button class="mode-pill" role="tab" aria-selected="false"
+            aria-controls="mode-panel-discussion" id="mode-tab-discussion" data-mode="discussion">
+            Discussion
+          </button>
+        </div>
+
+        <div class="mode-panels">
+          <div class="mode-panel is-active" id="mode-panel-socratic" role="tabpanel" aria-labelledby="mode-tab-socratic">
+            <h2>Socratic</h2>
+            <p>
+              The default. Mercurius asks questions back instead of handing you
+              the answer. Use this when you want to <em>learn</em> how to think
+              through a problem, not just collect a result.
+            </p>
+            <p class="example">
+              <span class="example-label">Try:</span>
+              "How does an LLM actually work?"
+            </p>
+          </div>
+
+          <div class="mode-panel" id="mode-panel-direct" role="tabpanel" aria-labelledby="mode-tab-direct" hidden>
+            <h2>Direct</h2>
+            <p>
+              Plain, efficient answers — no Socratic detours. Unlocks after you
+              demonstrate critical thinking in Socratic Mode, so the depth feels
+              earned rather than handed over.
+            </p>
+            <p class="example">
+              <span class="example-label">Try:</span>
+              "Give me the formula for exponential decay."
+            </p>
+          </div>
+
+          <div class="mode-panel" id="mode-panel-debate" role="tabpanel" aria-labelledby="mode-tab-debate" hidden>
+            <h2>Debate</h2>
+            <p>
+              You take a position; Mercurius pushes the other side. Responses
+              come structured as claim, warrant, impact, and rebuttal angle —
+              punchy enough for speech prep or live cross-examination.
+            </p>
+            <p class="example">
+              <span class="example-label">Try:</span>
+              "Argue against the claim that AI will replace teachers."
+            </p>
+          </div>
+
+          <div class="mode-panel" id="mode-panel-discussion" role="tabpanel" aria-labelledby="mode-tab-discussion" hidden>
+            <h2>Discussion</h2>
+            <p>
+              Conversational and balanced. Mercurius treats you as a thinking
+              partner — surfacing tradeoffs and tensions, not verdicts.
+            </p>
+            <p class="example">
+              <span class="example-label">Try:</span>
+              "What perspectives matter most when thinking about AI bias?"
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="Picking the right mode">
+      <div class="container" style="max-width: 760px;">
+        <header class="section-head">
+          <p class="eyebrow">When to use which</p>
+          <h2 class="section-title">Mode by intent.</h2>
+        </header>
+        <p class="lede">
+          <strong>Socratic</strong> if you want to actually understand a new
+          topic. <strong>Direct</strong> when you already know the topic and
+          just need a fast fact. <strong>Debate</strong> when you have a
+          position to defend or stress-test. <strong>Discussion</strong> when
+          the question is more interesting than the answer.
+        </p>
+        <p class="lede">
+          You can switch modes mid-conversation. Each conversation stores its
+          mode so switching opens a separate thread — your Debate prep doesn't
+          bleed into your Socratic study session.
+        </p>
+      </div>
+    </section>
+
+    <section class="next-strip" aria-label="What to read next">
+      <div class="container">
+        <div>
+          <p class="eyebrow">Next</p>
+          <h3>See the three-beat loop every session follows.</h3>
+        </div>
+        <a class="next-strip-link" href="/how-it-works.html">How it works →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mercurius AI home">
+          <img src="/assets/mercurius-icon.png" alt="" width="32" height="18" class="brand-mark" aria-hidden="true" />
+          <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+        </a>
+        <p class="footer-tagline">Guided, not given.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/features.html">Features</a>
+        <a href="/modes.html">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/trust.html">Responsibility</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
+    </div>
+  </footer>
+
+  <script src="/script.js" defer></script>
+</body>
+</html>
