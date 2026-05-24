@@ -501,12 +501,28 @@ p:last-child { margin-bottom: 0; }
   border-color: transparent;
   box-shadow: 0 4px 14px rgba(123, 77, 255, 0.30);
 }
-.mode-pill.is-locked {
-  opacity: 0.6;
+
+/* Inline "unlocked after proficiency" badge — used inside the Direct
+   mode panel. Visually a small accent-tinted chip with a small lock
+   glyph; gives the same information the previous locked pill did,
+   but only after the user clicks Direct to see the panel. Keeps the
+   pill row visually uniform. */
+.mode-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.35rem 0.75rem;
+  margin-bottom: var(--space-3);
+  background: var(--gradient-soft);
+  color: var(--violet);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 1.2;
 }
-.lock-icon {
-  display: inline-block;
-  vertical-align: middle;
+.mode-note svg {
+  flex-shrink: 0;
+  color: var(--violet);
 }
 
 .mode-panels {
