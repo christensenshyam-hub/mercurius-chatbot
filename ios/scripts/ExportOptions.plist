@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Store distribution (the path TestFlight rides on).
+         Use "ad-hoc" instead if you ever need to share an .ipa
+         directly to a device list — not what we're doing here. -->
+    <key>method</key>
+    <string>app-store</string>
+
+    <key>teamID</key>
+    <string>TMBPRHZYW2</string>
+
+    <!-- Let xcodebuild ask Apple's services for the right
+         provisioning profile + signing certificate at export time.
+         Combined with -allowProvisioningUpdates in release.sh, this
+         means no manual profile management. -->
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <!-- Strip Swift symbols / bitcode-free dSYMs for a smaller upload.
+         Apple recommends this for App Store distribution. -->
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <!-- Disable Bitcode (deprecated on iOS 17+; including would just
+         bloat the upload). -->
+    <key>compileBitcode</key>
+    <false/>
+
+    <!-- Include the dSYM archive so App Store Connect can symbolicate
+         crashes. -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- "export" writes the .ipa to disk. "upload" goes direct to
+         App Store Connect but needs API key configuration — leaving
+         this on "export" so the first TestFlight upload uses the
+         Xcode Organizer GUI for clarity. Flip to "upload" later
+         once a CI runner is set up. -->
+    <key>destination</key>
+    <string>export</string>
+</dict>
+</plist>

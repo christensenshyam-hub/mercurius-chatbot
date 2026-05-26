@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B1330" />
+
+  <title>Privacy — Mercurius AI</title>
+  <meta name="description" content="What Mercurius AI collects, what it doesn't, and how we treat the data that powers the tutor." />
+  <link rel="canonical" href="https://mercurius.ai/privacy.html" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Privacy — Mercurius AI" />
+  <meta property="og:description" content="What we collect, what we don't, and what happens to your chat messages." />
+  <meta property="og:image" content="/assets/mercurius-logo.png" />
+  <meta property="og:url" content="https://mercurius.ai/privacy.html" />
+  <meta property="og:site_name" content="Mercurius AI" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Privacy — Mercurius AI" />
+  <meta name="twitter:description" content="What we collect, what we don't, and what happens to your chat messages." />
+  <meta name="twitter:image" content="/assets/mercurius-logo.png" />
+
+  <link rel="icon" type="image/png" sizes="512x512" href="/assets/mercurius-icon.png" />
+  <link rel="apple-touch-icon" href="/assets/mercurius-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mercurius AI home">
+        <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="/features.html">Features</a>
+        <a href="/modes.html">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/audience.html">Who it's for</a>
+        <a class="cta-pill" href="/#cta">Start Learning</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="container">
+        <p class="eyebrow">Privacy</p>
+        <h1 id="page-heading" class="display">
+          What we collect — and what we <span class="text-gradient">don't.</span>
+        </h1>
+        <p class="lede">
+          Mercurius is built to teach AI literacy. Pretending you can't see how
+          a product handles your data would be dishonest on both counts. So:
+          the full picture, in plain language.
+        </p>
+        <p class="lede" style="font-size: var(--fs-small); margin-top: var(--space-4);">
+          Last updated: May 2026 · Subject to change as the product evolves.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" aria-label="What we collect">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">What we collect</h2>
+
+        <p class="lede">
+          <strong>A random session ID.</strong> When you open the app for the
+          first time, Mercurius generates a 32-character random identifier and
+          stores it in the iOS Keychain on your device. The server sees this
+          ID on every request so it can recognize you across sessions for
+          features like streaks and conversation memory. It is not tied to
+          your name, email, phone number, or any external identity.
+        </p>
+
+        <p class="lede">
+          <strong>Your chat messages.</strong> Every message you send is sent
+          to our server (hosted on Railway) and forwarded to Anthropic's Claude
+          API to generate a response. The messages are also stored on our
+          server, keyed by your session ID, so Mercurius can remember the
+          conversation across launches.
+        </p>
+
+        <p class="lede">
+          <strong>Anonymous usage signals.</strong> Standard server logs
+          capture the time and outcome of each request (e.g. "chat request
+          succeeded"). They do not include message content, your IP address
+          in clear form, or any personal information.
+        </p>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="What we don't collect">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">What we don't collect</h2>
+        <ul class="trust-list">
+          <li>
+            <strong>No name, email, phone number, or address.</strong>
+            Mercurius doesn't ask for an account and doesn't have one.
+          </li>
+          <li>
+            <strong>No demographic data.</strong> No age, gender, ethnicity,
+            location, or school affiliation.
+          </li>
+          <li>
+            <strong>No third-party tracking.</strong> No Google Analytics, no
+            Facebook Pixel, no advertising SDKs. None.
+          </li>
+          <li>
+            <strong>No ad targeting.</strong> Your chat history is not used to
+            sell anything to anyone.
+          </li>
+          <li>
+            <strong>No device fingerprinting.</strong> The session ID is
+            randomly generated, not derived from your device.
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Where data goes">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">Who sees what</h2>
+        <p class="lede">
+          To generate replies, Mercurius sends your messages to two third
+          parties:
+        </p>
+        <ul class="trust-list">
+          <li>
+            <strong>Anthropic</strong> (anthropic.com) — runs the Claude
+            language model that produces the actual answers. Their data
+            policies are at
+            <a href="https://www.anthropic.com/legal/commercial-terms" style="color: var(--violet);">anthropic.com/legal</a>.
+            Anthropic does not train future models on API requests by default.
+          </li>
+          <li>
+            <strong>Railway</strong> (railway.app) — hosts our backend server.
+            Standard hosting provider; sees the encrypted HTTPS traffic and
+            the database that stores conversations.
+          </li>
+        </ul>
+        <p class="lede" style="margin-top: var(--space-6);">
+          We do not share, sell, or transfer your messages to anyone else.
+        </p>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="Your controls">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">Your controls</h2>
+        <ul class="trust-list">
+          <li>
+            <strong>Start Over.</strong> The Settings sheet inside the app has
+            a "Start Over" button. Tapping it clears your local chat history,
+            wipes your session ID from the Keychain, and generates a fresh
+            one. From the server's perspective you become a brand-new user.
+          </li>
+          <li>
+            <strong>Delete the app.</strong> Removing Mercurius from your
+            device clears local chat history. Server-side conversation data
+            keyed to your old session ID becomes unreachable from your device.
+          </li>
+          <li>
+            <strong>Email us for full deletion.</strong> If you want server-
+            side data tied to your session ID permanently deleted, email the
+            address below with your session ID (visible in the app's Settings
+            sheet). We'll process the deletion within 30 days.
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Contact">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">Contact</h2>
+        <p class="lede">
+          For privacy questions or data-deletion requests:
+          <strong>privacy@mercurius.ai</strong>
+        </p>
+        <p class="lede">
+          For everything else, the marketing site's main pages cover what
+          Mercurius is and what it isn't.
+        </p>
+      </div>
+    </section>
+
+    <section class="next-strip" aria-label="More about how we think">
+      <div class="container">
+        <div>
+          <p class="eyebrow">Related</p>
+          <h3>Read how we approach responsibility.</h3>
+        </div>
+        <a class="next-strip-link" href="/trust.html">Responsibility →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mercurius AI home">
+          <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+        </a>
+        <p class="footer-tagline">Guided, not given.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/features.html">Features</a>
+        <a href="/modes.html">Modes</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/trust.html">Responsibility</a>
+        <a href="/privacy.html">Privacy</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=7" defer></script>
+</body>
+</html>
