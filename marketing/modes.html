@@ -85,7 +85,7 @@
         </div>
 
         <div class="mode-panels">
-          <div class="mode-panel is-active" id="mode-panel-socratic" role="tabpanel" aria-labelledby="mode-tab-socratic">
+          <div class="mode-panel is-active" id="mode-panel-socratic" data-mode-panel="socratic" role="tabpanel" aria-labelledby="mode-tab-socratic">
             <h2>Socratic</h2>
             <p>
               The default. Mercurius asks questions back instead of handing you
@@ -98,7 +98,7 @@
             </p>
           </div>
 
-          <div class="mode-panel" id="mode-panel-direct" role="tabpanel" aria-labelledby="mode-tab-direct" hidden>
+          <div class="mode-panel" id="mode-panel-direct" data-mode-panel="direct" role="tabpanel" aria-labelledby="mode-tab-direct" hidden>
             <h2>Direct</h2>
             <p class="mode-note">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -119,7 +119,7 @@
             </p>
           </div>
 
-          <div class="mode-panel" id="mode-panel-debate" role="tabpanel" aria-labelledby="mode-tab-debate" hidden>
+          <div class="mode-panel" id="mode-panel-debate" data-mode-panel="debate" role="tabpanel" aria-labelledby="mode-tab-debate" hidden>
             <h2>Debate</h2>
             <p>
               You take a position; Mercurius pushes the other side. Responses
@@ -132,7 +132,7 @@
             </p>
           </div>
 
-          <div class="mode-panel" id="mode-panel-discussion" role="tabpanel" aria-labelledby="mode-tab-discussion" hidden>
+          <div class="mode-panel" id="mode-panel-discussion" data-mode-panel="discussion" role="tabpanel" aria-labelledby="mode-tab-discussion" hidden>
             <h2>Discussion</h2>
             <p>
               Conversational and balanced. Mercurius treats you as a thinking
@@ -148,19 +148,51 @@
     </section>
 
     <section class="section section-soft" aria-label="Picking the right mode">
-      <div class="container" style="max-width: 760px;">
+      <div class="container intent-container">
         <header class="section-head">
           <p class="eyebrow">When to use which</p>
           <h2 class="section-title">Mode by intent.</h2>
         </header>
-        <p class="lede">
-          <strong>Socratic</strong> if you want to actually understand a new
-          topic. <strong>Direct</strong> when you already know the topic and
-          just need a fast fact. <strong>Debate</strong> when you have a
-          position to defend or stress-test. <strong>Discussion</strong> when
-          the question is more interesting than the answer.
-        </p>
-        <p class="lede">
+
+        <!-- The active intent text is driven by the same tab the user
+             clicked above. data-mode-panel ties this to the script's
+             tab activation logic — same attribute as the mode-panel
+             div higher on the page, so a single tab click toggles both. -->
+        <div class="intent-stage" aria-live="polite">
+          <div class="intent-panel is-active" data-mode-panel="socratic">
+            <p class="intent-name">Socratic</p>
+            <p class="intent-text">
+              When you want to actually understand a new topic. Mercurius asks
+              questions back, scaffolds your thinking, and only hands over the
+              full answer once you've earned it.
+            </p>
+          </div>
+          <div class="intent-panel" data-mode-panel="direct" hidden>
+            <p class="intent-name">Direct</p>
+            <p class="intent-text">
+              When you already know the topic and just need a fast fact. Plain,
+              efficient, no detours — answer first, full stop.
+            </p>
+          </div>
+          <div class="intent-panel" data-mode-panel="debate" hidden>
+            <p class="intent-name">Debate</p>
+            <p class="intent-text">
+              When you have a position to defend or stress-test. Mercurius
+              pushes the opposing side as claim, warrant, impact, and rebuttal
+              angle — punchy enough for speech prep or live cross-examination.
+            </p>
+          </div>
+          <div class="intent-panel" data-mode-panel="discussion" hidden>
+            <p class="intent-name">Discussion</p>
+            <p class="intent-text">
+              When the question is more interesting than the answer.
+              Conversational, balanced, tradeoff-focused — closer to a seminar
+              than a search engine.
+            </p>
+          </div>
+        </div>
+
+        <p class="intent-footer">
           You can switch modes mid-conversation. Each conversation stores its
           mode so switching opens a separate thread — your Debate prep doesn't
           bleed into your Socratic study session.

@@ -14,8 +14,13 @@
   'use strict';
 
   // ---- Mode tabs (Socratic / Direct / Debate / Discussion) ----
+  //
+  // Tabs and panels are decoupled via `data-mode-panel`. Any element on
+  // the page that wants to react to a mode change (the description
+  // panel, the "Mode by intent" stage, anything we add later) tags
+  // itself with `data-mode-panel="<mode>"` and gets toggled in one pass.
   const tabs = Array.from(document.querySelectorAll('.mode-pill[data-mode]'));
-  const panels = Array.from(document.querySelectorAll('.mode-panel'));
+  const panels = Array.from(document.querySelectorAll('[data-mode-panel]'));
 
   if (tabs.length && panels.length) {
     const activate = (mode) => {
@@ -25,7 +30,7 @@
         t.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       panels.forEach((p) => {
-        const on = p.id === `mode-panel-${mode}`;
+        const on = p.dataset.modePanel === mode;
         p.hidden = !on;
         p.classList.toggle('is-active', on);
       });

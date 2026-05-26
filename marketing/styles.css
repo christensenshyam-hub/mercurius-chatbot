@@ -773,6 +773,67 @@ p:last-child { margin-bottom: 0; }
   transform: translateX(3px);
 }
 
+/* --------- Mode-by-intent stage (modes.html) ----------
+   Driven by the same tab activation as the description panel above
+   — `data-mode-panel="<mode>"` on each block. Center-aligned because
+   only one block is visible at a time and centered text reads better
+   on short, isolated copy. */
+.intent-container {
+  max-width: 720px;
+  text-align: center;
+}
+.intent-container .section-head {
+  margin-bottom: var(--space-6);
+}
+
+.intent-stage {
+  position: relative;
+  min-height: 220px;       /* prevents jump between modes of slightly
+                              different copy length */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intent-panel {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto;
+  animation: fadeIn 0.25s ease-out;
+}
+.intent-panel[hidden] { display: none; }
+
+.intent-name {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 var(--space-3);
+  background: var(--gradient);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  letter-spacing: -0.01em;
+}
+
+.intent-text {
+  font-size: var(--fs-lede);
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.intent-footer {
+  margin: var(--space-7) auto 0;
+  max-width: 580px;
+  font-size: var(--fs-small);
+  color: var(--ink-muted);
+  text-align: center;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-soft);
+}
+
 /* --------- "Next" cross-link bar at the bottom of detail pages ----- */
 .next-strip {
   background: var(--surface);
