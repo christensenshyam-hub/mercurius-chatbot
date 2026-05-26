@@ -43,7 +43,35 @@ In <https://appstoreconnect.apple.com/apps>:
 - SKU: **mercurius-ai-001** (or anything unique to your account)
 - User Access: **Full Access**
 
-## 3. Archive + upload
+## 3. One-time: provision the Distribution cert + profile
+
+Before the very first archive (and only the first time), bootstrap the
+Apple Distribution certificate and the "Mercurius App Store"
+provisioning profile via the App Store Connect API:
+
+```bash
+cd ios
+./scripts/provision.sh
+```
+
+What this does (so you know what's on your machine after):
+1. Creates a dedicated `mercurius-codesign.keychain-db` keychain so
+   codesign can use the private key non-interactively (no GUI prompts).
+2. Generates a CSR, posts it to `/v1/certificates`, and imports the
+   returned Apple Distribution cert + key into the dedicated keychain.
+3. Creates an `IOS_APP_STORE` profile named "Mercurius App Store" tied
+   to the cert and the bundle id, then installs the `.mobileprovision`
+   into `~/Library/MobileDevice/Provisioning Profiles/`.
+
+This whole dance exists because brand-new Apple Developer teams have
+zero registered devices, and Xcode's automatic signing refuses to
+archive without first being able to issue a *Development* profile (which
+needs at least one device). Manual signing with a pre-created
+Distribution profile sidesteps the deadlock entirely. The script is
+idempotent — re-running it reuses what's already there, and rotates
+the cert if the local private key has gone missing.
+
+## 4. Archive + upload
 
 From the repo root:
 
@@ -55,24 +83,17 @@ cd ios
 The script:
 1. Bumps `CURRENT_PROJECT_VERSION` by +1
 2. Regenerates the `.xcodeproj` so the bump lands in the build
-3. Cleans previous archives
-4. Builds a signed Release archive to `ios/build/Mercurius.xcarchive`
-5. Exports the `.ipa` to `ios/build/export/`
-6. Prints upload instructions
-
-For the first upload, use **Xcode Organizer**:
-
-```bash
-open ios/build/Mercurius.xcarchive
-```
-
-Then Distribute App → App Store Connect → Upload. Xcode handles the
-signing + transport.
+3. Unlocks the dedicated codesigning keychain (from `provision.sh`)
+4. Cleans previous archives
+5. Builds a signed Release archive to `ios/build/Mercurius.xcarchive`
+6. Exports the signed `.ipa` to `ios/build/export/`
+7. Uploads the `.ipa` to App Store Connect via `xcrun altool` and the
+   App Store Connect API key
 
 Apple processes the build (~10–20 minutes). It'll appear in
 App Store Connect → Apps → Mercurius AI → **TestFlight** tab.
 
-## 4. Fill in TestFlight Beta info
+## 5. Fill in TestFlight Beta info
 
 When you go to the TestFlight tab the first time, Apple asks for:
 
@@ -116,7 +137,7 @@ the answer — and is honest about what it doesn't know.
 
 Default Apple beta license is fine for now.
 
-## 5. Add internal testers
+## 6. Add internal testers
 
 Internal testers are people on your developer team. They get instant
 access — no Apple Beta Review needed.
@@ -131,7 +152,7 @@ They get an email with a TestFlight invite link. Install the
 TestFlight app from the App Store, redeem the link, and Mercurius
 shows up there.
 
-## 6. Add external testers (when ready)
+## 7. Add external testers (when ready)
 
 External testers can be anyone — up to 10,000. Requires a quick
 Apple Beta App Review (~24–48 hours, sometimes faster).
@@ -144,14 +165,15 @@ In TestFlight → External Testing:
 
 When review approves, testers get the invite.
 
-## 7. After the first build
+## 8. After the first build
 
 Every subsequent build:
 ```bash
 cd ios && ./scripts/release.sh
 ```
-…and re-do step 3's upload. The build number auto-bumps so you don't
-hit "build version already exists" errors.
+The build number auto-bumps so you don't hit "build version already
+exists" errors. `provision.sh` does not need to be re-run unless the
+Distribution cert or profile gets revoked / expires.
 
 External testers see new builds automatically once they're approved.
 The first build in a group requires review; minor follow-ups usually

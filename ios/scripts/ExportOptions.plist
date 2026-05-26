@@ -11,12 +11,21 @@
     <key>teamID</key>
     <string>TMBPRHZYW2</string>
 
-    <!-- Let xcodebuild ask Apple's services for the right
-         provisioning profile + signing certificate at export time.
-         Combined with -allowProvisioningUpdates in release.sh, this
-         means no manual profile management. -->
+    <!-- Manual signing matches our archive config: we created the
+         "Mercurius App Store" Distribution profile via the App Store
+         Connect API (see scripts/provision.sh) and pinned it in
+         project.yml. Telling export to reuse that exact profile
+         avoids the "Cloud signing permission error" Xcode throws
+         when it tries to (re)create a profile during export. -->
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Apple Distribution</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.mayoailiteracy.mercurius.native</key>
+        <string>Mercurius App Store</string>
+    </dict>
 
     <!-- Strip Swift symbols / bitcode-free dSYMs for a smaller upload.
          Apple recommends this for App Store distribution. -->

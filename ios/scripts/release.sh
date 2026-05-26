@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
 #
-# release.sh — archive Mercurius for TestFlight distribution.
+# release.sh — fully automated TestFlight build + upload.
 #
 # What this does:
-#   1. Bumps the build number (CURRENT_PROJECT_VERSION) by +1 unless
-#      `--no-bump` is passed.
-#   2. Cleans previous archives so codesign doesn't pick up stale bits.
-#   3. Builds a signed archive (App Store distribution) into
-#      `ios/build/Mercurius.xcarchive`.
-#   4. Exports the archive to an .ipa using
-#      `scripts/ExportOptions.plist`.
-#   5. Prints next-steps for uploading to App Store Connect.
+#   1. Reads App Store Connect API credentials from ~/.appstoreconnect/
+#   2. Bumps CURRENT_PROJECT_VERSION by +1 (skip with --no-bump)
+#   3. Cleans previous archives
+#   4. Builds a signed Release archive with API-key auth — Xcode
+#      doesn't need to be signed in. xcodebuild fetches the right
+#      provisioning profile from App Store Connect using the .p8 key.
+#   5. Exports the archive to a .ipa via ExportOptions.plist
+#   6. Uploads the .ipa to App Store Connect with xcrun altool +
+#      the same API key. From there it appears in TestFlight after
+#      Apple finishes processing (~10–20 min).
 #
-# Why two steps (archive → export) instead of `-destination upload`:
-#   `xcodebuild -exportArchive -exportPath ...` writes the .ipa to disk;
-#   you can then upload via Xcode Organizer (point-and-click) OR via
-#   `xcrun altool --upload-app` (script-friendly, needs an
-#   app-specific password). Driving upload from a CI runner is the
-#   next step — for first launch the GUI flow is friendlier.
+# Credentials (one-time setup):
+#   ~/.appstoreconnect/key_id        — App Store Connect API Key ID
+#   ~/.appstoreconnect/issuer_id     — App Store Connect Issuer ID
+#   ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8
+#                                    — downloaded once from
+#                                      appstoreconnect.apple.com →
+#                                      Users and Access → Integrations
+#                                      → App Store Connect API
 #
 # Usage:
-#   ./scripts/release.sh                 # bumps build, archives, exports
-#   ./scripts/release.sh --no-bump       # archive at current version
-#   ./scripts/release.sh --archive-only  # skip the .ipa export
+#   ./scripts/release.sh                 # bump → archive → export → upload
+#   ./scripts/release.sh --no-bump       # skip the build-number bump
+#   ./scripts/release.sh --no-upload     # archive + export only, skip upload
 #
 
 set -euo pipefail
@@ -38,42 +42,95 @@ EXPORT_PATH="${BUILD_DIR}/export"
 EXPORT_OPTIONS="${SCRIPT_DIR}/ExportOptions.plist"
 PROJECT_YML="${IOS_DIR}/project.yml"
 
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+ASC_DIR="${HOME}/.appstoreconnect"
+KEY_ID_FILE="${ASC_DIR}/key_id"
+ISSUER_ID_FILE="${ASC_DIR}/issuer_id"
+
+if [ ! -f "$KEY_ID_FILE" ] || [ ! -f "$ISSUER_ID_FILE" ]; then
+  echo "❌ Missing credentials:"
+  echo "   $KEY_ID_FILE"
+  echo "   $ISSUER_ID_FILE"
+  echo ""
+  echo "Set them up with:"
+  echo "   mkdir -p ${ASC_DIR}"
+  echo "   echo '<your-key-id>' > $KEY_ID_FILE"
+  echo "   echo '<your-issuer-id>' > $ISSUER_ID_FILE"
+  exit 10
+fi
+
+ASC_KEY_ID=$(cat "$KEY_ID_FILE" | tr -d '[:space:]')
+ASC_ISSUER_ID=$(cat "$ISSUER_ID_FILE" | tr -d '[:space:]')
+ASC_KEY_PATH="${ASC_DIR}/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+if [ ! -f "$ASC_KEY_PATH" ]; then
+  echo "❌ Missing private key: $ASC_KEY_PATH"
+  echo ""
+  echo "Download AuthKey_${ASC_KEY_ID}.p8 from App Store Connect →"
+  echo "Users and Access → Integrations → App Store Connect API, then:"
+  echo "   mkdir -p ${ASC_DIR}/private_keys"
+  echo "   mv ~/Downloads/AuthKey_${ASC_KEY_ID}.p8 ${ASC_DIR}/private_keys/"
+  exit 11
+fi
+
+# ---------------------------------------------------------------------------
+# Flags
+# ---------------------------------------------------------------------------
 NO_BUMP=0
-ARCHIVE_ONLY=0
+NO_UPLOAD=0
 for arg in "$@"; do
   case "$arg" in
     --no-bump) NO_BUMP=1 ;;
-    --archive-only) ARCHIVE_ONLY=1 ;;
+    --no-upload) NO_UPLOAD=1 ;;
     *) echo "Unknown arg: $arg"; exit 2 ;;
   esac
 done
 
 # ---------------------------------------------------------------------------
-# 1. Build-number bump (idempotent — reads from project.yml, writes back)
+# 1. Build-number bump (reads from project.yml, writes back)
 # ---------------------------------------------------------------------------
 if [ "$NO_BUMP" -eq 0 ]; then
   current=$(grep -E '^    CURRENT_PROJECT_VERSION:' "$PROJECT_YML" | sed -E 's/.*"([0-9]+)".*/\1/')
   if ! [[ "$current" =~ ^[0-9]+$ ]]; then
-    echo "Could not parse CURRENT_PROJECT_VERSION from $PROJECT_YML (got: '$current')"; exit 3
+    echo "❌ Could not parse CURRENT_PROJECT_VERSION (got: '$current')"; exit 3
   fi
   next=$((current + 1))
   echo "📈  Bumping build number: $current → $next"
   /usr/bin/sed -i '' "s|CURRENT_PROJECT_VERSION: \"$current\"|CURRENT_PROJECT_VERSION: \"$next\"|" "$PROJECT_YML"
-
-  # Regenerate the xcodeproj so the bump lands in the .pbxproj.
   echo "🔧  Regenerating Xcode project..."
   (cd "$IOS_DIR" && xcodegen generate >/dev/null)
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Clean previous archives
+# 2. Clean
 # ---------------------------------------------------------------------------
 echo "🧹  Cleaning previous archives..."
 rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
 mkdir -p "$BUILD_DIR"
 
 # ---------------------------------------------------------------------------
-# 3. Archive
+# 2.5. Unlock the dedicated codesigning keychain.
+# `provision.sh` creates `mercurius-codesign.keychain-db` and stores the
+# Apple Distribution cert + key there. macOS will re-lock it after the
+# configured idle timeout, so re-unlock it here every release. If the
+# keychain doesn't exist yet, the user hasn't run provision.sh — tell
+# them what to do.
+# ---------------------------------------------------------------------------
+CODESIGN_KEYCHAIN="${HOME}/Library/Keychains/mercurius-codesign.keychain-db"
+CODESIGN_KEYCHAIN_PASSWORD="mercurius-ci"
+if [ ! -f "$CODESIGN_KEYCHAIN" ]; then
+  echo "❌  Dedicated codesigning keychain not found."
+  echo "    Run ./scripts/provision.sh once to create it."
+  exit 12
+fi
+echo "🔓  Unlocking codesigning keychain..."
+security unlock-keychain -p "$CODESIGN_KEYCHAIN_PASSWORD" "$CODESIGN_KEYCHAIN"
+security set-keychain-settings -lut 21600 "$CODESIGN_KEYCHAIN"
+
+# ---------------------------------------------------------------------------
+# 3. Archive — uses API-key auth (no Xcode sign-in needed)
 # ---------------------------------------------------------------------------
 echo "📦  Archiving Mercurius (this takes ~3-5 min)..."
 xcodebuild \
@@ -83,9 +140,10 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE_PATH" \
   -allowProvisioningUpdates \
-  archive \
-  | grep -E '\*\* ARCHIVE|error:|warning:' \
-  || true
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+  archive
 
 if [ ! -d "$ARCHIVE_PATH" ]; then
   echo "❌  Archive failed — see Xcode output above."
@@ -93,28 +151,20 @@ if [ ! -d "$ARCHIVE_PATH" ]; then
 fi
 echo "✅  Archive at: $ARCHIVE_PATH"
 
-if [ "$ARCHIVE_ONLY" -eq 1 ]; then
-  echo ""
-  echo "Stopping after archive (--archive-only). Next:"
-  echo "   • Open the archive in Xcode Organizer:"
-  echo "       open '$ARCHIVE_PATH'"
-  echo "   • Or run this script without --archive-only to also export the .ipa."
-  exit 0
-fi
-
 # ---------------------------------------------------------------------------
-# 4. Export to .ipa
+# 4. Export .ipa
 # ---------------------------------------------------------------------------
 echo ""
-echo "📤  Exporting .ipa via ExportOptions.plist..."
+echo "📤  Exporting .ipa..."
 xcodebuild \
   -exportArchive \
   -archivePath "$ARCHIVE_PATH" \
   -exportPath "$EXPORT_PATH" \
   -exportOptionsPlist "$EXPORT_OPTIONS" \
   -allowProvisioningUpdates \
-  | grep -E 'EXPORT SUCCEEDED|error:|warning:' \
-  || true
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
 IPA_PATH=$(find "$EXPORT_PATH" -name '*.ipa' | head -n 1)
 if [ -z "$IPA_PATH" ]; then
@@ -123,32 +173,41 @@ if [ -z "$IPA_PATH" ]; then
 fi
 echo "✅  .ipa at: $IPA_PATH"
 
+if [ "$NO_UPLOAD" -eq 1 ]; then
+  echo ""
+  echo "Stopping after export (--no-upload). To upload later, run:"
+  echo "   xcrun altool --upload-app -f '$IPA_PATH' -t ios \\"
+  echo "     --apiKey '$ASC_KEY_ID' --apiIssuer '$ASC_ISSUER_ID'"
+  exit 0
+fi
+
 # ---------------------------------------------------------------------------
-# 5. Next steps
+# 5. Upload to App Store Connect via altool — same API key
 # ---------------------------------------------------------------------------
+echo ""
+echo "☁️   Uploading to App Store Connect..."
+xcrun altool --upload-app \
+  --file "$IPA_PATH" \
+  --type ios \
+  --apiKey "$ASC_KEY_ID" \
+  --apiIssuer "$ASC_ISSUER_ID"
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────
-✅  Build is ready to upload to App Store Connect.
+✅  Upload complete.
 
-  IPA file:
-    $IPA_PATH
+Apple is now processing the build (~10–20 min). It will appear in:
+   App Store Connect → Apps → Mercurius AI → TestFlight tab
 
-Choose one upload path:
+The first build always needs you to answer Apple's encryption-use
+question in the TestFlight UI — we already declared
+ITSAppUsesNonExemptEncryption=false in Info.plist, so it should
+auto-pass and the build will go into the "Internal Testing"
+section ready to assign to testers.
 
-  A) Xcode Organizer (GUI, simplest first time):
-       open '$ARCHIVE_PATH'
-     → Distribute App → App Store Connect → Upload
-
-  B) Transporter app (free from the Mac App Store):
-       open -a Transporter '$IPA_PATH'
-
-  C) Command line (needs an App-Specific Password from
-     appleid.apple.com → Sign-In and Security → App-Specific Passwords):
-       xcrun altool --upload-app -f '$IPA_PATH' -t ios \\
-         -u <your-apple-id> -p <app-specific-password>
-
-After upload: Apple processes the build (~10-20 min). It then
-appears in App Store Connect → Apps → Mercurius AI → TestFlight.
+If you don't see the build after 30 minutes, check:
+   • App Store Connect → Apps → Mercurius AI → Activity tab
+   • Your email — Apple sends a notification if processing failed.
 ────────────────────────────────────────────────────────────
 EOF

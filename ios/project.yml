@@ -17,9 +17,29 @@ settings:
     # only a warning, not a rejection).
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "4"
     DEVELOPMENT_TEAM: "TMBPRHZYW2"
-    CODE_SIGN_STYLE: Automatic
+  configs:
+    # Pin signing per configuration. Debug stays on automatic (Xcode handles
+    # local-dev signing on the simulator just fine). Release uses MANUAL
+    # signing with Apple Distribution — this is the key to making TestFlight
+    # archives work on a brand-new team:
+    #
+    #   With automatic signing, `xcodebuild archive` does a pre-flight check
+    #   that requires a working *Development* provisioning profile, which
+    #   needs at least one registered device on the team. We have zero
+    #   devices on purpose (App Store distribution doesn't need any), so
+    #   automatic signing deadlocks before it even gets to the distribution
+    #   step. Manual signing skips that pre-flight, and with
+    #   `-allowProvisioningUpdates` + the App Store Connect API key,
+    #   xcodebuild can still create a Distribution cert + profile on
+    #   demand — without ever asking for a dev profile.
+    Debug:
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: "Apple Development"
+    Release:
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: "Apple Distribution"
 
 packages:
   LocalPackages:
@@ -80,6 +100,13 @@ targets:
         UIStatusBarStyle: UIStatusBarStyleDefault
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Opt out of iPad multitasking (split view / slide-over). Without
+        # this, the App Store validator rejects portrait-only iPad builds
+        # because multitasking requires all four orientations.
+        # Mercurius is designed for a single full-screen reading/typing
+        # context, so split view doesn't add value — locking full-screen
+        # keeps the layout predictable on iPad.
+        UIRequiresFullScreen: true
         # Declare encryption compliance: we use only HTTPS/TLS over
         # URLSession, which is exempt from US export review. Setting
         # this to false skips the annual compliance questionnaire on
@@ -97,6 +124,23 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
+      configs:
+        # Mirror the project-level signing config at the target level —
+        # xcodegen leaves the per-target CODE_SIGN_IDENTITY as
+        # "iPhone Developer" by default, which would otherwise override
+        # our project-level Apple Distribution setting at archive time.
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          # Named profile that release.sh will create on the fly via the
+          # App Store Connect API if it doesn't already exist locally.
+          # Manual signing requires SOME profile name; this lets the
+          # script bootstrap a Distribution profile without ever needing
+          # an interactive Xcode sign-in.
+          PROVISIONING_PROFILE_SPECIFIER: "Mercurius App Store"
 
   MercuriusTests:
     type: bundle.unit-test
