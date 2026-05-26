@@ -106,7 +106,7 @@ button { font: inherit; }
 
   /* Layout */
   --container-max: 1200px;
-  --header-h: 64px;
+  --header-h: 72px;
 }
 
 /* --------- Typography --------- */
@@ -244,16 +244,23 @@ p:last-child { margin-bottom: 0; }
 }
 
 .brand-mark {
-  /* Cropped icon is 1024×563 — display as 40×22 to keep aspect. */
-  width: 40px;
-  height: 22px;
+  /* Cropped icon is 1024×563 — keep the 1.82:1 aspect ratio.
+     Default = header sizing (80×44). Footer overrides below to
+     a smaller 56×31. */
+  width: 80px;
+  height: 44px;
   flex-shrink: 0;
+}
+
+.site-footer .brand-mark {
+  width: 56px;
+  height: 31px;
 }
 
 .brand-name {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   letter-spacing: -0.01em;
 }
 
