@@ -243,26 +243,10 @@ p:last-child { margin-bottom: 0; }
   color: var(--navy);
 }
 
-.brand-mark {
-  /* Tight-cropped icon is 470×415 (~1.13:1) — head + wings +
-     sparkle, no whitespace. The bounding box IS the head, so
-     the rendered size should track the wordmark's visual weight
-     (cap-height ≈ 16px at 1.35rem) — a mark ~2× the cap-height
-     reads as a peer, not a billboard.
-     -1px translateY for optical centering: the head's visual
-     center sits slightly below the geometric center of the PNG
-     because the sparkle floats lower-right. */
-  width: 38px;
-  height: 34px;
-  flex-shrink: 0;
-  transform: translateY(-1px);
-}
-
-.site-footer .brand-mark {
-  width: 28px;
-  height: 25px;
-  transform: translateY(-1px);
-}
+/* .brand-mark img was retired — wordmark-only brand reads cleaner
+   in the header / footer at the scale we needed. The cropped icon
+   PNG still lives in `assets/mercurius-icon.png` for the favicon /
+   apple-touch-icon and for future use, but no UI references it. */
 
 .brand-name {
   font-family: var(--font-display);
