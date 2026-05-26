@@ -244,17 +244,23 @@ p:last-child { margin-bottom: 0; }
 }
 
 .brand-mark {
-  /* Cropped icon is 1024×563 — keep the 1.82:1 aspect ratio.
-     Default = header sizing (80×44). Footer overrides below to
-     a smaller 56×31. */
-  width: 80px;
+  /* Tight-cropped icon is 470×415 (~1.13:1) — the head + wings +
+     sparkle with no whitespace. Default = header sizing. Footer
+     overrides below to a smaller size.
+     -2px translateY for optical centering: the head's visual
+     center sits slightly below the geometric center of the PNG
+     because of the sparkle below the chin, so the bounding-box
+     centering looks low by a hair until we lift it. */
+  width: 50px;
   height: 44px;
   flex-shrink: 0;
+  transform: translateY(-2px);
 }
 
 .site-footer .brand-mark {
-  width: 56px;
+  width: 35px;
   height: 31px;
+  transform: translateY(-1px);
 }
 
 .brand-name {
