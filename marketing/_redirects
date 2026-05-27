@@ -1,0 +1,11 @@
+# Netlify redirect rules. One per line: <source> <target> <status>
+# https://docs.netlify.com/routing/redirects
+
+# TestFlight public-beta shortcut.
+# Apple's join URL is opaque (testflight.apple.com/join/<code>); this lets
+# us share https://trymercurius.com/beta everywhere — Instagram, posters,
+# QR codes — and keep the underlying TestFlight URL out of the public copy.
+# 302 (temporary) because the join code rotates if the external-testing
+# group is ever recreated; 301 would get aggressively cached and outlive
+# the actual link.
+/beta   https://testflight.apple.com/join/3ujBtDsa   302
