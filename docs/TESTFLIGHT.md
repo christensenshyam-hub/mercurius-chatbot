@@ -119,7 +119,7 @@ we're looking for feedback on:
   earned or repetitive?
 • Anything that crashes, freezes, or feels broken.
 
-You can email beta@mercurius.ai with feedback at any time, or use
+You can email beta@trymercurius.com with feedback at any time, or use
 TestFlight's "Send Beta Feedback" feature directly in the app.
 ```
 
