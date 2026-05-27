@@ -1,6 +1,6 @@
 # Mercurius AI — marketing site
 
-Standalone single-page promotional site for [Mercurius AI](https://mercurius.ai).
+Standalone single-page promotional site for [Mercurius AI](https://trymercurius.com).
 Plain HTML, CSS, and a few lines of vanilla JS — no framework, no
 build step, no dependencies.
 

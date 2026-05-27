@@ -98,7 +98,7 @@ App Store Connect → Apps → Mercurius AI → **TestFlight** tab.
 When you go to the TestFlight tab the first time, Apple asks for:
 
 ### App Information
-- **Privacy Policy URL:** `https://mercurius.ai/privacy.html`
+- **Privacy Policy URL:** `https://trymercurius.com/privacy.html`
   *(or wherever you host `marketing/` — local IP if you're previewing,
   but real URL needed for actual external testing)*
 - **First Name / Last Name:** your contact info on file
