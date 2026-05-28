@@ -1051,11 +1051,21 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
   try {
     parsed = JSON.parse(raw);
   } catch (e1) {
-    const match = raw.match(/\{[\s\S]*?\}/);
+    // Fallback: extract the embedded JSON object. Greedy `[\s\S]*` spans
+    // to the LAST `}` so nested structures (concept-map nodes/links)
+    // survive — a non-greedy match stops at the first inner `}` and
+    // yields a truncated, unparseable fragment. Wrap the retry parse so
+    // a still-malformed payload (e.g. response truncated by max_tokens)
+    // returns a clean error instead of throwing a 500.
+    const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
       return { error: 'parse_error', message: `Could not generate ${errorLabel} — try after a longer conversation.` };
     }
-    parsed = JSON.parse(match[0]);
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (e2) {
+      return { error: 'parse_error', message: `Could not generate ${errorLabel} — try after a longer conversation.` };
+    }
   }
   return parsed;
 }
@@ -1631,7 +1641,10 @@ app.post('/api/concept-map', validate(ConceptMapRequest, { endpoint: '/api/conce
       minMessages: 4,
       systemPrompt: CONCEPT_MAP_PROMPT,
       userMessage: 'Generate a concept map from our conversation.',
-      maxTokens: 600,
+      // Concept-map JSON (nodes + links) is the largest of the three
+      // history-derived payloads; 600 truncated it mid-object and tripped
+      // the fallback parser. 1500 leaves headroom for a rich map.
+      maxTokens: 1500,
       errorLabel: 'concept map',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
