@@ -74,8 +74,15 @@ const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
 // ---------------------------------------------------------------------------
 // Anthropic client
 // ---------------------------------------------------------------------------
+// Timeout lives on the client, not in per-request bodies. Anthropic's
+// current API rejects `timeout` as a body field with
+//   400 invalid_request_error: "timeout: Extra inputs are not permitted"
+// which silently broke every non-streaming endpoint (quiz, report-card,
+// concept-map, factcheck, analyze, pre-briefing, memory extraction) on
+// the deployed SDK. Setting it here applies to every call uniformly.
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 30000,
 });
 
 // ---------------------------------------------------------------------------
@@ -1002,7 +1009,6 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
       const response = await anthropic.messages.create({
         model: MEMORY_MODEL,
         max_tokens: 200,
-        timeout: 10000,
         messages: [{ role: 'user', content: memoryPrompt }],
       });
 
@@ -1039,7 +1045,6 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: [...dbHistory.slice(-(historyLimit - 10)), { role: 'user', content: userMessage }],
-    timeout: 30000,
   });
   const raw = response.content[0]?.text || '';
   let parsed;
@@ -1498,7 +1503,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         temperature,
         system: systemPrompt,
         messages: trimmed,
-        timeout: 30000,
       });
 
       const rawReply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
@@ -1705,7 +1709,6 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
       max_tokens: 700,
       system: FACTCHECK_PROMPT,
       messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
-      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
@@ -1734,7 +1737,6 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
       max_tokens: 700,
       system: ANALYZE_PROMPT,
       messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
-      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
@@ -1761,7 +1763,6 @@ app.get('/api/pre-briefing', async (req, res) => {
       max_tokens: 800,
       system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
       messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
-      timeout: 30000,
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
