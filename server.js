@@ -1454,7 +1454,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // response_mode + the deep nudge live inside the unified prompt itself.
   // ---------------------------------------------------------------------------
   let systemForApi = systemPrompt;
-  if (USE_UNIFIED_PROMPT) {
+  // Use v2 only when the flag is on AND the unified prompt actually loaded.
+  // If the prompt file failed to load (UNIFIED_PROMPT === ''), fall back to
+  // the legacy path even with the flag on — never ship an empty system prompt.
+  if (USE_UNIFIED_PROMPT && UNIFIED_PROMPT) {
     const runtimeContext = buildRuntimeContext({
       mode: effectiveMode,
       responseMode,
