@@ -34,6 +34,7 @@ const {
   resolveResponseMode,
   qualityPrefix,
 } = require('./lib/responseQuality');
+const { UNIFIED_PROMPT, MODE_TOKENS, buildRuntimeContext } = require('./lib/unifiedPrompt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +71,12 @@ function isValidSessionId(id) {
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
 const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
+
+// v2 unified-prompt rollout switch. OFF by default → the backend behaves
+// exactly as before (the 10 per-mode prompts). Set USE_UNIFIED_PROMPT=1 in
+// the Railway env to route /api/chat through the single unified prompt +
+// prompt caching. Flip back to instantly revert. See docs/V2_UPGRADE.md.
+const USE_UNIFIED_PROMPT = process.env.USE_UNIFIED_PROMPT === '1' || process.env.USE_UNIFIED_PROMPT === 'true';
 
 // ---------------------------------------------------------------------------
 // Anthropic client
@@ -984,6 +991,20 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 `;
 
 // ---------------------------------------------------------------------------
+// v2 cached system prefix — built once at startup. The unified prompt plus
+// the two STATIC libraries (club knowledge + source library). Because this
+// string is byte-identical on every request, it caches as a prompt prefix
+// (~0.1× cost after the first call). Per-request context (runtime, memory,
+// performance, meetings, blog) is injected SEPARATELY via buildRuntimeContext
+// as a second system block, so it never invalidates this cached prefix.
+// Only used when USE_UNIFIED_PROMPT is on.
+// ---------------------------------------------------------------------------
+const V2_STATIC_SYSTEM =
+  UNIFIED_PROMPT +
+  '\n\n<club_knowledge>\n' + CLUB_KNOWLEDGE.trim() + '\n</club_knowledge>' +
+  '\n\n<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
+
+// ---------------------------------------------------------------------------
 // Background memory extraction — runs after each response, non-blocking
 // ---------------------------------------------------------------------------
 async function extractAndSaveMemories(sessionId, userMessage, assistantReply, mode) {
@@ -1339,6 +1360,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // ---------------------------------------------------------------------------
   let systemPrompt;
   let testTriggered = false;
+  // `effectiveMode` is the uppercase mode token the v2 unified prompt's
+  // <mode_router> reads. It tracks the SAME decision the legacy branching
+  // makes below — it's just the routing signal instead of a prompt swap.
+  let effectiveMode = 'SOCRATIC';
 
   // Check if this is a curriculum lesson message
   const lastUserMsg = clientMessages[clientMessages.length - 1]?.content || '';
@@ -1347,33 +1372,40 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   if (isCurriculumMsg) {
     // Structured curriculum lesson mode
     systemPrompt = CURRICULUM_PROMPT + memoryContext;
+    effectiveMode = 'CURRICULUM';
 
   } else if (mode === 'direct' && isUnlocked) {
     // Direct mode — full educational prompt
     systemPrompt = DIRECT_PROMPT + memoryContext;
+    effectiveMode = 'DIRECT';
 
   } else if (mode === 'debate') {
     // Debate mode — freely available, no unlock required
     systemPrompt = DEBATE_PROMPT + memoryContext;
+    effectiveMode = 'DEBATE';
 
   } else if (mode === 'discussion') {
     // Discussion mode — reasoning evaluation, freely available
     systemPrompt = DISCUSSION_PROMPT + memoryContext;
+    effectiveMode = 'DISCUSSION';
 
   } else if (!isUnlocked && testState === null && msgCount >= 6) {
     // Time to trigger the test
     await db.setTestState(sessionId, 'pending');
     systemPrompt = TEST_EVALUATOR_PROMPT;
     testTriggered = true;
+    effectiveMode = 'TEST_EVALUATOR';
 
   } else if (testState === 'pending' || testState === 'in_progress') {
     // Student is mid-test — use evaluator prompt
     systemPrompt = TEST_EVALUATOR_PROMPT;
     if (testState === 'pending') testTriggered = true;
+    effectiveMode = 'TEST_EVALUATOR';
 
   } else {
     // Normal Socratic mode
     systemPrompt = SOCRATIC_PROMPT + memoryContext;
+    effectiveMode = 'SOCRATIC';
   }
 
   // Personalized learning injection — combines difficulty, struggled topics, and memory
@@ -1412,6 +1444,33 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     systemPrompt += EXPAND_MODE_NOTE;
   }
 
+  // ---------------------------------------------------------------------------
+  // Choose the system payload. `systemForApi` is what actually goes on the
+  // wire — either the legacy concatenated string (flag off) or the v2
+  // two-block array (flag on): a cached static prefix + a per-request
+  // context block. The v2 prompt has the quality preamble / mode rules /
+  // response-mode contract baked in, so qualityPrefix + EXPAND_MODE_NOTE
+  // (applied above to `systemPrompt`) are intentionally NOT used in v2 —
+  // response_mode + the deep nudge live inside the unified prompt itself.
+  // ---------------------------------------------------------------------------
+  let systemForApi = systemPrompt;
+  if (USE_UNIFIED_PROMPT) {
+    const runtimeContext = buildRuntimeContext({
+      mode: effectiveMode,
+      responseMode,
+      unlocked: isUnlocked,
+      currentDate: new Date().toISOString().slice(0, 10),
+      memory: memoryContext,
+      performance: personalizationNote,
+      meeting: meetingContext,
+      blog: blogContext,
+    });
+    systemForApi = [
+      { type: 'text', text: V2_STATIC_SYSTEM, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: runtimeContext },
+    ];
+  }
+
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
     ? [...dbHistory, { role: 'user', content: latestUserMessage.content }]
@@ -1445,7 +1504,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         model: chosenModel,
         max_tokens: maxTokens,
         temperature,
-        system: systemPrompt,
+        system: systemForApi,
         messages: trimmed,
       }, { signal: streamAbort.signal });
 
@@ -1511,7 +1570,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         model: chosenModel,
         max_tokens: maxTokens,
         temperature,
-        system: systemPrompt,
+        system: systemForApi,
         messages: trimmed,
       });
 
