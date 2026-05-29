@@ -174,27 +174,11 @@ module.exports = {
     return await query('SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?', [sessionId, limit]);
   },
 
-  async getPastSessions(sessionId, limit = 3) {
-    if (USE_PG) {
-      return await query(
-        `SELECT m.session_id, STRING_AGG(m.content, ' ||| ') as messages, s.created_at
-         FROM messages m
-         JOIN sessions s ON m.session_id = s.session_id
-         WHERE m.session_id != ? AND m.role = 'assistant'
-         GROUP BY m.session_id, s.created_at, s.last_active
-         ORDER BY s.last_active DESC
-         LIMIT ?`, [sessionId, limit]);
-    } else {
-      return await query(
-        `SELECT m.session_id, GROUP_CONCAT(m.content, ' ||| ') as messages, s.created_at
-         FROM messages m
-         JOIN sessions s ON m.session_id = s.session_id
-         WHERE m.session_id != ? AND m.role = 'assistant'
-         GROUP BY m.session_id
-         ORDER BY s.last_active DESC
-         LIMIT ?`, [sessionId, limit]);
-    }
-  },
+  // NOTE: getPastSessions() was removed. It queried `WHERE session_id != ?`
+  // (i.e. OTHER users' sessions) and was used as a memory fallback, which
+  // leaked one student's conversation into another's context. Per-user
+  // memory lives in student_memory (see buildMemoryProfile), scoped by
+  // session_id. Do not reintroduce a cross-session reader here.
 
   async updateTopics(sessionId, topics) {
     await query('UPDATE sessions SET topics = ? WHERE session_id = ?', [JSON.stringify(topics), sessionId]);

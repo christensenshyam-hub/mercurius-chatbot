@@ -1332,25 +1332,26 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // Save the new user message to DB
   await db.saveMessage(sessionId, 'user', latestUserMessage.content);
 
-  // Build rich memory profile from persistent student memory
+  // Build the memory profile from THIS student's own persistent memory.
+  // Scoped to sessionId (getMemories → student_memory WHERE session_id = ?),
+  // and returns '' when there's nothing remembered yet (new user).
+  //
+  // NOTE: a previous cross-session fallback here injected db.getPastSessions()
+  // — which returns OTHER sessions (WHERE session_id != ?) — as "STUDENT
+  // MEMORY (from previous sessions)". Because sessionId is the persistent
+  // per-device identity (a user only ever has one), that fallback could only
+  // ever surface OTHER USERS' conversations into this student's context,
+  // making brand-new sessions hallucinate "you've touched on this before"
+  // and leaking one student's chat into another's. Removed entirely.
   let memoryContext = '';
   try {
     memoryContext = await db.buildMemoryProfile(sessionId);
-    // Also include recent conversation excerpts as fallback
-    if (!memoryContext) {
-      const pastSessions = await db.getPastSessions(sessionId, 2);
-      if (pastSessions.length > 0) {
-        memoryContext = `\n\n### STUDENT MEMORY (from previous sessions):\n`;
-        pastSessions.forEach((s, i) => {
-          const excerpt = s.messages ? s.messages.split(' ||| ').slice(0, 3).join(' ... ') : '';
-          if (excerpt) memoryContext += `\nPast session ${i + 1}: "${excerpt.slice(0, 300)}..."\n`;
-        });
-        memoryContext += `\nReference past discussions naturally when relevant.`;
-      }
-    }
   } catch (e) { logger.warn({ err: e.message }, 'memory profile build failed'); }
 
-  // Welcome-back context for returning users
+  // Welcome-back note — only when THIS student has real remembered history.
+  // With the cross-user fallback gone, memoryContext is non-empty only when
+  // buildMemoryProfile found genuine, session-scoped memories, so this fires
+  // accurately (a returning student) instead of on strangers.
   if (dbHistory.length <= 1 && memoryContext.length > 50) {
     memoryContext += '\n\n**WELCOME BACK NOTE:** This student is returning after a previous session. Reference something specific from their memory profile in your greeting — a topic they explored, a strength you noticed, or a question they left open. Make them feel recognized, not like a stranger. Keep it natural, one sentence max.';
   }
