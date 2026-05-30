@@ -34,6 +34,9 @@ public struct ChatHistoryView: View {
     /// Filter pill state. `nil` = "All".
     @State private var filter: ChatMode? = nil
 
+    /// Free-text search over each conversation's title + preview snippet.
+    @State private var searchText: String = ""
+
     /// Pending-delete target shown in a destructive confirmation sheet.
     /// Optional so absence drives presentation via `.confirmationDialog`.
     @State private var pendingDelete: ConversationSummary? = nil
@@ -61,6 +64,7 @@ public struct ChatHistoryView: View {
 #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
 #endif
+        .searchable(text: $searchText, prompt: "Search chats")
         .toolbar {
             ToolbarItem(placement: .principal) {
                 filterMenu
@@ -117,9 +121,15 @@ public struct ChatHistoryView: View {
     }
 
     private var filteredConversations: [ConversationSummary] {
-        let all = load()
-        guard let filter else { return all }
-        return all.filter { $0.mode == filter.rawValue }
+        var result = load()
+        if let filter {
+            result = result.filter { $0.mode == filter.rawValue }
+        }
+        return result.filter { ChatHistorySearch.matches($0, query: searchText) }
+    }
+
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - List
@@ -151,14 +161,15 @@ public struct ChatHistoryView: View {
 
     private var emptyState: some View {
         VStack(spacing: BrandSpacing.md) {
-            Image(systemName: "tray")
+            Image(systemName: isSearching ? "magnifyingglass" : "tray")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(BrandColor.textSecondary)
                 .accessibilityHidden(true)
-            Text(filter == nil ? "No previous chats yet" : "No \(filter!.displayName) chats yet")
+            Text(emptyTitle)
                 .font(BrandFont.subheading)
                 .foregroundStyle(BrandColor.text)
-            Text("Start a conversation and it'll show up here.")
+                .multilineTextAlignment(.center)
+            Text(emptySubtitle)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .multilineTextAlignment(.center)
@@ -167,6 +178,32 @@ public struct ChatHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, BrandSpacing.xxl)
         .accessibilityElement(children: .combine)
+    }
+
+    private var emptyTitle: String {
+        if isSearching { return "No chats match your search" }
+        return filter == nil ? "No previous chats yet" : "No \(filter!.displayName) chats yet"
+    }
+
+    private var emptySubtitle: String {
+        if isSearching { return "Try a different word or clear the search." }
+        return "Start a conversation and it'll show up here."
+    }
+}
+
+// MARK: - Search
+
+/// Pure search predicate for chat history — matches a conversation's title or
+/// preview snippet, case- and diacritic-insensitive. An empty/whitespace query
+/// matches everything. Extracted from the view so it's unit-testable.
+enum ChatHistorySearch {
+    static func matches(_ conversation: ConversationSummary, query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return true }
+        // `localizedStandardContains` is the system's search comparison:
+        // case- and diacritic-insensitive, locale-aware.
+        return conversation.title.localizedStandardContains(q)
+            || conversation.preview.localizedStandardContains(q)
     }
 }
 

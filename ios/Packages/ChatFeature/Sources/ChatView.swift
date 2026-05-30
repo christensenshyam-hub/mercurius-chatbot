@@ -7,8 +7,12 @@ import PersistenceKit
 /// list, input bar, and empty state.
 public struct ChatView: View {
     @State private var model: ChatViewModel
-    @State private var showSettings = false
-    @State private var activeTool: ActiveTool?
+    /// A single presented sheet. Settings + the analytical tools all route
+    /// through ONE `.sheet(item:)` — stacking multiple `.sheet` modifiers on the
+    /// same view is a SwiftUI footgun where only one presents (the others
+    /// silently no-op), which is exactly why "Generate Quiz" / "Report Card"
+    /// did nothing while Settings worked.
+    @State private var activeSheet: ActiveSheet?
 
     /// First-launch hint above the input bar. Visible only when the
     /// chat is empty AND the user hasn't dismissed it once. The X
@@ -17,10 +21,11 @@ public struct ChatView: View {
     /// `model.messages.isEmpty` flips to false.
     @AppStorage(ChatInputHint.storageKey) private var hasSeenChatInputHint: Bool = false
 
-    private enum ActiveTool: Identifiable {
-        case quiz, reportCard
+    private enum ActiveSheet: Identifiable {
+        case settings, quiz, reportCard
         var id: String {
             switch self {
+            case .settings: return "settings"
             case .quiz: return "quiz"
             case .reportCard: return "reportCard"
             }
@@ -176,7 +181,7 @@ public struct ChatView: View {
             toolsMenuButton
             if settingsPresenter != nil {
                 Button {
-                    showSettings = true
+                    activeSheet = .settings
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 18, weight: .medium))
@@ -207,11 +212,12 @@ public struct ChatView: View {
         .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
-        .sheet(isPresented: $showSettings) {
-            settingsPresenter?()
-        }
-        .sheet(item: $activeTool) { tool in
-            switch tool {
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .settings:
+                if let settingsPresenter {
+                    settingsPresenter()
+                }
             case .quiz:
                 QuizView(
                     model: QuizViewModel(
@@ -220,7 +226,7 @@ public struct ChatView: View {
                             try sessionIdentity.current()
                         }
                     ),
-                    dismissAction: { activeTool = nil }
+                    dismissAction: { activeSheet = nil }
                 )
             case .reportCard:
                 ReportCardView(
@@ -230,7 +236,7 @@ public struct ChatView: View {
                             try sessionIdentity.current()
                         }
                     ),
-                    dismissAction: { activeTool = nil }
+                    dismissAction: { activeSheet = nil }
                 )
             }
         }
@@ -242,14 +248,14 @@ public struct ChatView: View {
     private var toolsMenuButton: some View {
         Menu {
             Button {
-                activeTool = .quiz
+                activeSheet = .quiz
             } label: {
                 Label("Generate Quiz", systemImage: "checkmark.rectangle.stack")
             }
             .disabled(!hasEnoughConversation)
 
             Button {
-                activeTool = .reportCard
+                activeSheet = .reportCard
             } label: {
                 Label("Report Card", systemImage: "chart.bar.doc.horizontal")
             }

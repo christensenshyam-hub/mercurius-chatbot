@@ -98,15 +98,22 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIStatusBarStyle: UIStatusBarStyleDefault
+        # iPhone stays portrait-only — designed for a single full-screen
+        # reading/typing context on phone.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # Opt out of iPad multitasking (split view / slide-over). Without
-        # this, the App Store validator rejects portrait-only iPad builds
-        # because multitasking requires all four orientations.
-        # Mercurius is designed for a single full-screen reading/typing
-        # context, so split view doesn't add value — locking full-screen
-        # keeps the layout predictable on iPad.
-        UIRequiresFullScreen: true
+        # iPad (and "iPad apps on Mac") support all four orientations. This is
+        # what lets the window RESIZE and fill a Mac screen, instead of being
+        # pinned to a fixed, phone-shaped portrait window. Declaring all four
+        # iPad orientations also satisfies the App Store validator's
+        # multitasking requirement, which is the only reason the build needed
+        # UIRequiresFullScreen before — so that key is now removed (its presence
+        # is what locked the Mac/iPad window to a fixed size).
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # Declare encryption compliance: we use only HTTPS/TLS over
         # URLSession, which is exempt from US export review. Setting
         # this to false skips the annual compliance questionnaire on

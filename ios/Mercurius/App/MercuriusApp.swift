@@ -9,7 +9,12 @@ struct MercuriusApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(environment)
-                .preferredColorScheme(nil)  // respect system setting
+            // NOTE: do NOT set `.preferredColorScheme` here. `RootView` applies
+            // the user's choice from `ThemePreferenceStore` (System/Light/Dark).
+            // A `.preferredColorScheme(nil)` at this level is nearer the window
+            // root and OVERRIDES RootView's value, pinning the app to the system
+            // appearance — which made the Settings theme toggle appear to do
+            // nothing.
         }
     }
 }
