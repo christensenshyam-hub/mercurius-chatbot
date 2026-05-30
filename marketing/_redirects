@@ -8,4 +8,9 @@
 # 302 (temporary) because the join code rotates if the external-testing
 # group is ever recreated; 301 would get aggressively cached and outlive
 # the actual link.
+# Netlify redirect matching is case-sensitive, so list the common-typed
+# capitalizations explicitly (phones autocapitalize the first letter).
+# /beta/ with a trailing slash is already handled by Netlify automatically.
 /beta   https://testflight.apple.com/join/3ujBtDsa   302
+/Beta   https://testflight.apple.com/join/3ujBtDsa   302
+/BETA   https://testflight.apple.com/join/3ujBtDsa   302
