@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
+        .library(name: "ImageUploadFeature", targets: ["ImageUploadFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
     ],
     dependencies: [
@@ -99,6 +100,22 @@ let package = Package(
             path: "SettingsFeature/Tests"
         ),
 
+        // MARK: ImageUploadFeature
+        //
+        // v3 image upload. UI (View + ViewModel) over NetworkingKit's image
+        // client. Pure infra deps (DesignSystem + NetworkingKit) — no
+        // cross-feature coupling, so it composes cleanly via AppFeature.
+        .target(
+            name: "ImageUploadFeature",
+            dependencies: ["DesignSystem", "NetworkingKit"],
+            path: "ImageUploadFeature/Sources"
+        ),
+        .testTarget(
+            name: "ImageUploadFeatureTests",
+            dependencies: ["ImageUploadFeature"],
+            path: "ImageUploadFeature/Tests"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
@@ -109,6 +126,7 @@ let package = Package(
                 "ChatFeature",
                 "CurriculumFeature",
                 "SettingsFeature",
+                "ImageUploadFeature",
             ],
             path: "AppFeature/Sources"
         ),

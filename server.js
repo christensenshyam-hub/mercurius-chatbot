@@ -24,7 +24,10 @@ const {
   ReportCardRequest,
   ConceptMapRequest,
   ResponseMode,
+  ImageUploadRequest,
 } = require('./lib/schemas');
+const imageStore = require('./lib/imageStore');
+const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
@@ -1138,6 +1141,11 @@ const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: 15 });
 // while accommodating the realistic operator flow: load the panel,
 // stage edits, save — easily 5–8 requests in a burst.
 const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
+// Image uploads are heavier than chat turns (multi-MB bodies, a DB write per
+// call), so they get a dedicated IP bucket rather than sharing the chat one.
+// 20/min/IP comfortably covers a user attaching several photos in a sitting
+// while capping bulk-abuse from a single source.
+const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: 20 });
 
 // ---------------------------------------------------------------------------
 // Admin auth — shared-password header with constant-time compare
@@ -1239,6 +1247,14 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+// The image-upload route carries base64 image payloads far larger than the
+// 32kb global JSON cap. Mount a dedicated, larger JSON parser scoped to that
+// path *before* the global parser: body-parser sets `req._body` once a body is
+// read, so the global 32kb parser below sees it already parsed and skips it.
+// The 12mb ceiling sits just above MAX_IMAGE_BYTES (8MB) after base64's ~4/3
+// inflation, so genuinely oversized images get our clean `image_too_large`
+// envelope from the handler, and only truly abusive bodies hit the raw 413.
+app.use('/api/images', express.json({ limit: '12mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // Request tracing — assign correlation ID to every request
@@ -1895,6 +1911,98 @@ app.post('/api/profile', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // Health check
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// POST /api/images — upload an image (v3)
+//
+// base64-JSON in (matches the repo's JSON API style; no multipart dependency),
+// stable JSON out. Zod validates the request shape; `decodeAndValidateImage`
+// checks the decoded bytes (real size + magic-byte sniff). Bytes are persisted
+// through the imageStore abstraction — DB-backed by default, swappable to
+// object storage (S3/R2) via IMAGE_STORAGE_DRIVER with no route changes.
+// ---------------------------------------------------------------------------
+app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: '/api/images' }), async (req, res) => {
+  const { sessionId, contentType, data, fileName } = req.validated;
+
+  const validated = decodeAndValidateImage({ data, contentType });
+  if (!validated.ok) {
+    logger.forRequest(req).warn({ endpoint: '/api/images', error: validated.error }, 'image validation failed');
+    return res.status(validated.status).json({ error: validated.error, message: validated.message });
+  }
+  const { buffer } = validated;
+
+  // Opaque, unguessable id (~192 bits). It doubles as the retrieval capability
+  // — consistent with the app's bearer-style session model — and is the stable
+  // handle future v3 features key off.
+  const id = crypto.randomBytes(24).toString('base64url');
+  const createdAt = Date.now();
+
+  try {
+    await db.getOrCreateSession(sessionId);
+    await imageStore.put({
+      id,
+      sessionId,
+      contentType,
+      fileName: fileName ?? null,
+      sizeBytes: buffer.length,
+      data: buffer,
+      createdAt,
+    });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
+    return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
+  }
+
+  // Log metadata only — never the image bytes or the (possibly personal) file name.
+  logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
+
+  // Stable response. `url` is relative; the iOS client resolves it against its
+  // configured API base URL. Future v3 features reuse `id`.
+  return res.status(201).json({
+    id,
+    url: `/api/images/${id}`,
+    contentType,
+    fileName: fileName ?? null,
+    size: buffer.length,
+    createdAt: new Date(createdAt).toISOString(),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/images/:id — retrieve a stored image (v3)
+//
+// The opaque id is the capability: anyone holding it can fetch the bytes (it's
+// unguessable and only ever returned to the uploader). Streams the raw image
+// with a hard, private cache.
+// ---------------------------------------------------------------------------
+app.get('/api/images/:id', async (req, res) => {
+  const { id } = req.params;
+  // Cheap shape gate before touching storage: ids are base64url tokens.
+  if (typeof id !== 'string' || id.length < 16 || id.length > 64 || !/^[A-Za-z0-9_-]+$/.test(id)) {
+    return res.status(404).json({ error: 'not_found', message: 'Image not found.' });
+  }
+
+  let image;
+  try {
+    image = await imageStore.get(id);
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'image fetch storage failure');
+    return res.status(500).json({ error: 'storage_error', message: 'Could not load the image.' });
+  }
+  if (!image) {
+    return res.status(404).json({ error: 'not_found', message: 'Image not found.' });
+  }
+
+  res.setHeader('Content-Type', image.contentType);
+  // Content is immutable (addressed by an opaque id). Cache hard, but keep it
+  // private so shared proxies don't retain user images. res.send sets
+  // Content-Length from the buffer.
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  return res.status(200).send(image.data);
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/health
 // ---------------------------------------------------------------------------
 app.get('/api/health', async (_req, res) => {
   const health = {

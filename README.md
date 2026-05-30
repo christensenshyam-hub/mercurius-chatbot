@@ -284,6 +284,44 @@ Returns server status.
 }
 ```
 
+### POST /api/images
+
+Uploads an image (v3). Base64-JSON body — no multipart. See
+[`docs/IMAGE_UPLOAD.md`](docs/IMAGE_UPLOAD.md) for the full contract.
+
+**Request body:**
+```json
+{
+  "sessionId": "merc_abc123_def456_1234567890abcd",
+  "contentType": "image/jpeg",
+  "data": "<base64-encoded image bytes; data-URI prefix allowed>",
+  "fileName": "photo.jpg"
+}
+```
+
+**Success response (201):**
+```json
+{
+  "id": "kQ7c…opaque",
+  "url": "/api/images/kQ7c…opaque",
+  "contentType": "image/jpeg",
+  "fileName": "photo.jpg",
+  "size": 84213,
+  "createdAt": "2026-05-30T12:00:00.000Z"
+}
+```
+
+Allowed types: JPEG, PNG, WebP, GIF. Max decoded size: 8 MB. Errors (all
+`{ error, message }`): `image_missing`, `image_invalid_type` (400),
+`image_too_large` (413), `invalid_session` (400, missing/invalid session),
+`storage_error` (500). Rate limit: 20/min/IP.
+
+### GET /api/images/:id
+
+Streams a stored image's bytes (`Content-Type` set from the stored type,
+`Cache-Control: private, immutable`). The opaque `id` is the access
+capability. 404 if unknown.
+
 ---
 
 ## Native iOS App

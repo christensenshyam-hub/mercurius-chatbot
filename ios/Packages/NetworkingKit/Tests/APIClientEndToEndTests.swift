@@ -21,6 +21,17 @@ import Foundation
 
 private let testSessionId = "sess_abcdef1234567890"
 
+private let uploadResponseJSON = #"""
+{
+  "id": "abc123_TOKEN-xyz",
+  "url": "/api/images/abc123_TOKEN-xyz",
+  "contentType": "image/jpeg",
+  "fileName": "photo.jpg",
+  "size": 12345,
+  "createdAt": "2026-05-30T12:00:00.000Z"
+}
+"""#
+
 /// Build an APIClient pointed at a fake base URL, with URLSession
 /// pinned to `StubURLProtocol`. Session identity is irrelevant to
 /// these tests — the server would normally read it, but our stub
@@ -221,6 +232,140 @@ struct APIClientEndToEndTests {
         } catch {
             Issue.record("Expected .offline, got \(error)")
         }
+    }
+
+    // MARK: - Image upload (APIClient+Images)
+    //
+    // Live in this suite (not a separate one) on purpose: they share the static
+    // `StubURLProtocol.handler`, and two `.serialized` suites would still run in
+    // parallel and stomp each other's handler — the trap documented above.
+
+    @Test("uploadImage: 201 decodes the full stored-image descriptor")
+    func uploadHappyPath() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/images")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            return .response(status: 201, headers: ["Content-Type": "application/json"], data: Data(uploadResponseJSON.utf8))
+        }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD", fileName: "photo.jpg")
+        let response = try await client.uploadImage(input, sessionId: testSessionId)
+
+        #expect(response.id == "abc123_TOKEN-xyz")
+        #expect(response.url == "/api/images/abc123_TOKEN-xyz")
+        #expect(response.contentType == "image/jpeg")
+        #expect(response.fileName == "photo.jpg")
+        #expect(response.size == 12345)
+        #expect(response.createdAt == "2026-05-30T12:00:00.000Z")
+    }
+
+    @Test("uploadImage: request body carries sessionId + contentType + data + fileName")
+    func uploadBodyShape() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 201, data: Data(uploadResponseJSON.utf8))
+        }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/png", base64Data: "QUJD", fileName: "p.png")
+        _ = try await client.uploadImage(input, sessionId: "sess-99")
+
+        struct Body: Decodable {
+            let sessionId: String
+            let contentType: String
+            let data: String
+            let fileName: String?
+        }
+        let decoded = try JSONDecoder().decode(Body.self, from: #require(capturedBody))
+        #expect(decoded.sessionId == "sess-99")
+        #expect(decoded.contentType == "image/png")
+        #expect(decoded.data == "QUJD")
+        #expect(decoded.fileName == "p.png")
+    }
+
+    @Test("uploadImage: nil fileName is omitted from the JSON body (not null)")
+    func uploadOmitsNilFileName() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 201, data: Data(uploadResponseJSON.utf8))
+        }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD", fileName: nil)
+        _ = try await client.uploadImage(input, sessionId: "sess-1")
+
+        // The backend's Zod `.optional()` accepts undefined but rejects null,
+        // so the key must be ABSENT.
+        let json = try JSONSerialization.jsonObject(with: #require(capturedBody)) as? [String: Any]
+        #expect(json?["fileName"] == nil)
+        #expect(json?.keys.contains("fileName") == false)
+    }
+
+    @Test("uploadImage: 400 surfaces as APIError.invalidRequest")
+    func uploadRejectedPayload() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 400, data: Data(#"{"error":"image_invalid_type","message":"Unsupported image type."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD")
+        do {
+            _ = try await client.uploadImage(input, sessionId: testSessionId)
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest {
+            // expected
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+    }
+
+    @Test("uploadImage: 500 storage failure surfaces as APIError.server")
+    func uploadStorageFailure() async {
+        StubURLProtocol.handler = { _ in .response(status: 500, data: Data(#"{"error":"storage_error"}"#.utf8)) }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD")
+        do {
+            _ = try await client.uploadImage(input, sessionId: testSessionId)
+            Issue.record("Expected APIError.server")
+        } catch APIError.server(let status) {
+            #expect(status == 500)
+        } catch {
+            Issue.record("Expected .server, got \(error)")
+        }
+    }
+
+    @Test("uploadImage: offline surfaces as APIError.offline")
+    func uploadOffline() async {
+        StubURLProtocol.handler = { _ in .urlError(.notConnectedToInternet) }
+        let client = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD")
+        do {
+            _ = try await client.uploadImage(input, sessionId: testSessionId)
+            Issue.record("Expected APIError.offline")
+        } catch APIError.offline {
+            // expected
+        } catch {
+            Issue.record("Expected .offline, got \(error)")
+        }
+    }
+
+    @Test("imageURL(for:) resolves the relative url against the base URL")
+    func resolvesImageURL() {
+        let client = makeTestAPIClient()
+        let response = APIClient.ImageUploadResponse(
+            id: "x", url: "/api/images/x", contentType: "image/jpeg",
+            fileName: nil, size: 1, createdAt: "2026-05-30T12:00:00.000Z"
+        )
+        #expect(client.imageURL(for: response)?.absoluteString == "https://stub.mercurius.test/api/images/x")
+    }
+
+    @Test("APIClient satisfies ImageUploading and uploads through the protocol")
+    func uploadsThroughProtocol() async throws {
+        StubURLProtocol.handler = { _ in .response(status: 201, data: Data(uploadResponseJSON.utf8)) }
+        let uploader: ImageUploading = makeTestAPIClient()
+        let input = APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD")
+        let response = try await uploader.uploadImage(input, sessionId: testSessionId)
+        #expect(response.id == "abc123_TOKEN-xyz")
     }
 
     // MARK: - Streaming helpers

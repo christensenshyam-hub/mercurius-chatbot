@@ -19,8 +19,16 @@ const {
   ChatRequest,
   ModeRequest,
   QuizRequest,
+  ImageUploadRequest,
+  ALLOWED_IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
   _legacyErrorCode,
 } = require('../lib/schemas');
+
+// A 1×1 transparent PNG, base64. Real bytes so magic-byte checks elsewhere
+// pass; here we only need a plausibly-sized data string.
+const TINY_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('SessionId', () => {
   test('accepts well-formed ids', () => {
@@ -188,6 +196,64 @@ describe('ChatRequest with responseMode', () => {
   });
 });
 
+describe('ImageUploadRequest', () => {
+  const sid = 'abc_DEF-123';
+
+  test('parses a minimal valid body (no fileName)', () => {
+    const out = ImageUploadRequest.parse({ sessionId: sid, contentType: 'image/png', data: TINY_PNG_B64 });
+    assert.equal(out.sessionId, sid);
+    assert.equal(out.contentType, 'image/png');
+    assert.equal(out.fileName, undefined);
+  });
+
+  test('accepts an optional fileName', () => {
+    const out = ImageUploadRequest.parse({ sessionId: sid, contentType: 'image/jpeg', data: TINY_PNG_B64, fileName: 'photo.jpg' });
+    assert.equal(out.fileName, 'photo.jpg');
+  });
+
+  test('accepts every allowed content type', () => {
+    for (const ct of ALLOWED_IMAGE_TYPES) {
+      assert.ok(ImageUploadRequest.safeParse({ sessionId: sid, contentType: ct, data: TINY_PNG_B64 }).success, `should accept ${ct}`);
+    }
+  });
+
+  test('rejects a content type off the allowlist → image_invalid_type', () => {
+    const bad = ImageUploadRequest.safeParse({ sessionId: sid, contentType: 'image/bmp', data: TINY_PNG_B64 });
+    assert.ok(!bad.success);
+    assert.equal(_legacyErrorCode(bad.error.issues), 'image_invalid_type');
+  });
+
+  test('rejects HEIC explicitly (client normalizes to JPEG first)', () => {
+    assert.ok(!ImageUploadRequest.safeParse({ sessionId: sid, contentType: 'image/heic', data: TINY_PNG_B64 }).success);
+  });
+
+  test('rejects missing data → image_missing', () => {
+    const bad = ImageUploadRequest.safeParse({ sessionId: sid, contentType: 'image/png' });
+    assert.ok(!bad.success);
+    assert.equal(_legacyErrorCode(bad.error.issues), 'image_missing');
+  });
+
+  test('rejects empty data string → image_missing', () => {
+    const bad = ImageUploadRequest.safeParse({ sessionId: sid, contentType: 'image/png', data: '' });
+    assert.ok(!bad.success);
+    assert.equal(_legacyErrorCode(bad.error.issues), 'image_missing');
+  });
+
+  test('rejects data beyond the base64 length cap → image_too_large', () => {
+    // One char past the cap; cheaper than building a real >8MB payload.
+    const huge = 'A'.repeat(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 2048);
+    const bad = ImageUploadRequest.safeParse({ sessionId: sid, contentType: 'image/png', data: huge });
+    assert.ok(!bad.success);
+    assert.equal(_legacyErrorCode(bad.error.issues), 'image_too_large');
+  });
+
+  test('rejects missing sessionId → invalid_session', () => {
+    const bad = ImageUploadRequest.safeParse({ contentType: 'image/png', data: TINY_PNG_B64 });
+    assert.ok(!bad.success);
+    assert.equal(_legacyErrorCode(bad.error.issues), 'invalid_session');
+  });
+});
+
 describe('legacyErrorCode mapping', () => {
   test('session path → invalid_session', () => {
     const bad = ChatRequest.safeParse({ sessionId: '', messages: [{ role: 'user', content: 'x' }] });
@@ -202,6 +268,11 @@ describe('legacyErrorCode mapping', () => {
   test('mode path → invalid_request', () => {
     const bad = ModeRequest.safeParse({ sessionId: 'abc', mode: 'nope' });
     assert.equal(_legacyErrorCode(bad.error.issues), 'invalid_request');
+  });
+
+  test('contentType path → image_invalid_type', () => {
+    const bad = ImageUploadRequest.safeParse({ sessionId: 'abc', contentType: 'image/bmp', data: TINY_PNG_B64 });
+    assert.equal(_legacyErrorCode(bad.error.issues), 'image_invalid_type');
   });
 
   test('unrecognized path falls back to invalid_request', () => {
