@@ -171,12 +171,24 @@ public struct ImageUploadView: View {
         guard let newItem else { return }
         isLoadingSelection = true
         Task {
-            let data = try? await newItem.loadTransferable(type: Data.self)
-            await MainActor.run {
-                isLoadingSelection = false
-                if let data {
-                    // PhotosPickerItem doesn't expose a file name; nil is fine.
-                    viewModel.select(data: data, fileName: nil)
+            // Don't swallow the load error: an iCloud asset that fails to
+            // download, or an item with no Data representation, would otherwise
+            // leave the screen blank with no feedback.
+            do {
+                let data = try await newItem.loadTransferable(type: Data.self)
+                await MainActor.run {
+                    isLoadingSelection = false
+                    if let data {
+                        // PhotosPickerItem doesn't expose a file name; nil is fine.
+                        viewModel.select(data: data, fileName: nil)
+                    } else {
+                        viewModel.handleSelectionFailure()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingSelection = false
+                    viewModel.handleSelectionFailure()
                 }
             }
         }

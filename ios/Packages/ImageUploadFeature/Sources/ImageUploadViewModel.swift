@@ -1,6 +1,11 @@
 import Foundation
 import Observation
+import OSLog
 import NetworkingKit
+
+/// Diagnostics logger. Logs upload lifecycle metadata only — never the image
+/// bytes and never the session id/token.
+private let uploadLog = Logger(subsystem: "com.mayoailiteracy.mercurius", category: "ImageUpload")
 
 /// View model for the image-upload screen.
 ///
@@ -134,6 +139,16 @@ public final class ImageUploadViewModel {
         phase = .idle
     }
 
+    /// The picker handed us an item but its data couldn't be loaded (e.g. an
+    /// iCloud asset that failed to download, or an unsupported item). Surface a
+    /// clear, non-retryable error instead of silently doing nothing.
+    public func handleSelectionFailure() {
+        uploadLog.error("photo selection failed to load")
+        selectedImageData = nil
+        selectedFileName = nil
+        phase = .failed(reason: "Couldn't load that photo. Pick a different one.", isRetryable: false)
+    }
+
     /// Prepare + upload the selected image. No-op without a selection or while
     /// an upload is already in flight (the duplicate-upload guard).
     public func upload() {
@@ -199,9 +214,14 @@ public final class ImageUploadViewModel {
 
         if Task.isCancelled { return }
 
+        // Metadata only — never the image bytes, never the session id/token.
+        let approxKB = (input.base64Data.count * 3 / 4) / 1024
+        uploadLog.info("uploading image: type=\(input.contentType, privacy: .public), ~\(approxKB)KB")
+
         do {
             let response = try await uploader.uploadImage(input, sessionId: sessionId)
             if Task.isCancelled { return }
+            uploadLog.info("image upload succeeded: id=\(response.id, privacy: .public), size=\(response.size)")
             phase = .uploaded(response)
         } catch let error as APIError {
             setFailed(reason: error.userFacingMessage, isRetryable: error.isRetryable)
@@ -213,6 +233,8 @@ public final class ImageUploadViewModel {
     }
 
     private func setFailed(reason: String, isRetryable: Bool) {
+        // `reason` is an app-generated user message (no bytes, no token).
+        uploadLog.error("image upload failed (retryable=\(isRetryable, privacy: .public)): \(reason, privacy: .public)")
         phase = .failed(reason: reason, isRetryable: isRetryable)
     }
 }

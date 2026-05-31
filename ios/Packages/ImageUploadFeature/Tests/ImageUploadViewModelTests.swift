@@ -221,4 +221,17 @@ struct ImageUploadViewModelTests {
         #expect(vm.phase == .idle)
         #expect(vm.canUpload == false)
     }
+
+    @Test("handleSelectionFailure surfaces a non-retryable error and clears selection")
+    func selectionFailure() {
+        let vm = makeViewModel(uploader: StubUploader(.success(sampleResponse)))
+        vm.select(data: sampleData, fileName: nil)
+        #expect(vm.canUpload == true)
+
+        vm.handleSelectionFailure()
+        #expect(vm.selectedImageData == nil)
+        #expect(vm.canUpload == false)
+        #expect(vm.canRetry == false)
+        #expect(vm.failureReason != nil)
+    }
 }
