@@ -1,41 +1,101 @@
 import SwiftUI
+import PhotosUI
 import DesignSystem
 
-/// Message composer. Grows with content up to 5 lines, then scrolls.
-/// Disables the send button while a request is in flight.
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+/// Message composer. Grows with content up to 5 lines, then scrolls. Supports
+/// attaching one photo (shown as a thumbnail above the field). Disables the
+/// send button while a request is in flight.
 struct ChatInputBar: View {
     @Binding var text: String
     let isSending: Bool
+    let attachedImageData: Data?
     let onSend: () -> Void
     let onCancel: () -> Void
+    let onAttachImage: (Data) -> Void
+    let onRemoveAttachment: () -> Void
 
     @FocusState private var focused: Bool
+    @State private var pickerItem: PhotosPickerItem?
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
-            TextField("Ask Mercurius…", text: $text, axis: .vertical)
-                .lineLimit(1...5)
-                .font(BrandFont.body)
-                .foregroundStyle(BrandColor.text)
-                .tint(BrandColor.accent)
-                .padding(.vertical, 10)
-                .padding(.horizontal, BrandSpacing.md)
-                .background(BrandColor.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: BrandRadius.xl))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BrandRadius.xl)
-                        .stroke(focused ? BrandColor.accent : BrandColor.border, lineWidth: 1)
-                )
-                .focused($focused)
-                .submitLabel(.send)
-                .onSubmit(triggerSend)
-                .accessibilityLabel("Message")
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            if let data = attachedImageData, let image = Self.thumbnail(from: data) {
+                attachmentPreview(image)
+            }
 
-            actionButton
+            HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
+                photoButton
+
+                TextField("Ask Mercurius…", text: $text, axis: .vertical)
+                    .lineLimit(1...5)
+                    .font(BrandFont.body)
+                    .foregroundStyle(BrandColor.text)
+                    .tint(BrandColor.accent)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, BrandSpacing.md)
+                    .background(BrandColor.surfaceElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: BrandRadius.xl))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: BrandRadius.xl)
+                            .stroke(focused ? BrandColor.accent : BrandColor.border, lineWidth: 1)
+                    )
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit(triggerSend)
+                    .accessibilityLabel("Message")
+
+                actionButton
+            }
         }
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
+        .onChange(of: pickerItem) { _, newItem in
+            loadPickedImage(newItem)
+        }
+    }
+
+    private var photoButton: some View {
+        PhotosPicker(selection: $pickerItem, matching: .images) {
+            Image(systemName: "photo")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(isSending ? BrandColor.textSecondary.opacity(0.5) : BrandColor.accent)
+                .frame(width: 36, height: 36)
+        }
+        .frame(minWidth: 44, minHeight: 44)
+        .disabled(isSending)
+        .accessibilityLabel("Attach photo")
+    }
+
+    private func attachmentPreview(_ image: Image) -> some View {
+        ZStack(alignment: .topTrailing) {
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BrandRadius.md)
+                        .stroke(BrandColor.border, lineWidth: 1)
+                )
+
+            Button(action: onRemoveAttachment) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.5))
+            }
+            .padding(4)
+            .accessibilityLabel("Remove photo")
+        }
+        .padding(.leading, 44)  // align past the photo button
+        .accessibilityElement(children: .contain)
     }
 
     private var actionButton: some View {
@@ -63,11 +123,37 @@ struct ChatInputBar: View {
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return (hasText || attachedImageData != nil) && !isSending
     }
 
     private func triggerSend() {
         guard canSend else { return }
         onSend()
+    }
+
+    private func loadPickedImage(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+        Task {
+            let data = try? await item.loadTransferable(type: Data.self)
+            await MainActor.run {
+                // Reset so the same photo can be picked again after removal.
+                pickerItem = nil
+                if let data {
+                    onAttachImage(data)
+                }
+            }
+        }
+    }
+
+    /// Decode raw image bytes into a SwiftUI `Image` for the thumbnail.
+    private static func thumbnail(from data: Data) -> Image? {
+        #if canImport(UIKit)
+        return UIImage(data: data).map { Image(uiImage: $0) }
+        #elseif canImport(AppKit)
+        return NSImage(data: data).map { Image(nsImage: $0) }
+        #else
+        return nil
+        #endif
     }
 }

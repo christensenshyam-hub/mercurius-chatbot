@@ -5,7 +5,6 @@ import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
-import ImageUploadFeature
 
 /// The TabView host. Owns the selected-tab binding and, crucially, a
 /// single shared `ChatViewModel` so switching tabs doesn't wipe the
@@ -42,7 +41,6 @@ struct AppShellView: View {
 
     @State private var selectedTab: Tab = .chat
     @State private var chatModel: ChatViewModel
-    @State private var uploadModel: ImageUploadViewModel
     @State private var progress = CurriculumProgressStore()
 
     /// Drives presentation of the Chat History sheet. Set to true by
@@ -60,7 +58,6 @@ struct AppShellView: View {
         case history       // action: present chat-history sheet
         case newChat       // action: startNewConversation()
         case curriculum
-        case upload        // v3: image upload
     }
 
     init(
@@ -80,12 +77,6 @@ struct AppShellView: View {
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity,
                 store: chatStore
-            )
-        )
-        _uploadModel = State(
-            initialValue: ImageUploadViewModel(
-                apiClient: apiClient,
-                sessionIdentity: sessionIdentity
             )
         )
     }
@@ -116,10 +107,6 @@ struct AppShellView: View {
             curriculumTab
                 .tabItem { Label("Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
-
-            uploadTab
-                .tabItem { Label("Upload", systemImage: "photo.badge.plus") }
-                .tag(Tab.upload)
         }
         .tint(BrandColor.accent)
         .onChange(of: selectedTab) { oldValue, newValue in
@@ -190,7 +177,7 @@ struct AppShellView: View {
         case .newChat:
             chatModel.startNewConversation()
             selectedTab = oldValue == .newChat ? .chat : oldValue
-        case .chat, .curriculum, .upload:
+        case .chat, .curriculum:
             break
         }
     }
@@ -221,15 +208,6 @@ struct AppShellView: View {
             progress: progress,
             onStartLesson: handleStartLesson
         )
-    }
-
-    /// v3 image upload. A real destination tab (unlike History / New Chat).
-    /// Wrapped in a NavigationStack for its title bar. Shares the app's
-    /// `APIClient` + `SessionIdentity` via a model built once in `init`.
-    private var uploadTab: some View {
-        NavigationStack {
-            ImageUploadView(model: uploadModel)
-        }
     }
 
     // MARK: - Lesson launch

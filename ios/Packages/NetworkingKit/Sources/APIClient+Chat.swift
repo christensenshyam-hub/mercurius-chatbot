@@ -22,7 +22,8 @@ extension APIClient {
     public func streamChat(
         messages: [ChatMessageDTO],
         sessionId: String,
-        responseMode: ResponseMode
+        responseMode: ResponseMode,
+        imageId: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let request: URLRequest
@@ -32,7 +33,8 @@ extension APIClient {
                     timeout: streamingTimeout,
                     messages: messages,
                     sessionId: sessionId,
-                    responseMode: responseMode
+                    responseMode: responseMode,
+                    imageId: imageId
                 )
             } catch {
                 continuation.finish(throwing: error)
@@ -81,7 +83,8 @@ extension APIClient {
         timeout: TimeInterval,
         messages: [ChatMessageDTO],
         sessionId: String,
-        responseMode: ResponseMode
+        responseMode: ResponseMode,
+        imageId: String?
     ) throws -> URLRequest {
         let url = baseURL.appendingPathComponent("api/chat")
         var request = URLRequest(url: url)
@@ -96,12 +99,16 @@ extension APIClient {
             let messages: [ChatMessageDTO]
             let sessionId: String
             let responseMode: String
+            // Optional: synthesized Encodable omits it when nil, so text-only
+            // turns send no `imageId` and the server treats them normally.
+            let imageId: String?
         }
         do {
             request.httpBody = try JSONEncoder().encode(Body(
                 messages: messages,
                 sessionId: sessionId,
-                responseMode: responseMode.rawValue
+                responseMode: responseMode.rawValue,
+                imageId: imageId
             ))
         } catch {
             throw APIError.invalidRequest(reason: "Failed to encode chat body")

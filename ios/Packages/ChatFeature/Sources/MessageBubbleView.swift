@@ -2,6 +2,12 @@ import SwiftUI
 import DesignSystem
 import MarkdownUI
 
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
 /// A single message bubble. User messages are plain text in a gold
 /// bubble; assistant messages render markdown.
 struct MessageBubbleView: View {
@@ -19,7 +25,22 @@ struct MessageBubbleView: View {
             if message.role == .user { Spacer(minLength: 48) }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: BrandSpacing.xs) {
-                bubble
+                if message.role == .user, let data = message.imageData, let image = Self.image(from: data) {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 220, maxHeight: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.lg))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: BrandRadius.lg)
+                                .stroke(BrandColor.border, lineWidth: 1)
+                        )
+                        .accessibilityLabel("Attached photo")
+                }
+                // Skip an empty text bubble for an image-only user message.
+                if message.role == .assistant || !message.content.isEmpty {
+                    bubble
+                }
                 if case .failed(let reason) = message.status, message.role == .assistant {
                     failureLabel(reason)
                 }
@@ -101,6 +122,17 @@ struct MessageBubbleView: View {
             .font(BrandFont.caption)
             .foregroundStyle(BrandColor.error)
             .padding(.horizontal, BrandSpacing.sm)
+    }
+
+    /// Decode raw image bytes into a SwiftUI `Image` for an attached photo.
+    private static func image(from data: Data) -> Image? {
+        #if canImport(UIKit)
+        return UIImage(data: data).map { Image(uiImage: $0) }
+        #elseif canImport(AppKit)
+        return NSImage(data: data).map { Image(nsImage: $0) }
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Shapes

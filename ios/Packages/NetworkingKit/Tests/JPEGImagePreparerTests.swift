@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import ImageUploadFeature
+@testable import NetworkingKit
 
 // Tests for the real ImageIO-backed preparer. Runs on the macOS test host
 // because it uses ImageIO/CoreGraphics (not UIKit).

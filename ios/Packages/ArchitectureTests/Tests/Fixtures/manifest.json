@@ -141,20 +141,6 @@
       }
     },
     {
-      "name" : "ImageUploadFeature",
-      "settings" : [
-
-      ],
-      "targets" : [
-        "ImageUploadFeature"
-      ],
-      "type" : {
-        "library" : [
-          "automatic"
-        ]
-      }
-    },
-    {
       "name" : "AppFeature",
       "settings" : [
 
@@ -489,58 +475,6 @@
             "NetworkingKit",
             null
           ]
-        }
-      ],
-      "exclude" : [
-
-      ],
-      "name" : "ImageUploadFeature",
-      "packageAccess" : true,
-      "path" : "ImageUploadFeature/Sources",
-      "resources" : [
-
-      ],
-      "settings" : [
-
-      ],
-      "type" : "regular"
-    },
-    {
-      "dependencies" : [
-        {
-          "byName" : [
-            "ImageUploadFeature",
-            null
-          ]
-        }
-      ],
-      "exclude" : [
-
-      ],
-      "name" : "ImageUploadFeatureTests",
-      "packageAccess" : true,
-      "path" : "ImageUploadFeature/Tests",
-      "resources" : [
-
-      ],
-      "settings" : [
-
-      ],
-      "type" : "test"
-    },
-    {
-      "dependencies" : [
-        {
-          "byName" : [
-            "DesignSystem",
-            null
-          ]
-        },
-        {
-          "byName" : [
-            "NetworkingKit",
-            null
-          ]
         },
         {
           "byName" : [
@@ -563,12 +497,6 @@
         {
           "byName" : [
             "SettingsFeature",
-            null
-          ]
-        },
-        {
-          "byName" : [
-            "ImageUploadFeature",
             null
           ]
         }

@@ -254,6 +254,25 @@ describe('ImageUploadRequest', () => {
   });
 });
 
+describe('ChatRequest imageId (v3 vision)', () => {
+  const base = { sessionId: 'abc', messages: [{ role: 'user', content: 'hi' }] };
+
+  test('accepts a valid base64url image id', () => {
+    const out = ChatRequest.safeParse({ ...base, imageId: 'kQ7c85zpfk_yUOZyCYff3ycVpyqQ6lsV' });
+    assert.ok(out.success);
+    assert.equal(out.data.imageId, 'kQ7c85zpfk_yUOZyCYff3ycVpyqQ6lsV');
+  });
+
+  test('omitting imageId is valid (text-only chat still works)', () => {
+    assert.ok(ChatRequest.safeParse(base).success);
+  });
+
+  test('rejects a malformed image id', () => {
+    assert.ok(!ChatRequest.safeParse({ ...base, imageId: 'has/slash and spaces' }).success);
+    assert.ok(!ChatRequest.safeParse({ ...base, imageId: 'short' }).success);
+  });
+});
+
 describe('legacyErrorCode mapping', () => {
   test('session path → invalid_session', () => {
     const bad = ChatRequest.safeParse({ sessionId: '', messages: [{ role: 'user', content: 'x' }] });

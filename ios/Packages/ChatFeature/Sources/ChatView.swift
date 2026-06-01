@@ -131,8 +131,11 @@ public struct ChatView: View {
                         set: { model.draft = $0 }
                     ),
                     isSending: isSending,
+                    attachedImageData: model.pendingImageData,
                     onSend: { model.send() },
-                    onCancel: { model.cancel() }
+                    onCancel: { model.cancel() },
+                    onAttachImage: { model.attachImage(data: $0) },
+                    onRemoveAttachment: { model.clearAttachment() }
                 )
             }
         }

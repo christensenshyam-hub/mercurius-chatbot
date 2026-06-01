@@ -28,6 +28,7 @@ const {
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
+const { buildUserContent } = require('./lib/visionContent');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
@@ -1283,7 +1284,7 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
-  const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode } = req.validated;
+  const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId } = req.validated;
 
   // Resolve the response-mode dial (concise / balanced / deep / one_line).
   // Missing → 'concise' (mobile default). Already-validated by Zod, but
@@ -1345,8 +1346,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     return res.status(400).json({ error: 'invalid_messages', reply: 'Last message must be from user.' });
   }
 
-  // Save the new user message to DB
-  await db.saveMessage(sessionId, 'user', latestUserMessage.content);
+  // Save the new user message to DB. If the student attached an image with no
+  // text (image-only turn), persist a marker instead of an empty string —
+  // history is replayed to Claude on later turns, and an empty content block
+  // would make that next request 400.
+  const userTextToSave =
+    (latestUserMessage.content || '').trim().length > 0
+      ? latestUserMessage.content
+      : (imageId ? '[Shared an image]' : latestUserMessage.content);
+  await db.saveMessage(sessionId, 'user', userTextToSave);
 
   // Build the memory profile from THIS student's own persistent memory.
   // Scoped to sessionId (getMemories → student_memory WHERE session_id = ?),
@@ -1491,10 +1499,30 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     ];
   }
 
+  // v3 vision: if the student attached an image (uploaded earlier via
+  // POST /api/images), fetch it and make THIS user turn multimodal so Claude
+  // can see it. Only the current turn carries the image — history stays text
+  // (Claude's own description of the image persists there), which keeps token
+  // cost bounded. A missing/unreadable image degrades to a normal text turn.
+  let attachedImage = null;
+  if (imageId) {
+    try {
+      const img = await imageStore.get(imageId);
+      if (img) {
+        attachedImage = { contentType: img.contentType, dataBase64: img.data.toString('base64') };
+      } else {
+        logger.forRequest(req).warn({ imageId }, 'chat: attached image not found — proceeding text-only');
+      }
+    } catch (err) {
+      logger.forRequest(req).warn({ err: err.message }, 'chat: attached image fetch failed — proceeding text-only');
+    }
+  }
+  const latestContent = buildUserContent(latestUserMessage.content, attachedImage);
+
   // Build messages array for API
   const apiMessages = dbHistory.length > 0
-    ? [...dbHistory, { role: 'user', content: latestUserMessage.content }]
-    : [{ role: 'user', content: latestUserMessage.content }];
+    ? [...dbHistory, { role: 'user', content: latestContent }]
+    : [{ role: 'user', content: latestContent }];
 
   const trimmed = apiMessages.slice(-40);
 

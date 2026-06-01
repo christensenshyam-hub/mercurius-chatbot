@@ -95,7 +95,6 @@ private let featureModules: Set<String> = [
     "ChatFeature",
     "CurriculumFeature",
     "SettingsFeature",
-    "ImageUploadFeature",
 ]
 
 /// Infra / core modules that features are allowed to depend on.

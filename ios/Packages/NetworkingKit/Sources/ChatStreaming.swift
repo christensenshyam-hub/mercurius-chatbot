@@ -11,19 +11,29 @@ public protocol ChatStreaming: Sendable {
     func streamChat(
         messages: [ChatMessageDTO],
         sessionId: String,
-        responseMode: ResponseMode
+        responseMode: ResponseMode,
+        imageId: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error>
 }
 
 public extension ChatStreaming {
-    /// Default-`responseMode` overload so existing tests / call sites
-    /// that don't yet pass it continue to compile. Routes to the
-    /// required method with `.concise`.
+    /// No-image overload — the common case. Routes to the required method
+    /// with `imageId: nil`.
+    func streamChat(
+        messages: [ChatMessageDTO],
+        sessionId: String,
+        responseMode: ResponseMode
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        streamChat(messages: messages, sessionId: sessionId, responseMode: responseMode, imageId: nil)
+    }
+
+    /// Default-`responseMode`, no-image overload so existing tests / call
+    /// sites that don't pass either continue to compile.
     func streamChat(
         messages: [ChatMessageDTO],
         sessionId: String
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        streamChat(messages: messages, sessionId: sessionId, responseMode: .concise)
+        streamChat(messages: messages, sessionId: sessionId, responseMode: .concise, imageId: nil)
     }
 }
 

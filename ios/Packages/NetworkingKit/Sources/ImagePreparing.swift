@@ -1,5 +1,4 @@
 import Foundation
-import NetworkingKit
 
 /// Turns raw picked image bytes into an upload-ready `ImageUploadInput`
 /// (compressed + normalized + base64). Abstracted behind a protocol so the

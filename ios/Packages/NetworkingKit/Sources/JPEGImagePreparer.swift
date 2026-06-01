@@ -2,7 +2,6 @@ import Foundation
 import ImageIO
 import CoreGraphics
 import UniformTypeIdentifiers
-import NetworkingKit
 
 /// Production `ImagePreparing`. Built on ImageIO/CoreGraphics (available on
 /// every Apple platform, no UIKit), so the package compiles for the macOS

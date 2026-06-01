@@ -17,15 +17,18 @@ final class FakeChatClient: ChatStreaming, @unchecked Sendable {
     var receivedMessages: [[ChatMessageDTO]] = []
     var receivedSessionIds: [String] = []
     var receivedResponseModes: [ResponseMode] = []
+    var receivedImageIds: [String?] = []
 
     func streamChat(
         messages: [ChatMessageDTO],
         sessionId: String,
-        responseMode: ResponseMode
+        responseMode: ResponseMode,
+        imageId: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         receivedMessages.append(messages)
         receivedSessionIds.append(sessionId)
         receivedResponseModes.append(responseMode)
+        receivedImageIds.append(imageId)
 
         let outcome = self.outcome
         return AsyncThrowingStream { continuation in
@@ -435,5 +438,109 @@ struct ChatViewModelResponseModeTests {
 
         #expect(client.receivedResponseModes.last == .balanced,
                 "Retry should reuse the original responseMode, not silently drop to .concise")
+    }
+}
+
+// MARK: - Image attach
+
+private final class StubImageUploader: ImageUploading, @unchecked Sendable {
+    let response: APIClient.ImageUploadResponse
+    private(set) var callCount = 0
+    init(response: APIClient.ImageUploadResponse) { self.response = response }
+    func uploadImage(_ input: APIClient.ImageUploadInput, sessionId: String) async throws -> APIClient.ImageUploadResponse {
+        callCount += 1
+        return response
+    }
+}
+
+private struct StubPreparer: ImagePreparing {
+    func prepare(imageData: Data, fileName: String?) throws -> APIClient.ImageUploadInput {
+        APIClient.ImageUploadInput(contentType: "image/jpeg", base64Data: "QUJD", fileName: nil)
+    }
+}
+
+private func imageTestReply() -> ChatResponse {
+    ChatResponse(
+        reply: "ok", sessionId: "sess", mode: "socratic", unlocked: false,
+        justUnlocked: nil, streak: nil, difficulty: nil, suggestSummary: nil
+    )
+}
+
+private func sampleUploadResponse() -> APIClient.ImageUploadResponse {
+    APIClient.ImageUploadResponse(
+        id: "img_abc", url: "/api/images/img_abc", contentType: "image/jpeg",
+        fileName: nil, size: 3, createdAt: "2026-05-31T00:00:00.000Z"
+    )
+}
+
+@Suite("ChatViewModel image attach")
+@MainActor
+struct ChatViewModelImageTests {
+
+    @Test("Attaching a photo uploads it and streams with the imageId")
+    func attachUploadsAndStreams() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(imageTestReply())])
+        let uploader = StubImageUploader(response: sampleUploadResponse())
+        let model = ChatViewModel(
+            chatClient: client,
+            modeClient: FakeModeClient(),
+            sessionIdProvider: { "sess" },
+            store: nil,
+            imageUploader: uploader,
+            preparer: StubPreparer()
+        )
+
+        model.attachImage(data: Data([0x01, 0x02, 0x03]))
+        #expect(model.pendingImageData != nil)
+        model.draft = "What is this?"
+        model.send()
+        // Cleared on send — the photo moves into the user bubble.
+        #expect(model.pendingImageData == nil)
+
+        try await waitUntilSettled(model)
+
+        #expect(uploader.callCount == 1)
+        #expect(client.receivedImageIds.last == "img_abc")
+        #expect(model.messages.first?.imageData != nil, "user bubble keeps the photo for display")
+    }
+
+    @Test("A photo-only message (no text) is allowed")
+    func photoOnlySends() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(imageTestReply())])
+        let uploader = StubImageUploader(response: sampleUploadResponse())
+        let model = ChatViewModel(
+            chatClient: client, modeClient: FakeModeClient(), sessionIdProvider: { "sess" },
+            store: nil, imageUploader: uploader, preparer: StubPreparer()
+        )
+
+        model.attachImage(data: Data([0x09]))
+        model.send()   // no draft text
+        try await waitUntilSettled(model)
+
+        #expect(uploader.callCount == 1)
+        #expect(client.receivedImageIds.last == "img_abc")
+    }
+
+    @Test("Text-only send attaches no image (imageId nil)")
+    func textOnlyNoImage() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(imageTestReply())])
+        let model = makeModel(client: client)
+        model.draft = "Just text"
+        model.send()
+        try await waitUntilSettled(model)
+        let lastImageId = client.receivedImageIds.last ?? nil
+        #expect(lastImageId == nil, "no imageId for a text-only turn")
+    }
+
+    @Test("clearAttachment removes the pending photo")
+    func clearAttachmentClears() {
+        let model = ChatViewModel(chatClient: FakeChatClient(), modeClient: FakeModeClient(), sessionIdProvider: { "s" })
+        model.attachImage(data: Data([0x01]))
+        #expect(model.pendingImageData != nil)
+        model.clearAttachment()
+        #expect(model.pendingImageData == nil)
     }
 }

@@ -28,6 +28,10 @@ public final class ChatViewModel {
     public var draft: String = ""
     public private(set) var phase: Phase = .idle
 
+    /// A photo the user attached to the next message. Drives the composer's
+    /// thumbnail; compressed + uploaded when the message is sent. Nil = none.
+    public private(set) var pendingImageData: Data?
+
     /// Active teaching mode. Defaults to Socratic on first launch;
     /// updated from the server on each `complete` event and on
     /// successful `switchMode(to:)` calls.
@@ -59,6 +63,11 @@ public final class ChatViewModel {
     private let modeClient: ModeChanging
     private let sessionIdProvider: @Sendable () throws -> String
     private let store: ChatStore?
+    /// Image upload client + preparer for attached photos. `imageUploader` is
+    /// nil in tests that don't exercise attachments; the production init wires
+    /// the real `APIClient`.
+    private let imageUploader: ImageUploading?
+    private let preparer: ImagePreparing
 
     // MARK: - Private
 
@@ -84,7 +93,8 @@ public final class ChatViewModel {
             chatClient: apiClient,
             modeClient: apiClient,
             sessionIdProvider: { try sessionIdentity.current() },
-            store: store
+            store: store,
+            imageUploader: apiClient
         )
     }
 
@@ -94,12 +104,16 @@ public final class ChatViewModel {
         chatClient: ChatStreaming,
         modeClient: ModeChanging,
         sessionIdProvider: @escaping @Sendable () throws -> String,
-        store: ChatStore? = nil
+        store: ChatStore? = nil,
+        imageUploader: ImageUploading? = nil,
+        preparer: ImagePreparing = JPEGImagePreparer()
     ) {
         self.chatClient = chatClient
         self.modeClient = modeClient
         self.sessionIdProvider = sessionIdProvider
         self.store = store
+        self.imageUploader = imageUploader
+        self.preparer = preparer
         hydrateFromStore()
     }
 
@@ -176,9 +190,22 @@ public final class ChatViewModel {
     /// is `.concise` — the mobile-native short answer. The "Explain
     /// more" affordance flips this to `.deep` for one round; see
     /// `explainMore()`.
+    /// Attach a photo to the next message. Shown as a thumbnail in the
+    /// composer; compressed + uploaded when the message is sent.
+    public func attachImage(data: Data) {
+        pendingImageData = data
+    }
+
+    /// Remove the pending photo attachment.
+    public func clearAttachment() {
+        pendingImageData = nil
+    }
+
     public func send(responseMode: ResponseMode = .concise) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let attachedImage = pendingImageData
+        // Allow sending text, a photo, or both — but not nothing.
+        guard !text.isEmpty || attachedImage != nil else { return }
 
         switch phase {
         case .sending, .streaming:
@@ -194,10 +221,11 @@ public final class ChatViewModel {
             }
         }
 
-        let userMessage = ChatMessage(role: .user, content: text)
+        let userMessage = ChatMessage(role: .user, content: text, imageData: attachedImage)
         messages.append(userMessage)
         persistMessage(userMessage)
         draft = ""
+        pendingImageData = nil
 
         let assistantPlaceholder = ChatMessage(
             role: .assistant,
@@ -211,8 +239,36 @@ public final class ChatViewModel {
         lastResponseMode = responseMode
 
         streamingTask = Task { [weak self] in
-            await self?.runStream(assistantId: assistantId, responseMode: responseMode)
+            await self?.runSend(assistantId: assistantId, responseMode: responseMode, imageData: attachedImage)
         }
+    }
+
+    /// Upload the attached photo (if any), then open the chat stream with its
+    /// id so the server can show it to Claude. Upload failures mark the turn
+    /// failed (retryable) without ever opening the stream.
+    private func runSend(assistantId: UUID, responseMode: ResponseMode, imageData: Data?) async {
+        var imageId: String?
+        if let imageData, let uploader = imageUploader {
+            do {
+                let sessionId = try sessionIdProvider()
+                let preparer = self.preparer
+                let input = try await Task.detached(priority: .userInitiated) {
+                    try preparer.prepare(imageData: imageData, fileName: nil)
+                }.value
+                if Task.isCancelled { return }
+                let response = try await uploader.uploadImage(input, sessionId: sessionId)
+                imageId = response.id
+            } catch is CancellationError {
+                return
+            } catch let error as APIError {
+                markCurrentFailed(reason: error.userFacingMessage, isRetryable: error.isRetryable, assistantId: assistantId)
+                return
+            } catch {
+                markCurrentFailed(reason: "Couldn't attach that photo. Try again.", isRetryable: true, assistantId: assistantId)
+                return
+            }
+        }
+        await runStream(assistantId: assistantId, responseMode: responseMode, imageId: imageId)
     }
 
     /// "Explain more" — asks the model to expand on the previous reply
@@ -274,7 +330,8 @@ public final class ChatViewModel {
             phase = .idle
             return
         }
-        _ = lastUser  // ensure we have one
+        // Re-send the last user turn, re-uploading its photo if it had one.
+        let imageData = lastUser.imageData
         let placeholder = ChatMessage(role: .assistant, content: "", status: .streaming)
         messages.append(placeholder)
         phase = .sending
@@ -282,7 +339,7 @@ public final class ChatViewModel {
         let assistantId = placeholder.id
         let responseMode = lastResponseMode
         streamingTask = Task { [weak self] in
-            await self?.runStream(assistantId: assistantId, responseMode: responseMode)
+            await self?.runSend(assistantId: assistantId, responseMode: responseMode, imageData: imageData)
         }
     }
 
@@ -513,7 +570,8 @@ public final class ChatViewModel {
     private func runStream(
         assistantId: UUID,
         responseMode: ResponseMode,
-        injectedUserTurn: String? = nil
+        injectedUserTurn: String? = nil,
+        imageId: String? = nil
     ) async {
         let sessionId: String
         do {
@@ -538,7 +596,8 @@ public final class ChatViewModel {
             let stream = chatClient.streamChat(
                 messages: history,
                 sessionId: sessionId,
-                responseMode: responseMode
+                responseMode: responseMode,
+                imageId: imageId
             )
             var sawAnyDelta = false
 
