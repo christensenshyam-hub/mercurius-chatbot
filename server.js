@@ -25,6 +25,7 @@ const {
   ConceptMapRequest,
   ResponseMode,
   ImageUploadRequest,
+  ReportRequest,
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
@@ -2027,6 +2028,28 @@ app.get('/api/images/:id', async (req, res) => {
   // Content-Length from the buffer.
   res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
   return res.status(200).send(image.data);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/report — a user flags an objectionable AI response.
+//
+// Required by App Store Review Guideline 1.2 (user-generated / AI content):
+// the app must let users report content and the developer must be able to act
+// on it. Reports land in the `reports` table for review. Covered by the
+// global rate limiter.
+// ---------------------------------------------------------------------------
+app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
+  const { sessionId, content, reason } = req.validated;
+  try {
+    await db.saveReport({ sessionId, content, reason: reason ?? null, createdAt: Date.now() });
+    // Log the signal (reason only) so reports surface in observability; the
+    // full reported text lives in the DB for review.
+    logger.forRequest(req).warn({ reason: reason || null }, 'content report received');
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'failed to save content report');
+    return res.status(500).json({ error: 'server_error', message: 'Could not submit the report.' });
+  }
 });
 
 // ---------------------------------------------------------------------------

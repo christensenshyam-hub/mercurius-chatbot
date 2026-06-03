@@ -112,6 +112,15 @@ async function initSchema() {
         created_at BIGINT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
+
+      -- User reports of objectionable AI responses (App Store Guideline 1.2).
+      CREATE TABLE IF NOT EXISTS reports (
+        id SERIAL PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        reason TEXT DEFAULT NULL,
+        created_at BIGINT NOT NULL
+      );
     `);
   } else {
     sqliteDb.exec(`
@@ -158,6 +167,13 @@ async function initSchema() {
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        reason TEXT DEFAULT NULL,
+        created_at INTEGER NOT NULL
+      );
     `);
     // Migrate existing SQLite DB: add new columns if missing
     const cols = sqliteDb.prepare('PRAGMA table_info(sessions)').all().map(c => c.name);
@@ -212,6 +228,14 @@ module.exports = {
     return await queryOne(
       'SELECT id, session_id, content_type, file_name, size_bytes, data, created_at FROM images WHERE id = ?',
       [id],
+    );
+  },
+
+  // ─── Content reports (App Store Guideline 1.2) ───
+  async saveReport({ sessionId, content, reason, createdAt }) {
+    await query(
+      'INSERT INTO reports (session_id, content, reason, created_at) VALUES (?, ?, ?, ?)',
+      [sessionId, content, reason ?? null, createdAt],
     );
   },
 

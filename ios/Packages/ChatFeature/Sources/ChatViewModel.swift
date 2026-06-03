@@ -68,6 +68,9 @@ public final class ChatViewModel {
     /// the real `APIClient`.
     private let imageUploader: ImageUploading?
     private let preparer: ImagePreparing
+    /// Reports objectionable AI responses (App Store Guideline 1.2). Nil in
+    /// tests that don't exercise it; the production init wires `APIClient`.
+    private let reporting: Reporting?
 
     // MARK: - Private
 
@@ -94,7 +97,8 @@ public final class ChatViewModel {
             modeClient: apiClient,
             sessionIdProvider: { try sessionIdentity.current() },
             store: store,
-            imageUploader: apiClient
+            imageUploader: apiClient,
+            reporting: apiClient
         )
     }
 
@@ -106,7 +110,8 @@ public final class ChatViewModel {
         sessionIdProvider: @escaping @Sendable () throws -> String,
         store: ChatStore? = nil,
         imageUploader: ImageUploading? = nil,
-        preparer: ImagePreparing = JPEGImagePreparer()
+        preparer: ImagePreparing = JPEGImagePreparer(),
+        reporting: Reporting? = nil
     ) {
         self.chatClient = chatClient
         self.modeClient = modeClient
@@ -114,6 +119,7 @@ public final class ChatViewModel {
         self.store = store
         self.imageUploader = imageUploader
         self.preparer = preparer
+        self.reporting = reporting
         hydrateFromStore()
     }
 
@@ -353,6 +359,20 @@ public final class ChatViewModel {
             isRetryable: true,
             assistantId: messages.last?.id
         )
+    }
+
+    /// Report an assistant message as objectionable (App Store Guideline 1.2).
+    /// Fire-and-forget — the UI confirms optimistically; a failed submission is
+    /// silently dropped rather than nagging the user.
+    public func reportMessage(_ message: ChatMessage) {
+        guard let reporting, message.role == .assistant else { return }
+        let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        let sessionIdProvider = self.sessionIdProvider
+        Task {
+            guard let sessionId = try? sessionIdProvider() else { return }
+            try? await reporting.reportResponse(content: content, reason: nil, sessionId: sessionId)
+        }
     }
 
     /// Start a fresh conversation.

@@ -22,6 +22,7 @@ const {
   ImageUploadRequest,
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
+  ReportRequest,
   _legacyErrorCode,
 } = require('../lib/schemas');
 
@@ -270,6 +271,20 @@ describe('ChatRequest imageId (v3 vision)', () => {
   test('rejects a malformed image id', () => {
     assert.ok(!ChatRequest.safeParse({ ...base, imageId: 'has/slash and spaces' }).success);
     assert.ok(!ChatRequest.safeParse({ ...base, imageId: 'short' }).success);
+  });
+});
+
+describe('ReportRequest (Guideline 1.2)', () => {
+  test('accepts a report with content (+ optional reason)', () => {
+    assert.ok(ReportRequest.safeParse({ sessionId: 'abc', content: 'a bad reply' }).success);
+    const out = ReportRequest.safeParse({ sessionId: 'abc', content: 'x', reason: 'offensive' });
+    assert.ok(out.success);
+    assert.equal(out.data.reason, 'offensive');
+  });
+
+  test('rejects empty content or missing session', () => {
+    assert.ok(!ReportRequest.safeParse({ sessionId: 'abc', content: '' }).success);
+    assert.ok(!ReportRequest.safeParse({ content: 'x' }).success);
   });
 });
 

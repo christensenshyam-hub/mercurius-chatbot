@@ -116,6 +116,15 @@ public struct SettingsView: View {
         Section("About") {
             LabeledRow(title: "Version", value: "\(model.appVersion) (\(model.buildNumber))")
 
+            if let terms = URL(string: "https://trymercurius.com/terms") {
+                Link("Terms of Use", destination: terms)
+                    .foregroundStyle(BrandColor.accent)
+            }
+            if let privacy = URL(string: "https://trymercurius.com/privacy") {
+                Link("Privacy Policy", destination: privacy)
+                    .foregroundStyle(BrandColor.accent)
+            }
+
             Text("Mercurius AI is an AI literacy tutor — built to help you think critically about AI, not think for you.")
                 .font(.footnote)
                 .foregroundStyle(BrandColor.textSecondary)

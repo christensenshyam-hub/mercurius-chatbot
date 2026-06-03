@@ -544,3 +544,52 @@ struct ChatViewModelImageTests {
         #expect(model.pendingImageData == nil)
     }
 }
+
+// MARK: - Report (Guideline 1.2)
+
+private final class StubReporter: Reporting, @unchecked Sendable {
+    private(set) var reports: [(content: String, sessionId: String)] = []
+    func reportResponse(content: String, reason: String?, sessionId: String) async throws {
+        reports.append((content, sessionId))
+    }
+}
+
+@MainActor
+private func waitForReport(_ reporter: StubReporter, timeout: Duration = .seconds(1)) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    while reporter.reports.isEmpty && ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}
+
+@Suite("ChatViewModel report")
+@MainActor
+struct ChatViewModelReportTests {
+
+    @Test("Reporting an assistant message sends its content + session to the reporter")
+    func reportsAssistantMessage() async throws {
+        let reporter = StubReporter()
+        let model = ChatViewModel(
+            chatClient: FakeChatClient(), modeClient: FakeModeClient(),
+            sessionIdProvider: { "sess" }, store: nil, reporting: reporter
+        )
+        model.reportMessage(ChatMessage(role: .assistant, content: "a questionable reply"))
+        try await waitForReport(reporter)
+
+        #expect(reporter.reports.count == 1)
+        #expect(reporter.reports.first?.content == "a questionable reply")
+        #expect(reporter.reports.first?.sessionId == "sess")
+    }
+
+    @Test("Reporting a user message is a no-op")
+    func ignoresUserMessage() async throws {
+        let reporter = StubReporter()
+        let model = ChatViewModel(
+            chatClient: FakeChatClient(), modeClient: FakeModeClient(),
+            sessionIdProvider: { "s" }, store: nil, reporting: reporter
+        )
+        model.reportMessage(ChatMessage(role: .user, content: "hi"))
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(reporter.reports.isEmpty)
+    }
+}

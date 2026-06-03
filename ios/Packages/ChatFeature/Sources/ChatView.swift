@@ -14,6 +14,9 @@ public struct ChatView: View {
     /// did nothing while Settings worked.
     @State private var activeSheet: ActiveSheet?
 
+    /// Confirmation shown after the user reports an AI response.
+    @State private var showReportConfirmation = false
+
     /// First-launch hint above the input bar. Visible only when the
     /// chat is empty AND the user hasn't dismissed it once. The X
     /// button on the hint is the only explicit dismissal path;
@@ -116,7 +119,11 @@ public struct ChatView: View {
                         messages: model.messages,
                         phase: model.phase,
                         onRetry: { model.retry() },
-                        onExplainMore: { model.explainMore() }
+                        onExplainMore: { model.explainMore() },
+                        onReport: { message in
+                            model.reportMessage(message)
+                            showReportConfirmation = true
+                        }
                     )
                 }
 
@@ -243,6 +250,11 @@ public struct ChatView: View {
                 )
             }
         }
+        .alert("Reported", isPresented: $showReportConfirmation) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Thanks — we'll review this response.")
+        }
         // Chat History presentation is owned by `AppShellView`
         // (the TabView host) so the History tab item there can
         // drive it without coupling ChatView to the action.
@@ -293,13 +305,14 @@ struct MessageListView: View {
     let phase: ChatViewModel.Phase
     let onRetry: () -> Void
     let onExplainMore: () -> Void
+    let onReport: (ChatMessage) -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) {
                     ForEach(messages) { message in
-                        MessageBubbleView(message: message)
+                        MessageBubbleView(message: message, onReport: { onReport(message) })
                             .id(message.id)
                     }
 

@@ -12,6 +12,9 @@ import AppKit
 /// bubble; assistant messages render markdown.
 struct MessageBubbleView: View {
     let message: ChatMessage
+    /// Invoked when the user long-presses an assistant message and taps
+    /// "Report response" (App Store Guideline 1.2).
+    var onReport: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -110,6 +113,13 @@ struct MessageBubbleView: View {
                 .frame(width: 2)
         }
         .clipShape(assistantShape)
+        .contextMenu {
+            if !message.content.isEmpty {
+                Button(role: .destructive, action: onReport) {
+                    Label("Report response", systemImage: "flag")
+                }
+            }
+        }
     }
 
     private var typingIndicator: some View {
