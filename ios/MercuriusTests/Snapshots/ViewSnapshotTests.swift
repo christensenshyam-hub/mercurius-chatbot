@@ -579,7 +579,8 @@ private func makeChatModel() -> ChatViewModel {
         func streamChat(
             messages: [ChatMessageDTO],
             sessionId: String,
-            responseMode: ResponseMode
+            responseMode: ResponseMode,
+            imageId: String?
         ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
             AsyncThrowingStream { continuation in continuation.finish() }
         }
