@@ -29,8 +29,10 @@ RUNTIME="$(xcrun simctl list runtimes 2>/dev/null | grep -i 'iOS' | tail -1 | gr
 echo "Runtime: $RUNTIME"
 
 # label | sim name | device-type id
+# iPhone 13 Pro Max → 1284×2778 (App Store "6.5-inch" slot).
+# iPad Pro 13" (M4)  → 2064×2752 (App Store "13-inch" slot).
 DEVICES=(
-  "iphone|Mercurius-Shots-iPhone|com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro-Max"
+  "iphone|Mercurius-Shots-iPhone-65|com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max"
   "ipad|Mercurius-Shots-iPad|com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M4-16GB"
 )
 
@@ -111,6 +113,10 @@ if os.path.exists(mf):
 print(f"  renamed {n} screenshot(s)")
 PY
 
+  # Drop the export manifest so only image files remain — App Store Connect
+  # rejects a stray .json as "wrong format" if it's dragged in with the PNGs.
+  rm -f "$destdir/manifest.json"
+
   echo "  → $destdir"
   for f in "$destdir"/*.png; do
     [ -e "$f" ] || { echo "    (no PNGs captured — check the log)"; break; }
@@ -122,5 +128,6 @@ done
 
 echo ""
 echo "✅  Done. Screenshots in: $OUT"
-echo "   iPhone slot wants 6.9\" (1320×2868); iPad wants 13\" (2064×2752)."
-echo "   Drag them into App Store Connect → iOS App 1.0 → Previews and Screenshots."
+echo "   iPhone: 1284×2778 (6.5\" slot)   iPad: 2064×2752 (13\" slot)."
+echo "   Drag the PNGs (not any .json) into App Store Connect → iOS App 1.0 →"
+echo "   Previews and Screenshots (iPhone tab, then iPad tab)."
