@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E2A18" />
+
+  <title>Events — Mayo AI Literacy Club</title>
+  <meta name="description" content="When the Mayo AI Literacy Club meets, what's coming up, and recaps of past meetings. Every Thursday at 8:20 AM in the MHS Library Classroom." />
+  <link rel="canonical" href="https://mayoailiteracy.com/events" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Events — Mayo AI Literacy Club" />
+  <meta property="og:description" content="When we meet, what's coming up, and past meeting recaps." />
+  <meta property="og:image" content="https://mayoailiteracy.com/logo.png" />
+  <meta property="og:url" content="https://mayoailiteracy.com/events" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Events — Mayo AI Literacy Club" />
+  <meta name="twitter:description" content="When we meet, what's coming up, and past meeting recaps." />
+  <meta name="twitter:image" content="https://mayoailiteracy.com/logo.png" />
+
+  <link rel="icon" href="/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+        <img class="brand-logo" src="/logo.png" alt="" width="34" height="34" />
+        <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a class="cta-pill" href="/join">Join Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="container">
+        <p class="eyebrow">Schedule</p>
+        <h1 id="page-heading" class="display">
+          When we <span class="text-gradient">meet.</span>
+        </h1>
+        <p class="lede">
+          One morning a week. One topic. Real discussion, no lectures.
+        </p>
+      </div>
+    </section>
+
+    <!-- MEETING SCHEDULE — values are baked in as a fallback, then kept
+         in sync with events-data.json (the same file the Mercurius app
+         reads). Edit events-data.json, and this page + the app update. -->
+    <section class="section" aria-label="Meeting schedule" style="padding-top: var(--space-5);">
+      <div class="container" style="max-width: 880px;">
+        <div class="meeting-card fade-in">
+          <div class="meeting-info" id="meeting-info">
+            <div class="meeting-detail">
+              <span class="meeting-label">Day</span>
+              <span class="meeting-value" data-k="day">Every Thursday</span>
+            </div>
+            <div class="meeting-detail">
+              <span class="meeting-label">Time</span>
+              <span class="meeting-value" data-k="time">8:20 AM</span>
+            </div>
+            <div class="meeting-detail">
+              <span class="meeting-label">Location</span>
+              <span class="meeting-value" data-k="location">MHS Library Classroom</span>
+            </div>
+            <div class="meeting-detail">
+              <span class="meeting-label">Open To</span>
+              <span class="meeting-value" data-k="openTo">All MHS Students</span>
+            </div>
+          </div>
+          <p class="meeting-note">No sign-up required for your first visit. Just show up and bring your curiosity.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- UPCOMING -->
+    <section class="section section-soft" aria-labelledby="upcoming-heading" style="padding-top: var(--space-6);">
+      <div class="container" style="max-width: 880px;">
+        <div class="section-head">
+          <p class="eyebrow">What's Coming Up</p>
+          <h2 id="upcoming-heading">Upcoming meetings</h2>
+        </div>
+        <div class="events-list" id="upcoming-list">
+          <p class="events-note" id="upcoming-empty" hidden>Nothing on the calendar right now — follow
+            <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">@mayoailiteracy</a> for updates.</p>
+        </div>
+        <p class="events-note">More events added as they're scheduled — follow
+          <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">@mayoailiteracy</a> for updates.</p>
+      </div>
+    </section>
+
+    <!-- PAST -->
+    <section class="section" aria-labelledby="past-heading" style="padding-top: var(--space-6);">
+      <div class="container" style="max-width: 880px;">
+        <div class="section-head">
+          <p class="eyebrow">Archive</p>
+          <h2 id="past-heading">Past meetings</h2>
+        </div>
+        <div class="events-list" id="past-list"></div>
+      </div>
+    </section>
+
+    <section class="next-strip" aria-label="Next page">
+      <div class="container">
+        <div>
+          <p class="eyebrow">Next</p>
+          <h3>Read what came out of those meetings.</h3>
+        </div>
+        <a class="next-strip-link" href="/blog">Blog →</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+          <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+        </a>
+        <p class="footer-tagline">Understanding AI, together.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mayo AI Literacy Club</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=1" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+      // "2026-03-26" → { month: "MAR", day: "26" } without timezone drift.
+      function dateParts(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+        if (!m) return { month: '', day: '' };
+        return { month: MONTHS[Number(m[2]) - 1] || '', day: String(Number(m[3])) };
+      }
+
+      // Old-site recap links are absolute (https://mayoailiteracy.com/...).
+      // Serve them as local paths so they work on previews + cutover.
+      function localUrl(u) {
+        if (!u) return '';
+        try {
+          const url = new URL(u, window.location.origin);
+          return url.origin === window.location.origin || url.hostname === 'mayoailiteracy.com'
+            ? url.pathname + url.search
+            : u;
+        } catch { return u; }
+      }
+
+      function eventCard(ev, { past } = {}) {
+        const d = dateParts(ev.date);
+        const card = document.createElement('div');
+        card.className = `event-card fade-in${past ? '' : ' is-next'}`;
+        card.innerHTML = `
+          <div class="event-date" aria-hidden="true">
+            <span class="event-month"></span>
+            <span class="event-day"></span>
+          </div>
+          <div class="event-details">
+            <span class="event-tag${past ? ' is-past' : ''}"></span>
+            <h3></h3>
+            <p></p>
+            <div class="event-meta"></div>
+          </div>`;
+        card.querySelector('.event-month').textContent = d.month;
+        card.querySelector('.event-day').textContent = d.day;
+        card.querySelector('.event-tag').textContent = past ? 'Recap' : (ev.label || 'Upcoming');
+        card.querySelector('h3').textContent = ev.title;
+        card.querySelector('.event-details p').textContent = ev.description || '';
+        const meta = card.querySelector('.event-meta');
+        const bits = [];
+        if (ev.location) bits.push(ev.location);
+        if (ev.time) bits.push(ev.time);
+        meta.textContent = bits.join(' · ');
+        if (past && ev.recapUrl) {
+          const a = document.createElement('a');
+          a.href = localUrl(ev.recapUrl);
+          a.textContent = 'Read recap →';
+          meta.appendChild(a);
+        }
+        return card;
+      }
+
+      window.mayoFetch('/events-data.json').then((data) => {
+        // Schedule card
+        const s = data.schedule || {};
+        document.querySelectorAll('#meeting-info [data-k]').forEach((el) => {
+          if (s[el.dataset.k]) el.textContent = s[el.dataset.k];
+        });
+
+        // Upcoming
+        const up = document.getElementById('upcoming-list');
+        (data.upcoming || []).forEach((ev) => up.appendChild(eventCard(ev)));
+        if (!(data.upcoming || []).length) document.getElementById('upcoming-empty').hidden = false;
+
+        // Past
+        const past = document.getElementById('past-list');
+        (data.past || []).forEach((ev) => past.appendChild(eventCard(ev, { past: true })));
+
+        window.observeFadeIns();
+      }).catch(() => {
+        document.getElementById('upcoming-empty').hidden = false;
+      });
+    });
+  </script>
+</body>
+</html>

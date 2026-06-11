@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E2A18" />
+
+  <title>Blog — Mayo AI Literacy Club</title>
+  <meta name="description" content="Writing from Mayo AI Literacy Club members — AI policy, opinion, meeting recaps, and student perspectives on the AI era." />
+  <link rel="canonical" href="https://mayoailiteracy.com/blog" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Blog — Mayo AI Literacy Club" />
+  <meta property="og:description" content="What we're thinking about — writing from club members." />
+  <meta property="og:image" content="https://mayoailiteracy.com/logo.png" />
+  <meta property="og:url" content="https://mayoailiteracy.com/blog" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Blog — Mayo AI Literacy Club" />
+  <meta name="twitter:description" content="What we're thinking about — writing from club members." />
+  <meta name="twitter:image" content="https://mayoailiteracy.com/logo.png" />
+
+  <link rel="icon" href="/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+        <img class="brand-logo" src="/logo.png" alt="" width="34" height="34" />
+        <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a class="cta-pill" href="/join">Join Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="container">
+        <p class="eyebrow">From the Club</p>
+        <h1 id="page-heading" class="display">
+          What we're <span class="text-gradient">thinking about.</span>
+        </h1>
+        <p class="lede">
+          Student writing on AI policy, ethics, and the technology reshaping
+          our generation — plus recaps of what happens on Thursdays.
+        </p>
+      </div>
+    </section>
+
+    <!-- Posts are rendered from blog-content.json — the same file the
+         Mercurius tutor reads, so the app can quote these posts. To
+         publish: add an entry to the top of blog-content.json and push. -->
+    <section class="section" aria-label="Blog posts" style="padding-top: var(--space-5);">
+      <div class="container">
+        <div class="blog-list" id="blog-list">
+          <noscript><p class="blog-empty">The blog needs JavaScript to load. Posts also live at mayoailiteracy.com/blog-content.json.</p></noscript>
+        </div>
+      </div>
+    </section>
+
+    <section class="next-strip" aria-label="Next page">
+      <div class="container">
+        <div>
+          <p class="eyebrow">Next</p>
+          <h3>Meet the AI tutor our club built.</h3>
+        </div>
+        <a class="next-strip-link" href="/mercurius">Mercurius Ⅰ →</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+          <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+        </a>
+        <p class="footer-tagline">Understanding AI, together.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mayo AI Literacy Club</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=1" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Posts with a bespoke standalone page are mapped here.
+      const CUSTOM_URLS = { 'anthropic-pentagon-fallout': '/blog-anthropic-pentagon.html' };
+
+      const list = document.getElementById('blog-list');
+      window.mayoFetch('/blog-content.json').then((posts) => {
+        if (!posts || !posts.length) {
+          list.insertAdjacentHTML('beforeend', '<p class="blog-empty">No posts yet — check back soon.</p>');
+          return;
+        }
+        posts.forEach((p) => {
+          const card = document.createElement('a');
+          card.className = 'blog-card fade-in';
+          card.href = CUSTOM_URLS[p.id] || `/blog-post.html?id=${encodeURIComponent(p.id)}`;
+          card.innerHTML = `
+            <div class="blog-meta">
+              <span class="blog-category"></span>
+              <span class="blog-date"></span>
+              <span class="blog-author"></span>
+            </div>
+            <h3></h3>
+            <p></p>
+            <span class="blog-read-more">Read post →</span>`;
+          card.querySelector('.blog-category').textContent = p.category;
+          card.querySelector('.blog-date').textContent = p.date;
+          card.querySelector('.blog-author').textContent = p.author ? `by ${p.author}` : '';
+          card.querySelector('h3').textContent = p.title;
+          card.querySelector('p').textContent = p.summary;
+          list.appendChild(card);
+        });
+        window.observeFadeIns(list);
+      }).catch(() => {
+        list.insertAdjacentHTML('beforeend', '<p class="blog-empty">Couldn’t load posts — please try again shortly.</p>');
+      });
+    });
+  </script>
+</body>
+</html>

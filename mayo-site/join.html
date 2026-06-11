@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E2A18" />
+
+  <title>Join Us — Mayo AI Literacy Club</title>
+  <meta name="description" content="Join the Mayo AI Literacy Club — show up Thursday morning, follow @mayoailiteracy, or send us a note and we'll reach out." />
+  <link rel="canonical" href="https://mayoailiteracy.com/join" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Join Us — Mayo AI Literacy Club" />
+  <meta property="og:description" content="Show up Thursday morning, or send us a note — we'd love to have you." />
+  <meta property="og:image" content="https://mayoailiteracy.com/logo.png" />
+  <meta property="og:url" content="https://mayoailiteracy.com/join" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Join Us — Mayo AI Literacy Club" />
+  <meta name="twitter:description" content="Show up Thursday morning, or send us a note." />
+  <meta name="twitter:image" content="https://mayoailiteracy.com/logo.png" />
+
+  <link rel="icon" href="/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+        <img class="brand-logo" src="/logo.png" alt="" width="34" height="34" />
+        <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a class="cta-pill" href="/join">Join Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="container">
+        <p class="eyebrow">Join Us</p>
+        <h1 id="page-heading" class="display">
+          Ready to <span class="text-gradient">join?</span>
+        </h1>
+        <p class="lede">
+          Whether you want to understand AI headlines, run thought experiments,
+          or just hang out with curious people — we'd love to have you.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" aria-label="How to join" style="padding-top: var(--space-5);">
+      <div class="container">
+        <div class="join-box fade-in">
+          <h2>The easiest way in: just show up.</h2>
+          <!-- Kept in sync with events-data.json -->
+          <span class="meeting-chip" id="meeting-chip" style="margin: var(--space-4) 0 var(--space-5);">
+            <span class="dot" aria-hidden="true"></span>
+            Every Thursday · 8:20 AM · MHS Library Classroom
+          </span>
+          <div class="cta-row" style="justify-content: center; margin-bottom: 0;">
+            <a class="btn btn-primary btn-large" href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Follow on Instagram</a>
+          </div>
+          <p class="join-note">No sign-up needed for your first visit. Open to all MHS students.</p>
+        </div>
+
+        <!-- CONTACT FORM — Netlify Forms. After the new site's first deploy,
+             enable form detection + the notification email in the Netlify
+             dashboard (Site → Forms) or submissions go nowhere visible. -->
+        <div class="contact-box">
+          <div class="section-head" style="margin-bottom: var(--space-6);">
+            <p class="eyebrow">Contact Us</p>
+            <h2>Show your interest</h2>
+            <p class="section-sub">Fill this out and we'll reach out with more info about joining.</p>
+          </div>
+
+          <form class="contact-form" id="contact-form" name="contact" method="POST" action="/join" data-netlify="true" netlify-honeypot="bot-field">
+            <input type="hidden" name="form-name" value="contact" />
+            <p class="hidden-field" aria-hidden="true">
+              <label>Don't fill this out: <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
+            </p>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" placeholder="Your name" autocomplete="name" required />
+              </div>
+              <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="your@email.com" autocomplete="email" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="grade">Grade</label>
+                <select id="grade" name="grade" required>
+                  <option value="" disabled selected>Select your grade</option>
+                  <option value="9">9th Grade</option>
+                  <option value="10">10th Grade</option>
+                  <option value="11">11th Grade</option>
+                  <option value="12">12th Grade</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="experience">AI Experience</label>
+                <select id="experience" name="experience">
+                  <option value="" disabled selected>Your level</option>
+                  <option value="none">No experience</option>
+                  <option value="some">Some — used ChatGPT etc.</option>
+                  <option value="intermediate">Intermediate — know the basics</option>
+                  <option value="advanced">Advanced — building with AI</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="message">Why do you want to join? <span class="form-optional">(optional)</span></label>
+              <textarea id="message" name="message" rows="4" placeholder="Tell us what interests you about AI literacy..."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submit-btn">Send Message</button>
+            <p class="fineprint" id="form-error" hidden>Something went wrong sending that — please try again, or just come by on Thursday.</p>
+          </form>
+
+          <div class="form-success" id="form-success" hidden>
+            <div class="success-icon" aria-hidden="true">✓</div>
+            <h3>Message sent!</h3>
+            <p>Thanks for reaching out — we'll be in touch soon.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+          <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+        </a>
+        <p class="footer-tagline">Understanding AI, together.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mayo AI Literacy Club</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=1" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Meeting chip — live from the same JSON the app uses.
+      window.mayoFetch('/events-data.json').then((data) => {
+        const s = data.schedule;
+        if (!s) return;
+        const chip = document.getElementById('meeting-chip');
+        if (chip) chip.innerHTML = `<span class="dot" aria-hidden="true"></span>${s.day} · ${s.time} · ${s.location}`;
+      }).catch(() => {});
+
+      // AJAX submit so the success state shows in-page. Without JS the
+      // form still POSTs natively and Netlify shows its own success page.
+      const form = document.getElementById('contact-form');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submit-btn');
+        const err = document.getElementById('form-error');
+        btn.disabled = true;
+        err.hidden = true;
+        fetch('/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(new FormData(form)).toString(),
+        }).then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          form.hidden = true;
+          document.getElementById('form-success').hidden = false;
+        }).catch(() => {
+          btn.disabled = false;
+          err.hidden = false;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

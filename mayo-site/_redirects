@@ -1,0 +1,19 @@
+# Netlify redirect rules. One per line: <source> <target> <status>
+# https://docs.netlify.com/routing/redirects
+
+# Instagram shortcut (was a standalone page on the old site)
+/instagram        https://www.instagram.com/mayoailiteracy   302
+/instagram.html   https://www.instagram.com/mayoailiteracy   302
+/Instagram        https://www.instagram.com/mayoailiteracy   302
+
+# Pages consolidated in the 2026 rewrite (old URL → new home).
+# 301s so search engines + old links carry over.
+/board            /about#board        301
+/board.html       /about#board        301
+/groups           /about#groups       301
+/groups.html      /about#groups       301
+/resources        /topics#resources   301
+/resources.html   /topics#resources   301
+
+# NOTE: do NOT redirect /blog-content.json or /events-data.json — the
+# Mercurius backend (Railway) fetches both hourly at exactly these paths.

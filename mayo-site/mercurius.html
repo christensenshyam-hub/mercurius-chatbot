@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E2A18" />
+
+  <title>Mercurius Ⅰ — Mayo AI Literacy Club</title>
+  <meta name="description" content="Mercurius Ⅰ — the AI literacy tutor built by Mayo AI Literacy Club. Guides your thinking with questions instead of handing you answers. Coming to the App Store, and usable in your browser today." />
+  <link rel="canonical" href="https://mayoailiteracy.com/mercurius" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Mercurius Ⅰ — Mayo AI Literacy Club" />
+  <meta property="og:description" content="An AI tutor that teaches you to think critically about AI — not think for you. Built by students." />
+  <meta property="og:image" content="https://mayoailiteracy.com/assets/mercurius-logo-dark.png" />
+  <meta property="og:url" content="https://mayoailiteracy.com/mercurius" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Mercurius Ⅰ — Mayo AI Literacy Club" />
+  <meta name="twitter:description" content="An AI tutor that teaches you to think critically about AI — not think for you." />
+  <meta name="twitter:image" content="https://mayoailiteracy.com/assets/mercurius-logo-dark.png" />
+
+  <!-- PWA — the browser version installs as an app (manifest + service
+       worker are carried over from the original site; same paths). -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-512.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mercurius Ⅰ" />
+
+  <link rel="icon" href="/logo.png" type="image/png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+        <img class="brand-logo" src="/logo.png" alt="" width="34" height="34" />
+        <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a class="cta-pill" href="/join">Join Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="page-hero" aria-labelledby="page-heading">
+      <div class="container">
+        <img class="merc-page-logo" src="/assets/mercurius-logo-dark.png" alt="Mercurius AI logo" width="128" height="128" />
+        <p class="eyebrow">Built by this club</p>
+        <h1 id="page-heading" class="display">
+          Mercurius <span class="text-gradient">Ⅰ</span>
+        </h1>
+        <p class="lede">
+          An AI literacy tutor that guides your thinking with questions instead
+          of handing you answers. Made by students, for students.
+        </p>
+      </div>
+    </section>
+
+    <!-- iOS APP -->
+    <section class="section" aria-labelledby="app-heading" style="padding-top: var(--space-5);">
+      <div class="container">
+        <div class="app-card" style="text-align: center;">
+          <p class="eyebrow">The next chapter</p>
+          <h2 id="app-heading">Mercurius is becoming an iPhone&nbsp;app.</h2>
+          <p class="lede" style="margin-left: auto; margin-right: auto;">
+            Native iOS, photo understanding, quizzes, a report card, and a full
+            AI literacy curriculum — submitted to the App Store and on its way.
+          </p>
+          <span class="app-chip" id="appstore-chip">Coming soon to the App Store</span>
+          <!-- LAUNCH DAY: when the app is live, replace the chip above with
+               the official badge — uncomment and fill in the App Store URL:
+          <a href="APP_STORE_URL_HERE" target="_blank" rel="noopener noreferrer">
+            <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us"
+                 alt="Download on the App Store" style="height: 54px; margin: 0 auto var(--space-5);" />
+          </a>
+          -->
+          <div class="cta-row" style="justify-content: center; margin-bottom: 0;">
+            <a class="btn btn-primary" href="https://trymercurius.com" target="_blank" rel="noopener noreferrer">Visit trymercurius.com ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="section section-soft" aria-labelledby="features-heading">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">What Makes It Different</p>
+          <h2 id="features-heading">Built for critical thinking</h2>
+        </div>
+        <div class="topics-grid">
+          <div class="topic-card fade-in">
+            <span class="topic-num">01</span>
+            <h3>Four ways to think</h3>
+            <p>Socratic, Discussion, Debate, and Direct modes — it asks before it answers, and you earn your way to direct explanations.</p>
+          </div>
+          <div class="topic-card fade-in">
+            <span class="topic-num">02</span>
+            <h3>It can see your photos</h3>
+            <p>Share an image — a diagram, a headline, your homework — and Mercurius discusses what it's actually looking at.</p>
+          </div>
+          <div class="topic-card fade-in">
+            <span class="topic-num">03</span>
+            <h3>Quizzes &amp; report card</h3>
+            <p>Auto-generated checks on what you've covered, plus a session report card that shows what you actually learned.</p>
+          </div>
+          <div class="topic-card fade-in">
+            <span class="topic-num">04</span>
+            <h3>AI literacy curriculum</h3>
+            <p>Bite-sized lessons — how models work, bias, hallucinations, prompting — built into the app alongside the chat.</p>
+          </div>
+          <div class="topic-card fade-in">
+            <span class="topic-num">05</span>
+            <h3>Guided, not given</h3>
+            <p>The comprehension gate unlocks direct answers only after you've genuinely engaged with an idea. No outsourcing your thinking.</p>
+          </div>
+          <div class="topic-card fade-in">
+            <span class="topic-num">06</span>
+            <h3>Private by design</h3>
+            <p>No account, no sign-up — an anonymous session, no ads, no tracking. Start over any time with one tap.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRANSPARENCY -->
+    <section class="section" aria-labelledby="transparency-heading">
+      <div class="container" style="max-width: 760px;">
+        <p class="eyebrow">Transparency</p>
+        <h2 id="transparency-heading">An AI teaching AI skepticism</h2>
+        <p class="lede">
+          Mercurius Ⅰ is powered by Claude, a large language model made by
+          Anthropic. The irony of using an AI to teach AI skepticism is
+          intentional — it's a design feature, not a bug.
+        </p>
+        <p class="lede">
+          Every interaction is an opportunity to observe how AI actually
+          behaves: how it hedges, where it sounds more confident than it should
+          be, and what it silently assumes. Mercurius is built to make those
+          patterns visible rather than hide them.
+        </p>
+        <p class="lede">
+          It will not write your essays. It will not do your homework. It will
+          not give you answers before you have done some thinking yourself.
+        </p>
+        <div class="groups-callout fade-in">
+          <p>"Here to help you think, not think for you."</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- BROWSER VERSION -->
+    <section class="section section-soft" aria-labelledby="browser-heading">
+      <div class="container" style="max-width: 760px; text-align: center;">
+        <p class="eyebrow" style="text-align: center;">No iPhone? No problem.</p>
+        <h2 id="browser-heading">Use it in your browser, right now</h2>
+        <p class="lede" style="margin: 0 auto var(--space-6);">
+          The web version of Mercurius runs on anything — Chromebooks included —
+          and can install as its own app.
+        </p>
+        <div class="cta-row" style="justify-content: center;">
+          <button class="btn btn-primary btn-large" onclick="MercuriusOpen()">Open Mercurius Ⅰ</button>
+          <button class="btn btn-ghost btn-large" id="merc-install-btn" hidden onclick="mercuriusInstall()">Install as App</button>
+        </div>
+        <p class="fineprint" id="merc-install-hint" hidden>Works offline. Runs in its own window.</p>
+      </div>
+    </section>
+
+    <section class="next-strip" aria-label="Next page">
+      <div class="container">
+        <div>
+          <p class="eyebrow">Next</p>
+          <h3>Like what we're building? Come build with us.</h3>
+        </div>
+        <a class="next-strip-link" href="/join">Join Us →</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+          <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+        </a>
+        <p class="footer-tagline">Understanding AI, together.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mayo AI Literacy Club</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=1" defer></script>
+
+  <!-- Mercurius web widget — same working set as the original site -->
+  <script>
+    window.MercuriusConfig = {
+      apiEndpoint: 'https://mercurius-chatbot-production.up.railway.app/api/chat',
+      autoOpen: false
+    };
+  </script>
+  <link rel="stylesheet" href="/widget.css?v=3" />
+  <script src="/widget.js?v=3"></script>
+  <script>
+    // PWA service worker + install prompt (carried over from the
+    // original site — same sw.js, same cached paths).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
+
+    var deferredInstallPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      var btn = document.getElementById('merc-install-btn');
+      var hint = document.getElementById('merc-install-hint');
+      if (btn) btn.hidden = false;
+      if (hint) hint.hidden = false;
+    });
+
+    function mercuriusInstall() {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(function (result) {
+        if (result.outcome === 'accepted') {
+          var btn = document.getElementById('merc-install-btn');
+          var hint = document.getElementById('merc-install-hint');
+          if (btn) btn.hidden = true;
+          if (hint) hint.hidden = true;
+        }
+        deferredInstallPrompt = null;
+      });
+    }
+
+    // Installed-PWA mode: hide the site chrome so only the tutor shows.
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (isStandalone) {
+      document.querySelectorAll('.site-header, main, .site-footer').forEach(function (el) {
+        el.style.display = 'none';
+      });
+      document.body.style.background = '#0f1f14';
+      document.body.style.margin = '0';
+      document.body.style.overflow = 'hidden';
+      var panel = document.getElementById('merc-panel');
+      if (panel && !panel.classList.contains('merc-open')) {
+        if (typeof MercuriusOpen === 'function') MercuriusOpen();
+        else panel.classList.add('merc-open');
+      }
+      var closeBtn = document.getElementById('merc-close-btn');
+      if (closeBtn) closeBtn.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

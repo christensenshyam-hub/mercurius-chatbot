@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E2A18" />
+
+  <title>Mayo AI Literacy Club</title>
+  <meta name="description" content="Mayo AI Literacy Club — building AI literacy at Mayo High School in Rochester, MN. Learn how AI works, think critically about its impact, and join a community of curious students." />
+  <link rel="canonical" href="https://mayoailiteracy.com/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Mayo AI Literacy Club" />
+  <meta property="og:description" content="Creating the next leaders for an AI-driven world — at Mayo High School in Rochester, MN." />
+  <meta property="og:image" content="https://mayoailiteracy.com/logo.png" />
+  <meta property="og:url" content="https://mayoailiteracy.com/" />
+  <meta property="og:site_name" content="Mayo AI Literacy Club" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Mayo AI Literacy Club" />
+  <meta name="twitter:description" content="Creating the next leaders for an AI-driven world." />
+  <meta name="twitter:image" content="https://mayoailiteracy.com/logo.png" />
+
+  <link rel="icon" href="/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=2" />
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+        <img class="brand-logo" src="/logo.png" alt="" width="34" height="34" />
+        <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a class="cta-pill" href="/join">Join Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- HERO -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Mayo High School · Rochester, MN</p>
+          <!-- Populated live from events-data.json; this text is the fallback. -->
+          <span class="meeting-chip" id="meeting-chip">
+            <span class="dot" aria-hidden="true"></span>
+            Every Thursday · 8:20 AM · MHS Library Classroom
+          </span>
+          <h1 id="hero-heading" class="display">
+            Creating the next leaders for an <span class="text-gradient">AI&#8209;driven world.</span>
+          </h1>
+          <p class="lede">
+            Learn how AI works, think critically about its impact, and build
+            the skills that actually matter.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary btn-large" href="/join">Get Involved</a>
+            <a class="btn btn-ghost btn-large" href="/about#groups">Which group are you?</a>
+          </div>
+          <p class="hero-tagline fineprint">No experience required. Curiosity is the only prerequisite.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS — update these numbers any time; just edit the values below -->
+    <div class="stats-bar" role="group" aria-label="Club stats">
+      <div class="container">
+        <div class="stat-item">
+          <span class="stat-number">25+</span>
+          <span class="stat-label">Members</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">15+</span>
+          <span class="stat-label">Meetings</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">6</span>
+          <span class="stat-label">Topics Covered</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">1</span>
+          <span class="stat-label">Seminar</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMBER VOICES — add quotes to the QUOTES array in the script at
+         the bottom of this file -->
+    <div class="ticker-wrap" aria-label="Member voices">
+      <div class="ticker-label">Member Voices</div>
+      <div class="ticker-outer">
+        <div class="ticker-track" id="quote-ticker"></div>
+      </div>
+    </div>
+
+    <!-- WHAT WE DO -->
+    <section class="section" aria-labelledby="what-heading">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">What We Do</p>
+          <h2 id="what-heading">A club for understanding AI — not just using it</h2>
+        </div>
+        <div class="toc-grid">
+          <a class="toc-card fade-in" href="/events">
+            <h3>Weekly meetings</h3>
+            <p>Every Thursday morning: one topic, real discussion, no lectures. Show up once and see.</p>
+            <span class="toc-arrow">See the schedule</span>
+          </a>
+          <a class="toc-card fade-in" href="/topics">
+            <h3>Topics that matter</h3>
+            <p>AI ethics, how models actually work, AI in health and finance, prompting, and critical thinking.</p>
+            <span class="toc-arrow">What you'll learn</span>
+          </a>
+          <a class="toc-card fade-in" href="/about#groups">
+            <h3>The 3 Groups</h3>
+            <p>Most people use AI in one of three ways. Which one are you — and which one do you want to be?</p>
+            <span class="toc-arrow">Find out</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- LATEST FROM THE BLOG — rendered from blog-content.json -->
+    <section class="section section-soft" aria-labelledby="blog-heading">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Latest from the Blog</p>
+          <h2 id="blog-heading">What we're thinking about</h2>
+        </div>
+        <div class="blog-list" id="featured-post"></div>
+      </div>
+    </section>
+
+    <!-- MERCURIUS APP -->
+    <section class="section" aria-labelledby="merc-heading">
+      <div class="container">
+        <div class="app-card">
+          <img class="app-logo" src="/assets/mercurius-logo-dark.png" alt="" width="84" height="84" loading="lazy" />
+          <p class="eyebrow">Built by this club</p>
+          <h2 id="merc-heading">We didn't just study AI.<br />We built one.</h2>
+          <p class="lede" style="max-width: 560px;">
+            Mercurius Ⅰ is our AI literacy tutor — it guides your thinking with
+            questions instead of handing you answers. Made by students, for students.
+          </p>
+          <span class="app-chip">Coming soon to the App Store</span>
+          <div class="cta-row" style="margin-bottom: 0;">
+            <a class="btn btn-primary" href="/mercurius">Meet Mercurius Ⅰ</a>
+            <a class="btn btn-ghost" style="color: #fff; border-color: rgba(255,255,255,0.35);" href="https://trymercurius.com" target="_blank" rel="noopener noreferrer">trymercurius.com ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUPPORTERS -->
+    <section class="section sponsor-strip" aria-labelledby="sponsor-heading">
+      <div class="container">
+        <div class="section-head" style="margin-bottom: var(--space-6);">
+          <p class="eyebrow" id="sponsor-heading">Our Supporters</p>
+        </div>
+        <div class="sponsor-card">
+          <span class="sponsor-tier">Tier One Supporter</span>
+          <img src="/assets/dermatology-partners.svg" alt="Dermatology Partners" />
+        </div>
+        <p class="sponsor-note">Interested in supporting student AI literacy? <a href="/join">Get in touch.</a></p>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section" aria-labelledby="cta-heading">
+      <div class="container cta-inner">
+        <h2 id="cta-heading" class="cta-headline">Ready to think for yourself in the age of AI?</h2>
+        <p class="cta-sub">Thursday mornings. Library classroom. Bring your curiosity.</p>
+        <a class="btn btn-primary btn-large" href="/join">Join the Club</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="/" aria-label="Mayo AI Literacy Club home">
+          <span class="brand-name">Mayo <span class="brand-name-accent">AI Literacy</span> Club</span>
+        </a>
+        <p class="footer-tagline">Understanding AI, together.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="/about">About</a>
+        <a href="/topics">Topics</a>
+        <a href="/events">Events</a>
+        <a href="/blog">Blog</a>
+        <a href="/mercurius">Mercurius Ⅰ</a>
+        <a href="https://www.instagram.com/mayoailiteracy" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </nav>
+      <p class="footer-copy">© <span id="year">2026</span> Mayo AI Literacy Club</p>
+    </div>
+  </footer>
+
+  <script src="/script.js?v=1" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      // ---- Member voices ticker — add quotes here ----
+      const QUOTES = [
+        { text: 'At the end of the day, AI should be applied to everything we are comfortable with.', author: 'Michael T.', grade: '10th Grade' },
+        { text: "I'm not going to pick option A, I'm not going to pick option B, I'm going to pick option C — I'm stopping the train.", author: 'Michael T.', grade: '10th Grade' },
+        { text: 'If lives are equal, 5 lives are greater than 1.', author: 'Liam Michael', grade: '9th Grade' },
+      ];
+
+      const ticker = document.getElementById('quote-ticker');
+      if (ticker) {
+        const items = (dupe) => QUOTES.map((q) =>
+          `<span class="ticker-item${dupe ? ' ticker-item-dupe' : ''}"${dupe ? ' aria-hidden="true"' : ''}>“${q.text}”<em class="ticker-author">— ${q.author}, ${q.grade}</em></span><span class="ticker-sep${dupe ? ' ticker-item-dupe' : ''}" aria-hidden="true">·</span>`
+        ).join('');
+        // Track is duplicated for a seamless loop; dupes are hidden when
+        // reduced-motion turns the marquee into a static wrap.
+        ticker.innerHTML = items(false) + items(true);
+      }
+
+      // ---- Meeting chip — live from the same JSON the app uses ----
+      window.mayoFetch('/events-data.json').then((data) => {
+        const s = data.schedule;
+        if (!s) return;
+        const chip = document.getElementById('meeting-chip');
+        if (chip) chip.innerHTML = `<span class="dot" aria-hidden="true"></span>${s.day} · ${s.time} · ${s.location}`;
+      }).catch(() => {});
+
+      // ---- Featured post — newest entry in blog-content.json ----
+      // Posts with a bespoke standalone page are mapped here.
+      const CUSTOM_URLS = { 'anthropic-pentagon-fallout': '/blog-anthropic-pentagon.html' };
+      window.mayoFetch('/blog-content.json').then((posts) => {
+        if (!posts || !posts.length) return;
+        const p = posts[0];
+        const wrap = document.getElementById('featured-post');
+        const link = document.createElement('a');
+        link.className = 'blog-card fade-in';
+        link.href = CUSTOM_URLS[p.id] || `/blog-post.html?id=${encodeURIComponent(p.id)}`;
+        link.innerHTML = `
+          <div class="blog-meta">
+            <span class="blog-category"></span>
+            <span class="blog-date"></span>
+          </div>
+          <h3></h3>
+          <p></p>
+          <span class="blog-read-more">Read post →</span>`;
+        link.querySelector('.blog-category').textContent = p.category;
+        link.querySelector('.blog-date').textContent = p.date;
+        link.querySelector('h3').textContent = p.title;
+        link.querySelector('p').textContent = p.summary;
+        wrap.appendChild(link);
+        window.observeFadeIns(wrap);
+      }).catch(() => {});
+    });
+  </script>
+</body>
+</html>
