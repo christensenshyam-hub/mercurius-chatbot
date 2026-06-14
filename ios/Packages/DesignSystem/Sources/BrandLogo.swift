@@ -9,10 +9,14 @@ import SwiftUI
 /// Why `.full` is a composite (icon image + SwiftUI wordmark) instead
 /// of a single PNG: the wordmark needs to read in both light and dark
 /// modes. A baked-in dark navy wordmark sits on top of `BrandColor.background`
-/// fine in light mode but vanishes in dark mode. Splitting into a
-/// transparent-background icon image plus `Text` styled with adaptive
-/// `BrandColor` lets the wordmark recolor automatically — no second
-/// PNG, no Asset Catalog "dark appearance" variant to maintain.
+/// fine in light mode but vanishes in dark mode. Splitting into an icon
+/// image plus `Text` styled with adaptive `BrandColor` lets the wordmark
+/// recolor automatically — no baked wordmark PNG to maintain.
+///
+/// The icon image ships in two forms, because the artwork itself (not just
+/// its color) differs by mode: light `LogoIcon` is a cropped transparent
+/// head; dark `LogoIconDark` is the brighter emblem that reads on a dark
+/// background. `FullLogoView` selects between them via `colorScheme`.
 ///
 /// The `.mark` style is a pure SwiftUI composition (no asset) so it
 /// scales perfectly at any size.
@@ -48,11 +52,12 @@ public struct BrandLogo: View {
 /// the icon is < 1:1 aspect after cropping, plus the two text rows.
 private struct FullLogoView: View {
     let size: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: max(8, size * 0.05)) {
             iconLayer
-                .frame(width: size, height: size * iconAspect)
+                .frame(width: iconWidth, height: iconWidth * iconAspect)
 
             wordmark
             tutorLabel
@@ -61,20 +66,31 @@ private struct FullLogoView: View {
         .accessibilityLabel("Mercurius AI — AI literacy tutor")
     }
 
-    /// Cropped icon's height/width ratio. The source `LogoIcon` asset
-    /// is 1024×563. Updating that PNG should update this constant too,
-    /// or the icon will distort.
-    private var iconAspect: CGFloat { 563.0 / 1024.0 }
+    private var isDark: Bool { colorScheme == .dark }
+
+    /// Height/width ratio of the icon artwork. Light mode uses the cropped
+    /// `LogoIcon` (1024×563, wider than tall); dark mode uses the transparent,
+    /// tightly-cropped `LogoIconDark` emblem (839×872, near-square). Update the
+    /// matching ratio here if either PNG changes, or the icon will distort.
+    private var iconAspect: CGFloat { isDark ? 872.0 / 839.0 : 563.0 / 1024.0 }
+
+    /// The dark emblem is a near-circle (tall) vs the light icon's wide cropped
+    /// head, so render it a little narrower to keep a similar visual weight.
+    private var iconWidth: CGFloat { isDark ? size * 0.85 : size }
 
     /// Layered fallback chain:
-    /// 1. `LogoIcon` (the cropped, transparent-background icon — preferred)
-    /// 2. `LogoHero` (the legacy single-PNG composition — works in
-    ///    light mode if the new asset is missing for any reason)
-    /// 3. The pure-SwiftUI `MarkView` so SwiftUI previews / SPM tests
+    /// 1. `LogoIconDark` in dark mode — the transparent, dark-optimized emblem.
+    ///    (The light icon's navy figure all but vanishes on a dark
+    ///    background, which is the bug this fixes.)
+    /// 2. `LogoIcon` (the cropped, transparent-background icon — light mode)
+    /// 3. `LogoHero` (the legacy single-PNG composition fallback)
+    /// 4. The pure-SwiftUI `MarkView` so SwiftUI previews / SPM tests
     ///    that don't have asset access still render something.
     @ViewBuilder
     private var iconLayer: some View {
-        if let uiImage = platformImage(named: "LogoIcon") ?? platformImage(named: "LogoHero") {
+        if let uiImage = (isDark ? platformImage(named: "LogoIconDark") : nil)
+            ?? platformImage(named: "LogoIcon")
+            ?? platformImage(named: "LogoHero") {
             Image(sharedImage: uiImage)
                 .resizable()
                 .scaledToFit()
