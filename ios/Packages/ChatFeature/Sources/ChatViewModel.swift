@@ -71,6 +71,11 @@ public final class ChatViewModel {
     /// Reports objectionable AI responses (App Store Guideline 1.2). Nil in
     /// tests that don't exercise it; the production init wires `APIClient`.
     private let reporting: Reporting?
+    /// Engagement stores. Optional — nil in tests that don't exercise
+    /// streaks/achievements. Streak is captured from each `complete` event;
+    /// achievements are awarded at chat milestones.
+    private let streakStore: StreakStore?
+    private let achievementStore: AchievementStore?
 
     // MARK: - Private
 
@@ -90,7 +95,9 @@ public final class ChatViewModel {
     public convenience init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
-        store: ChatStore? = nil
+        store: ChatStore? = nil,
+        streakStore: StreakStore? = nil,
+        achievementStore: AchievementStore? = nil
     ) {
         self.init(
             chatClient: apiClient,
@@ -98,7 +105,9 @@ public final class ChatViewModel {
             sessionIdProvider: { try sessionIdentity.current() },
             store: store,
             imageUploader: apiClient,
-            reporting: apiClient
+            reporting: apiClient,
+            streakStore: streakStore,
+            achievementStore: achievementStore
         )
     }
 
@@ -111,7 +120,9 @@ public final class ChatViewModel {
         store: ChatStore? = nil,
         imageUploader: ImageUploading? = nil,
         preparer: ImagePreparing = JPEGImagePreparer(),
-        reporting: Reporting? = nil
+        reporting: Reporting? = nil,
+        streakStore: StreakStore? = nil,
+        achievementStore: AchievementStore? = nil
     ) {
         self.chatClient = chatClient
         self.modeClient = modeClient
@@ -120,6 +131,8 @@ public final class ChatViewModel {
         self.imageUploader = imageUploader
         self.preparer = preparer
         self.reporting = reporting
+        self.streakStore = streakStore
+        self.achievementStore = achievementStore
         hydrateFromStore()
     }
 
@@ -230,6 +243,7 @@ public final class ChatViewModel {
         let userMessage = ChatMessage(role: .user, content: text, imageData: attachedImage)
         messages.append(userMessage)
         persistMessage(userMessage)
+        awardSendAchievements()
         draft = ""
         pendingImageData = nil
 
@@ -373,6 +387,37 @@ public final class ChatViewModel {
             guard let sessionId = try? sessionIdProvider() else { return }
             try? await reporting.reportResponse(content: content, reason: nil, sessionId: sessionId)
         }
+    }
+
+    // MARK: - Engagement (streaks + achievements)
+
+    /// Achievements that fire from sending a message: first conversation, deep
+    /// diver (20+ user turns in this conversation), and the current mode's badge.
+    private func awardSendAchievements() {
+        achievementStore?.award(AchievementCatalog.firstConversation)
+        let userTurns = messages.filter { $0.role == .user }.count
+        if userTurns >= 20 { achievementStore?.award(AchievementCatalog.deepDiver) }
+        awardModeAchievementsIfNeeded()
+    }
+
+    /// Record streak + unlock signals from a chat `complete` event: cache the
+    /// server's authoritative streak and award any streak-milestone / unlock
+    /// badges. Idempotent.
+    private func recordSessionSignals(_ response: ChatResponse) {
+        if let streak = response.streak {
+            streakStore?.update(streak: streak)
+            for id in AchievementCatalog.streakMilestones(for: streak) {
+                achievementStore?.award(id)
+            }
+        }
+        if response.justUnlocked == true {
+            achievementStore?.award(AchievementCatalog.criticalThinker)
+        }
+    }
+
+    /// Award badges tied to the current mode (currently: Debate). Idempotent.
+    private func awardModeAchievementsIfNeeded() {
+        if currentMode == .debate { achievementStore?.award(AchievementCatalog.debater) }
     }
 
     /// Start a fresh conversation.
@@ -519,6 +564,7 @@ public final class ChatViewModel {
                 currentMode = parsed
             }
             if result.unlocked { isUnlocked = true }
+            awardModeAchievementsIfNeeded()
             modeSwitchInFlight = nil
             return true
         } catch APIError.unauthorized {
@@ -637,6 +683,8 @@ public final class ChatViewModel {
                         currentMode = serverMode
                     }
                     if response.unlocked { isUnlocked = true }
+                    recordSessionSignals(response)
+                    awardModeAchievementsIfNeeded()
                     phase = .idle
                     return
 

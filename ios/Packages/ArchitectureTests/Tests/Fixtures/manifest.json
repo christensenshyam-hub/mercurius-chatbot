@@ -141,6 +141,20 @@
       }
     },
     {
+      "name" : "EngagementFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "EngagementFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
       "name" : "AppFeature",
       "settings" : [
 
@@ -365,6 +379,12 @@
             "SettingsFeature",
             null
           ]
+        },
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
         }
       ],
       "exclude" : [
@@ -481,6 +501,64 @@
             "PersistenceKit",
             null
           ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "EngagementFeature",
+      "packageAccess" : true,
+      "path" : "EngagementFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "EngagementFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "EngagementFeatureTests",
+      "packageAccess" : true,
+      "path" : "EngagementFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "NetworkingKit",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "PersistenceKit",
+            null
+          ]
         },
         {
           "byName" : [
@@ -497,6 +575,12 @@
         {
           "byName" : [
             "SettingsFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "EngagementFeature",
             null
           ]
         }

@@ -5,6 +5,7 @@ import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
+import EngagementFeature
 
 /// The TabView host. Owns the selected-tab binding and, crucially, a
 /// single shared `ChatViewModel` so switching tabs doesn't wipe the
@@ -31,6 +32,9 @@ struct AppShellView: View {
     let sessionIdentity: SessionIdentity
     let chatStore: ChatStore?
     let themeStore: ThemePreferenceStore
+    let streakStore: StreakStore
+    let achievementStore: AchievementStore
+    let reminderStore: ReminderStore
 
     /// Called when the user taps the Home button in the chat header.
     /// `AppEntryView` wires this to flip `hasEnteredApp` back to
@@ -47,6 +51,13 @@ struct AppShellView: View {
     /// the `.history` tab-action; cleared by the row tap or the
     /// Close toolbar button.
     @State private var showChatHistory: Bool = false
+
+    /// Drives the Progress hub sheet (streak / achievements / leaderboard),
+    /// opened from the streak chip in the chat header.
+    @State private var showProgress: Bool = false
+
+    /// Wraps UNUserNotificationCenter for the daily reminder.
+    @State private var scheduler = NotificationScheduler()
 
     /// Lesson the user asked to start while the chat had existing
     /// messages. Drives a confirmation alert that lets them choose
@@ -65,18 +76,26 @@ struct AppShellView: View {
         sessionIdentity: SessionIdentity,
         chatStore: ChatStore?,
         themeStore: ThemePreferenceStore,
+        streakStore: StreakStore,
+        achievementStore: AchievementStore,
+        reminderStore: ReminderStore,
         onGoHome: @escaping @MainActor () -> Void
     ) {
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
         self.chatStore = chatStore
         self.themeStore = themeStore
+        self.streakStore = streakStore
+        self.achievementStore = achievementStore
+        self.reminderStore = reminderStore
         self.onGoHome = onGoHome
         _chatModel = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity,
-                store: chatStore
+                store: chatStore,
+                streakStore: streakStore,
+                achievementStore: achievementStore
             )
         )
     }
@@ -158,6 +177,36 @@ struct AppShellView: View {
             }
             .tint(BrandColor.accent)
         }
+        .sheet(isPresented: $showProgress) {
+            ProgressHubView(
+                streakStore: streakStore,
+                achievementStore: achievementStore,
+                reminderStore: reminderStore,
+                scheduler: scheduler,
+                leaderboard: LeaderboardViewModel(fetcher: apiClient, ownBadge: ownBadge()),
+                onDone: { showProgress = false }
+            )
+            .tint(BrandColor.accent)
+        }
+        // Achievement-unlocked toasts surface over the whole shell.
+        .achievementToasts(achievementStore)
+        // Seed the streak from the server so it shows before the first chat.
+        .task { await seedStreakOnLaunch() }
+    }
+
+    /// The current session's 4-char leaderboard badge (last-4 of the id,
+    /// uppercased) — matches the server's projection, used to highlight "you".
+    private func ownBadge() -> String? {
+        guard let sid = try? sessionIdentity.current(), sid.count >= 4 else { return nil }
+        return String(sid.suffix(4)).uppercased()
+    }
+
+    /// Fetch the server's authoritative streak once on launch to seed the cache.
+    private func seedStreakOnLaunch() async {
+        guard let sid = try? sessionIdentity.current() else { return }
+        if let streak = try? await apiClient.sessionStreak(sessionId: sid) {
+            streakStore.update(streak: streak)
+        }
     }
 
     // MARK: - Tab selection
@@ -189,6 +238,7 @@ struct AppShellView: View {
             model: chatModel,
             apiClient: apiClient,
             sessionIdentity: sessionIdentity,
+            achievementStore: achievementStore,
             settingsPresenter: { [sessionIdentity, themeStore, chatStore, chatModel] in
                 AnyView(
                     SettingsSheet(
@@ -198,6 +248,9 @@ struct AppShellView: View {
                         chatModel: chatModel
                     )
                 )
+            },
+            headerAccessory: {
+                AnyView(StreakChip(streakStore: streakStore, action: { showProgress = true }))
             },
             onGoHome: onGoHome
         )
@@ -233,6 +286,7 @@ struct AppShellView: View {
         }
         chatModel.draft = lesson.starter
         progress.markCompleted(lesson.id)
+        achievementStore.award(AchievementCatalog.explorer)
         selectedTab = .chat
         // Defer send slightly so the tab swap animates first.
         Task { @MainActor in

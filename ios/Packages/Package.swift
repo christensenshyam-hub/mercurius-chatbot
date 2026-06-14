@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
+        .library(name: "EngagementFeature", targets: ["EngagementFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
     ],
     dependencies: [
@@ -78,7 +79,7 @@ let package = Package(
         // MARK: CurriculumFeature
         .target(
             name: "CurriculumFeature",
-            dependencies: ["DesignSystem", "SettingsFeature"],
+            dependencies: ["DesignSystem", "SettingsFeature", "PersistenceKit"],
             path: "CurriculumFeature/Sources"
         ),
         .testTarget(
@@ -99,6 +100,18 @@ let package = Package(
             path: "SettingsFeature/Tests"
         ),
 
+        // MARK: EngagementFeature
+        .target(
+            name: "EngagementFeature",
+            dependencies: ["DesignSystem", "NetworkingKit", "PersistenceKit"],
+            path: "EngagementFeature/Sources"
+        ),
+        .testTarget(
+            name: "EngagementFeatureTests",
+            dependencies: ["EngagementFeature"],
+            path: "EngagementFeature/Tests"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
@@ -109,6 +122,7 @@ let package = Package(
                 "ChatFeature",
                 "CurriculumFeature",
                 "SettingsFeature",
+                "EngagementFeature",
             ],
             path: "AppFeature/Sources"
         ),

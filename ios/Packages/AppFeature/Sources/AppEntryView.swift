@@ -74,6 +74,9 @@ struct AppEntryView: View {
                 sessionIdentity: env.sessionIdentity,
                 chatStore: env.chatStore,
                 themeStore: env.themeStore,
+                streakStore: env.streakStore,
+                achievementStore: env.achievementStore,
+                reminderStore: env.reminderStore,
                 onGoHome: { hasEnteredApp = false }
             )
             .transition(.opacity)

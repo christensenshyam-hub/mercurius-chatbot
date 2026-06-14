@@ -37,11 +37,19 @@ public struct ChatView: View {
 
     private let apiClient: APIClient
     private let sessionIdentity: SessionIdentity
+    /// Awards tool-driven achievements (Quiz Master, Report Card). Lives in
+    /// PersistenceKit (a ChatFeature dependency). Optional for previews/tests.
+    private let achievementStore: AchievementStore?
 
     /// Closure the host app provides to surface the Settings screen.
     /// Kept as a closure so `ChatFeature` doesn't depend on
     /// `SettingsFeature` — composition lives in `AppFeature`.
     private let settingsPresenter: (@MainActor () -> AnyView)?
+
+    /// Optional header accessory (e.g. the streak chip). Injected as a closure
+    /// so `ChatFeature` doesn't depend on `EngagementFeature` — composition
+    /// lives in `AppFeature`, mirroring `settingsPresenter`.
+    private let headerAccessory: (@MainActor () -> AnyView)?
 
     /// Optional escape hatch: if provided, renders a leading "Home"
     /// button in the header that invokes this closure. `AppFeature`
@@ -54,19 +62,24 @@ public struct ChatView: View {
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
         chatStore: ChatStore? = nil,
+        achievementStore: AchievementStore? = nil,
         settingsPresenter: (@MainActor () -> AnyView)? = nil,
+        headerAccessory: (@MainActor () -> AnyView)? = nil,
         onGoHome: (@MainActor () -> Void)? = nil
     ) {
         _model = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity,
-                store: chatStore
+                store: chatStore,
+                achievementStore: achievementStore
             )
         )
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
+        self.achievementStore = achievementStore
         self.settingsPresenter = settingsPresenter
+        self.headerAccessory = headerAccessory
         self.onGoHome = onGoHome
     }
 
@@ -77,13 +90,17 @@ public struct ChatView: View {
         model: ChatViewModel,
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
+        achievementStore: AchievementStore? = nil,
         settingsPresenter: (@MainActor () -> AnyView)? = nil,
+        headerAccessory: (@MainActor () -> AnyView)? = nil,
         onGoHome: (@MainActor () -> Void)? = nil
     ) {
         _model = State(initialValue: model)
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
+        self.achievementStore = achievementStore
         self.settingsPresenter = settingsPresenter
+        self.headerAccessory = headerAccessory
         self.onGoHome = onGoHome
     }
 
@@ -183,6 +200,9 @@ public struct ChatView: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer()
+            if let headerAccessory {
+                headerAccessory()
+            }
             // New Chat and Chat History both live in the bottom tab
             // bar (see `AppShellView`) — surfacing them there matches
             // the user's mental model of "common chat actions are in
@@ -234,7 +254,8 @@ public struct ChatView: View {
                         tools: apiClient,
                         sessionIdProvider: { [sessionIdentity] in
                             try sessionIdentity.current()
-                        }
+                        },
+                        achievementStore: achievementStore
                     ),
                     dismissAction: { activeSheet = nil }
                 )
@@ -270,6 +291,7 @@ public struct ChatView: View {
             .disabled(!hasEnoughConversation)
 
             Button {
+                achievementStore?.award(AchievementCatalog.reportCard)
                 activeSheet = .reportCard
             } label: {
                 Label("Report Card", systemImage: "chart.bar.doc.horizontal")
