@@ -80,7 +80,7 @@ describe('ChatMessage', () => {
 
 describe('ChatMode', () => {
   test('accepts every shipping mode', () => {
-    for (const m of ['socratic', 'direct', 'debate', 'discussion']) {
+    for (const m of ['socratic', 'debate', 'discussion']) {
       assert.ok(ChatMode.safeParse(m).success, `should accept ${m}`);
     }
   });
@@ -131,11 +131,9 @@ describe('ModeRequest', () => {
     assert.equal(_legacyErrorCode(out.error.issues), 'invalid_request');
   });
 
-  test('accepts optional clientUnlocked without enforcing it', () => {
-    const out = ModeRequest.parse({ sessionId: 'abc', mode: 'direct', clientUnlocked: true });
-    assert.equal(out.mode, 'direct');
-    // Schema validation doesn't enforce policy — the server still
-    // refuses `direct` for a locked session, just not at this layer.
+  test('rejects the removed direct mode', () => {
+    assert.ok(!ModeRequest.safeParse({ sessionId: 'abc', mode: 'direct' }).success);
+    assert.ok(ModeRequest.safeParse({ sessionId: 'abc', mode: 'socratic' }).success);
   });
 });
 

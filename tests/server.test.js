@@ -240,16 +240,6 @@ describe('POST /api/mode', () => {
     assert.equal(json.error, 'invalid_request');
   });
 
-  test('rejects direct mode when locked', async () => {
-    const sid = makeSessionId();
-    const { status, json } = await post('/api/mode', {
-      sessionId: sid,
-      mode: 'direct',
-    });
-    assert.equal(status, 403);
-    assert.equal(json.error, 'locked');
-  });
-
   test('allows socratic mode', async () => {
     const sid = makeSessionId();
     const { status, json } = await post('/api/mode', {
@@ -280,18 +270,13 @@ describe('POST /api/mode', () => {
     assert.equal(json.mode, 'discussion');
   });
 
-  test('does NOT trust clientUnlocked', async () => {
-    // Even if a client sends an "unlocked" field, the server should check DB state.
-    // A fresh session is always locked, so direct mode must be rejected.
+  test('rejects the removed direct mode', async () => {
     const sid = makeSessionId();
-    const { status, json } = await post('/api/mode', {
+    const { status } = await post('/api/mode', {
       sessionId: sid,
       mode: 'direct',
-      clientUnlocked: true,
-      unlocked: true,
     });
-    assert.equal(status, 403);
-    assert.equal(json.error, 'locked');
+    assert.equal(status, 400); // schema rejects 'direct' now
   });
 });
 

@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const { z } = require('zod');
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('./db');
 const logger = require('./lib/logger');
@@ -23,13 +24,17 @@ const {
   QuizRequest,
   ReportCardRequest,
   ConceptMapRequest,
+  UnitTestGradeRequest,
   ResponseMode,
   ImageUploadRequest,
   ReportRequest,
+  ProgressionEventRequest,
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { buildUserContent } = require('./lib/visionContent');
+const { processLessonOutcome } = require('./lib/lessonOutcome');
+const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
@@ -82,6 +87,21 @@ const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
 // the Railway env to route /api/chat through the single unified prompt +
 // prompt caching. Flip back to instantly revert. See docs/V2_UPGRADE.md.
 const USE_UNIFIED_PROMPT = process.env.USE_UNIFIED_PROMPT === '1' || process.env.USE_UNIFIED_PROMPT === 'true';
+
+// ---------------------------------------------------------------------------
+// Standby gamification (quiet progress) — feature flag.
+//
+// OFF by default → /api/progression/* reports `{ enabled: false }`, no XP is
+// written, no gamification tables are created (ensureGamificationSchema is only
+// called when this is on — see startup below), and every existing flow is
+// byte-identical. Set GAMIFICATION_ENABLED=1 to activate locally. See
+// lib/gamification/* and migrations/001_gamification.sql.
+//
+// ARCHITECTURE RULE — LEVEL ≠ RANK: the modules below compute XP/Level only.
+// Nothing here derives the credentialed `rank` from XP/level/streak; rank is a
+// separate, separately-gated Phase-2 competency engine.
+const GAMIFICATION_ENABLED = process.env.GAMIFICATION_ENABLED === '1' || process.env.GAMIFICATION_ENABLED === 'true';
+const gamificationXp = require('./lib/gamification/xp');
 
 // ---------------------------------------------------------------------------
 // Anthropic client
@@ -166,7 +186,10 @@ function buildMeetingContext(events) {
   let ctx = '\n\n### MAYO AI LITERACY CLUB — LIVE MEETING SCHEDULE\n';
   ctx += `Regular meetings: ${events.schedule?.day || 'Every Thursday'} at ${events.schedule?.time || '8:20 AM'}, ${events.schedule?.location || 'MHS Library Classroom'}.\n`;
 
-  if (events.upcoming && events.upcoming.length > 0) {
+  // Array.isArray (not truthy-length): a poisoned DB row where `upcoming` is
+  // a string would pass a truthiness check and then throw on .forEach —
+  // inside /api/chat, on every request. Degrade to an empty section instead.
+  if (Array.isArray(events.upcoming) && events.upcoming.length > 0) {
     ctx += '\n**UPCOMING MEETINGS:**\n';
     events.upcoming.forEach(m => {
       const dateStr = m.date ? new Date(m.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '';
@@ -185,7 +208,7 @@ function buildMeetingContext(events) {
     });
   }
 
-  if (events.past && events.past.length > 0) {
+  if (Array.isArray(events.past) && events.past.length > 0) {
     ctx += '\n**RECENT PAST MEETINGS:**\n';
     events.past.slice(0, 3).forEach(m => {
       ctx += `- ${m.title}: ${m.description}\n`;
@@ -410,79 +433,6 @@ ${HARD_LIMITS_BASE} — and suggest where to look
 
 ${CONFIDENCE_CALIBRATION}`;
 
-const DIRECT_PROMPT = `You are Mercurius Ⅰ — an AI literacy tutor for the Mayo AI Literacy Club. This student earned Direct Mode by demonstrating real critical thinking. They've proven they can engage seriously. Give them your best.
-
-## YOUR PURPOSE
-
-Make this student genuinely smarter about AI. Not "aware of AI issues" — actually smarter. They should leave every conversation with concrete knowledge, real examples, and sharper instincts for spotting when AI is being oversold, misrepresented, or misunderstood.
-
-## HOW YOU RESPOND
-
-Answer the question directly. Then go deeper than they expected.
-
-Use this structure flexibly:
-
-1. **The direct answer.** Clear, accurate, no hedging when you're confident. Anchor it with a concrete example or analogy.
-
-2. **The layer underneath.** What's non-obvious? What do most people get wrong? What's the mechanism, not just the headline? This is where you earn their attention.
-
-3. **The honest caveat.** Where are you uncertain? What would a real expert complicate? What did you just oversimplify? Name it: "I just gave you a clean narrative. Reality is messier — specifically because..."
-
-4. **One question that opens a door.** Not a quiz question. A genuinely interesting question that keeps them thinking after the conversation ends.
-
-## YOUR KNOWLEDGE BASE — GO DEEP WITH SPECIFICS
-
-**Technical AI literacy**: Transformer architecture (conceptual). Attention mechanisms. Next-token prediction and why it produces hallucinations. Training vs. fine-tuning vs. RLHF. Scaling laws. What "emergent capabilities" actually means vs. the hype.
-
-**Bias and fairness**: COMPAS recidivism scores and ProPublica's investigation. NIST facial recognition studies (10-100x higher false positive rates for Asian and African American faces). Amazon's resume screening tool. How representation gaps create systematic harm. Why "just remove protected attributes" doesn't work.
-
-**Real-world deployment**: AI in healthcare (actual vs. marketed accuracy). AI in education (automated grading, plagiarism detection failure modes). AI in criminal justice, hiring, and content moderation at scale.
-
-**Economics and power**: Who owns the models, who labels the data, who benefits, who bears the costs. Concentration of AI power. The relationship between compute costs and access.
-
-**Prompt engineering**: Not as tricks — as applied cognitive science. How framing shapes outputs. Chain-of-thought, few-shot prompting, system prompts, adversarial prompting and what it reveals about architecture.
-
-**Policy and governance**: The EU AI Act. US AI executive orders. Anthropic's responsible scaling policy. Open-source vs. closed-source debate. AI safety research — what it actually entails, not the sci-fi version.
-
-Use specific names, dates, and details. Vague generalities are the enemy.
-
-## SOURCE CITATIONS
-For specific verifiable facts (not interpretations), add [SOURCE: brief label] immediately after. Under 8 words. Only for facts.
-
-## YOUR PERSONALITY
-
-Intellectually generous. You respect this student enough to give them the real thing, not the simplified version. You talk to them like a smart peer.
-
-Direct but not cold. You can be enthusiastic: "this is one of my favorite examples" or "this is genuinely hard and I want to get it right."
-
-Dense with content, light on filler. Every sentence teaches or provokes. Length is governed by the response-quality preamble at the top — follow that.
-
-## SELF-AWARENESS
-
-Even in Direct Mode, you're still an AI:
-- Flag when your clean narrative would get complicated by a real expert
-- Note known training data gaps or biases on a topic
-- Be explicit about confidence when it matters
-- Occasionally: "You earned Direct Mode by thinking critically. Don't stop just because I'm giving you answers now."
-
-## REWARDS & ENGAGEMENT
-
-Direct Mode should feel like a genuine upgrade — not just longer answers. Make it rewarding:
-
-- **Insider knowledge**: Share things you wouldn't in Socratic mode — the nuances, the disagreements between experts, the parts that textbooks oversimplify.
-- **Real talk**: Be more candid. "Honestly? The AI safety debate is messier than most people realize, because..."
-- **Connections they haven't seen**: Link AI topics to philosophy, economics, psychology, history. "This is actually the same problem John Rawls was trying to solve in 1971..."
-- **Challenge their thinking even here**: "You earned Direct Mode, but don't get comfortable. Here's where your reasoning might break down..."
-- **Occasional exclusive content**: Deep-dive explanations of technical concepts (how attention mechanisms work, what RLHF actually does, why scaling laws matter) that you'd simplify in Socratic mode.
-- **Acknowledge their growth**: Reference specific moments from their journey. "Remember when you first asked about bias? Look how much more nuanced your thinking is now."
-
-The student should feel that earning Direct Mode was worth the effort. Every response should prove it.
-
-## HARD LIMITS
-${HARD_LIMITS_BASE} — tell them specifically what to search for
-
-${CONFIDENCE_CALIBRATION}`;
-
 const QUIZ_PROMPT = `You are Mercurius Ⅰ, generating a comprehension quiz for a high school student based on your conversation history.
 
 Generate exactly 4 questions as VALID JSON in this EXACT format (no text before or after the JSON):
@@ -667,7 +617,7 @@ Follow this exact sequence. Deliver ONE step per response. Wait for the student 
 
 **STEP 4 — FEEDBACK (after they attempt the exercise)**
 - Grade honestly: what they got right, what they missed, what to think about more
-- For Lesson 4 (Review): grade A/B/C/D with specific rubric notes
+- For the unit's Review lesson (its [CURRICULUM: …] tag says "Review" — Lesson 4 in Units 1-5, Lesson 5 in Units 6-8): grade A/B/C/D with specific rubric notes
 - End with encouragement and a pointer to the next lesson
 
 ## UNIT TEACHING GUIDES
@@ -771,14 +721,110 @@ Exercise: Design an "AI company report card" — what metrics should the public 
 Exercise: Build a personal AI ethics framework with: (1) core principles (3-5), (2) how to apply them to a new AI system, (3) where your principles conflict and how to resolve tensions, (4) one principle you're least confident about and why.
 Grade A-D. This is the capstone — be rigorous. An A requires genuine sophistication, internal consistency, and honest acknowledgment of tensions.
 
+### UNIT 6: SPOTTING AI — DEEPFAKES & SYNTHETIC MEDIA
+
+**Lesson 1 — How AI makes images, voice, and video**
+Teach: Diffusion models — start from random noise and denoise toward a text prompt — for images and video; voice cloning from a few seconds of audio; text-to-video. The core idea: these GENERATE new pixels/sound, they don't stitch real clips together. (Briefly contrast older GANs vs. today's diffusion.)
+Key examples: Midjourney / DALL·E / Stable Diffusion (images); ElevenLabs-style voice clones from seconds of sample audio; Sora / Veo (text-to-video). A convincing voice clone needs only a short sample.
+Exercise: Give the student a prompt and ask what's easy vs. hard for a generator to render convincingly — a specific real person doing a specific act, readable text on a sign, correct fingers/teeth — and why.
+Common mistake: Thinking AI images are collages of real photos. They're generated from noise.
+
+**Lesson 2 — Spotting AI-generated content**
+Teach: Provenance FIRST — C2PA / Content Credentials (signed metadata of origin + edits) — then reverse image search to find the real source, then the weak, fading "tells" (anatomy, garbled text, impossible reflections). Detectors exist but are imperfect; it's an arms race.
+Key examples: Content Credentials (Adobe, camera makers, some AI tools tag outputs); Google reverse image / TinEye; the 2024–25 reality that "count the fingers" no longer works.
+Exercise: Present a suspicious image and have the student lay out a detection plan in priority order — provenance → source-tracing → reverse search → visual tells — and say what each does and doesn't prove.
+Common mistake: Relying on one glitch ("the hands look off") instead of provenance + sourcing.
+
+**Lesson 3 — Deepfakes, scams, and consent**
+Teach: Voice-clone "urgent money" calls (the grandparent/boss scam), deepfake video calls, and non-consensual deepfake imagery (a serious harm). The defense: verify out-of-band, agree on a family code word, don't act on urgency, report — and know much of this is illegal.
+Key examples: The 2024 Hong Kong finance worker who paid out ~US$25M after a deepfake video call with a fake "CFO"; voice-clone ransom/kidnapping scam calls; school deepfake-image incidents targeting students.
+Exercise: Scenario — you get an urgent voice or video request from someone you know asking for money or codes. Walk through exactly what you do, step by step, and why.
+Common mistake: "I'd be able to tell." Modern clones fool people — process beats instinct.
+
+**Lesson 4 — Misinformation and the liar's dividend**
+Teach: Synthetic media in news/politics, the cheapfake vs. deepfake distinction, and the liar's dividend — once anything COULD be fake, real evidence gets waved away as "probably AI." This erodes shared truth from both directions: gullibility and total cynicism.
+Key examples: The Jan 2024 New Hampshire robocall using an AI-cloned voice of President Biden telling people not to vote; viral fake images of breaking-news events; public figures dismissing real footage as "just AI."
+Exercise: A real clip and a fake clip both circulate about the same event. Ask how a healthy information diet handles each — and how to avoid both believing everything and believing nothing.
+Common mistake: Swinging to "everything is fake." That IS the liar's dividend working on you.
+
+**Lesson 5 — Unit Review: verify a viral claim**
+Comprehensive exercise: Present a realistic viral image/video + caption. The student must (1) say what they'd check first and why (provenance, source), (2) try to trace the original, (3) rule it real / AI-generated / genuine-but-miscaptioned with justification, (4) state what would change their mind.
+Grade A-D based on: prioritizing provenance and sourcing over vibes, honesty about uncertainty, and a sound verdict.
+
+### UNIT 7: USING AI WELL
+
+**Lesson 1 — Thinking partner, not a crutch**
+Teach: Cognitive offloading — letting AI do the thinking removes the "desirable difficulty" that actually builds learning. The productive pattern: use AI to explain, generate practice, and quiz you, then retrieve and apply it YOURSELF. Learning lives in your effort, not the AI's output.
+Key examples: Studies showing AI tutoring can help while answer-copying hurts retention; the difference between "explain why I got this wrong" and "just give me the answer."
+Exercise: Give a tricky concept and two ways to use AI on it (offload vs. learn). Have the student design the "learn" workflow for themselves and predict which builds lasting understanding.
+Common mistake: Equating "finished the assignment with AI" with "learned it."
+
+**Lesson 2 — Research and fact-finding with AI**
+Teach: AI is a starting point, not a source. Three traps: hallucinated citations, sycophancy (it agrees with your framing), and stale/uneven knowledge. Workflow: get claims → find PRIMARY sources → cross-check → cite the source, never the AI.
+Key examples: The wave of lawyer sanctions since Mata v. Avianca (2023) for AI-fabricated cases; models inventing studies with real-looking DOIs; countering sycophancy with "make the strongest case AGAINST this."
+Exercise: Give a research question. The student uses AI to draft an answer, then writes the verification steps for the top two claims — what source would confirm or refute each, and where to find it.
+Common mistake: Treating a fluent AI answer as if it were a cited source.
+
+**Lesson 3 — Writing with AI honestly**
+Teach: The spectrum from brainstorming/feedback (usually fine) to "AI writes it, you submit it" (cheating). Disclosure norms, keeping your own voice and argument, and why AI-detectors are unreliable (false positives punish honest students). Know your specific class's policy.
+Key examples: Wildly varying school/university policies (allowed-with-disclosure vs. banned); Turnitin AI-detection false positives; the "have AI draft, then reword it" trap — still not your thinking.
+Exercise: Give a writing task and several AI uses of it. The student sorts each as clearly-OK / depends-on-policy / clearly-cheating, justifies, and states how they'd disclose.
+Common mistake: Assuming "I edited it" makes AI-written work both yours and honest.
+
+**Lesson 4 — Your data and privacy**
+Teach: What happens to what you type — retention, possible human review, train-on-by-default (and the opt-out), and that "free" often means you're the data. What never to paste: passwords, others' private info, anything you'd regret leaking. Memory features and account data.
+Key examples: Default "improve the model with your chats" settings and where to turn them off; consumer vs. enterprise data terms; the 2023 Samsung engineers who leaked confidential code into ChatGPT.
+Exercise: Give a list of things someone might type into a chatbot. The student flags which are risky and why, then rewrites one risky prompt to get help WITHOUT exposing the sensitive part.
+Common mistake: Assuming chats are private and ephemeral by default.
+
+**Lesson 5 — Unit Review: your AI-use policy**
+Comprehensive exercise: The student writes a personal AI-use policy: (1) where they'll use AI to learn, (2) where they won't, (3) their verification + disclosure rules, (4) their privacy rules — then defends the hardest call in it.
+Grade A-D based on: coherence, honesty about temptation and tradeoffs, and practicality.
+
+### UNIT 8: THE FRONTIER — AGENTS & WHAT'S NEXT
+
+**Lesson 1 — From chatbots to agents**
+Teach: An agent = an LLM + tools + a loop (plan → act → observe → repeat) pursuing a goal (browse, run code, call apps, click). It unlocks multi-step tasks but adds real risks: actions in the world, prompt injection, compounding errors, and weak oversight.
+Key examples: Coding agents (Claude Code, Cursor), browser/computer-use agents, "deep research" agents; prompt-injection attacks that hijack an agent through a malicious web page or document.
+Exercise: Give a task a chatbot can't do but an agent could. The student lists the steps the agent would take and the single point where a mistake would be most costly — and where they'd insert a human check.
+Common mistake: Assuming more autonomy is strictly better. Autonomy multiplies capability AND risk.
+
+**Lesson 2 — Multimodal AI**
+Teach: Models that take or produce more than text — vision (read an image/screenshot), audio (speech in/out), video. It enables real-time tutoring, accessibility, "point your camera and ask" — and adds failure modes (misreading images, confident wrong OCR, audio spoofing, image-hidden jailbreaks).
+Key examples: GPT-4o / Gemini live voice + vision; "photograph your homework and ask"; document and chart reading; prompt injections hidden inside an image.
+Exercise: Take a real multimodal use (e.g., photo-based homework help). The student names two things it makes easier and two NEW ways it could fail or be misused.
+Common mistake: Trusting the AI's reading of an image as much as its text — vision is often less reliable.
+
+**Lesson 3 — What AI still can't do**
+Teach: The "jagged frontier" — uneven capability: great at some hard things, failing at some easy ones. Reliability/consistency gaps, pattern-matching vs. true reasoning, no live grounding without tools, and overconfidence. "It did the hard part" does NOT imply it'll do the easy part.
+Key examples: Models acing an essay but miscounting letters ("how many r's in strawberry"), flubbing simple logic/arithmetic; reasoning models help but don't erase this.
+Exercise: Give a task AI looks great at and a deceptively simple one it tends to flub. The student predicts which it'll fail and explains the jagged-frontier reason.
+Common mistake: Inferring broad competence from one impressive output.
+
+**Lesson 4 — Keeping up and staying critical**
+Teach: Evaluate AI claims without hype OR doom. Ask "what task, measured how, on whose data?"; separate a polished demo from a reliable product; follow credible sources; treat benchmarks skeptically (gaming, contamination). Skepticism is the durable skill as tools change monthly.
+Key examples: Cherry-picked demo videos vs. real-world reliability; "PhD-level" marketing claims; benchmark contamination where test data leaked into training.
+Exercise: Give a bold AI marketing claim. The student writes the three questions they'd ask and the evidence that would actually convince them.
+Common mistake: Believing the demo is the product.
+
+**Lesson 5 — Unit Review: evaluate a real AI product**
+Comprehensive exercise: Present a real AI product or agent. The student evaluates (1) what it genuinely does well, (2) its real limits, (3) its risks (privacy, errors, misuse), and (4) whether they'd trust it for something that matters — and what would have to be true.
+Grade A-D based on: specificity, balanced judgment (neither hype nor doom), and a defensible trust verdict.
+
 ## GENERAL RULES
+- LESSON SCOPE — you teach ONLY the single lesson named in the most recent [CURRICULUM: Unit X, Lesson Y] tag. Stay on that one lesson's objective. Do NOT teach, preview, or begin the next lesson or unit — not even after the student shows mastery. When you emit [LESSON_COMPLETE] the lesson is OVER: give only a one- or two-line sign-off ("Nice work — you've nailed this one."). The APP moves the student forward; a brand-new [CURRICULUM: …] message will start the next lesson. If the context seems to contain more than one [CURRICULUM: …] tag, follow the most recent one and ignore the others — never announce that you saw multiple tags.
 - Be specific. Use names, dates, real systems. Vague teaching is bad teaching.
 - One step at a time. Never dump TEACH + EXERCISE in one response.
 - If the student struggles, break it down further — don't repeat the same explanation.
 - For Review lessons, be comprehensive and grade honestly.
 - Keep tone warm but intellectually rigorous — like a demanding but supportive teacher.
 - Always connect concepts back to the student's real life where possible.
-- Mobile readability: short paragraphs (≤3 lines), bullets when listing, no walls of text. The student is on a phone.`;
+- Mobile readability: short paragraphs (≤3 lines), bullets when listing, no walls of text. The student is on a phone.
+- CHECK-QUESTION FORMATTING — when you pose your single check question (the short question that probes understanding before the exercise), wrap ONLY that question in [CHECK] … [/CHECK] tags, e.g. [CHECK]Why doesn't more training data always make a model better?[/CHECK]. At most one per message, only for a genuine check question (never rhetorical or teaching questions), with nothing else inside the tags. The app renders it as a highlighted callout and strips the tags from view; if you're unsure whether something is a check question, leave the tags off.
+- PROFICIENCY SIGNAL — be strict. End a reply with the marker [LESSON_COMPLETE] on its own final line ONLY when you have just confirmed the student is genuinely proficient at THIS lesson's objective — not merely that they participated. Before emitting, silently verify: did the student make a real attempt at the exercise AND get it right, either on their own or by self-correcting after your feedback and re-demonstrating the skill? If you have any doubt, do NOT emit — give them another attempt or keep coaching.
+  • Regular lessons: emit only after the student's exercise attempt is correct (or self-corrected and re-shown) AND your Step 4 feedback confirms real understanding. A first wrong attempt is never a completion.
+  • Review lessons: emit only when your grade is A or B. For a C or D, do NOT emit — name the specific gap, give them another attempt, and emit only once they genuinely reach A/B.
+  Never emit during TEACH, CHECK, or the EXERCISE prompt itself, never while reteaching, and never just because the student replied — it signals proficiency, not participation. Emit at most once per lesson.`;
 
 const FACTCHECK_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. A student has submitted a claim about AI for fact-checking.
 
@@ -922,30 +968,6 @@ SHORT. Score feedback should be concise and scannable. Don't write essays about 
 
 ${CONFIDENCE_CALIBRATION}`;
 
-const TEST_EVALUATOR_PROMPT = `You are Mercurius Ⅰ, evaluating whether a student is ready for Direct Mode.
-
-Direct Mode gives students access to deeper, more substantive responses. To earn it, they need to demonstrate genuine critical thinking — not perfection, just authenticity.
-
-**If this is the START of the test** (you haven't asked test questions yet):
-- Transition warmly: "You've been engaging really well. Before I unlock something new, I want to check something..."
-- Ask exactly 2 questions based on topics you've ACTUALLY discussed. Test reasoning, not recall:
-  - A question that asks them to apply a concept to a new situation
-  - A question that asks them to identify a flaw, limitation, or hidden assumption
-- Keep it conversational. This should feel like the best part of the conversation, not an exam.
-
-**If the student has already answered your test questions:**
-- Look for: genuine effort, evidence of reasoning (not just restating what you said), willingness to engage with uncertainty
-- NOT looking for: perfect answers, technical vocabulary, or agreement with you
-- **Pass** (they showed real thinking): Start your response with "[TEST_PASSED]" on its own line. Celebrate genuinely — tell them specifically what impressed you. Explain what Direct Mode gives them.
-- **Fail** (they need more time): Start with "[TEST_FAILED]" on its own line. Be encouraging and specific about what to think more about. This is a milestone, not a gatekeep.
-
-Tone: warm, honest, genuinely rooting for them.
-
-Format: short paragraphs (≤3 lines), readable on a phone. The two questions are the substance — keep scaffolding minimal.`;
-
-// ---------------------------------------------------------------------------
-// Curated source library — real URLs for Mercurius to cite
-// ---------------------------------------------------------------------------
 const SOURCE_LIBRARY = `
 
 ### CURATED SOURCE LIBRARY
@@ -1066,11 +1088,16 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
   if (dbHistory.length < minMessages) {
     return { error: 'insufficient_history', message: 'Have a longer conversation first.' };
   }
+  const history = dbHistory.slice(-(historyLimit - 10));
+  // The Anthropic API requires messages[0].role === 'user' (400 otherwise) —
+  // drop leading assistant turns the slice may have exposed. The generated
+  // `userMessage` appended below keeps the array non-empty.
+  while (history.length > 0 && history[0].role !== 'user') history.shift();
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
-    messages: [...dbHistory.slice(-(historyLimit - 10)), { role: 'user', content: userMessage }],
+    messages: [...history, { role: 'user', content: userMessage }],
   });
   const raw = response.content[0]?.text || '';
   let parsed;
@@ -1096,27 +1123,8 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
   return parsed;
 }
 
-// ---------------------------------------------------------------------------
-// Helper — detect [TEST_PASSED]/[TEST_FAILED] markers and update DB state
-// ---------------------------------------------------------------------------
-async function processTestOutcome(reply, sessionId, testState, testTriggered) {
-  let processedReply = reply;
-  let justUnlocked = false;
-
-  if (processedReply.startsWith('[TEST_PASSED]')) {
-    processedReply = processedReply.replace(/^\[TEST_PASSED\]\n?/, '');
-    await db.setUnlocked(sessionId);
-    await db.setTestState(sessionId, 'passed');
-    justUnlocked = true;
-  } else if (processedReply.startsWith('[TEST_FAILED]')) {
-    processedReply = processedReply.replace(/^\[TEST_FAILED\]\n?/, '');
-    await db.setTestState(sessionId, null);
-  } else if (testState === 'pending' || testTriggered) {
-    await db.setTestState(sessionId, 'in_progress');
-  }
-
-  return { reply: processedReply, justUnlocked };
-}
+// `processLessonOutcome` (curriculum [LESSON_COMPLETE] marker) lives in
+// ./lib/lessonOutcome and is required at the top — pure + unit-tested there.
 
 // ---------------------------------------------------------------------------
 // Rate limiting
@@ -1192,6 +1200,17 @@ function requireAdmin(req, res, next) {
 // `isRateLimited(sessionId)` is now async because the Redis path
 // is. Callers `await` it.
 const isRateLimited = sessionLimiter(60 * 1000, 20);
+
+// ---------------------------------------------------------------------------
+// Async route wrapper — Express 4 does NOT forward rejections from async
+// handlers to the error middleware at the bottom of this file, so any await
+// that rejects outside a handler's own try/catch becomes an unhandled
+// rejection and (on modern Node) kills the whole process. Wrapping a handler
+// routes the rejection to the last-resort error handler → a logged 500 for
+// one request instead of dropping every connected user. Applied to every
+// route with awaits outside its own try/catch.
+// ---------------------------------------------------------------------------
+const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // ---------------------------------------------------------------------------
 // Prompt injection defense — detect common injection patterns
@@ -1283,7 +1302,7 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 // POST /api/chat
 // ---------------------------------------------------------------------------
-app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), async (req, res) => {
+app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
   const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId } = req.validated;
 
@@ -1337,8 +1356,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     db.getMessages(sessionId, HISTORY_LIMITS.CHAT),
   ]);
   const mode = sessionState?.mode || 'socratic';
-  const isUnlocked = !!(sessionState?.unlocked);
-  let testState = sessionState?.test_state || null;
   const msgCount = sessionState?.message_count || 0;
 
   // Get the latest user message (last in clientMessages)
@@ -1385,7 +1402,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // Determine which system prompt to use + test state transitions
   // ---------------------------------------------------------------------------
   let systemPrompt;
-  let testTriggered = false;
   // `effectiveMode` is the uppercase mode token the v2 unified prompt's
   // <mode_router> reads. It tracks the SAME decision the legacy branching
   // makes below — it's just the routing signal instead of a prompt swap.
@@ -1393,43 +1409,31 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   // Check if this is a curriculum lesson message
   const lastUserMsg = clientMessages[clientMessages.length - 1]?.content || '';
-  const isCurriculumMsg = lastUserMsg.startsWith('[CURRICULUM:');
+  // Lessons stay in curriculum mode for the WHOLE conversation: the iOS client
+  // re-sends the [CURRICULUM: …] opener as a hidden first wire message on every
+  // turn, so detect the prefix on ANY user message, not just the last — that's
+  // what keeps graded follow-ups (where [LESSON_COMPLETE] is emitted) in mode.
+  const isCurriculumMsg = clientMessages.some(
+    (m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[CURRICULUM:'),
+  );
 
   if (isCurriculumMsg) {
     // Structured curriculum lesson mode
     systemPrompt = CURRICULUM_PROMPT + memoryContext;
     effectiveMode = 'CURRICULUM';
 
-  } else if (mode === 'direct' && isUnlocked) {
-    // Direct mode — full educational prompt
-    systemPrompt = DIRECT_PROMPT + memoryContext;
-    effectiveMode = 'DIRECT';
-
   } else if (mode === 'debate') {
-    // Debate mode — freely available, no unlock required
+    // Debate mode
     systemPrompt = DEBATE_PROMPT + memoryContext;
     effectiveMode = 'DEBATE';
 
   } else if (mode === 'discussion') {
-    // Discussion mode — reasoning evaluation, freely available
+    // Discussion mode — reasoning evaluation
     systemPrompt = DISCUSSION_PROMPT + memoryContext;
     effectiveMode = 'DISCUSSION';
 
-  } else if (!isUnlocked && testState === null && msgCount >= 6) {
-    // Time to trigger the test
-    await db.setTestState(sessionId, 'pending');
-    systemPrompt = TEST_EVALUATOR_PROMPT;
-    testTriggered = true;
-    effectiveMode = 'TEST_EVALUATOR';
-
-  } else if (testState === 'pending' || testState === 'in_progress') {
-    // Student is mid-test — use evaluator prompt
-    systemPrompt = TEST_EVALUATOR_PROMPT;
-    if (testState === 'pending') testTriggered = true;
-    effectiveMode = 'TEST_EVALUATOR';
-
   } else {
-    // Normal Socratic mode
+    // Normal Socratic mode (the default)
     systemPrompt = SOCRATIC_PROMPT + memoryContext;
     effectiveMode = 'SOCRATIC';
   }
@@ -1459,9 +1463,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // deeper pedagogical material. Curriculum mode is exempted: it has
   // its own structured-lesson contract that explicitly wants
   // teach → exercise → feedback turns, which would conflict with the
-  // 3-6 sentence default. Test-evaluator mode is also exempt — it has
-  // a fixed marker contract ([TEST_PASSED] / [TEST_FAILED]).
-  if (!isCurriculumMsg && !testTriggered) {
+  // 3-6 sentence default.
+  if (!isCurriculumMsg) {
     systemPrompt = qualityPrefix(mode) + systemPrompt;
   }
 
@@ -1487,7 +1490,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const runtimeContext = buildRuntimeContext({
       mode: effectiveMode,
       responseMode,
-      unlocked: isUnlocked,
       currentDate: new Date().toISOString().slice(0, 10),
       memory: memoryContext,
       performance: personalizationNote,
@@ -1520,19 +1522,39 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   }
   const latestContent = buildUserContent(latestUserMessage.content, attachedImage);
 
-  // Build messages array for API
-  const apiMessages = dbHistory.length > 0
-    ? [...dbHistory, { role: 'user', content: latestContent }]
+  // Build messages array for API.
+  //
+  // Curriculum lessons are ISOLATED conversations on the client — each lesson is
+  // its own thread, and the client re-sends that whole thread every turn. The
+  // per-session `dbHistory`, by contrast, flattens EVERY lesson + the main chat
+  // under one sessionId, so it bleeds other lessons' content (and their
+  // `[CURRICULUM: …]` tags) into the current one — which makes the model think
+  // two lessons are in play and drift into the wrong one. For curriculum, trust
+  // the client's thread; only ordinary chat falls back to the session history.
+  const priorHistory = isCurriculumMsg
+    ? clientMessages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
+    : dbHistory;
+  const apiMessages = priorHistory.length > 0
+    ? [...priorHistory, { role: 'user', content: latestContent }]
     : [{ role: 'user', content: latestContent }];
 
   const trimmed = apiMessages.slice(-40);
+  // The Anthropic API requires messages[0].role === 'user' (400 otherwise).
+  // The slice can land on an assistant turn depending on window parity, so
+  // drop leading assistant messages — the newest user turn is always last.
+  while (trimmed.length > 1 && trimmed[0].role !== 'user') trimmed.shift();
 
   try {
     // Token + temperature now come from the response-mode budget —
     // see `RESPONSE_MODE_BUDGETS`. The previous mode-keyed heuristic
     // (direct → 1200 / discussion → 1000 / others → 800) is gone:
     // mode controls *posture*, response_mode controls *length*.
-    const { maxTokens, temperature } = responseBudget;
+    const { temperature } = responseBudget;
+    // Curriculum lessons are long, structured teaching turns (teach → check →
+    // exercise → grade). The concise mobile budget (250 tokens) truncates them
+    // mid-sentence, so give lesson turns real headroom regardless of the
+    // response-mode the client sent.
+    const maxTokens = isCurriculumMsg ? 2048 : responseBudget.maxTokens;
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
@@ -1547,7 +1569,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       });
 
       const streamAbort = new AbortController();
-      const streamTimeout = setTimeout(() => streamAbort.abort(), 45000);
+      // Distinguishes the watchdog firing from a client Stop/disconnect abort
+      // — only the former owes the client an SSE error frame.
+      let timedOut = false;
+      const streamTimeout = setTimeout(() => { timedOut = true; streamAbort.abort(); }, 45000);
 
       const stream = anthropic.messages.stream({
         model: chosenModel,
@@ -1573,21 +1598,40 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
       stream.on('end', async () => {
         clearTimeout(streamTimeout);
+        // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
+        // or aborted stream must never persist its truncated partial (or the
+        // fabricated fallback line) as a completed turn, nor emit 'complete'.
+        if (stream.errored || stream.aborted) return;
         const rawReply = fullText || "I seem to have lost my train of thought. Try asking again?";
-        const outcome = await processTestOutcome(rawReply, sessionId, testState, testTriggered);
-        const { reply, justUnlocked } = outcome;
+        // Only curriculum lessons emit [LESSON_COMPLETE]; gate on mode so a
+        // stray marker in any other mode is never stripped or flagged.
+        const lessonOutcome = isCurriculumMsg
+          ? processLessonOutcome(rawReply)
+          : { reply: rawReply, lessonComplete: false };
+        const reply = lessonOutcome.reply;
 
-        await db.saveMessage(sessionId, 'assistant', reply);
+        try {
+          await db.saveMessage(sessionId, 'assistant', reply);
+        } catch (e) {
+          // The reply text is already in hand — log the failed save and still
+          // deliver the 'complete'/[DONE] frames. A rejection here bypasses
+          // Express entirely and would otherwise kill the process.
+          logger.forRequest(req).error({ err: e.message }, 'SSE assistant save failed');
+        }
+
+        // Background: extract and save memories (non-blocking) — same as the
+        // JSON path; without this the streaming path (the iOS app and the
+        // widget's default send) never writes any student memory at all.
+        extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { logger.warn({ err: e.message }, 'background memory save failed'); });
 
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
           sessionId,
-          mode: justUnlocked ? 'socratic' : mode,
-          unlocked: justUnlocked ? true : isUnlocked,
-          justUnlocked,
+          mode,
           streak: currentStreak,
           difficulty,
+          lessonComplete: lessonOutcome.lessonComplete,
         })}\n\n`);
 
         safeWrite('data: [DONE]\n\n');
@@ -1604,6 +1648,20 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
             res.end();
           } catch (e) { logger.warn({ err: e.message }, 'SSE error-write failed'); }
+        }
+      });
+
+      // Aborts (watchdog timeout, client Stop/disconnect via req 'close') emit
+      // 'abort', NOT 'error'. Registering this listener also suppresses the
+      // SDK's deliberate Promise.reject for unhandled aborts (MessageStream
+      // _emit), which would otherwise crash the process on every disconnect.
+      stream.on('abort', () => {
+        clearTimeout(streamTimeout);
+        // Only the watchdog owes the client an answer — on a client-initiated
+        // abort the other end is already gone.
+        if (timedOut && !res.writableEnded) {
+          safeWrite(`data: ${JSON.stringify({ type: 'error', error: 'response timed out' })}\n\n`);
+          try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
       });
 
@@ -1624,7 +1682,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       });
 
       const rawReply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
-      const { reply, justUnlocked } = await processTestOutcome(rawReply, sessionId, testState, testTriggered);
+      const lessonOutcome = isCurriculumMsg
+        ? processLessonOutcome(rawReply)
+        : { reply: rawReply, lessonComplete: false };
+      const reply = lessonOutcome.reply;
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply);
@@ -1633,18 +1694,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { logger.warn({ err: e.message }, 'background memory save failed'); });
 
       // Session summary suggestion — after 8+ exchanges, hint to the user
-      const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0 && !testTriggered;
+      const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0;
 
       // Return mode info so the widget can update UI
       return res.json({
         reply,
         sessionId,
-        mode: justUnlocked ? 'socratic' : mode,
-        unlocked: justUnlocked ? true : isUnlocked,
-        justUnlocked,
+        mode,
         streak: currentStreak,
         difficulty,
         suggestSummary: shouldSuggestSummary,
+        lessonComplete: lessonOutcome.lessonComplete,
       });
     }
 
@@ -1655,7 +1715,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       reply: "Hmm, something went wrong on my end — which is itself a good reminder that AI systems fail. Try again in a moment."
     });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/session/:sessionId
@@ -1676,27 +1736,28 @@ app.get('/api/session/:sessionId', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/mode — switch mode (only allowed if session is unlocked)
+// POST /api/mode — switch mode
 // ---------------------------------------------------------------------------
-app.post('/api/mode', validate(ModeRequest, { endpoint: '/api/mode' }), async (req, res) => {
+app.post('/api/mode', validate(ModeRequest, { endpoint: '/api/mode' }), asyncRoute(async (req, res) => {
   const { sessionId, mode } = req.validated;
   await db.getOrCreateSession(sessionId);
   const state = await db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
 
-  const isUnlocked = !!state.unlocked;
-  const requiresUnlock = mode === 'direct';
-  if (requiresUnlock && !isUnlocked) return res.status(403).json({ error: 'locked', message: 'Complete the comprehension check first.' });
-
   await db.setMode(sessionId, mode);
-  return res.json({ mode, unlocked: isUnlocked });
-});
+  return res.json({ mode });
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/quiz — generate a comprehension quiz from conversation history
 // ---------------------------------------------------------------------------
-app.post('/api/quiz', validate(QuizRequest, { endpoint: '/api/quiz' }), async (req, res) => {
+app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz' }), asyncRoute(async (req, res) => {
   const { sessionId } = req.validated;
+  // Per-session rate limit — this is an Anthropic-backed route, so it gets the
+  // same session bucket as /api/chat (survives IP rotation on mobile).
+  if (await isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
+  }
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.QUIZ,
@@ -1713,13 +1774,18 @@ app.post('/api/quiz', validate(QuizRequest, { endpoint: '/api/quiz' }), async (r
     logger.forRequest(req).error({ err: err.message }, 'Quiz error');
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/report-card
 // ---------------------------------------------------------------------------
-app.post('/api/report-card', validate(ReportCardRequest, { endpoint: '/api/report-card' }), async (req, res) => {
+app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint: '/api/report-card' }), asyncRoute(async (req, res) => {
   const { sessionId } = req.validated;
+  // Per-session rate limit — this is an Anthropic-backed route, so it gets the
+  // same session bucket as /api/chat (survives IP rotation on mobile).
+  if (await isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
+  }
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.REPORT,
@@ -1736,13 +1802,53 @@ app.post('/api/report-card', validate(ReportCardRequest, { endpoint: '/api/repor
     logger.forRequest(req).error({ err: err.message }, 'Report card error');
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
-});
+}));
+
+// ---------------------------------------------------------------------------
+// POST /api/unit-test/grade — grade a unit test's open-ended "defense" answer
+//
+// Stateless: the body carries the unit, the question, and the student's answer
+// (no conversation history). The multiple-choice half of the unit test is
+// scored entirely on-device; only this open-ended answer needs the model.
+// ---------------------------------------------------------------------------
+app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { endpoint: '/api/unit-test/grade' }), asyncRoute(async (req, res) => {
+  const { sessionId, unitTitle, defensePrompt, answer } = req.validated;
+  // Per-session rate limit — this is an Anthropic-backed route, so it gets the
+  // same session bucket as /api/chat (survives IP rotation on mobile).
+  if (await isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 400,
+      // Low temperature for grading consistency across retries.
+      temperature: 0.2,
+      system: UNIT_TEST_GRADER_PROMPT,
+      messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
+    });
+    const raw = response.content[0]?.text || '';
+    const result = parseUnitTestGrade(raw);
+    if (!result) {
+      return res.status(500).json({ error: 'parse_error', message: 'Could not grade your answer — please try again.' });
+    }
+    return res.json(result);
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'Unit test grade error');
+    return res.status(500).json({ error: 'api_error', message: 'Could not grade your answer right now.' });
+  }
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/concept-map
 // ---------------------------------------------------------------------------
-app.post('/api/concept-map', validate(ConceptMapRequest, { endpoint: '/api/concept-map' }), async (req, res) => {
+app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint: '/api/concept-map' }), asyncRoute(async (req, res) => {
   const { sessionId } = req.validated;
+  // Per-session rate limit — this is an Anthropic-backed route, so it gets the
+  // same session bucket as /api/chat (survives IP rotation on mobile).
+  if (await isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
+  }
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.MAP,
@@ -1762,7 +1868,7 @@ app.post('/api/concept-map', validate(ConceptMapRequest, { endpoint: '/api/conce
     logger.forRequest(req).error({ err: err.message }, 'Concept map error');
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/leaderboard
@@ -1789,21 +1895,143 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Standby gamification (mascot: Mercury) — /api/progression/*
+//
+// Flag-gated by GAMIFICATION_ENABLED. When OFF (default) BOTH routes return
+// `{ enabled: false }` and touch nothing — they intentionally still respond
+// (rather than 404) so the client can probe capability. Server-authoritative:
+// the client only READS state and REQUESTS evaluations; it can never set XP.
+// LEVEL ≠ RANK — these endpoints expose XP/Level/streak only, never rank.
+// ---------------------------------------------------------------------------
+app.get('/api/progression/me', async (req, res) => {
+  if (!GAMIFICATION_ENABLED) return res.json({ enabled: false });
+  const sessionId = req.query.sessionId;
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+  }
+  try {
+    // Lazily anchor the session row first — `progression.session_id` is a
+    // foreign key into `sessions`, and a fresh client may probe /me before its
+    // first chat. Mirrors POST /event (and /api/profile). getOrCreateSession is
+    // idempotent.
+    await db.getOrCreateSession(sessionId);
+    await db.ensureProgression(sessionId);
+    const snap = await gamificationXp.snapshot(db, sessionId);
+    const recent = await db.getRecentXpEvents(sessionId, 10);
+    // Quiet by design: /me is a plain snapshot. `recentXpEvents` is the factual
+    // reasoning-move credit log the UI renders — no character, no voice.
+    return res.json({
+      enabled: true,
+      xp: snap.xp,
+      level: snap.level,
+      levelProgress: snap.levelProgress,
+      xpToNext: snap.xpToNext,
+      streak: snap.currentStreak,
+      longestStreak: snap.longestStreak,
+      recentXpEvents: recent.map((e) => ({
+        amount: e.amount, reason: e.reason, sourceType: e.source_type, at: e.created_at,
+      })),
+    });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'progression/me error');
+    return res.status(500).json({ error: 'db_error' });
+  }
+});
+
+app.post('/api/progression/event', validate(ProgressionEventRequest, { endpoint: '/api/progression/event' }), async (req, res) => {
+  if (!GAMIFICATION_ENABLED) return res.json({ enabled: false });
+  const { sessionId, reason, sourceType, sourceId, sessionRef, metadata } = req.validated;
+  try {
+    await db.getOrCreateSession(sessionId);
+    // Progression streak (current_streak / longest_streak / last_active_date)
+    // is maintained here — any XP event counts as that day's activity. The
+    // row must exist first (awardXp's own ensureProgression runs later).
+    await db.ensureProgression(sessionId);
+    await db.touchProgressionStreak(sessionId);
+    // Server decides: idempotency, caps, and diminishing returns all live in
+    // lib/gamification/xp.js. Rewards reasoning/engagement moves, never answer
+    // correctness (there is no reason code for correctness).
+    const result = await gamificationXp.awardXp(db, { sessionId, reason, sourceType, sourceId, sessionRef, metadata });
+    if (!result.ok) {
+      return res.status(400).json({ enabled: true, error: result.status, awarded: 0 });
+    }
+    // Analytics — engagement track only (never rank). Counters stay at zero
+    // unless the flag is on, since this route returns early when it's off.
+    metrics.gamificationEventsTotal.inc({ reason, status: result.status });
+    if (result.status === 'awarded') {
+      metrics.gamificationXpAwardedTotal.inc({ reason }, result.awarded);
+    }
+    logger.forRequest(req).info(
+      { gamification: true, reason, status: result.status, awarded: result.awarded, level: result.level, leveledUp: !!result.leveledUp },
+      'progression event',
+    );
+    // The response is a plain result. The client formats its own factual,
+    // character-free acknowledgment from `reason` + `awarded` (e.g. "Revised
+    // your position · +12 XP"); the server ships no voice copy.
+    return res.json({
+      enabled: true,
+      status: result.status,
+      awarded: result.awarded,
+      leveledUp: !!result.leveledUp,
+      reason,
+      xp: result.xp,
+      level: result.level,
+      levelProgress: result.levelProgress,
+      xpToNext: result.xpToNext,
+      streak: result.currentStreak,
+    });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'progression/event error');
+    return res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Admin — GET current events data
 // ---------------------------------------------------------------------------
-app.get('/api/admin/events', adminLimiter, requireAdmin, async (_req, res) => {
+app.get('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (_req, res) => {
   const data = await db.getEventsFromDB();
   const updatedAt = await db.getEventsUpdatedAt();
   res.json({ data: data || eventsCache, updatedAt });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Admin — POST update events data (saves to SQLite, invalidates cache)
 // ---------------------------------------------------------------------------
-app.post('/api/admin/events', adminLimiter, requireAdmin, async (req, res) => {
+// Shape gate for the persisted events payload. buildMeetingContext consumes
+// this on EVERY chat request (`events.upcoming.forEach(...)`), so a malformed
+// row (e.g. `upcoming` as a string — truthy, `.length > 0`, no `.forEach`)
+// would throw on every /api/chat until the DB row is manually fixed. Unknown
+// extra keys are fine (Zod ignores them; the original object is what's
+// persisted) — this only rejects shapes the context builders can't walk.
+const AdminEventsData = z.object({
+  schedule: z.object({
+    day: z.string(),
+    time: z.string(),
+    location: z.string(),
+  }).partial().optional(),
+  upcoming: z.array(z.object({
+    title: z.string(),
+    date: z.string().optional(),
+    description: z.string().optional(),
+    topics: z.array(z.string()).optional(),
+    keyQuestions: z.array(z.string()).optional(),
+    suggestedReading: z.string().optional(),
+  })).optional(),
+  past: z.array(z.object({
+    title: z.string(),
+    description: z.string().optional(),
+  })).optional(),
+});
+
+app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
   const { data } = req.body;
   if (!data || typeof data !== 'object') {
     return res.status(400).json({ error: 'invalid_data', message: 'Provide a data object.' });
+  }
+  const parsed = AdminEventsData.safeParse(data);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'invalid_data', message: 'Events payload has an invalid shape — check upcoming/past/schedule.' });
   }
   await db.setEventsInDB(data);
   // Bust memory cache so next request picks up new data immediately
@@ -1811,12 +2039,12 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, async (req, res) => {
   eventsCacheTime = Date.now();
   logger.info('events updated via admin panel');
   return res.json({ ok: true, message: 'Events updated. Mercurius will use this data immediately.' });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/factcheck — analyze a claim about AI
 // ---------------------------------------------------------------------------
-app.post('/api/factcheck', chatLimiter, async (req, res) => {
+app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   const { sessionId, claim } = req.body;
   if (!isValidSessionId(sessionId) || !claim || typeof claim !== 'string' || claim.length > 1000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
@@ -1839,12 +2067,12 @@ app.post('/api/factcheck', chatLimiter, async (req, res) => {
     logger.forRequest(req).error({ err: err.message }, 'Factcheck error');
     return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/analyze — analyze an AI-generated response
 // ---------------------------------------------------------------------------
-app.post('/api/analyze', chatLimiter, async (req, res) => {
+app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
   const { sessionId, aiOutput } = req.body;
   if (!isValidSessionId(sessionId) || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and aiOutput (max 3000 chars).' });
@@ -1867,14 +2095,19 @@ app.post('/api/analyze', chatLimiter, async (req, res) => {
     logger.forRequest(req).error({ err: err.message }, 'Analyze error');
     return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/pre-briefing — generate a meeting prep briefing
 // ---------------------------------------------------------------------------
-app.get('/api/pre-briefing', async (req, res) => {
+app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
   const { sessionId } = req.query;
   if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_request', message: 'Session ID missing or invalid.' });
+  // Per-session rate limit — this is an Anthropic-backed route, so it gets the
+  // same session bucket as /api/chat (survives IP rotation on mobile).
+  if (await isRateLimited(sessionId)) {
+    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
+  }
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
     const meetingContext = buildMeetingContext(eventsData);
@@ -1893,7 +2126,7 @@ app.get('/api/pre-briefing', async (req, res) => {
     logger.forRequest(req).error({ err: err.message }, 'pre-briefing error');
     return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/challenge — get the weekly challenge from the next meeting
@@ -1926,7 +2159,7 @@ app.get('/api/challenge', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/profile — set display name for a session
 // ---------------------------------------------------------------------------
-app.post('/api/profile', async (req, res) => {
+app.post('/api/profile', asyncRoute(async (req, res) => {
   const { sessionId, displayName } = req.body;
   if (!isValidSessionId(sessionId) || !displayName || typeof displayName !== 'string') {
     return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId and displayName required.' });
@@ -1936,7 +2169,7 @@ app.post('/api/profile', async (req, res) => {
   await db.getOrCreateSession(sessionId);
   await db.setDisplayName(sessionId, clean);
   return res.json({ ok: true, displayName: clean });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Health check
@@ -2147,7 +2380,15 @@ app.use((err, req, res, _next) => {
 // Start server
 // ---------------------------------------------------------------------------
 let server;
-db.initSchema().then(() => {
+db.initSchema().then(async () => {
+  // Standby gamification: create its tables ONLY when the flag is on. With the
+  // flag off (default / production) this is skipped entirely, so the live
+  // schema is never altered. The canonical production migration lives in
+  // migrations/001_gamification.sql for deliberate, operator-run application.
+  if (GAMIFICATION_ENABLED) {
+    await db.ensureGamificationSchema();
+    logger.info('gamification standby: schema ensured (GAMIFICATION_ENABLED on)');
+  }
   server = app.listen(PORT, () => {
     logger.info(
       { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL },
@@ -2163,6 +2404,13 @@ db.initSchema().then(() => {
 }).catch(err => {
   logger.error({ err: err.message }, 'failed to initialize database');
   process.exit(1);
+});
+
+// Backstop: any rejection path the asyncRoute wrapper / handler try-catches
+// miss degrades to a logged error instead of the Node default (process exit),
+// which would drop every connected user and burn Railway's restart budget.
+process.on('unhandledRejection', (err) => {
+  logger.error({ err: err && err.message ? err.message : String(err), stack: err && err.stack }, 'unhandled rejection');
 });
 
 process.on('SIGTERM', () => {
