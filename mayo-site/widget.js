@@ -81,8 +81,8 @@
   var isOpen = false;
   var isLoading = false;
   var userMessageCount = 0;
-  var isUnlocked = safeGetItem('merc_unlocked') === 'true';
   var currentMode = safeGetItem('merc_mode') || 'socratic';
+  if (['socratic', 'debate', 'discussion'].indexOf(currentMode) === -1) currentMode = 'socratic';
   var reflectionIndex = 0;
   var conversationHistory = [];
   var summaryFetched = false;
@@ -192,11 +192,34 @@
         { id: 'u5_l2', title: 'Autonomous weapons and lethal AI', objective: 'Grapple with the ethics of autonomous weapons systems.', starter: '[CURRICULUM: Unit 5, Lesson 2] Teach me about autonomous weapons and the debate around lethal AI decision-making. Present both sides, then give me a scenario-based exercise.' },
         { id: 'u5_l3', title: 'Corporate responsibility and open vs. closed AI', objective: 'Understand who controls AI and why it matters.', starter: '[CURRICULUM: Unit 5, Lesson 3] Walk me through the debate about open vs. closed AI models and corporate responsibility. Who should control AI development? Exercise after.' },
         { id: 'u5_l4', title: 'Final review: your AI ethics framework', objective: 'Build a personal ethical framework for AI.', starter: '[CURRICULUM: Unit 5, Lesson 4 - Final Review] Have me build my own AI ethics framework from everything I have learned across all 5 units. Ask me hard questions, challenge my reasoning, and grade the result.' }
+      ]},
+    { id: 'unit_6', number: '06', title: 'Spotting AI: Deepfakes & Synthetic Media', description: 'How AI generates images, voice, and video — and how to tell what\'s real: detection, deepfake scams, and the liar\'s dividend.',
+      lessons: [
+        { id: 'u6_l1', title: 'How AI makes images, voice, and video', objective: 'Understand how generative models create synthetic media.', starter: '[CURRICULUM: Unit 6, Lesson 1] Teach me how AI actually generates images, voice, and video — diffusion models and voice cloning, in plain terms, with real tools as examples. Then give me a hands-on exercise.' },
+        { id: 'u6_l2', title: 'Spotting AI-generated content', objective: 'Learn practical techniques to detect synthetic media.', starter: '[CURRICULUM: Unit 6, Lesson 2] Teach me how to tell if an image, video, or audio clip was AI-generated — the real tells, provenance signals like C2PA / Content Credentials, and reverse search. Then give me an exercise.' },
+        { id: 'u6_l3', title: 'Deepfakes, scams, and consent', objective: 'Understand the real harms of deepfakes and how to respond.', starter: '[CURRICULUM: Unit 6, Lesson 3] Teach me about deepfakes and voice-clone scams — real cases, the consent and harassment problems, and how to protect myself. Then give me a scenario-based exercise.' },
+        { id: 'u6_l4', title: 'Misinformation and the liar\'s dividend', objective: 'Understand how synthetic media distorts truth and trust.', starter: '[CURRICULUM: Unit 6, Lesson 4] Teach me how AI-generated media fuels misinformation, and explain the liar\'s dividend — how the mere existence of fakes lets people deny real things. Then give me an exercise.' },
+        { id: 'u6_l5', title: 'Unit review: verify a viral claim', objective: 'Apply detection and verification skills end-to-end.', starter: '[CURRICULUM: Unit 6, Lesson 5 - Review] Give me a realistic viral media claim and have me verify it end-to-end — is it real, AI-generated, or genuine but miscaptioned? Then grade my process A-D and tell me what to revisit.' }
+      ]},
+    { id: 'unit_7', number: '07', title: 'Using AI Well', description: 'The practical literacy: using AI to learn instead of avoid learning, researching and writing with it honestly, and protecting your data.',
+      lessons: [
+        { id: 'u7_l1', title: 'Thinking partner, not a crutch', objective: 'Use AI to learn more, not to skip the thinking.', starter: '[CURRICULUM: Unit 7, Lesson 1] Teach me the difference between using AI to actually learn versus to avoid thinking — the cognitive-offloading trap, and how to use it as a tutor instead of an answer machine. Then give me an exercise.' },
+        { id: 'u7_l2', title: 'Research and fact-finding with AI', objective: 'Use AI for research without getting burned by its traps.', starter: '[CURRICULUM: Unit 7, Lesson 2] Teach me how to use AI for research well — and its traps: hallucinated sources, sycophancy, and stale knowledge. Show me a verification workflow, then give me an exercise.' },
+        { id: 'u7_l3', title: 'Writing with AI honestly', objective: 'Use AI in your writing with integrity and your own voice.', starter: '[CURRICULUM: Unit 7, Lesson 3] Teach me how to use AI in my writing honestly — disclosure, keeping my own voice, and where the line sits between help and cheating. Use real school-policy examples, then give me an exercise.' },
+        { id: 'u7_l4', title: 'Your data and privacy', objective: 'Understand what you reveal to AI and how to protect it.', starter: '[CURRICULUM: Unit 7, Lesson 4] Teach me what really happens to the things I type into AI chatbots — training on your data, what gets stored, and what I should never share. Then give me an exercise.' },
+        { id: 'u7_l5', title: 'Unit review: your AI-use policy', objective: 'Design and defend your own rules for using AI.', starter: '[CURRICULUM: Unit 7, Lesson 5 - Review] Have me write my own personal AI-use policy — when I will and won\'t use AI for schoolwork, and why — then challenge my reasoning and grade it A-D.' }
+      ]},
+    { id: 'unit_8', number: '08', title: 'The Frontier: Agents & What\'s Next', description: 'Where AI is heading now — from chatbots to tool-using agents, multimodal models, what AI still can\'t do, and how to evaluate new claims without hype or fear.',
+      lessons: [
+        { id: 'u8_l1', title: 'From chatbots to agents', objective: 'Understand what AI agents are and why they matter.', starter: '[CURRICULUM: Unit 8, Lesson 1] Teach me the difference between a chatbot and an AI agent that can use tools and take actions — what it unlocks and what new risks it creates. Use real examples, then give me an exercise.' },
+        { id: 'u8_l2', title: 'Multimodal AI', objective: 'Understand AI that sees, hears, and speaks.', starter: '[CURRICULUM: Unit 8, Lesson 2] Teach me what multimodal AI is — models that handle images, audio, and video, not just text — what it enables and the new failure modes it brings. Then give me an exercise.' },
+        { id: 'u8_l3', title: 'What AI still can\'t do', objective: 'Understand the real limits of today\'s AI.', starter: '[CURRICULUM: Unit 8, Lesson 3] Teach me what current AI still genuinely struggles with — reasoning reliability, the jagged frontier, and why it fails in surprising ways. Use concrete examples, then give me an exercise.' },
+        { id: 'u8_l4', title: 'Keeping up and staying critical', objective: 'Build habits to evaluate new AI claims and tools.', starter: '[CURRICULUM: Unit 8, Lesson 4] Teach me how to evaluate new AI products and bold claims without falling for hype or fear — what questions to ask and what evidence to demand. Then give me an exercise.' },
+        { id: 'u8_l5', title: 'Unit review: evaluate a real AI product', objective: 'Apply critical evaluation to a real AI tool.', starter: '[CURRICULUM: Unit 8, Lesson 5 - Review] Give me a real AI product or agent and have me evaluate it — capabilities, limits, risks, and whether I\'d trust it and why. Then grade me A-D.' }
       ]}
   ];
   var ACHIEVEMENTS_DEF = [
     { id: 'first_chat', icon: 'I', name: 'First Conversation', desc: 'Sent your first message to Mercurius' },
-    { id: 'critical_thinker', icon: 'II', name: 'Critical Thinker', desc: 'Unlocked Direct Mode by demonstrating genuine thinking' },
     { id: 'debate_starter', icon: 'III', name: 'Debate Starter', desc: 'Entered Debate Mode and challenged Mercurius' },
     { id: 'fact_checker', icon: 'IV', name: 'Fact Checker', desc: 'Used the Fact Check tool to verify an AI claim' },
     { id: 'analyst', icon: 'V', name: 'AI Output Analyst', desc: 'Analyzed an AI-generated response critically' },
@@ -387,10 +410,6 @@
       '      <button class="merc-mode-btn active" id="merc-tab-socratic">',
       '        <span class="merc-mode-dot"></span> Socratic',
       '      </button>',
-      '      <button class="merc-mode-btn" id="merc-tab-direct">',
-      '        <span class="merc-mode-dot"></span> Direct',
-      '        <span class="merc-mode-lock" id="merc-tab-lock-icon">Locked</span>',
-      '      </button>',
       '      <button class="merc-mode-btn" id="merc-tab-debate">',
       '        <span class="merc-mode-dot"></span> Debate',
       '      </button>',
@@ -493,8 +512,8 @@
       '      <h2>Three Ways to Learn</h2>',
       '      <div class="merc-onboard-modes">',
       '        <div class="merc-onboard-mode"><strong>Socratic</strong> \u2014 I ask questions first to activate your thinking before sharing anything.</div>',
-      '        <div class="merc-onboard-mode"><strong>Direct</strong> \u2014 Unlocked after you demonstrate critical thinking. More depth, more nuance.</div>',
       '        <div class="merc-onboard-mode"><strong>Debate</strong> \u2014 I take a position on AI ethics and argue against you. Anyone can use this.</div>',
+      '        <div class="merc-onboard-mode"><strong>Discussion</strong> \u2014 I pose a hard AI question and score the quality of your reasoning.</div>',
       '      </div>',
       '    </div>',
       '    <div class="merc-onboard-step" data-step="2">',
@@ -1277,15 +1296,9 @@
 
     // Mode tab clicks
     var tabSocratic = document.getElementById('merc-tab-socratic');
-    var tabDirect   = document.getElementById('merc-tab-direct');
     if (tabSocratic) {
       tabSocratic.addEventListener('click', function () {
         if (currentMode !== 'socratic') handleModeSwitchTo('socratic');
-      });
-    }
-    if (tabDirect) {
-      tabDirect.addEventListener('click', function () {
-        if (isUnlocked && currentMode !== 'direct') handleModeSwitchTo('direct');
       });
     }
     var tabDebate = document.getElementById('merc-tab-debate');
@@ -1534,16 +1547,6 @@
       conversationHistory = conversationHistory.slice(conversationHistory.length - 20);
     }
 
-    // Handle unlock event
-    if (data.justUnlocked) {
-      isUnlocked = true;
-      currentMode = 'socratic';
-      localStorage.setItem('merc_unlocked', 'true');
-      localStorage.setItem('merc_mode', 'socratic');
-      updateModeBar();
-      showUnlockCelebration();
-      checkAndAwardAchievement('critical_thinker');
-    }
     // Note: do NOT override currentMode from chat response — the user
     // may have switched modes while the request was in flight.
 
@@ -1841,10 +1844,19 @@
   // =========================================================================
   // 11. Minimal Markdown renderer (no external deps)
   // =========================================================================
+  // Strip lesson control sentinels so they never render as transcript text.
+  // The legacy/production backend emits [TEST_PASSED] inline, and the current
+  // server only strips [LESSON_COMPLETE] — so scrub all three here, the single
+  // chokepoint every display path (stream, finalize, fallback, resume) funnels
+  // through.
+  function stripLessonMarkers(t) {
+    return (t || '').replace(/\[(?:LESSON_COMPLETE|TEST_PASSED|TEST_FAILED)\]/g, '').trimEnd();
+  }
+
   function renderMarkdown(text) {
     if (!text) return '';
 
-    var escaped = escapeHtml(text);
+    var escaped = escapeHtml(stripLessonMarkers(text));
 
     escaped = escaped.replace(/^##\s+(.+)$/gm, '<h3>$1</h3>');
     escaped = escaped.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
@@ -2115,46 +2127,26 @@
   // =========================================================================
   function updateModeBar() {
     var btnSocratic   = document.getElementById('merc-tab-socratic');
-    var btnDirect     = document.getElementById('merc-tab-direct');
     var btnDebate     = document.getElementById('merc-tab-debate');
     var btnDiscussion = document.getElementById('merc-tab-discussion');
-    var lockIcon      = document.getElementById('merc-tab-lock-icon');
     var modeLabel     = document.getElementById('merc-mode-label');
 
-    if (!btnSocratic || !btnDirect) return;
-
-    // Unlock state
-    if (isUnlocked) {
-      btnDirect.disabled = false;
-      if (lockIcon) lockIcon.textContent = '';
-    } else {
-      btnDirect.disabled = true;
-      if (lockIcon) lockIcon.innerHTML = 'Locked';
-    }
+    if (!btnSocratic) return;
 
     // Active states
-    [btnSocratic, btnDirect, btnDebate, btnDiscussion].forEach(function (b) {
+    [btnSocratic, btnDebate, btnDiscussion].forEach(function (b) {
       if (b) b.classList.remove('active');
     });
 
     var activeBtn =
-      currentMode === 'direct' ? btnDirect :
       currentMode === 'debate' ? btnDebate :
       currentMode === 'discussion' ? btnDiscussion :
       btnSocratic;
     if (activeBtn) activeBtn.classList.add('active');
 
     // Mode label in header
-    var modeNames = { socratic: 'Socratic', direct: 'Direct', debate: 'Debate', discussion: 'Discussion' };
+    var modeNames = { socratic: 'Socratic', debate: 'Debate', discussion: 'Discussion' };
     if (modeLabel) modeLabel.textContent = modeNames[currentMode] || 'Socratic';
-  }
-
-  function showUnlockCelebration() {
-    var header = document.getElementById('merc-main-header');
-    if (header) {
-      header.classList.add('merc-unlock-flash');
-      setTimeout(function () { header.classList.remove('merc-unlock-flash'); }, 1800);
-    }
   }
 
   function showModeToast(label) {
@@ -2166,7 +2158,6 @@
 
   function handleModeSwitchTo(newMode) {
     if (newMode === 'debate') debateRound = 0;
-    if (newMode === 'direct' && !isUnlocked) return;
 
     var specialModes = ['debate', 'discussion'];
     var leavingSpecial = (specialModes.indexOf(currentMode) !== -1 && specialModes.indexOf(newMode) === -1);
@@ -2210,9 +2201,7 @@
       container.innerHTML = '';
       var notice = document.createElement('div');
       notice.className = 'merc-msg merc-msg-notice';
-      notice.textContent = newMode === 'direct'
-        ? 'Switched to Direct Mode — Mercurius will now lead with substantive explanations.'
-        : 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.';
+      notice.textContent = 'Switched to Socratic Mode — Mercurius will guide your thinking with questions.';
       container.appendChild(notice);
 
       var tags = document.createElement('div');
@@ -2223,21 +2212,20 @@
       attachTopicTagListeners();
 
     } else {
-      // Normal mode switch (socratic <-> direct)
+      // Normal mode switch
       var modeNotices = {
-        direct: 'Switched to Direct Mode \u2014 Mercurius will now lead with substantive explanations.',
         socratic: 'Switched to Socratic Mode \u2014 Mercurius will guide your thinking with questions.'
       };
       appendSystemNotice(modeNotices[newMode] || 'Mode switched.');
     }
 
-    showModeToast({ socratic: 'Socratic', direct: 'Direct', debate: 'Debate', discussion: 'Discussion' }[newMode] || newMode);
+    showModeToast({ socratic: 'Socratic', debate: 'Debate', discussion: 'Discussion' }[newMode] || newMode);
 
     // Tell server
     fetch(MODE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, mode: newMode, clientUnlocked: isUnlocked }),
+      body: JSON.stringify({ sessionId: sessionId, mode: newMode }),
     }).catch(function (e) { console.warn('[Mercurius]', e); });
   }
 
@@ -2421,7 +2409,7 @@
     }
     var myBadge = sessionId.slice(-4).toUpperCase();
     var html = '<div class="merc-lb-table">';
-    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>Streak</span><span>Msgs</span><span>Mode</span></div>';
+    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>Streak</span><span>Msgs</span></div>';
     rows.forEach(function (r) {
       var isMe = r.badge === myBadge;
       html += '<div class="merc-lb-row' + (isMe ? ' merc-lb-me' : '') + '">';
@@ -2429,7 +2417,6 @@
       html += '<span class="merc-lb-badge">' + escapeHtml(r.name || r.badge) + (isMe ? ' <span style="font-size:9px;opacity:0.6">(you)</span>' : '') + '</span>';
       html += '<span>' + escapeHtml(String(r.streak)) + '</span>';
       html += '<span>' + escapeHtml(String(r.messages)) + '</span>';
-      html += '<span>' + (r.unlocked ? '<span style="color:#C9922A">Direct</span>' : 'Socratic') + '</span>';
       html += '</div>';
     });
     html += '</div>';
@@ -2550,14 +2537,6 @@
       var ta = document.getElementById('merc-textarea');
       if (ta) setTimeout(function () { ta.focus(); }, 280);
     };
-
-    if (isUnlocked) {
-      fetch(MODE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionId, mode: currentMode, clientUnlocked: true }),
-      }).catch(function (e) { console.warn('[Mercurius]', e); });
-    }
 
     // Immediate-value onboarding: auto-send starter message for first-time visitors
     if (!safeGetItem('merc_onboarded')) {

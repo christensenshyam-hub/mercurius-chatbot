@@ -228,25 +228,6 @@
       color: var(--gold);
       font-weight: 700;
     }
-    .dash-unlocked-pill {
-      display: inline-block;
-      padding: 2px 8px;
-      background: rgba(201, 146, 42, 0.12);
-      border: 1px solid rgba(201, 146, 42, 0.3);
-      border-radius: 10px;
-      font-size: 10px;
-      color: var(--gold);
-    }
-    .dash-socratic-pill {
-      display: inline-block;
-      padding: 2px 8px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 10px;
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-
     /* Loading / error states */
     .dash-loading {
       text-align: center;
@@ -313,9 +294,11 @@
       var html = '';
 
       // Stat cards
+      var today = new Date().toISOString().slice(0, 10);
+      var activeToday = (d.recentSessions || []).filter(function(s) { return s.lastActive === today; }).length;
       html += '<div class="dash-stats-grid">';
       html += statCard('Total Sessions', d.totalSessions, 'All unique student sessions');
-      html += statCard('Unlock Rate', d.unlockRate + '%', d.unlockedCount + ' students reached Direct Mode');
+      html += statCard('Active Today', activeToday, 'Sessions active today');
       html += statCard('Total Messages', d.totalMessages, 'Across all sessions');
       html += statCard('Avg Msgs / Session', d.avgMessagesPerSession, 'Engagement depth indicator');
       html += '</div>';
@@ -348,14 +331,13 @@
         html += '<p class="dash-empty">No sessions yet.</p>';
       } else {
         html += '<table class="dash-table">';
-        html += '<thead><tr><th>Student</th><th>Msgs</th><th>Streak</th><th>Mode</th><th>Last Active</th></tr></thead>';
+        html += '<thead><tr><th>Student</th><th>Msgs</th><th>Streak</th><th>Last Active</th></tr></thead>';
         html += '<tbody>';
         d.recentSessions.forEach(function(s) {
           html += '<tr>';
           html += '<td><span class="dash-badge">' + escapeHtml(s.badge) + '</span></td>';
           html += '<td>' + (s.messages || 0) + '</td>';
           html += '<td>' + (s.streak || 1) + (s.streak > 1 ? ' \uD83D\uDD25' : '') + '</td>';
-          html += '<td>' + (s.unlocked ? '<span class="dash-unlocked-pill">Direct</span>' : '<span class="dash-socratic-pill">Socratic</span>') + '</td>';
           html += '<td style="font-family:\'Space Mono\',monospace;font-size:10px;">' + escapeHtml(s.lastActive || '—') + '</td>';
           html += '</tr>';
         });
