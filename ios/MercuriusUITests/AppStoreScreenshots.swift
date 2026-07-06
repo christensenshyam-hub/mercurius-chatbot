@@ -31,12 +31,13 @@ final class AppStoreScreenshots: XCTestCase {
         ]
         app.launch()
 
-        // Home → Chat.
-        let startChat = app.buttons["Start Chat"]
-        XCTAssertTrue(startChat.waitForExistence(timeout: Self.timeout), "Never reached Home")
-        startChat.tap()
+        // Home → Chat. ("AI LITERACY TUTOR" is unique to the chat header;
+        // the Home welcome also shows "Mercurius AI".)
+        let chatCTA = app.buttons["Chat with Merc"]
+        XCTAssertTrue(chatCTA.waitForExistence(timeout: Self.timeout), "Never reached Home")
+        chatCTA.tap()
         XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: Self.timeout),
+            app.staticTexts["AI LITERACY TUTOR"].waitForExistence(timeout: Self.timeout),
             "Never reached the chat tab"
         )
         settle()

@@ -338,7 +338,7 @@ Modular Swift Package Manager layout under `ios/Packages/`:
 | `NetworkingKit` | `APIClient`, session identity, SSE streaming, typed `APIError`, keychain wrapper |
 | `PersistenceKit` | SwiftData-backed chat history + in-memory fallback |
 | `ChatFeature` | Chat view model, message list, mode selector, quiz + report-card tools |
-| `CurriculumFeature` | 5 units × 4 lessons, progress store with forward-compatible migrations |
+| `CurriculumFeature` | 8 units of lessons + cumulative unit tests, progress store with forward-compatible migrations |
 | `ClubFeature` | Schedule / upcoming meetings / blog, pulled live from `mayoailiteracy.com` |
 | `SettingsFeature` | Theme preference, session reset |
 | `AppFeature` | Composition root — `AppEnvironment`, `RootView`, `AppShellView` (TabView) |

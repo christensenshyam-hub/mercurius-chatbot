@@ -12,7 +12,7 @@ import XCTest
 ///    selection actually flips content when tapped.
 /// 3. Empty chat state — all four starter prompts surface as accessible
 ///    buttons so a VoiceOver user can reach them.
-/// 4. Mode selector — all four modes render; Direct is marked locked.
+/// 4. Mode selector — all three modes render and are selectable.
 /// 5. Header affordances — Settings and Tools buttons carry their
 ///    accessibility labels and open the right UI.
 /// 6. Curriculum tab — progress bar + unit section header appear, and all
@@ -91,12 +91,14 @@ final class MercuriusUITests: XCTestCase {
     /// Wait for the bootstrap phase to finish AND advance past the
     /// HomeView entry screen into the main TabView.
     ///
-    /// Post-launch flow is: loading spinner → HomeView → (user taps
-    /// Start Chat) → AppShellView / TabView. The `"Mercurius AI"`
-    /// staticText in the chat header is our reliable "we are in the
-    /// app" signal — it exists only once the TabView is on screen.
+    /// Post-launch flow is: loading spinner → HomeView (the Merc
+    /// welcome) → (user taps Chat with Merc) → AppShellView / TabView.
+    /// The `"AI LITERACY TUTOR"` caption in the chat header is our
+    /// reliable "we are in the app" signal — it exists only once the
+    /// TabView is on screen ("Mercurius AI" is NOT unique anymore:
+    /// the Home welcome shows the same wordmark).
     /// Nearly every test cares about TabView-level affordances, so
-    /// this helper does both boot-wait and Start-Chat tap by default.
+    /// this helper does both boot-wait and CTA tap by default.
     /// Pass `enterApp: false` for tests that want to assert on
     /// HomeView itself.
     @MainActor
@@ -105,23 +107,23 @@ final class MercuriusUITests: XCTestCase {
         enterApp: Bool = true,
         timeout: TimeInterval = 15
     ) {
-        // First: HomeView's "Start Chat" button is the post-bootstrap
+        // First: HomeView's "Chat with Merc" button is the post-bootstrap
         // ready signal. Appears once RootView flips from .loading to
         // .ready.
-        let startChat = app.buttons["Start Chat"]
+        let chatCTA = app.buttons["Chat with Merc"]
         XCTAssertTrue(
-            startChat.waitForExistence(timeout: timeout),
-            "App never reached HomeView — Start Chat button did not appear within \(timeout)s"
+            chatCTA.waitForExistence(timeout: timeout),
+            "App never reached HomeView — Chat with Merc button did not appear within \(timeout)s"
         )
         guard enterApp else { return }
 
-        // Tap through to the TabView. The chat header's "Mercurius AI"
-        // staticText is the reliable signal we've landed there.
-        startChat.tap()
-        let header = app.staticTexts["Mercurius AI"]
+        // Tap through to the TabView. The chat header's "AI LITERACY
+        // TUTOR" caption is the reliable signal we've landed there.
+        chatCTA.tap()
+        let header = app.staticTexts["AI LITERACY TUTOR"]
         XCTAssertTrue(
             header.waitForExistence(timeout: timeout),
-            "Did not reach the chat tab — 'Mercurius AI' header missing \(timeout)s after Start Chat"
+            "Did not reach the chat tab — 'AI LITERACY TUTOR' caption missing \(timeout)s after Chat with Merc"
         )
     }
 
@@ -163,10 +165,10 @@ final class MercuriusUITests: XCTestCase {
         )
 
         // Tapping it should take us back to HomeView, which we
-        // recognize by the Start Chat button that only exists there.
+        // recognize by the Chat with Merc CTA that only exists there.
         home.tap()
         XCTAssertTrue(
-            app.buttons["Start Chat"].waitForExistence(timeout: Self.lookupTimeout),
+            app.buttons["Chat with Merc"].waitForExistence(timeout: Self.lookupTimeout),
             "Tapping Home from chat did not return to HomeView"
         )
     }
@@ -258,14 +260,14 @@ final class MercuriusUITests: XCTestCase {
     }
 
     @MainActor
-    func testModeSelectorExposesAllFourModes() {
+    func testModeSelectorExposesAllModes() {
         let app = launchApp()
         waitForBootComplete(app)
 
         // `ModeSelectorView` builds each pill's accessibility label as
-        // "<displayName>, locked" / "<displayName>, selected" / plain.
-        // Match by CONTAINS so we're robust to either state.
-        let expected = ["Socratic", "Direct", "Debate", "Discussion"]
+        // "<displayName>, selected" / plain. Match by BEGINSWITH so
+        // we're robust to either state.
+        let expected = ["Socratic", "Debate", "Discussion"]
         for mode in expected {
             let pill = app.buttons.matching(
                 NSPredicate(format: "label BEGINSWITH %@", mode)
@@ -286,7 +288,6 @@ final class MercuriusUITests: XCTestCase {
         let app = launchApp(
             extraArgs: [
                 "-seenModeDescription.socratic", "NO",
-                "-seenModeDescription.direct", "NO",
                 "-seenModeDescription.debate", "NO",
                 "-seenModeDescription.discussion", "NO",
             ],
@@ -294,10 +295,9 @@ final class MercuriusUITests: XCTestCase {
         )
         waitForBootComplete(app)
 
-        // Tap Debate — it's unlocked and guaranteed present. Socratic
-        // is the default active mode so tapping it is a no-op path
-        // (the user has already 'selected' it), and Direct is locked
-        // which has its own branch; Debate is the cleanest first-tap
+        // Tap Debate — guaranteed present. Socratic is the default
+        // active mode so tapping it is a no-op path (the user has
+        // already 'selected' it); Debate is the cleanest first-tap
         // case for this assertion.
         let debatePill = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH 'Debate'")
