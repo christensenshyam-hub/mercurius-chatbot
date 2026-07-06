@@ -46,14 +46,6 @@ extension ModeDescription {
             example: "What's the difference between correlation and causation?",
             footnote: nil
         ),
-        .direct: ModeDescription(
-            mode: .direct,
-            title: "Direct",
-            purpose: "Mercurius answers your question straight — no back-and-forth.",
-            whenToUse: "Use this when you already understand the topic and just need the information fast.",
-            example: "Give me the formula for exponential decay.",
-            footnote: "Direct is locked until you demonstrate critical thinking in Socratic Mode."
-        ),
         .debate: ModeDescription(
             mode: .debate,
             title: "Debate",

@@ -17,6 +17,10 @@ public struct ChatView: View {
     /// Confirmation shown after the user reports an AI response.
     @State private var showReportConfirmation = false
 
+    /// Brief "encouraging" Merc beat after a substantive exchange completes.
+    @State private var encourage = false
+    @State private var encourageTask: Task<Void, Never>?
+
     /// First-launch hint above the input bar. Visible only when the
     /// chat is empty AND the user hasn't dismissed it once. The X
     /// button on the hint is the only explicit dismissal path;
@@ -117,6 +121,8 @@ public struct ChatView: View {
                 if model.messages.isEmpty {
                     EmptyChatView(
                         suggestions: ModePromptProvider.prompts(for: model.currentMode),
+                        mercMood: focalMercState.mood,
+                        mercActivity: focalMercState.activity,
                         onSuggestion: { suggestion in
                             model.draft = suggestion
                             model.send()
@@ -140,7 +146,9 @@ public struct ChatView: View {
                         onReport: { message in
                             model.reportMessage(message)
                             showReportConfirmation = true
-                        }
+                        },
+                        mercMood: focalMercState.mood,
+                        mercActivity: focalMercState.activity
                     )
                 }
 
@@ -167,10 +175,58 @@ public struct ChatView: View {
         // doesn't snap when `hasSeenChatInputHint` flips. Scoped to
         // just that state so other view churn isn't animated.
         .animation(.easeInOut(duration: 0.25), value: hasSeenChatInputHint)
+        // A finished, substantive exchange earns a brief encouraging beat —
+        // whether the reply streamed (.streaming→.idle) or arrived whole
+        // (.sending→.idle, no deltas).
+        .onChange(of: model.phase) { old, new in
+            if (old == .streaming || old == .sending), new == .idle, hasEnoughConversation {
+                triggerEncourage()
+            }
+        }
     }
 
     private func dismissChatInputHint() {
         hasSeenChatInputHint = true
+    }
+
+    // MARK: - Merc focal state
+
+    private var isThinking: Bool { model.phase == .sending }
+    private var isStreaming: Bool { model.phase == .streaming }
+    private var isFailed: Bool {
+        if case .failed = model.phase { return true } else { return false }
+    }
+
+    /// The single focal Merc state for the chat — resolved from the live signals
+    /// via the centralized helper. Drives the intro Merc and the latest assistant
+    /// avatar.
+    private var focalMercState: MercMascotState {
+        let resolved = MercMascotState.resolve(MercSignals(
+            screen: .chat,
+            isUserTyping: !model.draft.isEmpty,
+            isAIThinking: isThinking,
+            isAISpeaking: isStreaming,
+            hasError: isFailed
+        ))
+        // The brief encouraging beat only colors an OTHERWISE-IDLE chat: live
+        // ambient states (thinking / speaking / listening) and errors always win
+        // — so a fast follow-up is never masked — and it never leaks onto the
+        // empty intro.
+        if encourage, resolved.activity == .idle, !model.messages.isEmpty {
+            return MercMascotState(mood: .encouraging, activity: .success,
+                                   priority: .reaction, duration: 2.5)
+        }
+        return resolved
+    }
+
+    private func triggerEncourage() {
+        encourageTask?.cancel()
+        encourage = true
+        encourageTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            encourage = false
+        }
     }
 
     private var isSending: Bool {
@@ -227,6 +283,12 @@ public struct ChatView: View {
             // item in the HStack.
             if let onGoHome {
                 Button {
+                    // Leaving the shell destroys this view model — an
+                    // in-flight reply would stream into the void and leave
+                    // the persisted thread permanently unanswered. Cancel
+                    // first so the bubble is marked and state is coherent
+                    // when the user comes back.
+                    if isSending { model.cancel() }
                     onGoHome()
                 } label: {
                     Image(systemName: "house")
@@ -328,14 +390,67 @@ struct MessageListView: View {
     let onRetry: () -> Void
     let onExplainMore: () -> Void
     let onReport: (ChatMessage) -> Void
+    /// Lesson styling for the bubbles (presence line + callout + soft shadow).
+    var lessonStyle: Bool = false
+    /// The live focal Merc state, applied to the LATEST assistant message's
+    /// avatar (older avatars stay neutral). Avatars render only in free chat.
+    var mercMood: MercMood = .neutral
+    var mercActivity: MercActivity = .idle
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The latest assistant message — the one whose avatar reflects the live
+    /// thinking / speaking / listening state.
+    private var focalAssistantId: ChatMessage.ID? {
+        guard let last = messages.last, last.role == .assistant else { return nil }
+        return last.id
+    }
+
+    /// Whether assistant bubbles currently render the leading Merc avatar —
+    /// mirrors `MessageBubbleView.shouldShowAvatar` (free chat only, dropped at
+    /// accessibility type sizes), so the follow-up chip only leads-aligns with
+    /// a bubble edge that actually exists.
+    private var alignsWithAvatar: Bool {
+        !lessonStyle && !dynamicTypeSize.isAccessibilitySize
+    }
+
+    /// The FIRST exchange of a Discussion chat (the user's opening message +
+    /// Merc's first reply) gets a larger coach moment above the thread. Once a
+    /// second user turn arrives it collapses and the compact per-message
+    /// avatars carry Merc from there. (A one-exchange thread resumed from
+    /// history shows it too — there it reads as an invitation to continue.)
+    private var showsCoachIntro: Bool {
+        !lessonStyle && messages.count <= 2
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) {
+                    if showsCoachIntro {
+                        coachIntro
+                            .transition(reduceMotion
+                                ? .opacity
+                                : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+                    }
+
                     ForEach(messages) { message in
-                        MessageBubbleView(message: message, onReport: { onReport(message) })
-                            .id(message.id)
+                        let isFocal = message.id == focalAssistantId
+                        // One live Merc at a time: while the coach intro is up
+                        // it carries the thinking/speaking motion and the
+                        // message avatars stay neutral; after it collapses the
+                        // latest assistant avatar becomes the live one.
+                        let isLive = isFocal && !showsCoachIntro
+                        MessageBubbleView(
+                            message: message,
+                            onReport: { onReport(message) },
+                            lessonStyle: lessonStyle,
+                            showAvatar: !lessonStyle,
+                            avatarMood: isLive ? mercMood : .neutral,
+                            avatarActivity: isLive ? mercActivity : .idle
+                        )
+                        .id(message.id)
                     }
 
                     if case .failed(_, let isRetryable) = phase, isRetryable {
@@ -352,6 +467,11 @@ struct MessageListView: View {
                     }
                 }
                 .padding(.vertical, BrandSpacing.md)
+                // Gated like every other explicit animation in the app: under
+                // Reduce Motion the intro just disappears (its transition is
+                // already opacity-only) instead of sliding the thread up.
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.25),
+                           value: showsCoachIntro)
             }
             .onChange(of: messages.last?.id) { _, newValue in
                 guard let newValue else { return }
@@ -366,6 +486,28 @@ struct MessageListView: View {
                 proxy.scrollTo(id, anchor: .bottom)
             }
         }
+    }
+
+    /// The larger Merc coach moment above a brand-new thread — the handoff
+    /// beat between the empty-state intro ("Hi, I'm Merc") and the compact
+    /// per-message avatars. Carries the live thinking/speaking motion while
+    /// Merc works on his first reply.
+    private var coachIntro: some View {
+        VStack(spacing: BrandSpacing.sm) {
+            MercMascot(.idle, size: 84, emphasis: .softGlow,
+                       mood: mercMood, activity: mercActivity,
+                       idleAntics: true, pokeable: true)
+                .accessibilityHidden(true)
+            Text("Let’s sharpen this question together.")
+                .font(.system(.footnote, design: .rounded).weight(.semibold))
+                .foregroundStyle(BrandColor.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, BrandSpacing.xs)
+        .padding(.bottom, BrandSpacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Merc, your tutor: Let’s sharpen this question together.")
     }
 
     private var retryFooter: some View {
@@ -391,9 +533,13 @@ struct MessageListView: View {
     /// was from the assistant — invites the user to ask for more depth
     /// without re-typing. Wires to `ChatViewModel.explainMore()` which
     /// re-issues the chat request with `responseMode = .deep`.
+    ///
+    /// In the free chat the chip leads-aligns with the assistant bubble's
+    /// text edge (past the Merc avatar) so it reads as part of Merc's turn;
+    /// lessons have no avatar column, so it stays centered there.
     private var explainMoreFooter: some View {
         HStack {
-            Spacer()
+            if !alignsWithAvatar { Spacer() }
             Button(action: onExplainMore) {
                 Label("Explain more", systemImage: "text.alignleft")
                     .font(BrandFont.caption)
@@ -412,6 +558,9 @@ struct MessageListView: View {
             .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
             Spacer()
         }
+        .padding(.leading, alignsWithAvatar
+            ? BrandSpacing.lg + ChatAvatarMetrics.footprint + BrandSpacing.sm
+            : 0)
         .padding(.top, BrandSpacing.xs)
         .padding(.bottom, BrandSpacing.sm)
     }

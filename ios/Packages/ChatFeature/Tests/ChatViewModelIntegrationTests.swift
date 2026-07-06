@@ -139,7 +139,8 @@ private func sampleComplete(
     reply: String = "Hi there!",
     mode: String = "socratic",
     unlocked: Bool = false,
-    justUnlocked: Bool? = nil
+    justUnlocked: Bool? = nil,
+    lessonComplete: Bool? = nil
 ) -> ChatStreamEvent {
     .complete(
         ChatResponse(
@@ -150,7 +151,8 @@ private func sampleComplete(
             justUnlocked: justUnlocked,
             streak: 1,
             difficulty: 1,
-            suggestSummary: nil
+            suggestSummary: nil,
+            lessonComplete: lessonComplete
         )
     )
 }
@@ -434,20 +436,6 @@ struct EdgeCaseTests {
 @MainActor
 struct ServerDrivenStateTests {
 
-    @Test("complete event with unlocked=true flips isUnlocked")
-    func unlockOnComplete() async {
-        let client = ControllableChatClient()
-        let model = makeModel(chat: client)
-        #expect(!model.isUnlocked)
-
-        model.draft = "Pass the test?"
-        model.send()
-        await client.emit(sampleComplete(reply: "Yes.", unlocked: true, justUnlocked: true))
-
-        await waitFor("phase idle") { model.phase == .idle }
-        #expect(model.isUnlocked, "Server's unlocked=true should flip the flag on the client")
-    }
-
     @Test("complete event with a different mode updates currentMode")
     func modeChangedByServer() async {
         // Curriculum lessons can make the server switch modes on the client's
@@ -506,23 +494,21 @@ struct StartNewConversationTests {
         #expect(model.phase == .idle)
     }
 
-    @Test("Mode and unlock state are preserved")
+    @Test("Mode is preserved")
     func preservesPreferences() async {
         let client = ControllableChatClient()
         let model = makeModel(chat: client)
 
-        // Mark unlocked + switch mode via a server reply.
+        // Switch mode via a server reply.
         model.draft = "Hi"
         model.send()
-        await client.emit(sampleComplete(reply: "ok", mode: "debate", unlocked: true))
+        await client.emit(sampleComplete(reply: "ok", mode: "debate"))
         await waitFor("first exchange done") { model.phase == .idle }
         #expect(model.currentMode == .debate)
-        #expect(model.isUnlocked)
 
         model.startNewConversation()
 
         #expect(model.currentMode == .debate, "Mode should survive startNewConversation()")
-        #expect(model.isUnlocked, "Unlock state should survive startNewConversation()")
     }
 
     @Test("Cancels an in-flight stream silently (no failure bubble)")
@@ -642,26 +628,6 @@ struct SSERoundTripTests {
         #expect(model.messages.last?.status == .idle)
     }
 
-    @Test("Round-trip surfaces an unlock from the server")
-    func roundTripUnlocks() async throws {
-        let client = ControllableChatClient()
-        let model = makeModel(chat: client)
-        #expect(!model.isUnlocked)
-
-        model.draft = "I passed!"
-        model.send()
-
-        let payloads = [
-            #"""
-            {"type":"complete","reply":"Direct Mode unlocked.","sessionId":"test-session","mode":"socratic","unlocked":true,"justUnlocked":true,"streak":2,"difficulty":1}
-            """#,
-        ]
-        try await driveFromSSEPayloads(payloads, into: client)
-
-        await waitFor("phase idle") { model.phase == .idle }
-        #expect(model.isUnlocked, "The `unlocked:true` field must flow from server → parser → view model")
-    }
-
     @Test("`[DONE]` terminator between events is tolerated")
     func doneTerminatorNoOp() async throws {
         // The server sometimes appends `data: [DONE]` before closing. The
@@ -686,5 +652,130 @@ struct SSERoundTripTests {
 
         await waitFor("phase idle") { model.phase == .idle }
         #expect(model.messages.last?.content == "ok")
+    }
+}
+
+// MARK: - Lesson completion (marker fallback + flag + display sanitizing)
+
+@Suite("ChatViewModel lesson completion")
+@MainActor
+struct LessonCompletionTests {
+
+    @Test("Server `lessonComplete` flag fires completion (current backend)")
+    func flagFiresCompletion() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+
+        model.draft = "My answer"
+        model.send()
+        await client.emit(sampleComplete(reply: "Nice work.", lessonComplete: true))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 1)
+        #expect(model.lessonCompletionEvents == 1)
+    }
+
+    @Test("A pass marker fires completion + is stripped (legacy backend, no flag)")
+    func passMarkerFiresAndStrips() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+
+        model.draft = "My answer"
+        model.send()
+        await client.emit(.delta(text: "Solid reasoning."))
+        // Legacy/production: marker inline, NO lessonComplete flag.
+        await client.emit(sampleComplete(reply: "Solid reasoning.\n\n[TEST_PASSED]"))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 1)
+        #expect(model.lessonCompletionEvents == 1)
+        // The control token must never survive into the visible transcript.
+        #expect(model.messages.last?.content == "Solid reasoning.")
+        #expect(model.messages.last?.content.contains("[TEST_PASSED]") == false)
+    }
+
+    @Test("A fail marker does NOT complete the lesson, and is stripped")
+    func failMarkerDoesNotComplete() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+
+        model.draft = "My answer"
+        model.send()
+        await client.emit(sampleComplete(reply: "Not yet — reconsider. [TEST_FAILED]"))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 0)
+        #expect(model.lessonCompletionEvents == 0)
+        #expect(model.messages.last?.content == "Not yet — reconsider.")
+    }
+
+    @Test("Non-lesson chat is never sanitized or treated as completion")
+    func nonLessonUntouched() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)   // onLessonComplete stays nil → not a lesson
+        model.draft = "Explain a literal token"
+        model.send()
+        await client.emit(sampleComplete(reply: "Use [TEST_PASSED] as a literal example."))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(model.lessonCompletionEvents == 0)
+        #expect(model.messages.last?.content == "Use [TEST_PASSED] as a literal example.")
+    }
+
+    @Test("A pass token quoted mid-reply does NOT complete a lesson, and is scrubbed")
+    func midReplyTokenDoesNotComplete() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+        model.draft = "answer"
+        model.send()
+        // The model explains the markers — the token is NOT on its own line.
+        await client.emit(sampleComplete(reply: "Never type [TEST_PASSED] yourself; the system handles it."))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 0)
+        #expect(model.lessonCompletionEvents == 0)
+        #expect(model.messages.last?.content.contains("[TEST_PASSED]") == false)
+    }
+
+    @Test("A marker-only reply substitutes a confirmation, never the raw token")
+    func markerOnlyReplySubstitutes() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+        model.draft = "answer"
+        model.send()
+        await client.emit(sampleComplete(reply: "[TEST_PASSED]"))
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 1)
+        #expect(model.messages.last?.content == "Lesson complete — nice work.")
+        #expect(model.messages.last?.content.contains("[TEST_PASSED]") == false)
+    }
+
+    @Test("Completion still fires if the stream truncates after a pass marker (no .complete)")
+    func truncatedStreamStillCompletes() async {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        var fired = 0
+        model.onLessonComplete = { fired += 1 }
+        model.draft = "answer"
+        model.send()
+        await client.emit(.delta(text: "Great work.\n"))
+        await client.emit(.delta(text: "[TEST_PASSED]"))
+        await client.finish()   // stream closes WITHOUT a .complete event
+        await waitFor("finalized") { model.phase == .idle }
+
+        #expect(fired == 1)
+        #expect(model.lessonCompletionEvents == 1)
+        #expect(model.messages.last?.content.contains("[TEST_PASSED]") == false)
     }
 }

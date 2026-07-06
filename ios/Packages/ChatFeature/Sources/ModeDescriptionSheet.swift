@@ -167,15 +167,6 @@ struct ModeDescriptionSheet: View {
     }
 }
 
-#Preview("Direct (locked)") {
-    Color.clear.sheet(isPresented: .constant(true)) {
-        ModeDescriptionSheet(
-            description: ModeDescription.description(for: .direct),
-            onContinue: { }
-        )
-    }
-}
-
 #Preview("Debate") {
     Color.clear.sheet(isPresented: .constant(true)) {
         ModeDescriptionSheet(

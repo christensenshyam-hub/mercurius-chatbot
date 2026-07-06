@@ -11,24 +11,41 @@ import DesignSystem
 /// model directly — keeps this view dumb and previewable in isolation.
 struct EmptyChatView: View {
     let suggestions: [String]
+    /// Live Merc state so the intro mascot reacts (e.g. leans in while you type).
+    var mercMood: MercMood = .neutral
+    var mercActivity: MercActivity = .idle
     let onSuggestion: (String) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var introState: MercState = .idle
 
     var body: some View {
         // Wrapped in a ScrollView so that at accessibility Dynamic Type sizes
-        // the logo + starter prompts remain reachable even when they exceed
+        // the intro + starter prompts remain reachable even when they exceed
         // the screen height. Centered with top/bottom spacers at normal sizes.
         ScrollView {
             VStack(spacing: BrandSpacing.xl) {
-                Spacer(minLength: BrandSpacing.xl)
+                Spacer(minLength: BrandSpacing.lg)
 
+                // Branded intro coach — Merc, the tutor, greeting the learner.
+                // Antics + poke: he waves hello, then keeps living between
+                // interactions and reacts when tapped, Duolingo-style.
                 VStack(spacing: BrandSpacing.md) {
-                    BrandLogo(style: .full, size: 180)
+                    MercMascot(introState, size: 140, emphasis: .softGlow,
+                               mood: mercMood, activity: mercActivity,
+                               idleAntics: true, pokeable: true)
+                        .accessibilityHidden(true)
 
-                    Text("Here to help you think, not think for you.")
-                        .font(BrandFont.caption)
-                        .italic()
-                        .foregroundStyle(BrandColor.textSecondary)
-                        .multilineTextAlignment(.center)
+                    VStack(spacing: 4) {
+                        Text("Hi, I'm Merc")
+                            .font(.system(.title2, design: .rounded).weight(.heavy))
+                            .foregroundStyle(BrandColor.text)
+                        Text("Your AI literacy tutor — here to help you think, not think for you.")
+                            .font(BrandFont.caption)
+                            .foregroundStyle(BrandColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 VStack(spacing: BrandSpacing.sm) {
@@ -44,6 +61,11 @@ struct EmptyChatView: View {
             }
             .padding(.horizontal, BrandSpacing.lg)
             .frame(maxWidth: .infinity)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            introState = .wave
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { introState = .idle }
         }
     }
 }
