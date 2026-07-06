@@ -13,10 +13,12 @@ import SwiftUI
 /// image plus `Text` styled with adaptive `BrandColor` lets the wordmark
 /// recolor automatically — no baked wordmark PNG to maintain.
 ///
-/// The icon image ships in two forms, because the artwork itself (not just
-/// its color) differs by mode: light `LogoIcon` is a cropped transparent
-/// head; dark `LogoIconDark` is the brighter emblem that reads on a dark
-/// background. `FullLogoView` selects between them via `colorScheme`.
+/// The icon is the winged-Mercury emblem on a TRANSPARENT background (no
+/// backing plate) — the same artwork in both modes, with only the figure
+/// recolored so it reads on either background: `LogoIcon` (light mode) has a
+/// navy figure; `LogoIconDark` (dark mode) has a white figure. The gradient
+/// wing/hat/ring/sparkle are shared. `FullLogoView` selects between them via
+/// `colorScheme`; the layout geometry is identical in both modes.
 ///
 /// The `.mark` style is a pure SwiftUI composition (no asset) so it
 /// scales perfectly at any size.
@@ -68,24 +70,19 @@ private struct FullLogoView: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    /// Height/width ratio of the icon artwork. Light mode uses the cropped
-    /// `LogoIcon` (1024×563, wider than tall); dark mode uses the transparent,
-    /// tightly-cropped `LogoIconDark` emblem (839×872, near-square). Update the
-    /// matching ratio here if either PNG changes, or the icon will distort.
-    private var iconAspect: CGFloat { isDark ? 872.0 / 839.0 : 563.0 / 1024.0 }
+    /// The two emblems are normalized onto an identical 980×980 transparent
+    /// square (same emblem height, centered) so the logo never changes size or
+    /// position between modes — hence a 1:1 aspect.
+    private var iconAspect: CGFloat { 1.0 }
 
-    /// The dark emblem is a near-circle (tall) vs the light icon's wide cropped
-    /// head, so render it a little narrower to keep a similar visual weight.
-    private var iconWidth: CGFloat { isDark ? size * 0.85 : size }
+    /// The emblem floats (no backing plate), so it fills the bounding width.
+    private var iconWidth: CGFloat { size }
 
-    /// Layered fallback chain:
-    /// 1. `LogoIconDark` in dark mode — the transparent, dark-optimized emblem.
-    ///    (The light icon's navy figure all but vanishes on a dark
-    ///    background, which is the bug this fixes.)
-    /// 2. `LogoIcon` (the cropped, transparent-background icon — light mode)
-    /// 3. `LogoHero` (the legacy single-PNG composition fallback)
-    /// 4. The pure-SwiftUI `MarkView` so SwiftUI previews / SPM tests
-    ///    that don't have asset access still render something.
+    /// The winged-Mercury emblem on a TRANSPARENT background — the same artwork,
+    /// with only the figure recolored per mode so it reads on either background:
+    /// `LogoIcon` (light mode) has a navy figure; `LogoIconDark` (dark mode) has
+    /// a white figure. The gradient wing/hat/ring/sparkle are shared. `LogoHero`
+    /// and the pure-SwiftUI `MarkView` remain fallbacks for SPM/preview contexts.
     @ViewBuilder
     private var iconLayer: some View {
         if let uiImage = (isDark ? platformImage(named: "LogoIconDark") : nil)
