@@ -112,12 +112,28 @@ struct MercPresenceControllerTests {
         c.chatStarted(greet: false)
         #expect(c.isVisible)
 
-        try await Task.sleep(for: .seconds(0.18))   // past idle→sleep, mid hide-countdown
-        #expect(c.state == .sleep)
-        #expect(c.isVisible)
+        // Poll with a deadline rather than fixed sleeps: on a loaded CI
+        // runner a fixed 0.18s sleep can overshoot BOTH timer windows, so a
+        // mid-countdown assertion races the controller. The doze-in-place
+        // window itself is covered by `activityWakesFromSleep`, which pins
+        // `sleepToHide` long so the intermediate state can't be missed.
+        #expect(await poll { c.state == .sleep })
+        #expect(await poll { !c.isVisible })
+    }
 
-        try await Task.sleep(for: .seconds(0.18))   // past sleep→hide
-        #expect(c.isVisible == false)
+    /// Wait until `condition` holds or the deadline passes; returns the final
+    /// evaluation. Keeps timer-driven assertions robust on slow shared runners.
+    private func poll(
+        deadline: Duration = .seconds(2),
+        _ condition: () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let end = clock.now.advanced(by: deadline)
+        while clock.now < end {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
     }
 
     @Test func activityWakesFromSleep() async throws {
