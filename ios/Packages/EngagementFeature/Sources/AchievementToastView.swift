@@ -41,7 +41,11 @@ public struct AchievementToastView: View {
 }
 
 /// Watches `AchievementStore.lastEarned` and shows the toast at the top of the
-/// screen, auto-dismissing after a few seconds. Attach once at the app shell.
+/// screen, auto-dismissing after a few seconds. Attach at the app shell AND at
+/// the root of each full-screen cover — a sheet/cover renders above the shell's
+/// overlay, so awards fired while one is up need a presenter in that layer too.
+/// Multiple attachments are safe: `clearLastEarned(_:)` is head-guarded, so
+/// duplicate clears for the same achievement can't swallow the next queued one.
 public struct AchievementToastPresenter: ViewModifier {
     private let store: AchievementStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,7 +62,7 @@ public struct AchievementToastPresenter: ViewModifier {
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     .task(id: earned.id) {
                         try? await Task.sleep(nanoseconds: 3_200_000_000)
-                        store.clearLastEarned()
+                        store.clearLastEarned(earned)
                     }
             }
         }

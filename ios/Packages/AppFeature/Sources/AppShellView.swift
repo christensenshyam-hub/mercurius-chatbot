@@ -43,7 +43,7 @@ struct AppShellView: View {
 
     // MARK: - Shared state
 
-    @State private var selectedTab: Tab = .chat
+    @State private var selectedTab: Tab
     @State private var chatModel: ChatViewModel
     @State private var progress = CurriculumProgressStore()
 
@@ -59,10 +59,18 @@ struct AppShellView: View {
     /// Wraps UNUserNotificationCenter for the daily reminder.
     @State private var scheduler = NotificationScheduler()
 
-    /// Lesson the user asked to start while the chat had existing
-    /// messages. Drives a confirmation alert that lets them choose
-    /// whether to start fresh or add to the current conversation.
-    @State private var pendingLesson: Lesson?
+    /// Standby gamification (quiet progress) cache. Default-constructed, so
+    /// `clientEnabled` is false — it makes no network calls and renders nothing
+    /// unless the feature is explicitly turned on (client + server flags).
+    @State private var gamificationStore = GamificationStore()
+
+    /// The lesson currently presented in its own full-screen curriculum window
+    /// (separate from the chat tab and the four modes). nil when none is open.
+    @State private var activeLesson: Lesson?
+
+    /// The unit whose cumulative unit test is presented full-screen. nil when
+    /// none is open. Qualified because Foundation also exports a `Unit` type.
+    @State private var activeUnitTest: CurriculumFeature.Unit?
 
     enum Tab: Hashable {
         case chat
@@ -79,6 +87,7 @@ struct AppShellView: View {
         streakStore: StreakStore,
         achievementStore: AchievementStore,
         reminderStore: ReminderStore,
+        initialTab: Tab = .chat,
         onGoHome: @escaping @MainActor () -> Void
     ) {
         self.apiClient = apiClient
@@ -89,6 +98,10 @@ struct AppShellView: View {
         self.achievementStore = achievementStore
         self.reminderStore = reminderStore
         self.onGoHome = onGoHome
+        // The Home screen's CTAs route here: "Chat with Merc" → .chat,
+        // "Start learning" → .curriculum. Fresh @State each entry (the shell
+        // leaves the tree when the user goes Home), so this always applies.
+        _selectedTab = State(initialValue: initialTab)
         _chatModel = State(
             initialValue: ChatViewModel(
                 apiClient: apiClient,
@@ -131,23 +144,56 @@ struct AppShellView: View {
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
         }
-        // Confirmation alert for starting a lesson on top of an existing
-        // conversation. The `.alert(presenting:)` form binds to an optional
-        // so the alert only shows while `pendingLesson` is non-nil.
-        .alert(
-            "Start this lesson?",
-            isPresented: Binding(
-                get: { pendingLesson != nil },
-                set: { if !$0 { pendingLesson = nil } }
-            ),
-            presenting: pendingLesson
-        ) { lesson in
-            Button("New chat") { startLesson(lesson, inNewChat: true) }
-            Button("Add to current") { startLesson(lesson, inNewChat: false) }
-            Button("Cancel", role: .cancel) { pendingLesson = nil }
-        } message: { lesson in
-            Text("\"\(lesson.title)\" — would you like a clean slate for this lesson, or add it to your current conversation?")
+        // A started lesson opens in its OWN full-screen curriculum window — not
+        // the chat tab, not a new mode. The starter prompt is sent behind the
+        // scenes (see CurriculumLessonView / ChatViewModel.beginLesson).
+        // `fullScreenCover` is iOS-only; the app ships for iOS, and macOS is
+        // just the SPM test host (where the lesson window isn't presented).
+#if os(iOS)
+        .fullScreenCover(item: $activeLesson) { lesson in
+            let next = MercuriusCurriculum.lesson(after: lesson.id)
+            let parentUnit = MercuriusCurriculum.units.first(where: { $0.lessons.contains(lesson) })
+            CurriculumLessonView(
+                lessonId: lesson.id,
+                unitLabel: unitLabel(for: lesson),
+                lessonNumber: lesson.number,
+                title: lesson.title,
+                objective: lesson.objective,
+                starter: lesson.starter,
+                resumeConversationId: progress.resumeConversationId(for: lesson.id),
+                apiClient: apiClient,
+                sessionIdentity: sessionIdentity,
+                chatStore: chatStore,
+                streakStore: streakStore,
+                achievementStore: achievementStore,
+                onStarted: { lessonId, convoId in
+                    progress.markInProgress(lessonId, conversationId: convoId)
+                    // Explorer is "Started a structured curriculum lesson"
+                    // (Achievement.swift) — award it at start, matching the
+                    // copy and the web widget's semantics. Idempotent.
+                    achievementStore.award(AchievementCatalog.explorer)
+                },
+                onLessonComplete: { lessonId in
+                    handleLessonComplete(lessonId)
+                },
+                onExit: { activeLesson = nil },
+                nextLessonNumber: next?.number,
+                nextLessonTitle: next?.title,
+                onAdvanceToNext: { if let next { activeLesson = next } },
+                completedInUnit: parentUnit.map { progress.completedCount(in: $0) } ?? 0,
+                totalInUnit: parentUnit?.lessons.count ?? 0
+            )
+            // Swapping `activeLesson` to the next lesson must give a FRESH view
+            // (new ChatViewModel + re-run of `beginOrResume`), not reuse this
+            // one's @State. Keying on the lesson id forces that re-identity.
+            .id(lesson.id)
+            // Toasts need a presenter in THIS layer too: the cover renders
+            // above the shell's presenter, so awards fired while the lesson
+            // window is up (Explorer, streak milestones) would otherwise
+            // auto-clear unseen behind it.
+            .achievementToasts(achievementStore)
         }
+#endif
         .sheet(isPresented: $showChatHistory) {
             // Wrapped in NavigationStack so ChatHistoryView gets
             // its title bar + filter pill chrome.
@@ -156,6 +202,10 @@ struct AppShellView: View {
                     load: { chatModel.archivedConversations() },
                     onSelect: { id in
                         showChatHistory = false
+                        // The thread opens in the Chat tab — land the user
+                        // there even if they browsed history from another
+                        // tab (otherwise the open is invisible).
+                        selectedTab = .chat
                         // Defer the open slightly so the sheet
                         // dismissal animation runs cleanly before
                         // the chat thread re-renders behind it.
@@ -184,14 +234,21 @@ struct AppShellView: View {
                 reminderStore: reminderStore,
                 scheduler: scheduler,
                 leaderboard: LeaderboardViewModel(fetcher: apiClient, ownBadge: ownBadge()),
+                gamificationStore: gamificationStore,
                 onDone: { showProgress = false }
             )
             .tint(BrandColor.accent)
         }
         // Achievement-unlocked toasts surface over the whole shell.
         .achievementToasts(achievementStore)
+        // Brief, factual progress nudges (standby; inert unless the feature is on).
+        .progressNudge(gamificationStore)
         // Seed the streak from the server so it shows before the first chat.
-        .task { await seedStreakOnLaunch() }
+        .task {
+            chatModel.configureGamification(store: gamificationStore, provider: apiClient)
+            await seedStreakOnLaunch()
+            await refreshGamificationOnLaunch()
+        }
     }
 
     /// The current session's 4-char leaderboard badge (last-4 of the id,
@@ -204,9 +261,29 @@ struct AppShellView: View {
     /// Fetch the server's authoritative streak once on launch to seed the cache.
     private func seedStreakOnLaunch() async {
         guard let sid = try? sessionIdentity.current() else { return }
-        if let streak = try? await apiClient.sessionStreak(sessionId: sid) {
-            streakStore.update(streak: streak)
+        if let snapshot = try? await apiClient.sessionStreak(sessionId: sid) {
+            // `seed`, not `update`: the session row's streak is only recomputed
+            // when the user chats, so a lapsed user's row can be weeks stale —
+            // freshness must come from the row's own `last_session_date`, not
+            // from when we happened to fetch it, or the Home greeting would
+            // claim a dead streak is alive.
+            streakStore.seed(streak: snapshot.streak, lastSessionDate: snapshot.lastSessionDate)
         }
+    }
+
+    /// Refresh the standby gamification cache on launch. A no-op — and no
+    /// network call — unless the client gate is on (see `GamificationStore`),
+    /// so the default build's launch behavior is unchanged.
+    private func refreshGamificationOnLaunch() async {
+        guard let sid = try? sessionIdentity.current() else { return }
+        await gamificationStore.refresh(using: apiClient, sessionId: sid)
+        // Credit the daily return (idempotent per UTC day; server caps at 1/day).
+        // No-op unless the feature is on — recordEvent is gated in the store.
+        let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        await gamificationStore.recordEvent(
+            using: apiClient, sessionId: sid,
+            reason: .dailyReturn, sourceType: "daily", sourceId: today
+        )
     }
 
     // MARK: - Tab selection
@@ -239,13 +316,21 @@ struct AppShellView: View {
             apiClient: apiClient,
             sessionIdentity: sessionIdentity,
             achievementStore: achievementStore,
-            settingsPresenter: { [sessionIdentity, themeStore, chatStore, chatModel] in
+            settingsPresenter: { [sessionIdentity, themeStore, chatStore, chatModel,
+                                  streakStore, achievementStore, progress] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
                         themeStore: themeStore,
                         chatStore: chatStore,
-                        chatModel: chatModel
+                        chatModel: chatModel,
+                        // "Start Over" must also clear the on-device engagement
+                        // + curriculum caches — they describe the OLD identity
+                        // (streak, badges, resume pointers into deleted
+                        // conversations) and would otherwise survive the reset.
+                        streakStore: streakStore,
+                        achievementStore: achievementStore,
+                        progress: progress
                     )
                 )
             },
@@ -259,39 +344,150 @@ struct AppShellView: View {
     private var curriculumTab: some View {
         CurriculumView(
             progress: progress,
-            onStartLesson: handleStartLesson
+            onStartLesson: handleStartLesson,
+            onStartUnitTest: handleStartUnitTest,
+            // The gamified stats bar is composed here at the app root — the
+            // curriculum feature can't depend on EngagementFeature (layering),
+            // so it's injected through the path's top-bar slot. Streak is always
+            // live; XP/level appear only when the gamification feature is on.
+            topBar: {
+                GamifiedTopBar(
+                    streakStore: streakStore,
+                    gamificationStore: gamificationStore,
+                    onOpenProfile: { showProgress = true }
+                )
+            }
         )
+#if os(iOS)
+        .fullScreenCover(item: $activeUnitTest) { unit in
+            unitTestCover(for: unit)
+                // Same as the lesson cover: Unit Master is awarded while this
+                // cover is up, so its toast needs a presenter in this layer.
+                .achievementToasts(achievementStore)
+        }
+#endif
     }
+
+    // MARK: - Unit test
+
+    /// Curriculum tapped a unit's test → present it full-screen (separate from
+    /// the lesson cover). All four lessons are already complete — the row is
+    /// locked otherwise.
+    private func handleStartUnitTest(_ unit: CurriculumFeature.Unit) {
+        activeUnitTest = unit
+    }
+
+    /// The student passed a unit test → mark the unit mastered + award the
+    /// badge. Idempotent, so a duplicate callback is harmless. The curriculum
+    /// stays fully open — mastery is a checkpoint, not a gate.
+    private func handleUnitMastered(_ unitId: String) {
+        progress.markUnitMastered(unitId)
+        achievementStore.award(AchievementCatalog.unitMaster)
+        // Credit module completion (idempotent per unit). Gated/no-op when off.
+        if let sid = try? sessionIdentity.current() {
+            Task {
+                await gamificationStore.recordEvent(
+                    using: apiClient, sessionId: sid,
+                    reason: .moduleCompleted, sourceType: "unit_test", sourceId: unitId
+                )
+            }
+        }
+    }
+
+#if os(iOS)
+    /// Builds the unit-test cover: looks up the unit's authored test and wires
+    /// the server-backed defense grader. Falls back to a dismissable message if
+    /// the test is somehow missing (every unit ships one, so this is defensive).
+    @ViewBuilder
+    private func unitTestCover(for unit: CurriculumFeature.Unit) -> some View {
+        if let test = MercuriusCurriculum.unitTest(for: unit.id) {
+            UnitTestView(
+                unit: unit,
+                test: test,
+                gradeDefense: { answer in
+                    let sid = try sessionIdentity.current()
+                    let dto: UnitDefenseResult
+                    do {
+                        dto = try await apiClient.gradeUnitDefense(
+                            sessionId: sid,
+                            unitId: unit.id,
+                            unitTitle: unit.title,
+                            defensePrompt: test.defensePrompt,
+                            answer: answer
+                        )
+                    } catch APIError.unknown(let underlying) where underlying == "HTTP 404" {
+                        // The deployed server can predate `/api/unit-test/grade`
+                        // (the client ships ahead of backend deploys). Translate
+                        // the 404 into the typed "grading unavailable" error so
+                        // the student sees an honest message instead of a
+                        // connection error that no amount of retrying can fix.
+                        throw DefenseGradingError.unavailable
+                    }
+                    // Derive pass from the letter grade on-device too, so a
+                    // malformed server `pass` flag can't mark a C/D as passed.
+                    let g = dto.grade.uppercased()
+                    return UnitTestViewModel.DefenseResult(
+                        grade: dto.grade,
+                        pass: g == "A" || g == "B",
+                        feedback: dto.feedback
+                    )
+                },
+                onMastered: { unitId in handleUnitMastered(unitId) },
+                onExit: { activeUnitTest = nil }
+            )
+        } else {
+            VStack(spacing: BrandSpacing.md) {
+                Text("This unit test isn't available right now.")
+                    .font(BrandFont.body)
+                    .foregroundStyle(BrandColor.text)
+                Button("Done") { activeUnitTest = nil }
+                    .font(BrandFont.bodyEmphasized)
+                    .foregroundStyle(BrandColor.accent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(BrandColor.background.ignoresSafeArea())
+        }
+    }
+#endif
 
     // MARK: - Lesson launch
 
-    /// Curriculum tapped a lesson. If the chat has existing messages we
-    /// ask the user whether to keep that conversation or start fresh;
-    /// otherwise we just kick the lesson off immediately.
+    /// Curriculum tapped a lesson → open it in its own full-screen window
+    /// (`.fullScreenCover` on `activeLesson`). The starter prompt is sent behind
+    /// the scenes by `CurriculumLessonView`; the main chat tab is untouched.
     private func handleStartLesson(_ lesson: Lesson) {
-        if chatModel.messages.isEmpty {
-            startLesson(lesson, inNewChat: false)
-        } else {
-            pendingLesson = lesson
+        // Open-only. The lesson is NOT complete on open — it becomes "in
+        // progress" once its conversation is created (the lesson view's
+        // `onStarted` callback records the resume mapping), and only flips to
+        // complete when the server reports demonstrated proficiency
+        // (`handleLessonComplete`, below).
+        activeLesson = lesson
+    }
+
+    /// The server signalled demonstrated proficiency (`[LESSON_COMPLETE]`).
+    /// Mark the lesson complete + award the milestones. All idempotent, so a
+    /// duplicate marker (or a later re-review) is harmless. We deliberately do
+    /// NOT auto-dismiss the lesson window — the student reads the final feedback
+    /// and taps Done; the curriculum row updates underneath them.
+    private func handleLessonComplete(_ lessonId: String) {
+        progress.markCompleted(lessonId)
+        achievementStore.award(AchievementCatalog.explorer)
+        // Credit module completion (idempotent per lesson id). Gated/no-op off.
+        if let sid = try? sessionIdentity.current() {
+            Task {
+                await gamificationStore.recordEvent(
+                    using: apiClient, sessionId: sid,
+                    reason: .moduleCompleted, sourceType: "lesson", sourceId: lessonId
+                )
+            }
         }
     }
 
-    /// Run the lesson's starter. If `inNewChat` is true, the existing
-    /// conversation is archived (preserved in the store) and a fresh
-    /// one is opened before the starter is sent.
-    private func startLesson(_ lesson: Lesson, inNewChat: Bool) {
-        pendingLesson = nil
-        if inNewChat {
-            chatModel.startNewConversation()
+    /// "UNIT 0X" label for the lesson's parent unit, for the lesson header.
+    private func unitLabel(for lesson: Lesson) -> String {
+        if let unit = MercuriusCurriculum.units.first(where: { $0.lessons.contains(lesson) }) {
+            return "UNIT \(unit.number)"
         }
-        chatModel.draft = lesson.starter
-        progress.markCompleted(lesson.id)
-        achievementStore.award(AchievementCatalog.explorer)
-        selectedTab = .chat
-        // Defer send slightly so the tab swap animates first.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(300))
-            chatModel.send()
-        }
+        return "CURRICULUM"
     }
 }

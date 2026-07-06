@@ -12,6 +12,10 @@ public struct ProgressHubView: View {
     private let reminderStore: ReminderStore
     private let scheduler: NotificationScheduler
     @State private var leaderboard: LeaderboardViewModel
+    /// Standby gamification (quiet progress). Optional + defaults to nil so
+    /// existing callers are unaffected; the Progress card renders only when a
+    /// store is passed AND it reports `enabled` (server flag on). Off by default.
+    private let gamificationStore: GamificationStore?
     private let onDone: () -> Void
 
     public init(
@@ -20,6 +24,7 @@ public struct ProgressHubView: View {
         reminderStore: ReminderStore,
         scheduler: NotificationScheduler,
         leaderboard: LeaderboardViewModel,
+        gamificationStore: GamificationStore? = nil,
         onDone: @escaping () -> Void
     ) {
         self.streakStore = streakStore
@@ -27,6 +32,7 @@ public struct ProgressHubView: View {
         self.reminderStore = reminderStore
         self.scheduler = scheduler
         _leaderboard = State(initialValue: leaderboard)
+        self.gamificationStore = gamificationStore
         self.onDone = onDone
     }
 
@@ -34,10 +40,25 @@ public struct ProgressHubView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: BrandSpacing.xl) {
+                    // Streak hero leads the profile.
                     StreakHeroView(streakStore: streakStore)
+
+                    // XP / level surface — present only when explicitly enabled
+                    // (client + server flags). Off by default, so the profile
+                    // shows streak + achievements + leaderboard with no holes.
+                    if let gamificationStore, gamificationStore.enabled {
+                        section("Your XP") {
+                            ProgressCard(store: gamificationStore)
+                            RecentCreditsView(store: gamificationStore)
+                        }
+                    }
+
+                    // These three already render their own section header, so
+                    // they're shown bare (wrapping them in section() would double
+                    // the title).
                     AchievementsGalleryView(store: achievementStore)
-                    DailyReminderSection(store: reminderStore, scheduler: scheduler)
                     LeaderboardListView(model: leaderboard)
+                    DailyReminderSection(store: reminderStore, scheduler: scheduler)
                 }
                 .padding(BrandSpacing.lg)
             }
@@ -46,9 +67,26 @@ public struct ProgressHubView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: onDone)
+                        .font(BrandFont.roundedBodyEmphasized)
                         .foregroundStyle(BrandColor.accent)
                 }
             }
+        }
+    }
+
+    /// A titled group — a rounded section header above its content, the
+    /// Duolingo-profile rhythm. Reuses the existing sub-views unchanged.
+    @ViewBuilder
+    private func section<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.md) {
+            Text(title)
+                .font(BrandFont.roundedHeadline)
+                .foregroundStyle(BrandColor.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            content()
         }
     }
 }

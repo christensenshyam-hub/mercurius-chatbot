@@ -14,7 +14,7 @@ public struct StreakHeroView: View {
         VStack(spacing: BrandSpacing.xs) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(streakStore.current > 0 ? Color.orange : BrandColor.textSecondary)
+                .foregroundStyle(streakStore.current > 0 ? BrandColor.streakFlame : BrandColor.textSecondary)
             Text("\(streakStore.current)")
                 .font(.system(size: 52, weight: .bold, design: .rounded))
                 .foregroundStyle(BrandColor.text)

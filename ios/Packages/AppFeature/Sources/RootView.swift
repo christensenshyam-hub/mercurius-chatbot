@@ -1,5 +1,12 @@
 import SwiftUI
 import DesignSystem
+#if DEBUG
+import ChatFeature
+import CurriculumFeature
+import MercFlowFeature
+import NetworkingKit
+import PersistenceKit
+#endif
 
 /// Root view of the app. Focused on **bootstrap** only:
 ///
@@ -27,6 +34,76 @@ public struct RootView: View {
     public init() {}
 
     public var body: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-MercFlow") {
+            MercFlowFeature.LessonView()
+        } else if ProcessInfo.processInfo.arguments.contains("-LessonPreview") {
+            lessonPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-MercPreview") {
+            MercPreviewView()
+        } else if ProcessInfo.processInfo.arguments.contains("-ChatPreview") {
+            chatPreview
+        } else {
+            mainBody
+        }
+        #else
+        mainBody
+        #endif
+    }
+
+    #if DEBUG
+    /// DEBUG-only: launch straight into the redesigned lesson screen for the
+    /// first lesson, wired to the live environment, so the Playful redesign can
+    /// be screenshotted without navigating the whole app.
+    @ViewBuilder private var lessonPreview: some View {
+        if let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first {
+            let next = unit.lessons.dropFirst().first
+            // A fake resume id skips the speech-bubble intro (and harmlessly
+            // falls through to a fresh start) so the chat can be previewed.
+            let fakeResume: UUID? = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
+            CurriculumLessonView(
+                lessonId: lesson.id,
+                unitLabel: "UNIT \(unit.number)",
+                lessonNumber: lesson.number,
+                title: lesson.title,
+                objective: lesson.objective,
+                starter: lesson.starter,
+                resumeConversationId: fakeResume,
+                apiClient: env.apiClient,
+                sessionIdentity: env.sessionIdentity,
+                chatStore: env.chatStore,
+                streakStore: env.streakStore,
+                achievementStore: env.achievementStore,
+                onStarted: { _, _ in },
+                onLessonComplete: { _ in },
+                onExit: {},
+                nextLessonNumber: next?.number,
+                nextLessonTitle: next?.title,
+                onAdvanceToNext: {},
+                completedInUnit: 3,
+                totalInUnit: unit.lessons.count
+            )
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else {
+            mainBody
+        }
+    }
+
+    /// DEBUG-only: land directly on the free Chat screen to view the branded
+    /// Merc intro + assistant-avatar treatment. Pass `-ChatSeed` to also auto-send
+    /// a starter so the thinking → speaking states can be seen.
+    @ViewBuilder private var chatPreview: some View {
+        ChatPreviewHost(
+            apiClient: env.apiClient,
+            sessionIdentity: env.sessionIdentity,
+            chatStore: env.chatStore,
+            autoSend: ProcessInfo.processInfo.arguments.contains("-ChatSeed")
+        )
+        .preferredColorScheme(env.themeStore.theme.colorScheme)
+    }
+    #endif
+
+    @ViewBuilder private var mainBody: some View {
         ZStack {
             BrandColor.background.ignoresSafeArea()
 
@@ -47,13 +124,11 @@ public struct RootView: View {
 
     // MARK: - States
 
+    /// The Duolingo-style branded launch moment (Merc hovering under the
+    /// wordmark + sweep + rotating tip). Held for a minimum beat by
+    /// `bootstrap()` so it never flashes.
     private var loadingView: some View {
-        VStack(spacing: BrandSpacing.lg) {
-            BrandLogo(style: .full, size: 240)
-            ProgressView().controlSize(.small)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Loading Mercurius")
+        MercLaunchScreen()
     }
 
     private func failureView(reason: String) -> some View {
@@ -79,15 +154,58 @@ public struct RootView: View {
 
     // MARK: - Bootstrap
 
+    /// How long the branded launch screen stays up even when bootstrap
+    /// finishes instantly — the Duolingo beat. Long enough to register as a
+    /// welcome, short enough to never feel like waiting.
+    private static let minimumLaunchHold: Duration = .seconds(2.2)
+
     private func bootstrap() async {
+        let start = ContinuousClock.now
         let identity = env.sessionIdentity
+        let result: BootstrapState
         do {
             let id = try await Task.detached(priority: .userInitiated) {
                 try identity.current()
             }.value
-            bootstrapState = .ready(sessionId: id)
+            result = .ready(sessionId: id)
         } catch {
-            bootstrapState = .failed(reason: "Could not create a session on this device. Please restart the app.")
+            result = .failed(reason: "Could not create a session on this device. Please restart the app.")
         }
+        // Hold the launch screen for its minimum beat before revealing Home.
+        // Failures skip the hold — an error should surface immediately, and
+        // the beat only pads the happy-path cold open.
+        let elapsed = start.duration(to: .now)
+        if case .ready = result, elapsed < Self.minimumLaunchHold {
+            try? await Task.sleep(for: Self.minimumLaunchHold - elapsed)
+        }
+        bootstrapState = result
     }
 }
+
+#if DEBUG
+/// DEBUG host for `-ChatPreview`: owns a `ChatViewModel` so it can optionally
+/// auto-send a starter (`-ChatSeed`) to exercise the thinking → speaking states.
+private struct ChatPreviewHost: View {
+    @State private var model: ChatViewModel
+    private let apiClient: APIClient
+    private let sessionIdentity: SessionIdentity
+    private let autoSend: Bool
+
+    init(apiClient: APIClient, sessionIdentity: SessionIdentity, chatStore: ChatStore?, autoSend: Bool) {
+        self.apiClient = apiClient
+        self.sessionIdentity = sessionIdentity
+        self.autoSend = autoSend
+        _model = State(initialValue: ChatViewModel(
+            apiClient: apiClient, sessionIdentity: sessionIdentity, store: chatStore))
+    }
+
+    var body: some View {
+        ChatView(model: model, apiClient: apiClient, sessionIdentity: sessionIdentity)
+            .task {
+                guard autoSend, model.messages.isEmpty else { return }
+                model.draft = "What is a token in an LLM?"
+                model.send()
+            }
+    }
+}
+#endif

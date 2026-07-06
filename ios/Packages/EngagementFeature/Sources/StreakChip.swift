@@ -18,7 +18,7 @@ public struct StreakChip: View {
             HStack(spacing: BrandSpacing.xs) {
                 Image(systemName: "flame.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(streakStore.current > 0 ? Color.orange : BrandColor.textSecondary)
+                    .foregroundStyle(streakStore.current > 0 ? BrandColor.streakFlame : BrandColor.textSecondary)
                 Text("\(streakStore.current)")
                     .font(BrandFont.bodyEmphasized)
                     .foregroundStyle(BrandColor.text)

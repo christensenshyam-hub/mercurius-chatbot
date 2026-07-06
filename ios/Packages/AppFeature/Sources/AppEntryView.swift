@@ -45,11 +45,15 @@ struct AppEntryView: View {
 
     @AppStorage(InteractiveOnboardingView.storageKey) private var hasSeenOnboarding: Bool = false
 
-    /// Flips true when the user taps **Start Chat** on HomeView.
+    /// Flips true when the user taps a CTA on HomeView.
     /// In-memory only: every cold launch restarts at Home (by design
-    /// — we'd rather reintroduce the framing every launch than drop
+    /// — Merc greets the learner every launch rather than dropping
     /// straight into a mid-conversation chat).
     @State private var hasEnteredApp: Bool = false
+
+    /// Which tab the shell should open on — set by the Home CTA the user
+    /// chose ("Chat with Merc" → .chat, "Start learning" → .curriculum).
+    @State private var entryTab: AppShellView.Tab = .chat
 
     /// Drives the "How it works" sheet presented from HomeView.
     @State private var showHowItWorks: Bool = false
@@ -77,13 +81,25 @@ struct AppEntryView: View {
                 streakStore: env.streakStore,
                 achievementStore: env.achievementStore,
                 reminderStore: env.reminderStore,
+                initialTab: entryTab,
                 onGoHome: { hasEnteredApp = false }
             )
             .transition(.opacity)
         } else {
             HomeView(
-                onStartChat: { hasEnteredApp = true },
-                onHowItWorks: { showHowItWorks = true }
+                onStartChat: {
+                    entryTab = .chat
+                    hasEnteredApp = true
+                },
+                onStartLearning: {
+                    entryTab = .curriculum
+                    hasEnteredApp = true
+                },
+                onHowItWorks: { showHowItWorks = true },
+                // Only feed the greeting a streak the server confirmed
+                // recently — a weeks-old cache would make Merc claim a
+                // streak that has already died ("Day 5 — keep it alive!").
+                streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0
             )
             .transition(.opacity)
         }

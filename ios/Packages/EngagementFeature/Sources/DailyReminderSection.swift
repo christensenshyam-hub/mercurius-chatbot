@@ -9,6 +9,12 @@ public struct DailyReminderSection: View {
     private let store: ReminderStore
     private let scheduler: NotificationScheduler
     @State private var permissionDenied = false
+    /// Enable is asynchronous (it awaits the notification-permission request,
+    /// which can sit under the system alert for as long as the user deliberates).
+    /// The Toggle reads this so the switch stays ON while the request is in
+    /// flight instead of visibly snapping back to OFF — which reads as "the tap
+    /// didn't take" and invites re-taps.
+    @State private var pendingOn = false
 
     public init(store: ReminderStore, scheduler: NotificationScheduler) {
         self.store = store
@@ -21,7 +27,7 @@ public struct DailyReminderSection: View {
                 .font(BrandFont.subheading)
                 .foregroundStyle(BrandColor.text)
 
-            Toggle(isOn: Binding(get: { store.enabled }, set: { setEnabled($0) })) {
+            Toggle(isOn: Binding(get: { store.enabled || pendingOn }, set: { setEnabled($0) })) {
                 Text("Remind me to learn each day")
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)
@@ -50,11 +56,16 @@ public struct DailyReminderSection: View {
 
     private func setEnabled(_ on: Bool) {
         guard on else {
+            pendingOn = false
             store.enabled = false
             permissionDenied = false
             scheduler.cancel()
             return
         }
+        // Re-entry guard: a second flip while the permission request is in
+        // flight must not spawn a parallel request.
+        guard !pendingOn else { return }
+        pendingOn = true
         Task {
             let granted = await scheduler.requestPermission()
             if granted {
@@ -62,9 +73,11 @@ public struct DailyReminderSection: View {
                 permissionDenied = false
                 scheduler.scheduleDaily(hour: store.hour, minute: store.minute)
             } else {
+                // Only an actual denial animates the switch back OFF.
                 store.enabled = false
                 permissionDenied = true
             }
+            pendingOn = false
         }
     }
 

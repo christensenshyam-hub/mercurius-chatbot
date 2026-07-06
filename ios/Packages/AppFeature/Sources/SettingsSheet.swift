@@ -2,6 +2,7 @@ import SwiftUI
 import NetworkingKit
 import PersistenceKit
 import ChatFeature
+import CurriculumFeature
 import SettingsFeature
 
 /// Thin wrapper around `SettingsView` that constructs the view model
@@ -13,6 +14,9 @@ struct SettingsSheet: View {
     let themeStore: ThemePreferenceStore
     let chatStore: ChatStore?
     let chatModel: ChatViewModel
+    let streakStore: StreakStore
+    let achievementStore: AchievementStore
+    let progress: CurriculumProgressStore
 
     @Environment(\.dismiss) private var dismiss
 
@@ -21,7 +25,7 @@ struct SettingsSheet: View {
             model: SettingsViewModel(
                 sessionStorage: sessionIdentity,
                 themeStore: themeStore,
-                extraReset: { [chatStore, chatModel] in
+                extraReset: { [chatStore, chatModel, streakStore, achievementStore, progress] in
                     // Order matters: wipe the disk store first so the
                     // new conversation `startNewConversation()` opens
                     // is the only record in the freshly-empty store.
@@ -34,6 +38,14 @@ struct SettingsSheet: View {
                     // here?"). Also resets `draft`, cancels any in-
                     // flight stream, and flips phase back to `.idle`.
                     chatModel.startNewConversation()
+                    // The on-device engagement + curriculum caches describe
+                    // the OLD identity: a fresh session must not inherit its
+                    // streak, badges, or lesson progress — and the curriculum
+                    // resume pointers now reference conversations `deleteAll()`
+                    // just removed, so they'd show dead "Resume" affordances.
+                    streakStore.reset()
+                    achievementStore.reset()
+                    progress.reset()
                 }
             ),
             dismissAction: { dismiss() }
