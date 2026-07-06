@@ -95,7 +95,6 @@ struct InMemoryChatStoreTests {
         #expect(store.latestConversationId(in: .socratic) == socratic)
         #expect(store.latestConversationId(in: .debate) == debate)
         #expect(store.latestConversationId(in: .discussion) == discussion)
-        #expect(store.latestConversationId(in: .direct) == nil)
 
         // Touching the Socratic conversation must not move the Debate
         // pointer — modes don't share state.
@@ -168,6 +167,29 @@ struct InMemoryChatStoreTests {
         let kept = store.createConversation(mode: .socratic)
         store.delete(conversationId: UUID())
         #expect(store.loadConversation(conversationId: kept) != nil)
+    }
+
+    // MARK: - Curriculum lesson threads are hidden from main chat history
+
+    @Test("Curriculum conversations are excluded from latestConversationId + listConversations, but stay loadable for resume")
+    func curriculumThreadsHiddenFromHistory() async {
+        let store = InMemoryChatStore()
+        let main = store.createConversation(mode: .socratic)
+        try? await Task.sleep(for: .milliseconds(5))
+        // A lesson thread, created AFTER the main chat — so it's the newest.
+        let lesson = store.createCurriculumConversation()
+        store.append(
+            StoredMessage(id: UUID(), role: "assistant", content: "Lesson 1…", createdAt: Date()),
+            to: lesson
+        )
+
+        // Never resurfaces as the "current" main chat, even though it's newest.
+        #expect(store.latestConversationId() == main)
+        // Not part of chat history…
+        #expect(!store.listConversations().map(\.id).contains(lesson))
+        #expect(store.listConversations().map(\.id).contains(main))
+        // …but the thread itself is still loadable (this is what resume uses).
+        #expect(store.loadConversation(conversationId: lesson)?.messages.count == 1)
     }
 }
 
@@ -248,5 +270,15 @@ struct SwiftDataChatStoreTests {
         )
         store.deleteAll()
         #expect(store.latestConversationId() == nil)
+    }
+
+    @Test("Curriculum conversations are excluded from history queries but remain loadable")
+    func curriculumThreadsHidden() throws {
+        let store = try SwiftDataChatStore.inMemory()
+        let main = store.createConversation(mode: .socratic)
+        let lesson = store.createCurriculumConversation()
+        #expect(store.latestConversationId() == main)
+        #expect(store.listConversations().map(\.id) == [main])
+        #expect(store.loadConversation(conversationId: lesson) != nil)
     }
 }

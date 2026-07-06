@@ -97,7 +97,8 @@ func parseChatEvent(from payload: String) throws -> ChatStreamEvent? {
             justUnlocked: decoded.justUnlocked,
             streak: decoded.streak,
             difficulty: decoded.difficulty,
-            suggestSummary: decoded.suggestSummary
+            suggestSummary: decoded.suggestSummary,
+            lessonComplete: decoded.lessonComplete
         )
         return .complete(response)
 

@@ -167,6 +167,20 @@
           "automatic"
         ]
       }
+    },
+    {
+      "name" : "MercFlowFeature",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "MercFlowFeature"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
     }
   ],
   "providers" : null,
@@ -583,6 +597,12 @@
             "EngagementFeature",
             null
           ]
+        },
+        {
+          "byName" : [
+            "MercFlowFeature",
+            null
+          ]
         }
       ],
       "exclude" : [
@@ -620,6 +640,52 @@
       "name" : "AppFeatureTests",
       "packageAccess" : true,
       "path" : "AppFeature/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "MercFlowFeature",
+      "packageAccess" : true,
+      "path" : "MercFlowFeature/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "MercFlowFeature",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "MercFlowFeatureTests",
+      "packageAccess" : true,
+      "path" : "MercFlowFeature/Tests",
       "resources" : [
 
       ],

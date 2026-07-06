@@ -25,14 +25,6 @@ struct ChatModeTests {
         }
     }
 
-    @Test("Only .direct requires unlock — that's the Socratic comprehension-test gate")
-    func requiresUnlockFlags() {
-        #expect(ChatMode.direct.requiresUnlock)
-        #expect(!ChatMode.socratic.requiresUnlock)
-        #expect(!ChatMode.debate.requiresUnlock)
-        #expect(!ChatMode.discussion.requiresUnlock)
-    }
-
     @Test("id equals rawValue — enables Identifiable/ForEach without a manual keyPath")
     func idMatchesRawValue() {
         for mode in ChatMode.allCases {
@@ -58,13 +50,12 @@ struct ChatModeTests {
         // renames a case, this test fails and prompts them to also
         // update the server side.
         #expect(ChatMode.socratic.rawValue == "socratic")
-        #expect(ChatMode.direct.rawValue == "direct")
         #expect(ChatMode.debate.rawValue == "debate")
         #expect(ChatMode.discussion.rawValue == "discussion")
     }
 
-    @Test("allCases covers exactly the 4 modes and their order is stable")
+    @Test("allCases covers exactly the 3 modes and their order is stable")
     func allCasesShape() {
-        #expect(ChatMode.allCases == [.socratic, .direct, .debate, .discussion])
+        #expect(ChatMode.allCases == [.socratic, .debate, .discussion])
     }
 }

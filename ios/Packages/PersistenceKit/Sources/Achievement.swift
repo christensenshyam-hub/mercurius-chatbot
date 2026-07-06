@@ -22,10 +22,10 @@ public struct Achievement: Identifiable, Equatable, Sendable, Hashable {
 /// drift. Mirrors (a subset of) the web widget's badge set.
 public enum AchievementCatalog {
     public static let firstConversation = "first_conversation"
-    public static let criticalThinker = "critical_thinker"
     public static let debater = "debater"
     public static let quizMaster = "quiz_master"
     public static let explorer = "explorer"
+    public static let unitMaster = "unit_master"
     public static let deepDiver = "deep_diver"
     public static let reportCard = "report_card"
     public static let streak3 = "streak_3"
@@ -36,16 +36,16 @@ public enum AchievementCatalog {
     public static let all: [Achievement] = [
         Achievement(id: firstConversation, title: "First Steps",
                     detail: "Started your first conversation with Mercurius.", symbol: "bubble.left.fill"),
-        Achievement(id: criticalThinker, title: "Critical Thinker",
-                    detail: "Unlocked Direct Mode by showing real understanding.", symbol: "lock.open.fill"),
         Achievement(id: debater, title: "Debater",
                     detail: "Stepped into Debate Mode and argued your side.", symbol: "person.2.fill"),
         Achievement(id: quizMaster, title: "Quiz Master",
                     detail: "Scored 3 or more on a comprehension quiz.", symbol: "checkmark.seal.fill"),
         Achievement(id: explorer, title: "Explorer",
                     detail: "Started a structured curriculum lesson.", symbol: "map.fill"),
+        Achievement(id: unitMaster, title: "Unit Master",
+                    detail: "Passed a cumulative unit test — quiz and written defense.", symbol: "rosette"),
         Achievement(id: deepDiver, title: "Deep Diver",
-                    detail: "Sent 20 messages across your conversations.", symbol: "arrow.down.circle.fill"),
+                    detail: "Sent 20 messages in a single conversation.", symbol: "arrow.down.circle.fill"),
         Achievement(id: reportCard, title: "Self-Aware",
                     detail: "Generated a session report card.", symbol: "doc.text.magnifyingglass"),
         Achievement(id: streak3, title: "On a Roll",

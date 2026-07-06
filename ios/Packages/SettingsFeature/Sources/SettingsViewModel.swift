@@ -81,6 +81,11 @@ public final class SettingsViewModel {
     private let sessionStorage: SessionResetting
     public let themeStore: ThemePreferenceStore
 
+    /// Standby gamification "show progress nudges" preference. Constructed
+    /// internally (no init-signature change) so existing callers are
+    /// unaffected. Only surfaced in the UI when `GamificationFlag.clientEnabled`.
+    public let nudgeStore: NudgePreferenceStore = NudgePreferenceStore()
+
     /// Optional hook for resetting app-side state that isn't owned by
     /// `SettingsFeature` — e.g. clearing the persisted chat history.
     /// Runs synchronously alongside the session reset.
@@ -93,6 +98,14 @@ public final class SettingsViewModel {
     public var theme: ThemePreference {
         get { themeStore.theme }
         set { themeStore.theme = newValue }
+    }
+
+    /// Computed binding for the "show progress nudges" toggle. Writes through
+    /// the shared preference store (and thus the shared UserDefaults key that
+    /// `GamificationStore` reads).
+    public var nudgesEnabled: Bool {
+        get { nudgeStore.isEnabled }
+        set { nudgeStore.isEnabled = newValue }
     }
 
     // MARK: - Init

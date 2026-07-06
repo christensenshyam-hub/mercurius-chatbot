@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import NetworkingKit
 
 /// Settings screen. Presented as a sheet from the chat header.
 ///
@@ -25,6 +26,11 @@ public struct SettingsView: View {
         NavigationStack {
             Form {
                 appearanceSection
+                // Standby gamification toggle — only shown when the client flag
+                // is on, so the default Settings screen is unchanged.
+                if GamificationFlag.clientEnabled {
+                    nudgesSection
+                }
                 sessionSection
                 aboutSection
             }
@@ -77,6 +83,17 @@ public struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    private var nudgesSection: some View {
+        Section {
+            Toggle("Show progress nudges", isOn: $model.nudgesEnabled)
+                .tint(BrandColor.accent)
+        } header: {
+            Text("Progress")
+        } footer: {
+            Text("Brief, factual credit when you make a good reasoning move — asking a sharper question, revising your view, catching your own mistake. Turn this off for a quieter experience; your progress still counts.")
         }
     }
 
