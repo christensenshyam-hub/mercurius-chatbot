@@ -105,15 +105,24 @@ public final class NotificationScheduler {
     /// DEBUG-only (`-NotifPreview`): schedule one of each banner flavor a few
     /// seconds out so the artwork + copy can be seen without waiting for the
     /// real reminder time. Uses the exact same content-building path.
+    ///
+    /// Requests **provisional** authorization (granted silently — no permission
+    /// dialog to tap) and installs a foreground presenter, so the banners
+    /// appear even while the app is on screen. This is a preview affordance
+    /// only; real reminders use the standard opt-in permission flow.
     public func scheduleDemo() {
         Task {
-            _ = await requestPermission()
-            var tiles: [ReminderPlanner.Pose: Data] = [:]
             let center = UNUserNotificationCenter.current()
+            center.delegate = ForegroundBannerPresenter.shared
+            // Full authorization so the banners actually interrupt (provisional
+            // delivers quietly, with no foreground banner). One "Allow" tap on
+            // the dialog; timers below start once it's granted.
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            var tiles: [ReminderPlanner.Pose: Data] = [:]
             let flavors: [(TimeInterval, String, ReminderPlanner.Pose)] = [
-                (8, ReminderPlanner.defenseLine(streak: 2), .sleep),
-                (16, ReminderPlanner.dailyLines[0].body, .wave),
-                (24, ReminderPlanner.dailyLines[5].body, .celebrate),
+                (4, ReminderPlanner.defenseLine(streak: 2), .sleep),
+                (10, ReminderPlanner.dailyLines[0].body, .wave),
+                (16, ReminderPlanner.dailyLines[5].body, .celebrate),
             ]
             for (delay, body, pose) in flavors {
                 let reminder = ReminderPlanner.PlannedReminder(
@@ -139,6 +148,22 @@ public final class NotificationScheduler {
             center.removePendingNotificationRequests(withIdentifiers: pending + [legacyReminderId])
         }
     }
+    #if DEBUG
+    /// Foreground presenter for the `-NotifPreview` demo: shows scheduled
+    /// notifications as banners even while the app is on screen (iOS otherwise
+    /// suppresses foreground notifications). DEBUG-only; not used by real
+    /// reminders, which fire while the app is backgrounded.
+    private final class ForegroundBannerPresenter: NSObject, UNUserNotificationCenterDelegate {
+        static let shared = ForegroundBannerPresenter()
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            willPresent notification: UNNotification
+        ) async -> UNNotificationPresentationOptions {
+            [.banner, .list, .sound]
+        }
+    }
+    #endif
+
     #else
     public func requestPermission() async -> Bool { false }
     public func refresh(enabled: Bool, hour: Int, minute: Int, streak: Int?, chattedToday: Bool) {}

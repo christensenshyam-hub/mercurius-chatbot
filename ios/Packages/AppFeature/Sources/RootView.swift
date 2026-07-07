@@ -3,6 +3,7 @@ import DesignSystem
 #if DEBUG
 import ChatFeature
 import CurriculumFeature
+import EngagementFeature
 import MercFlowFeature
 import NetworkingKit
 import PersistenceKit
@@ -120,6 +121,17 @@ public struct RootView: View {
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
         .preferredColorScheme(env.themeStore.theme.colorScheme)
         .task { await bootstrap() }
+        .task {
+            #if DEBUG
+            // `-NotifPreview`: fire one of each reminder banner flavor (defense
+            // / wave / celebrate) seconds from now so the Merc pose art can be
+            // seen without waiting for a real reminder time. Fires from the
+            // always-mounted root (the AppShell hook never runs from Home).
+            if ProcessInfo.processInfo.arguments.contains("-NotifPreview") {
+                EngagementFeature.NotificationScheduler().scheduleDemo()
+            }
+            #endif
+        }
     }
 
     // MARK: - States

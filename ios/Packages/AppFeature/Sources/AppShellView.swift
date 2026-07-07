@@ -165,16 +165,8 @@ struct AppShellView: View {
         // the number before it could go stale.
         .onChange(of: scenePhase) { _, _ in refreshReminders() }
         .onChange(of: streakStore.lastUpdatedAt) { _, _ in refreshReminders() }
-        .task {
-            #if DEBUG
-            // `-NotifPreview`: fire one of each banner flavor (defense /
-            // wave / celebrate) seconds from now, so the Merc pose tiles can
-            // be eyeballed without waiting for the real reminder time.
-            if ProcessInfo.processInfo.arguments.contains("-NotifPreview") {
-                scheduler.scheduleDemo()
-            }
-            #endif
-        }
+        // (`-NotifPreview` fires from RootView's always-mounted root, since the
+        // app opens on Home and this shell isn't in the tree until a CTA tap.)
         // A started lesson opens in its OWN full-screen curriculum window — not
         // the chat tab, not a new mode. The starter prompt is sent behind the
         // scenes (see CurriculumLessonView / ChatViewModel.beginLesson).
