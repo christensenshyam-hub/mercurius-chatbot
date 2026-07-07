@@ -58,7 +58,8 @@ public struct ProgressHubView: View {
                     // the title).
                     AchievementsGalleryView(store: achievementStore)
                     LeaderboardListView(model: leaderboard)
-                    DailyReminderSection(store: reminderStore, scheduler: scheduler)
+                    DailyReminderSection(store: reminderStore, scheduler: scheduler,
+                                         streakStore: streakStore)
                 }
                 .padding(BrandSpacing.lg)
             }

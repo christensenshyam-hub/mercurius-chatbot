@@ -59,6 +59,8 @@ struct AppShellView: View {
     /// Wraps UNUserNotificationCenter for the daily reminder.
     @State private var scheduler = NotificationScheduler()
 
+    @Environment(\.scenePhase) private var scenePhase
+
     /// Standby gamification (quiet progress) cache. Default-constructed, so
     /// `clientEnabled` is false — it makes no network calls and renders nothing
     /// unless the feature is explicitly turned on (client + server flags).
@@ -77,6 +79,18 @@ struct AppShellView: View {
         case history       // action: present chat-history sheet
         case newChat       // action: startNewConversation()
         case curriculum
+    }
+
+    /// Re-plan the outside-app reminder window from current state. The
+    /// scheduler no-ops when the toggle is off or permission is missing.
+    private func refreshReminders() {
+        scheduler.refresh(
+            enabled: reminderStore.enabled,
+            hour: reminderStore.hour,
+            minute: reminderStore.minute,
+            streak: streakStore.isCurrentFresh ? streakStore.current : nil,
+            chattedToday: streakStore.confirmedToday
+        )
     }
 
     init(
@@ -144,6 +158,13 @@ struct AppShellView: View {
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
         }
+        // Keep the reminder window current (rotating Merc copy + streak
+        // defense): re-plan when the app changes foreground state and after
+        // every chat that touches the streak — chatting today replaces the
+        // pending "streak on the line" alert, and a streak change re-stamps
+        // the number before it could go stale.
+        .onChange(of: scenePhase) { _, _ in refreshReminders() }
+        .onChange(of: streakStore.lastUpdatedAt) { _, _ in refreshReminders() }
         // A started lesson opens in its OWN full-screen curriculum window — not
         // the chat tab, not a new mode. The starter prompt is sent behind the
         // scenes (see CurriculumLessonView / ChatViewModel.beginLesson).
