@@ -13,7 +13,16 @@ import XCTest
 /// see APP_STORE_LISTING.md.
 final class AppStoreScreenshots: XCTestCase {
 
-    private static let timeout: TimeInterval = 25
+    /// Per-query existence budget. This is the slowest UI test (~169s): it
+    /// seeds a ~50-message conversation, so the accessibility tree is large
+    /// and every snapshot XCUITest takes is expensive. On a loaded, shared CI
+    /// runner a query fired while a screen is still transitioning has
+    /// intermittently aborted with "Timed out while evaluating UI query"
+    /// (seen on the feature/merc-reminder-layer run — failed once, passed on
+    /// re-run). A generous budget, combined with `settleAndWait` letting each
+    /// transition quiesce first, gives that headroom. Most lookups still
+    /// resolve in well under a second once the element is in the tree.
+    private static let timeout: TimeInterval = 45
 
     override func setUpWithError() throws {
         continueAfterFailure = true   // capture as many screens as we can
@@ -36,20 +45,24 @@ final class AppStoreScreenshots: XCTestCase {
         let chatCTA = app.buttons["Chat with Merc"]
         XCTAssertTrue(chatCTA.waitForExistence(timeout: Self.timeout), "Never reached Home")
         chatCTA.tap()
+        // Entering the seeded 50-message chat is the heaviest transition of the
+        // run, so gate on the header through the settle-first poll helper rather
+        // than a single blocking query.
         XCTAssertTrue(
-            app.staticTexts["AI LITERACY TUTOR"].waitForExistence(timeout: Self.timeout),
+            settleAndWait(app.staticTexts["AI LITERACY TUTOR"]),
             "Never reached the chat tab"
         )
-        settle()
 
         // 1 — Chat (hero): seeded conversation + the mode pills up top.
         snapshot("01-chat")
 
         // 2 — Settings sheet.
         let settings = app.buttons["Settings"]
-        if settings.waitForExistence(timeout: Self.timeout) {
+        if settleAndWait(settings) {
             settings.tap()
-            settle()
+            // Wait for the sheet to actually present before capturing, instead
+            // of a blind sleep — its nav bar is a stable cross-version anchor.
+            _ = settleAndWait(app.navigationBars["Settings"].firstMatch)
             snapshot("02-settings")
             dismissSheet(app)
             settle()
@@ -57,9 +70,9 @@ final class AppStoreScreenshots: XCTestCase {
 
         // 3 — Curriculum tab.
         let curriculum = app.buttons.matching(NSPredicate(format: "label == 'Curriculum'")).firstMatch
-        if curriculum.waitForExistence(timeout: Self.timeout) {
+        if settleAndWait(curriculum) {
             curriculum.tap()
-            settle()
+            _ = settleAndWait(app.navigationBars["Curriculum"].firstMatch)
             snapshot("03-curriculum")
             // Back to chat for the next step.
             let chat = app.buttons.matching(NSPredicate(format: "label == 'Chat'")).firstMatch
@@ -68,7 +81,7 @@ final class AppStoreScreenshots: XCTestCase {
 
         // 4 — Chat History (the History tab presents it as a sheet).
         let history = app.buttons.matching(NSPredicate(format: "label == 'History'")).firstMatch
-        if history.waitForExistence(timeout: Self.timeout) {
+        if settleAndWait(history) {
             history.tap()
             settle()
             snapshot("04-history")
@@ -89,6 +102,32 @@ final class AppStoreScreenshots: XCTestCase {
     /// Let presentation/transition animations finish before capturing.
     private func settle() {
         Thread.sleep(forTimeInterval: 1.2)
+    }
+
+    /// Wait for `element` to appear, but let the in-flight transition settle
+    /// first and then poll in short slices up to `timeout`, rather than betting
+    /// the capture on a single long-running query.
+    ///
+    /// Same poll-with-deadline shape as `MercPresenceControllerTests.poll`,
+    /// adapted to XCUIElement: on a loaded shared runner the seeded chat's large
+    /// accessibility tree makes any query fired mid-transition slow, so we
+    /// (1) `settle()` so the finite present/dismiss/tab animation is done before
+    /// we look, then (2) re-evaluate existence in ~2s slices until the deadline —
+    /// a check that returns the instant the element is in the tree and re-tries
+    /// across a transient snapshot hiccup instead of failing the run outright.
+    @MainActor
+    @discardableResult
+    private func settleAndWait(
+        _ element: XCUIElement,
+        timeout: TimeInterval = AppStoreScreenshots.timeout
+    ) -> Bool {
+        settle()
+        if element.exists { return true }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.waitForExistence(timeout: 2) { return true }
+        }
+        return element.exists
     }
 
     @MainActor

@@ -8,6 +8,10 @@ import PersistenceKit
 public struct DailyReminderSection: View {
     private let store: ReminderStore
     private let scheduler: NotificationScheduler
+    /// Feeds the streak-defense layer: when the streak is fresh and unsaved
+    /// today, the next reminder becomes "your N-day streak is on the line".
+    /// Optional so previews/tests without a streak store still work.
+    private let streakStore: StreakStore?
     @State private var permissionDenied = false
     /// Enable is asynchronous (it awaits the notification-permission request,
     /// which can sit under the system alert for as long as the user deliberates).
@@ -16,9 +20,22 @@ public struct DailyReminderSection: View {
     /// didn't take" and invites re-taps.
     @State private var pendingOn = false
 
-    public init(store: ReminderStore, scheduler: NotificationScheduler) {
+    public init(store: ReminderStore, scheduler: NotificationScheduler,
+                streakStore: StreakStore? = nil) {
         self.store = store
         self.scheduler = scheduler
+        self.streakStore = streakStore
+    }
+
+    /// Re-plan the reminder window (rotating Merc copy + streak defense).
+    private func refreshSchedule() {
+        scheduler.refresh(
+            enabled: store.enabled,
+            hour: store.hour,
+            minute: store.minute,
+            streak: (streakStore?.isCurrentFresh == true) ? streakStore?.current : nil,
+            chattedToday: streakStore?.confirmedToday ?? false
+        )
     }
 
     public var body: some View {
@@ -71,7 +88,7 @@ public struct DailyReminderSection: View {
             if granted {
                 store.enabled = true
                 permissionDenied = false
-                scheduler.scheduleDaily(hour: store.hour, minute: store.minute)
+                refreshSchedule()
             } else {
                 // Only an actual denial animates the switch back OFF.
                 store.enabled = false
@@ -86,7 +103,7 @@ public struct DailyReminderSection: View {
         store.hour = comps.hour ?? 18
         store.minute = comps.minute ?? 0
         if store.enabled {
-            scheduler.scheduleDaily(hour: store.hour, minute: store.minute)
+            refreshSchedule()
         }
     }
 

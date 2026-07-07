@@ -3,14 +3,21 @@ import Foundation
 import UserNotifications
 #endif
 
-/// Thin wrapper over `UNUserNotificationCenter` for the single daily learning
-/// reminder. Guarded for iOS — the package also compiles for macOS (so
-/// `swift test` runs), where these are no-ops.
+/// Thin wrapper over `UNUserNotificationCenter` for the learning reminders.
+/// Guarded for iOS — the package also compiles for macOS (so `swift test`
+/// runs), where these are no-ops.
+///
+/// The planning (which days, which Merc line, streak defense) lives in the
+/// pure `ReminderPlanner`; this type only requests permission and applies a
+/// plan to the notification center.
 @MainActor
 public final class NotificationScheduler {
     public init() {}
 
-    private let reminderId = "mercurius.daily.reminder"
+    /// The pre-plan era's repeating-reminder id — cleared on every refresh so
+    /// upgrading users don't get the old static notification alongside the
+    /// planned ones.
+    private let legacyReminderId = "mercurius.daily.reminder"
 
     #if os(iOS)
     /// Ask for notification permission. Returns whether it was granted.
@@ -20,33 +27,149 @@ public final class NotificationScheduler {
         return granted ?? false
     }
 
-    /// Schedule (or replace) the repeating daily reminder at `hour:minute`.
-    /// Copy is deliberately streak-number-free so it never goes stale between
-    /// launches.
-    public func scheduleDaily(hour: Int, minute: Int) {
+    /// Re-plan the reminder window from the current state. Safe to call often
+    /// (launch, foreground, streak change, settings change): the plan's
+    /// per-day identifiers make re-adding a replace, and stale days are
+    /// cleared first. No-ops without authorization — an unauthorized add is
+    /// silently dropped by the system anyway, so this just keeps intent clear.
+    public func refresh(
+        enabled: Bool,
+        hour: Int,
+        minute: Int,
+        streak: Int?,
+        chattedToday: Bool
+    ) {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [reminderId])
+        Task {
+            let pending = await center.pendingNotificationRequests()
+                .map(\.identifier)
+                .filter { $0.hasPrefix(ReminderPlanner.idPrefix) }
+            center.removePendingNotificationRequests(withIdentifiers: pending + [legacyReminderId])
 
+            guard enabled else { return }
+            let settings = await center.notificationSettings()
+            guard settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional else { return }
+
+            // Render each pose tile once per refresh; every request needs its
+            // OWN file on disk because the system MOVES attachment files into
+            // its store when the request is added.
+            var tiles: [ReminderPlanner.Pose: Data] = [:]
+            for reminder in ReminderPlanner.plan(
+                now: Date(), hour: hour, minute: minute,
+                streak: streak, chattedToday: chattedToday
+            ) {
+                let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireDate, repeats: false)
+                // A failed add (system limit, etc.) just drops that day —
+                // the next refresh re-plans it.
+                try? await center.add(
+                    UNNotificationRequest(identifier: reminder.id,
+                                          content: content(for: reminder, tiles: &tiles),
+                                          trigger: trigger)
+                )
+            }
+        }
+    }
+
+    /// Build the notification content: title, Merc-voiced body, and the
+    /// rendered Merc pose tile as an image attachment (banner + expanded
+    /// view). Attachment failures degrade to a text-only notification.
+    private func content(
+        for reminder: ReminderPlanner.PlannedReminder,
+        tiles: inout [ReminderPlanner.Pose: Data]
+    ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = "Mercurius"
-        content.body = "Keep your streak alive — take a couple minutes to think with AI today."
+        content.body = reminder.body
         content.sound = .default
 
-        var components = DateComponents()
-        components.hour = hour
-        components.minute = minute
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-
-        center.add(UNNotificationRequest(identifier: reminderId, content: content, trigger: trigger))
+        let data: Data?
+        if let cached = tiles[reminder.pose] {
+            data = cached
+        } else {
+            data = MercNotificationArt.pngData(for: reminder.pose)
+            tiles[reminder.pose] = data ?? Data()
+        }
+        if let data, !data.isEmpty {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("merc-notif-\(UUID().uuidString).png")
+            if (try? data.write(to: url)) != nil,
+               let attachment = try? UNNotificationAttachment(identifier: "merc", url: url) {
+                content.attachments = [attachment]
+            }
+        }
+        return content
     }
 
-    /// Cancel the daily reminder.
+    #if DEBUG
+    /// DEBUG-only (`-NotifPreview`): schedule one of each banner flavor a few
+    /// seconds out so the artwork + copy can be seen without waiting for the
+    /// real reminder time. Uses the exact same content-building path.
+    ///
+    /// Requests **provisional** authorization (granted silently — no permission
+    /// dialog to tap) and installs a foreground presenter, so the banners
+    /// appear even while the app is on screen. This is a preview affordance
+    /// only; real reminders use the standard opt-in permission flow.
+    public func scheduleDemo() {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            center.delegate = ForegroundBannerPresenter.shared
+            // Full authorization so the banners actually interrupt (provisional
+            // delivers quietly, with no foreground banner). One "Allow" tap on
+            // the dialog; timers below start once it's granted.
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            var tiles: [ReminderPlanner.Pose: Data] = [:]
+            let flavors: [(TimeInterval, String, ReminderPlanner.Pose)] = [
+                (4, ReminderPlanner.defenseLine(streak: 2), .sleep),
+                (10, ReminderPlanner.dailyLines[0].body, .wave),
+                (16, ReminderPlanner.dailyLines[5].body, .celebrate),
+            ]
+            for (delay, body, pose) in flavors {
+                let reminder = ReminderPlanner.PlannedReminder(
+                    id: "mercurius.demo.\(pose.rawValue)",
+                    fireDate: DateComponents(), body: body, pose: pose
+                )
+                let content = content(for: reminder, tiles: &tiles)
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+                try? await center.add(UNNotificationRequest(
+                    identifier: reminder.id, content: content, trigger: trigger))
+            }
+        }
+    }
+    #endif
+
+    /// Cancel every scheduled reminder (toggle turned off).
     public func cancel() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [reminderId])
+        let center = UNUserNotificationCenter.current()
+        Task {
+            let pending = await center.pendingNotificationRequests()
+                .map(\.identifier)
+                .filter { $0.hasPrefix(ReminderPlanner.idPrefix) }
+            center.removePendingNotificationRequests(withIdentifiers: pending + [legacyReminderId])
+        }
     }
+    #if DEBUG
+    /// Foreground presenter for the `-NotifPreview` demo: shows scheduled
+    /// notifications as banners even while the app is on screen (iOS otherwise
+    /// suppresses foreground notifications). DEBUG-only; not used by real
+    /// reminders, which fire while the app is backgrounded.
+    private final class ForegroundBannerPresenter: NSObject, UNUserNotificationCenterDelegate {
+        static let shared = ForegroundBannerPresenter()
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            willPresent notification: UNNotification
+        ) async -> UNNotificationPresentationOptions {
+            [.banner, .list, .sound]
+        }
+    }
+    #endif
+
     #else
     public func requestPermission() async -> Bool { false }
-    public func scheduleDaily(hour: Int, minute: Int) {}
+    public func refresh(enabled: Bool, hour: Int, minute: Int, streak: Int?, chattedToday: Bool) {}
     public func cancel() {}
+    #if DEBUG
+    public func scheduleDemo() {}
+    #endif
     #endif
 }

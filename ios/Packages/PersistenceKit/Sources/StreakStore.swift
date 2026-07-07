@@ -53,6 +53,17 @@ public final class StreakStore {
         return Date().timeIntervalSince(lastUpdatedAt) < Self.freshnessWindow
     }
 
+    /// Whether the streak was confirmed today (local calendar) — i.e. the user
+    /// already chatted today and the day is "saved". Drives the streak-defense
+    /// reminder: no point warning someone about a day they already banked.
+    /// (A launch `seed` stamps UTC midnight of the last chat day, which can
+    /// read as "yesterday" locally — worst case one redundant reminder after a
+    /// fresh install; a real in-app chat stamps precisely via `update`.)
+    public var confirmedToday: Bool {
+        guard let lastUpdatedAt else { return false }
+        return Calendar.current.isDateInToday(lastUpdatedAt)
+    }
+
     /// Record the latest authoritative streak from the server. No-op for
     /// non-positive values (the server's minimum is 1).
     ///
