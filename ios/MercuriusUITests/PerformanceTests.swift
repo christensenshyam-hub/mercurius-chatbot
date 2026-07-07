@@ -46,15 +46,17 @@ final class PerformanceTests: XCTestCase {
     /// use this — it's deliberately measuring the whole bootstrap.
     @MainActor
     private func enterAppFromHome(_ app: XCUIApplication, timeout: TimeInterval = 15) {
-        let startChat = app.buttons["Start Chat"]
+        let chatCTA = app.buttons["Chat with Merc"]
         XCTAssertTrue(
-            startChat.waitForExistence(timeout: timeout),
-            "HomeView never rendered — Start Chat button missing after \(timeout)s"
+            chatCTA.waitForExistence(timeout: timeout),
+            "HomeView never rendered — Chat with Merc button missing after \(timeout)s"
         )
-        startChat.tap()
+        chatCTA.tap()
+        // "AI LITERACY TUTOR" is unique to the chat header ("Mercurius AI"
+        // also appears on the Home welcome, so it can match mid-crossfade).
         XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: timeout),
-            "Did not reach the chat screen after tapping Start Chat"
+            app.staticTexts["AI LITERACY TUTOR"].waitForExistence(timeout: timeout),
+            "Did not reach the chat screen after tapping Chat with Merc"
         )
     }
 

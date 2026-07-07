@@ -48,4 +48,18 @@ public final class ConversationRecord {
         self.updatedAt = createdAt
         self.messages = []
     }
+
+    /// Create a record with a raw `mode` string — used for non-`ChatMode`
+    /// conversations like curriculum lessons (`ChatStoreTag.curriculum`).
+    public init(
+        id: UUID = UUID(),
+        modeRaw: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.mode = modeRaw
+        self.createdAt = createdAt
+        self.updatedAt = createdAt
+        self.messages = []
+    }
 }

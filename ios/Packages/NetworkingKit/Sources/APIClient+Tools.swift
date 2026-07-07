@@ -33,6 +33,34 @@ extension APIClient {
             body: Body(sessionId: sessionId, messages: [])
         )
     }
+
+    /// Grade a unit test's open-ended "defense" answer. Stateless — unlike the
+    /// quiz / report-card endpoints, it carries everything it needs in the body
+    /// and does not read conversation history. Returns the letter grade, a
+    /// pass/fail verdict (grade A or B), and short feedback.
+    public func gradeUnitDefense(
+        sessionId: String,
+        unitId: String,
+        unitTitle: String,
+        defensePrompt: String,
+        answer: String
+    ) async throws -> UnitDefenseResult {
+        struct Body: Encodable {
+            let sessionId: String
+            let unitId: String
+            let unitTitle: String
+            let defensePrompt: String
+            let answer: String
+        }
+        return try await send(
+            method: "POST",
+            path: "/api/unit-test/grade",
+            body: Body(
+                sessionId: sessionId, unitId: unitId, unitTitle: unitTitle,
+                defensePrompt: defensePrompt, answer: answer
+            )
+        )
+    }
 }
 
 // MARK: - Protocols for testability

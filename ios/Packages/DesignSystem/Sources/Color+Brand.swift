@@ -72,6 +72,30 @@ public enum BrandColor {
 
     public static let error = Color(red: 0xEF / 255, green: 0x44 / 255, blue: 0x44 / 255)
     public static let success = Color(red: 0x22 / 255, green: 0xC5 / 255, blue: 0x5E / 255)
+
+    /// The deep violet at the heart of the brand gradient (#7C3AED) — used for
+    /// the Merc halo + accents that must match the mascot's skin tone exactly.
+    public static let mercViolet = Color(red: 0x7C / 255, green: 0x3A / 255, blue: 0xED / 255)
+}
+
+// MARK: - Brand gradient
+
+/// The Mercurius brand gradient — blue → violet → magenta, taken from the logo.
+/// Used on the lesson send button, the progress bar, and the Merc mascot's skin.
+public enum BrandGradient {
+    private static let stops = [
+        Color(red: 0x3D / 255, green: 0x5A / 255, blue: 0xFF / 255),
+        Color(red: 0x7C / 255, green: 0x3A / 255, blue: 0xED / 255),
+        Color(red: 0xB5 / 255, green: 0x3B / 255, blue: 0xE8 / 255),
+    ]
+
+    /// 135° diagonal — buttons, send circle, mascot skin.
+    public static let merc = LinearGradient(
+        colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    /// 90° horizontal — progress bars.
+    public static let mercHorizontal = LinearGradient(
+        colors: stops, startPoint: .leading, endPoint: .trailing)
 }
 
 // MARK: - Adaptive color helper

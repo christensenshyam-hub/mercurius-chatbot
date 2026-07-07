@@ -14,7 +14,9 @@ let package = Package(
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
+        .library(name: "EngagementFeature", targets: ["EngagementFeature"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
+        .library(name: "MercFlowFeature", targets: ["MercFlowFeature"]),
     ],
     dependencies: [
         // Third-party markdown renderer. Chosen over Apple's
@@ -78,7 +80,7 @@ let package = Package(
         // MARK: CurriculumFeature
         .target(
             name: "CurriculumFeature",
-            dependencies: ["DesignSystem", "SettingsFeature"],
+            dependencies: ["DesignSystem", "SettingsFeature", "PersistenceKit"],
             path: "CurriculumFeature/Sources"
         ),
         .testTarget(
@@ -99,6 +101,18 @@ let package = Package(
             path: "SettingsFeature/Tests"
         ),
 
+        // MARK: EngagementFeature
+        .target(
+            name: "EngagementFeature",
+            dependencies: ["DesignSystem", "NetworkingKit", "PersistenceKit"],
+            path: "EngagementFeature/Sources"
+        ),
+        .testTarget(
+            name: "EngagementFeatureTests",
+            dependencies: ["EngagementFeature"],
+            path: "EngagementFeature/Tests"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
@@ -109,6 +123,8 @@ let package = Package(
                 "ChatFeature",
                 "CurriculumFeature",
                 "SettingsFeature",
+                "EngagementFeature",
+                "MercFlowFeature",
             ],
             path: "AppFeature/Sources"
         ),
@@ -116,6 +132,24 @@ let package = Package(
             name: "AppFeatureTests",
             dependencies: ["AppFeature", "PersistenceKit"],
             path: "AppFeature/Tests"
+        ),
+
+        // MARK: MercFlowFeature
+        //
+        // The self-contained "Merc lesson flow" build from MERC_HANDOFF.md
+        // (Part B). It still ships its own `Brand` tokens, `Font.nunito`, and
+        // `LessonViewModel`, but the mascot itself is now the SHARED
+        // `DesignSystem.Merc` / `MercState` (one source of truth) rather than a
+        // duplicated copy — so the demo flow and the app never drift.
+        .target(
+            name: "MercFlowFeature",
+            dependencies: ["DesignSystem"],
+            path: "MercFlowFeature/Sources"
+        ),
+        .testTarget(
+            name: "MercFlowFeatureTests",
+            dependencies: ["MercFlowFeature"],
+            path: "MercFlowFeature/Tests"
         ),
 
         // MARK: ArchitectureTests

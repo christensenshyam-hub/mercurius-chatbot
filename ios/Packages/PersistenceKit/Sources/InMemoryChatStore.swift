@@ -10,7 +10,7 @@ public final class InMemoryChatStore: ChatStore {
 
     private struct Box {
         let id: UUID
-        let mode: ChatMode
+        let mode: String   // ChatMode.rawValue, or a ChatStoreTag sentinel ("curriculum")
         var createdAt: Date
         var updatedAt: Date
         var messages: [StoredMessage] = []
@@ -24,13 +24,14 @@ public final class InMemoryChatStore: ChatStore {
 
     public func latestConversationId() -> UUID? {
         conversations.values
+            .filter { $0.mode != ChatStoreTag.curriculum }
             .sorted { $0.updatedAt > $1.updatedAt }
             .first?.id
     }
 
     public func latestConversationId(in mode: ChatMode) -> UUID? {
         conversations.values
-            .filter { $0.mode == mode }
+            .filter { $0.mode == mode.rawValue }
             .sorted { $0.updatedAt > $1.updatedAt }
             .first?.id
     }
@@ -38,9 +39,17 @@ public final class InMemoryChatStore: ChatStore {
     // MARK: - Mutation
 
     public func createConversation(mode: ChatMode) -> UUID {
+        makeConversation(modeRaw: mode.rawValue)
+    }
+
+    public func createCurriculumConversation() -> UUID {
+        makeConversation(modeRaw: ChatStoreTag.curriculum)
+    }
+
+    private func makeConversation(modeRaw: String) -> UUID {
         let id = UUID()
         let now = Date()
-        conversations[id] = Box(id: id, mode: mode, createdAt: now, updatedAt: now)
+        conversations[id] = Box(id: id, mode: modeRaw, createdAt: now, updatedAt: now)
         return id
     }
 
@@ -52,7 +61,7 @@ public final class InMemoryChatStore: ChatStore {
         guard let box = conversations[conversationId] else { return nil }
         return StoredConversation(
             id: box.id,
-            mode: box.mode.rawValue,
+            mode: box.mode,
             messages: box.messages.sorted { $0.createdAt < $1.createdAt },
             createdAt: box.createdAt,
             updatedAt: box.updatedAt
@@ -68,6 +77,7 @@ public final class InMemoryChatStore: ChatStore {
 
     public func listConversations() -> [ConversationSummary] {
         conversations.values
+            .filter { $0.mode != ChatStoreTag.curriculum }
             .sorted { $0.updatedAt > $1.updatedAt }
             .map(Self.summary(from:))
     }
@@ -88,7 +98,7 @@ public final class InMemoryChatStore: ChatStore {
         let last = sorted.last
         return ConversationSummary(
             id: box.id,
-            mode: box.mode.rawValue,
+            mode: box.mode,
             title: SummaryText.title(from: firstUser?.content),
             preview: SummaryText.preview(from: last?.content),
             messageCount: sorted.count,

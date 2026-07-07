@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import NetworkingKit
+import PersistenceKit
 
 /// State machine for the Quiz sheet:
 ///
@@ -31,13 +32,16 @@ public final class QuizViewModel {
 
     private let tools: ToolsProviding
     private let sessionIdProvider: @Sendable () throws -> String
+    private let achievementStore: AchievementStore?
 
     public init(
         tools: ToolsProviding,
-        sessionIdProvider: @escaping @Sendable () throws -> String
+        sessionIdProvider: @escaping @Sendable () throws -> String,
+        achievementStore: AchievementStore? = nil
     ) {
         self.tools = tools
         self.sessionIdProvider = sessionIdProvider
+        self.achievementStore = achievementStore
     }
 
     // MARK: - Actions
@@ -81,6 +85,9 @@ public final class QuizViewModel {
         guard case .ready(let quiz) = phase else { return }
         guard allAnswered(quiz: quiz) else { return }
         isSubmitted = true
+        if score(quiz: quiz) >= 3 {
+            achievementStore?.award(AchievementCatalog.quizMaster)
+        }
     }
 
     public func restart() {

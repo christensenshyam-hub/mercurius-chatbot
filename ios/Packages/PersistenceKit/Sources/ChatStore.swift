@@ -1,6 +1,14 @@
 import Foundation
 import NetworkingKit
 
+/// Sentinel conversation tags that are deliberately NOT `ChatMode` cases.
+public enum ChatStoreTag {
+    /// `mode` value for curriculum lesson conversations. Kept out of the main
+    /// chat's latest-conversation + history reads so lessons never surface as
+    /// the user's "current chat" or in Chat History.
+    public static let curriculum = "curriculum"
+}
+
 /// Plain-old-value representation of a stored message, decoupled from
 /// the SwiftData `@Model` class. Features consume this type — they
 /// never see `MessageRecord` directly.
@@ -104,6 +112,11 @@ public protocol ChatStore: AnyObject {
     /// fixed at creation time and never changes for the life of the
     /// conversation — a Debate chat is Debate forever.
     func createConversation(mode: ChatMode) -> UUID
+
+    /// Create a curriculum lesson conversation, tagged `ChatStoreTag.curriculum`
+    /// so it's excluded from `latestConversationId()` and `listConversations()`
+    /// (the main chat never picks it up or lists it). Returns its id.
+    func createCurriculumConversation() -> UUID
 
     /// Load the chronologically-ordered messages for a conversation.
     /// Returns an empty array if the conversation doesn't exist.

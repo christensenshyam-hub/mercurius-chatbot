@@ -2,14 +2,11 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 
-/// Horizontal pill group for switching between the four Mercurius
-/// modes. Direct Mode shows a lock badge until unlocked — tapping it
-/// while locked triggers an explainer alert rather than silently
-/// failing.
+/// Horizontal pill group for switching between the three Mercurius
+/// modes. Tapping a mode for the first time shows an explainer sheet;
+/// thereafter it switches directly.
 struct ModeSelectorView: View {
     @Bindable var model: ChatViewModel
-
-    @State private var showLockedAlert = false
 
     /// The description sheet presented the first time the user taps a
     /// mode. `nil` when no sheet is active. Set by `handleTap(...)`
@@ -29,11 +26,6 @@ struct ModeSelectorView: View {
             .padding(.horizontal, BrandSpacing.lg)
             .padding(.vertical, BrandSpacing.sm)
         }
-        .alert("Direct Mode is locked", isPresented: $showLockedAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Chat with Mercurius in Socratic Mode. When it sees enough critical thinking, it'll run a short test — pass it and Direct Mode unlocks.")
-        }
         .alert(
             "Couldn't switch modes",
             isPresented: Binding(
@@ -48,11 +40,7 @@ struct ModeSelectorView: View {
         .sheet(item: $pendingDescription) { description in
             ModeDescriptionSheet(description: description) {
                 // Acknowledge handler: fires after the sheet dismisses
-                // and the mode is marked seen. For unlocked modes we
-                // proceed into the mode; for locked ones the user
-                // learned what it is — no selection happens but the
-                // subsequent-tap locked alert will fire if they try
-                // again.
+                // and the mode is marked seen — proceed into the mode.
                 continueIntoMode(description.mode)
             }
         }
@@ -60,27 +48,30 @@ struct ModeSelectorView: View {
 
     // MARK: - Pieces
 
+    /// Whether a reply is currently being produced (sending or streaming).
+    private var isReplying: Bool {
+        switch model.phase {
+        case .sending, .streaming: return true
+        case .idle, .failed: return false
+        }
+    }
+
     private func pill(for mode: ChatMode) -> some View {
         let isActive = mode == model.currentMode
-        let isLocked = mode.requiresUnlock && !model.isUnlocked
         let isPending = model.modeSwitchInFlight == mode
 
         return Button {
-            handleTap(mode: mode, isLocked: isLocked)
+            handleTap(mode: mode)
         } label: {
             HStack(spacing: BrandSpacing.xs) {
                 Text(mode.displayName)
                     .font(BrandFont.caption)
                     .fontWeight(isActive ? .semibold : .regular)
-                if isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                }
                 if isPending {
                     ProgressView().controlSize(.mini)
                 }
             }
-            .foregroundStyle(labelColor(isActive: isActive, isLocked: isLocked))
+            .foregroundStyle(labelColor(isActive: isActive))
             .padding(.vertical, 8)
             .padding(.horizontal, BrandSpacing.md)
             .background(background(isActive: isActive))
@@ -92,12 +83,16 @@ struct ModeSelectorView: View {
                         lineWidth: 1
                     )
             )
-            .opacity(isLocked ? 0.6 : 1)
+            .opacity(1)
         }
         .buttonStyle(.plain)
         .frame(minHeight: 44)
-        .disabled(model.modeSwitchInFlight != nil && !isPending)
-        .accessibilityLabel(accessibilityLabel(mode: mode, isActive: isActive, isLocked: isLocked))
+        // Disabled while a switch is in flight AND while a reply is being
+        // produced — switching workspaces mid-stream would abandon the
+        // answer (switchMode also cancels defensively, but the pill
+        // shouldn't invite it).
+        .disabled((model.modeSwitchInFlight != nil && !isPending) || isReplying)
+        .accessibilityLabel(accessibilityLabel(mode: mode, isActive: isActive))
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
@@ -114,15 +109,13 @@ struct ModeSelectorView: View {
         }
     }
 
-    private func labelColor(isActive: Bool, isLocked: Bool) -> Color {
+    private func labelColor(isActive: Bool) -> Color {
         if isActive { return .white }
-        if isLocked { return BrandColor.textSecondary }
         return BrandColor.text
     }
 
-    private func accessibilityLabel(mode: ChatMode, isActive: Bool, isLocked: Bool) -> String {
+    private func accessibilityLabel(mode: ChatMode, isActive: Bool) -> String {
         var label = mode.displayName
-        if isLocked { label += ", locked" }
         if isActive { label += ", selected" }
         return label
     }
@@ -131,24 +124,12 @@ struct ModeSelectorView: View {
 
     /// Tap flow per mode, first time vs. subsequent:
     ///
-    /// - **First tap, unlocked mode**: show the description sheet;
-    ///   `continueIntoMode(_:)` runs after dismiss and performs the
-    ///   mode switch.
-    /// - **First tap, locked mode**: show the description sheet. The
-    ///   sheet itself explains why the mode is locked; no alert
-    ///   follows.
-    /// - **Subsequent tap, unlocked mode**: switch directly (no sheet,
-    ///   matches pre-existing behavior).
-    /// - **Subsequent tap, locked mode**: locked alert (matches
-    ///   pre-existing behavior).
-    private func handleTap(mode: ChatMode, isLocked: Bool) {
+    /// - **First tap**: show the description sheet; `continueIntoMode(_:)`
+    ///   runs after dismiss and performs the mode switch.
+    /// - **Subsequent tap**: switch directly (no sheet).
+    private func handleTap(mode: ChatMode) {
         if !ModeDescriptionStore.hasSeen(mode) {
             pendingDescription = ModeDescription.description(for: mode)
-            return
-        }
-
-        if isLocked {
-            showLockedAlert = true
             return
         }
         Task { await model.switchMode(to: mode) }
@@ -156,12 +137,8 @@ struct ModeSelectorView: View {
 
     /// Run after the description sheet is acknowledged. `markSeen`
     /// already happened inside the sheet's Got-it action, so this
-    /// just performs the post-sheet side effect — select the mode
-    /// for unlocked ones; no-op for locked (the user has now been
-    /// told what the mode is and why it's locked).
+    /// just performs the post-sheet side effect — select the mode.
     private func continueIntoMode(_ mode: ChatMode) {
-        let isLocked = mode.requiresUnlock && !model.isUnlocked
-        guard !isLocked else { return }
         Task { await model.switchMode(to: mode) }
     }
 }

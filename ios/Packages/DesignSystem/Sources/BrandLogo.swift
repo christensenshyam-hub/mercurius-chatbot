@@ -9,10 +9,16 @@ import SwiftUI
 /// Why `.full` is a composite (icon image + SwiftUI wordmark) instead
 /// of a single PNG: the wordmark needs to read in both light and dark
 /// modes. A baked-in dark navy wordmark sits on top of `BrandColor.background`
-/// fine in light mode but vanishes in dark mode. Splitting into a
-/// transparent-background icon image plus `Text` styled with adaptive
-/// `BrandColor` lets the wordmark recolor automatically — no second
-/// PNG, no Asset Catalog "dark appearance" variant to maintain.
+/// fine in light mode but vanishes in dark mode. Splitting into an icon
+/// image plus `Text` styled with adaptive `BrandColor` lets the wordmark
+/// recolor automatically — no baked wordmark PNG to maintain.
+///
+/// The icon is the winged-Mercury emblem on a TRANSPARENT background (no
+/// backing plate) — the same artwork in both modes, with only the figure
+/// recolored so it reads on either background: `LogoIcon` (light mode) has a
+/// navy figure; `LogoIconDark` (dark mode) has a white figure. The gradient
+/// wing/hat/ring/sparkle are shared. `FullLogoView` selects between them via
+/// `colorScheme`; the layout geometry is identical in both modes.
 ///
 /// The `.mark` style is a pure SwiftUI composition (no asset) so it
 /// scales perfectly at any size.
@@ -48,11 +54,12 @@ public struct BrandLogo: View {
 /// the icon is < 1:1 aspect after cropping, plus the two text rows.
 private struct FullLogoView: View {
     let size: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: max(8, size * 0.05)) {
             iconLayer
-                .frame(width: size, height: size * iconAspect)
+                .frame(width: iconWidth, height: iconWidth * iconAspect)
 
             wordmark
             tutorLabel
@@ -61,20 +68,26 @@ private struct FullLogoView: View {
         .accessibilityLabel("Mercurius AI — AI literacy tutor")
     }
 
-    /// Cropped icon's height/width ratio. The source `LogoIcon` asset
-    /// is 1024×563. Updating that PNG should update this constant too,
-    /// or the icon will distort.
-    private var iconAspect: CGFloat { 563.0 / 1024.0 }
+    private var isDark: Bool { colorScheme == .dark }
 
-    /// Layered fallback chain:
-    /// 1. `LogoIcon` (the cropped, transparent-background icon — preferred)
-    /// 2. `LogoHero` (the legacy single-PNG composition — works in
-    ///    light mode if the new asset is missing for any reason)
-    /// 3. The pure-SwiftUI `MarkView` so SwiftUI previews / SPM tests
-    ///    that don't have asset access still render something.
+    /// The two emblems are normalized onto an identical 980×980 transparent
+    /// square (same emblem height, centered) so the logo never changes size or
+    /// position between modes — hence a 1:1 aspect.
+    private var iconAspect: CGFloat { 1.0 }
+
+    /// The emblem floats (no backing plate), so it fills the bounding width.
+    private var iconWidth: CGFloat { size }
+
+    /// The winged-Mercury emblem on a TRANSPARENT background — the same artwork,
+    /// with only the figure recolored per mode so it reads on either background:
+    /// `LogoIcon` (light mode) has a navy figure; `LogoIconDark` (dark mode) has
+    /// a white figure. The gradient wing/hat/ring/sparkle are shared. `LogoHero`
+    /// and the pure-SwiftUI `MarkView` remain fallbacks for SPM/preview contexts.
     @ViewBuilder
     private var iconLayer: some View {
-        if let uiImage = platformImage(named: "LogoIcon") ?? platformImage(named: "LogoHero") {
+        if let uiImage = (isDark ? platformImage(named: "LogoIconDark") : nil)
+            ?? platformImage(named: "LogoIcon")
+            ?? platformImage(named: "LogoHero") {
             Image(sharedImage: uiImage)
                 .resizable()
                 .scaledToFit()

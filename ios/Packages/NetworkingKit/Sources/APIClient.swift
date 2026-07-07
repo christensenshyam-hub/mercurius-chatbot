@@ -138,6 +138,13 @@ public final class APIClient: Sendable {
             throw APIError.invalidRequest(reason: reason)
         case 401, 403:
             throw APIError.unauthorized
+        case 413:
+            // express's JSON body cap. Non-retryable — a retry re-sends the
+            // same oversized payload — and actionable, unlike `.unknown`.
+            let reason = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.message
+            throw APIError.invalidRequest(
+                reason: reason ?? "That message is too long. Try a shorter one, or start a new chat."
+            )
         case 429:
             throw APIError.rateLimited
         case 500...599:

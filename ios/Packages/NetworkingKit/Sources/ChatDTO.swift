@@ -30,6 +30,32 @@ public struct ChatResponse: Decodable, Sendable, Equatable {
     public let streak: Int?
     public let difficulty: Int?
     public let suggestSummary: Bool?
+    /// Set by the server's curriculum path when the student demonstrated
+    /// proficiency this turn (the stripped `[LESSON_COMPLETE]` marker). nil from
+    /// older servers / non-curriculum turns → treated as "not complete".
+    public let lessonComplete: Bool?
+
+    public init(
+        reply: String,
+        sessionId: String,
+        mode: String,
+        unlocked: Bool,
+        justUnlocked: Bool? = nil,
+        streak: Int? = nil,
+        difficulty: Int? = nil,
+        suggestSummary: Bool? = nil,
+        lessonComplete: Bool? = nil
+    ) {
+        self.reply = reply
+        self.sessionId = sessionId
+        self.mode = mode
+        self.unlocked = unlocked
+        self.justUnlocked = justUnlocked
+        self.streak = streak
+        self.difficulty = difficulty
+        self.suggestSummary = suggestSummary
+        self.lessonComplete = lessonComplete
+    }
 }
 
 /// Events emitted by the SSE stream.
@@ -63,6 +89,7 @@ struct SSEPayload: Decodable {
     let streak: Int?
     let difficulty: Int?
     let suggestSummary: Bool?
+    let lessonComplete: Bool?
     // Only present on `error`:
     let error: String?
 }

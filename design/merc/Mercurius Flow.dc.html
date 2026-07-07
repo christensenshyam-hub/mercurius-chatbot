@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .mq{ -webkit-font-smoothing:antialiased; }
+  .mq input::placeholder{color:#9a97b5;font-weight:700;}
+  .mq ::-webkit-scrollbar{width:0;height:0;}
+  @keyframes fl-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  @keyframes fl-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fl-sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+</style>
+</helmet>
+
+<div class="mq" style="min-height:100vh;box-sizing:border-box;padding:56px;background:#e7e5df;font-family:'Nunito',sans-serif;display:flex;gap:48px;align-items:flex-start;flex-wrap:wrap;">
+
+  <!-- LEFT: flow guide -->
+  <div style="flex:none;width:320px;">
+    <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8a8578;font-weight:800;margin-bottom:12px;">Mercurius · Working flow</div>
+    <h1 style="font-size:30px;line-height:1.12;margin:0 0 14px;color:#23211c;font-weight:900;letter-spacing:-0.02em;">One lesson, every placement</h1>
+    <p style="font-size:14px;line-height:1.6;color:#615d53;margin:0 0 24px;font-weight:600;">A real playable lesson. Merc changes placement and reacts at each step — try it on the right.</p>
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+      <sc-for list="{{ stages }}" as="st" hint-placeholder-count="5">
+        <div style="{{ st.style }}">
+          <div style="width:26px;height:26px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;{{ st.badgeStyle }}">{{ st.n }}</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:900;color:#2a2440;line-height:1.2;">{{ st.title }}</div>
+            <div style="font-size:11.5px;font-weight:800;color:#9a93b8;">{{ st.placement }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <button onClick="{{ restart }}" style="padding:12px 20px;border:none;border-radius:14px;background:#fff;color:#6C5CE7;font-family:'Nunito',sans-serif;font-size:13.5px;font-weight:900;cursor:pointer;box-shadow:inset 0 0 0 1.5px rgba(108,92,231,.25);">↺ Restart flow</button>
+  </div>
+
+  <!-- RIGHT: live phone -->
+  <div style="flex:none;width:360px;">
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9a958a;font-weight:800;margin-bottom:8px;">Live · {{ placementNow }}</div>
+    <div style="position:relative;width:360px;height:740px;border-radius:52px;background:#0c0c0e;padding:9px;box-shadow:0 24px 60px -18px rgba(40,38,50,.45);">
+      <div style="position:relative;width:100%;height:100%;border-radius:44px;overflow:hidden;background:#F3F4FF;color:#1c1b2e;">
+        <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:90px;height:24px;background:#0c0c0e;border-radius:13px;z-index:30;"></div>
+
+        <!-- TOP BAR (shared, hidden on celebrate/done) -->
+        <sc-if value="{{ showTopBar }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute;top:0;left:0;right:0;z-index:20;">
+            <div style="height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;"><span style="font-size:14px;font-weight:800;">6:18</span><div style="display:flex;gap:5px;align-items:flex-end;"><div style="display:flex;gap:2px;align-items:flex-end;height:11px;"><div style="width:3px;height:5px;background:#1c1b2e;border-radius:1px;"></div><div style="width:3px;height:7px;background:#1c1b2e;border-radius:1px;"></div><div style="width:3px;height:9px;background:#1c1b2e;border-radius:1px;"></div><div style="width:3px;height:11px;background:#1c1b2e;border-radius:1px;"></div></div><div style="width:23px;height:11px;border:1px solid rgba(28,27,46,.5);border-radius:3px;padding:1.5px;"><div style="width:72%;height:100%;background:#1c1b2e;border-radius:1px;"></div></div></div></div>
+            <div style="padding:2px 22px 10px;display:flex;align-items:center;gap:13px;">
+              <div style="width:28px;height:28px;border-radius:50%;border:2px solid rgba(108,92,231,.28);display:flex;align-items:center;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="#6C5CE7" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div style="flex:1;height:11px;border-radius:6px;background:rgba(108,92,231,.16);overflow:hidden;"><div style="{{ progressStyle }}"></div></div>
+              <div style="display:flex;align-items:center;gap:4px;flex:none;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.2 5.8L20 9l-4.6 4 1.5 6L12 16l-4.9 3 1.5-6L4 9l5.8-.2z" fill="#F5B301" stroke="#E09600" stroke-width="1.2" stroke-linejoin="round"/></svg><span style="font-size:13px;font-weight:900;color:#E09600;">5</span></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ INTRO (speech bubble) ============ -->
+        <sc-if value="{{ showIntro }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <div style="height:96px;flex:none;"></div>
+            <div style="flex:1;"></div>
+            <div style="padding:0 24px;flex:none;position:relative;z-index:3;animation:fl-rise .4s ease;">
+              <div style="background:#fff;border:2px solid rgba(108,92,231,.16);border-radius:22px;padding:18px 18px;box-shadow:0 12px 30px -14px rgba(60,50,120,.35);position:relative;">
+                <div style="font-size:11px;letter-spacing:.4px;color:#6C5CE7;font-weight:900;text-transform:uppercase;margin-bottom:7px;">Lesson 2 · Pre-training</div>
+                <p style="font-size:15px;line-height:1.5;margin:0;font-weight:800;color:#1c1b2e;">Hey — ready to find out how a model <em style="font-style:italic;color:#6C5CE7;">actually</em> learns? I'll explain, then quiz you once.</p>
+                <div style="position:absolute;bottom:-9px;left:48px;width:18px;height:18px;background:#fff;border-right:2px solid rgba(108,92,231,.16);border-bottom:2px solid rgba(108,92,231,.16);transform:rotate(45deg);"></div>
+              </div>
+            </div>
+            <div style="flex:none;height:184px;position:relative;">
+              <div style="position:absolute;left:20px;bottom:-4px;width:158px;height:178px;">
+                <div style="width:160px;height:180px;transform:scale(.96);transform-origin:bottom left;">
+                  <dc-import name="Merc" state="{{ merc }}" hint-size="160px,180px" style="width:160px;height:180px;display:block;"></dc-import>
+                </div>
+              </div>
+              <button onClick="{{ goChat }}" style="position:absolute;right:22px;bottom:30px;padding:15px 26px;border:none;border-radius:16px;background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;font-family:'Nunito',sans-serif;font-size:14px;font-weight:900;letter-spacing:.4px;cursor:pointer;box-shadow:0 10px 22px -6px rgba(108,92,231,.6);">CONTINUE</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ CHAT (bottom anchor) ============ -->
+        <sc-if value="{{ showChat }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <div style="height:90px;flex:none;"></div>
+            <div ref="{{ setScroll }}" style="flex:1;overflow-y:auto;padding:6px 18px 0;">
+              <sc-for list="{{ msgs }}" as="m" hint-placeholder-count="1">
+                <div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}</div></div>
+              </sc-for>
+              <sc-if value="{{ showQuizBtn }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;justify-content:center;margin:6px 0 20px;animation:fl-rise .4s ease;">
+                  <button onClick="{{ goExercise }}" style="padding:13px 24px;border:none;border-radius:15px;background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;font-family:'Nunito',sans-serif;font-size:13.5px;font-weight:900;letter-spacing:.3px;cursor:pointer;box-shadow:0 10px 22px -6px rgba(108,92,231,.6);">Got it — quiz me →</button>
+                </div>
+              </sc-if>
+            </div>
+            <div style="flex:none;position:relative;height:104px;">
+              <div style="position:absolute;left:50%;transform:translateX(-50%);bottom:42px;width:118px;height:130px;z-index:1;overflow:hidden;">
+                <div style="width:160px;height:180px;transform:scale(.73);transform-origin:top center;margin-left:-21px;">
+                  <dc-import name="Merc" state="{{ merc }}" hint-size="160px,180px" style="width:160px;height:180px;display:block;"></dc-import>
+                </div>
+              </div>
+              <div style="position:absolute;left:0;right:0;bottom:0;padding:10px 16px 18px;display:flex;align-items:center;gap:9px;background:linear-gradient(to top,#F3F4FF 74%,rgba(243,244,255,.3));z-index:2;">
+                <div style="flex:1;height:42px;border-radius:24px;background:#fff;box-shadow:inset 0 0 0 1.5px rgba(108,92,231,.18);display:flex;align-items:center;padding:0 6px 0 17px;">
+                  <input value="{{ input }}" onInput="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="Ask Mercurius…" style="flex:1;border:none;background:transparent;outline:none;font-family:'Nunito',sans-serif;font-size:13.5px;font-weight:700;color:#1c1b2e;" />
+                </div>
+                <div onClick="{{ send }}" style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer;box-shadow:0 7px 18px -4px rgba(108,92,231,.6);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5l-6 6M12 5l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ EXERCISE (floating helper) ============ -->
+        <sc-if value="{{ showExercise }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <div style="height:86px;flex:none;"></div>
+            <div style="padding:2px 22px 12px;flex:none;">
+              <div style="font-size:11px;letter-spacing:.3px;color:#6C5CE7;font-weight:900;margin-bottom:6px;text-transform:uppercase;">Check · 1 question</div>
+              <h2 style="font-size:21px;line-height:1.18;margin:0;font-weight:900;letter-spacing:-0.01em;">Pick the best description of pre-training</h2>
+            </div>
+            <div style="flex:1;padding:4px 18px 0;display:flex;flex-direction:column;gap:11px;">
+              <sc-for list="{{ options }}" as="o" hint-placeholder-count="3">
+                <div onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.label }}</div>
+              </sc-for>
+              <sc-if value="{{ wrong }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12.5px;font-weight:800;color:#c23b3f;padding:2px 4px;animation:fl-rise .3s ease;">Not quite — it isn't storing the text itself. Tap Merc for a hint.</div>
+              </sc-if>
+            </div>
+
+            <!-- floating helper -->
+            <div style="position:absolute;right:18px;bottom:96px;z-index:6;display:flex;flex-direction:column;align-items:flex-end;">
+              <sc-if value="{{ hintOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border-radius:16px 16px 4px 16px;padding:12px 14px;box-shadow:0 12px 28px -10px rgba(60,40,140,.45);font-size:12px;font-weight:800;color:#4a3fb0;max-width:200px;line-height:1.45;margin-bottom:8px;animation:fl-rise .3s ease;">Think about what it's trained to <em style="font-style:italic;">predict</em> each step — not what it keeps.</div>
+              </sc-if>
+              <div onClick="{{ toggleHint }}" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                <sc-if value="{{ showHintLabel }}" hint-placeholder-val="{{ true }}"><div style="background:#fff;border-radius:12px;padding:5px 10px;box-shadow:0 8px 20px -8px rgba(60,40,140,.4);font-size:10.5px;font-weight:900;color:#6C5CE7;margin-bottom:6px;white-space:nowrap;">Need a hint?</div></sc-if>
+                <div style="width:64px;height:64px;border-radius:50%;background:#fff;box-shadow:0 10px 26px -8px rgba(108,92,231,.5);display:flex;align-items:center;justify-content:center;overflow:hidden;animation:fl-pulse 2.4s ease-in-out infinite;">
+                  <div style="width:160px;height:180px;transform:scale(.45);transform-origin:center;margin-top:15px;">
+                    <dc-import name="Merc" state="{{ merc }}" hint-size="160px,180px" style="width:160px;height:180px;display:block;"></dc-import>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:none;padding:10px 16px 18px;">
+              <button onClick="{{ check }}" style="{{ checkStyle }}">CHECK</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ CELEBRATE (takeover) ============ -->
+        <sc-if value="{{ showCelebrate }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;background:rgba(20,12,40,.32);z-index:25;display:flex;flex-direction:column;justify-content:flex-end;">
+            <div style="background:#fff;border-radius:34px 34px 44px 44px;box-shadow:0 -16px 44px -16px rgba(60,40,140,.5);padding:0 24px 28px;animation:fl-sheet .42s cubic-bezier(.2,.9,.3,1.1);">
+              <div style="display:flex;justify-content:center;"><div style="position:relative;width:170px;height:166px;margin-top:-60px;">
+                <dc-import name="Merc" state="celebrate" hint-size="160px,180px" style="width:160px;height:180px;display:block;transform:scale(1.05);transform-origin:bottom center;"></dc-import>
+              </div></div>
+              <h3 style="font-size:27px;font-weight:900;color:#22A05B;text-align:center;margin:0 0 8px;letter-spacing:-0.01em;">Nailed it!</h3>
+              <p style="font-size:14px;line-height:1.5;color:#7a72a8;text-align:center;margin:0 0 14px;font-weight:800;">Pre-training learns patterns to predict the next token — nothing is copied or memorized.</p>
+              <div style="display:flex;justify-content:center;gap:8px;margin-bottom:20px;"><div style="display:flex;align-items:center;gap:5px;background:rgba(245,179,1,.14);padding:7px 14px;border-radius:20px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.2 5.8L20 9l-4.6 4 1.5 6L12 16l-4.9 3 1.5-6L4 9l5.8-.2z" fill="#F5B301" stroke="#E09600" stroke-width="1.2" stroke-linejoin="round"/></svg><span style="font-size:13px;font-weight:900;color:#E09600;">+15 XP</span></div></div>
+              <button onClick="{{ goDone }}" style="width:100%;padding:16px;border:none;border-radius:16px;background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;font-family:'Nunito',sans-serif;font-size:15px;font-weight:900;letter-spacing:.3px;cursor:pointer;box-shadow:0 10px 22px -6px rgba(108,92,231,.6);">CONTINUE</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ DONE ============ -->
+        <sc-if value="{{ showDone }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 28px;background:linear-gradient(165deg,#F3F4FF,#F7F2FF 60%,#FCEFFB);">
+            <div style="position:relative;width:170px;height:190px;margin-bottom:8px;">
+              <dc-import name="Merc" state="{{ merc }}" hint-size="160px,180px" style="width:160px;height:180px;display:block;transform:scale(1.05);transform-origin:center;"></dc-import>
+            </div>
+            <h2 style="font-size:28px;font-weight:900;color:#3a2a8c;margin:0 0 8px;letter-spacing:-0.02em;text-align:center;">Lesson complete!</h2>
+            <p style="font-size:14px;line-height:1.5;color:#7a72a8;text-align:center;margin:0 0 24px;font-weight:800;max-width:240px;">You're 6 of 8 through Unit 01. Merc will be here when you're back.</p>
+            <div style="display:flex;gap:12px;margin-bottom:28px;">
+              <div style="background:#fff;border-radius:18px;padding:14px 20px;text-align:center;box-shadow:0 10px 26px -16px rgba(60,40,140,.4);"><div style="font-size:22px;font-weight:900;color:#6C5CE7;">+15</div><div style="font-size:11px;font-weight:800;color:#9a93b8;letter-spacing:.5px;">XP</div></div>
+              <div style="background:#fff;border-radius:18px;padding:14px 20px;text-align:center;box-shadow:0 10px 26px -16px rgba(60,40,140,.4);"><div style="font-size:22px;font-weight:900;color:#E09600;">5🔥</div><div style="font-size:11px;font-weight:800;color:#9a93b8;letter-spacing:.5px;">STREAK</div></div>
+            </div>
+            <button onClick="{{ restart }}" style="padding:15px 32px;border:none;border-radius:16px;background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;font-family:'Nunito',sans-serif;font-size:14px;font-weight:900;letter-spacing:.3px;cursor:pointer;box-shadow:0 10px 22px -6px rgba(108,92,231,.6);">Replay flow ↺</button>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'intro',
+    merc: 'idle',
+    messages: [],
+    input: '',
+    generating: false,
+    introStreamed: false,
+    hintOpen: false,
+    hintUsed: false,
+    selected: null,
+    wrong: false,
+    checked: false,
+  };
+
+  componentDidMount() { this.greet(); }
+  greet() { this.setState({ merc: 'wave' }); clearTimeout(this._w); this._w = setTimeout(() => this.setState({ merc: 'idle' }), 1700); }
+  componentDidUpdate() { if (this.scrollEl) this.scrollEl.scrollTop = this.scrollEl.scrollHeight; }
+  componentWillUnmount() { ['_w','_d','_c'].forEach(k => clearTimeout(this[k])); clearInterval(this._s); }
+
+  goChat() {
+    this.setState({ screen: 'chat', messages: [], introStreamed: false, merc: 'thinking', generating: true });
+    const reply = "During pre-training, the model reads mountains of text and adjusts billions of weights so the patterns in language become predictable.\n\nIt keeps the patterns — not copies of the pages.";
+    clearTimeout(this._d);
+    this._d = setTimeout(() => this.stream(reply, () => this.setState({ introStreamed: true })), 700);
+  }
+
+  stream(full, done) {
+    this.setState(s => ({ messages: [...s.messages, { role: 'merc', text: '' }] }));
+    let i = 0;
+    clearInterval(this._s);
+    this._s = setInterval(() => {
+      i += 2;
+      this.setState(s => {
+        const m = s.messages.slice();
+        m[m.length - 1] = { role: 'merc', text: full.slice(0, i) };
+        return { messages: m };
+      });
+      if (i >= full.length) {
+        clearInterval(this._s);
+        this.setState({ generating: false, merc: 'idle' });
+        if (done) done();
+      }
+    }, 20);
+  }
+
+  send() {
+    const t = (this.state.input || '').trim();
+    if (!t || this.state.generating) return;
+    this.setState(s => ({ messages: [...s.messages, { role: 'user', text: t }], input: '', merc: 'thinking', generating: true }));
+    clearTimeout(this._d);
+    this._d = setTimeout(() => this.stream("Good instinct. The short version: it learns to predict the next token, so the structure of language gets baked into its weights — no lookup table of pages.", () => this.setState({ introStreamed: true })), 650);
+  }
+
+  goExercise() { this.setState({ screen: 'exercise', merc: 'idle', selected: null, wrong: false, checked: false, hintOpen: false, hintUsed: false }); }
+  toggleHint() { this.setState(s => ({ hintOpen: !s.hintOpen, hintUsed: true })); }
+  selectOpt(i) { if (this.state.checked) return; this.setState({ selected: i, wrong: false }); }
+  check() {
+    if (this.state.selected == null || this.state.checked) return;
+    if (this.state.selected === 1) {
+      this.setState({ checked: true, wrong: false, merc: 'happy' });
+      clearTimeout(this._c);
+      this._c = setTimeout(() => this.setState({ screen: 'celebrate', merc: 'celebrate' }), 450);
+    } else {
+      this.setState({ wrong: true, merc: 'thinking' });
+    }
+  }
+  goDone() { this.setState({ screen: 'done', merc: 'wave' }); clearTimeout(this._w); this._w = setTimeout(() => this.setState({ merc: 'happy' }), 1600); }
+  restart() {
+    clearInterval(this._s); ['_d','_c'].forEach(k => clearTimeout(this[k]));
+    this.setState({ screen: 'intro', merc: 'idle', messages: [], input: '', generating: false, introStreamed: false, hintOpen: false, hintUsed: false, selected: null, wrong: false, checked: false });
+    this.greet();
+  }
+
+  renderVals() {
+    const sc = this.state.screen;
+    const order = ['intro','chat','exercise','celebrate','done'];
+    const curIdx = order.indexOf(sc === 'celebrate' ? 'exercise' : sc);
+    const stageDefs = [
+      ['1','Intro','Speech bubble','intro'],
+      ['2','Live chat','Bottom anchor','chat'],
+      ['3','Exercise','Floating helper','exercise'],
+      ['4','Celebrate','Takeover sheet','celebrate'],
+      ['5','Done','Centered wave','done'],
+    ];
+    const stages = stageDefs.map(([n,title,placement,key]) => {
+      const active = key === sc;
+      const passed = order.indexOf(key) < order.indexOf(sc) || (sc === 'done' && key !== 'done');
+      return {
+        n: passed ? '✓' : n,
+        title, placement,
+        style: 'display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:14px;transition:all .2s;' + (active ? 'background:#fff;box-shadow:0 8px 22px -14px rgba(60,40,140,.4);' : 'background:transparent;'),
+        badgeStyle: active ? 'background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;' : (passed ? 'background:rgba(34,160,91,.15);color:#22A05B;' : 'background:rgba(108,92,231,.12);color:#6C5CE7;'),
+      };
+    });
+
+    const placeMap = { intro:'Speech bubble', chat:'Bottom anchor', exercise:'Floating helper', celebrate:'Celebration takeover', done:'Centered wave' };
+    const pct = [12, 40, 68, 90, 100][curIdx] || 12;
+
+    const optLabels = ['It stores all the text it saw','It learns patterns to predict the next token','It copies websites into a database'];
+    const options = optLabels.map((label, i) => {
+      const sel = this.state.selected === i;
+      let border = '2px solid transparent', bg = '#fff', color = '#1c1b2e';
+      if (this.state.checked && i === 1) { border = '2px solid #22A05B'; bg = 'rgba(34,160,91,.08)'; color = '#1a7a45'; }
+      else if (this.state.wrong && sel) { border = '2px solid #E5484D'; bg = 'rgba(229,72,77,.08)'; color = '#c23b3f'; }
+      else if (sel) { border = '2px solid #6C5CE7'; bg = 'rgba(108,92,231,.07)'; }
+      return { label, pick: () => this.selectOpt(i),
+        style: `padding:15px 16px;border-radius:16px;background:${bg};box-shadow:0 6px 18px -12px rgba(60,50,120,.3);font-size:13px;font-weight:800;line-height:1.35;border:${border};color:${color};cursor:pointer;transition:all .14s;` };
+    });
+
+    const canCheck = this.state.selected != null && !this.state.checked;
+    const checkStyle = `width:100%;padding:16px;border:none;border-radius:16px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:900;letter-spacing:.3px;transition:all .16s;` +
+      (canCheck ? `background:linear-gradient(135deg,#3D5AFF,#7C3AED,#B53BE8);color:#fff;cursor:pointer;box-shadow:0 10px 22px -6px rgba(108,92,231,.6);`
+                : `background:#e6e4f2;color:#aaa6c4;cursor:default;`);
+
+    return {
+      merc: this.state.merc,
+      placementNow: placeMap[sc],
+      stages,
+      showTopBar: sc === 'intro' || sc === 'chat' || sc === 'exercise',
+      progressStyle: `width:${pct}%;height:100%;border-radius:6px;background:linear-gradient(90deg,#3D5AFF,#7C3AED,#B53BE8);transition:width .5s ease;`,
+      showIntro: sc === 'intro',
+      showChat: sc === 'chat',
+      showExercise: sc === 'exercise',
+      showCelebrate: sc === 'celebrate',
+      showDone: sc === 'done',
+      goChat: () => this.goChat(),
+      goExercise: () => this.goExercise(),
+      goDone: () => this.goDone(),
+      restart: () => this.restart(),
+      input: this.state.input,
+      onInput: (e) => this.setState({ input: e.target.value }),
+      onKey: (e) => { if (e.key === 'Enter') this.send(); },
+      send: () => this.send(),
+      setScroll: (el) => { this.scrollEl = el; },
+      showQuizBtn: this.state.introStreamed && !this.state.generating,
+      msgs: this.state.messages.map(m => {
+        const isUser = m.role === 'user';
+        return {
+          text: m.text,
+          rowStyle: 'display:flex;margin-bottom:12px;' + (isUser ? 'justify-content:flex-end;' : 'justify-content:flex-start;'),
+          bubbleStyle: isUser
+            ? "max-width:78%;background:linear-gradient(135deg,#6C5CE7,#7C3AED);color:#fff;border-radius:22px 22px 8px 22px;padding:11px 15px;font-size:13px;font-weight:700;line-height:1.5;white-space:pre-line;box-shadow:0 8px 20px -10px rgba(108,92,231,.55);"
+            : "max-width:86%;background:#fff;color:#1c1b2e;border-radius:8px 22px 22px 22px;padding:13px 15px;font-size:13px;font-weight:700;line-height:1.55;white-space:pre-line;box-shadow:0 8px 22px -12px rgba(60,50,120,.28);",
+        };
+      }),
+      options,
+      wrong: this.state.wrong,
+      hintOpen: this.state.hintOpen,
+      showHintLabel: !this.state.hintUsed,
+      toggleHint: () => this.toggleHint(),
+      check: () => this.check(),
+      checkStyle,
+    };
+  }
+}
+</script>
+</body>
+</html>

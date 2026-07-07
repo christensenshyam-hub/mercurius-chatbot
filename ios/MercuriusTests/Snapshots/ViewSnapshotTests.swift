@@ -46,6 +46,11 @@ final class ViewSnapshotTests: XCTestCase {
         // aliased edges across simulator versions; 98% / 0.02 tolerates
         // single-pixel noise without hiding real regressions.
         // Applied locally per-test via the `precision` parameter.
+        //
+        // Appearance: every test pins `traits: .init(userInterfaceStyle:)`
+        // explicitly (light unless the name says Dark), so snapshots are
+        // deterministic regardless of the host app's theme or the simulator's
+        // appearance state. Do NOT rely on the ambient appearance here.
     }
 
     // MARK: - BrandLogo
@@ -88,7 +93,81 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 80, height: 80)
+                layout: .fixed(width: 80, height: 80),
+                traits: .init(userInterfaceStyle: .light)
+            )
+        )
+    }
+
+    // MARK: - Merc mascot
+
+    func testMercAllStates() {
+        let row1: [MercState] = [.idle, .wave, .happy]
+        let row2: [MercState] = [.thinking, .celebrate, .sleep]
+        let view = VStack(spacing: 20) {
+            HStack(spacing: 8) {
+                ForEach(row1, id: \.self) { Merc(state: $0, size: 130) }
+            }
+            HStack(spacing: 8) {
+                ForEach(row2, id: \.self) { Merc(state: $0, size: 130) }
+            }
+        }
+        .padding(24)
+        .background(BrandColor.background)
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .fixed(width: 470, height: 420),
+                traits: .init(userInterfaceStyle: .light)
+            )
+        )
+    }
+
+    // MARK: - LessonCompleteOverlay
+
+    /// Render the overlay over a representative lesson backdrop so the
+    /// clouded material reads. `reduceMotion: true` pins it to its final
+    /// (settled) state for a deterministic snapshot.
+    private func lessonOverlayHarness(next: (Int, String)?) -> some View {
+        ZStack {
+            BrandColor.background
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(0..<6, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 8).fill(BrandColor.surface).frame(height: 40)
+                }
+            }
+            .padding()
+            LessonCompleteOverlay(
+                lessonTitle: "The alignment problem",
+                nextLessonNumber: next?.0,
+                nextLessonTitle: next?.1,
+                reduceMotion: true,
+                onNext: {}, onBackToLessons: {}, onDismiss: {}
+            )
+        }
+    }
+
+    func testLessonCompleteOverlayWithNext() {
+        let view = lessonOverlayHarness(next: (2, "Reward hacking & specification gaming"))
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
+            )
+        )
+    }
+
+    func testLessonCompleteOverlayLastLessonDark() {
+        let view = lessonOverlayHarness(next: nil)
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .dark)
             )
         )
     }
@@ -133,7 +212,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -149,7 +229,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 312, height: 82)
+                layout: .fixed(width: 312, height: 82),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -163,7 +244,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 312, height: 82)
+                layout: .fixed(width: 312, height: 82),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -171,7 +253,7 @@ final class ViewSnapshotTests: XCTestCase {
     // MARK: - ModeSelectorView
     //
     // Uses a live ChatViewModel with a stub client so the pills render
-    // in their default (Socratic selected, Direct locked) state.
+    // in their default (Socratic selected) state.
 
     func testModeSelectorDefault() {
         let model = makeChatModel()
@@ -181,7 +263,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 60)
+                layout: .fixed(width: 393, height: 60),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -197,13 +280,18 @@ final class ViewSnapshotTests: XCTestCase {
 
     func testCurriculumListAtAccessibilityXXL() {
         let progress = CurriculumProgressStore(preferences: InMemoryPreferences())
-        let view = CurriculumView(progress: progress, onStartLesson: { _ in })
+        let view = CurriculumView(progress: progress, onStartLesson: { _ in }, onStartUnitTest: { _ in })
             .environment(\.dynamicTypeSize, .accessibility3)
+            // No Reduce Motion pin needed (the key is get-only anyway): the
+            // snapshot renders the first frame synchronously, before any
+            // onAppear-driven pulse/START-bob leaves its baseline, so the
+            // path image is deterministic as-is.
         assertSnapshot(
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -221,7 +309,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 80)
+                layout: .fixed(width: 393, height: 80),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -240,7 +329,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 90)
+                layout: .fixed(width: 393, height: 90),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -255,7 +345,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 160)
+                layout: .fixed(width: 393, height: 160),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -270,7 +361,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 120)
+                layout: .fixed(width: 393, height: 120),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -289,7 +381,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 80)
+                layout: .fixed(width: 393, height: 80),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -305,7 +398,8 @@ final class ViewSnapshotTests: XCTestCase {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .fixed(width: 393, height: 160)
+                layout: .fixed(width: 393, height: 160),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -347,7 +441,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -391,7 +486,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -408,7 +504,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -426,7 +523,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -443,7 +541,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -483,7 +582,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }
@@ -500,7 +600,8 @@ extension ViewSnapshotTests {
             of: view,
             as: .image(
                 precision: 0.98,
-                layout: .device(config: .iPhone13)
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
             )
         )
     }

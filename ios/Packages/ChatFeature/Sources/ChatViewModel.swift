@@ -37,10 +37,6 @@ public final class ChatViewModel {
     /// successful `switchMode(to:)` calls.
     public private(set) var currentMode: ChatMode = .socratic
 
-    /// Whether Direct Mode is unlocked for this session. Defaults to
-    /// false; updated from the server's `unlocked` flag.
-    public private(set) var isUnlocked: Bool = false
-
     /// State of an in-flight mode switch, used by the UI to disable
     /// pills and show a progress indicator.
     public private(set) var modeSwitchInFlight: ChatMode?
@@ -71,11 +67,47 @@ public final class ChatViewModel {
     /// Reports objectionable AI responses (App Store Guideline 1.2). Nil in
     /// tests that don't exercise it; the production init wires `APIClient`.
     private let reporting: Reporting?
+    /// Engagement stores. Optional — nil in tests that don't exercise
+    /// streaks/achievements. Streak is captured from each `complete` event;
+    /// achievements are awarded at chat milestones.
+    private let streakStore: StreakStore?
+    private let achievementStore: AchievementStore?
+    /// Standby gamification — set post-init via `configureGamification`. When a
+    /// reasoning move is detected in a send, a gated, fire-and-forget event is
+    /// requested (the server decides). No-op unless the feature is on.
+    @ObservationIgnored private var gamificationStore: GamificationStore?
+    @ObservationIgnored private var progressionProvider: ProgressionProviding?
+
+    /// Fired when the lesson is completed this turn (proficiency demonstrated).
+    /// Set by the curriculum lesson view; nil for normal chat — so its non-nil
+    /// state also marks "this is a lesson conversation".
+    @ObservationIgnored public var onLessonComplete: (() -> Void)?
+
+    /// Bumps each time the current turn reports lesson completion (server flag
+    /// or a pass marker in the reply text), so the lesson view can present a
+    /// celebration. Observable on purpose; distinct from `onLessonComplete`,
+    /// which marks progress.
+    public private(set) var lessonCompletionEvents = 0
+
+    /// A lesson thread sets `onLessonComplete`; normal chat leaves it nil. Used
+    /// to gate marker handling so ordinary chat text is never touched.
+    private var isLessonConversation: Bool { onLessonComplete != nil }
+
+    /// Set during streaming if a pass marker arrives in the raw deltas, so a
+    /// stream that truncates before its `.complete` event (legacy backend, no
+    /// flag) still registers the completion. Reset at the start of each turn.
+    @ObservationIgnored private var sawPassMarkerThisTurn = false
+    /// The `[CURRICULUM: …]` opener, sent wire-only (hidden from the visible
+    /// thread) as the FIRST user message on every lesson turn so the server
+    /// keeps the whole lesson — including graded follow-ups — in curriculum mode.
+    @ObservationIgnored private var lessonWirePrefix: ChatMessageDTO?
 
     // MARK: - Private
 
     private var streamingTask: Task<Void, Never>?
-    private var conversationId: UUID?
+    /// The active conversation id. Public read so the curriculum lesson view can
+    /// record it for resume; only the view model mutates it.
+    public private(set) var conversationId: UUID?
 
     /// Response-mode used by the most recent `send` call. `retry()`
     /// reuses this so a failed deep request retries deep, not as a
@@ -90,7 +122,9 @@ public final class ChatViewModel {
     public convenience init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
-        store: ChatStore? = nil
+        store: ChatStore? = nil,
+        streakStore: StreakStore? = nil,
+        achievementStore: AchievementStore? = nil
     ) {
         self.init(
             chatClient: apiClient,
@@ -98,7 +132,9 @@ public final class ChatViewModel {
             sessionIdProvider: { try sessionIdentity.current() },
             store: store,
             imageUploader: apiClient,
-            reporting: apiClient
+            reporting: apiClient,
+            streakStore: streakStore,
+            achievementStore: achievementStore
         )
     }
 
@@ -111,7 +147,10 @@ public final class ChatViewModel {
         store: ChatStore? = nil,
         imageUploader: ImageUploading? = nil,
         preparer: ImagePreparing = JPEGImagePreparer(),
-        reporting: Reporting? = nil
+        reporting: Reporting? = nil,
+        streakStore: StreakStore? = nil,
+        achievementStore: AchievementStore? = nil,
+        hydrateOnInit: Bool = true
     ) {
         self.chatClient = chatClient
         self.modeClient = modeClient
@@ -120,7 +159,9 @@ public final class ChatViewModel {
         self.imageUploader = imageUploader
         self.preparer = preparer
         self.reporting = reporting
-        hydrateFromStore()
+        self.streakStore = streakStore
+        self.achievementStore = achievementStore
+        if hydrateOnInit { hydrateFromStore() }
     }
 
     /// Load the latest persisted conversation, if any. Runs on init
@@ -135,28 +176,40 @@ public final class ChatViewModel {
     private func hydrateFromStore() {
         guard let store else { return }
         if let existingId = store.latestConversationId(),
-           let convo = store.loadConversation(conversationId: existingId) {
+           let convo = store.loadConversation(conversationId: existingId),
+           let parsed = ChatMode(rawValue: convo.mode) {
             conversationId = existingId
-            if let parsed = ChatMode(rawValue: convo.mode) {
-                currentMode = parsed
-            }
-            messages = convo.messages.compactMap { record -> ChatMessage? in
-                guard let role = ChatMessage.Role(rawValue: record.role) else {
-                    return nil  // skip unknown roles rather than crashing
-                }
-                return ChatMessage(
-                    id: record.id,
-                    role: role,
-                    content: record.content,
-                    createdAt: record.createdAt,
-                    status: .idle
-                )
-            }
+            currentMode = parsed
+            messages = convo.messages.compactMap(Self.hydratedMessage)
         } else {
-            // Fresh install / cleared store: open the first conversation
-            // in the default mode.
+            // Fresh install, cleared store — or the latest record carries a
+            // mode this build no longer knows (e.g. the retired "direct"
+            // from shipped betas). Never adopt an unknown-mode thread as
+            // the writable active conversation: new turns would persist
+            // into a record whose tag lies about its contents, breaking the
+            // mode-locked invariant. The legacy thread stays in History.
             conversationId = store.createConversation(mode: currentMode)
         }
+    }
+
+    /// Rebuild one persisted record as a renderable message. Unknown roles
+    /// are skipped rather than crashing. Empty user content — a photo-only
+    /// turn persisted by an older build (image bytes are in-memory only) —
+    /// is healed to the same placeholder new sends use, so the turn stays
+    /// visible and its replay is never rejected as empty content.
+    private static func hydratedMessage(_ record: StoredMessage) -> ChatMessage? {
+        guard let role = ChatMessage.Role(rawValue: record.role) else { return nil }
+        var content = record.content
+        if role == .user, content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content = "[Shared an image]"
+        }
+        return ChatMessage(
+            id: record.id,
+            role: role,
+            content: content,
+            createdAt: record.createdAt,
+            status: .idle
+        )
     }
 
     /// Ensure a conversation exists and return its id. Creates one in
@@ -227,9 +280,17 @@ public final class ChatViewModel {
             }
         }
 
-        let userMessage = ChatMessage(role: .user, content: text, imageData: attachedImage)
+        // A photo-only turn must never carry empty content: Anthropic
+        // rejects empty user text when the thread is replayed on later
+        // curriculum turns (bricking the lesson), and an empty persisted
+        // turn hydrates as an invisible message after relaunch. Mirror the
+        // server's own dbHistory substitution.
+        let content = text.isEmpty && attachedImage != nil ? "[Shared an image]" : text
+        let userMessage = ChatMessage(role: .user, content: content, imageData: attachedImage)
         messages.append(userMessage)
         persistMessage(userMessage)
+        awardSendAchievements()
+        recordReasoningMove(from: text)
         draft = ""
         pendingImageData = nil
 
@@ -243,10 +304,31 @@ public final class ChatViewModel {
 
         phase = .sending
         lastResponseMode = responseMode
+        lastRequest = LastRequest(responseMode: responseMode,
+                                  injectedUserTurn: nil,
+                                  imageData: attachedImage)
 
         streamingTask = Task { [weak self] in
             await self?.runSend(assistantId: assistantId, responseMode: responseMode, imageData: attachedImage)
         }
+    }
+
+    /// Attach the standby gamification store + provider after init (avoids a
+    /// SwiftUI @State ordering problem at the call site). The feature stays
+    /// no-op when off — `recordEvent` is gated in the store.
+    public func configureGamification(store: GamificationStore, provider: ProgressionProviding) {
+        self.gamificationStore = store
+        self.progressionProvider = provider
+    }
+
+    /// Detect a reasoning move in the user's turn and request a gated XP
+    /// evaluation (the server decides, validates, and caps). Fire-and-forget;
+    /// never blocks the send. No-op unless gamification is configured + on.
+    private func recordReasoningMove(from userText: String) {
+        guard let gamificationStore, let provider = progressionProvider,
+              let reason = ReasoningMoveDetector.detect(in: userText),
+              let sid = try? sessionIdProvider() else { return }
+        Task { await gamificationStore.recordEvent(using: provider, sessionId: sid, reason: reason, sourceType: "chat") }
     }
 
     /// Upload the attached photo (if any), then open the chat stream with its
@@ -314,6 +396,9 @@ public final class ChatViewModel {
         lastResponseMode = .deep
 
         let instruction = "Explain more — go deeper on the same topic. Don't repeat what you already said."
+        lastRequest = LastRequest(responseMode: .deep,
+                                  injectedUserTurn: instruction,
+                                  imageData: nil)
         streamingTask = Task { [weak self] in
             await self?.runStream(
                 assistantId: assistantId,
@@ -323,30 +408,141 @@ public final class ChatViewModel {
         }
     }
 
+    // MARK: - Curriculum lessons (persisted + resumable)
+
+    /// A lesson view model: persists to `store` (for resume) but does NOT
+    /// hydrate the latest main conversation. Pair with `beginLessonConversation`
+    /// (new lesson) or `resumeLesson` (continue a saved one).
+    public static func makeLesson(
+        apiClient: APIClient,
+        sessionIdentity: SessionIdentity,
+        store: ChatStore?,
+        streakStore: StreakStore? = nil,
+        achievementStore: AchievementStore? = nil
+    ) -> ChatViewModel {
+        ChatViewModel(
+            chatClient: apiClient,
+            modeClient: apiClient,
+            sessionIdProvider: { try sessionIdentity.current() },
+            store: store,
+            imageUploader: apiClient,
+            reporting: apiClient,
+            streakStore: streakStore,
+            achievementStore: achievementStore,
+            hydrateOnInit: false
+        )
+    }
+
+    /// Start a NEW lesson: create a curriculum-tagged conversation, anchor the
+    /// `[CURRICULUM: …]` opener as a hidden wire prefix (so every turn — opener
+    /// and graded follow-ups — stays in curriculum mode), and stream the first
+    /// reply. The raw opener is never shown. Returns the conversation id for the
+    /// resume mapping. Only valid on an empty thread.
+    @discardableResult
+    public func beginLessonConversation(starter: String) -> UUID? {
+        guard messages.isEmpty else { return conversationId }
+        lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
+        let convoId = store?.createCurriculumConversation()
+        if let convoId { conversationId = convoId }
+
+        let placeholder = ChatMessage(role: .assistant, content: "", status: .streaming)
+        messages.append(placeholder)
+        phase = .sending
+        lastResponseMode = .balanced
+        lastRequest = LastRequest(responseMode: .balanced,
+                                  injectedUserTurn: nil,
+                                  imageData: nil)
+        streamingTask = Task { [weak self] in
+            await self?.runStream(assistantId: placeholder.id, responseMode: .balanced)
+        }
+        return convoId
+    }
+
+    /// Resume a saved lesson: load its persisted transcript and re-anchor the
+    /// curriculum wire prefix so follow-ups stay in curriculum mode. Does NOT
+    /// re-send the opener. Returns false if the saved conversation is gone —
+    /// or empty: nothing persists until the first reply finalizes, so a
+    /// zero-message record means the opener stream never finished (Stop /
+    /// app-kill / network error mid-first-reply). Reporting false lets the
+    /// host start fresh and re-send the opener instead of presenting a blank
+    /// lesson that never teaches.
+    @discardableResult
+    public func resumeLesson(conversationId: UUID, starter: String) async -> Bool {
+        lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
+        let opened = await openConversation(id: conversationId)
+        return opened && !messages.isEmpty
+    }
+
+    /// The lesson opener plus the completion contract. The current backend's
+    /// curriculum prompt already instructs the `[LESSON_COMPLETE]` marker, but
+    /// the deployed legacy generation's prompt does not — embedding the
+    /// contract in the opener makes completion detectable against BOTH server
+    /// generations (the client's `LessonMarker` fallback recognizes and strips
+    /// the marker either way).
+    private static func withCompletionContract(_ starter: String) -> String {
+        starter + " When I have clearly demonstrated proficiency at this lesson's objective, end your reply with [LESSON_COMPLETE] on its own final line."
+    }
+
+    /// The request that was actually sent on the wire, captured at every
+    /// send site so `retry()` can replay it verbatim. Inferring the request
+    /// from the visible thread breaks for wire-only turns: the explain-more
+    /// instruction and the lesson opener never appear in `messages`, so a
+    /// rebuilt history would end on an assistant turn (a deterministic 400)
+    /// or — for a failed lesson opener — contain nothing to re-send at all.
+    /// Cleared whenever the active thread changes.
+    private struct LastRequest {
+        var responseMode: ResponseMode
+        var injectedUserTurn: String?
+        var imageData: Data?
+    }
+    private var lastRequest: LastRequest?
+
     /// Retry the last send after a failure. The last user message stays
-    /// in the history; a new assistant placeholder is created.
+    /// in the history; a new assistant placeholder is created and the
+    /// failed request is replayed exactly as it originally went out.
     public func retry() {
         guard case .failed = phase else { return }
         // Remove the failed assistant bubble if present.
         if let last = messages.last, last.role == .assistant, case .failed = last.status {
             messages.removeLast()
         }
-        // Rebuild a fresh placeholder and re-run the stream.
-        guard let lastUser = messages.last(where: { $0.role == .user }) else {
+        guard let request = lastRequest ?? fallbackRequestFromVisibleThread() else {
             phase = .idle
             return
         }
-        // Re-send the last user turn, re-uploading its photo if it had one.
-        let imageData = lastUser.imageData
         let placeholder = ChatMessage(role: .assistant, content: "", status: .streaming)
         messages.append(placeholder)
         phase = .sending
+        lastResponseMode = request.responseMode
 
         let assistantId = placeholder.id
-        let responseMode = lastResponseMode
         streamingTask = Task { [weak self] in
-            await self?.runSend(assistantId: assistantId, responseMode: responseMode, imageData: imageData)
+            if let imageData = request.imageData {
+                // Re-send the last user turn, re-uploading its photo.
+                await self?.runSend(assistantId: assistantId,
+                                    responseMode: request.responseMode,
+                                    imageData: imageData)
+            } else {
+                await self?.runStream(assistantId: assistantId,
+                                      responseMode: request.responseMode,
+                                      injectedUserTurn: request.injectedUserTurn)
+            }
         }
+    }
+
+    /// Reconstruct a replayable request from the visible thread — the
+    /// pre-capture behavior, kept as a fallback. A lesson whose wire-only
+    /// opener failed has no visible user turn, but the wire prefix still
+    /// carries the opener, so a bare stream re-sends it.
+    private func fallbackRequestFromVisibleThread() -> LastRequest? {
+        guard let lastUser = messages.last(where: { $0.role == .user }) else {
+            return lessonWirePrefix != nil
+                ? LastRequest(responseMode: .balanced, injectedUserTurn: nil, imageData: nil)
+                : nil
+        }
+        return LastRequest(responseMode: lastResponseMode,
+                           injectedUserTurn: nil,
+                           imageData: lastUser.imageData)
     }
 
     /// Cancel any in-flight request. The assistant bubble is marked
@@ -366,13 +562,46 @@ public final class ChatViewModel {
     /// silently dropped rather than nagging the user.
     public func reportMessage(_ message: ChatMessage) {
         guard let reporting, message.role == .assistant else { return }
-        let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip the lesson [CHECK]…[/CHECK] callout markers so the moderation
+        // payload carries clean reply text, not the internal markup.
+        let content = message.content
+            .replacingOccurrences(of: "[CHECK]", with: "")
+            .replacingOccurrences(of: "[/CHECK]", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
         let sessionIdProvider = self.sessionIdProvider
         Task {
             guard let sessionId = try? sessionIdProvider() else { return }
             try? await reporting.reportResponse(content: content, reason: nil, sessionId: sessionId)
         }
+    }
+
+    // MARK: - Engagement (streaks + achievements)
+
+    /// Achievements that fire from sending a message: first conversation, deep
+    /// diver (20+ user turns in this conversation), and the current mode's badge.
+    private func awardSendAchievements() {
+        achievementStore?.award(AchievementCatalog.firstConversation)
+        let userTurns = messages.filter { $0.role == .user }.count
+        if userTurns >= 20 { achievementStore?.award(AchievementCatalog.deepDiver) }
+        awardModeAchievementsIfNeeded()
+    }
+
+    /// Record streak signals from a chat `complete` event: cache the
+    /// server's authoritative streak and award any streak-milestone
+    /// badges. Idempotent.
+    private func recordSessionSignals(_ response: ChatResponse) {
+        if let streak = response.streak {
+            streakStore?.update(streak: streak)
+            for id in AchievementCatalog.streakMilestones(for: streak) {
+                achievementStore?.award(id)
+            }
+        }
+    }
+
+    /// Award badges tied to the current mode (currently: Debate). Idempotent.
+    private func awardModeAchievementsIfNeeded() {
+        if currentMode == .debate { achievementStore?.award(AchievementCatalog.debater) }
     }
 
     /// Start a fresh conversation.
@@ -386,17 +615,22 @@ public final class ChatViewModel {
     ///   conversation record. Prior conversations stay on disk so
     ///   history could be surfaced later, but are no longer shown.
     ///
-    /// Mode and unlock state are **preserved** on purpose — they're user
-    /// preferences that shouldn't be disturbed by starting a new chat.
-    /// The new record is always tagged with `currentMode` so the
-    /// "every conversation is mode-locked" invariant holds.
+    /// Mode is **preserved** on purpose — it's a user preference that
+    /// shouldn't be disturbed by starting a new chat. The new record is
+    /// always tagged with `currentMode` so the "every conversation is
+    /// mode-locked" invariant holds.
     public func startNewConversation() {
         streamingTask?.cancel()
         streamingTask = nil
+        let hadMessages = !messages.isEmpty
         messages = []
         draft = ""
         phase = .idle
-        if let store {
+        lastRequest = nil
+        // Don't mint another record when the active thread is already a
+        // fresh empty one — repeated New Chat taps would otherwise litter
+        // Chat History with permanent zero-message "New chat" rows.
+        if let store, conversationId == nil || hadMessages {
             conversationId = store.createConversation(mode: currentMode)
         }
     }
@@ -414,11 +648,20 @@ public final class ChatViewModel {
         guard let store, let convo = store.loadConversation(conversationId: id) else {
             return false
         }
+        // A record whose mode this build no longer knows (e.g. the retired
+        // "direct" from shipped betas) can't become the writable active
+        // thread — new turns would persist under a mode tag that lies about
+        // the contents. Curriculum threads carry their own tag and open
+        // through `resumeLesson`.
+        guard ChatMode(rawValue: convo.mode) != nil || convo.mode == ChatStoreTag.curriculum else {
+            return false
+        }
 
         streamingTask?.cancel()
         streamingTask = nil
         phase = .idle
         draft = ""
+        lastRequest = nil   // a failed request must not replay into this thread
 
         // Adopt mode FIRST (server side) so the conversation we're
         // about to render matches the model's behavior. Use the
@@ -462,10 +705,6 @@ public final class ChatViewModel {
 
     /// Ask the server to switch the active teaching mode.
     ///
-    /// Client-side guard: requesting Direct while locked returns an
-    /// `APIError.unauthorized` — mapped to a user-facing error rather
-    /// than silently dropping. The server is still the source of truth.
-    ///
     /// Returns a discardable error for callers that want to surface it;
     /// the UI typically just reads `modeSwitchError` instead.
     public private(set) var modeSwitchError: String?
@@ -474,6 +713,14 @@ public final class ChatViewModel {
     public func switchMode(to mode: ChatMode) async -> Bool {
         let succeeded = await _serverSyncMode(to: mode)
         if succeeded {
+            // Abandon any in-flight reply before swapping (mirrors
+            // `openConversation`): a stream finishing into a conversation
+            // the user just swapped away from would render nothing, persist
+            // nothing, and let its stale `.complete` snap `currentMode`
+            // back to the old mode.
+            streamingTask?.cancel()
+            streamingTask = nil
+            phase = .idle
             // Mode-switch (via the pill) feels like switching
             // workspaces — the chat thread changes too, not just a
             // setting somewhere off-screen. `openConversation` calls
@@ -485,19 +732,18 @@ public final class ChatViewModel {
     }
 
     /// Server side of the mode switch — talks to the backend,
-    /// updates `currentMode` / `isUnlocked` / `modeSwitchError` /
+    /// updates `currentMode` / `modeSwitchError` /
     /// `modeSwitchInFlight`. Does NOT touch `conversationId` or
     /// `messages`; the caller decides whether to swap the active
     /// thread.
     @discardableResult
     private func _serverSyncMode(to mode: ChatMode) async -> Bool {
         guard mode != currentMode else { return true }
-        guard modeSwitchInFlight == nil else { return false }
-
-        // Client-side pre-check: don't even call the server for Direct
-        // if we know we're locked. Saves a round trip + 403.
-        if mode.requiresUnlock && !isUnlocked {
-            modeSwitchError = "Pass the Socratic comprehension check to unlock Direct Mode."
+        guard modeSwitchInFlight == nil else {
+            // Surface the skip: `openConversation` ignores the returned Bool,
+            // and a silent skip would leave the thread rendering in one mode
+            // while the server session sits in another.
+            modeSwitchError = "Another mode switch is in progress. Try again."
             return false
         }
 
@@ -518,13 +764,9 @@ public final class ChatViewModel {
             if let parsed = ChatMode(rawValue: result.mode) {
                 currentMode = parsed
             }
-            if result.unlocked { isUnlocked = true }
+            awardModeAchievementsIfNeeded()
             modeSwitchInFlight = nil
             return true
-        } catch APIError.unauthorized {
-            modeSwitchInFlight = nil
-            modeSwitchError = "Pass the Socratic comprehension check to unlock Direct Mode."
-            return false
         } catch let error as APIError {
             modeSwitchInFlight = nil
             modeSwitchError = error.userFacingMessage
@@ -541,6 +783,7 @@ public final class ChatViewModel {
     /// mode. Used by the public `switchMode` and by tests.
     private func swapActiveConversation(forMode mode: ChatMode) {
         guard let store else { return }
+        lastRequest = nil   // a failed request must not replay into this thread
         if let id = store.latestConversationId(in: mode),
            let convo = store.loadConversation(conversationId: id) {
             applyLoadedConversation(convo)
@@ -556,16 +799,7 @@ public final class ChatViewModel {
     /// `openConversation`.
     private func applyLoadedConversation(_ convo: StoredConversation) {
         conversationId = convo.id
-        messages = convo.messages.compactMap { record -> ChatMessage? in
-            guard let role = ChatMessage.Role(rawValue: record.role) else { return nil }
-            return ChatMessage(
-                id: record.id,
-                role: role,
-                content: record.content,
-                createdAt: record.createdAt,
-                status: .idle
-            )
-        }
+        messages = convo.messages.compactMap(Self.hydratedMessage)
     }
 
     /// Dismiss the current mode-switch error from the UI.
@@ -573,11 +807,34 @@ public final class ChatViewModel {
         modeSwitchError = nil
     }
 
-    /// Test-only hook. Not exposed publicly; tests in the same package
-    /// can call it via `@testable import`. The underscore prefix marks
-    /// it as non-production API.
-    func _testing_markUnlocked() {
-        isUnlocked = true
+    /// The `[CURRICULUM: Unit X, Lesson Y]` tag extracted from the lesson's
+    /// wire prefix, for re-tagging follow-up turns (legacy-server bridge).
+    private var curriculumTurnTag: String? {
+        guard let content = lessonWirePrefix?.content, content.hasPrefix("["),
+              let close = content.firstIndex(of: "]") else { return nil }
+        return String(content[...close])
+    }
+
+    /// Bound the outbound history to what the server will actually use:
+    /// at most `maxMessages` (matching the server's own trim) and roughly
+    /// `maxBytes` of content (safely under the 32kb JSON body limit),
+    /// dropping oldest turns first. Never drops the latest turn, and never
+    /// leaves an assistant turn first — Anthropic requires the replayed
+    /// thread to start with a user message.
+    static func cappedHistory(
+        _ history: [ChatMessageDTO],
+        maxMessages: Int = 40,
+        maxBytes: Int = 24_000
+    ) -> [ChatMessageDTO] {
+        var trimmed = Array(history.suffix(maxMessages))
+        var bytes = trimmed.reduce(0) { $0 + $1.content.utf8.count }
+        while bytes > maxBytes, trimmed.count > 1 {
+            bytes -= trimmed.removeFirst().content.utf8.count
+        }
+        while let first = trimmed.first, first.role == "assistant", trimmed.count > 1 {
+            trimmed.removeFirst()
+        }
+        return trimmed
     }
 
     // MARK: - Streaming
@@ -608,6 +865,30 @@ public final class ChatViewModel {
         var history = messages
             .filter { $0.id != assistantId }
             .map(\.dto)
+        // Cap the outbound thread. The server rebuilds ordinary-chat context
+        // from its own DB and trims curriculum replays to its last 40 anyway,
+        // while express's 32kb JSON body cap 413s an unbounded payload long
+        // before that — permanently, since Retry would re-send the same bytes.
+        history = Self.cappedHistory(history)
+        // Lesson turns carry the [CURRICULUM: …] opener as a hidden first wire
+        // message so the server keeps the whole lesson in curriculum mode —
+        // including the graded follow-ups where [LESSON_COMPLETE] is emitted.
+        if let lessonWirePrefix {
+            history.insert(lessonWirePrefix, at: 0)
+            // Legacy-server bridge: the deployed production generation detects
+            // curriculum mode from the LAST user message only, so tag the
+            // outgoing final user turn too. Wire-only — the visible thread is
+            // untouched, and the current server's any-message detection is
+            // unaffected by the extra tag.
+            if let tag = curriculumTurnTag,
+               let lastUserIdx = history.lastIndex(where: { $0.role == "user" }),
+               !history[lastUserIdx].content.hasPrefix("[CURRICULUM") {
+                history[lastUserIdx] = ChatMessageDTO(
+                    role: "user",
+                    content: tag + " " + history[lastUserIdx].content
+                )
+            }
+        }
         if let injectedUserTurn {
             history.append(ChatMessageDTO(role: "user", content: injectedUserTurn))
         }
@@ -620,6 +901,7 @@ public final class ChatViewModel {
                 imageId: imageId
             )
             var sawAnyDelta = false
+            sawPassMarkerThisTurn = false
 
             for try await event in stream {
                 if Task.isCancelled { return }
@@ -632,11 +914,21 @@ public final class ChatViewModel {
 
                 case .complete(let response):
                     finalize(assistantId: assistantId, fullReply: response.reply)
-                    // Server is the source of truth for mode + unlock.
+                    // Server is the source of truth for mode.
                     if let serverMode = ChatMode(rawValue: response.mode) {
                         currentMode = serverMode
                     }
-                    if response.unlocked { isUnlocked = true }
+                    recordSessionSignals(response)
+                    // Lesson completion: the current backend sets `lessonComplete`;
+                    // the legacy backend only emits a pass marker inline. Either
+                    // one advances the lesson (and triggers the celebration).
+                    let lessonPassed = response.lessonComplete == true
+                        || (isLessonConversation && LessonMarker.indicatesCompletion(response.reply))
+                    if lessonPassed {
+                        onLessonComplete?()
+                        lessonCompletionEvents += 1
+                    }
+                    awardModeAchievementsIfNeeded()
                     phase = .idle
                     return
 
@@ -655,10 +947,23 @@ public final class ChatViewModel {
                 }
             }
 
+            // A cancelled consumer ends stream iteration by returning nil
+            // (it does NOT throw), so control falls through to here. The
+            // canceller (Stop, New Chat, opening another thread) has already
+            // reset or re-marked state — never finalize a truncated reply or
+            // plant a failure over what it set.
+            if Task.isCancelled { return }
+
             // Stream ended without a `.complete` event. If we saw deltas,
             // commit whatever we have; otherwise treat as failure.
             if sawAnyDelta {
                 finalizeFromDeltas(assistantId: assistantId)
+                // A legacy stream can drop after the pass marker but before
+                // `.complete`; honor the completion we saw in the deltas.
+                if isLessonConversation, sawPassMarkerThisTurn {
+                    onLessonComplete?()
+                    lessonCompletionEvents += 1
+                }
                 phase = .idle
             } else {
                 markCurrentFailed(
@@ -688,20 +993,58 @@ public final class ChatViewModel {
 
     private func appendDelta(_ text: String, to id: UUID) {
         guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
-        messages[idx].content += text
+        let combined = messages[idx].content + text
+        if isLessonConversation {
+            // Note any pass marker in the RAW stream before scrubbing, so a
+            // truncated stream (no `.complete`) still registers completion.
+            if !sawPassMarkerThisTurn, LessonMarker.indicatesCompletion(combined) {
+                sawPassMarkerThisTurn = true
+            }
+            // Scrub control markers as they stream so a legacy `[TEST_PASSED]`
+            // never flashes in the transcript.
+            messages[idx].content = LessonMarker.removingMarkers(combined)
+        } else {
+            messages[idx].content = combined
+        }
     }
 
     private func finalize(assistantId: UUID, fullReply: String) {
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
-        // Prefer the server's full reply over concatenated deltas in case
-        // any deltas were dropped.
-        messages[idx].content = fullReply
+        // Prefer the server's full reply over concatenated deltas in case any
+        // deltas were dropped.
+        guard isLessonConversation else {
+            messages[idx].content = fullReply
+            messages[idx].status = .idle
+            persistMessage(messages[idx])
+            return
+        }
+        // In a lesson, strip any inline control markers a backend may have left.
+        // If the reply was NOTHING but a marker (cleans to empty), substitute a
+        // short confirmation — never render or persist the raw token. Mirrors the
+        // server's fallback in lib/lessonOutcome.js.
+        let cleaned = LessonMarker.cleaned(fullReply)
+        messages[idx].content = cleaned.isEmpty ? "Lesson complete — nice work." : cleaned
         messages[idx].status = .idle
         persistMessage(messages[idx])
     }
 
     private func finalizeFromDeltas(assistantId: UUID) {
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
+        if isLessonConversation {
+            // Mirror `finalize()`: deltas were marker-scrubbed as they
+            // streamed, so a truncated marker-only reply leaves empty
+            // content — substitute rather than render/persist a blank
+            // bubble (an empty assistant turn would also be rejected when
+            // the curriculum thread is replayed on later turns).
+            let cleaned = LessonMarker.cleaned(messages[idx].content)
+            if cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages[idx].content = sawPassMarkerThisTurn
+                    ? "Lesson complete — nice work."
+                    : "Got it."
+            } else {
+                messages[idx].content = cleaned
+            }
+        }
         messages[idx].status = .idle
         persistMessage(messages[idx])
     }

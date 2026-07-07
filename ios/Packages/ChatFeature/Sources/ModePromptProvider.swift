@@ -7,8 +7,6 @@ import NetworkingKit
 ///
 /// - **Socratic** — exploratory, mechanism-curious. The default
 ///   Mercurius experience.
-/// - **Direct** — fact-fast, definitional. For when a student knows
-///   what they want and wants it concise.
 /// - **Debate** — adversarial, position-taking. The student picks a
 ///   side; Mercurius pushes the other.
 /// - **Discussion** — collaborative, perspective-taking. Both parties
@@ -41,16 +39,6 @@ public struct ModePromptProvider {
         "How do I write a better prompt?",
     ]
 
-    /// Locked until the student demonstrates critical thinking; the
-    /// prompts here are still accurate previews of the mode's
-    /// posture for users who haven't unlocked it yet.
-    public static let directPrompts: [String] = [
-        "Define what an LLM is in plain language.",
-        "List the main risks of using AI for homework.",
-        "Summarize how training data shapes a model.",
-        "Compare AI 'thinking' vs. human thinking.",
-    ]
-
     /// Adversarial. The student takes a position; Mercurius pushes
     /// back. Prompts here name the position the student wants to
     /// defend or attack — Mercurius will argue the opposite.
@@ -78,7 +66,6 @@ public struct ModePromptProvider {
     public static func prompts(for mode: ChatMode) -> [String] {
         switch mode {
         case .socratic:   return socraticPrompts
-        case .direct:     return directPrompts
         case .debate:     return debatePrompts
         case .discussion: return discussionPrompts
         }

@@ -74,3 +74,23 @@ public struct ReportCard: Decodable, Sendable, Equatable {
         self.nextSessionSuggestion = nextSessionSuggestion
     }
 }
+
+// MARK: - Unit test defense grade
+
+/// Result of `POST /api/unit-test/grade` — the server's grade of the student's
+/// open-ended "defense" answer for a unit test. `pass` is the server's verdict
+/// (grade A or B). A decode failure is treated by the caller as "not passed."
+public struct UnitDefenseResult: Decodable, Sendable, Equatable {
+    /// Letter grade, "A"–"D".
+    public let grade: String
+    /// Whether the defense passed (the server sets this = grade ∈ {A, B}).
+    public let pass: Bool
+    /// Short written feedback shown to the student.
+    public let feedback: String
+
+    public init(grade: String, pass: Bool, feedback: String) {
+        self.grade = grade
+        self.pass = pass
+        self.feedback = feedback
+    }
+}

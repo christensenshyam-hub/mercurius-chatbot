@@ -20,9 +20,13 @@ if (USE_PG) {
 } else {
   const Database = require('better-sqlite3');
   const path = require('path');
-  sqliteDb = new Database(path.join(__dirname, 'mercurius.db'));
+  // SQLITE_PATH lets tests point at an isolated temp database. Unset in
+  // production (which uses Postgres anyway) and in local-default dev → behavior
+  // is identical (mercurius.db beside this file).
+  const sqlitePath = process.env.SQLITE_PATH || path.join(__dirname, 'mercurius.db');
+  sqliteDb = new Database(sqlitePath);
   sqliteDb.pragma('journal_mode = WAL');
-  logger.info({ driver: 'sqlite' }, 'db driver: SQLite (ephemeral)');
+  logger.info({ driver: 'sqlite', path: sqlitePath }, 'db driver: SQLite (ephemeral)');
 }
 
 // ─── Helper: run a query ───
@@ -190,6 +194,17 @@ async function initSchema() {
   }
 }
 
+// ─── Streak day boundary ───
+// The product is US-first, so the streak "day" is anchored to a fixed product
+// timezone (default America/New_York, override with STREAK_TZ) instead of the
+// server's UTC date — with UTC the day flips at 5-8pm local (prime
+// after-school time), letting a streak tick twice in one evening while the
+// next-morning session earns nothing. 'en-CA' formats as YYYY-MM-DD, the same
+// string shape last_session_date has always stored.
+function streakDay(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.STREAK_TZ || 'America/New_York' }).format(now);
+}
+
 // ─── Exported async API (same interface as before, but now async) ───
 module.exports = {
   initSchema,
@@ -201,7 +216,11 @@ module.exports = {
       await query('UPDATE sessions SET last_active = ? WHERE session_id = ?', [now, sessionId]);
       return existing;
     }
-    await query('INSERT INTO sessions (session_id, created_at, last_active) VALUES (?, ?, ?)', [sessionId, now, now]);
+    // ON CONFLICT DO NOTHING (both drivers support it) makes the
+    // SELECT-then-INSERT race-safe: two near-simultaneous first-contact
+    // requests with the same brand-new sessionId both reach the INSERT, and
+    // without it the loser throws duplicate-key — an unhandled rejection.
+    await query('INSERT INTO sessions (session_id, created_at, last_active) VALUES (?, ?, ?) ON CONFLICT (session_id) DO NOTHING', [sessionId, now, now]);
     return await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
   },
 
@@ -240,7 +259,12 @@ module.exports = {
   },
 
   async getMessages(sessionId, limit = 50) {
-    return await query('SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?', [sessionId, limit]);
+    // Most RECENT N messages, returned in chronological order. ORDER BY ASC
+    // with LIMIT would pin the window to the FIRST N rows ever saved, freezing
+    // the model's context once a session outgrows the limit. The `id DESC`
+    // tie-break keeps same-millisecond user/assistant pairs ordered correctly.
+    const rows = await query('SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp DESC, id DESC LIMIT ?', [sessionId, limit]);
+    return rows.reverse();
   },
 
   // NOTE: getPastSessions() was removed. It queried `WHERE session_id != ?`
@@ -270,16 +294,6 @@ module.exports = {
 
   async setMode(sessionId, mode) {
     await query('UPDATE sessions SET mode = ? WHERE session_id = ?', [mode, sessionId]);
-  },
-
-  async setUnlocked(sessionId) {
-    await query("UPDATE sessions SET unlocked = 1, mode = 'socratic' WHERE session_id = ?", [sessionId]);
-  },
-
-  async markUnlocked(sessionId) { await this.setUnlocked(sessionId); },
-
-  async setTestState(sessionId, state) {
-    await query('UPDATE sessions SET test_state = ? WHERE session_id = ?', [state, sessionId]);
   },
 
   async getDifficulty(sessionId) {
@@ -312,13 +326,13 @@ module.exports = {
   async updateStreak(sessionId) {
     const r = await queryOne('SELECT streak, last_session_date FROM sessions WHERE session_id = ?', [sessionId]);
     if (!r) return 1;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = streakDay();
     if (r.last_session_date === today) return r.streak || 1;
     let newStreak = 1;
     if (r.last_session_date) {
-      const last = new Date(r.last_session_date);
-      const now = new Date(today);
-      const diffDays = Math.round((now - last) / 86400000);
+      // Both strings are YYYY-MM-DD, which Date.parse reads as UTC midnight —
+      // so the diff is an exact day count and DST never skews it.
+      const diffDays = Math.round((Date.parse(today) - Date.parse(r.last_session_date)) / 86400000);
       newStreak = diffDays <= 2 ? (r.streak || 1) + 1 : 1;
     }
     await query('UPDATE sessions SET streak = ?, last_session_date = ? WHERE session_id = ?', [newStreak, today, sessionId]);
@@ -341,13 +355,25 @@ module.exports = {
       SELECT session_id, streak, message_count, unlocked, last_session_date, topics, display_name
       FROM sessions
       WHERE message_count > 2
-      ORDER BY streak DESC, message_count DESC
-      LIMIT 20
     `);
-    return rows.map((r, i) => ({
+    // Rank by the EFFECTIVE streak: the stored streak only counts while it is
+    // still alive under updateStreak's own 2-day grace rule. The raw column is
+    // never recomputed for sessions that stop chatting, so without this a
+    // lapsed 30-day streak from months ago would top the board forever.
+    const today = streakDay();
+    const ranked = rows
+      .map((r) => {
+        const diffDays = r.last_session_date
+          ? Math.round((Date.parse(today) - Date.parse(r.last_session_date)) / 86400000)
+          : Infinity;
+        return { ...r, effStreak: diffDays <= 2 ? (r.streak || 1) : 0 };
+      })
+      .sort((a, b) => (b.effStreak - a.effStreak) || ((b.message_count || 0) - (a.message_count || 0)))
+      .slice(0, 20);
+    return ranked.map((r, i) => ({
       rank: i + 1,
       badge: r.session_id.slice(-4).toUpperCase(),
-      streak: r.streak || 1,
+      streak: r.effStreak,
       messages: r.message_count || 0,
       unlocked: !!(r.unlocked),
       lastActive: r.last_session_date,
@@ -477,5 +503,182 @@ module.exports = {
 
     profile += '\nDo NOT repeat things they already know. Build on their existing knowledge. If they struggled with something before, revisit it gently when the topic comes up again.';
     return profile;
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Standby gamification (mascot: Mercury) — STANDBY / FLAG-GATED.
+  //
+  // These tables and helpers exist for the gamification feature flag
+  // (GAMIFICATION_ENABLED). `ensureGamificationSchema()` is called from
+  // server.js ONLY when that flag is on, so with the flag off — the default and
+  // production — the tables are never created and the live schema is
+  // byte-identical to before. The helpers below are likewise only reached from
+  // the flag-gated /api/progression/* routes.
+  //
+  // LEVEL ≠ RANK: `progression.rank` is a PLACEHOLDER column. No code here (or
+  // anywhere in Phase 1) derives it from xp/level/streak. It defaults to
+  // 'copper' at row creation and is never recomputed until the separate
+  // Phase-2 competency engine owns it. `updateProgression` deliberately omits
+  // it. The canonical production migration is migrations/001_gamification.sql.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async ensureGamificationSchema() {
+    if (USE_PG) {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS progression (
+          session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
+          xp INTEGER NOT NULL DEFAULT 0,
+          level INTEGER NOT NULL DEFAULT 1,
+          current_streak INTEGER NOT NULL DEFAULT 0,
+          longest_streak INTEGER NOT NULL DEFAULT 0,
+          last_active_date TEXT DEFAULT NULL,
+          rank TEXT NOT NULL DEFAULT 'copper',
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS xp_ledger (
+          id SERIAL PRIMARY KEY,
+          session_id TEXT NOT NULL REFERENCES sessions(session_id),
+          amount INTEGER NOT NULL,
+          reason TEXT NOT NULL,
+          source_type TEXT NOT NULL,
+          source_id TEXT DEFAULT NULL,
+          session_ref TEXT DEFAULT NULL,
+          metadata TEXT DEFAULT NULL,
+          created_at BIGINT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_xp_ledger_idem ON xp_ledger(session_id, source_type, source_id);
+        CREATE INDEX IF NOT EXISTS idx_xp_ledger_session ON xp_ledger(session_id, reason, created_at);
+      `);
+    } else {
+      sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS progression (
+          session_id TEXT PRIMARY KEY,
+          xp INTEGER NOT NULL DEFAULT 0,
+          level INTEGER NOT NULL DEFAULT 1,
+          current_streak INTEGER NOT NULL DEFAULT 0,
+          longest_streak INTEGER NOT NULL DEFAULT 0,
+          last_active_date TEXT DEFAULT NULL,
+          rank TEXT NOT NULL DEFAULT 'copper',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+        );
+        CREATE TABLE IF NOT EXISTS xp_ledger (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          amount INTEGER NOT NULL,
+          reason TEXT NOT NULL,
+          source_type TEXT NOT NULL,
+          source_id TEXT DEFAULT NULL,
+          session_ref TEXT DEFAULT NULL,
+          metadata TEXT DEFAULT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_xp_ledger_idem ON xp_ledger(session_id, source_type, source_id);
+        CREATE INDEX IF NOT EXISTS idx_xp_ledger_session ON xp_ledger(session_id, reason, created_at);
+      `);
+    }
+  },
+
+  // Create the progression row if absent. `rank` is seeded to its placeholder
+  // 'copper' here and never touched again by Phase-1 code.
+  async ensureProgression(sessionId, now = Date.now()) {
+    if (USE_PG) {
+      await pool.query(
+        `INSERT INTO progression (session_id, xp, level, current_streak, longest_streak, last_active_date, rank, created_at, updated_at)
+         VALUES ($1, 0, 1, 0, 0, NULL, 'copper', $2, $2)
+         ON CONFLICT (session_id) DO NOTHING`,
+        [sessionId, now],
+      );
+    } else {
+      sqliteDb.prepare(
+        `INSERT OR IGNORE INTO progression (session_id, xp, level, current_streak, longest_streak, last_active_date, rank, created_at, updated_at)
+         VALUES (?, 0, 1, 0, 0, NULL, 'copper', ?, ?)`
+      ).run(sessionId, now, now);
+    }
+  },
+
+  async getProgression(sessionId) {
+    return await queryOne(
+      'SELECT session_id, xp, level, current_streak, longest_streak, last_active_date, rank, created_at, updated_at FROM progression WHERE session_id = ?',
+      [sessionId],
+    );
+  },
+
+  // Persist a recomputed XP total + Level. Intentionally does NOT write `rank`
+  // — keeping the engagement track (xp/level) and the credential track (rank)
+  // strictly separate.
+  async updateProgression(sessionId, { xp, level, updatedAt = Date.now() }) {
+    await query('UPDATE progression SET xp = ?, level = ?, updated_at = ? WHERE session_id = ?', [xp, level, updatedAt, sessionId]);
+  },
+
+  // Maintain the progression streak columns (current_streak / longest_streak /
+  // last_active_date) — nothing else ever writes them, so without this the
+  // /api/progression payload reports streak 0 forever. Day boundary is the UTC
+  // calendar date, matching the XP service's startOfUtcDay convention
+  // (lib/gamification/xp.js). Same day → no-op; yesterday → extend; any longer
+  // gap → reset to 1. Called from /api/progression/event on every XP event.
+  async touchProgressionStreak(sessionId, now = Date.now()) {
+    const row = await queryOne('SELECT current_streak, longest_streak, last_active_date FROM progression WHERE session_id = ?', [sessionId]);
+    if (!row) return;
+    const today = new Date(now).toISOString().slice(0, 10);
+    if (row.last_active_date === today) return;
+    const diffDays = row.last_active_date
+      ? Math.round((Date.parse(today) - Date.parse(row.last_active_date)) / 86400000)
+      : Infinity;
+    const current = diffDays === 1 ? (Number(row.current_streak) || 0) + 1 : 1;
+    const longest = Math.max(Number(row.longest_streak) || 0, current);
+    await query('UPDATE progression SET current_streak = ?, longest_streak = ?, last_active_date = ?, updated_at = ? WHERE session_id = ?', [current, longest, today, now, sessionId]);
+  },
+
+  // Append one awarded event to the ledger. Idempotency is enforced by the
+  // unique index on (session_id, source_type, source_id): a replay of a
+  // structural event is a no-op. Returns { inserted } so the caller can tell an
+  // award from a deduped replay. Branches on the driver because each expresses
+  // "insert-or-skip + did-it-insert" differently.
+  async recordXpEvent({ sessionId, amount, reason, sourceType, sourceId, sessionRef, metadata, createdAt }) {
+    if (USE_PG) {
+      const res = await pool.query(
+        `INSERT INTO xp_ledger (session_id, amount, reason, source_type, source_id, session_ref, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (session_id, source_type, source_id) DO NOTHING
+         RETURNING id`,
+        [sessionId, amount, reason, sourceType, sourceId ?? null, sessionRef ?? null, metadata ?? null, createdAt],
+      );
+      return { inserted: res.rows.length > 0, ledgerId: res.rows[0] ? res.rows[0].id : null };
+    } else {
+      const info = sqliteDb.prepare(
+        `INSERT OR IGNORE INTO xp_ledger (session_id, amount, reason, source_type, source_id, session_ref, metadata, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(sessionId, amount, reason, sourceType, sourceId ?? null, sessionRef ?? null, metadata ?? null, createdAt);
+      return { inserted: info.changes === 1, ledgerId: info.lastInsertRowid != null ? Number(info.lastInsertRowid) : null };
+    }
+  },
+
+  // Count prior awards of a reason for caps / diminishing returns. Optional
+  // filters: `sinceTs` (created_at >= ts, for per-day + rolling-window) and
+  // `sessionRef` (per activity-session cap).
+  async countXpEvents(sessionId, reason, { sinceTs = null, sessionRef = null } = {}) {
+    let sql = 'SELECT COUNT(*) AS c FROM xp_ledger WHERE session_id = ? AND reason = ?';
+    const params = [sessionId, reason];
+    if (sinceTs != null) { sql += ' AND created_at >= ?'; params.push(sinceTs); }
+    if (sessionRef != null) { sql += ' AND session_ref = ?'; params.push(sessionRef); }
+    const r = await queryOne(sql, params);
+    return r ? Number(r.c) : 0;
+  },
+
+  // The append-only ledger is the source of truth for total XP.
+  async sumXp(sessionId) {
+    const r = await queryOne('SELECT COALESCE(SUM(amount), 0) AS s FROM xp_ledger WHERE session_id = ?', [sessionId]);
+    return r ? Number(r.s) : 0;
+  },
+
+  async getRecentXpEvents(sessionId, limit = 10) {
+    return await query(
+      'SELECT amount, reason, source_type, source_id, created_at FROM xp_ledger WHERE session_id = ? ORDER BY created_at DESC LIMIT ?',
+      [sessionId, limit],
+    );
   },
 };

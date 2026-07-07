@@ -42,7 +42,11 @@ public final class SwiftDataChatStore: ChatStore {
     // MARK: - ChatStore: lookup
 
     public func latestConversationId() -> UUID? {
+        // Exclude curriculum lesson threads — they must never resurface as the
+        // user's "current" main chat on launch.
+        let curriculum = ChatStoreTag.curriculum
         var descriptor = FetchDescriptor<ConversationRecord>(
+            predicate: #Predicate { $0.mode != curriculum },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 1
@@ -73,6 +77,13 @@ public final class SwiftDataChatStore: ChatStore {
 
     public func createConversation(mode: ChatMode) -> UUID {
         let convo = ConversationRecord(mode: mode)
+        context.insert(convo)
+        try? context.save()
+        return convo.id
+    }
+
+    public func createCurriculumConversation() -> UUID {
+        let convo = ConversationRecord(modeRaw: ChatStoreTag.curriculum)
         context.insert(convo)
         try? context.save()
         return convo.id
@@ -132,7 +143,10 @@ public final class SwiftDataChatStore: ChatStore {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         let records = (try? context.fetch(descriptor)) ?? []
-        return records.map(Self.summary(from:))
+        // Curriculum lesson threads are not part of chat history.
+        return records
+            .filter { $0.mode != ChatStoreTag.curriculum }
+            .map(Self.summary(from:))
     }
 
     public func delete(conversationId: UUID) {

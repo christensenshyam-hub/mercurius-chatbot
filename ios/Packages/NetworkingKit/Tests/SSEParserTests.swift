@@ -82,6 +82,32 @@ struct SSEParserDecodeTests {
         #expect(resp.streak == 3)
     }
 
+    @Test("`complete` carries lessonComplete=true when the server reports proficiency")
+    func completeWithLessonComplete() throws {
+        let json = #"""
+        {"type":"complete","reply":"Great work.","sessionId":"s1","mode":"curriculum","unlocked":false,"lessonComplete":true}
+        """#
+        let event = try parseChatEvent(from: json)
+        guard case .complete(let resp) = event else {
+            Issue.record("Expected .complete")
+            return
+        }
+        #expect(resp.lessonComplete == true)
+    }
+
+    @Test("`complete` from an older server (no lessonComplete field) decodes as nil, not a failure")
+    func completeWithoutLessonCompleteIsNil() throws {
+        let json = #"""
+        {"type":"complete","reply":"Hello!","sessionId":"s1","mode":"socratic","unlocked":false}
+        """#
+        let event = try parseChatEvent(from: json)
+        guard case .complete(let resp) = event else {
+            Issue.record("Expected .complete")
+            return
+        }
+        #expect(resp.lessonComplete == nil)
+    }
+
     @Test("`error` becomes .streamError with the message")
     func errorEvent() throws {
         let event = try parseChatEvent(from: #"{"type":"error","error":"rate limit"}"#)

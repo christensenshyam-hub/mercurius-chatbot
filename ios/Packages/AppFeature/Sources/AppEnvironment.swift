@@ -30,7 +30,24 @@ public final class AppEnvironment: ObservableObject {
     /// just without persistent conversations.
     public let chatStore: ChatStore?
 
+    /// Engagement stores — streak cache + achievements. Shared singletons so the
+    /// chat view model (which writes them), the Progress hub, and the toast
+    /// presenter all observe the same state.
+    public let streakStore: StreakStore
+    public let achievementStore: AchievementStore
+    public let reminderStore: ReminderStore
+
     public convenience init(environment: APIEnvironment = .production) {
+        // DEBUG-only dev hook: launch with `-UseLocalServer` (Xcode / simctl)
+        // to point the app at the local dev server (http://localhost:3000)
+        // instead of production. Never settable by users — only the launcher.
+        var environment = environment
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-UseLocalServer") {
+            environment = .local
+        }
+        #endif
+
         // Default production init: disk-backed SwiftData, fall back to
         // in-memory on throw. The init below has `chatStore: nil` fall
         // through to this default.
@@ -76,6 +93,9 @@ public final class AppEnvironment: ObservableObject {
         )
         self.themeStore = ThemePreferenceStore()
         self.chatStore = chatStore
+        self.streakStore = StreakStore()
+        self.achievementStore = AchievementStore()
+        self.reminderStore = ReminderStore()
     }
 
     /// Constructs the production default `ChatStore` — disk-backed
