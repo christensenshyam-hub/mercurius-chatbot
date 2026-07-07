@@ -16,6 +16,14 @@ import Foundation
 /// unit-testable without touching `UNUserNotificationCenter`.
 public enum ReminderPlanner {
 
+    /// Which Merc appears on the banner — rendered from the procedural art at
+    /// schedule time, so every notification carries a matching pose (a wave
+    /// for hellos, a pondering Merc for questions, a dozing Merc when the
+    /// streak is about to fall asleep).
+    public enum Pose: String, Sendable, CaseIterable {
+        case wave, happy, thinking, celebrate, sleep
+    }
+
     public struct PlannedReminder: Equatable, Sendable {
         /// Stable per-day identifier ("mercurius.reminder.2026-07-06") so
         /// re-planning replaces rather than duplicates.
@@ -23,24 +31,28 @@ public enum ReminderPlanner {
         /// Local wall-clock fire time (year/month/day/hour/minute).
         public let fireDate: DateComponents
         public let body: String
+        public let pose: Pose
     }
 
     /// Identifier prefix for every planned reminder — the scheduler uses it
     /// to find and clear previous plans.
     public static let idPrefix = "mercurius.reminder."
 
-    /// The Merc-voiced rotation. Warm and inviting — this app's audience is
-    /// 9+, so no Duo-style guilt, just personality.
-    static let dailyLines = [
-        "Merc here! Got two minutes to think together today?",
-        "Curious about anything today? Merc loves a good question.",
-        "Two minutes of thinking beats two hours of scrolling — Merc's ready.",
-        "Merc's been pondering something. Come ask him about it!",
-        "Your learning path misses you. One small step today?",
-        "A question a day keeps your brain in play. Merc's waiting!",
-        "Merc says hi 👋 — swing by for a quick brain workout.",
+    /// The Merc-voiced rotation, each line paired with the pose Merc strikes
+    /// on the banner. Warm and inviting — this app's audience is 9+, so no
+    /// Duo-style guilt, just personality.
+    static let dailyLines: [(body: String, pose: Pose)] = [
+        ("Merc here! Got two minutes to think together today?", .wave),
+        ("Curious about anything today? Merc loves a good question.", .thinking),
+        ("Two minutes of thinking beats two hours of scrolling — Merc's ready.", .happy),
+        ("Merc's been pondering something. Come ask him about it!", .thinking),
+        ("Your learning path misses you. One small step today?", .happy),
+        ("A question a day keeps your brain in play. Merc's waiting!", .celebrate),
+        ("Merc says hi 👋 — swing by for a quick brain workout.", .wave),
     ]
 
+    /// Defense pairs the urgency copy with a DOZING Merc — the streak is
+    /// literally about to fall asleep.
     static func defenseLine(streak: Int) -> String {
         "Your \(streak)-day streak is on the line! A two-minute chat with Merc saves it."
     }
@@ -75,19 +87,21 @@ public enum ReminderPlanner {
             if offset == 0, (fire <= now || chattedToday) { continue }
 
             let body: String
+            let pose: Pose
             if defensePending, let streak {
                 body = defenseLine(streak: streak)
+                pose = .sleep
                 defensePending = false
             } else {
                 let dayOfYear = calendar.ordinality(of: .day, in: .year, for: fire) ?? offset
-                body = dailyLines[dayOfYear % dailyLines.count]
+                (body, pose) = dailyLines[dayOfYear % dailyLines.count]
             }
 
             var comps = calendar.dateComponents([.year, .month, .day], from: fire)
             comps.hour = hour
             comps.minute = minute
             let key = String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
-            reminders.append(PlannedReminder(id: idPrefix + key, fireDate: comps, body: body))
+            reminders.append(PlannedReminder(id: idPrefix + key, fireDate: comps, body: body, pose: pose))
         }
         return reminders
     }

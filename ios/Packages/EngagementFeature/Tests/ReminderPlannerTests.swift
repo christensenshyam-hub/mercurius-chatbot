@@ -30,8 +30,27 @@ struct ReminderPlannerTests {
         let p = plan(streak: 4)
         #expect(p.count == 7)
         #expect(p[0].body.contains("4-day streak is on the line"))
+        #expect(p[0].pose == .sleep)   // the streak is about to doze off
         // Only the first slot defends; the rest rotate.
         #expect(!p[1].body.contains("streak is on the line"))
+        #expect(p[1].pose != .sleep)
+    }
+
+    @Test("Every rotation line carries its paired pose")
+    func rotationPoses() {
+        let p = plan(streak: nil)
+        for reminder in p {
+            let match = ReminderPlanner.dailyLines.first { $0.body == reminder.body }
+            #expect(match?.pose == reminder.pose)
+        }
+    }
+
+    @Test("Pose tiles render to non-empty PNG data")
+    @MainActor func tilesRender() {
+        for pose in ReminderPlanner.Pose.allCases {
+            let data = MercNotificationArt.pngData(for: pose)
+            #expect((data?.count ?? 0) > 1000, "pose \(pose.rawValue) rendered no data")
+        }
     }
 
     @Test("Chatting today drops today's slot and moves the defense to tomorrow")
