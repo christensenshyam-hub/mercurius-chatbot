@@ -60,7 +60,11 @@ public final class NotificationScheduler {
                 content.body = reminder.body
                 content.sound = .default
                 let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireDate, repeats: false)
-                center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
+                // A failed add (system limit, etc.) just drops that day —
+                // the next refresh re-plans it.
+                try? await center.add(
+                    UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger)
+                )
             }
         }
     }
