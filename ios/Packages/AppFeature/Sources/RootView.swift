@@ -5,6 +5,7 @@ import ChatFeature
 import CurriculumFeature
 import EngagementFeature
 import MercFlowFeature
+import MercuriusActivity
 import NetworkingKit
 import PersistenceKit
 #endif
@@ -44,6 +45,8 @@ public struct RootView: View {
             MercPreviewView()
         } else if ProcessInfo.processInfo.arguments.contains("-ChatPreview") {
             chatPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-LiveActivityGallery") {
+            liveActivityGallery
         } else {
             mainBody
         }
@@ -90,6 +93,17 @@ public struct RootView: View {
         }
     }
 
+    /// DEBUG-only: every Live Activity phase (lock card + DI expanded) as an
+    /// in-app gallery — the sim can't fake stale/error on a real activity.
+    /// (ActivityKit types are iOS-only; the macOS test host compiles this too.)
+    @ViewBuilder private var liveActivityGallery: some View {
+        #if os(iOS)
+        LiveActivityGalleryView()
+        #else
+        mainBody
+        #endif
+    }
+
     /// DEBUG-only: land directly on the free Chat screen to view the branded
     /// Merc intro + assistant-avatar treatment. Pass `-ChatSeed` to also auto-send
     /// a starter so the thinking → speaking states can be seen.
@@ -130,6 +144,16 @@ public struct RootView: View {
             if ProcessInfo.processInfo.arguments.contains("-NotifPreview") {
                 EngagementFeature.NotificationScheduler().scheduleDemo()
             }
+            // `-LiveActivityPreview`: start the learning Live Activity with
+            // the design handoff's exact sample data (streak 24, lesson 3/5,
+            // 2 to Level 7, 2h 40m left) for lock-screen / Dynamic Island
+            // eyeballing without running a real session. (ActivityKit types
+            // are iOS-only; the macOS test host compiles this file too.)
+            #if os(iOS)
+            if ProcessInfo.processInfo.arguments.contains("-LiveActivityPreview") {
+                LearningActivityController.shared.startDemo()
+            }
+            #endif
             #endif
         }
     }

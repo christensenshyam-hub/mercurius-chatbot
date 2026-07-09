@@ -65,6 +65,15 @@ struct AppEntryView: View {
             .sheet(isPresented: $showHowItWorks) {
                 HowItWorksView(dismiss: { showHowItWorks = false })
             }
+            // `mercurius://session` — the Live Activity's tap target. Skip
+            // the Home doorman and land on the learning path, where the
+            // in-progress lesson is the highlighted node. Never shortcuts
+            // onboarding: first-run users finish that flow first.
+            .onOpenURL { url in
+                guard url.scheme == "mercurius", url.host == "session" else { return }
+                entryTab = .curriculum
+                hasEnteredApp = true
+            }
     }
 
     @ViewBuilder

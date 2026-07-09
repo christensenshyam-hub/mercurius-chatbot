@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import ChatFeature
 import CurriculumFeature
+import MercuriusActivity
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
@@ -195,6 +196,11 @@ struct AppShellView: View {
                     // (Achievement.swift) — award it at start, matching the
                     // copy and the web widget's semantics. Idempotent.
                     achievementStore.award(AchievementCatalog.explorer)
+                    // Surface the session on the Lock Screen / Dynamic Island.
+                    // Started here (not on open) so it only appears once a
+                    // conversation actually exists; re-starting on a later
+                    // lesson simply replaces the running activity.
+                    startLearningActivity(for: lessonId)
                 },
                 onLessonComplete: { lessonId in
                     handleLessonComplete(lessonId)
@@ -495,6 +501,10 @@ struct AppShellView: View {
     private func handleLessonComplete(_ lessonId: String) {
         progress.markCompleted(lessonId)
         achievementStore.award(AchievementCatalog.explorer)
+        // Push the fresh count into the Live Activity (after markCompleted so
+        // it reads the new state). The unit's last lesson completes the
+        // activity — the win lingers on the Lock Screen.
+        refreshLearningActivity(afterCompleting: lessonId)
         // Credit module completion (idempotent per lesson id). Gated/no-op off.
         if let sid = try? sessionIdentity.current() {
             Task {
@@ -505,6 +515,67 @@ struct AppShellView: View {
             }
         }
     }
+
+    // MARK: - Live Activity
+
+    /// Start the learning Live Activity for the lesson's unit. Framed as
+    /// streak defense: the ring tracks lessons-in-unit and the countdown runs
+    /// to the end of the local day — the same window the reminders defend.
+    /// No-ops when the parent unit can't be resolved or the user has Live
+    /// Activities off (the controller checks authorization).
+    private func startLearningActivity(for lessonId: String) {
+#if os(iOS)
+        guard let unit = parentUnit(of: lessonId) else { return }
+        LearningActivityController.shared.startSession(
+            title: "Unit \(unit.number) · \(unit.title)",
+            state: learningState(in: unit)
+        )
+#endif
+    }
+
+    /// After a completion lands: last lesson in the unit → `complete`
+    /// (lingering win); otherwise `update` with the new counts. Both no-op
+    /// when no activity is running.
+    private func refreshLearningActivity(afterCompleting lessonId: String) {
+#if os(iOS)
+        guard let unit = parentUnit(of: lessonId) else { return }
+        let state = learningState(in: unit)
+        if state.lessonsDone >= state.lessonsTotal {
+            LearningActivityController.shared.complete(state: state)
+        } else {
+            LearningActivityController.shared.update(state: state)
+        }
+#endif
+    }
+
+    private func parentUnit(of lessonId: String) -> CurriculumFeature.Unit? {
+        MercuriusCurriculum.units.first { $0.lessons.contains(where: { $0.id == lessonId }) }
+    }
+
+#if os(iOS)
+    /// Snapshot the unit's progress into the activity's content state.
+    /// "Level" is the gamified framing of units: finishing unit N unlocks
+    /// level N+1, so `lessonsToLevel` is simply the lessons left in the unit.
+    private func learningState(in unit: CurriculumFeature.Unit) -> LearningActivityAttributes.ContentState {
+        let total = unit.lessons.count
+        let done = progress.completedCount(in: unit)
+        let endOfDay = Calendar.current.date(
+            byAdding: .day, value: 1,
+            to: Calendar.current.startOfDay(for: Date())
+        ) ?? Date().addingTimeInterval(3600)
+        return .init(
+            phase: .active,
+            lessonsDone: done,
+            lessonsTotal: total,
+            progress: total > 0 ? Double(done) / Double(total) : 0,
+            streakCount: streakStore.current,
+            level: (Int(unit.number) ?? 0) + 1,
+            lessonsToLevel: max(total - done, 0),
+            deadline: endOfDay,
+            lastUpdated: Date()
+        )
+    }
+#endif
 
     /// "UNIT 0X" label for the lesson's parent unit, for the lesson header.
     private func unitLabel(for lesson: Lesson) -> String {
