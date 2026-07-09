@@ -203,21 +203,33 @@ private struct ChatPreviewHost: View {
     private let sessionIdentity: SessionIdentity
     private let autoSend: Bool
 
+    /// A demo streak so the preview shows the real slimmed header (streak chip
+    /// leading, Settings + Home trailing) the way `AppShellView` wires it.
+    private let demoStreak = StreakStore(defaults: UserDefaults(suiteName: "chat-preview") ?? .standard)
+
     init(apiClient: APIClient, sessionIdentity: SessionIdentity, chatStore: ChatStore?, autoSend: Bool) {
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
         self.autoSend = autoSend
         _model = State(initialValue: ChatViewModel(
             apiClient: apiClient, sessionIdentity: sessionIdentity, store: chatStore))
+        demoStreak.update(streak: 3)
     }
 
     var body: some View {
-        ChatView(model: model, apiClient: apiClient, sessionIdentity: sessionIdentity)
-            .task {
-                guard autoSend, model.messages.isEmpty else { return }
-                model.draft = "What is a token in an LLM?"
-                model.send()
-            }
+        ChatView(
+            model: model,
+            apiClient: apiClient,
+            sessionIdentity: sessionIdentity,
+            settingsPresenter: { AnyView(Text("Settings").padding()) },
+            headerAccessory: { AnyView(StreakChip(streakStore: demoStreak, action: {})) },
+            onGoHome: {}
+        )
+        .task {
+            guard autoSend, model.messages.isEmpty else { return }
+            model.draft = "What is a token in an LLM?"
+            model.send()
+        }
     }
 }
 #endif

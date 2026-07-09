@@ -40,16 +40,16 @@ final class AppStoreScreenshots: XCTestCase {
         ]
         app.launch()
 
-        // Home → Chat. ("AI LITERACY TUTOR" is unique to the chat header;
-        // the Home welcome also shows "Mercurius AI".)
+        // Home → Chat. The "Debate" mode pill is unique to the chat screen
+        // (unaffected by the slimmed-down header that dropped the brand caption).
         let chatCTA = app.buttons["Chat with Merc"]
         XCTAssertTrue(chatCTA.waitForExistence(timeout: Self.timeout), "Never reached Home")
         chatCTA.tap()
         // Entering the seeded 50-message chat is the heaviest transition of the
-        // run, so gate on the header through the settle-first poll helper rather
+        // run, so gate on the pill through the settle-first poll helper rather
         // than a single blocking query.
         XCTAssertTrue(
-            settleAndWait(app.staticTexts["AI LITERACY TUTOR"]),
+            settleAndWait(app.buttons["Debate"]),
             "Never reached the chat tab"
         )
 
