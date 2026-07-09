@@ -169,7 +169,7 @@ public struct RootView: View {
     /// How long the branded launch screen stays up even when bootstrap
     /// finishes instantly — the Duolingo beat. Long enough to register as a
     /// welcome, short enough to never feel like waiting.
-    private static let minimumLaunchHold: Duration = .seconds(2.2)
+    private static let minimumLaunchHold: Duration = .seconds(3.5)
 
     private func bootstrap() async {
         let start = ContinuousClock.now
