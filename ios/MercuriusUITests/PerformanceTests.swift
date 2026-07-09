@@ -52,10 +52,10 @@ final class PerformanceTests: XCTestCase {
             "HomeView never rendered — Chat with Merc button missing after \(timeout)s"
         )
         chatCTA.tap()
-        // "AI LITERACY TUTOR" is unique to the chat header ("Mercurius AI"
-        // also appears on the Home welcome, so it can match mid-crossfade).
+        // The "Debate" mode pill is unique to the chat screen and unaffected
+        // by the slimmed-down header (which dropped the brand caption).
         XCTAssertTrue(
-            app.staticTexts["AI LITERACY TUTOR"].waitForExistence(timeout: timeout),
+            app.buttons["Debate"].waitForExistence(timeout: timeout),
             "Did not reach the chat screen after tapping Chat with Merc"
         )
     }

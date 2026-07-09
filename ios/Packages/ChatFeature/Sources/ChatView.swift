@@ -29,14 +29,8 @@ public struct ChatView: View {
     @AppStorage(ChatInputHint.storageKey) private var hasSeenChatInputHint: Bool = false
 
     private enum ActiveSheet: Identifiable {
-        case settings, quiz, reportCard
-        var id: String {
-            switch self {
-            case .settings: return "settings"
-            case .quiz: return "quiz"
-            case .reportCard: return "reportCard"
-            }
-        }
+        case settings
+        var id: String { "settings" }
     }
 
     private let apiClient: APIClient
@@ -237,34 +231,16 @@ public struct ChatView: View {
     }
 
     private var header: some View {
-        HStack(spacing: BrandSpacing.md) {
-            BrandLogo(style: .mark, size: 32)
-            VStack(alignment: .leading, spacing: 0) {
-                // `lineLimit(1) + minimumScaleFactor` caps growth at extreme
-                // Dynamic Type sizes so the brand header doesn't wrap onto
-                // three lines and push content out of the safe area.
-                Text("Mercurius AI")
-                    .font(BrandFont.subheading)
-                    .foregroundStyle(BrandColor.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text("AI LITERACY TUTOR")
-                    .font(BrandFont.caption)
-                    .tracking(1.5)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            Spacer()
+        // The brand block (logo monogram + "Mercurius AI / AI LITERACY TUTOR")
+        // was redundant — the app is obviously Mercurius — so the bar is now
+        // just the controls, balanced iOS-toolbar style: the streak chip
+        // leads, Settings + Home trail. (New Chat / History live in the bottom
+        // tab bar; Quiz / Report Card were removed.)
+        HStack(spacing: BrandSpacing.sm) {
             if let headerAccessory {
                 headerAccessory()
             }
-            // New Chat and Chat History both live in the bottom tab
-            // bar (see `AppShellView`) — surfacing them there matches
-            // the user's mental model of "common chat actions are in
-            // the bar." The header keeps just analytical Tools +
-            // settings + Home so it doesn't get visually crowded.
-            toolsMenuButton
+            Spacer()
             if settingsPresenter != nil {
                 Button {
                     activeSheet = .settings
@@ -310,27 +286,6 @@ public struct ChatView: View {
                 if let settingsPresenter {
                     settingsPresenter()
                 }
-            case .quiz:
-                QuizView(
-                    model: QuizViewModel(
-                        tools: apiClient,
-                        sessionIdProvider: { [sessionIdentity] in
-                            try sessionIdentity.current()
-                        },
-                        achievementStore: achievementStore
-                    ),
-                    dismissAction: { activeSheet = nil }
-                )
-            case .reportCard:
-                ReportCardView(
-                    model: ReportCardViewModel(
-                        tools: apiClient,
-                        sessionIdProvider: { [sessionIdentity] in
-                            try sessionIdentity.current()
-                        }
-                    ),
-                    dismissAction: { activeSheet = nil }
-                )
             }
         }
         .alert("Reported", isPresented: $showReportConfirmation) {
@@ -343,39 +298,8 @@ public struct ChatView: View {
         // drive it without coupling ChatView to the action.
     }
 
-    private var toolsMenuButton: some View {
-        Menu {
-            Button {
-                activeSheet = .quiz
-            } label: {
-                Label("Generate Quiz", systemImage: "checkmark.rectangle.stack")
-            }
-            .disabled(!hasEnoughConversation)
-
-            Button {
-                achievementStore?.award(AchievementCatalog.reportCard)
-                activeSheet = .reportCard
-            } label: {
-                Label("Report Card", systemImage: "chart.bar.doc.horizontal")
-            }
-            .disabled(!hasEnoughConversation)
-
-            if !hasEnoughConversation {
-                Divider()
-                Text("Chat a bit more to unlock tools.")
-            }
-        } label: {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(BrandColor.textSecondary)
-                .frame(width: 44, height: 44)
-        }
-        .accessibilityLabel("Tools")
-    }
-
-    /// The server rejects quiz / report-card requests if the conversation
-    /// has fewer than 4 messages. Match that client-side for fast
-    /// feedback and to avoid a pointless round-trip.
+    /// Whether the conversation is substantive enough (≥2 user turns, ≥4
+    /// messages) to earn the brief "encouraging" Merc beat after a reply.
     private var hasEnoughConversation: Bool {
         model.messages.filter { $0.role == .user }.count >= 2
             && model.messages.count >= 4

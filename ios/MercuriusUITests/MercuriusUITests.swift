@@ -117,13 +117,15 @@ final class MercuriusUITests: XCTestCase {
         )
         guard enterApp else { return }
 
-        // Tap through to the TabView. The chat header's "AI LITERACY
-        // TUTOR" caption is the reliable signal we've landed there.
+        // Tap through to the TabView. The "Debate" mode pill is the reliable
+        // "we're in the chat tab" signal — it's unique to the chat screen and
+        // unaffected by header chrome changes. (The brand caption that used to
+        // anchor this was removed when the header was slimmed down.)
         chatCTA.tap()
-        let header = app.staticTexts["AI LITERACY TUTOR"]
+        let chatSignal = app.buttons["Debate"]
         XCTAssertTrue(
-            header.waitForExistence(timeout: timeout),
-            "Did not reach the chat tab — 'AI LITERACY TUTOR' caption missing \(timeout)s after Chat with Merc"
+            chatSignal.waitForExistence(timeout: timeout),
+            "Did not reach the chat tab — 'Debate' mode pill missing \(timeout)s after Chat with Merc"
         )
     }
 
@@ -417,31 +419,23 @@ final class MercuriusUITests: XCTestCase {
         // Close via the Done toolbar button and confirm we return to chat.
         app.buttons["Done"].tap()
         XCTAssertTrue(
-            app.staticTexts["Mercurius AI"].waitForExistence(timeout: Self.lookupTimeout),
-            "Dismissing settings did not return focus to the chat header"
+            app.buttons["Debate"].waitForExistence(timeout: Self.lookupTimeout),
+            "Dismissing settings did not return focus to the chat screen"
         )
-    }
-
-    @MainActor
-    func testToolsButtonIsReachable() {
-        let app = launchApp()
-        waitForBootComplete(app)
-
-        let tools = app.buttons["Tools"]
-        XCTAssertTrue(tools.exists, "Tools button in chat header is not exposed to accessibility")
     }
 
     @MainActor
     func testHeaderRemainsVisibleAtAccessibilityTextSize() {
         // At XXL accessibility text size the header used to overflow the
-        // safe area (Phase 3f regression). This test is the canary: if
-        // the header ever stops being reachable at an accessibility size,
-        // the minimumScaleFactor / lineLimit caps have been lost.
+        // safe area (Phase 3f regression). This test is the canary: if a
+        // header control ever stops being reachable at an accessibility
+        // size, the layout caps have been lost. (Anchors on the Settings
+        // button now that the brand caption is gone.)
         let app = launchApp(contentSize: "UICTContentSizeCategoryAccessibilityXXL")
         waitForBootComplete(app, timeout: 15)
 
-        let header = app.staticTexts["Mercurius AI"]
-        XCTAssertTrue(header.exists, "Header must stay reachable at XXL accessibility size")
-        XCTAssertTrue(header.isHittable, "Header scrolled off-screen at XXL accessibility size")
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.exists, "Header control must stay reachable at XXL accessibility size")
+        XCTAssertTrue(settings.isHittable, "Header control scrolled off-screen at XXL accessibility size")
     }
 }
