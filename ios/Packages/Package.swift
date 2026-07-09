@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "EngagementFeature", targets: ["EngagementFeature"]),
+        .library(name: "MercuriusActivity", targets: ["MercuriusActivity"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "MercFlowFeature", targets: ["MercFlowFeature"]),
     ],
@@ -113,6 +114,13 @@ let package = Package(
             path: "EngagementFeature/Tests"
         ),
 
+        // MARK: MercuriusActivity (Live Activity — shared by app + widget extension)
+        .target(
+            name: "MercuriusActivity",
+            dependencies: ["DesignSystem"],
+            path: "MercuriusActivity/Sources"
+        ),
+
         // MARK: AppFeature
         .target(
             name: "AppFeature",
@@ -124,6 +132,7 @@ let package = Package(
                 "CurriculumFeature",
                 "SettingsFeature",
                 "EngagementFeature",
+                "MercuriusActivity",
                 "MercFlowFeature",
             ],
             path: "AppFeature/Sources"

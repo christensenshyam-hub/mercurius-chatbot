@@ -89,6 +89,10 @@ targets:
         product: DesignSystem
       - package: LocalPackages
         product: NetworkingKit
+      # Widget extension hosting the learning-session Live Activity
+      # (lock screen banner + Dynamic Island). Embedded into PlugIns.
+      - target: MercuriusWidgets
+        embed: true
     info:
       path: Mercurius/Resources/Info.plist
       properties:
@@ -126,6 +130,14 @@ targets:
           NSAllowsArbitraryLoads: false
         # App Store Connect category. Drives where users discover us.
         LSApplicationCategoryType: public.app-category.education
+        # Learning-session Live Activity (lock screen + Dynamic Island).
+        NSSupportsLiveActivities: true
+        # Deep link the Live Activity taps into (mercurius://session →
+        # AppEntryView routes to the learning path).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mayoailiteracy.mercurius.native
+            CFBundleURLSchemes:
+              - mercurius
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native
@@ -148,6 +160,55 @@ targets:
           # script bootstrap a Distribution profile without ever needing
           # an interactive Xcode sign-in.
           PROVISIONING_PROFILE_SPECIFIER: "Mercurius App Store"
+
+  MercuriusWidgets:
+    # WidgetKit extension — a thin @main WidgetBundle shell. The Live
+    # Activity itself (attributes, views, theme, controller) lives in the
+    # shared MercuriusActivity package so the app can start/update it with
+    # the same types.
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MercuriusWidgets
+    dependencies:
+      - package: LocalPackages
+        product: MercuriusActivity
+      - package: LocalPackages
+        product: DesignSystem
+    info:
+      path: MercuriusWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Mercurius Widgets
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    postBuildScripts:
+      - name: Strip extended attributes (macOS workaround for codesign)
+        script: |
+          # Same workaround as the app target — the appex is signed in its
+          # own target build, and inherits the same xattr detritus.
+          if [ -d "${TARGET_BUILD_DIR}" ]; then
+            /usr/bin/xattr -cr "${TARGET_BUILD_DIR}"
+          fi
+        basedOnDependencyAnalysis: false
+        runOnlyWhenInstalling: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native.MercuriusWidgets
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          # Extensions need their own provisioning profile at archive time;
+          # release.sh bootstraps it via the App Store Connect API the same
+          # way it does the app profile.
+          PROVISIONING_PROFILE_SPECIFIER: "Mercurius Widgets App Store"
 
   MercuriusTests:
     type: bundle.unit-test
