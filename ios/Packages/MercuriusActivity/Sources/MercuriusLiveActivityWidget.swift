@@ -42,11 +42,17 @@ public struct MercuriusLiveActivityWidget: Widget {
                 StreakChipView(state: state, compact: true, onIsland: true)
                     .staleDim(stale)
             } compactTrailing: {
-                ProgressRing(state: state, size: 26, stroke: 3.5, labelSize: 9, onIsland: true)
+                // 18pt, not the handoff's 26: measured on device, the compact
+                // slot's clip window is ~18pt wide (sensor cutout to island
+                // edge) and it shears anything wider flat — the system clips
+                // rather than re-proposing, so adaptive sizing can't save a
+                // bigger ring. (The prototype was HTML; it never met the
+                // real clip.)
+                ProgressRing(state: state, size: 18, stroke: 2.5, labelSize: 9, onIsland: true)
                     .staleDim(stale)
             } minimal: {
                 // Ring only (no text) per the handoff's state table.
-                ProgressRing(state: state, size: 26, stroke: 3.5, labelSize: 9, onIsland: true, showsLabel: false)
+                ProgressRing(state: state, size: 18, stroke: 2.5, labelSize: 9, onIsland: true, showsLabel: false)
                     .staleDim(stale)
             }
             .widgetURL(URL(string: "mercurius://session"))
