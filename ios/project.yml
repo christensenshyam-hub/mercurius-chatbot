@@ -16,7 +16,7 @@ settings:
     # App Store hardening if Apple ever requires it for iOS (currently
     # only a warning, not a rejection).
     ENABLE_USER_SCRIPT_SANDBOXING: NO
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "2.0.0"
     CURRENT_PROJECT_VERSION: "9"
     DEVELOPMENT_TEAM: "TMBPRHZYW2"
   configs:
