@@ -25,6 +25,8 @@
     <dict>
         <key>com.mayoailiteracy.mercurius.native</key>
         <string>Mercurius App Store</string>
+        <key>com.mayoailiteracy.mercurius.native.MercuriusWidgets</key>
+        <string>Mercurius Widgets App Store</string>
     </dict>
 
     <!-- Strip Swift symbols / bitcode-free dSYMs for a smaller upload.
