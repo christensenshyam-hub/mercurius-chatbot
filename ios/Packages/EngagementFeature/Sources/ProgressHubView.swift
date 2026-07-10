@@ -3,7 +3,7 @@ import DesignSystem
 import PersistenceKit
 import NetworkingKit
 
-/// The engagement hub — streak, achievements, and leaderboard in one sheet.
+/// The engagement hub — streak and achievements in one sheet.
 /// Presented from the chat header's streak chip. (Named `ProgressHubView` to
 /// avoid clashing with SwiftUI's built-in `ProgressView`.)
 public struct ProgressHubView: View {
@@ -11,7 +11,6 @@ public struct ProgressHubView: View {
     private let achievementStore: AchievementStore
     private let reminderStore: ReminderStore
     private let scheduler: NotificationScheduler
-    @State private var leaderboard: LeaderboardViewModel
     /// Standby gamification (quiet progress). Optional + defaults to nil so
     /// existing callers are unaffected; the Progress card renders only when a
     /// store is passed AND it reports `enabled` (server flag on). Off by default.
@@ -23,7 +22,6 @@ public struct ProgressHubView: View {
         achievementStore: AchievementStore,
         reminderStore: ReminderStore,
         scheduler: NotificationScheduler,
-        leaderboard: LeaderboardViewModel,
         gamificationStore: GamificationStore? = nil,
         onDone: @escaping () -> Void
     ) {
@@ -31,7 +29,6 @@ public struct ProgressHubView: View {
         self.achievementStore = achievementStore
         self.reminderStore = reminderStore
         self.scheduler = scheduler
-        _leaderboard = State(initialValue: leaderboard)
         self.gamificationStore = gamificationStore
         self.onDone = onDone
     }
@@ -45,7 +42,7 @@ public struct ProgressHubView: View {
 
                     // XP / level surface — present only when explicitly enabled
                     // (client + server flags). Off by default, so the profile
-                    // shows streak + achievements + leaderboard with no holes.
+                    // shows streak + achievements with no holes.
                     if let gamificationStore, gamificationStore.enabled {
                         section("Your XP") {
                             ProgressCard(store: gamificationStore)
@@ -53,11 +50,10 @@ public struct ProgressHubView: View {
                         }
                     }
 
-                    // These three already render their own section header, so
+                    // These two already render their own section header, so
                     // they're shown bare (wrapping them in section() would double
                     // the title).
                     AchievementsGalleryView(store: achievementStore)
-                    LeaderboardListView(model: leaderboard)
                     DailyReminderSection(store: reminderStore, scheduler: scheduler,
                                          streakStore: streakStore)
                 }

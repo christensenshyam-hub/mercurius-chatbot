@@ -138,7 +138,7 @@ public final class SettingsViewModel {
 
     /// Delete the current session and generate a new one. Used by a
     /// "Start Over" action — clears the student's identity on this
-    /// device, so streak / memory / leaderboard entries won't be
+    /// device, so streak / memory entries won't be
     /// associated with their next session.
     @discardableResult
     public func resetSession() async -> Bool {

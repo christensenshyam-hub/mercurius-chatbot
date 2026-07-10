@@ -10,7 +10,7 @@ import Foundation
 /// base64 of 24 bytes, stripped of padding and `+`/`/`) on first launch
 /// and persist it in the Keychain so it survives app reinstalls on the
 /// same device? No — Keychain **does** survive reinstalls on iOS, which
-/// is what we want for streak / leaderboard continuity.
+/// is what we want for streak continuity.
 public final class SessionIdentity: @unchecked Sendable {
     private let keychain: KeychainStore
     private let key = "session_id"

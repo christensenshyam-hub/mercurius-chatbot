@@ -53,7 +53,7 @@ struct AppShellView: View {
     /// Close toolbar button.
     @State private var showChatHistory: Bool = false
 
-    /// Drives the Progress hub sheet (streak / achievements / leaderboard),
+    /// Drives the Progress hub sheet (streak / achievements),
     /// opened from the streak chip in the chat header.
     @State private var showProgress: Bool = false
 
@@ -262,7 +262,6 @@ struct AppShellView: View {
                 achievementStore: achievementStore,
                 reminderStore: reminderStore,
                 scheduler: scheduler,
-                leaderboard: LeaderboardViewModel(fetcher: apiClient, ownBadge: ownBadge()),
                 gamificationStore: gamificationStore,
                 onDone: { showProgress = false }
             )
@@ -278,13 +277,6 @@ struct AppShellView: View {
             await seedStreakOnLaunch()
             await refreshGamificationOnLaunch()
         }
-    }
-
-    /// The current session's 4-char leaderboard badge (last-4 of the id,
-    /// uppercased) — matches the server's projection, used to highlight "you".
-    private func ownBadge() -> String? {
-        guard let sid = try? sessionIdentity.current(), sid.count >= 4 else { return nil }
-        return String(sid.suffix(4)).uppercased()
     }
 
     /// Fetch the server's authoritative streak once on launch to seed the cache.

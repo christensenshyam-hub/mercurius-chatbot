@@ -200,8 +200,7 @@ extension APIClient {
 }
 
 /// Narrow protocol so stores / view models depend on this instead of the
-/// concrete `APIClient` and can inject a stub in tests — mirrors
-/// `LeaderboardFetching` / `ProfileSetting`.
+/// concrete `APIClient` and can inject a stub in tests — mirrors `Reporting`.
 public protocol ProgressionProviding: Sendable {
     func progression(sessionId: String) async throws -> ProgressionState
     func recordProgressionEvent(
