@@ -35,8 +35,9 @@ struct MercPresenceControllerTests {
         c.introHold = 0.03
         c.chatStarted(greet: true)
         #expect(c.state == .wave)
-        try await Task.sleep(for: .seconds(0.07))   // wave settles to idle on its own
-        #expect(c.state == .idle)
+        // Poll, don't fixed-sleep: on a loaded CI runner the settle timer can
+        // fire well after the nominal introHold.
+        #expect(await poll { c.state == .idle })    // wave settles on its own
         c.chatStarted(greet: true)                  // a second start must not re-wave
         #expect(c.state == .idle)
     }
@@ -142,8 +143,8 @@ struct MercPresenceControllerTests {
         c.sleepToHide = 5.0                          // long, so it can't hide before we wake it
         c.chatStarted(greet: false)
 
-        try await Task.sleep(for: .seconds(0.14))    // let it doze off
-        #expect(c.state == .sleep)
+        // Poll, don't fixed-sleep: the doze timer can lag on a loaded runner.
+        #expect(await poll { c.state == .sleep })    // let it doze off
 
         c.activity()
         #expect(c.state == .idle)
