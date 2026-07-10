@@ -76,7 +76,14 @@ struct MercLaunchScreen: View {
             tip = Self.tips.randomElement() ?? Self.tips[0]
             guard !reduceMotion else { return }
             float = true
-            sweep = true
+            // Scope the repeatForever to THIS state change. A persistent
+            // `.animation(value:)` modifier on the capsule lets ancestor
+            // layout shifts (the launch zoom settling, the crossfade to
+            // Home) ride the repeat curve too — the capsule visibly tears
+            // out of the track and glides back ("spills out of the bar").
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                sweep = true
+            }
         }
     }
 
@@ -92,14 +99,16 @@ struct MercLaunchScreen: View {
                     .fill(BrandGradient.mercHorizontal)
                     .frame(width: segment)
                     .offset(x: sweep ? geo.size.width - segment : 0)
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                        value: sweep
-                    )
+                    // Animated via `withAnimation` at onAppear — see there
+                    // for why a persistent .animation modifier is wrong.
             }
         }
         .frame(width: 200, height: 6)
         .clipShape(Capsule())
+        // Isolate the subtree's geometry: outer movement is applied to the
+        // finished track as a unit, so in-flight sweep frames can never be
+        // composed against a moved ancestor.
+        .geometryGroup()
         .accessibilityHidden(true)
     }
 }
