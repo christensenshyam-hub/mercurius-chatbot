@@ -375,7 +375,10 @@ struct AppShellView: View {
                 GamifiedTopBar(
                     streakStore: streakStore,
                     gamificationStore: gamificationStore,
-                    onOpenProfile: { showProgress = true }
+                    onOpenProfile: { showProgress = true },
+                    // Same exit affordance the chat header has — Home was
+                    // unreachable from the curriculum tab.
+                    onGoHome: onGoHome
                 )
             }
         )

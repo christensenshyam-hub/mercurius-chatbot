@@ -38,7 +38,22 @@ final class AppStoreScreenshots: XCTestCase {
             "-seenAllModeDescriptions", "YES", // skip first-tap mode sheets
             "-SeedDemoChat",                   // ~50-message in-memory conversation
         ]
-        app.launch()
+        // This suite runs FIRST on CI, against a freshly booted simulator, and
+        // the very first launch has repeatedly died with "does not have a
+        // process ID" (the app never reaches foreground) before any UI query
+        // runs. Retry the launch itself — every later suite's launch succeeds,
+        // so one warm-up round trip is all the runner needs.
+        var launched = false
+        for attempt in 1...3 {
+            app.launch()
+            if app.wait(for: .runningForeground, timeout: 30) {
+                launched = true
+                break
+            }
+            app.terminate()
+            if attempt < 3 { sleep(5) }
+        }
+        XCTAssertTrue(launched, "App never reached foreground after 3 launch attempts")
 
         // Home → Chat. The "Debate" mode pill is unique to the chat screen
         // (unaffected by the slimmed-down header that dropped the brand caption).
