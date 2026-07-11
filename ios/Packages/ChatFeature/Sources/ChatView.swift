@@ -233,14 +233,13 @@ public struct ChatView: View {
     private var header: some View {
         // The brand block (logo monogram + "Mercurius AI / AI LITERACY TUTOR")
         // was redundant — the app is obviously Mercurius — so the bar is now
-        // just the controls, balanced iOS-toolbar style: the streak chip
-        // leads, Settings + Home trail. (New Chat / History live in the bottom
-        // tab bar; Quiz / Report Card were removed.)
+        // just the controls: the in-screen pair (streak chip + Settings)
+        // leads together, Home trails alone. (New Chat / History live in the
+        // bottom tab bar; Quiz / Report Card were removed.)
         HStack(spacing: BrandSpacing.sm) {
             if let headerAccessory {
                 headerAccessory()
             }
-            Spacer()
             if settingsPresenter != nil {
                 Button {
                     activeSheet = .settings
@@ -252,11 +251,11 @@ public struct ChatView: View {
                 }
                 .accessibilityLabel("Settings")
             }
-            // Home is the rightmost trailing item so it reads as
+            Spacer()
+            // Home is the lone trailing item so it reads as
             // "exit this context" rather than an in-screen control
             // — mirroring how Cancel/Done sit at the trailing edge
-            // of iOS toolbars. Separated visually by being the last
-            // item in the HStack.
+            // of iOS toolbars.
             if let onGoHome {
                 Button {
                     // Leaving the shell destroys this view model — an

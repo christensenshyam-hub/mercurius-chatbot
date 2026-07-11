@@ -49,11 +49,31 @@ struct AppEntryView: View {
     /// In-memory only: every cold launch restarts at Home (by design
     /// — Merc greets the learner every launch rather than dropping
     /// straight into a mid-conversation chat).
-    @State private var hasEnteredApp: Bool = false
+    /// DEBUG `-EnterShell` / `-EnterShellCurriculum` skip the Home doorman
+    /// so screenshot tooling can reach the shell (no CLI way to tap CTAs).
+    @State private var hasEnteredApp: Bool = Self.debugEntersShell
 
     /// Which tab the shell should open on — set by the Home CTA the user
     /// chose ("Chat with Merc" → .chat, "Start learning" → .curriculum).
-    @State private var entryTab: AppShellView.Tab = .chat
+    @State private var entryTab: AppShellView.Tab =
+        Self.debugEntersCurriculum ? .curriculum : .chat
+
+    private static var debugEntersShell: Bool {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-EnterShell") || args.contains("-EnterShellCurriculum")
+        #else
+        return false
+        #endif
+    }
+
+    private static var debugEntersCurriculum: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-EnterShellCurriculum")
+        #else
+        return false
+        #endif
+    }
 
     /// Drives the "How it works" sheet presented from HomeView.
     @State private var showHowItWorks: Bool = false

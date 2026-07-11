@@ -17,15 +17,16 @@ struct ModeSelectorView: View {
     @State private var pendingDescription: ModeDescription?
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: BrandSpacing.sm) {
-                ForEach(ChatMode.allCases) { mode in
-                    pill(for: mode)
-                }
+        // Three fixed modes — no scroll. Each pill takes an equal share of
+        // the row so the trio reads evenly spaced across the top.
+        HStack(spacing: BrandSpacing.sm) {
+            ForEach(ChatMode.allCases) { mode in
+                pill(for: mode)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, BrandSpacing.lg)
-            .padding(.vertical, BrandSpacing.sm)
         }
+        .padding(.horizontal, BrandSpacing.lg)
+        .padding(.vertical, BrandSpacing.sm)
         .alert(
             "Couldn't switch modes",
             isPresented: Binding(
@@ -74,6 +75,8 @@ struct ModeSelectorView: View {
             .foregroundStyle(labelColor(isActive: isActive))
             .padding(.vertical, 8)
             .padding(.horizontal, BrandSpacing.md)
+            // Fill the equal-width column so the capsule itself stretches.
+            .frame(maxWidth: .infinity)
             .background(background(isActive: isActive))
             .clipShape(Capsule())
             .overlay(

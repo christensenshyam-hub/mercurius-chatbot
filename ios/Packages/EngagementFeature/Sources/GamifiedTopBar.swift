@@ -18,6 +18,9 @@ public struct GamifiedTopBar: View {
     private let streakStore: StreakStore
     private let gamificationStore: GamificationStore
     private let onOpenProfile: () -> Void
+    /// Optional Home escape hatch at the trailing edge — the learning path
+    /// needs the same "exit to Home" affordance the chat header has.
+    private let onGoHome: (() -> Void)?
 
     /// Scales the level ring in step with the streak/XP numbers at large
     /// Dynamic Type sizes so the bar stays visually balanced.
@@ -26,41 +29,60 @@ public struct GamifiedTopBar: View {
     public init(
         streakStore: StreakStore,
         gamificationStore: GamificationStore,
-        onOpenProfile: @escaping () -> Void
+        onOpenProfile: @escaping () -> Void,
+        onGoHome: (() -> Void)? = nil
     ) {
         self.streakStore = streakStore
         self.gamificationStore = gamificationStore
         self.onOpenProfile = onOpenProfile
+        self.onGoHome = onGoHome
     }
 
     public var body: some View {
-        Button(action: onOpenProfile) {
-            HStack(spacing: BrandSpacing.lg) {
-                streakStat
-                if gamificationStore.enabled {
-                    statDivider
-                    xpStat
-                    statDivider
-                    levelStat
+        // Home must be a SIBLING of the profile button (nested buttons
+        // would fight over the tap), so the bar is an HStack of the two.
+        HStack(spacing: 0) {
+            Button(action: onOpenProfile) {
+                HStack(spacing: BrandSpacing.lg) {
+                    streakStat
+                    if gamificationStore.enabled {
+                        statDivider
+                        xpStat
+                        statDivider
+                        levelStat
+                    }
+                    Spacer(minLength: BrandSpacing.sm)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(BrandColor.textSecondary)
                 }
-                Spacer(minLength: BrandSpacing.sm)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(BrandColor.textSecondary)
+                .padding(.horizontal, BrandSpacing.lg)
+                .padding(.vertical, BrandSpacing.sm)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, BrandSpacing.lg)
-            .padding(.vertical, BrandSpacing.sm)
-            .frame(maxWidth: .infinity)
-            .background(BrandColor.surface)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(BrandColor.border).frame(height: 0.5)
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens your progress")
+
+            if let onGoHome {
+                Button(action: onGoHome) {
+                    Image(systemName: "house")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Home")
+                .accessibilityHint("Return to the Mercurius home screen")
+                .padding(.trailing, 4)
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Opens your progress")
+        .frame(maxWidth: .infinity)
+        .background(BrandColor.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(BrandColor.border).frame(height: 0.5)
+        }
     }
 
     // MARK: - Stats
