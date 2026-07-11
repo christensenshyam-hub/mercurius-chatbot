@@ -43,7 +43,11 @@ extension View {
 /// an em-dash and no fill.
 struct ProgressRing: View {
     let state: LearningActivityAttributes.ContentState
-    let size: CGFloat
+    /// Fixed diameter — or nil to fit whatever the container proposes
+    /// (the DI compact slot offers ~18pt between the sensor cutout and the
+    /// island edge and SHEARS any fixed frame wider than that, so island
+    /// compact/minimal must size adaptively).
+    let size: CGFloat?
     let stroke: CGFloat
     let labelSize: CGFloat
     /// DI ring uses the direction's DI gradient over the island's black;
@@ -57,10 +61,16 @@ struct ProgressRing: View {
 
     var body: some View {
         ZStack {
+            // Inset by half the stroke: `.stroke` straddles the path, so an
+            // un-inset "26pt" ring paints 29.5pt and the Dynamic Island's
+            // compact slot shears the overflow off at the island edge.
+            // Inset, the ring's OUTER edge equals the stated size exactly.
             Circle()
+                .inset(by: stroke / 2)
                 .stroke(trackColor, lineWidth: stroke)
             if state.phase != .error {
                 Circle()
+                    .inset(by: stroke / 2)
                     .trim(from: 0, to: displayedProgress)
                     .stroke(fillStyle, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
                     .rotationEffect(.degrees(-90))
@@ -69,6 +79,7 @@ struct ProgressRing: View {
                 label
             }
         }
+        .aspectRatio(1, contentMode: .fit)
         .frame(width: size, height: size)
     }
 
@@ -104,6 +115,11 @@ struct ProgressRing: View {
             Text("\(state.lessonsDone)/\(state.lessonsTotal)")
                 .font(.system(size: labelSize, weight: .heavy))
                 .foregroundStyle(onIsland ? Color.white : theme.text.resolved(scheme))
+                // Island rings are small — shrink the fraction to fit the
+                // ring's inner well instead of overflowing it.
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .padding(.horizontal, stroke)
         }
     }
 }
