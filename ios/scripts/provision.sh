@@ -41,6 +41,9 @@ fi
 
 BUNDLE_ID="com.mayoailiteracy.mercurius.native"
 PROFILE_NAME="Mercurius App Store"
+# The widget extension signs separately — its own bundle id + profile.
+WIDGET_BUNDLE_ID="com.mayoailiteracy.mercurius.native.MercuriusWidgets"
+WIDGET_PROFILE_NAME="Mercurius Widgets App Store"
 TEAM_ID="TMBPRHZYW2"
 
 WORK_DIR="${IOS_DIR}/build/provision"
@@ -151,6 +154,35 @@ if [ -z "$BUNDLE_RID" ] || [ "$BUNDLE_RID" = "None" ]; then
   exit 2
 fi
 echo "   → resource id: $BUNDLE_RID"
+
+# The widget's bundle id we can register ourselves via the API (unlike the
+# app's, which carries capabilities configured in the developer portal).
+echo "🆔 Looking up bundle id resource for $WIDGET_BUNDLE_ID..."
+WIDGET_BUNDLE_RESPONSE=$(api GET "/bundleIds?filter%5Bidentifier%5D=${WIDGET_BUNDLE_ID}&limit=1")
+WIDGET_BUNDLE_RID=$(echo "$WIDGET_BUNDLE_RESPONSE" | json_get data 0 id 2>/dev/null || echo "")
+if [ -z "$WIDGET_BUNDLE_RID" ] || [ "$WIDGET_BUNDLE_RID" = "None" ]; then
+  echo "   → not registered; creating it..."
+  WIDGET_BUNDLE_POST=$(/usr/bin/python3 -c "
+import json, sys
+print(json.dumps({
+  'data': {
+    'type': 'bundleIds',
+    'attributes': {
+      'identifier': sys.argv[1],
+      'name': 'Mercurius Widgets',
+      'platform': 'IOS',
+    }
+  }
+}))" "$WIDGET_BUNDLE_ID")
+  WIDGET_BUNDLE_RESPONSE=$(api POST "/bundleIds" "$WIDGET_BUNDLE_POST")
+  WIDGET_BUNDLE_RID=$(echo "$WIDGET_BUNDLE_RESPONSE" | json_get data id 2>/dev/null || echo "")
+  if [ -z "$WIDGET_BUNDLE_RID" ] || [ "$WIDGET_BUNDLE_RID" = "None" ]; then
+    echo "❌ Widget bundle id registration failed:"
+    echo "$WIDGET_BUNDLE_RESPONSE" | /usr/bin/python3 -m json.tool || echo "$WIDGET_BUNDLE_RESPONSE"
+    exit 2
+  fi
+fi
+echo "   → resource id: $WIDGET_BUNDLE_RID"
 
 # ---------------------------------------------------------------------------
 # Step 1.5: Set up a dedicated codesigning keychain.
@@ -307,11 +339,16 @@ print(json.dumps({
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: App Store provisioning profile.
+# Step 3: App Store provisioning profiles — one for the app, one for the
+# widget extension (an appex signs with its own profile).
 # ---------------------------------------------------------------------------
-echo "📝 Checking for existing '$PROFILE_NAME' profile..."
-PROFILES_RESPONSE=$(api GET "/profiles?filter%5Bname%5D=${PROFILE_NAME// /%20}&limit=200")
-EXISTING_PROFILE_ID=$(echo "$PROFILES_RESPONSE" | /usr/bin/python3 -c "
+create_and_install_profile() {
+  local profile_name="$1" bundle_rid="$2"
+
+  echo "📝 Checking for existing '$profile_name' profile..."
+  local profiles_response existing_profile_id
+  profiles_response=$(api GET "/profiles?filter%5Bname%5D=${profile_name// /%20}&limit=200")
+  existing_profile_id=$(echo "$profiles_response" | /usr/bin/python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for p in data.get('data', []):
@@ -320,15 +357,16 @@ for p in data.get('data', []):
         break
 ")
 
-# Always recreate the profile to make sure it references the current cert.
-# (Profiles are cheap, and a stale cert reference here is a common gotcha.)
-if [ -n "$EXISTING_PROFILE_ID" ] && [ "$EXISTING_PROFILE_ID" != "None" ]; then
-  echo "   → deleting stale profile $EXISTING_PROFILE_ID so we can re-issue"
-  api DELETE "/profiles/${EXISTING_PROFILE_ID}" >/dev/null
-fi
+  # Always recreate the profile to make sure it references the current cert.
+  # (Profiles are cheap, and a stale cert reference here is a common gotcha.)
+  if [ -n "$existing_profile_id" ] && [ "$existing_profile_id" != "None" ]; then
+    echo "   → deleting stale profile $existing_profile_id so we can re-issue"
+    api DELETE "/profiles/${existing_profile_id}" >/dev/null
+  fi
 
-echo "   → creating new App Store profile..."
-PROFILE_POST_BODY=$(/usr/bin/python3 -c "
+  echo "   → creating new App Store profile..."
+  local profile_post_body profile_response profile_id
+  profile_post_body=$(/usr/bin/python3 -c "
 import json, sys
 name, bundle_rid, cert_id = sys.argv[1], sys.argv[2], sys.argv[3]
 print(json.dumps({
@@ -343,29 +381,34 @@ print(json.dumps({
       'certificates': {'data': [{'type': 'certificates','id': cert_id}]},
     }
   }
-}))" "$PROFILE_NAME" "$BUNDLE_RID" "$CERT_ID")
-PROFILE_RESPONSE=$(api POST "/profiles" "$PROFILE_POST_BODY")
+}))" "$profile_name" "$bundle_rid" "$CERT_ID")
+  profile_response=$(api POST "/profiles" "$profile_post_body")
 
-PROFILE_ID=$(echo "$PROFILE_RESPONSE" | json_get data id 2>/dev/null || echo "")
-if [ -z "$PROFILE_ID" ] || [ "$PROFILE_ID" = "None" ]; then
-  echo "❌ Profile creation failed:"
-  echo "$PROFILE_RESPONSE" | /usr/bin/python3 -m json.tool || echo "$PROFILE_RESPONSE"
-  exit 4
-fi
-echo "   → created profile: $PROFILE_ID"
+  profile_id=$(echo "$profile_response" | json_get data id 2>/dev/null || echo "")
+  if [ -z "$profile_id" ] || [ "$profile_id" = "None" ]; then
+    echo "❌ Profile creation failed:"
+    echo "$profile_response" | /usr/bin/python3 -m json.tool || echo "$profile_response"
+    exit 4
+  fi
+  echo "   → created profile: $profile_id"
 
-PROFILE_B64=$(echo "$PROFILE_RESPONSE" | json_get data attributes profileContent)
-PROFILE_UUID=$(echo "$PROFILE_B64" | openssl base64 -d -A | \
-  /usr/bin/security cms -D 2>/dev/null | \
-  /usr/bin/python3 -c "
+  local profile_b64 profile_uuid
+  profile_b64=$(echo "$profile_response" | json_get data attributes profileContent)
+  profile_uuid=$(echo "$profile_b64" | openssl base64 -d -A | \
+    /usr/bin/security cms -D 2>/dev/null | \
+    /usr/bin/python3 -c "
 import sys, plistlib
 p = plistlib.loads(sys.stdin.buffer.read())
 print(p['UUID'])
 ")
 
-PROFILE_PATH="${PROFILES_DIR}/${PROFILE_UUID}.mobileprovision"
-echo "$PROFILE_B64" | openssl base64 -d -A > "$PROFILE_PATH"
-echo "   → installed at: $PROFILE_PATH"
+  local profile_path="${PROFILES_DIR}/${profile_uuid}.mobileprovision"
+  echo "$profile_b64" | openssl base64 -d -A > "$profile_path"
+  echo "   → installed at: $profile_path"
+}
+
+create_and_install_profile "$PROFILE_NAME" "$BUNDLE_RID"
+create_and_install_profile "$WIDGET_PROFILE_NAME" "$WIDGET_BUNDLE_RID"
 
 # ---------------------------------------------------------------------------
 # Done.
@@ -376,7 +419,7 @@ cat <<EOF
 ✅  Provisioning complete.
 
    Distribution cert:    $CERT_ID
-   App Store profile:    $PROFILE_NAME ($PROFILE_UUID)
+   App Store profiles:   $PROFILE_NAME, $WIDGET_PROFILE_NAME
 
 Now run:
    ./scripts/release.sh
