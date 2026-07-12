@@ -28,6 +28,23 @@ final class AppStoreScreenshots: XCTestCase {
         continueAfterFailure = true   // capture as many screens as we can
     }
 
+    /// While the launch-retry loop is running, swallow the launch-phase
+    /// failures XCUITest records on a cold-simulator misfire ("does not have
+    /// a process ID"). `app.launch()` doesn't throw — it RECORDS the issue —
+    /// so without this, one flaky first launch marks the whole test failed
+    /// even when the retry succeeds. Cleared after the loop; a genuine
+    /// never-launches case still fails via the explicit assert.
+    private var suppressLaunchIssues = false
+
+    override func record(_ issue: XCTIssue) {
+        if suppressLaunchIssues,
+           issue.compactDescription.contains("does not have a process ID")
+            || issue.compactDescription.contains("Failed to launch") {
+            return
+        }
+        super.record(issue)
+    }
+
     @MainActor
     func testCaptureAppStoreScreenshots() {
         let app = XCUIApplication()
@@ -42,7 +59,10 @@ final class AppStoreScreenshots: XCTestCase {
         // the very first launch has repeatedly died with "does not have a
         // process ID" (the app never reaches foreground) before any UI query
         // runs. Retry the launch itself — every later suite's launch succeeds,
-        // so one warm-up round trip is all the runner needs.
+        // so one warm-up round trip is all the runner needs. Launch-phase
+        // issues are suppressed during the loop (see `record(_:)`) because
+        // XCUITest records them rather than throwing.
+        suppressLaunchIssues = true
         var launched = false
         for attempt in 1...3 {
             app.launch()
@@ -53,6 +73,7 @@ final class AppStoreScreenshots: XCTestCase {
             app.terminate()
             if attempt < 3 { sleep(5) }
         }
+        suppressLaunchIssues = false
         XCTAssertTrue(launched, "App never reached foreground after 3 launch attempts")
 
         // Home → Chat. The "Debate" mode pill is unique to the chat screen
