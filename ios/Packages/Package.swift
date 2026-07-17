@@ -30,7 +30,12 @@ let package = Package(
         // MARK: DesignSystem
         .target(
             name: "DesignSystem",
-            path: "DesignSystem/Sources"
+            path: "DesignSystem/Sources",
+            // Reading-font candidates for the tutor's replies (Lexend,
+            // Atkinson Hyperlegible + their OFL licenses). Registered at
+            // runtime by BrandFontRegistrar — no UIAppFonts/project.yml
+            // involvement, so the generated app target stays untouched.
+            resources: [.copy("Fonts")]
         ),
         .testTarget(
             name: "DesignSystemTests",
