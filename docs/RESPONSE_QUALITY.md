@@ -16,14 +16,17 @@ respected on every turn.
 The four modes the user sees in the pill row:
 
 - **Socratic** — guides through questions; one strong question per turn,
-  short scaffolding, hints that escalate progressively. Default mode for
-  new users.
-- **Direct** — plain, efficient answers. No teaching framing, no Socratic
-  detours. Locked behind a comprehension check.
+  at most one new idea of setup, hints that escalate progressively. The
+  question is always the last line. Default mode for new users.
+- **Direct** — plain, efficient answers. Answers only what was asked, no
+  teaching framing, no Socratic detours. Locked behind a comprehension
+  check.
 - **Debate** — adversarial, four-line structure: claim · warrant · impact ·
-  rebuttal angle. Tight enough for speech prep or live cross-examination.
+  rebuttal angle. One argument per turn, then it hands the turn back with
+  a single challenge.
 - **Discussion** — conversational, balanced; surfaces tradeoffs rather
-  than verdicts; ends with an open thread, not a conclusion.
+  than verdicts; pulls ONE tension per turn and ends with one open
+  follow-up, not a conclusion.
 
 These modes are persisted server-side and never silently mutate. A
 conversation started in Debate stays in Debate.
@@ -60,19 +63,43 @@ guidance *before* the deeper pedagogical material:
 ```
 ## RESPONSE QUALITY (read first; applies to every reply)
 - Lead with the direct answer. No "Great question", "Sure!", or other warm-up.
-- Default length: 3–6 sentences, OR a tight bulleted list. Skip filler and hedging.
-- Format for a phone screen: short paragraphs (≤3 lines), tight bullets.
-- Never repeat content already established earlier in the thread.
+- ONE idea per reply. Teach a single load-bearing concept, then stop — the
+  CONVERSATION is the unit of teaching, not the message.
+- Never preview what's coming or enumerate everything at once.
+- Default length: 2–4 sentences, OR 3–4 tight bullets. Skip filler and hedging.
+- Format for a phone screen: short paragraphs (≤3 lines). Never repeat what's
+  already established in the thread.
+- End with exactly ONE short question or forward invitation.
 - Only go deep when the user asks for it (they have an "Explain more" button).
-- A short, useful answer beats a thorough lecture every time.
+- When in doubt, stop earlier than you think you should.
 
 ## MODE RULES — <SOCRATIC|DIRECT|DEBATE|DISCUSSION>
 <mode-specific guidance>
 ```
 
-Two paths are exempted because they have their own structural
-contracts that conflict with the 3–6 sentence default:
-- **Curriculum mode** — has its own teach → exercise → feedback cadence
+### Beat pacing (across-turns)
+
+The preamble's core discipline is **beat pacing**: information is
+spaced across the conversation instead of packed into each message.
+Each reply spends exactly one "beat" — one load-bearing idea, one
+question, one argument, or one tension — and ends with a single
+question or forward invitation that earns the next beat. Roadmapping
+("there are three factors: …", "next we'll cover X, then Y") is an
+explicit failure mode: it front-loads the whole territory and kills
+the back-and-forth the tutor is built around. The per-mode rules
+restate the same discipline in mode-native terms (Socratic: one
+question, last line; Debate: one argument, hand the turn back;
+Discussion: one tension, one open follow-up; Direct: answer only what
+was asked, optional single offer).
+
+Curriculum mode is not exempt from the *spirit* of beat pacing — its
+own prompt (`CURRICULUM_PROMPT` in `server.js`) delivers the lesson's
+teach material as 2–3 micro-concept beats, each ending in a single
+`[CHECK]` question — but it IS exempt from the preamble itself:
+
+Two paths skip the preamble because they have their own structural
+contracts that conflict with the 2–4 sentence default:
+- **Curriculum mode** — has its own beats → exercise → feedback cadence
   (`[CURRICULUM: …]` messages).
 - **Test evaluator** — emits a fixed `[TEST_PASSED]` / `[TEST_FAILED]`
   marker.
@@ -90,7 +117,10 @@ The first answer is concise. If the user wants depth, they tap
    The server sees that turn (and saves it to the memory table for
    downstream context) but the iOS chat UI never displays it.
 3. The server appends an `EXPAND-MODE NOTE` to the system prompt
-   reinforcing the don't-repeat-yourself directive.
+   reinforcing the don't-repeat-yourself directive. The note also
+   suspends the one-idea-per-turn pacing rule for that single reply —
+   deep is the sanctioned way to get more than one beat at once —
+   while still requiring one forward question at the end.
 4. The next user-typed message defaults back to `.concise`. Deep is
    one-shot, never sticky.
 
