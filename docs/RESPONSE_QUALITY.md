@@ -66,7 +66,8 @@ guidance *before* the deeper pedagogical material:
 - ONE idea per reply. Teach a single load-bearing concept, then stop — the
   CONVERSATION is the unit of teaching, not the message.
 - Never preview what's coming or enumerate everything at once.
-- Default length: 2–4 sentences, OR 3–4 tight bullets. Skip filler and hedging.
+- Default length: 2–4 sentences, OR 3–4 tight bullets. Six sentences is a hard
+  ceiling, not a target — overflow moves to a later turn. Skip filler and hedging.
 - Format for a phone screen: short paragraphs (≤3 lines). Never repeat what's
   already established in the thread.
 - End with exactly ONE short question or forward invitation.
@@ -88,9 +89,22 @@ question or forward invitation that earns the next beat. Roadmapping
 explicit failure mode: it front-loads the whole territory and kills
 the back-and-forth the tutor is built around. The per-mode rules
 restate the same discipline in mode-native terms (Socratic: one
-question, last line; Debate: one argument, hand the turn back;
+question, last line, and exactly one question mark in the whole reply —
+no rhetorical extras; Debate: one argument, hand the turn back;
 Discussion: one tension, one open follow-up; Direct: answer only what
 was asked, optional single offer).
+
+Two structured formats live inside the same length budget rather than
+being carved out of it:
+- **Discussion scoring** (`DISCUSSION_PROMPT` Step 3) is compressed to
+  the labeled 5-dimension block plus a single-sentence Overall line and
+  one follow-up question. The old "What worked / What to strengthen /
+  The angle you missed" trailer routinely clipped mid-word at the
+  `concise` 250-token cap, which is the worst possible UX.
+- **Curriculum proficiency** has a bounded-strictness rule: if a
+  student clearly demonstrates the objective but misses the exercise's
+  exact format after one redirect, the tutor models the answer and
+  emits `[LESSON_COMPLETE]` rather than re-drilling a third time.
 
 Curriculum mode is not exempt from the *spirit* of beat pacing — its
 own prompt (`CURRICULUM_PROMPT` in `server.js`) delivers the lesson's
@@ -176,6 +190,20 @@ The preamble explicitly bans:
 The token cap and temperature on the underlying Anthropic call are
 read directly from `RESPONSE_MODE_BUDGETS` — no per-mode heuristic
 overrides anymore.
+
+## Pacing eval
+
+Prompt changes aren't unit-testable, so `scripts/eval-pacing.mjs`
+drives a local server over SSE with scripted multi-turn conversations
+(socratic ×2, debate ×2, discussion ×2, one full curriculum lesson,
+one Explain-more) and checks the shipped contracts: sentence budgets,
+debate/discussion line contracts, single-question endings, zero
+truncations, zero previews, and lesson completion within 10 turns.
+Because single runs at temperature flip criteria on noise, the merge
+gate is `--runs 3` — each criterion must pass a majority of runs.
+`--rescore <file>` re-judges an existing result file offline after a
+metric-definition change, without API spend. Results live in
+`docs/evals/pacing-<label>.json`.
 
 ## Logging safety
 

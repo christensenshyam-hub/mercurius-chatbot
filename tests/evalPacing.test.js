@@ -120,4 +120,48 @@ describe('eval-pacing metrics', () => {
     assert.equal(m.previewHit, true, 'roadmapping should be flagged');
     assert.equal(m.questionMarks, 2, 'double question should be counted');
   });
+
+  test('countQuestionMarks: quoted and italicized rhetorical questions are not asks', async () => {
+    const { countQuestionMarks } = await modP;
+    assert.equal(
+      countQuestionMarks('I keep asking myself: "what token comes next?" — then I repeat that. What does that tell you about my answers?'),
+      1,
+      'quoted inner-monologue question must not count',
+    );
+    assert.equal(
+      countQuestionMarks('I run *given the context, what fits best?* over and over. Where could that go wrong?'),
+      1,
+      'italicized rhetorical question must not count',
+    );
+    assert.equal(countQuestionMarks('First ask? Second ask?'), 2, 'real double asks still count');
+  });
+
+  test('evaluateCriteria: discussion scoring replies leave the sentence pool and get their own contract', async () => {
+    const { evaluateCriteria, computeMetrics } = await modP;
+    const scoring =
+      "Here's how your reasoning scored:\n\n**Claim Clarity: 4/5** — clear stance\n**Evidence: 3/5** — one real case\n**Nuance: 3/5** — saw one tradeoff\n**Logic: 4/5** — follows\n**Originality: 2/5** — standard take\n\n**Overall: 16/25** — Solid. Anchor the bias claim in a real case next time.\n\nWant to revise with that in mind, or take a new question?";
+    const results = [{
+      id: 'discussion-1', mode: 'discussion', sessionId: 's',
+      replies: [{ user: 'my take', responseMode: 'concise', raw: scoring, metrics: computeMetrics(scoring) }],
+    }];
+    const criteria = evaluateCriteria(results);
+    const medianC = criteria.find((c) => c.name.startsWith('median sentences'));
+    assert.equal(medianC.value, 0, 'scoring reply must not enter the sentence pool');
+    const contract = criteria.find((c) => c.name.startsWith('discussion scoring block'));
+    assert.equal(contract.pass, true, `scoring contract should pass: ${contract.value}`);
+  });
+
+  test('aggregateCriteria: majority vote with median values', async () => {
+    const { aggregateCriteria } = await modP;
+    const runs = [
+      [{ name: 'a', value: 4, pass: true }, { name: 'b', value: '8/8', pass: true }],
+      [{ name: 'a', value: 7, pass: false }, { name: 'b', value: '8/8', pass: true }],
+      [{ name: 'a', value: 3, pass: true }, { name: 'b', value: '7/8', pass: false }],
+    ];
+    const agg = aggregateCriteria(runs);
+    assert.equal(agg[0].pass, true, 'a passes 2/3 runs');
+    assert.ok(String(agg[0].value).startsWith('4'), 'numeric value is the median');
+    assert.equal(agg[1].pass, true, 'b passes 2/3 runs');
+    assert.ok(String(agg[1].value).includes('2/3 runs pass'));
+  });
 });

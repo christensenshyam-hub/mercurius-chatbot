@@ -31,7 +31,7 @@
  * executed directly.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -76,7 +76,17 @@ export function countLines(text) {
 }
 
 export function countQuestionMarks(text) {
-  return (stripMarkers(text).match(/\?/g) || []).length;
+  // The contract is "never barrage the STUDENT with multiple questions" —
+  // a question mark inside a quoted or italicized span ("what token comes
+  // next?" as the model narrates its own inner loop) is rhetoric, not a
+  // second ask. Strip those spans before counting; the closing question the
+  // modes mandate is never wrapped in quotes or italics.
+  const withoutQuoted = stripMarkers(text)
+    .replace(/\*\*[^*]*\*\*/g, ' ')
+    .replace(/\*[^*\n]*\*/g, ' ')
+    .replace(/"[^"\n]*"/g, ' ')
+    .replace(/“[^”\n]*”/g, ' ');
+  return (withoutQuoted.match(/\?/g) || []).length;
 }
 
 export function endsWithQuestion(text) {
@@ -85,6 +95,12 @@ export function endsWithQuestion(text) {
 
 /** True when the reply has no terminal .!? — i.e. a token-cap cutoff. */
 export function isTruncated(text) {
+  // A reply whose RAW text ends with a control marker was terminated
+  // deliberately ([LESSON_COMPLETE] on its own final line is the sanctioned
+  // ending for the completion turn) — never a token-cap cutoff, even when the
+  // words before the marker lack terminal punctuation ("Grade: A").
+  const raw = String(text ?? '').trim();
+  if (/(\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\])$/.test(raw)) return false;
   const t = trimTrailingDecoration(stripMarkers(text));
   if (!t) return true;
   return !/[.!?…]$/.test(t);
@@ -182,9 +198,11 @@ const SCENARIOS = [
       "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
       "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
       "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
-      "For the exercise: the high-confidence predictions are the ones with strong patterns — like 'mat' after 'the cat sat on the' — and the low-confidence ones are open choices like a person's name, because many continuations are plausible. The model is confident when its training data heavily favors one continuation.",
+      "For the exercise, concretely: the model is most confident at the end of a strong collocation — in your sentence, the slot right after the last two words, where one continuation dominates training text. It's least confident at an open slot like right after the opening word, where several continuations ('a', 'the', a noun) are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+      "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression the model has seen thousands of times. Low confidence — immediately after the first word, because almost any word class could follow there.",
       "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
       "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+      "Yes — one more concrete pair: after 'sat on the' the model would bet on 'mat'-type continuations; right after 'She said' it would hesitate, since a quote, a name, or 'that' are all live options.",
     ],
   },
   {
@@ -282,7 +300,18 @@ async function runScenario(baseUrl, scenario, delayMs) {
     const body = { sessionId, messages: thread };
     if (responseMode) body.responseMode = responseMode;
 
-    const reply = await streamChat(baseUrl, body);
+    // One retry on transient server errors (the 45s generation watchdog
+    // occasionally fires on a slow curriculum turn) — a multi-run gate
+    // shouldn't die 100 calls in on a single hiccup.
+    let reply;
+    try {
+      reply = await streamChat(baseUrl, body);
+    } catch (err) {
+      if (!/timed out|overloaded|rate.?limit/i.test(String(err?.message))) throw err;
+      process.stderr.write(`    turn ${replies.length + 1} transient error (${err.message}) — retrying once\n`);
+      await sleep(Math.max(delayMs, 10_000));
+      reply = await streamChat(baseUrl, body);
+    }
     thread.push({ role: 'assistant', content: reply });
     replies.push({
       user: userText,
@@ -300,10 +329,30 @@ export function evaluateCriteria(results) {
   const convo = (prefix) => results.filter((r) => r.id.startsWith(prefix));
   const allReplies = results.flatMap((r) => r.replies.map((x) => ({ ...x, convoId: r.id, mode: r.mode })));
 
-  // Length stats over conversational (non-curriculum, non-deep) replies:
-  // curriculum beats and deep replies carry their own criteria below.
-  const chatReplies = allReplies.filter((x) => x.mode !== 'curriculum' && x.responseMode !== 'deep');
+  // Length stats over conversational (non-curriculum, non-deep) replies.
+  // Debate is ALSO excluded from the sentence pool and measured by its own
+  // shipped contract instead — MODE_RULES.debate mandates a 4-line labeled
+  // Claim/Warrant/Impact/Rebuttal structure with "Total length: 4–7 lines";
+  // sentence-counting penalizes exactly the format we require. Debate gets a
+  // dedicated ≤7-line criterion below. Discussion SCORING replies get the
+  // same treatment for the same reason: DISCUSSION_PROMPT mandates a labeled
+  // 5-dimension rubric block, so they're pulled from the sentence pool and
+  // held to their own line-count contract instead.
+  const isScoringReply = (x) => /how your reasoning scored/i.test(x.raw);
+  const chatReplies = allReplies.filter(
+    (x) => x.mode !== 'curriculum' && x.mode !== 'debate' && x.responseMode !== 'deep' &&
+      !isScoringReply(x),
+  );
   const sentences = chatReplies.map((x) => x.metrics.sentenceCount);
+
+  const debateReplies = allReplies.filter((x) => x.mode === 'debate');
+  const debateLineMax = Math.max(0, ...debateReplies.map((x) => x.metrics.lineCount));
+
+  // Discussion scoring contract: header + 5 dimension lines + Overall + one
+  // follow-up question ≈ 8 non-blank lines; ≤10 leaves headroom without
+  // letting the old "What worked / What to strengthen" trailer back in.
+  const scoringReplies = allReplies.filter((x) => x.mode === 'discussion' && isScoringReply(x));
+  const scoringLineMax = Math.max(0, ...scoringReplies.map((x) => x.metrics.lineCount));
 
   const socraticReplies = allReplies.filter(
     (x) => x.convoId.startsWith('socratic') && x.responseMode !== 'deep',
@@ -321,6 +370,16 @@ export function evaluateCriteria(results) {
   const criteria = [
     { name: 'median sentences ≤ 4 (chat replies)', value: median(sentences), pass: median(sentences) <= 4 },
     { name: 'p90 sentences ≤ 6 (chat replies)', value: percentile(sentences, 90), pass: percentile(sentences, 90) <= 6 },
+    // Debate's own contract: 4-line CWIR + hand-back, "Total length: 4–7 lines".
+    { name: 'debate replies ≤ 7 lines (contract)', value: debateLineMax, pass: debateLineMax <= 7 },
+    {
+      name: 'discussion scoring block ≤ 10 lines, ends with one question',
+      value: scoringReplies.length
+        ? `lines=${scoringLineMax} endQ=${scoringReplies.every((x) => x.metrics.endsWithQuestion)}`
+        : 'none',
+      pass: scoringReplies.length > 0 && scoringLineMax <= 10 &&
+        scoringReplies.every((x) => x.metrics.endsWithQuestion),
+    },
     {
       name: 'socratic: 100% end with exactly one question',
       value: `${socraticReplies.filter((x) => x.metrics.endsWithQuestion && x.metrics.questionMarks === 1).length}/${socraticReplies.length}`,
@@ -356,31 +415,92 @@ export function evaluateCriteria(results) {
   return criteria;
 }
 
+/**
+ * Aggregate one criteria list per run into a single verdict per criterion:
+ * pass = passed in a strict majority of runs (the plan's "3 runs, medians"
+ * gate — single runs at temperature flip 1–3 criteria per run on noise).
+ * Numeric values are reported as their median; all per-run values are shown.
+ */
+export function aggregateCriteria(perRunCriteria) {
+  const runs = perRunCriteria.length;
+  return perRunCriteria[0].map((first, i) => {
+    const runsForCriterion = perRunCriteria.map((c) => c[i]);
+    const passes = runsForCriterion.filter((c) => c.pass).length;
+    const values = runsForCriterion.map((c) => c.value);
+    const numeric = values.filter((v) => typeof v === 'number');
+    const value = numeric.length === runs
+      ? `${median(numeric)} (runs: ${values.join(', ')})`
+      : `${passes}/${runs} runs pass (${values.join(' | ')})`;
+    return { name: first.name, value, pass: passes * 2 > runs };
+  });
+}
+
 function parseArgs(argv) {
-  const args = { label: '', delay: 4500, only: '' };
+  const args = { label: '', delay: 4500, only: '', rescore: '', runs: 1 };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--label') args.label = argv[++i] ?? '';
     else if (argv[i] === '--delay') args.delay = Number(argv[++i]) || 4500;
     else if (argv[i] === '--only') args.only = argv[++i] ?? '';
+    else if (argv[i] === '--rescore') args.rescore = argv[++i] ?? '';
+    else if (argv[i] === '--runs') args.runs = Math.max(1, Number(argv[++i]) || 1);
   }
   if (!args.label) args.label = new Date().toISOString().replace(/[:.]/g, '-');
   return args;
 }
 
+/**
+ * Offline re-judge: recompute metrics + criteria from the raw reply texts in
+ * an existing pacing-<label>.json — no server, no API calls. Used after a
+ * metric-definition fix so before/after runs stay comparable without respend.
+ */
+async function rescore(file) {
+  const data = JSON.parse(await readFile(file, 'utf8'));
+  const runResults = data.perRun ? data.perRun.map((r) => r.results) : [data.results];
+  for (const results of runResults) {
+    for (const convo of results) {
+      for (const reply of convo.replies) reply.metrics = computeMetrics(reply.raw);
+    }
+  }
+  const perRunCriteria = runResults.map(evaluateCriteria);
+  if (data.perRun) {
+    data.perRun.forEach((r, i) => {
+      r.criteria = perRunCriteria[i].map(({ name, value, pass }) => ({ name, value, pass }));
+    });
+  }
+  const criteria = runResults.length > 1 ? aggregateCriteria(perRunCriteria) : perRunCriteria[0];
+  data.criteria = criteria.map(({ name, value, pass }) => ({ name, value, pass }));
+  data.rescoredAt = new Date().toISOString();
+  await writeFile(file, JSON.stringify(data, null, 2));
+  console.log(`\n=== PACING EVAL — ${data.label} (rescored) ===`);
+  for (const c of criteria) {
+    console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name.padEnd(52)} ${c.value}`);
+  }
+  const failed = criteria.filter((c) => !c.pass).length;
+  console.log(failed ? `\n${failed} criterion(s) failed.` : '\nall criteria passed.');
+  process.exitCode = failed ? 1 : 0;
+}
+
 async function main() {
   const baseUrl = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-  const { label, delay, only } = parseArgs(process.argv.slice(2));
+  const { label, delay, only, rescore: rescoreFile, runs } = parseArgs(process.argv.slice(2));
+  if (rescoreFile) return rescore(rescoreFile);
   const scenarios = SCENARIOS.filter((s) => !only || s.id.startsWith(only));
 
-  process.stderr.write(`eval-pacing → ${baseUrl} label=${label} scenarios=${scenarios.length} delay=${delay}ms\n`);
+  process.stderr.write(`eval-pacing → ${baseUrl} label=${label} scenarios=${scenarios.length} delay=${delay}ms runs=${runs}\n`);
 
-  const results = [];
-  for (const scenario of scenarios) {
-    process.stderr.write(`  ${scenario.id} (${scenario.mode})\n`);
-    results.push(await runScenario(baseUrl, scenario, delay));
+  const allRuns = [];
+  for (let run = 1; run <= runs; run++) {
+    if (runs > 1) process.stderr.write(`── run ${run}/${runs}\n`);
+    const results = [];
+    for (const scenario of scenarios) {
+      process.stderr.write(`  ${scenario.id} (${scenario.mode})\n`);
+      results.push(await runScenario(baseUrl, scenario, delay));
+    }
+    allRuns.push(results);
   }
 
-  const criteria = evaluateCriteria(results);
+  const perRunCriteria = allRuns.map(evaluateCriteria);
+  const criteria = runs > 1 ? aggregateCriteria(perRunCriteria) : perRunCriteria[0];
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const outDir = path.join(scriptDir, '..', 'docs', 'evals');
@@ -390,14 +510,24 @@ async function main() {
     label,
     baseUrl,
     generatedAt: new Date().toISOString(),
+    runs,
     criteria: criteria.map(({ name, value, pass }) => ({ name, value, pass })),
-    results,
+    // Single run keeps the flat `results` shape (older rescore files match);
+    // multi-run adds perRun so each run stays independently rescoreable.
+    ...(runs === 1
+      ? { results: allRuns[0] }
+      : {
+          perRun: allRuns.map((results, i) => ({
+            criteria: perRunCriteria[i].map(({ name, value, pass }) => ({ name, value, pass })),
+            results,
+          })),
+        }),
   }, null, 2));
 
   // Summary table
   const w = Math.max(...criteria.map((c) => c.name.length)) + 2;
-  console.log(`\n=== PACING EVAL — ${label} ===`);
-  console.log(`replies: ${results.reduce((n, r) => n + r.replies.length, 0)} across ${results.length} conversations\n`);
+  console.log(`\n=== PACING EVAL — ${label}${runs > 1 ? ` (majority of ${runs} runs)` : ''} ===`);
+  console.log(`replies: ${allRuns.flat().reduce((n, r) => n + r.replies.length, 0)} across ${allRuns.flat().length} conversations\n`);
   for (const c of criteria) {
     console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name.padEnd(w)} ${String(c.value)}`);
   }
