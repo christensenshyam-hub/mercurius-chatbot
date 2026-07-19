@@ -41,6 +41,13 @@ struct MessageBubbleView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.readingFaceOverride) private var readingFaceOverride
+
+    /// The reply typeface: the app-wide pick (Lexend) unless the DEBUG font
+    /// gallery overrides it for a comparison subtree.
+    private var activeReadingFace: BrandReadingFace {
+        readingFaceOverride ?? BrandFont.readingFace
+    }
 
     /// Numeric size of the body text. MarkdownUI needs a `CGFloat`, and
     /// SwiftUI's `Font` type doesn't expose its size, so we keep the value
@@ -189,11 +196,33 @@ struct MessageBubbleView: View {
     private func lessonMarkdown(_ text: String) -> some View {
         Markdown(text)
             .markdownTextStyle {
+                FontFamily(activeReadingFace.markdownFamily)
                 ForegroundColor(BrandColor.assistantBubbleText)
                 FontSize(bodyFontSize)
             }
+            // Inline code stays monospaced EXPLICITLY — the variant-based
+            // `.monospaced()` fallback is unreliable on custom families.
+            .markdownTextStyle(\.code) {
+                FontFamily(.system(.monospaced))
+                FontSize(.em(0.94))
+            }
+            // Airy reading rhythm (chosen with the Lexend face): looser line
+            // spacing and a fuller gap between paragraphs.
+            .markdownBlockStyle(\.paragraph) { config in
+                config.label
+                    .fixedSize(horizontal: false, vertical: true)
+                    .relativeLineSpacing(.em(0.30))
+                    .markdownMargin(top: .zero, bottom: .em(1.2))
+            }
             .markdownBlockStyle(\.codeBlock) { config in
                 config.label
+                    // Re-apply the mono text style this block override
+                    // otherwise drops (fenced code used to render in the
+                    // body face — pre-existing bug).
+                    .markdownTextStyle {
+                        FontFamily(.system(.monospaced))
+                        FontSize(.em(0.94))
+                    }
                     .padding(BrandSpacing.md)
                     .background(BrandColor.surfaceElevated, in: RoundedRectangle(cornerRadius: BrandRadius.md))
             }
@@ -266,11 +295,31 @@ struct MessageBubbleView: View {
                 // free Chat tab, but strip it so it can't surface literally.
                 Markdown(Self.stripCheckTokens(message.content))
                     .markdownTextStyle {
+                        FontFamily(activeReadingFace.markdownFamily)
                         ForegroundColor(BrandColor.assistantBubbleText)
                         FontSize(bodyFontSize)
                     }
+                    // Inline code stays monospaced EXPLICITLY — see
+                    // lessonMarkdown for why.
+                    .markdownTextStyle(\.code) {
+                        FontFamily(.system(.monospaced))
+                        FontSize(.em(0.94))
+                    }
+                    // Airy reading rhythm — matches lessonMarkdown.
+                    .markdownBlockStyle(\.paragraph) { config in
+                        config.label
+                            .fixedSize(horizontal: false, vertical: true)
+                            .relativeLineSpacing(.em(0.30))
+                            .markdownMargin(top: .zero, bottom: .em(1.2))
+                    }
                     .markdownBlockStyle(\.codeBlock) { config in
                         config.label
+                            // Re-apply the mono style the override drops —
+                            // see lessonMarkdown.
+                            .markdownTextStyle {
+                                FontFamily(.system(.monospaced))
+                                FontSize(.em(0.94))
+                            }
                             .padding(BrandSpacing.md)
                             .background(
                                 BrandColor.surface,

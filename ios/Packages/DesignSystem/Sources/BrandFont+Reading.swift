@@ -11,15 +11,14 @@ public enum BrandReadingFace: Equatable, Sendable {
 
 public extension BrandFont {
     /// Single switch point for the assistant-reply typeface. The gallery
-    /// (`-ReplyFontGallery`) evaluates candidates; once one wins, it is set
-    /// here and every reply surface follows.
-    ///
-    /// Currently: SF (the pre-exploration default).
+    /// (`-ReplyFontGallery`) evaluated candidates; the user picked **Lexend**
+    /// (with airy spacing — the paragraph treatment lives in
+    /// `MessageBubbleView`), so every reply surface renders it.
     static var readingFace: BrandReadingFace {
         // Ensure bundled candidates are resolvable before any consumer asks
         // for a custom family (no-op after the first call).
         BrandFontRegistrar.registerReadingFonts()
-        return .system(.default)
+        return .custom("Lexend")
     }
 
     /// Plain-`Text` counterpart of the reading face for non-Markdown surfaces.

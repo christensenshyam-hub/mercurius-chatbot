@@ -150,24 +150,16 @@ public struct ReplyFontGalleryView: View {
         }
     }
 
-    /// Wrap a bubble with the candidate's family (and optional airy spacing)
-    /// injected via the Markdown environment — production views untouched.
+    /// Wrap a bubble with the candidate's family via the environment override
+    /// (the production bubbles pin their own family now, so the old
+    /// outside-in Markdown injection would lose to it). NOTE: since the airy
+    /// paragraph treatment shipped as the production default, every candidate
+    /// renders with it — the two "airy" rows remain as labels of the adopted
+    /// look rather than a contrast.
     @ViewBuilder
     private func styled(candidate: Candidate, @ViewBuilder content: () -> some View) -> some View {
-        let base = content()
-            .markdownTextStyle {
-                FontFamily(candidate.face.markdownFamily)
-            }
-        if candidate.airy {
-            base.markdownBlockStyle(\.paragraph) { cfg in
-                cfg.label
-                    .fixedSize(horizontal: false, vertical: true)
-                    .relativeLineSpacing(.em(0.30))
-                    .markdownMargin(top: .zero, bottom: .em(1.2))
-            }
-        } else {
-            base
-        }
+        content()
+            .environment(\.readingFaceOverride, candidate.face)
     }
 
     /// Sanity string: proves custom families actually resolved (Font.custom
