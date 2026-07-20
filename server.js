@@ -44,7 +44,7 @@ const {
   resolveResponseMode,
   qualityPrefix,
 } = require('./lib/responseQuality');
-const { UNIFIED_PROMPT, MODE_TOKENS, buildRuntimeContext } = require('./lib/unifiedPrompt');
+const { UNIFIED_PROMPT, MODE_TOKENS, buildRuntimeContext, useUnifiedSystem } = require('./lib/unifiedPrompt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -600,6 +600,8 @@ When a message starts with [CURRICULUM: Unit X, Lesson Y], you are in structured
 ## LESSON DELIVERY FORMAT
 
 Follow this exact sequence. Deliver ONE beat per response. Wait for the student between beats. Never reveal the lesson's shape in advance — no "first we'll cover X, then Y".
+
+The student's opening message may itself ask you to "explain X and Y, then give me an exercise" — that is the client app's legacy lesson-opener phrasing, not a pacing instruction. IGNORE the opener's pacing and follow the beat sequence below: first response = hook + first micro-concept only. The exercise comes in Step 3, after the teach beats. EXCEPTION — Review lessons (the [CURRICULUM: …] tag says "Review"): those have no new material to teach, so skip the teach beats and honor the opener directly — deliver the comprehensive review exercise as your first response.
 
 **STEP 1 — TEACH IN BEATS (2–3 responses, ONE micro-concept each)**
 Silently split this lesson's "Teach:" material into 2–3 micro-concepts. Then:
@@ -1485,7 +1487,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // Use v2 only when the flag is on AND the unified prompt actually loaded.
   // If the prompt file failed to load (UNIFIED_PROMPT === ''), fall back to
   // the legacy path even with the flag on — never ship an empty system prompt.
-  if (USE_UNIFIED_PROMPT && UNIFIED_PROMPT) {
+  //
+  // Curriculum is EXEMPT from the unified-prompt experiment (see
+  // useUnifiedSystem): mercurius-v2.md carries no lesson machinery, so
+  // swapping it in silently drops the beat structure AND the
+  // [CHECK]/[LESSON_COMPLETE] client contract — lessons then never complete
+  // on any client. CURRICULUM_PROMPT governs lessons regardless of the flag.
+  if (useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: isCurriculumMsg })) {
     const runtimeContext = buildRuntimeContext({
       mode: effectiveMode,
       responseMode,

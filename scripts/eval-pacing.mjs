@@ -194,7 +194,11 @@ const SCENARIOS = [
   {
     id: 'curriculum-1', mode: 'curriculum',
     turns: [
-      '[CURRICULUM: Unit 1, Lesson 1] Start the lesson.',
+      // The iOS app's REAL Unit 1 Lesson 1 opener (Curriculum.swift), verbatim.
+      // It asks for everything at once plus an exercise — the beat prompt must
+      // override that pacing, so the eval has to send what production clients
+      // actually send, not a gentler "start the lesson" stand-in.
+      '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.',
       "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
       "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
       "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
