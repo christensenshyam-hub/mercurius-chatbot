@@ -32,6 +32,14 @@ describe('RESPONSE_QUALITY_PREAMBLE', () => {
     assert.ok(text.includes('skip filler'),    'should ban filler');
     assert.ok(text.includes('explain more'),   'should reference the Explain More flow');
   });
+
+  test('carries the beat-pacing rules (one idea, no previews, one closing question)', () => {
+    const text = RESPONSE_QUALITY_PREAMBLE.toLowerCase();
+    assert.ok(text.includes('one idea per reply'),       'should limit to one idea per reply');
+    assert.ok(text.includes('never preview'),            'should ban previewing upcoming content');
+    assert.ok(text.includes('exactly one short question'),
+      'should require exactly one closing question/invitation');
+  });
 });
 
 describe('MODE_RULES', () => {
@@ -47,10 +55,16 @@ describe('MODE_RULES', () => {
     }
   });
 
+  test('debate rules hand the turn back after one argument', () => {
+    const text = MODE_RULES.debate.toLowerCase();
+    assert.ok(text.includes('hand the turn back'), 'debate should end by handing the turn back');
+  });
+
   test('socratic rules ask one question at a time, not full answers', () => {
     const text = MODE_RULES.socratic.toLowerCase();
     assert.ok(text.includes('one strong question'), 'socratic should lead with one question');
     assert.ok(text.includes("don't dump"), 'socratic should not dump answers up front');
+    assert.ok(text.includes('last line'), 'socratic should end on the question (last line)');
   });
 
   test('direct rules emphasize plain efficient answers', () => {
@@ -65,6 +79,12 @@ describe('MODE_RULES', () => {
     assert.ok(text.includes('tradeoff'), 'discussion should surface tradeoffs');
     assert.ok(text.includes('follow-up question') || text.includes('open thought'),
       'discussion should leave a thread to pull');
+  });
+
+  test('discussion rules pull one tension per turn', () => {
+    const text = MODE_RULES.discussion.toLowerCase();
+    assert.ok(text.includes('one tension'), 'discussion should name a single tension per turn');
+    assert.ok(text.includes('follow-up question'), 'discussion should end with the follow-up');
   });
 });
 
@@ -181,5 +201,10 @@ describe('EXPAND_MODE_NOTE', () => {
     const text = EXPAND_MODE_NOTE.toLowerCase();
     assert.ok(text.includes('explain more'));
     assert.ok(text.includes("don't repeat") || text.includes('not repeat'));
+  });
+
+  test('suspends the one-idea pacing rule for the deep reply only', () => {
+    const text = EXPAND_MODE_NOTE.toLowerCase();
+    assert.ok(text.includes('suspended'), 'deep replies should suspend the pacing rule');
   });
 });
