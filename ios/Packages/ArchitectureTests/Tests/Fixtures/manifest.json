@@ -155,6 +155,20 @@
       }
     },
     {
+      "name" : "MercuriusActivity",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "MercuriusActivity"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
       "name" : "AppFeature",
       "settings" : [
 
@@ -197,7 +211,14 @@
       "packageAccess" : true,
       "path" : "DesignSystem/Sources",
       "resources" : [
+        {
+          "path" : "Fonts",
+          "rule" : {
+            "copy" : {
 
+            }
+          }
+        }
       ],
       "settings" : [
 
@@ -561,6 +582,29 @@
             "DesignSystem",
             null
           ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "MercuriusActivity",
+      "packageAccess" : true,
+      "path" : "MercuriusActivity/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
         },
         {
           "byName" : [
@@ -595,6 +639,12 @@
         {
           "byName" : [
             "EngagementFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "MercuriusActivity",
             null
           ]
         },

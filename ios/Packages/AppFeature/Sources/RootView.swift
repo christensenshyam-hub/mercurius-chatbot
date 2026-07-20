@@ -47,6 +47,8 @@ public struct RootView: View {
             chatPreview
         } else if ProcessInfo.processInfo.arguments.contains("-LiveActivityGallery") {
             liveActivityGallery
+        } else if ProcessInfo.processInfo.arguments.contains("-ReplyFontGallery") {
+            ReplyFontGalleryView()
         } else {
             mainBody
         }
