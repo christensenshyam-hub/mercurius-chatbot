@@ -80,7 +80,7 @@ function isValidSessionId(id) {
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
-const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
+const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-haiku-4-5';
 
 // v2 unified-prompt rollout switch. OFF by default → the backend behaves
 // exactly as before (the 10 per-mode prompts). Set USE_UNIFIED_PROMPT=1 in
@@ -1059,8 +1059,13 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
         messages: [{ role: 'user', content: memoryPrompt }],
       });
 
-      const text = response.content[0]?.text?.trim();
+      let text = response.content[0]?.text?.trim();
       if (!text) return;
+
+      // Haiku 4.5 often wraps the array in a ```json fence despite the
+      // "ONLY valid JSON" instruction; unwrap before parsing.
+      const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+      if (fenced) text = fenced[1];
 
       const memories = JSON.parse(text);
       if (!Array.isArray(memories)) return;
