@@ -27,8 +27,8 @@ env var becomes part of the supported runtime surface.
 | Var | Purpose | Default |
 |---|---|---|
 | `LOG_LEVEL` | `trace`, `debug`, `info`, `warn`, `error`, `silent` | `info` in prod, `debug` elsewhere, `silent` when `NODE_ENV=test` |
-| `MODEL_ALLOWLIST` | Comma-separated Anthropic model ids the server will accept when a client supplies `model` on `/api/chat` | `claude-sonnet-4-6,claude-3-5-haiku-latest` |
-| `MEMORY_MODEL` | Model used for the background memory-extraction job (not client-selectable) | `claude-3-5-haiku-latest` |
+| `MODEL_ALLOWLIST` | Comma-separated Anthropic model ids the server will accept when a client supplies `model` on `/api/chat` | `claude-sonnet-4-6,claude-haiku-4-5` |
+| `MEMORY_MODEL` | Model used for the background memory-extraction job (not client-selectable) | `claude-haiku-4-5` |
 
 ### Rate limiting — horizontal scaling
 
