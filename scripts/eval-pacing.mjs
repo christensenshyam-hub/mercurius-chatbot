@@ -110,6 +110,23 @@ export function previewHit(text) {
   return PREVIEW_RE.test(stripMarkers(text));
 }
 
+/**
+ * Largest sentence count of any single PROSE paragraph. The airiness
+ * contract says a paragraph is 1–2 sentences ("insert a blank line after
+ * every 1–2 sentences"); bullet lists and fenced code are exempt — bullets
+ * are line-formatted by design and fences aren't prose.
+ */
+export function maxParagraphSentences(rawText) {
+  const noFences = stripMarkers(rawText).replace(/```[\s\S]*?(?:```|$)/g, '');
+  const paragraphs = noFences
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    // Bullet/numbered paragraphs: every non-empty line starts with a list marker.
+    .filter((p) => !p.split('\n').every((l) => /^\s*(?:[-*+]|\d+[.)])\s/.test(l.trim()) || !l.trim()));
+  return Math.max(0, ...paragraphs.map((p) => countSentences(p)));
+}
+
 export function computeMetrics(rawText) {
   return {
     sentenceCount: countSentences(rawText),
@@ -118,6 +135,7 @@ export function computeMetrics(rawText) {
     endsWithQuestion: endsWithQuestion(rawText),
     truncated: isTruncated(rawText),
     previewHit: previewHit(rawText),
+    maxParagraphSentences: maxParagraphSentences(rawText),
   };
 }
 
@@ -415,8 +433,26 @@ export function evaluateCriteria(results) {
       value: deepReply ? deepReply.metrics.sentenceCount : 'missing',
       pass: Boolean(deepReply) && deepReply.metrics.sentenceCount >= 8,
     },
+    airyParagraphsCriterion(chatReplies, curriculumReplies, deepReply),
   ];
   return criteria;
+}
+
+/**
+ * Airiness gate (Presentation P1): no prose paragraph packs more than 2
+ * sentences in chat replies (3 in curriculum beats and deep explainers,
+ * whose paragraphs legitimately carry an example alongside a claim).
+ * Bullet paragraphs and code fences are exempt in the metric itself.
+ */
+function airyParagraphsCriterion(chatReplies, curriculumReplies, deepReply) {
+  const chatMax = Math.max(0, ...chatReplies.map((x) => x.metrics.maxParagraphSentences ?? 0));
+  const longformPool = [...curriculumReplies, ...(deepReply ? [deepReply] : [])];
+  const longformMax = Math.max(0, ...longformPool.map((x) => x.metrics?.maxParagraphSentences ?? maxParagraphSentences(x.raw)));
+  return {
+    name: 'airy paragraphs: chat ≤ 2 sentences/para, curriculum+deep ≤ 3',
+    value: `chat=${chatMax} longform=${longformMax}`,
+    pass: (chatReplies.length === 0 || chatMax <= 2) && (longformPool.length === 0 || longformMax <= 3),
+  };
 }
 
 /**

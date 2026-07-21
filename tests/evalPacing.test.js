@@ -151,6 +151,44 @@ describe('eval-pacing metrics', () => {
     assert.equal(contract.pass, true, `scoring contract should pass: ${contract.value}`);
   });
 
+  test('maxParagraphSentences: airiness metric', async () => {
+    const { maxParagraphSentences } = await modP;
+    // Two airy paragraphs of 2 sentences each → 2.
+    assert.equal(maxParagraphSentences('One. Two.\n\nThree. Four?'), 2);
+    // A packed 4-sentence paragraph → 4.
+    assert.equal(maxParagraphSentences('A. B. C. D.'), 4);
+    // Bullet paragraphs are exempt, prose still measured.
+    assert.equal(maxParagraphSentences('Intro line.\n\n- one bullet. with detail.\n- another bullet.\n\nClose?'), 1);
+    // Code fences are exempt even with blank lines and periods inside.
+    assert.equal(maxParagraphSentences('Look:\n\n```\nx = 1. y = 2. z = 3. q = 4.\n\nmore. code. here. now.\n```\n\nDone?'), 1);
+    // Markers don't count as prose.
+    assert.equal(maxParagraphSentences('[CHECK]Why? Because. Right?[/CHECK]'), 3);
+    assert.equal(maxParagraphSentences(''), 0);
+  });
+
+  test('airy paragraphs criterion: chat ≤2, curriculum ≤3', async () => {
+    const { computeMetrics, evaluateCriteria } = await modP;
+    const packed = 'One. Two. Three.'; // 3-sentence paragraph
+    const airy = 'One. Two.\n\nThree?';
+    const results = [
+      {
+        id: 'socratic-1', mode: 'socratic', sessionId: 's',
+        replies: [{ user: 'q', responseMode: 'concise', raw: packed, metrics: computeMetrics(packed) }],
+      },
+      {
+        id: 'curriculum-1', mode: 'curriculum', sessionId: 's2',
+        replies: [{ user: '[CURRICULUM: Unit 1, Lesson 1] go', responseMode: 'balanced', raw: `${airy}\n\n[CHECK]Why?[/CHECK]`, metrics: computeMetrics(`${airy}\n\n[CHECK]Why?[/CHECK]`) }],
+      },
+    ];
+    const criteria = evaluateCriteria(results);
+    const airyC = criteria.find((c) => c.name.startsWith('airy paragraphs'));
+    assert.equal(airyC.pass, false, 'a 3-sentence chat paragraph must fail');
+    // Same fixture with the chat reply airy → passes (curriculum 3-sentence allowance).
+    results[0].replies[0] = { user: 'q', responseMode: 'concise', raw: airy, metrics: computeMetrics(airy) };
+    const airyC2 = evaluateCriteria(results).find((c) => c.name.startsWith('airy paragraphs'));
+    assert.equal(airyC2.pass, true, `airy chat + airy curriculum should pass: ${airyC2.value}`);
+  });
+
   test('aggregateCriteria: majority vote with median values', async () => {
     const { aggregateCriteria } = await modP;
     const runs = [
