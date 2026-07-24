@@ -102,13 +102,17 @@ extension APIClient {
             // Optional: synthesized Encodable omits it when nil, so text-only
             // turns send no `imageId` and the server treats them normally.
             let imageId: String?
+            // What this build can render natively (blocks_v1 cards/checks).
+            // Old servers strip unknown fields — safe against any backend.
+            let capabilities: [String]
         }
         do {
             request.httpBody = try JSONEncoder().encode(Body(
                 messages: messages,
                 sessionId: sessionId,
                 responseMode: responseMode.rawValue,
-                imageId: imageId
+                imageId: imageId,
+                capabilities: ClientCapabilities.current
             ))
         } catch {
             throw APIError.invalidRequest(reason: "Failed to encode chat body")

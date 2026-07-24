@@ -146,7 +146,10 @@ public struct CurriculumLessonView: View {
                     lessonStyle: true,
                     // "Tap the question, keyboard opens" — the check callout
                     // focuses the composer so answering is one tap away.
-                    onCheckTap: { inputFocusTrigger += 1 }
+                    onCheckTap: { inputFocusTrigger += 1 },
+                    // blocks_v1: a tapped [Q] option grades locally, then
+                    // auto-sends as a normal visible user turn.
+                    onQuizPick: { model.sendQuickReply($0) }
                 )
 
                 // Clean, fixed composer — nothing tucked behind it.

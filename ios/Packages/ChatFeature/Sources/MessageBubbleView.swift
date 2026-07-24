@@ -42,6 +42,20 @@ struct MessageBubbleView: View {
     /// focuses the input bar so "tap the question, keyboard opens". Nil (the
     /// default) renders the callout as a plain card, exactly as before.
     var onCheckTap: (() -> Void)? = nil
+    /// blocks_v1 quiz interaction. Nil (the default) renders any [Q] block
+    /// inert — snapshots and free chat unaffected.
+    var quizInteraction: QuizInteraction? = nil
+
+    /// How a [Q] block behaves in THIS bubble.
+    struct QuizInteraction {
+        /// Taps live only on the latest assistant message while idle.
+        let isEnabled: Bool
+        /// Prior pick for inert re-renders (from the next user message's
+        /// "I picked X)" prefix); nil if unanswered.
+        let answeredIndex: Int?
+        /// Fires after local grading renders; host auto-sends the pick.
+        let onPick: (QuizBlock, Int) -> Void
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -173,18 +187,14 @@ struct MessageBubbleView: View {
             if isEmptyTyping {
                 typingIndicator
             } else {
-                let parts = Self.splitCheck(message.content)
-                // Strip any stray/second/partial markers from the rendered
-                // segments so they never surface as literal text.
-                let before = Self.stripCheckTokens(parts.before)
-                let after = Self.stripCheckTokens(parts.after)
+                // blocks_v1: tokenize into prose + native blocks. A plain
+                // reply yields one .prose block and renders exactly as before;
+                // [CHECK] spans keep their callout; [KEY]/[EX]/[Q] become
+                // cards. Partial markers are withheld by the parser.
+                let blocks = BlockParser.parse(message.content)
                 VStack(alignment: .leading, spacing: BrandSpacing.sm) {
-                    if !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        lessonMarkdown(before)
-                    }
-                    if let check = parts.check { calloutCard(check) }
-                    if !after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        lessonMarkdown(after)
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                        blockView(block)
                     }
                 }
             }
@@ -210,6 +220,39 @@ struct MessageBubbleView: View {
                 bodySize: bodyFontSize,
                 codeBlockBackground: BrandColor.surfaceElevated
             )
+    }
+
+    /// Render one parsed block of a lesson reply.
+    @ViewBuilder
+    private func blockView(_ block: MessageBlock) -> some View {
+        switch block {
+        case .prose(let text):
+            // Defensive re-strip: stray tokens the parser normalized away.
+            lessonMarkdown(Self.stripCheckTokens(text))
+        case .check(let question):
+            calloutCard(question)
+        case .key(let text):
+            KeyIdeaCard(text: text, bodySize: bodyFontSize,
+                        font: readingFont(size: bodyFontSize, weight: .regular))
+        case .example(let text):
+            ExampleCard(text: text, bodySize: bodyFontSize,
+                        font: readingFont(size: bodyFontSize, weight: .regular))
+        case .quiz(let quiz):
+            if quiz.isComplete && !quiz.isWellFormed {
+                // Malformed degradation: worst case is exactly the pre-blocks
+                // UX — the interior as an open-ended callout question.
+                calloutCard(([quiz.stem] + quiz.options).filter { !$0.isEmpty }.joined(separator: " "))
+            } else {
+                CheckQuizCard(
+                    quiz: quiz,
+                    bodySize: bodyFontSize,
+                    stemFont: readingFont(size: bodyFontSize, weight: .semibold),
+                    isEnabled: quiz.isWellFormed && quizInteraction?.isEnabled == true,
+                    answeredIndex: quizInteraction?.answeredIndex,
+                    onSelect: { index in quizInteraction?.onPick(quiz, index) }
+                )
+            }
+        }
     }
 
     /// The check-question callout — the one thing the student must ACT on, so
@@ -410,12 +453,9 @@ struct MessageBubbleView: View {
         if message.content.isEmpty, case .streaming = message.status {
             return Text("Mercurius is replying")
         }
-        // Speak the reply with the check question flagged, so VoiceOver users
-        // hear that a response is expected — and never hear the raw markers.
-        let parts = Self.splitCheck(message.content)
-        var spoken = Self.stripCheckTokens(parts.before)
-        if let check = parts.check { spoken += " Question: \(check)" }
-        spoken += Self.stripCheckTokens(parts.after)
+        // Speak the reply with questions flagged and never a raw marker — and
+        // never the [Q] answer key (plainText drops ANS lines).
+        let spoken = BlockParser.plainText(message.content)
         return Text("\(roleLabel): \(spoken)")
     }
 }

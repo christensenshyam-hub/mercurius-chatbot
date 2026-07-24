@@ -35,6 +35,7 @@ const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { buildUserContent } = require('./lib/visionContent');
 const { processLessonOutcome } = require('./lib/lessonOutcome');
 const { createReflow, reflowText, reflowLimit } = require('./lib/airyReflow');
+const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
@@ -1306,7 +1307,11 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
-  const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId } = req.validated;
+  const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId, capabilities } = req.validated;
+  // blocks_v1: capable clients get block-markup instructions (native cards +
+  // tappable checks); everyone else gets prose. Per-request — a device that
+  // upgrades mid-lesson is told the truth for THIS turn.
+  const wantsBlocks = hasBlocks(capabilities);
 
   // Resolve the response-mode dial (concise / balanced / deep / one_line).
   // Missing → 'concise' (mobile default). Already-validated by Zod, but
@@ -1421,7 +1426,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   if (isCurriculumMsg) {
     // Structured curriculum lesson mode
-    systemPrompt = CURRICULUM_PROMPT + memoryContext;
+    // Capable clients get the block-markup appendix. Curriculum is exempt
+    // from the unified prompt (useUnifiedSystem), so this single concat
+    // covers lessons under BOTH USE_UNIFIED_PROMPT states.
+    systemPrompt = CURRICULUM_PROMPT
+      + (wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : '')
+      + memoryContext;
     effectiveMode = 'CURRICULUM';
 
   } else if (mode === 'debate') {
@@ -1645,7 +1655,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           fullText += tail;
           safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
         }
-        const rawReply = fullText || "I seem to have lost my train of thought. Try asking again?";
+        // Defense in depth: a prose client must never persist/receive block
+        // markers even on a model slip (it was never instructed to emit
+        // them). Streamed deltas can't be retro-scrubbed — clients' own
+        // marker stripping is the live guard, this cleans the final record.
+        const assembled = fullText || "I seem to have lost my train of thought. Try asking again?";
+        const rawReply = wantsBlocks ? assembled : scrubBlockMarkers(assembled);
         // Only curriculum lessons emit [LESSON_COMPLETE]; gate on mode so a
         // stray marker in any other mode is never stripped or flagged.
         const lessonOutcome = isCurriculumMsg
@@ -1724,10 +1739,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         messages: trimmed,
       });
 
-      const rawReply = reflowText(
+      const reflowed = reflowText(
         response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?",
         reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
       );
+      // Same non-capable scrub as the streaming path (defense in depth).
+      const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
       const lessonOutcome = isCurriculumMsg
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };

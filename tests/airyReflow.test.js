@@ -53,6 +53,20 @@ describe('airyReflow', () => {
     assert.ok(out.includes('Done. Really.\n\nTruly.'), 'prose after fence reflowed');
   });
 
+  test('blocks_v1 spans ([KEY]/[EX]/[Q]) are exempt and tags survive', () => {
+    const q = '[Q]\nWhich is a hallucination? Think hard. Answer well.\nA) This one. Really. Truly. Fully.\nB) That one.\nANS: A\n[/Q]';
+    const text = `Teach one. Teach two.\n\n[KEY]Key one. Key two. Key three.[/KEY]\n\n[EX]Ex one. Ex two. Ex three. Ex four.[/EX]\n\n${q}`;
+    const out = reflowText(text, 2);
+    assert.ok(out.includes('[KEY]Key one. Key two. Key three.[/KEY]'), 'KEY interior untouched');
+    assert.ok(out.includes('[EX]Ex one. Ex two. Ex three. Ex four.[/EX]'), 'EX interior untouched');
+    assert.ok(out.includes(q), 'Q interior untouched (option lines + ANS intact)');
+    // Chunk independence holds with block spans too.
+    const oneShot = reflowText(text, 2);
+    for (const size of [1, 3, 7, 50]) {
+      assert.equal(streamed(text, 2, size), oneShot, `chunk size ${size}`);
+    }
+  });
+
   test('[CHECK] spans are exempt and tags survive', () => {
     const text = 'Teach one. Teach two. [CHECK]Why is this true? Think hard. Answer well.[/CHECK]';
     const out = reflowText(text, 2);
