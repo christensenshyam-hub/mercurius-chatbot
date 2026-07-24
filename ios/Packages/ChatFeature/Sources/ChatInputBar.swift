@@ -25,6 +25,10 @@ struct ChatInputBar: View {
     /// When true, the bar's background fades to transparent at the top so a
     /// mascot anchored behind it dissolves in (lesson screen). Defaults off.
     var backgroundFade: Bool = false
+    /// Increment to programmatically focus the text field (e.g. tapping the
+    /// lesson check-question callout). A counter rather than a Bool so every
+    /// tap re-focuses even if the field was focused-then-dismissed.
+    var focusTrigger: Int = 0
 
     @FocusState private var focused: Bool
     @State private var pickerItem: PhotosPickerItem?
@@ -72,6 +76,7 @@ struct ChatInputBar: View {
                     .submitLabel(.send)
                     .onSubmit(triggerSend)
                     .accessibilityLabel("Message")
+                    .onChange(of: focusTrigger) { _, _ in focused = true }
 
                 actionButton
             }

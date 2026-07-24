@@ -38,6 +38,10 @@ struct MessageBubbleView: View {
     /// latest assistant message, neutral/idle on older ones.
     var avatarMood: MercMood = .neutral
     var avatarActivity: MercActivity = .idle
+    /// Invoked when the user taps the lesson check-question callout — the host
+    /// focuses the input bar so "tap the question, keyboard opens". Nil (the
+    /// default) renders the callout as a plain card, exactly as before.
+    var onCheckTap: (() -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -53,7 +57,12 @@ struct MessageBubbleView: View {
     /// SwiftUI's `Font` type doesn't expose its size, so we keep the value
     /// here. `@ScaledMetric` makes it grow with the user's Dynamic Type
     /// setting (relative to `.body`), so reading text stays accessible.
-    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = 17
+
+    /// Cap on the assistant text measure. Uncapped lines run ~60+ characters
+    /// on wider phones, which reads slower than the ~45-55 character measure
+    /// typography guidance targets for the 17pt reading face.
+    private static let assistantMeasureCap: CGFloat = 340
 
     var body: some View {
         HStack(alignment: .top, spacing: shouldShowAvatar ? BrandSpacing.sm : 0) {
@@ -182,6 +191,7 @@ struct MessageBubbleView: View {
         }
         .padding(.vertical, BrandSpacing.md)
         .padding(.horizontal, BrandSpacing.lg)
+        .frame(maxWidth: Self.assistantMeasureCap, alignment: .leading)
         .background(BrandColor.surface, in: lessonAssistantShape)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
         .contextMenu {
@@ -195,49 +205,58 @@ struct MessageBubbleView: View {
 
     private func lessonMarkdown(_ text: String) -> some View {
         Markdown(text)
-            .markdownTextStyle {
-                FontFamily(activeReadingFace.markdownFamily)
-                ForegroundColor(BrandColor.assistantBubbleText)
-                FontSize(bodyFontSize)
-            }
-            // Inline code stays monospaced EXPLICITLY — the variant-based
-            // `.monospaced()` fallback is unreliable on custom families.
-            .markdownTextStyle(\.code) {
-                FontFamily(.system(.monospaced))
-                FontSize(.em(0.94))
-            }
-            // Airy reading rhythm (chosen with the Lexend face): looser line
-            // spacing and a fuller gap between paragraphs.
-            .markdownBlockStyle(\.paragraph) { config in
-                config.label
-                    .fixedSize(horizontal: false, vertical: true)
-                    .relativeLineSpacing(.em(0.30))
-                    .markdownMargin(top: .zero, bottom: .em(1.2))
-            }
-            .markdownBlockStyle(\.codeBlock) { config in
-                config.label
-                    // Re-apply the mono text style this block override
-                    // otherwise drops (fenced code used to render in the
-                    // body face — pre-existing bug).
-                    .markdownTextStyle {
-                        FontFamily(.system(.monospaced))
-                        FontSize(.em(0.94))
-                    }
-                    .padding(BrandSpacing.md)
-                    .background(BrandColor.surfaceElevated, in: RoundedRectangle(cornerRadius: BrandRadius.md))
-            }
+            .replyMarkdownStyling(
+                face: activeReadingFace,
+                bodySize: bodyFontSize,
+                codeBlockBackground: BrandColor.surfaceElevated
+            )
     }
 
+    /// The check-question callout — the one thing the student must ACT on, so
+    /// it renders at full body size in the reading face (it was 12.5pt, the
+    /// quietest element in the bubble) with a leading glyph, and taps through
+    /// to focus the input bar when the host wires `onCheckTap`.
+    @ViewBuilder
     private func calloutCard(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12.5, weight: .heavy, design: .rounded).italic())
-            .foregroundStyle(BrandColor.accent)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.vertical, 13)
-            .padding(.horizontal, 14)
-            .background(BrandColor.accent.opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+        if let onCheckTap {
+            Button(action: onCheckTap) { calloutContent(text) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Double-tap to answer")
+        } else {
+            calloutContent(text)
+        }
+    }
+
+    private func calloutContent(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
+            Image(systemName: "questionmark.bubble.fill")
+                .font(.system(size: bodyFontSize * 0.9, weight: .semibold))
+                .foregroundStyle(BrandColor.accent)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(readingFont(size: bodyFontSize, weight: .semibold))
+                .foregroundStyle(BrandColor.accent)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
+        .background(BrandColor.accent.opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+    }
+
+    /// A `Font` in the active reading face (Lexend in production; the DEBUG
+    /// gallery can override to a system design) at an explicit size + weight.
+    private func readingFont(size: CGFloat, weight: Font.Weight) -> Font {
+        switch activeReadingFace {
+        case .system(let design):
+            return .system(size: size, weight: weight, design: design)
+        case .custom(let name):
+            // `size` is already Dynamic-Type-scaled (@ScaledMetric) — use the
+            // fixed-size initializer so it doesn't scale a second time.
+            return Font.custom(name, fixedSize: size).weight(weight)
+        }
     }
 
     /// Splits a lesson reply into the text before a `[CHECK]…[/CHECK]` block, the
@@ -294,42 +313,16 @@ struct MessageBubbleView: View {
                 // Defensive: a lesson-only [CHECK] marker should never reach the
                 // free Chat tab, but strip it so it can't surface literally.
                 Markdown(Self.stripCheckTokens(message.content))
-                    .markdownTextStyle {
-                        FontFamily(activeReadingFace.markdownFamily)
-                        ForegroundColor(BrandColor.assistantBubbleText)
-                        FontSize(bodyFontSize)
-                    }
-                    // Inline code stays monospaced EXPLICITLY — see
-                    // lessonMarkdown for why.
-                    .markdownTextStyle(\.code) {
-                        FontFamily(.system(.monospaced))
-                        FontSize(.em(0.94))
-                    }
-                    // Airy reading rhythm — matches lessonMarkdown.
-                    .markdownBlockStyle(\.paragraph) { config in
-                        config.label
-                            .fixedSize(horizontal: false, vertical: true)
-                            .relativeLineSpacing(.em(0.30))
-                            .markdownMargin(top: .zero, bottom: .em(1.2))
-                    }
-                    .markdownBlockStyle(\.codeBlock) { config in
-                        config.label
-                            // Re-apply the mono style the override drops —
-                            // see lessonMarkdown.
-                            .markdownTextStyle {
-                                FontFamily(.system(.monospaced))
-                                FontSize(.em(0.94))
-                            }
-                            .padding(BrandSpacing.md)
-                            .background(
-                                BrandColor.surface,
-                                in: RoundedRectangle(cornerRadius: BrandRadius.md)
-                            )
-                    }
+                    .replyMarkdownStyling(
+                        face: activeReadingFace,
+                        bodySize: bodyFontSize,
+                        codeBlockBackground: BrandColor.surface
+                    )
             }
         }
         .padding(.vertical, BrandSpacing.md)
         .padding(.horizontal, BrandSpacing.lg)
+        .frame(maxWidth: Self.assistantMeasureCap, alignment: .leading)
         .background(BrandColor.assistantBubble)
         // The Merc avatar is the message's attribution now — a full-height
         // accent bar next to it competes with the mascot, so it only renders
