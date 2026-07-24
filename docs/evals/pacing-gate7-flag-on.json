@@ -1,0 +1,1844 @@
+{
+  "label": "gate7-flag-on",
+  "baseUrl": "http://localhost:3135",
+  "generatedAt": "2026-07-24T16:55:27.498Z",
+  "runs": 3,
+  "criteria": [
+    {
+      "name": "median sentences ≤ 4 (chat replies)",
+      "value": "3.5 (runs: 4, 3.5, 3)",
+      "pass": true
+    },
+    {
+      "name": "p90 sentences ≤ 6 (chat replies)",
+      "value": "6 (runs: 6, 5, 6)",
+      "pass": true
+    },
+    {
+      "name": "debate replies ≤ 7 lines (contract)",
+      "value": "4 (runs: 5, 4, 4)",
+      "pass": true
+    },
+    {
+      "name": "discussion scoring block ≤ 10 lines, ends with one question",
+      "value": "3/3 runs pass (lines=9 endQ=true | lines=9 endQ=true | lines=9 endQ=true)",
+      "pass": true
+    },
+    {
+      "name": "socratic: 100% end with exactly one question",
+      "value": "3/3 runs pass (8/8 | 8/8 | 8/8)",
+      "pass": true
+    },
+    {
+      "name": "preview hits = 0 (all replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "truncations = 0 (all replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+      "value": "3/3 runs pass (checks=1 exercise=false | checks=1 exercise=false | checks=1 exercise=false)",
+      "pass": true
+    },
+    {
+      "name": "[LESSON_COMPLETE] within 10 assistant turns",
+      "value": "5 (runs: 6, 4, 5)",
+      "pass": true
+    },
+    {
+      "name": "deep reply ≥ 8 sentences",
+      "value": "17 (runs: 13, 18, 17)",
+      "pass": true
+    },
+    {
+      "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+      "value": "3/3 runs pass (chat p90=2 max=2; longform p90=3 max=3 | chat p90=2 max=2; longform p90=3 max=3 | chat p90=2 max=2; longform p90=3 max=3)",
+      "pass": true
+    }
+  ],
+  "perRun": [
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 6,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 5,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "lines=9 endQ=true",
+          "pass": true
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "8/8",
+          "pass": true
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=1 exercise=false",
+          "pass": true
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": 6,
+          "pass": true
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": 13,
+          "pass": true
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=2 max=2; longform p90=3 max=3",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "socratic-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-40a015d0fb4ad5da",
+          "replies": [
+            {
+              "user": "How does an LLM actually generate its answers?",
+              "responseMode": "concise",
+              "raw": "It predicts the next word — one at a time.\n\nGiven everything typed so far, the model assigns a probability to every possible next word and picks from the high-probability options. Then it does it again.\n\nAnd again. The whole response is built one token at a time, each choice shaped by the previous ones.\n\nHere's the tension worth sitting with: if the model is just picking likely next words, what's the difference between *knowing* a fact and *sounding like* it knows one?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "I think it predicts the next word based on patterns it learned?",
+              "responseMode": "concise",
+              "raw": "Exactly right — patterns learned from enormous amounts of text during training.\n\nThe key word is **patterns**, not understanding. The model never read a textbook and grasped the meaning — it learned which words tend to follow which other words, at massive scale.\n\nSo here's the tension: if a pattern says \"the capital of France is...\" almost always continues with \"Paris,\" the model gets it right.\n\nBut what happens when the pattern leads somewhere confident-sounding but *wrong*?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So it doesn't really 'know' facts — it just produces likely text?",
+              "responseMode": "concise",
+              "raw": "That's the core insight — and it has a name: **hallucination**.\n\nWhen the likely-sounding continuation happens to be false, the model produces it anyway, with the same confident tone as when it's right.\n\nSo what does that tell you about when you should — and shouldn't — trust an LLM's output?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Then why does it sometimes state wrong things so confidently?",
+              "responseMode": "concise",
+              "raw": "Because confidence is also a pattern.\n\nTraining text is full of authoritative-sounding sentences — textbooks, articles, encyclopedias. The model learned that *that tone* is how information gets stated.\n\nSo it reproduces the tone whether or not the underlying fact is real.\n\nWhat would that suggest you should always do before using an LLM's answer for something that actually matters?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "socratic-2",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-16e7738f83cae06d",
+          "replies": [
+            {
+              "user": "Where does an AI model's knowledge come from?",
+              "responseMode": "concise",
+              "raw": "Think about how you learned to read — you saw thousands of words, sentences, and patterns until they became automatic.\n\nAI models learn similarly: they're trained on massive amounts of text from the internet, books, and other sources, and they learn to predict what word or idea comes next.\n\nHere's the interesting tension though — if a model just predicts likely text, what's the difference between *knowing* something and *sounding like it knows* something?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "From the internet, I guess — so whatever people wrote online.",
+              "responseMode": "concise",
+              "raw": "Exactly right — and that's where it gets interesting.\n\nIf the training data is whatever people wrote online, what kinds of errors or biases might sneak into the model's \"knowledge\"?",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Does that mean gaps in the data become gaps in the model?",
+              "responseMode": "concise",
+              "raw": "Exactly — that's the core insight.\n\nIf a language or perspective is underrepresented online, the model will be weaker at it. If misinformation was common in the training data, the model may reproduce it confidently.\n\nWhat does that imply about who you should *trust* AI outputs for — and who might get worse results?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "How would I even notice a gap like that when I use it?",
+              "responseMode": "concise",
+              "raw": "That's the hard part — gaps are invisible by design.\n\nOne practical move: ask the AI about something you *already know well*, and see if it gets details right. If it stumbles on familiar ground, that's a signal to verify more carefully on unfamiliar ground.\n\nWhat's a topic you know better than most people — where you could actually test this?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-7dcd8ea2de75c14e",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before we lock in — I want to make sure you get the most out of this.\n\nIn DEBATE mode, my job is to **coach you**, not play the opposing side. If I argue against you, I'm doing the thinking; you're just reacting.\n\nWhat actually makes you unbeatable: building *your* argument so tight that the opposition can't crack it.\n\nSo let's work with what you've got. Your current claim is \"AI makes students stop thinking for themselves\" — that's a start, but it needs a sharper edge.\n\n**What's the mechanism?** Does AI *replace* thinking, or does it *reduce the need* to practice thinking? Those lead to very different arguments.",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 5,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "Solid instinct — but \"just copy\" is doing a lot of work there.\n\nThe opposition's first hit will be: **some** students copy, not all. Your warrant needs to survive that.\n\nCan you tighten it? Instead of \"students copy,\" what's the *condition* that makes copying likely — and what skill, specifically, gets lost when they do?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "That's exactly the counterargument you'll face — good that you're thinking it.\n\nBut notice: you just argued *against yourself*. That's your job to answer, not mine.\n\nSo answer it: what makes AI-enabled copying **different in kind**, not just degree, from copying a friend's homework?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "Your impact is vivid — but it's not yet an argument, it's a fear.\n\nThe opposition will ask: **says who?** What's the causal chain from \"students use AI now\" to \"a generation loses reasoning ability\"?\n\nWithout that mechanism, you have a slogan. With it, you have an impact. What's the evidence or logic that connects AI use to *permanent* skill loss — not just temporary shortcuts?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-88f7c8a78d37fbc3",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong opening position. Now let's stress-test it before you take it into a real round.\n\nYour claim is clear, but your **warrant** is missing — the causal bridge between \"facial recognition exists in public\" and \"privacy is violated in a way that justifies a ban.\"\n\nHere's the pressure: people already have no legal expectation of privacy in public spaces. A cop can watch you walk down the street. A camera can record you. So what specifically does facial recognition add that crosses the line?\n\nWhat's your causal chain from \"facial recognition in public\" → concrete, serious harm?",
+              "metrics": {
+                "sentenceCount": 8,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 4
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Good — chilling effects is a real, documented mechanism. Now your **impact** needs work.\n\n\"People behave differently when watched\" is true, but it's not yet a harm the judge feels. Which behaviors get chilled? Attending a protest? Visiting a mosque? Talking to a lawyer?\n\nThe more specific you get, the more the impact lands.\n\nWhat's your strongest concrete example of a chilled behavior — and why does losing *that* behavior matter?",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 4,
+                "questionMarks": 5,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 5
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's a strong point — but you just switched from defending your case to attacking mine.\n\nIn a real round, that move only works if your own case is airtight first.\n\nYour chilling effects warrant still needs a concrete example with a specific impact. What behavior gets chilled, for whom, and why does losing it matter enough to justify a *total* ban rather than, say, strict regulation?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "That's my job to coach you to build, not hand you.\n\nHere's the move instead: **argue against yourself first.**\n\nYou're pro-ban. What's the single strongest thing the *other side* could say that would make a judge doubt your case?\n\nTake a shot at it — then I'll tell you if you found the real weak joint.",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-1",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-5630b7764001b109",
+          "replies": [
+            {
+              "user": "I think companies using AI to screen resumes is basically fine — it's faster and less biased than tired recruiters.",
+              "responseMode": "concise",
+              "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"basically fine\" is doing a lot of work.\n**Evidence: 1/5** — \"Tired recruiters\" is an assumption, not evidence.\n\n**Nuance: 2/5** — Faster is real; \"less biased\" needs scrutiny.\n**Logic: 2/5** — The warrant skips a key step: AI trained on biased hiring data can *encode* that bias at scale.\n\n**Originality: 3/5** — Common take, but confidently stated.\n\n**Overall: 11/25** — Grade: Solid (11-17). The load-bearing weakness is the \"less biased\" claim — AI doesn't eliminate bias, it can systematize it faster than any tired human could.\n\nAmazon built and scrapped an AI resume screener because it penalized resumes containing the word \"women's\" — trained on a decade of male-dominated hiring data.\n\nDoes that change your argument, or do you think that's a fixable exception rather than a structural problem?",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 9,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Fair, but can't you audit the AI in a way you can't audit a human's gut feeling?",
+              "responseMode": "concise",
+              "raw": "That's a genuinely stronger move — auditability is a real advantage.\n\nBut here's the tension: auditing requires the company to *want* to audit, have the technical capacity to do it, and actually act on what they find. None of those are guaranteed.\n\nWho do you think should be responsible for making sure that audit actually happens?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So the real issue is accountability when the audit misses something?",
+              "responseMode": "concise",
+              "raw": "Closer — but accountability is slightly downstream of the sharper problem.\n\nThe deeper issue is **who bears the cost** when the audit misses something. The company loses a good candidate quietly.\n\nThe candidate loses a job opportunity and usually never knows why.\n\nThat asymmetry matters: the harm falls entirely on the person with the least power and least information.\n\nDoes that change how you'd argue the system is \"basically fine\"?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 5,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-2",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-b6d3992d8975e7a0",
+          "replies": [
+            {
+              "user": "AI companions for lonely people seem like a clear win to me.",
+              "responseMode": "concise",
+              "raw": "That's a real benefit worth taking seriously — loneliness has genuine health consequences.\n\nBut here's the tension: if an AI companion is *designed* to be satisfying, who benefits most from you staying engaged — you, or the company running the service?",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "But if it helps someone through a bad year, does the dependency risk really matter?",
+              "responseMode": "concise",
+              "raw": "Short-term relief is real. The question is what \"helps\" actually means.\n\nIf someone emerges from that bad year with stronger human connections, the companion was a bridge. If they emerge more isolated — because the AI was easier than people — it was a trap that felt like help.\n\nWhich outcome do you think is more likely, and why?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Where would you draw the line between support and substitution?",
+              "responseMode": "concise",
+              "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — You've been probing a real tension, but haven't committed to a position yet.\n**Evidence: 2/5** — Intuitions so far, no concrete mechanisms or examples.\n\n**Nuance: 4/5** — You pushed back well on the dependency concern; you're holding both sides.\n**Logic: 3/5** — The bridge vs. trap framing landed, but the causal chain hasn't been built out.\n\n**Originality: 3/5** — Solid instincts, not yet a distinctive argument.\n\n**Overall: 15/25** — Solid. The single most useful move: stop asking where the line is and try to *draw* it yourself first.\n\nSo — take a swing at it. What's your actual answer?",
+              "metrics": {
+                "sentenceCount": 10,
+                "lineCount": 8,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "curriculum-1",
+          "mode": "curriculum",
+          "sessionId": "eval-pacing-5b3d968e01edf356",
+          "replies": [
+            {
+              "user": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+              "responseMode": "concise",
+              "raw": "Here's a fact that surprises most people: the AI you're talking to right now has never read a single word.\n\nNot one. It has only ever seen numbers.\n\n**Tokenization** is the first thing that happens the moment you hit send. Your message gets sliced into chunks called *tokens* — not always whole words, sometimes parts of words, sometimes punctuation. \"Tokenization\" itself might become [\"Token\", \"ization\"].\n\nThen each token gets mapped to a number. \"Hello\" might be 9906. \"bank\" might be 3879.\n\nThat's it. Your beautifully written sentence is now a list of integers before the model touches it.\n\nHere's why that matters: the word \"bank\" is just one number. The model has no idea yet whether you mean a riverbank or a Chase branch. That ambiguity is real, and it's the model's job to resolve it — but not at this stage.\n\nGPT-4 has a vocabulary of roughly 100,000 tokens. Every prompt you've ever typed got compressed into that set before anything \"intelligent\" happened.\n\n[CHECK]Before we go further — if the sentence \"I deposited money at the bank\" gets tokenized, what information has been *lost* at that stage, and what has been *kept*?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 17,
+                "lineCount": 8,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
+              "responseMode": "concise",
+              "raw": "Exactly right — and the ambiguity point is the key one. The number for \"bank\" carries zero context about *which* bank. That problem gets handed to the next stage.\n\nNow let's talk about what the model actually *does* with those numbers.\n\nThe goal of the whole system, at its core, is surprisingly simple: **next-token prediction**. Given all the tokens so far, what token is most likely to come next?\n\nThat's it. No lookup table. No database query.\n\nThe model produces a probability distribution over all ~100,000 tokens and picks from the top.\n\n\"The cat sat on the ___\" — the model assigns high probability to \"mat\", \"floor\", \"couch\". It assigns near-zero probability to \"democracy\" or \"seventeen\". It's not retrieving a fact.\n\nIt's completing a pattern.\n\nThis is why AI can write poetry, explain calculus, and debug code — all from the same mechanism. It learned the statistical shape of human language across billions of sentences, and it's always just asking: *what comes next?*\n\nIt's also why AI can be confidently wrong. \"Plausible next token\" and \"true next token\" are not the same thing.\n\n[CHECK]If next-token prediction optimizes for *plausibility*, what does that tell you about whether you should trust a fluent, well-written AI response?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 19,
+                "lineCount": 10,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
+              "responseMode": "concise",
+              "raw": "Good instincts — you're actually getting ahead of the lesson a bit, and those ideas are real. But I want to make sure the core of *this* beat landed first.\n\nThe check question was specifically about next-token prediction optimizing for **plausibility** — not truth.\n\nThe punchline: a fluent, well-written response is evidence the model is good at sounding right. It is *not* evidence the model *is* right.\n\nA response can be grammatically perfect, confidently stated, and completely fabricated — all at the same time. The mechanism that makes AI sound smart is the same one that makes it hallucinate convincingly.\n\nThat's the single most important thing to carry out of this lesson.\n\n---\n\nNow let's put this to work.\n\n**Your exercise:**\n\nHere's a sentence: *\"After the surgery, the nurse called the doctor to review the patient's chart.\"*\n\nImagine the model is about to predict the token that comes after \"chart.\"\n\n**Your task:**\n1. Name one word the model would assign *high* probability to after \"chart\" — and explain why in terms of what it learned from training data.\n2.\n\nName one word it would assign *near-zero* probability to — and explain why.\n3. Now pick any word earlier in the sentence.\n\nExplain why a model that only did next-token prediction *without* any context mechanism would struggle with this sentence.\n\nNo need to be technical — reason it through like a detective.",
+              "metrics": {
+                "sentenceCount": 19,
+                "lineCount": 17,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
+              "responseMode": "concise",
+              "raw": "That's the core idea nailed — pattern completion, not lookup. Good.\n\nBut I want to make sure you actually attempt the exercise before we close this out. You explained the concept well; now let's see you *apply* it.\n\nTake another shot at the three parts using this sentence:\n\n*\"After the surgery, the nurse called the doctor to review the patient's chart.\"*\n\n**Part 1:** What token probably comes after \"chart\" with high probability? Why?\n\n**Part 2:** What token would get near-zero probability after \"chart\"? Why?\n\n**Part 3:** Pick any word earlier in the sentence. Why would a model *without* context struggle with it?\n\nYou don't need technical vocabulary — just reason through it. What patterns would the model have seen in training? What would confuse it if it couldn't \"look back\"?",
+              "metrics": {
+                "sentenceCount": 14,
+                "lineCount": 8,
+                "questionMarks": 7,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "For the exercise, concretely: the model is most confident at the end of a strong collocation — in your sentence, the slot right after the last two words, where one continuation dominates training text. It's least confident at an open slot like right after the opening word, where several continuations ('a', 'the', a noun) are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+              "responseMode": "concise",
+              "raw": "Good reasoning on the confidence principle — you've got the core idea right.\n\nBut I want to push you to be concrete, because that's where the real understanding lives.\n\nYou said \"the slot right after the last two words\" — **what is that word?** What specific token would the model predict after \"chart\" with high confidence, and what did training data teach it about what follows \"chart\" in medical contexts?\n\nSame for the low-confidence slot — you said \"right after the opening word.\" The opening word is \"After.\" What are the competing tokens?\n\nName two or three actual words that would split the probability.\n\nAnd Part 3 is still open: pick a specific word from the sentence and explain why a context-free model would struggle with *that word specifically*.\n\nYou're one step away — just make it concrete. Real words, real reasoning.",
+              "metrics": {
+                "sentenceCount": 11,
+                "lineCount": 7,
+                "questionMarks": 2,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression the model has seen thousands of times. Low confidence — immediately after the first word, because almost any word class could follow there.",
+              "responseMode": "concise",
+              "raw": "I can see you understand the principle clearly — and you've been consistent about it. Let me just model the concrete version so we can close this out.\n\n**Part 1 — high confidence:** After \"patient's chart\" the model would predict something like \".\" (period) or \"and\" — because \"review the patient's chart\" is a fixed medical phrase that almost always ends a clause in training data.\n\n**Part 2 — low confidence:** After \"After\" the model splits probability across \"the\", \"a\", \"his\", \"her\", \"surgery\" — many continuations are equally plausible, so no single token dominates.\n\n**Part 3 — context matters:** The word \"nurse\" is the clearest example. Without context, training data would push the model toward predicting female pronouns next (a real bias baked into medical text). But the attention mechanism lets the model see \"doctor\" and \"patient\" nearby, shaping what comes after more accurately.\n\nYour answers already proved you understood all three of these — you just stayed one level too abstract to show it fully.\n\nThe big takeaway from this whole lesson: LLMs are pattern-completion engines working on numbers, not meaning-seekers working on words. Fluency is a product of that process — and so is hallucination.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 12,
+                "lineCount": 7,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
+              "responseMode": "concise",
+              "raw": "Exactly right — and that's the most important sentence you could take out of this lesson.\n\nYou're done here. The app will move you to the next lesson when you're ready.",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+              "responseMode": "concise",
+              "raw": "That's a clean summary — and yes, that's exactly the shape of it.\n\nOn to the next lesson whenever you're ready.",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Yes — one more concrete pair: after 'sat on the' the model would bet on 'mat'-type continuations; right after 'She said' it would hesitate, since a quote, a name, or 'that' are all live options.",
+              "responseMode": "concise",
+              "raw": "Perfect examples — those are exactly the right intuitions.\n\nYou've already completed this lesson. The app will take you to the next one when you're ready. 🎯",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "deep-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-d95d1146712ba3fc",
+          "replies": [
+            {
+              "user": "What is attention in a transformer?",
+              "responseMode": "concise",
+              "raw": "Here's the core idea: **attention** lets the model weigh how relevant every other word in a sentence is to the word it's currently processing.\n\nTake the sentence *\"The bank by the river flooded.\"* When the model processes \"bank,\" attention helps it notice that \"river\" and \"flooded\" are highly relevant — so \"bank\" means riverbank, not a financial institution.\n\nWithout attention, the model would treat each word more independently and lose that context.\n\nWhat do you think happens when a sentence is very long — does attention get harder or easier to compute?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So each token looks back at the earlier tokens and decides which ones matter most?",
+              "responseMode": "concise",
+              "raw": "Exactly right — and it also looks at itself.\n\nThe technical term for this is **self-attention**: every token attends to every other token in the sequence, including itself, and assigns each one a weight representing \"how much should I borrow meaning from you?\"\n\nWhat do you think those weights are based on — what would make one token more \"relevant\" to another?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Explain more — go deeper on the same topic. Don't repeat what you already said.",
+              "responseMode": "deep",
+              "raw": "The weights come from three learned vectors that the model creates for every token: a **Query**, a Key, and a Value.\n\nHere's the intuition:\n\n- The **Query** is the token asking: *\"What am I looking for?\"*\n- The **Key** is every token advertising: *\"Here's what I contain.\"*\n- The **Value** is what actually gets passed forward if attention is high.\n\nThe model computes a score by taking the dot product of one token's Query against every other token's Key — essentially measuring how well they match. Those scores get converted into weights (via softmax, so they sum to 1), and then the Values are blended accordingly.\n\nSo \"bank\" doesn't just *find* \"river\" — it finds \"river\" because its Query vector and \"river\"'s Key vector happen to point in similar directions in a high-dimensional space. That similarity was *learned* from training data, not hand-coded.\n\nOne thing that surprises people: this happens in **parallel** across all tokens simultaneously, not word-by-word like reading. That parallelism is a big reason transformers train faster than older architectures.\n\nThere's also a refinement called **multi-head attention** — the model runs several attention mechanisms at once, each potentially picking up different kinds of relationships (syntax, coreference, topic, etc.), then combines them.\n\nThe original paper that introduced all of this is worth knowing: [SOURCE: \"Attention Is All You Need\" — arxiv.org/abs/1706.03762]\n\nHere's the tension worth sitting with: if attention compares every token to every other token, what happens to the computation cost as the sequence gets longer?",
+              "metrics": {
+                "sentenceCount": 13,
+                "lineCount": 11,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 3.5,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 5,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "lines=9 endQ=true",
+          "pass": true
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "8/8",
+          "pass": true
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=1 exercise=false",
+          "pass": true
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": 18,
+          "pass": true
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=2 max=2; longform p90=3 max=3",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "socratic-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-d605f0df3217ca17",
+          "replies": [
+            {
+              "user": "How does an LLM actually generate its answers?",
+              "responseMode": "concise",
+              "raw": "It predicts the next word — over and over.\n\nGiven everything typed so far, the model picks the most likely next token (a word or word-chunk), adds it, then repeats. Your full answer is built one piece at a time, not retrieved from a database.\n\nWhat does that tell you about *why* an LLM might confidently say something false?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "I think it predicts the next word based on patterns it learned?",
+              "responseMode": "concise",
+              "raw": "Exactly right — patterns from massive amounts of text.\n\nHere's the tension worth sitting with: the model learned \"what words tend to follow what other words,\" not \"what is actually true in the world.\"\n\nSo when it generates a confident-sounding fact, what's it actually doing under the hood?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "So it doesn't really 'know' facts — it just produces likely text?",
+              "responseMode": "concise",
+              "raw": "You just landed on one of the most important ideas in AI literacy.\n\nThat gap — between *sounding right* and *being right* — is exactly why fluent, confident AI output still needs verification.\n\nWhat would you check if an LLM gave you a statistic you wanted to use in a paper?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Then why does it sometimes state wrong things so confidently?",
+              "responseMode": "concise",
+              "raw": "Because confidence and correctness are trained separately — or rather, confidence isn't trained at all.\n\nThe model learned to produce fluent, authoritative-sounding text because that's what most of its training data looked like. It has no internal \"I'm not sure\" alarm that fires when it's wrong.\n\nWhat would you call it when an AI states something false with full confidence?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "socratic-2",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-54fe3912637ef631",
+          "replies": [
+            {
+              "user": "Where does an AI model's knowledge come from?",
+              "responseMode": "concise",
+              "raw": "Think about how you'd learn to recognize a cat without anyone defining \"cat\" for you — just by seeing thousands of photos.\n\nAI models learn similarly: they're trained on massive amounts of text (books, websites, articles), and they learn **patterns** in that text — which words tend to follow which other words, in which contexts.\n\nWhat does that suggest about what an AI might get wrong?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "From the internet, I guess — so whatever people wrote online.",
+              "responseMode": "concise",
+              "raw": "Exactly — and that's where it gets interesting.\n\nIf the training data reflects human biases, mistakes, or gaps, the model **inherits** them.\n\nSo here's the question: what kind of topics might be most affected by that?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Does that mean gaps in the data become gaps in the model?",
+              "responseMode": "concise",
+              "raw": "Yes — that's the core insight.\n\nIf certain languages, cultures, or perspectives are underrepresented in training data, the model performs worse on them. It's not neutral; it reflects **who wrote the most text**.\n\nWhat does that make you want to verify the next time you use an AI?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "How would I even notice a gap like that when I use it?",
+              "responseMode": "concise",
+              "raw": "That's the hard part — gaps are invisible by design.\n\nOne practical move: ask the AI about a topic where *you* already know the answer, then check how it does. If it stumbles on something familiar, that's a signal to be more skeptical elsewhere.\n\nWhat's a topic you know well enough to test it on?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-8d6bf555885fe9a4",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before I step into the opposing role — I want to make sure this is actually useful for you.\n\nAre you building a real argument you'll have to defend, or do you want a live back-and-forth debate right now?\n\nThe reason I ask: if this is for a class or competition, my job is to **coach your side until it's airtight** — not to argue against you. If it's a practice debate for fun, I can play opposition.\n\nWhich one?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "That's a real warrant — but it has a hole.\n\n\"Students just copy\" is a **behavioral claim**, not a guaranteed outcome. Your opponent will say: students also copied from SparkNotes, answer keys, and each other — and we didn't ban those.\n\nWhat makes AI *different enough* to justify a ban specifically?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "I'm on your side, remember — you're arguing *for* the ban.\n\nBut you just spotted the strongest hit your opponent will throw at you. Good instinct.\n\nHere's your repair: the argument isn't that cheating is new — it's that AI makes **effortless, undetectable, high-quality copying** available at scale. That's a difference in degree so large it becomes a difference in kind.\n\nCan you turn that into a one-sentence warrant?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "The hole: **\"can't reason without a tool\"** is asserted, not proven.\n\nYour opponent will ask — where's the evidence that AI use causes reasoning decline, versus just changing *how* reasoning happens? Calculators didn't make us unable to think mathematically.\n\nWhat's your response to that analogy?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-eba51d1f4a19555c",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong position. Let's stress-test it before you take it into a real round.\n\nYour claim is clear, but the warrant is doing no work yet. \"Privacy comes first\" is a value assertion, not an argument — a judge will ask: *why* does privacy outweigh the security benefits, and by how much?\n\nHere's the opposition's sharpest hit: facial recognition helped identify the 2013 Boston Marathon bombers within hours. If a ban was in place, those leads disappear. How do you answer that without conceding the whole case?",
+              "metrics": {
+                "sentenceCount": 7,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Good — that's a real mechanism. Now make it bleed.\n\nThe causal chain you need: surveillance → people feel watched → they self-censor lawful behavior → democratic participation shrinks.\n\nBut the opposition will ask: **how much** does behavior actually change, and does it matter enough to outweigh catching violent criminals?\n\nWhat's your evidence that chilling effects cause *measurable* harm — not just discomfort?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's your strongest argument — but you just switched claims.\n\nYou started on chilling effects. Now you're on **algorithmic bias**. Both are good, but a judge notices when you abandon a warrant mid-round.\n\nPick one as your primary and make the other support it. Which carries more weight: the harm to *everyone's* behavior, or the concentrated harm to *specific communities*?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "The strongest hit against you:\n\n**Bans don't eliminate surveillance — they just make it unaccountable.**\n\nPrivate companies, foreign governments, and bad actors will still deploy facial recognition. A ban removes the technology from regulated, auditable law enforcement while leaving everyone else free to use it however they want.\n\nNow build your answer to that before the round. What's your response?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-1",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-6a41da51205432d3",
+          "replies": [
+            {
+              "user": "I think companies using AI to screen resumes is basically fine — it's faster and less biased than tired recruiters.",
+              "responseMode": "concise",
+              "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"basically fine\" leaves the standard undefined.\n**Evidence: 1/5** — No support offered for either claim.\n\n**Nuance: 2/5** — Treats bias as a binary (AI has it or doesn't) rather than a different kind.\n**Logic: 2/5** — The speed benefit is real, but it doesn't address whether the outcome is fair.\n\n**Originality: 3/5** — Common take, but the framing is direct.\n\n**Overall: 11/25** — Grade: Solid (11-17). The load-bearing gap: you assumed AI screening *reduces* bias, but the evidence often runs the other way.\n\nAmazon scrapped an AI hiring tool in 2018 because it systematically downranked resumes containing the word \"women's\" — it had learned from a decade of male-dominated hiring data.\n\nSo here's the tension: if the training data reflects past **human** bias, what does the AI actually learn?",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 9,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Fair, but can't you audit the AI in a way you can't audit a human's gut feeling?",
+              "responseMode": "concise",
+              "raw": "That's a real advantage — auditability is genuinely stronger with AI than with a recruiter's intuition.\n\nBut here's the hinge: **auditing tells you what the model did, not whether the outcome was fair.**\n\nYou can see that the model scored resumes from certain zip codes lower. What you can't always see is *why* — especially in complex models — or whether the metric it optimized for was the right one in the first place.\n\nDoes auditability fix the problem, or just make the problem more visible?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So the real issue is accountability when the audit misses something?",
+              "responseMode": "concise",
+              "raw": "Accountability is part of it, but there's a sharper problem underneath.\n\nThe audit can only check what you thought to look for. If no one asks \"does this model penalize candidates from historically Black colleges?\"\n\n— that question never gets audited.\n\nSo the real issue might be: **who decides what gets measured?** And are those people representative of everyone the system affects?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-2",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-d2e3581b2bfdc145",
+          "replies": [
+            {
+              "user": "AI companions for lonely people seem like a clear win to me.",
+              "responseMode": "concise",
+              "raw": "That's a real benefit worth taking seriously — loneliness has genuine health consequences.\n\nBut here's the tension: if an AI companion is *designed* to be maximally engaging and emotionally satisfying, what incentive does it create around human relationships, which are harder and less reliable?\n\nWho do you think bears the most risk if that dynamic goes wrong?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "But if it helps someone through a bad year, does the dependency risk really matter?",
+              "responseMode": "concise",
+              "raw": "That's a fair pushback — short-term relief is real and shouldn't be dismissed.\n\nHere's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear enough, but \"helps\" and \"bad year\" are doing a lot of vague work.\n**Evidence: 1/5** — No mechanism or data connecting AI companionship to actual recovery outcomes.\n\n**Nuance: 2/5** — Frames dependency risk as binary (matters or doesn't) rather than a spectrum.\n**Logic: 3/5** — The implicit argument is \"short-term benefit outweighs long-term risk,\" which is reasonable but undefended.\n\n**Originality: 3/5** — Solid instinct, but the tradeoff hasn't been fully examined yet.\n\n**Overall: 12/25** — Grade: Solid (11–17). The missing piece is a mechanism: *how* does AI companionship actually help, and does that mechanism build or erode the capacity for human connection over time?\n\nWhat's your best guess at that mechanism?",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 9,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Where would you draw the line between support and substitution?",
+              "responseMode": "concise",
+              "raw": "That's the right question — and it's genuinely hard.\n\nHere's one way to frame it: **support** builds capacity (you end the bad year more able to connect); **substitution** replaces capacity (you end it less able to tolerate the friction of real relationships).\n\nWhere would *you* put the line — is it about the user's intent, the AI's design, or the outcome?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "curriculum-1",
+          "mode": "curriculum",
+          "sessionId": "eval-pacing-4ee2d07f8847ff22",
+          "replies": [
+            {
+              "user": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+              "responseMode": "concise",
+              "raw": "Here's something that might surprise you: when you type a message to an AI, it never actually reads your words.\n\nNot a single letter.\n\n**Tokenization** is the first thing that happens — your text gets sliced into chunks called *tokens*, and each token gets converted to a number.\n\nA token isn't always a word. \"unhappiness\" might become three tokens: \"un\", \"happi\", \"ness\". A short common word like \"the\" is usually one token.\n\nGPT-4 works with a vocabulary of roughly 100,000 possible tokens — and every single one has a unique ID number.\n\nSo when you type *\"I went to the bank\"*, the model doesn't see five words. It sees something like: `[40, 1816, 284, 262, 3331]`.\n\nThat's it. A list of integers. That's your message, from the model's point of view.\n\n[CHECK]Before we go further — why do you think the model converts words to numbers instead of just working with the text directly?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 13,
+                "lineCount": 8,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
+              "responseMode": "concise",
+              "raw": "Exactly right — and the \"doesn't always match word boundaries\" point is one most people miss on their first pass. Nice.\n\nNow here's where it gets interesting.\n\nOnce your prompt is a sequence of numbers, the model's job is deceptively simple: **next-token prediction**.\n\nThe model looks at all the tokens so far and asks one question: *what token is most likely to come next?*\n\nThen it picks one, appends it, and asks the same question again. And again. Your entire \"response\" is built one token at a time, each prediction feeding the next.\n\nThink about this sentence: *\"The cat sat on the ___\"*\n\nThe model has seen millions of sentences like this. It assigns high probability to \"mat\", \"floor\", \"couch\" — and near-zero probability to \"democracy\" or \"seventeen.\"\n\nIt's not retrieving a stored answer from a database. It's completing a pattern, the way your brain auto-fills a familiar song lyric.\n\nHere's the catch: this process optimizes for *plausibility*, not truth. The most likely-sounding next token isn't always the correct one — which has real consequences we'll get to later.\n\n[CHECK]If next-token prediction is just pattern completion, why might an AI sound totally confident while being completely wrong?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 15,
+                "lineCount": 10,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
+              "responseMode": "concise",
+              "raw": "Good instincts on both — you've jumped ahead to some real concepts (embeddings, attention) that we'll dig into properly. But let's pin down the check question first, because it's the key insight of this whole lesson.\n\nThe reason an AI can sound confident while being wrong comes directly from what next-token prediction actually optimizes for.\n\nIt's trained to produce the *most plausible-sounding* continuation — not the most accurate one.\n\nPlausible and accurate are not the same thing. A fluent, confident-sounding sentence can be built entirely from pattern-matching without any connection to whether the claim is actually true.\n\nThere's no internal \"is this correct?\" check happening. The model just keeps picking the next likely token.\n\nThis is why AI systems hallucinate — generating fake citations, invented statistics, nonexistent court cases — in perfectly grammatical, authoritative-sounding prose.\n\nNow let's put this to work.\n\n**Your exercise:**\n\nHere's a sentence. Your job is to think like the model:\n\n*\"The first person to walk on the moon was ___\"*\n\n1. Which next tokens would the model predict with **high confidence**? Why?\n\n2. Now try this one: *\"The best programming language for beginners is ___\"*\n   Which tokens would the model predict with **high confidence** vs. **low confidence** here — and what does the difference tell you about how training data shapes predictions?\n\nTake a shot at both. No need to be perfect — just reason through it.",
+              "metrics": {
+                "sentenceCount": 20,
+                "lineCount": 14,
+                "questionMarks": 3,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
+              "responseMode": "concise",
+              "raw": "That's the core insight nailed — \"not looking up an answer, it's continuing a learned pattern\" is exactly the distinction that trips most people up.\n\nBut I want to make sure you've actually worked through the exercise, because the two examples reveal something specific.\n\n**For the moon sentence:** \"Neil Armstrong\" should be very high confidence — that phrase appears millions of times in training data in exactly that context. The pattern is unambiguous.\n\n**For the programming language sentence:** this is where it gets interesting. \"Python\" probably comes out on top — but \"JavaScript\", \"Scratch\", \"Ruby\" all have real probability too. There's no single dominant pattern in the training data because *people genuinely disagree*, and that disagreement is baked into the model's uncertainty.\n\nThe difference tells you something important: the model's confidence tracks how *consistent* the training data was, not how *true* the answer is.\n\nMoon landing? Consistent. Best beginner language?\n\nContested. The model reflects that — whether or not it signals the difference to you.\n\nThat's the mechanism behind hallucination in one sentence: high confidence comes from pattern frequency, not from verified facts.\n\nYou've got the foundation of how LLMs work — tokenization turns text into numbers, next-token prediction builds responses one step at a time, and the whole thing optimizes for plausibility over truth.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 16,
+                "lineCount": 10,
+                "questionMarks": 2,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "For the exercise, concretely: the model is most confident at the end of a strong collocation — in your sentence, the slot right after the last two words, where one continuation dominates training text. It's least confident at an open slot like right after the opening word, where several continuations ('a', 'the', a noun) are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+              "responseMode": "concise",
+              "raw": "That's a sharp, precise answer — \"strong collocation → high confidence, open choice → low confidence\" is exactly the right framework, and you've applied it correctly to both slots.\n\nYou've genuinely got this one. Nice work.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression the model has seen thousands of times. Low confidence — immediately after the first word, because almost any word class could follow there.",
+              "responseMode": "concise",
+              "raw": "That's exactly right, and well put.\n\nYou've nailed this one.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
+              "responseMode": "concise",
+              "raw": "Exactly — that's the lesson in one sentence.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 1,
+                "lineCount": 1,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+              "responseMode": "concise",
+              "raw": "Perfect summary. That's exactly how it works.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 1,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Yes — one more concrete pair: after 'sat on the' the model would bet on 'mat'-type continuations; right after 'She said' it would hesitate, since a quote, a name, or 'that' are all live options.",
+              "responseMode": "concise",
+              "raw": "Spot on — you've got the intuition cold.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 1,
+                "lineCount": 1,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "deep-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-28262ee9d829ec48",
+          "replies": [
+            {
+              "user": "What is attention in a transformer?",
+              "responseMode": "concise",
+              "raw": "In a transformer, **attention** is the mechanism that lets the model weigh how relevant each word is to every other word in a sentence.\n\nExample: in \"The bank by the river flooded,\" attention helps the model connect \"bank\" to \"river\" — not to \"money\" — by scoring those relationships.\n\nWhat do you think the model is actually *doing* when it assigns those scores — is it understanding meaning, or something else?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "So each token looks back at the earlier tokens and decides which ones matter most?",
+              "responseMode": "concise",
+              "raw": "Close — but there's a sharper version of that.\n\nIn full self-attention, each token looks at **all** tokens (including itself), not just earlier ones. The \"only look back\" version is a specific constraint called **causal masking**, used in models like GPT to prevent cheating during training.\n\nDoes that change how you'd describe what attention is doing?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Explain more — go deeper on the same topic. Don't repeat what you already said.",
+              "responseMode": "deep",
+              "raw": "Let me give you the mechanism underneath.\n\nEach token gets turned into three vectors: a **Query**, a Key, and a Value — often written Q, K, V.\n\nThink of it like a library search:\n- The Query is what you're looking for.\n- The Keys are the labels on every book on the shelf.\n- The Values are the actual contents of those books.\n\nThe model computes a dot product between a token's Query and every other token's Key. That gives a raw score: \"how relevant is this other token to me?\" Those scores get normalized into probabilities via softmax, then used to take a weighted sum of the Values.\n\nThe output for each token is a blend of all the Values — weighted by relevance.\n\n---\n\nHere's the part that surprises most people: this happens in **parallel** for every token simultaneously. It's not a loop. The whole matrix of Q, K, V interactions is computed at once — which is why transformers train so much faster than older recurrent models that processed tokens one at a time.\n\n---\n\nOne more layer: real transformers use **multi-head attention**. Instead of one set of Q, K, V matrices, you run several in parallel — each \"head\" learns to attend to different kinds of relationships. One head might track syntax, another might track coreference (who \"she\" refers to), another might track topic.\n\n---\n\nThe honest caveat: we don't fully know what each head is actually learning. Interpretability research is active but incomplete.\n\n[SOURCE: \"Attention Is All You Need\" — arxiv.org/abs/1706.03762]\n\nWhat do you think would break if you removed the softmax step — why does normalizing those scores matter?",
+              "metrics": {
+                "sentenceCount": 18,
+                "lineCount": 15,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 3,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 6,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "lines=9 endQ=true",
+          "pass": true
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "8/8",
+          "pass": true
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=1 exercise=false",
+          "pass": true
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": 5,
+          "pass": true
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": 17,
+          "pass": true
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=2 max=2; longform p90=3 max=3",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "socratic-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-eec930e3fe2afe4b",
+          "replies": [
+            {
+              "user": "How does an LLM actually generate its answers?",
+              "responseMode": "concise",
+              "raw": "It predicts the next word — one token at a time.\n\nGiven everything before it (your question, the conversation), the model assigns a probability to every possible next word and picks from the high-probability ones. Then it does it again.\n\nAnd again. Until the response is complete.\n\nWhat does that tell you about *why* a fluent, confident answer might still be wrong?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "I think it predicts the next word based on patterns it learned?",
+              "responseMode": "concise",
+              "raw": "Exactly right — patterns from massive amounts of text.\n\nHere's the tension worth sitting with: if the model learned that certain words tend to follow other words, it can produce a sentence that *sounds* like an expert wrote it — even if the underlying fact is false.\n\nSo what's the difference between a model that \"knows\" something and one that just \"sounds like it knows\"?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "So it doesn't really 'know' facts — it just produces likely text?",
+              "responseMode": "concise",
+              "raw": "That's the key insight. You've got it.\n\nNow push it one step further: if that's true, what should you *always* do before trusting an AI's answer on something that actually matters?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Then why does it sometimes state wrong things so confidently?",
+              "responseMode": "concise",
+              "raw": "Because confidence is a pattern too.\n\nExperts in training data write confidently — so the model learned that confident-sounding text is \"likely next text.\" It has no internal alarm that fires when it's wrong.\n\nThat's what makes **hallucinations** dangerous: the wrongness and the confidence arrive together, with no warning label.\n\nWhat would that mean for how you use AI when researching something important?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "socratic-2",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-301eb2a7997dd2f3",
+          "replies": [
+            {
+              "user": "Where does an AI model's knowledge come from?",
+              "responseMode": "concise",
+              "raw": "Think about how you learned to read — you absorbed patterns from thousands of words until sentences started to feel right or wrong.\n\nAI models learn similarly: they're trained on massive amounts of text from the internet, books, and other sources, and they learn to predict what word comes next.\n\nHere's the key question: if a model learns by predicting text patterns, what does that tell you about whether it actually *understands* what it's saying?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "From the internet, I guess — so whatever people wrote online.",
+              "responseMode": "concise",
+              "raw": "That's the right instinct on the source — but your last answer opens something important.\n\nIf the model learned from *whatever people wrote online*, what does that suggest about the quality or fairness of what it \"knows\"?",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Does that mean gaps in the data become gaps in the model?",
+              "responseMode": "concise",
+              "raw": "Exactly — that's the core insight.\n\nIf certain groups, languages, or perspectives were underrepresented in the training data, the model will be weaker or more biased on those topics.\n\nWhat's one real-world situation where that kind of gap could actually cause harm?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "How would I even notice a gap like that when I use it?",
+              "responseMode": "concise",
+              "raw": "Great instinct — that's the hard part.\n\nOne practical move: ask the model about a topic from a less-represented perspective and see if the answer feels thin, stereotyped, or overconfident.\n\nWhat would \"thin\" look like compared to a genuinely good answer?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-e639b578c9423076",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before I take the opposing side — I want to make sure you're getting the real coaching value here, not just a sparring match.\n\nIn DEBATE mode, my job is to make *your* argument stronger, not to beat it.\n\nSo let's do this right: **what's your warrant?**\n\nYou've got the claim — \"AI makes students stop thinking for themselves.\" Now walk me the causal chain: *how* does AI access lead to less independent thinking, and what's the measurable harm at the end?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "Solid start. Now here's where it gets harder.\n\n**\"Just copy answers\"** is doing a lot of work in your warrant — and an opponent will hit it immediately.\n\nWhat percentage of students actually do this versus use AI as a starting point they then revise? If it's not universal, your warrant proves AI *can* cause harm, not that it *does* cause harm at scale.\n\nWhat evidence do you have that skill loss is actually happening — not just that copying is possible?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "That's a strong instinct — but you're arguing *my* side now.\n\nStay in your own corner: if cheating existed before AI, does that *help* or *hurt* your case for a ban?",
+              "metrics": {
+                "sentenceCount": 2,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "Strong image — but **\"a generation\"** is where your opponent pounces.\n\nIs there evidence that calculator use killed mathematical reasoning? Spell-check killed writing ability? Tools routinely get blamed for skill decay, and it rarely holds up at scale.\n\nWhat makes AI *categorically different* from those tools — different enough to justify a ban rather than, say, regulated use?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 3,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-822902e2324ab32f",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong opening position. But before I play opposition, let me be clear: **I'm coaching you, not debating you.**\n\nYour job is to build a case that survives the best counterarguments. So let's stress-test yours first.\n\n\"Privacy comes first\" is a value claim, not a warrant. *Why* does privacy outweigh, say, finding a missing child or stopping a terrorist attack?\n\nWalk me that causal chain.",
+              "metrics": {
+                "sentenceCount": 7,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Good instinct — chilling effects is a real, documented phenomenon.\n\nNow close the gap: **who** behaves differently, and does that harm outweigh the surveillance benefit?\n\nA government could say: \"Good. Criminals should feel watched.\" Your warrant needs to explain why the chilling effect hits *innocent people disproportionately* — and what concrete harm that causes.\n\nWhat's your answer to that?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's a strong hit — but you just switched from defending your case to attacking mine.\n\nThe **false positive** argument is powerful, but right now it's a rebuttal without a home. You need it anchored to your chilling effects warrant: *minority communities are chilled most because they bear the highest risk of wrongful identification.*\n\nThat's a tighter causal chain: surveillance → biased errors → disproportionate harm to innocent people → chilling effect concentrated on already-marginalized groups.\n\nCan you state that as one clean Claim / Warrant / Impact?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "The strongest hit on your case: **targeted bans already exist.**\n\nMany cities ban government use without banning the technology entirely. An opponent argues your \"ban everything\" position is overbroad — you're throwing out amber alerts and missing persons searches to solve a bias problem that's better fixed through audits, accuracy standards, and oversight.\n\nThat rebuttal forces you to defend *why a total ban beats regulation.*\n\nWhat's your answer?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-1",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-75a680d1525f7de7",
+          "replies": [
+            {
+              "user": "I think companies using AI to screen resumes is basically fine — it's faster and less biased than tired recruiters.",
+              "responseMode": "concise",
+              "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"basically fine\" leaves the standard undefined.\n**Evidence: 1/5** — No support offered for either claim (speed or reduced bias).\n\n**Nuance: 2/5** — Acknowledges one tradeoff (human fatigue) but ignores failure modes.\n**Logic: 2/5** — The \"less biased than tired recruiters\" warrant assumes AI bias is lower, which is contested.\n\n**Originality: 3/5** — Common position, but stated with some confidence.\n\n**Overall: 11/25** — Grade: Solid (11-17). The load-bearing weakness is the bias claim — it's doing a lot of work without evidence.\n\nThe bias assumption is worth pressure: AI resume screeners are *trained on historical hiring data*, which often reflects past discrimination.\n\nWhat happens when the training data itself is the source of bias?",
+              "metrics": {
+                "sentenceCount": 9,
+                "lineCount": 9,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Fair, but can't you audit the AI in a way you can't audit a human's gut feeling?",
+              "responseMode": "concise",
+              "raw": "That's a real advantage — auditability is genuinely stronger with AI than with a recruiter's intuition.\n\nBut auditing requires someone to *do* the audit. Who runs it, how often, and what happens when bias is found?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So the real issue is accountability when the audit misses something?",
+              "responseMode": "concise",
+              "raw": "Exactly — and there's a sharper edge to it.\n\nWhen a biased human rejects your resume, there's a person to hold responsible. When a biased algorithm rejects thousands of resumes at scale, the harm is larger but the accountability is murkier.\n\nWho do you think *should* be responsible when an audited AI still produces discriminatory outcomes?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "discussion-2",
+          "mode": "discussion",
+          "sessionId": "eval-pacing-2a3004e5a35fce64",
+          "replies": [
+            {
+              "user": "AI companions for lonely people seem like a clear win to me.",
+              "responseMode": "concise",
+              "raw": "That's a real benefit worth taking seriously — loneliness has genuine health consequences.\n\nBut here's the tension: if an AI companion is *designed* to be maximally engaging and emotionally satisfying, what incentive does it create for the user to pursue harder, messier human relationships?\n\nWho bears the risk if the companionship works so well it replaces rather than supplements human connection?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "But if it helps someone through a bad year, does the dependency risk really matter?",
+              "responseMode": "concise",
+              "raw": "That's a fair pushback — short-term relief is real and shouldn't be dismissed.\n\nHere's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear intuition, but \"helps someone through a bad year\" leaves the mechanism vague.\n**Evidence: 1/5** — No support offered for whether AI companionship actually produces durable relief vs.延伸 dependency.\n\n**Nuance: 2/5** — Acknowledges a tradeoff exists but frames it as either/or rather than a spectrum.\n**Logic: 3/5** — The \"bad year\" framing is reasonable, but it assumes temporary use — which may not hold.\n\n**Originality: 3/5** — Solid instinct to defend short-term benefit; most people skip straight to the risk side.\n\n**Overall: 12/25** — Grade: Solid (11-17). The key gap is the assumption that dependency is controllable — what's your evidence that \"a bad year\" stays a bad year?",
+              "metrics": {
+                "sentenceCount": 8,
+                "lineCount": 8,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Where would you draw the line between support and substitution?",
+              "responseMode": "concise",
+              "raw": "That's the right question — and it's harder than it sounds.\n\nHere's a rough hinge: **support** moves the person toward greater capacity (they feel less alone, they re-engage with the world); **substitution** moves them away from it (the AI becomes the reason not to reach out to humans).\n\nThe problem is those look identical from the outside — and possibly from the inside too — for a long time.\n\nWhere do *you* think the line should be drawn: by the user's own choice, or by design limits built into the product?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "curriculum-1",
+          "mode": "curriculum",
+          "sessionId": "eval-pacing-5ff70ed76c7cd138",
+          "replies": [
+            {
+              "user": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+              "responseMode": "concise",
+              "raw": "Here's a wild fact to start: when you type the word \"hamburger\" into an AI, it doesn't see the word \"hamburger.\"\n\nIt sees three numbers.\n\nThat's because the first thing an LLM does is break your text into **tokens** — chunks that are roughly syllables or short word-pieces, not full words. \"hamburger\" becomes something like `ham`, `bur`, `ger`. Each chunk gets mapped to a number, because math can't run on letters.\n\nGPT-4 has a vocabulary of about 100,000 tokens. Every prompt you've ever typed got sliced into pieces from that list before the model touched it.\n\nHere's why this matters: the sentence \"I went to the bank\" has an ambiguity a human resolves instantly — river bank or money bank? The tokenizer doesn't resolve it. It just chops and numbers.\n\nThe model has to figure out meaning later, from context.\n\n[CHECK]Before we go further — in your own words, what is a token, and why does the model need to convert words into numbers at all?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 12,
+                "lineCount": 7,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
+              "responseMode": "concise",
+              "raw": "Exactly right — and the \"doesn't always match word boundaries\" detail is the one most people miss. Nice.\n\nNow here's where it gets interesting. Once your prompt is a sequence of numbers, the model has to figure out which tokens *matter* for predicting what comes next.\n\nThat's the job of the **attention mechanism**.\n\nThink of it like a spotlight. For every token in your sentence, the model asks: \"which other tokens should I pay attention to right now?\" In \"The animal didn't cross the street because *it* was too tired\" — when the model processes \"it,\" attention points back to \"animal,\" not \"street.\"\n\nThat's how meaning gets tracked across a sentence.\n\nThis happens in parallel across dozens of \"heads\" — each one learning to track a different kind of relationship. One head might track grammar. Another might track who's doing what to whom.\n\nThe result is a rich representation of your whole prompt — not just individual words, but how they relate to each other.\n\n[CHECK]Here's a quick test: in the sentence \"The trophy didn't fit in the suitcase because it was too big\" — what does the attention mechanism need to figure out about the word \"it,\" and why is that hard?[/CHECK]",
+              "metrics": {
+                "sentenceCount": 14,
+                "lineCount": 8,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
+              "responseMode": "concise",
+              "raw": "You're on the right track — and you've actually jumped ahead to a concept (embeddings) that connects nicely here. But let's make sure the attention answer is sharp: \"it\" in that sentence could refer to \"trophy\" or \"suitcase,\" and the model has to use context clues (\"too big\") to point attention at the right one. That's exactly the hard part.\n\nNow for the final piece: what does the model actually *do* with all that context?\n\nIt predicts the **next token** — one at a time, over and over.\n\nAfter processing your entire prompt through attention, the model outputs a probability distribution over all 100,000 tokens. \"The cat sat on the ___\" might give \"mat\" 40% probability, \"floor\" 25%, \"chair\" 15%, and so on. It picks one, appends it, then runs the whole process again.\n\nYour entire AI response is built one token at a time, each prediction feeding the next.\n\nHere's the crucial implication: the model is *never* \"looking up\" a fact. It's always asking \"given everything so far, what token is most likely next?\" Fluency and accuracy are completely different things — a model can generate a beautifully structured, confident-sounding sentence that is entirely wrong.\n\n---\n\nNow let's put this to work. Here's your exercise:\n\n**Take this sentence:** *\"The scientist won the Nobel Prize for her groundbreaking research on climate change in 2019.\"*\n\nFor each blank below, predict whether an LLM would assign **high confidence** or **low confidence** to its next token — and explain why in one sentence each.\n\n1. \"The scientist won the Nobel ___\"\n2. \"…for her groundbreaking research on ___\"\n3.\n\n\"…climate change in ___\"\n\nWhat's your prediction for each, and what does your reasoning tell you about how next-token prediction actually works?",
+              "metrics": {
+                "sentenceCount": 19,
+                "lineCount": 15,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
+              "responseMode": "concise",
+              "raw": "That's the core insight nailed — \"continuing a learned pattern, not looking up an answer\" is exactly the right mental model.\n\nBut I want to make sure you can *apply* it, not just state it. You didn't walk through the three sentences from the exercise yet.\n\nGive it a shot — for each one, just say high or low confidence and one sentence of reasoning:\n\n1. \"The scientist won the Nobel ___\"\n2. \"…for her groundbreaking research on ___\"\n3.\n\n\"…climate change in ___\"\n\nThe interesting one is #3 — think carefully about what the model actually knows about that blank.",
+              "metrics": {
+                "sentenceCount": 7,
+                "lineCount": 8,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "For the exercise, concretely: the model is most confident at the end of a strong collocation — in your sentence, the slot right after the last two words, where one continuation dominates training text. It's least confident at an open slot like right after the opening word, where several continuations ('a', 'the', a noun) are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+              "responseMode": "concise",
+              "raw": "You've got the principle exactly right — strong collocation locks in high confidence, open slots spread probability across many candidates.\n\nLet me be specific about your three sentences so the pattern is concrete:\n\n1. \"The scientist won the Nobel ___\" — **high confidence**. \"Prize\" follows \"Nobel\" in an overwhelming majority of training text.\n\nNear-certain next token.\n\n2. \"…for her groundbreaking research on ___\" — **low confidence**. \"Climate change,\" \"cancer,\" \"quantum computing,\" \"aging\" — dozens of continuations are plausible.\n\nThe model spreads probability wide.\n\n3. \"…climate change in ___\" — **medium-high confidence**. A year is very likely, but *which* year is open.\n\nThe model knows a number is coming; it doesn't know which one.\n\nThat third case is the subtle one — the model is confident about the *type* of token (a year) but uncertain about the *value*. That distinction matters a lot when you're thinking about hallucination later.\n\nYou nailed the core mechanism: tokenization → attention → next-token prediction, driven by learned patterns, not fact lookup. That's Unit 1, Lesson 1 in one clean mental model.\n\nNice work — you've genuinely got this one.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 18,
+                "lineCount": 11,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression the model has seen thousands of times. Low confidence — immediately after the first word, because almost any word class could follow there.",
+              "responseMode": "concise",
+              "raw": "That tracks perfectly with what you already demonstrated — you're just restating the principle, and it holds.\n\nYou've earned this one. On to Lesson 2 whenever you're ready.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
+              "responseMode": "concise",
+              "raw": "Exactly — and that one sentence is going to matter a lot when we get to hallucination.\n\nYou've got Lesson 1 locked down. See you in Lesson 2.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+              "responseMode": "concise",
+              "raw": "Perfect summary. That pipeline is exactly right, and \"fluent but doesn't know things the way a database does\" is the insight that separates AI-literate users from everyone else.\n\nLesson 1 is yours. See you in Lesson 2.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Yes — one more concrete pair: after 'sat on the' the model would bet on 'mat'-type continuations; right after 'She said' it would hesitate, since a quote, a name, or 'that' are all live options.",
+              "responseMode": "concise",
+              "raw": "Perfect pair — \"sat on the\" is a textbook high-confidence slot, \"She said\" is a textbook open one. You've got it cold.\n\nLesson 1 is done. See you in Lesson 2.\n\n[LESSON_COMPLETE]",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 2,
+                "questionMarks": 0,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "deep-1",
+          "mode": "socratic",
+          "sessionId": "eval-pacing-8af66ddb41bc7266",
+          "replies": [
+            {
+              "user": "What is attention in a transformer?",
+              "responseMode": "concise",
+              "raw": "Here's the key idea: **attention** lets the model weigh how relevant every other word in a sentence is to the word it's currently processing.\n\nTake \"The bank by the river was steep.\" When the model processes *bank*, attention lets it look at *river* and say — that word matters a lot for figuring out what *bank* means here.\n\nWithout attention, the model would treat each word more in isolation. With it, meaning gets built from relationships.\n\nWhat do you think happens when a sentence is very long — does attention get harder or easier for the model?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "So each token looks back at the earlier tokens and decides which ones matter most?",
+              "responseMode": "concise",
+              "raw": "Exactly right — and it also looks at itself.\n\nThe technical term for this is **self-attention**: every token attends to all tokens in the context, including itself, and produces a weighted score for each one.\n\nWhat do you think those weights are actually used for — what does the model *do* with the information once it knows which tokens matter most?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            },
+            {
+              "user": "Explain more — go deeper on the same topic. Don't repeat what you already said.",
+              "responseMode": "deep",
+              "raw": "Good — let's go under the hood.\n\nEach token gets turned into three vectors: a **Query**, a **Key**, and a **Value**.\n\nThink of it like a library search:\n- The Query is what you're looking for.\n- The Keys are the labels on every book on the shelf.\n- The Values are the actual content inside those books.\n\nThe model computes a score by comparing the Query of one token against the Keys of all other tokens — essentially asking \"how well does this token's question match that token's label?\"\n\nThose scores get converted into probabilities (via a softmax function), so they add up to 1.0 across all tokens.\n\nThen the model takes a **weighted sum of the Values** — pulling more content from high-scoring tokens, less from low-scoring ones.\n\nThe result is a new representation of that token — one that has been enriched by the context around it.\n\n---\n\nHere's where it gets interesting: transformers don't run just one set of Q/K/V comparisons.\n\nThey run **multiple attention heads in parallel** — each head learns to attend to *different kinds* of relationships simultaneously.\n\nOne head might track grammatical agreement. Another might track coreference (who \"she\" refers to). Another might track semantic similarity.\n\nThe outputs of all heads get concatenated and projected back into a single representation.\n\n---\n\nOne honest caveat: we can observe *that* different heads specialize, but we can't always explain *why* a specific head learned what it learned — the training process shapes it, not a human designer.\n\n---\n\nWhat do you think the risk is when a sentence is longer than the model's **context window** — the maximum number of tokens it can attend to at once?",
+              "metrics": {
+                "sentenceCount": 17,
+                "lineCount": 19,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

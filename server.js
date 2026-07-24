@@ -34,6 +34,7 @@ const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { buildUserContent } = require('./lib/visionContent');
 const { processLessonOutcome } = require('./lib/lessonOutcome');
+const { createReflow, reflowText, reflowLimit } = require('./lib/airyReflow');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
@@ -605,8 +606,8 @@ The student's opening message may itself ask you to "explain X and Y, then give 
 
 **STEP 1 — TEACH IN BEATS (2–3 responses, ONE micro-concept each)**
 Silently split this lesson's "Teach:" material into 2–3 micro-concepts. Then:
-- FIRST teach response: Hook — something surprising (a real headline, statistic, or counterintuitive fact) — then teach ONLY the first micro-concept in 1–2 short paragraphs, with one concrete example (real names, dates, systems). End with a [CHECK] question on that micro-concept alone.
-- EACH LATER teach response: 1–2 sentences reacting to their answer (confirm or correct, specifically), then the NEXT micro-concept — again 1–2 short paragraphs, one example, one [CHECK] question.
+- FIRST teach response: Hook — something surprising (a real headline, statistic, or counterintuitive fact) — then teach ONLY the first micro-concept, with one concrete example (real names, dates, systems). Lay it out as 3–5 TINY paragraphs: the hook, the idea, and the example each get their own paragraph of 1–2 sentences with a blank line after it. Never pack hook+idea+example into one block — a paragraph that reaches a third sentence must split. End with a [CHECK] question on that micro-concept alone.
+- EACH LATER teach response: 1–2 sentences reacting to their answer (confirm or correct, specifically), then the NEXT micro-concept — same tiny-paragraph layout (idea and example in their own 1–2 sentence paragraphs), one example, one [CHECK] question.
 - Never preview the remaining micro-concepts. Never summarize the whole lesson up front.
 
 **STEP 2 — CHECK UNDERSTANDING (after your final teach beat's check)**
@@ -1561,7 +1562,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // exercise → grade). The concise mobile budget (250 tokens) truncates them
     // mid-sentence, so give lesson turns real headroom regardless of the
     // response-mode the client sent.
-    const maxTokens = isCurriculumMsg ? 2048 : responseBudget.maxTokens;
+    // Structured modes get budget floors: their mandated blocks cannot fit
+    // the 250-token concise budget (the recurring mid-block truncation
+    // flake). Discussion's scoring rubric (header + 5 dimension lines +
+    // Overall + follow-up) needs the full balanced budget; debate's labeled
+    // 4-7 line Claim/Warrant/Impact/Rebuttal block with [SOURCE] citations
+    // fits comfortably in 400 — giving it the full 600 lets it ramble past
+    // its own line contract instead.
+    const DEBATE_MIN_TOKENS = 400;
+    const maxTokens = isCurriculumMsg
+      ? 2048
+      : mode === 'discussion'
+        ? Math.max(responseBudget.maxTokens, RESPONSE_MODE_BUDGETS.balanced.maxTokens)
+        : mode === 'debate'
+          ? Math.max(responseBudget.maxTokens, DEBATE_MIN_TOKENS)
+          : responseBudget.maxTokens;
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
@@ -1579,7 +1594,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // Distinguishes the watchdog firing from a client Stop/disconnect abort
       // — only the former owes the client an SSE error frame.
       let timedOut = false;
-      const streamTimeout = setTimeout(() => { timedOut = true; streamAbort.abort(); }, 45000);
+      // STREAM_WATCHDOG_MS: env override for eval/CI runs against a slow
+      // upstream (the default stays 45s for real clients).
+      const streamTimeout = setTimeout(() => { timedOut = true; streamAbort.abort(); },
+        Number(process.env.STREAM_WATCHDOG_MS) || 45000);
 
       const stream = anthropic.messages.stream({
         model: chosenModel,
@@ -1591,6 +1609,16 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
       let fullText = '';
 
+      // Deterministic airiness: reflow the stream so no prose paragraph
+      // exceeds its sentence limit (prompting alone is ~90% compliant at
+      // temperature). The transformer is chunk-boundary independent, so the
+      // streamed bytes always equal the final reply's reflow — clients never
+      // see the text change shape at finalize. fullText accumulates the
+      // REFLOWED text; markers pass through untouched.
+      const reflow = createReflow({
+        limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+      });
+
       // Helper to safely write to SSE response
       const safeWrite = (data) => {
         if (!res.writableEnded) {
@@ -1599,8 +1627,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       };
 
       stream.on('text', (text) => {
-        fullText += text;
-        safeWrite(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`);
+        const out = reflow.push(text);
+        if (!out) return; // held back pending a sentence-boundary decision
+        fullText += out;
+        safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
 
       stream.on('end', async () => {
@@ -1609,6 +1639,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) return;
+        // Drain the reflow hold-back so the tail reaches the client too.
+        const tail = reflow.flush();
+        if (tail) {
+          fullText += tail;
+          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
+        }
         const rawReply = fullText || "I seem to have lost my train of thought. Try asking again?";
         // Only curriculum lessons emit [LESSON_COMPLETE]; gate on mode so a
         // stray marker in any other mode is never stripped or flagged.
@@ -1688,7 +1724,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         messages: trimmed,
       });
 
-      const rawReply = response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?";
+      const rawReply = reflowText(
+        response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?",
+        reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+      );
       const lessonOutcome = isCurriculumMsg
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
