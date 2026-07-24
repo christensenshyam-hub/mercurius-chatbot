@@ -35,13 +35,34 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
+
+// The blocks_v1 contract lives in one CJS module shared with the server —
+// the gate validates with the same code the scrubber uses, so they can't drift.
+const { validateBlocks, parseQuizInterior, BLOCKS_V1 } = createRequire(import.meta.url)('../lib/blockMarkup.js');
+
+/**
+ * "Tap" the [Q] in the previous reply the way the app would: parse the last
+ * quiz block, pick the correct option (or a deliberate wrong one), and phrase
+ * it exactly like CheckQuizCard's auto-send. Falls back to a generic answer
+ * when no parseable [Q] exists (the criteria will catch the missing block).
+ */
+export function pickFromQuiz(lastReply, { wrong = false } = {}) {
+  const m = [...String(lastReply ?? '').matchAll(/\[Q\]\n?([\s\S]*?)\[\/Q\]/g)].pop();
+  if (!m) return 'I think the answer is the second option.';
+  const q = parseQuizInterior(m[1]);
+  if (!q.wellFormed) return 'I think the answer is the second option.';
+  const idx = wrong ? (q.answerIndex + 1) % q.options.length : q.answerIndex;
+  return `I picked ${String.fromCharCode(65 + idx)}) ${q.options[idx]}`;
+}
 
 // ---------------------------------------------------------------------------
 // Metrics (pure — unit-tested in tests/evalPacing.test.js)
 // ---------------------------------------------------------------------------
 
-/** Server↔client contract markers stripped before measuring prose. */
-const MARKER_RE = /\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\]/g;
+/** Server↔client contract markers stripped before measuring prose —
+ *  including the blocks_v1 tokens and the never-rendered ANS: line. */
+const MARKER_RE = /\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\]|\[KEY\]|\[\/KEY\]|\[EX\]|\[\/EX\]|\[Q\]|\[\/Q\]|^ANS:.*$/gm;
 
 /** Roadmapping / preview language the pacing rules ban. */
 export const PREVIEW_RE =
@@ -100,7 +121,7 @@ export function isTruncated(text) {
   // ending for the completion turn) — never a token-cap cutoff, even when the
   // words before the marker lack terminal punctuation ("Grade: A").
   const raw = String(text ?? '').trim();
-  if (/(\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\])$/.test(raw)) return false;
+  if (/(\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\]|\[\/KEY\]|\[\/EX\]|\[\/Q\])$/.test(raw)) return false;
   // Emoji are a deliberate ending too ("…own this. 🎯") — strip any trailing
   // emoji/pictographs (plus joiners and variation selectors) before the
   // terminal-punctuation check so they don't read as a mid-sentence cutoff.
@@ -122,7 +143,10 @@ export function previewHit(text) {
  * are line-formatted by design and fences aren't prose.
  */
 export function maxParagraphSentences(rawText) {
-  const noFences = stripMarkers(rawText).replace(/```[\s\S]*?(?:```|$)/g, '');
+  // [Q] blocks are line-structured (stem + option lines + ANS) — their
+  // interior is a native quiz card, not prose; drop the whole span.
+  const noQuiz = String(rawText ?? '').replace(/\[Q\][\s\S]*?(?:\[\/Q\]|$)/g, ' ');
+  const noFences = stripMarkers(noQuiz).replace(/```[\s\S]*?(?:```|$)/g, '');
   const paragraphs = noFences
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -240,6 +264,24 @@ const SCENARIOS = [
       { text: "Explain more — go deeper on the same topic. Don't repeat what you already said.", responseMode: 'deep' },
     ],
   },
+  {
+    // blocks_v1 (Presentation P4): same real iOS opener as curriculum-1, but
+    // declaring the capability. Teach-beat checks arrive as [Q] blocks; the
+    // dynamic turns "tap" an option exactly like CheckQuizCard's auto-send —
+    // correct picks on the happy path plus ONE deliberate wrong pick to
+    // exercise the reteach beat. Exercise/summary turns stay scripted prose.
+    id: 'curriculum-blocks-1', mode: 'curriculum', capabilities: [BLOCKS_V1],
+    turns: [
+      '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.',
+      { dynamic: (last) => pickFromQuiz(last) },
+      { dynamic: (last) => pickFromQuiz(last, { wrong: true }) },
+      { dynamic: (last) => pickFromQuiz(last) },
+      "For the exercise, concretely: the model is most confident at the end of a strong collocation — the slot where one continuation dominates training text. It's least confident at an open slot where several continuations are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+      "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression. Low confidence — immediately after the first word, because almost any word class could follow there.",
+      "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
+      "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -322,10 +364,17 @@ async function runScenario(baseUrl, scenario, delayMs) {
   const thread = [];
   const replies = [];
   for (const turn of scenario.turns) {
-    const { text: userText, responseMode } = typeof turn === 'string' ? { text: turn } : turn;
+    const spec = typeof turn === 'string' ? { text: turn } : turn;
+    // Dynamic turns compute their text from the PREVIOUS assistant reply —
+    // how the eval "taps" a [Q] option the way the app would.
+    const userText = typeof spec.dynamic === 'function'
+      ? spec.dynamic(replies.length ? replies[replies.length - 1].raw : '')
+      : spec.text;
+    const { responseMode } = spec;
     thread.push({ role: 'user', content: userText });
     const body = { sessionId, messages: thread };
     if (responseMode) body.responseMode = responseMode;
+    if (scenario.capabilities) body.capabilities = scenario.capabilities;
 
     // One retry on transient server errors (the 45s generation watchdog
     // occasionally fires on a slow curriculum turn) — a multi-run gate
@@ -450,8 +499,58 @@ export function evaluateCriteria(results) {
       pass: Boolean(deepReply) && deepReply.metrics.sentenceCount >= 8,
     },
     airyParagraphsCriterion(chatReplies, curriculumReplies, deepReply),
+    ...blocksCriteria(results, allReplies),
   ];
   return criteria;
+}
+
+/**
+ * blocks_v1 gate (Presentation P4). The blocks scenario must use the marker
+ * grammar correctly AND the mechanism must never leak to capability-less
+ * requests — the entire backward-compat story rides on that last criterion.
+ */
+function blocksCriteria(results, allReplies) {
+  const blocks = results.find((r) => r.id.startsWith('curriculum-blocks'));
+  const blockReplies = blocks ? blocks.replies : [];
+  const problems = blockReplies.flatMap((r, i) => {
+    const v = validateBlocks(r.raw);
+    return v.ok ? [] : [`turn ${i + 1}: ${v.problems.join('; ')}`];
+  });
+  const beat1 = blockReplies[0]?.raw ?? '';
+  const beat1Q = [...beat1.matchAll(/\[Q\]/g)].length;
+  const beat1Check = (beat1.match(/\[CHECK\]/g) || []).length;
+  const totalQ = blockReplies.reduce((n, r) => n + [...r.raw.matchAll(/\[Q\]/g)].length, 0);
+  const blocksComplete = blockReplies.findIndex((r) => r.raw.includes('[LESSON_COMPLETE]')) + 1;
+  const leaks = allReplies.filter(
+    (x) => !x.convoId.startsWith('curriculum-blocks') && /\[KEY\]|\[EX\]|\[Q\]|^ANS:/m.test(x.raw),
+  );
+  return [
+    {
+      name: 'blocks: every reply well-formed (blocks scenario)',
+      value: problems.length ? problems.slice(0, 2).join(' | ') : (blockReplies.length ? 'clean' : 'none'),
+      pass: blockReplies.length > 0 && problems.length === 0,
+    },
+    {
+      name: 'blocks: beat 1 has exactly one [Q], zero [CHECK]',
+      value: `q=${beat1Q} check=${beat1Check}`,
+      pass: blockReplies.length > 0 && beat1Q === 1 && beat1Check === 0,
+    },
+    {
+      name: 'blocks: ≥2 [Q] checks across the lesson',
+      value: totalQ,
+      pass: totalQ >= 2,
+    },
+    {
+      name: 'blocks: [LESSON_COMPLETE] within 10 assistant turns',
+      value: blocksComplete || 'never',
+      pass: blocksComplete >= 1 && blocksComplete <= 10,
+    },
+    {
+      name: 'blocks: zero marker leak on capability-less replies',
+      value: leaks.length ? leaks.map((x) => `${x.convoId}`).slice(0, 3).join(',') : 0,
+      pass: leaks.length === 0,
+    },
+  ];
 }
 
 /**

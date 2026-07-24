@@ -341,6 +341,9 @@ struct MessageListView: View {
     var onCheckTap: (() -> Void)? = nil
     /// Presents the conversation quiz (free chat only). Nil hides the chip.
     var onQuizMe: (() -> Void)? = nil
+    /// blocks_v1: auto-sends a quiz-option pick as a user turn (lessons only).
+    /// Nil renders [Q] blocks inert.
+    var onQuizPick: ((String) -> Void)? = nil
     /// The live focal Merc state, applied to the LATEST assistant message's
     /// avatar (older avatars stay neutral). Avatars render only in free chat.
     var mercMood: MercMood = .neutral
@@ -398,7 +401,8 @@ struct MessageListView: View {
                             showAvatar: !lessonStyle,
                             avatarMood: isLive ? mercMood : .neutral,
                             avatarActivity: isLive ? mercActivity : .idle,
-                            onCheckTap: onCheckTap
+                            onCheckTap: onCheckTap,
+                            quizInteraction: quizInteraction(for: message)
                         )
                         .id(message.id)
                     }
@@ -505,6 +509,38 @@ struct MessageListView: View {
             : 0)
         .padding(.top, BrandSpacing.xs)
         .padding(.bottom, BrandSpacing.sm)
+    }
+
+    /// blocks_v1 interaction for one lesson bubble: taps live only on the
+    /// LATEST assistant message while idle; older [Q]s render inert with the
+    /// student's prior pick recovered from the following user message's
+    /// "I picked X)" prefix — zero persistence changes.
+    private func quizInteraction(for message: ChatMessage) -> MessageBubbleView.QuizInteraction? {
+        guard lessonStyle, let onQuizPick else { return nil }
+        let isLatest = message.id == focalAssistantId
+        var isIdle = false
+        if case .idle = phase { isIdle = true }
+        return MessageBubbleView.QuizInteraction(
+            isEnabled: isLatest && isIdle,
+            answeredIndex: priorPickIndex(after: message),
+            onPick: { quiz, index in
+                let letter = String(UnicodeScalar(65 + index)!)
+                let option = index < quiz.options.count ? quiz.options[index] : ""
+                onQuizPick("I picked \(letter)) \(option)")
+            }
+        )
+    }
+
+    /// Scan the user message FOLLOWING an assistant [Q] for its recorded pick.
+    private func priorPickIndex(after message: ChatMessage) -> Int? {
+        guard let idx = messages.firstIndex(where: { $0.id == message.id }),
+              idx + 1 < messages.count else { return nil }
+        let next = messages[idx + 1]
+        guard next.role == .user, next.content.hasPrefix("I picked "),
+              let letter = next.content.dropFirst(9).first,
+              let scalar = letter.unicodeScalars.first,
+              (65...68).contains(Int(scalar.value)) else { return nil }
+        return Int(scalar.value) - 65
     }
 
     /// The follow-up capsule chip ("Explain more" / "Quiz me") — one shared

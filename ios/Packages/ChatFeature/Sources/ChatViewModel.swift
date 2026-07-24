@@ -313,6 +313,20 @@ public final class ChatViewModel {
         }
     }
 
+    /// Send a quiz-option tap as a normal, VISIBLE user turn ("I picked B) …").
+    /// Reuses send()'s full plumbing (placeholder, persistence, retry capture,
+    /// curriculum wire prefix in runSend) so server-side history stays a
+    /// coherent user/assistant alternation — the model just sees the student
+    /// answering its question. Balanced budget: the reaction beat teaches.
+    public func sendQuickReply(_ text: String) {
+        guard case .idle = phase else { return }
+        let savedDraft = draft
+        draft = text
+        send(responseMode: .balanced)
+        // If a guard inside send() bailed, restore whatever the student had typed.
+        if draft == text { draft = savedDraft }
+    }
+
     /// Attach the standby gamification store + provider after init (avoids a
     /// SwiftUI @State ordering problem at the call site). The feature stays
     /// no-op when off — `recordEvent` is gated in the store.
@@ -562,11 +576,10 @@ public final class ChatViewModel {
     /// silently dropped rather than nagging the user.
     public func reportMessage(_ message: ChatMessage) {
         guard let reporting, message.role == .assistant else { return }
-        // Strip the lesson [CHECK]…[/CHECK] callout markers so the moderation
-        // payload carries clean reply text, not the internal markup.
-        let content = message.content
-            .replacingOccurrences(of: "[CHECK]", with: "")
-            .replacingOccurrences(of: "[/CHECK]", with: "")
+        // Flatten ALL markup ([CHECK] callouts + blocks_v1 cards/quizzes) so
+        // the moderation payload carries clean reply text — and never the
+        // [Q] answer key (BlockParser.plainText drops ANS lines).
+        let content = BlockParser.plainText(message.content)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
         let sessionIdProvider = self.sessionIdProvider
