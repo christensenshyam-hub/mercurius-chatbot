@@ -30,7 +30,13 @@ public struct ChatView: View {
 
     private enum ActiveSheet: Identifiable {
         case settings
-        var id: String { "settings" }
+        case quiz
+        var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .quiz: return "quiz"
+            }
+        }
     }
 
     private let apiClient: APIClient
@@ -141,6 +147,7 @@ public struct ChatView: View {
                             model.reportMessage(message)
                             showReportConfirmation = true
                         },
+                        onQuizMe: { activeSheet = .quiz },
                         mercMood: focalMercState.mood,
                         mercActivity: focalMercState.activity
                     )
@@ -285,6 +292,20 @@ public struct ChatView: View {
                 if let settingsPresenter {
                     settingsPresenter()
                 }
+            case .quiz:
+                // The dormant quiz feature, revived (Presentation P3): a
+                // comprehension quiz generated from THIS conversation via
+                // POST /api/quiz. All the machinery below the entry point
+                // (QuizView, QuizViewModel, APIClient+Tools, quizMaster
+                // achievement) shipped long ago and stayed tested.
+                QuizView(
+                    model: QuizViewModel(
+                        tools: apiClient,
+                        sessionIdProvider: { [sessionIdentity] in try sessionIdentity.current() },
+                        achievementStore: achievementStore
+                    ),
+                    dismissAction: { activeSheet = nil }
+                )
             }
         }
         .alert("Reported", isPresented: $showReportConfirmation) {
@@ -318,6 +339,8 @@ struct MessageListView: View {
     /// Tap handler for the lesson check-question callout ("tap the question,
     /// keyboard opens"). Nil keeps the callout non-interactive.
     var onCheckTap: (() -> Void)? = nil
+    /// Presents the conversation quiz (free chat only). Nil hides the chip.
+    var onQuizMe: (() -> Void)? = nil
     /// The live focal Merc state, applied to the LATEST assistant message's
     /// avatar (older avatars stay neutral). Avatars render only in free chat.
     var mercMood: MercMood = .neutral
@@ -467,22 +490,14 @@ struct MessageListView: View {
     private var explainMoreFooter: some View {
         HStack {
             if !alignsWithAvatar { Spacer() }
-            Button(action: onExplainMore) {
-                Label("Explain more", systemImage: "text.alignleft")
-                    .font(BrandFont.caption)
-                    .padding(.vertical, BrandSpacing.sm)
-                    .padding(.horizontal, BrandSpacing.md)
-                    .background(BrandColor.surface)
-                    .foregroundStyle(BrandColor.accent)
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
+            followUpChip("Explain more", systemImage: "text.alignleft", action: onExplainMore)
+                .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
+            // "Quiz me" appears once the conversation has enough substance to
+            // quiz on (two student turns) — the reading turns into doing.
+            if let onQuizMe, messages.filter({ $0.role == .user }).count >= 2 {
+                followUpChip("Quiz me", systemImage: "checklist", action: onQuizMe)
+                    .accessibilityHint("Generates a short quiz from this conversation")
             }
-            .frame(minHeight: 44)
-            .accessibilityLabel("Explain more")
-            .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
             Spacer()
         }
         .padding(.leading, alignsWithAvatar
@@ -490,6 +505,26 @@ struct MessageListView: View {
             : 0)
         .padding(.top, BrandSpacing.xs)
         .padding(.bottom, BrandSpacing.sm)
+    }
+
+    /// The follow-up capsule chip ("Explain more" / "Quiz me") — one shared
+    /// style so siblings can't drift.
+    private func followUpChip(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(BrandFont.caption)
+                .padding(.vertical, BrandSpacing.sm)
+                .padding(.horizontal, BrandSpacing.md)
+                .background(BrandColor.surface)
+                .foregroundStyle(BrandColor.accent)
+                .overlay(
+                    Capsule()
+                        .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)
+                )
+                .clipShape(Capsule())
+        }
+        .frame(minHeight: 44)
+        .accessibilityLabel(title)
     }
 
     /// Show the Explain More footer only when:
