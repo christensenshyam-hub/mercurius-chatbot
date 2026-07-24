@@ -1684,7 +1684,7 @@
     if (!wrapper) return;
     var bubble = wrapper.querySelector('.merc-bubble');
     if (bubble) {
-      bubble.innerHTML = renderMarkdown(text) + '<span class="merc-stream-cursor"></span>';
+      bubble.innerHTML = renderMarkdown(trimPartialMarker(text)) + '<span class="merc-stream-cursor"></span>';
       scrollToBottom();
     }
   }
@@ -1850,7 +1850,22 @@
   // chokepoint every display path (stream, finalize, fallback, resume) funnels
   // through.
   function stripLessonMarkers(t) {
-    return (t || '').replace(/\[(?:LESSON_COMPLETE|TEST_PASSED|TEST_FAILED)\]/g, '').trimEnd();
+    return (t || '').replace(/\[(?:LESSON_COMPLETE|TEST_PASSED|TEST_FAILED)\]|\[\/?CHECK\]/g, '').trimEnd();
+  }
+
+  // During streaming a control marker can arrive split across chunk
+  // boundaries (e.g. "...[LESSON_COMP"). Hide a trailing partial marker so it
+  // never flashes as raw text; the full marker is stripped once it completes.
+  var CONTROL_MARKERS = ['[LESSON_COMPLETE]', '[TEST_PASSED]', '[TEST_FAILED]', '[CHECK]', '[/CHECK]'];
+  function trimPartialMarker(t) {
+    var idx = t.lastIndexOf('[');
+    if (idx === -1) return t;
+    var tail = t.slice(idx);
+    if (tail.indexOf(']') !== -1) return t;
+    for (var i = 0; i < CONTROL_MARKERS.length; i++) {
+      if (CONTROL_MARKERS[i].indexOf(tail) === 0) return t.slice(0, idx);
+    }
+    return t;
   }
 
   function renderMarkdown(text) {
