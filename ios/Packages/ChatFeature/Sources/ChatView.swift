@@ -315,6 +315,9 @@ struct MessageListView: View {
     let onReport: (ChatMessage) -> Void
     /// Lesson styling for the bubbles (presence line + callout + soft shadow).
     var lessonStyle: Bool = false
+    /// Tap handler for the lesson check-question callout ("tap the question,
+    /// keyboard opens"). Nil keeps the callout non-interactive.
+    var onCheckTap: (() -> Void)? = nil
     /// The live focal Merc state, applied to the LATEST assistant message's
     /// avatar (older avatars stay neutral). Avatars render only in free chat.
     var mercMood: MercMood = .neutral
@@ -371,7 +374,8 @@ struct MessageListView: View {
                             lessonStyle: lessonStyle,
                             showAvatar: !lessonStyle,
                             avatarMood: isLive ? mercMood : .neutral,
-                            avatarActivity: isLive ? mercActivity : .idle
+                            avatarActivity: isLive ? mercActivity : .idle,
+                            onCheckTap: onCheckTap
                         )
                         .id(message.id)
                     }

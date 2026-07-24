@@ -45,6 +45,9 @@ public struct CurriculumLessonView: View {
     @State private var showReportConfirmation = false
     @State private var showCelebration = false
     @State private var didCelebrate = false
+    /// Incremented when the student taps the check-question callout — plumbed
+    /// into `ChatInputBar.focusTrigger` to pop the keyboard.
+    @State private var inputFocusTrigger = 0
     /// Speech-bubble intro shown before a FRESH lesson starts (skipped on resume).
     @State private var showIntro = false
     /// Transient lesson-progress reaction shown in the coach card (non-modal).
@@ -140,7 +143,10 @@ public struct CurriculumLessonView: View {
                         model.reportMessage(message)
                         showReportConfirmation = true
                     },
-                    lessonStyle: true
+                    lessonStyle: true,
+                    // "Tap the question, keyboard opens" — the check callout
+                    // focuses the composer so answering is one tap away.
+                    onCheckTap: { inputFocusTrigger += 1 }
                 )
 
                 // Clean, fixed composer — nothing tucked behind it.
@@ -153,7 +159,8 @@ public struct CurriculumLessonView: View {
                     onAttachImage: { model.attachImage(data: $0) },
                     onRemoveAttachment: { model.clearAttachment() },
                     useBrandSend: true,
-                    backgroundFade: true
+                    backgroundFade: true,
+                    focusTrigger: inputFocusTrigger
                 )
             }
 
