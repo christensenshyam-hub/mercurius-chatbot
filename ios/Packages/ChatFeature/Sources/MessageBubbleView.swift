@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import MarkdownUI
+import NetworkingKit
 
 #if canImport(UIKit)
 import UIKit
@@ -23,9 +24,9 @@ enum ChatAvatarMetrics {
 /// bubble; assistant messages render markdown.
 struct MessageBubbleView: View {
     let message: ChatMessage
-    /// Invoked when the user long-presses an assistant message and taps
-    /// "Report response" (App Store Guideline 1.2).
-    var onReport: () -> Void = {}
+    /// Invoked when the user long-presses an assistant message and picks a
+    /// reason under "Report response" (App Store Guideline 1.2).
+    var onReport: (ReportReason) -> Void = { _ in }
     /// Lesson screen styling: a white/elevated bubble with a soft shadow, a
     /// "Merc" presence line, and the tinted check-question callout. Defaults off
     /// so the free Chat tab keeps its standard bubble.
@@ -206,9 +207,18 @@ struct MessageBubbleView: View {
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
         .contextMenu {
             if !message.content.isEmpty {
-                Button(role: .destructive, action: onReport) {
-                    Label("Report response", systemImage: "flag")
-                }
+                reportMenu
+            }
+        }
+    }
+
+    /// "Report response" as a submenu of reasons, so a report always carries
+    /// why. Each reason is tagged `report.<rawValue>` for UI tests.
+    private var reportMenu: some View {
+        Menu("Report response", systemImage: "flag") {
+            ForEach(ReportReason.allCases, id: \.self) { reason in
+                Button(reason.title) { onReport(reason) }
+                    .accessibilityIdentifier("report.\(reason.rawValue)")
             }
         }
     }
@@ -380,9 +390,7 @@ struct MessageBubbleView: View {
         .clipShape(assistantShape)
         .contextMenu {
             if !message.content.isEmpty {
-                Button(role: .destructive, action: onReport) {
-                    Label("Report response", systemImage: "flag")
-                }
+                reportMenu
             }
         }
     }

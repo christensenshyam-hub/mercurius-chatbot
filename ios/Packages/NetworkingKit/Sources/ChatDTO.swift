@@ -13,12 +13,6 @@ public struct ChatMessageDTO: Codable, Sendable, Equatable {
     }
 }
 
-/// Request body for `POST /api/chat`.
-struct ChatRequestBody: Encodable {
-    let messages: [ChatMessageDTO]
-    let sessionId: String
-}
-
 /// Full (non-streaming) response body. Only used as a fallback; the
 /// streaming path emits the equivalent via `.complete`.
 public struct ChatResponse: Decodable, Sendable, Equatable {
@@ -63,13 +57,21 @@ public struct ChatResponse: Decodable, Sendable, Equatable {
 /// Mirrors the server's payload shape:
 /// - `delta`: incremental text chunk
 /// - `complete`: final reply with session/mode/streak/etc
-/// - `error`: a recoverable error reported mid-stream
+/// - `error`: either a refusal (carries a `ServerRefusalCode`) or a
+///   recoverable error reported mid-stream
 public enum ChatStreamEvent: Sendable, Equatable {
     /// A text chunk to append to the assistant message in progress.
     case delta(text: String)
 
     /// The stream finished and the server sent the final reply.
     case complete(ChatResponse)
+
+    /// The server declined this turn before answering — quota, spend cap,
+    /// paused, busy or restarting. `code` is a `ServerRefusalCode` raw value;
+    /// `message` is the server's own student-facing copy; `retryAfter` is
+    /// seconds until it is worth trying again, when the server says. No more
+    /// events will follow.
+    case refusal(code: String, message: String, retryAfter: TimeInterval?)
 
     /// The server reported an error. No more events will follow.
     case streamError(message: String)
@@ -90,6 +92,10 @@ struct SSEPayload: Decodable {
     let difficulty: Int?
     let suggestSummary: Bool?
     let lessonComplete: Bool?
-    // Only present on `error`:
+    // Only present on `error`. `code` and `retryAfterSec` arrive on refusal
+    // frames; plain mid-stream errors carry just `error` (or a code outside
+    // `ServerRefusalCode`).
     let error: String?
+    let code: String?
+    let retryAfterSec: TimeInterval?
 }

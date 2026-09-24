@@ -72,13 +72,41 @@ public final class SettingsViewModel {
     public private(set) var isResetInProgress: Bool = false
     public private(set) var resetErrorMessage: String?
 
+    /// True while "Delete my data & start over" is talking to the server
+    /// and/or rotating the local id. Distinct from `isResetInProgress` so
+    /// the two rows can be disabled independently.
+    public private(set) var isDeleteInProgress: Bool = false
+    public private(set) var deleteErrorMessage: String?
+
     /// App marketing version shown in the About section.
     public let appVersion: String
     public let buildNumber: String
 
+    /// Called after a successful consent withdrawal (server data deleted and
+    /// the local id rotated). The host uses it to reset the consent flag and
+    /// dismiss Settings so the agreement is shown again.
+    public var onConsentWithdrawn: (@MainActor () -> Void)?
+
+    /// Displayed when the session id can't be read. Kept distinct from the
+    /// real ids so the copy button knows there's nothing worth copying.
+    static let unavailableSessionId = "Unavailable"
+
+    /// Shown when the server can't be reached to delete the session.
+    static let serverDeleteFailedMessage =
+        "Couldn't reach the server to delete your data. Check your connection and try again — or reset this device only."
+
+    /// Whether `sessionId` holds a real identifier (not empty, not the
+    /// "Unavailable" placeholder).
+    public var canCopySessionId: Bool {
+        !sessionId.isEmpty && sessionId != Self.unavailableSessionId
+    }
+
     // MARK: - Dependencies
 
     private let sessionStorage: SessionResetting
+    /// Optional so hosts without networking (previews, tests) can omit it;
+    /// when nil, deletion falls back to the local-only reset.
+    private let sessionDeleter: SessionDeleting?
     public let themeStore: ThemePreferenceStore
 
     /// Standby gamification "show progress nudges" preference. Constructed
@@ -114,11 +142,13 @@ public final class SettingsViewModel {
         sessionStorage: SessionResetting,
         themeStore: ThemePreferenceStore,
         bundle: Bundle = .main,
-        extraReset: (@MainActor () -> Void)? = nil
+        extraReset: (@MainActor () -> Void)? = nil,
+        sessionDeleter: SessionDeleting? = nil
     ) {
         self.sessionStorage = sessionStorage
         self.themeStore = themeStore
         self.extraReset = extraReset
+        self.sessionDeleter = sessionDeleter
         self.appVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
         self.buildNumber = (bundle.infoDictionary?["CFBundleVersion"] as? String) ?? "—"
     }
@@ -132,29 +162,24 @@ public final class SettingsViewModel {
         do {
             sessionId = try sessionStorage.current()
         } catch {
-            sessionId = "Unavailable"
+            sessionId = Self.unavailableSessionId
         }
     }
 
-    /// Delete the current session and generate a new one. Used by a
-    /// "Start Over" action — clears the student's identity on this
-    /// device, so streak / memory entries won't be
-    /// associated with their next session.
+    /// Local-only reset: delete the current session id and generate a new
+    /// one without contacting the server. Offered as the fallback when
+    /// `deleteServerDataAndStartOver()` can't reach the server. Data the
+    /// server holds under the old id stays there but is no longer linked
+    /// to this device.
     @discardableResult
     public func resetSession() async -> Bool {
-        guard !isResetInProgress else { return false }
+        guard !isResetInProgress, !isDeleteInProgress else { return false }
         isResetInProgress = true
         resetErrorMessage = nil
         defer { isResetInProgress = false }
 
         do {
-            try sessionStorage.reset()
-            // Clear any extra app-side state the host wired up
-            // (e.g. persisted chat history).
-            extraReset?()
-            // Immediately generate a fresh session so the app has
-            // a valid one for the next request.
-            sessionId = try sessionStorage.current()
+            try resetLocally()
             return true
         } catch {
             resetErrorMessage = "Couldn't reset session. Try again."
@@ -162,7 +187,81 @@ public final class SettingsViewModel {
         }
     }
 
+    /// Erase the session on the server (under the id the data was written
+    /// with), then run the local reset and mint a fresh id. If the server
+    /// call fails nothing local changes, so the user can retry — the old
+    /// id is the only capability that can delete that data.
+    @discardableResult
+    public func deleteServerDataAndStartOver() async -> Bool {
+        guard !isDeleteInProgress, !isResetInProgress else { return false }
+        isDeleteInProgress = true
+        deleteErrorMessage = nil
+        defer { isDeleteInProgress = false }
+
+        let oldId: String
+        do {
+            oldId = try sessionStorage.current()
+        } catch {
+            deleteErrorMessage = "Couldn't read this device's session ID. Try again — or reset this device only."
+            return false
+        }
+
+        if let sessionDeleter {
+            do {
+                try await sessionDeleter.deleteSession(sessionId: oldId)
+            } catch {
+                deleteErrorMessage = Self.serverDeleteFailedMessage
+                return false
+            }
+        }
+
+        do {
+            try resetLocally()
+            return true
+        } catch {
+            // Server-side data is already gone (the endpoint is idempotent,
+            // so a retry is harmless); only the local rotation failed.
+            deleteErrorMessage = "Your data was deleted from the server, but this device couldn't be reset. Try again."
+            return false
+        }
+    }
+
+    /// Consent withdrawal = full deletion plus telling the host to show
+    /// the agreement again. The host callback only fires on success so a
+    /// failed server delete never leaves the app in a half-withdrawn state.
+    @discardableResult
+    public func withdrawConsent() async -> Bool {
+        let ok = await deleteServerDataAndStartOver()
+        if ok { onConsentWithdrawn?() }
+        return ok
+    }
+
+    /// Fallback for consent withdrawal when the server can't be reached:
+    /// reset this device only and still show the agreement again. Data
+    /// under the old id stays on the server.
+    @discardableResult
+    public func withdrawConsentLocally() async -> Bool {
+        let ok = await resetSession()
+        if ok { onConsentWithdrawn?() }
+        return ok
+    }
+
     public func clearResetError() {
         resetErrorMessage = nil
+    }
+
+    public func clearDeleteError() {
+        deleteErrorMessage = nil
+    }
+
+    // MARK: - Private
+
+    /// Shared tail of both reset paths: drop the Keychain id, clear the
+    /// host-owned local state, and immediately mint a fresh id so the next
+    /// request has a valid one.
+    private func resetLocally() throws {
+        try sessionStorage.reset()
+        extraReset?()
+        sessionId = try sessionStorage.current()
     }
 }

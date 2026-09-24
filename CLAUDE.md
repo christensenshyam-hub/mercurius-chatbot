@@ -60,7 +60,7 @@ Identity is an anonymous session id in the Keychain (survives reinstalls); there
 
 **Gamification is double-gated**: `NetworkingKit/GamificationFlag.clientEnabled` (compile-time) AND a server flag. UI must degrade gracefully when disabled — never render zeros.
 
-**DEBUG launch arguments** (see `RootView`/`AppEntryView`): `-EnterShell` / `-EnterShellCurriculum` skip the Home doorman; `-LiveActivityPreview` starts a demo Live Activity; `-LiveActivityGallery` (+`-LiveActivityGalleryBottom`) renders every activity phase in-app; `-NotifPreview` fires demo notification banners; `-ChatPreview`, `-LessonPreview`, `-MercPreview`. Use these for screenshot verification — there is no CLI way to tap through the UI.
+**DEBUG launch arguments** (see `RootView`/`AppEntryView`): `-EnterShell` / `-EnterShellCurriculum` skip the Home doorman; `-LiveActivityPreview` starts a demo Live Activity; `-LiveActivityGallery` (+`-LiveActivityGalleryBottom`) renders every activity phase in-app; `-NotifPreview` fires demo notification banners; `-ChatPreview`, `-LessonPreview`, `-MercPreview`. First-run gate (2.3.0): `-consentVersion N` sets the consent flag through the UserDefaults argument domain (`0` shows the gate, `1` = `ConsentGate.currentVersion` bypasses it — the UI tests pass `1` by default; pair with `-hasSeenOnboarding NO` for the full first-run flow); `-ResetConsent` clears the persisted consent so the gate shows again; `-GateStep <step>` opens the flow directly at one screen (`meet`, `age`, `underThirteen`, `disclosure`, `paused`, `limits`, `path`). Use these for screenshot verification — there is no CLI way to tap through the UI.
 
 ## Known build traps (all recur)
 

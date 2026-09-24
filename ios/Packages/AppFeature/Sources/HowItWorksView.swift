@@ -26,7 +26,7 @@ struct HowItWorksView: View {
                     principle(
                         number: "02",
                         title: "Honest about its limits",
-                        body: "Every response carries a confidence signal. When Mercurius isn't sure, it says so — and tells you why."
+                        body: "When Mercurius isn't sure, it says so — and asks you to check the claim against a real source."
                     )
                     principle(
                         number: "03",

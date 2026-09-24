@@ -93,6 +93,22 @@ public final class ChatViewModel {
     /// to gate marker handling so ordinary chat text is never touched.
     private var isLessonConversation: Bool { onLessonComplete != nil }
 
+    /// The curriculum lesson this thread belongs to (e.g. `"u1_l1"`), set by
+    /// `beginLessonConversation` / `resumeLesson`. Nil in free chat. Travels
+    /// with a report so a reviewer can open the same lesson.
+    public private(set) var currentLessonId: String?
+
+    /// What happened to the most recent `reportMessage` call. Observable so a
+    /// host can drive its one feedback alert from the real result rather than
+    /// confirming before the request has been sent.
+    public private(set) var lastReportOutcome: ReportOutcome?
+
+    /// Result of a report submission. `failed` carries a user-safe reason.
+    public enum ReportOutcome: Equatable, Sendable {
+        case sent
+        case failed(String)
+    }
+
     /// Set during streaming if a pass marker arrives in the raw deltas, so a
     /// stream that truncates before its `.complete` event (legacy backend, no
     /// flag) still registers the completion. Reset at the start of each turn.
@@ -453,8 +469,9 @@ public final class ChatViewModel {
     /// reply. The raw opener is never shown. Returns the conversation id for the
     /// resume mapping. Only valid on an empty thread.
     @discardableResult
-    public func beginLessonConversation(starter: String) -> UUID? {
+    public func beginLessonConversation(starter: String, lessonId: String? = nil) -> UUID? {
         guard messages.isEmpty else { return conversationId }
+        currentLessonId = lessonId
         lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
         let convoId = store?.createCurriculumConversation()
         if let convoId { conversationId = convoId }
@@ -481,7 +498,8 @@ public final class ChatViewModel {
     /// host start fresh and re-send the opener instead of presenting a blank
     /// lesson that never teaches.
     @discardableResult
-    public func resumeLesson(conversationId: UUID, starter: String) async -> Bool {
+    public func resumeLesson(conversationId: UUID, starter: String, lessonId: String? = nil) async -> Bool {
+        currentLessonId = lessonId
         lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
         let opened = await openConversation(id: conversationId)
         return opened && !messages.isEmpty
@@ -572,21 +590,71 @@ public final class ChatViewModel {
     }
 
     /// Report an assistant message as objectionable (App Store Guideline 1.2).
-    /// Fire-and-forget — the UI confirms optimistically; a failed submission is
-    /// silently dropped rather than nagging the user.
-    public func reportMessage(_ message: ChatMessage) {
-        guard let reporting, message.role == .assistant else { return }
+    /// Sends the reply text, the visible user turn that preceded it, and
+    /// where it happened, then returns what actually happened so the host
+    /// can confirm truthfully. Also recorded in `lastReportOutcome`.
+    @discardableResult
+    public func reportMessage(_ message: ChatMessage, reason: ReportReason) async -> ReportOutcome {
+        let outcome = await submitReport(message, reason: reason)
+        lastReportOutcome = outcome
+        return outcome
+    }
+
+    private func submitReport(_ message: ChatMessage, reason: ReportReason) async -> ReportOutcome {
+        guard let reporting else { return .failed("Reporting isn't available right now.") }
+        guard message.role == .assistant else { return .failed("Only Merc's replies can be reported.") }
         // Flatten ALL markup ([CHECK] callouts + blocks_v1 cards/quizzes) so
         // the moderation payload carries clean reply text — and never the
         // [Q] answer key (BlockParser.plainText drops ANS lines).
         let content = BlockParser.plainText(message.content)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
-        let sessionIdProvider = self.sessionIdProvider
-        Task {
-            guard let sessionId = try? sessionIdProvider() else { return }
-            try? await reporting.reportResponse(content: content, reason: nil, sessionId: sessionId)
+        guard !content.isEmpty else { return .failed("There's nothing to report yet.") }
+
+        let sessionId: String
+        do {
+            sessionId = try sessionIdProvider()
+        } catch {
+            return .failed("Could not resolve session.")
         }
+
+        let context = ReportContext(
+            surface: isLessonConversation ? "lesson" : "chat",
+            mode: isLessonConversation ? "curriculum" : currentMode.rawValue,
+            lessonId: currentLessonId,
+            appVersion: Self.appVersion
+        )
+
+        do {
+            try await reporting.reportResponse(
+                content: content,
+                reason: reason,
+                userMessage: precedingUserTurn(before: message),
+                context: context,
+                sessionId: sessionId
+            )
+            return .sent
+        } catch let error as APIError {
+            return .failed(error.userFacingMessage)
+        } catch {
+            return .failed("Couldn't send report. Try again.")
+        }
+    }
+
+    /// The nearest VISIBLE user turn before `message` — what the student
+    /// actually typed (or the photo placeholder). Wire-only turns never
+    /// appear here: an "Explain more" reply maps back to the real question,
+    /// and a lesson's first reply has no user turn at all (nil).
+    private func precedingUserTurn(before message: ChatMessage) -> String? {
+        guard let idx = messages.firstIndex(where: { $0.id == message.id }) else { return nil }
+        guard let user = messages[..<idx].last(where: { $0.role == .user }) else { return nil }
+        let text = user.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    /// `CFBundleShortVersionString` of the host app; nil under `swift test`
+    /// (no app bundle) — the report context omits the key then.
+    private static var appVersion: String? {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
 
     // MARK: - Engagement (streaks + achievements)
@@ -943,6 +1011,23 @@ public final class ChatViewModel {
                     }
                     awardModeAchievementsIfNeeded()
                     phase = .idle
+                    return
+
+                case .refusal(let code, let message, _):
+                    // The server declined before answering and wrote the
+                    // copy for the student itself — show it as-is (no
+                    // sanitize: its wording is trusted and must not be
+                    // masked by the billing heuristics). A used-up daily
+                    // allowance won't clear on Retry, so hide the button;
+                    // busy / restarting / paused / spend-cap can.
+                    let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                    markCurrentFailed(
+                        reason: trimmed.isEmpty
+                            ? "Mercurius can't answer right now. Please try again soon."
+                            : trimmed,
+                        isRetryable: code != ServerRefusalCode.dailyLimit.rawValue,
+                        assistantId: assistantId
+                    )
                     return
 
                 case .streamError(let message):

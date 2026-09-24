@@ -108,10 +108,67 @@ struct SSEParserDecodeTests {
         #expect(resp.lessonComplete == nil)
     }
 
-    @Test("`error` becomes .streamError with the message")
+    @Test("`error` without a code becomes .streamError with the message")
     func errorEvent() throws {
         let event = try parseChatEvent(from: #"{"type":"error","error":"rate limit"}"#)
         #expect(event == .streamError(message: "rate limit"))
+    }
+
+    @Test("`error` with a non-refusal code stays .streamError")
+    func codedNonRefusalError() throws {
+        let upstream = try parseChatEvent(
+            from: #"{"type":"error","code":"upstream_error","error":"Mercurius hit a snag. Try again in a moment."}"#
+        )
+        #expect(upstream == .streamError(message: "Mercurius hit a snag. Try again in a moment."))
+
+        let timeout = try parseChatEvent(
+            from: #"{"type":"error","code":"timeout","error":"That reply took too long. Try again."}"#
+        )
+        #expect(timeout == .streamError(message: "That reply took too long. Try again."))
+    }
+
+    @Test("`error` with a refusal code becomes .refusal with code, copy and retryAfter")
+    func refusalEvent() throws {
+        let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
+        let event = try parseChatEvent(
+            from: #"{"type":"error","code":"daily_limit","error":"\#(copy)","retryAfterSec":4200}"#
+        )
+        #expect(event == .refusal(code: "daily_limit", message: copy, retryAfter: 4200))
+    }
+
+    @Test("Every ServerRefusalCode maps to .refusal; retryAfter is nil when absent")
+    func allRefusalCodes() throws {
+        for code in ServerRefusalCode.allCases {
+            let event = try parseChatEvent(
+                from: #"{"type":"error","code":"\#(code.rawValue)","error":"nope"}"#
+            )
+            #expect(event == .refusal(code: code.rawValue, message: "nope", retryAfter: nil))
+        }
+    }
+
+    @Test("`retryAfterSec: null` on a refusal decodes as nil, not a failure")
+    func refusalNullRetryAfter() throws {
+        let event = try parseChatEvent(
+            from: #"{"type":"error","code":"spend_cap","error":"Daily usage limit reached — please try again tomorrow.","retryAfterSec":null}"#
+        )
+        #expect(event == .refusal(
+            code: "spend_cap",
+            message: "Daily usage limit reached — please try again tomorrow.",
+            retryAfter: nil
+        ))
+    }
+
+    @Test("A refusal frame with no text falls back to calm copy rather than a technical string")
+    func refusalWithoutText() throws {
+        let event = try parseChatEvent(from: #"{"type":"error","code":"busy","retryAfterSec":60}"#)
+        guard case .refusal(let code, let message, let retryAfter) = event else {
+            Issue.record("Expected .refusal, got \(String(describing: event))")
+            return
+        }
+        #expect(code == "busy")
+        #expect(retryAfter == 60)
+        #expect(!message.isEmpty)
+        #expect(message != "Unknown server error")
     }
 
     @Test("`[DONE]` sentinel produces no event")

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import NetworkingKit
 @testable import SettingsFeature
 
 // MARK: - Fakes
@@ -36,17 +37,37 @@ final class InMemoryPreferenceStore: PreferenceStore, @unchecked Sendable {
     }
 }
 
+/// Records every id it was asked to delete. `error` makes the call throw;
+/// `delay` keeps it suspended so callers can observe the in-progress flag.
+final class FakeSessionDeleter: SessionDeleting, @unchecked Sendable {
+    var error: Error?
+    var delay: Duration = .zero
+    private(set) var deletedIds: [String] = []
+
+    func deleteSession(sessionId: String) async throws {
+        deletedIds.append(sessionId)
+        if delay > .zero {
+            try await Task.sleep(for: delay)
+        }
+        if let error { throw error }
+    }
+}
+
 @MainActor
 private func makeModel(
     storage: FakeSessionStorage = FakeSessionStorage(),
     prefs: InMemoryPreferenceStore = InMemoryPreferenceStore(),
-    bundle: Bundle = .main
+    bundle: Bundle = .main,
+    extraReset: (@MainActor () -> Void)? = nil,
+    deleter: FakeSessionDeleter? = nil
 ) -> SettingsViewModel {
     let themeStore = ThemePreferenceStore(preferences: prefs)
     return SettingsViewModel(
         sessionStorage: storage,
         themeStore: themeStore,
-        bundle: bundle
+        bundle: bundle,
+        extraReset: extraReset,
+        sessionDeleter: deleter
     )
 }
 
@@ -188,4 +209,266 @@ struct SettingsViewModelResetTests {
     // becomes a no-op" test can't be expressed meaningfully without
     // artificially slowing the implementation. The guard is kept as
     // defensive programming in case `reset()` ever becomes async.
+    // `deleteServerDataAndStartOver()` DOES suspend (on the server call),
+    // so its guard is exercised in `SettingsViewModelDeleteTests`.
+}
+
+@Suite("SettingsViewModel delete server data")
+@MainActor
+struct SettingsViewModelDeleteTests {
+    struct E: Error {}
+
+    @Test("Deletes under the OLD id, then resets locally and mints a new one")
+    func deletesOldIdThenMintsNew() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        var extraResetCalls = 0
+        let model = makeModel(
+            storage: storage,
+            extraReset: { extraResetCalls += 1 },
+            deleter: deleter
+        )
+        model.loadSessionId()
+        #expect(model.sessionId == "old-id")
+
+        let ok = await model.deleteServerDataAndStartOver()
+
+        #expect(ok)
+        // The fake storage rotates its id inside reset(), so seeing "old-id"
+        // here proves the server call happened before the local reset.
+        #expect(deleter.deletedIds == ["old-id"])
+        #expect(storage.resetCount == 1)
+        #expect(extraResetCalls == 1)
+        #expect(model.sessionId.hasPrefix("new-id-"))
+        #expect(model.isDeleteInProgress == false)
+        #expect(model.deleteErrorMessage == nil)
+    }
+
+    @Test("Server failure keeps the local id, sets the error, and never resets")
+    func serverFailureLeavesDeviceUntouched() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.error = E()
+        var extraResetCalls = 0
+        let model = makeModel(
+            storage: storage,
+            extraReset: { extraResetCalls += 1 },
+            deleter: deleter
+        )
+        model.loadSessionId()
+
+        let ok = await model.deleteServerDataAndStartOver()
+
+        #expect(!ok)
+        #expect(deleter.deletedIds == ["old-id"])
+        #expect(storage.resetCount == 0)
+        #expect(extraResetCalls == 0)
+        #expect(storage.storedId == "old-id")
+        #expect(model.sessionId == "old-id")
+        #expect(model.deleteErrorMessage == SettingsViewModel.serverDeleteFailedMessage)
+        #expect(model.deleteErrorMessage?.contains("reset this device only") == true)
+        #expect(model.isDeleteInProgress == false)
+    }
+
+    @Test("Retry after a server failure succeeds and still uses the old id")
+    func retryAfterFailure() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.error = E()
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        #expect(await model.deleteServerDataAndStartOver() == false)
+        deleter.error = nil
+        #expect(await model.deleteServerDataAndStartOver() == true)
+
+        #expect(deleter.deletedIds == ["old-id", "old-id"])
+        #expect(storage.resetCount == 1)
+        #expect(model.deleteErrorMessage == nil)
+    }
+
+    @Test("Without a deleter it falls back to the local reset")
+    func noDeleterFallsBackToLocalReset() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let model = makeModel(storage: storage)
+
+        let ok = await model.deleteServerDataAndStartOver()
+
+        #expect(ok)
+        #expect(storage.resetCount == 1)
+        #expect(model.sessionId.hasPrefix("new-id-"))
+    }
+
+    @Test("Unreadable session id fails before contacting the server")
+    func unreadableIdFailsEarly() async {
+        let storage = FakeSessionStorage()
+        storage.behavior = .throwOnCurrent(E())
+        let deleter = FakeSessionDeleter()
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        let ok = await model.deleteServerDataAndStartOver()
+
+        #expect(!ok)
+        #expect(deleter.deletedIds.isEmpty)
+        #expect(storage.resetCount == 0)
+        #expect(model.deleteErrorMessage != nil)
+    }
+
+    @Test("Local reset failing after a successful server delete reports an error")
+    func localResetFailureAfterServerDelete() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        storage.behavior = .throwOnReset(E())
+        let deleter = FakeSessionDeleter()
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        let ok = await model.deleteServerDataAndStartOver()
+
+        #expect(!ok)
+        #expect(deleter.deletedIds == ["old-id"])
+        #expect(model.deleteErrorMessage?.contains("deleted from the server") == true)
+        #expect(model.isDeleteInProgress == false)
+    }
+
+    @Test("A second call while the server call is in flight is a no-op")
+    func concurrentCallIsNoOp() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.delay = .milliseconds(200)
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        async let first = model.deleteServerDataAndStartOver()
+        // Let the first call pass its guard and suspend on the server call.
+        var spins = 0
+        while !model.isDeleteInProgress, spins < 10_000 {
+            spins += 1
+            await Task.yield()
+        }
+        #expect(model.isDeleteInProgress)
+
+        let second = await model.deleteServerDataAndStartOver()
+        #expect(second == false)
+
+        let firstResult = await first
+        #expect(firstResult)
+        #expect(deleter.deletedIds == ["old-id"])
+        #expect(storage.resetCount == 1)
+        #expect(model.isDeleteInProgress == false)
+    }
+
+    @Test("clearDeleteError clears the message")
+    func clearsDeleteError() async {
+        let storage = FakeSessionStorage()
+        let deleter = FakeSessionDeleter()
+        deleter.error = E()
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        _ = await model.deleteServerDataAndStartOver()
+        #expect(model.deleteErrorMessage != nil)
+        model.clearDeleteError()
+        #expect(model.deleteErrorMessage == nil)
+    }
+
+    @Test("canCopySessionId is false for empty and Unavailable ids")
+    func canCopySessionId() {
+        let storage = FakeSessionStorage()
+        storage.storedId = "abc123"
+        let model = makeModel(storage: storage)
+        #expect(model.canCopySessionId == false)
+        model.loadSessionId()
+        #expect(model.canCopySessionId == true)
+
+        let broken = FakeSessionStorage()
+        broken.behavior = .throwOnCurrent(E())
+        let brokenModel = makeModel(storage: broken)
+        brokenModel.loadSessionId()
+        #expect(brokenModel.sessionId == "Unavailable")
+        #expect(brokenModel.canCopySessionId == false)
+    }
+}
+
+@Suite("SettingsViewModel consent withdrawal")
+@MainActor
+struct SettingsViewModelConsentTests {
+    struct E: Error {}
+
+    @Test("withdrawConsent deletes, resets, and notifies the host on success")
+    func withdrawSucceeds() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        let model = makeModel(storage: storage, deleter: deleter)
+        var notified = 0
+        model.onConsentWithdrawn = { notified += 1 }
+
+        let ok = await model.withdrawConsent()
+
+        #expect(ok)
+        #expect(notified == 1)
+        #expect(deleter.deletedIds == ["old-id"])
+        #expect(storage.resetCount == 1)
+    }
+
+    @Test("withdrawConsent does NOT notify the host when the server delete fails")
+    func withdrawFailureDoesNotNotify() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.error = E()
+        let model = makeModel(storage: storage, deleter: deleter)
+        var notified = 0
+        model.onConsentWithdrawn = { notified += 1 }
+
+        let ok = await model.withdrawConsent()
+
+        #expect(!ok)
+        #expect(notified == 0)
+        #expect(storage.resetCount == 0)
+        #expect(model.deleteErrorMessage != nil)
+    }
+
+    @Test("withdrawConsent works without a host callback")
+    func withdrawWithoutCallback() async {
+        let storage = FakeSessionStorage()
+        let model = makeModel(storage: storage, deleter: FakeSessionDeleter())
+        #expect(await model.withdrawConsent() == true)
+    }
+
+    @Test("withdrawConsentLocally resets the device without a server call and notifies")
+    func withdrawLocally() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.error = E()
+        let model = makeModel(storage: storage, deleter: deleter)
+        var notified = 0
+        model.onConsentWithdrawn = { notified += 1 }
+
+        let ok = await model.withdrawConsentLocally()
+
+        #expect(ok)
+        #expect(notified == 1)
+        #expect(deleter.deletedIds.isEmpty)
+        #expect(storage.resetCount == 1)
+        #expect(model.sessionId.hasPrefix("new-id-"))
+    }
+
+    @Test("withdrawConsentLocally does not notify when the local reset fails")
+    func withdrawLocallyFailure() async {
+        let storage = FakeSessionStorage()
+        storage.behavior = .throwOnReset(E())
+        let model = makeModel(storage: storage)
+        var notified = 0
+        model.onConsentWithdrawn = { notified += 1 }
+
+        let ok = await model.withdrawConsentLocally()
+
+        #expect(!ok)
+        #expect(notified == 0)
+        #expect(model.resetErrorMessage != nil)
+    }
 }

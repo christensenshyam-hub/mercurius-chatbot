@@ -26,9 +26,10 @@ import XCTest
 final class PerformanceTests: XCTestCase {
 
     /// Launch arguments every perf test passes. `-hasSeenOnboarding`
-    /// flips the `@AppStorage` flag in the process's argument-domain
-    /// UserDefaults, bypassing InteractiveOnboardingView so measurements
-    /// land on the real app surface — not on the tutorial flow.
+    /// and `-consentVersion 1` flip the `@AppStorage` flags in the
+    /// process's argument-domain UserDefaults, bypassing the first-run
+    /// onboarding and consent gate so measurements land on the real app
+    /// surface — not on the first-run flow.
     /// `-seenAllModeDescriptions` suppresses the first-time mode
     /// description sheets for the same reason. Cold-launch measurement
     /// uses these too so bootstrap time is comparable to what a
@@ -36,6 +37,7 @@ final class PerformanceTests: XCTestCase {
     static let defaultLaunchArgs = [
         "-UITests", "YES",
         "-hasSeenOnboarding", "YES",
+        "-consentVersion", "1",
         "-seenAllModeDescriptions", "YES",
         "-hasSeenChatInputHint", "YES",
     ]

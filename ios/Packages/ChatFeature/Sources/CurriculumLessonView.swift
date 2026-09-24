@@ -42,7 +42,8 @@ public struct CurriculumLessonView: View {
 
     @State private var model: ChatViewModel
     @State private var didBegin = false
-    @State private var showReportConfirmation = false
+    /// Outcome of the most recent report, driving the one feedback alert.
+    @State private var reportFeedback: ReportFeedback?
     @State private var showCelebration = false
     @State private var didCelebrate = false
     /// Incremented when the student taps the check-question callout — plumbed
@@ -139,9 +140,11 @@ public struct CurriculumLessonView: View {
                     phase: model.phase,
                     onRetry: { model.retry() },
                     onExplainMore: { model.explainMore() },
-                    onReport: { message in
-                        model.reportMessage(message)
-                        showReportConfirmation = true
+                    onReport: { message, reason in
+                        Task { @MainActor in
+                            let outcome = await model.reportMessage(message, reason: reason)
+                            reportFeedback = ReportFeedback(outcome)
+                        }
                     },
                     lessonStyle: true,
                     // "Tap the question, keyboard opens" — the check callout
@@ -226,11 +229,7 @@ public struct CurriculumLessonView: View {
             // lessons react from `startFromIntro` once the intro is dismissed.
             if !showIntro { reactToProgressOnEntry() }
         }
-        .alert("Reported", isPresented: $showReportConfirmation) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Thanks — we'll review this response.")
-        }
+        .reportFeedbackAlert(reportFeedback)
     }
 
     /// Start the lesson the first time the view appears: resume the saved
@@ -242,11 +241,11 @@ public struct CurriculumLessonView: View {
         model.onLessonComplete = { onLessonComplete(lessonId) }
 
         if let resumeId = resumeConversationId {
-            let resumed = await model.resumeLesson(conversationId: resumeId, starter: starter)
+            let resumed = await model.resumeLesson(conversationId: resumeId, starter: starter, lessonId: lessonId)
             if resumed { return }
             // Saved conversation is gone (history reset / pruned) — start fresh.
         }
-        if let convoId = model.beginLessonConversation(starter: starter) {
+        if let convoId = model.beginLessonConversation(starter: starter, lessonId: lessonId) {
             onStarted(lessonId, convoId)
         }
     }

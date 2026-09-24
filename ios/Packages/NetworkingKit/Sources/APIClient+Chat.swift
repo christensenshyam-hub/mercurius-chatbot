@@ -44,7 +44,10 @@ extension APIClient {
             let delegate = SSEDataDelegate(continuation: continuation)
             let config = URLSessionConfiguration.ephemeral
             config.timeoutIntervalForRequest = streamingTimeout
-            config.timeoutIntervalForResource = streamingTimeout * 2
+            // Whole-reply cap (240 s in production). The server lets a
+            // stream run up to 150 s; this must stay comfortably above
+            // that or a long, legitimate reply is cut off as `.timeout`.
+            config.timeoutIntervalForResource = streamingTimeout * 4
             config.waitsForConnectivity = false
             // Disable response caching — SSE responses should never be
             // cached, and cache lookups can delay delivery.

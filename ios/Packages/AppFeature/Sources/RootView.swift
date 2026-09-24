@@ -33,7 +33,24 @@ public struct RootView: View {
         case failed(reason: String)
     }
 
-    public init() {}
+    public init() {
+        #if DEBUG
+        _ = Self.debugResetConsent
+        #endif
+    }
+
+    #if DEBUG
+    /// `-ResetConsent`: forget the persisted consent + first-run flags once
+    /// per process, before `AppEntryView` reads them, so the gate can be
+    /// exercised on a simulator that already agreed. Unlike the argument
+    /// domain (`-consentVersion 0`), this leaves later writes observable.
+    private static let debugResetConsent: Void = {
+        guard ProcessInfo.processInfo.arguments.contains("-ResetConsent") else { return }
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: ConsentGate.storageKey)
+        defaults.removeObject(forKey: OnboardingFlow.storageKey)
+    }()
+    #endif
 
     public var body: some View {
         #if DEBUG
