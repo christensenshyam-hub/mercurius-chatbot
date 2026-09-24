@@ -221,8 +221,12 @@ struct AgeStep: View {
     }
 }
 
-/// Terminal: no way forward, and nothing was written.
+/// Terminal: no way forward, and nothing was written. The one control goes
+/// back to the wheel — it opens on "12 or younger", so a 13+ student who
+/// tapped Continue too fast must not be stuck here for the session.
 struct UnderThirteenView: View {
+    let onWrongAge: () -> Void
+
     var body: some View {
         GateRestScreen(
             mercState: .idle,
@@ -230,7 +234,14 @@ struct UnderThirteenView: View {
             titleIdentifier: "onboarding.underThirteen",
             message: "Come back when you're 13 — nothing you entered was saved."
         ) {
-            EmptyView()
+            Button(action: onWrongAge) {
+                Text("I picked the wrong age")
+                    .font(BrandFont.bodyEmphasized)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("onboarding.ageRetry")
         }
     }
 }

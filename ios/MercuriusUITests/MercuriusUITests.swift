@@ -76,7 +76,7 @@ final class MercuriusUITests: XCTestCase {
         var defaults = [
             "-UITests", "YES",
             "-hasSeenOnboarding", "YES",
-            "-consentVersion", "1",
+            "-consentVersion", "1",   // must equal ConsentGate.currentVersion (AppFeature) — bump in lockstep
             "-hasSeenChatInputHint", "YES",
         ]
         if bypassModeDescriptions {
@@ -447,14 +447,14 @@ final class MercuriusUITests: XCTestCase {
     /// defaults because `extraArgs` is appended after them.
     static let freshInstallArgs = [
         "-hasSeenOnboarding", "NO",
-        "-consentVersion", "0",
+        "-consentVersion", "0",   // 0 = never consented; any value below ConsentGate.currentVersion gates
     ]
 
     /// Launch arguments for an install that finished onboarding before
     /// 2.3.0 and has never seen the consent gate.
     static let preConsentInstallArgs = [
         "-hasSeenOnboarding", "YES",
-        "-consentVersion", "0",
+        "-consentVersion", "0",   // 0 = never consented; any value below ConsentGate.currentVersion gates
     ]
 
     /// Look an onboarding element up by its accessibility identifier,
@@ -542,6 +542,23 @@ final class MercuriusUITests: XCTestCase {
                 "Under-13 screen must be a dead end — '\(identifier)' is still reachable"
             )
         }
+
+        // The wheel opens on "12 or younger", so the one way out is back to
+        // it: a 13+ student who tapped Continue too fast must not be stuck.
+        let retry = onboardingElement(app, "onboarding.ageRetry")
+        XCTAssertTrue(
+            retry.exists,
+            "Under-13 screen must offer 'I picked the wrong age' (onboarding.ageRetry missing)"
+        )
+        retry.tap()
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.agePicker").waitForExistence(timeout: Self.lookupTimeout),
+            "'I picked the wrong age' did not return to the age picker (onboarding.agePicker missing)"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.underThirteen").exists,
+            "Under-13 title still present after returning to the age picker"
+        )
     }
 
     @MainActor

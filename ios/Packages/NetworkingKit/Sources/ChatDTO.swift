@@ -97,5 +97,42 @@ struct SSEPayload: Decodable {
     // `ServerRefusalCode`).
     let error: String?
     let code: String?
-    let retryAfterSec: TimeInterval?
+    @LenientSeconds var retryAfterSec: TimeInterval?
+}
+
+/// `retryAfterSec` however the server spells it: a number, a numeric string,
+/// or nothing. A strict `Double` would make an otherwise-valid refusal frame
+/// or error body undecodable over a quoted `"60"`, and the student would see
+/// a generic decoding error instead of the server's own copy.
+@propertyWrapper
+struct LenientSeconds: Decodable, Equatable {
+    var wrappedValue: TimeInterval?
+
+    init(wrappedValue: TimeInterval?) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        wrappedValue = Self.seconds(in: container)
+    }
+
+    private static func seconds(in container: SingleValueDecodingContainer) -> TimeInterval? {
+        if let number = try? container.decode(Double.self), number.isFinite {
+            return number
+        }
+        if let text = try? container.decode(String.self),
+           let number = Double(text.trimmingCharacters(in: .whitespaces)), number.isFinite {
+            return number
+        }
+        return nil
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// Synthesized `Decodable` calls `decode`, not `decodeIfPresent`, for a
+    /// wrapped property — an absent or `null` key must still yield nil.
+    func decode(_ type: LenientSeconds.Type, forKey key: Key) throws -> LenientSeconds {
+        try decodeIfPresent(type, forKey: key) ?? LenientSeconds(wrappedValue: nil)
+    }
 }

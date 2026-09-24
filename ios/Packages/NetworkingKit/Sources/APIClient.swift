@@ -216,7 +216,7 @@ struct ErrorBody: Decodable {
     let code: String?
     let message: String?
     let scope: String?
-    let retryAfterSec: TimeInterval?
+    @LenientSeconds var retryAfterSec: TimeInterval?
     let reply: String?
 
     /// The human copy, whichever field the route used.

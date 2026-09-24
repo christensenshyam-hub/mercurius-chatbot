@@ -87,6 +87,12 @@ public final class SettingsViewModel {
     /// dismiss Settings so the agreement is shown again.
     public var onConsentWithdrawn: (@MainActor () -> Void)?
 
+    /// Awaited before the server delete so a chat stream still running under
+    /// the old id can't finish after the erasure and re-create rows for it.
+    /// The host wires this to the chat model's stop; nil when there is no
+    /// chat to stop (previews, tests).
+    public var cancelInFlight: (@MainActor () async -> Void)?
+
     /// Displayed when the session id can't be read. Kept distinct from the
     /// real ids so the copy button knows there's nothing worth copying.
     static let unavailableSessionId = "Unavailable"
@@ -94,6 +100,23 @@ public final class SettingsViewModel {
     /// Shown when the server can't be reached to delete the session.
     static let serverDeleteFailedMessage =
         "Couldn't reach the server to delete your data. Check your connection and try again — or reset this device only."
+
+    /// Shown when the delete failed for a reason that isn't the connection
+    /// and isn't an `APIError` with copy of its own.
+    static let genericDeleteFailedMessage =
+        "Couldn't delete your data right now. Try again, or reset this device only."
+
+    /// The alert copy for a failed server delete. Only a connection problem
+    /// gets the "check your connection" line; a 400/429/500 says what the
+    /// server actually did.
+    static func deleteFailureMessage(for error: APIError) -> String {
+        switch error {
+        case .offline, .timeout:
+            return serverDeleteFailedMessage
+        default:
+            return error.userFacingMessage
+        }
+    }
 
     /// Whether `sessionId` holds a real identifier (not empty, not the
     /// "Unavailable" placeholder).
@@ -189,8 +212,9 @@ public final class SettingsViewModel {
 
     /// Erase the session on the server (under the id the data was written
     /// with), then run the local reset and mint a fresh id. If the server
-    /// call fails nothing local changes, so the user can retry — the old
-    /// id is the only capability that can delete that data.
+    /// call fails nothing local changes — beyond the in-flight reply having
+    /// been stopped — so the user can retry; the old id is the only
+    /// capability that can delete that data.
     @discardableResult
     public func deleteServerDataAndStartOver() async -> Bool {
         guard !isDeleteInProgress, !isResetInProgress else { return false }
@@ -206,11 +230,18 @@ public final class SettingsViewModel {
             return false
         }
 
+        // Stop any reply still streaming under `oldId` before the erasure —
+        // its completion would otherwise write the session back.
+        await cancelInFlight?()
+
         if let sessionDeleter {
             do {
                 try await sessionDeleter.deleteSession(sessionId: oldId)
+            } catch let error as APIError {
+                deleteErrorMessage = Self.deleteFailureMessage(for: error)
+                return false
             } catch {
-                deleteErrorMessage = Self.serverDeleteFailedMessage
+                deleteErrorMessage = Self.genericDeleteFailedMessage
                 return false
             }
         }

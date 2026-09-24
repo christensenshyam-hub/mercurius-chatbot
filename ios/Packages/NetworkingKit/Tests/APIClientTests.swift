@@ -87,6 +87,34 @@ struct APIClientValidationTests {
         }
     }
 
+    @Test("429 daily_limit with a quoted retryAfterSec still decodes the body, as a number")
+    func dailyLimitStringRetryAfter() {
+        let copy = "You've used today's chat turns."
+        let body = Data(#"{"error":"daily_limit","scope":"session","message":"\#(copy)","retryAfterSec":"3600"}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 429, data: body)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            #expect(error == .quotaExceeded(message: copy, retryAfter: 3600))
+        } catch {
+            Issue.record("Wrong error type")
+        }
+    }
+
+    @Test("503 busy with an unparseable retryAfterSec keeps the refusal and its copy, drops the wait")
+    func busyUnparseableRetryAfter() {
+        let copy = "Mercurius is helping a lot of students right now. Try again in a minute."
+        let body = Data(#"{"error":"busy","message":"\#(copy)","retryAfterSec":"a minute"}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 503, data: body)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            #expect(error == .serviceUnavailable(code: "busy", message: copy, retryAfter: nil))
+        } catch {
+            Issue.record("Wrong error type")
+        }
+    }
+
     @Test("429 daily_limit with only the legacy `reply` field still surfaces that copy")
     func dailyLimitReplyOnly() {
         let body = Data(#"{"error":"daily_limit","reply":"Too many new sessions from this network today."}"#.utf8)

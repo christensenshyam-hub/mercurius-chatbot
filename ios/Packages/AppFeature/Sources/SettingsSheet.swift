@@ -3,6 +3,7 @@ import NetworkingKit
 import PersistenceKit
 import ChatFeature
 import CurriculumFeature
+import MercuriusActivity
 import SettingsFeature
 
 /// Thin wrapper around `SettingsView` that constructs the view model
@@ -50,9 +51,26 @@ struct SettingsSheet: View {
                 streakStore.reset()
                 achievementStore.reset()
                 progress.reset()
+                // The Lock Screen card would otherwise keep showing the
+                // erased streak/progress. Reset paths only — lesson exit
+                // leaves the activity to its own lifecycle.
+#if os(iOS)
+                LearningActivityController.shared.endSession(immediately: true)
+#endif
             },
             sessionDeleter: sessionDeleter
         )
+        // A reply still streaming under the old id must stop BEFORE the server
+        // erasure, or its completion re-creates the session. `cancel()` from
+        // idle would stamp "Cancelled." on a finished bubble, so only stop a
+        // request that is actually running. Not `startNewConversation()`: that
+        // clears the thread before the server has confirmed anything.
+        model.cancelInFlight = { [chatModel] in
+            switch chatModel.phase {
+            case .sending, .streaming: chatModel.cancel()
+            case .idle, .failed: break
+            }
+        }
         // Close the sheet before its host (the shell) leaves the tree.
         model.onConsentWithdrawn = { [dismiss, onConsentWithdrawn] in
             dismiss()

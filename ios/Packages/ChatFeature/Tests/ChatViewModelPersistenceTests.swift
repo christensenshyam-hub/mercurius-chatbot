@@ -183,3 +183,97 @@ struct ChatViewModelPersistenceTests {
         #expect(vm.messages.last?.content == "ok")
     }
 }
+
+/// `startNewConversation()` reuses the active record only while it is BOTH
+/// empty and still in the store. After `deleteAll()` (Settings "Delete my
+/// data" / "Reset this device only") or History deleting the active row, the
+/// old id points at nothing and every later `append` would be dropped.
+@Suite("ChatViewModel.startNewConversation after the active record is deleted")
+@MainActor
+struct ChatViewModelStartNewConversationTests {
+
+    /// Both production-shaped stores: SwiftData's fetch-by-id must agree with
+    /// the in-memory dictionary.
+    private func stores() throws -> [(name: String, store: ChatStore)] {
+        [
+            ("InMemoryChatStore", InMemoryChatStore()),
+            ("SwiftDataChatStore", try SwiftDataChatStore.inMemory()),
+        ]
+    }
+
+    private func makeModel(store: ChatStore, client: FakeChatClient) -> ChatViewModel {
+        ChatViewModel(
+            chatClient: client,
+            modeClient: FakeModeClient(),
+            sessionIdProvider: { "sid" },
+            store: store
+        )
+    }
+
+    /// Send one "Hello" turn and wait for the streamed "Hi!" reply to settle.
+    private func sendTurn(_ vm: ChatViewModel, client: FakeChatClient) async throws {
+        let reply = ChatResponse(reply: "Hi!", sessionId: "sid", mode: "socratic", unlocked: false)
+        client.outcome = .events([.delta(text: "Hi!"), .complete(reply)])
+        vm.draft = "Hello"
+        vm.send()
+
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
+            if case .idle = vm.phase { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        Issue.record("Stream did not settle")
+    }
+
+    @Test("deleteAll() then startNewConversation(): the next turn persists into a live record")
+    func deleteAllThenNewConversation() async throws {
+        for (name, store) in try stores() {
+            let client = FakeChatClient()
+            let vm = makeModel(store: store, client: client)   // hydrates → lazily-created empty record
+            let staleId = try #require(vm.conversationId, "\(name): no active record after hydrate")
+
+            store.deleteAll()
+            #expect(store.loadConversation(conversationId: staleId) == nil, "\(name)")
+
+            vm.startNewConversation()
+            let freshId = try #require(vm.conversationId, "\(name): no active record after New Chat")
+            #expect(freshId != staleId, "\(name): kept the id of an erased record")
+
+            try await sendTurn(vm, client: client)
+            #expect(store.loadMessages(conversationId: freshId).map(\.content) == ["Hello", "Hi!"], "\(name)")
+            #expect(store.listConversations().count == 1, "\(name)")
+        }
+    }
+
+    @Test("History deleting the active empty row: the next turn persists")
+    func deleteActiveRowThenSend() async throws {
+        for (name, store) in try stores() {
+            let client = FakeChatClient()
+            let vm = makeModel(store: store, client: client)
+            let staleId = try #require(vm.conversationId, "\(name)")
+
+            vm.deleteConversation(id: staleId)
+            let freshId = try #require(vm.conversationId, "\(name)")
+            #expect(freshId != staleId, "\(name): kept the id of the deleted row")
+            #expect(store.loadConversation(conversationId: freshId) != nil, "\(name)")
+
+            try await sendTurn(vm, client: client)
+            #expect(store.loadMessages(conversationId: freshId).count == 2, "\(name)")
+            #expect(store.listConversations().count == 1, "\(name)")
+        }
+    }
+
+    @Test("Repeated New Chat on an existing empty record leaves exactly one record")
+    func repeatedNewChatDoesNotLitter() throws {
+        for (name, store) in try stores() {
+            let vm = makeModel(store: store, client: FakeChatClient())
+            let id = try #require(vm.conversationId, "\(name)")
+
+            vm.startNewConversation()
+            vm.startNewConversation()
+
+            #expect(vm.conversationId == id, "\(name): minted a new record for an empty thread")
+            #expect(store.listConversations().count == 1, "\(name)")
+        }
+    }
+}

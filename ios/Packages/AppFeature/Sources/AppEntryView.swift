@@ -154,10 +154,15 @@ struct AppEntryView: View {
                 },
                 // Withdrawing consent in Settings drops the user back onto the
                 // gate (gate-only mode, since the first run already happened).
+                // The entry lesson/tab are cleared too — otherwise a first-run
+                // "Start Lesson 1" would re-open Lesson 1 from "Chat with Merc"
+                // after re-consenting.
                 onConsentWithdrawn: {
                     consentVersion = 0
                     gateClearedThisLaunch = false
                     hasEnteredApp = false
+                    entryLesson = nil
+                    entryTab = .chat
                 }
             )
             .transition(.opacity)

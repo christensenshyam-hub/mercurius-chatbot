@@ -710,9 +710,17 @@ public final class ChatViewModel {
         lastRequest = nil
         // Don't mint another record when the active thread is already a
         // fresh empty one — repeated New Chat taps would otherwise litter
-        // Chat History with permanent zero-message "New chat" rows.
-        if let store, conversationId == nil || hadMessages {
-            conversationId = store.createConversation(mode: currentMode)
+        // Chat History with permanent zero-message "New chat" rows. But the
+        // record must still exist: after `deleteAll()` (Settings resets) or
+        // History deleting the active row, keeping the old id would make
+        // every later `append` a silent no-op and lose the whole chat.
+        if let store {
+            let activeRecordIsGone = conversationId.map {
+                store.loadConversation(conversationId: $0) == nil
+            } ?? true
+            if hadMessages || activeRecordIsGone {
+                conversationId = store.createConversation(mode: currentMode)
+            }
         }
     }
 

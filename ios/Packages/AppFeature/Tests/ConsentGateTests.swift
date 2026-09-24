@@ -24,6 +24,15 @@ struct ConsentGateTests {
     func storageKey() {
         #expect(ConsentGate.storageKey == "consentVersion")
     }
+
+    /// The XCUITests can't import AppFeature, so `MercuriusUITests.swift`
+    /// hard-codes `"-consentVersion", "1"` as the gate bypass. When this
+    /// version is bumped, those launch args must be bumped in lockstep or
+    /// every UI test will land on the consent gate.
+    @Test("currentVersion is pinned to the UI tests' `-consentVersion 1` launch arg")
+    func currentVersionMatchesUITestLaunchArgs() {
+        #expect(ConsentGate.currentVersion == 1)
+    }
 }
 
 @Suite("AgeGate")

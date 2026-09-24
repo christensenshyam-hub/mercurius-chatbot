@@ -56,7 +56,9 @@ struct AppShellView: View {
 
     @State private var selectedTab: Tab
     @State private var chatModel: ChatViewModel
-    @State private var progress = CurriculumProgressStore()
+    @State private var progress = CurriculumProgressStore(
+        preferences: AppEnvironment.curriculumProgressPreferences
+    )
     @State private var didPresentInitialLesson = false
 
     /// Drives presentation of the Chat History sheet. Set to true by

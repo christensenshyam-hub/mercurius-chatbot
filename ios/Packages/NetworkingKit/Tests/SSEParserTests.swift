@@ -158,6 +158,27 @@ struct SSEParserDecodeTests {
         ))
     }
 
+    @Test("A numeric-string retryAfterSec decodes as the number, not as a broken frame")
+    func refusalStringRetryAfter() throws {
+        let event = try parseChatEvent(
+            from: #"{"type":"error","code":"busy","error":"Busy right now.","retryAfterSec":"60"}"#
+        )
+        #expect(event == .refusal(code: "busy", message: "Busy right now.", retryAfter: 60))
+    }
+
+    @Test("A non-numeric retryAfterSec is dropped; the refusal and its copy survive", arguments: [
+        #""retryAfterSec":"soon""#,
+        #""retryAfterSec":true"#,
+        #""retryAfterSec":{"sec":60}"#,
+        #""retryAfterSec":[60]"#,
+    ])
+    func refusalUnparseableRetryAfter(_ field: String) throws {
+        let event = try parseChatEvent(
+            from: #"{"type":"error","code":"busy","error":"Busy right now.",\#(field)}"#
+        )
+        #expect(event == .refusal(code: "busy", message: "Busy right now.", retryAfter: nil))
+    }
+
     @Test("A refusal frame with no text falls back to calm copy rather than a technical string")
     func refusalWithoutText() throws {
         let event = try parseChatEvent(from: #"{"type":"error","code":"busy","retryAfterSec":60}"#)

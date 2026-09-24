@@ -99,7 +99,9 @@ struct OnboardingFlow: View {
                 step = Self.step(afterAgeEligible: eligible)
             })
         case .underThirteen:
-            UnderThirteenView()
+            // `.id(step)` re-mounts the age step fresh (wheel back on the
+            // youngest row). Nothing is persisted or logged for the retry.
+            UnderThirteenView(onWrongAge: { step = .age })
         case .disclosure:
             DisclosureStep(
                 onAgree: {

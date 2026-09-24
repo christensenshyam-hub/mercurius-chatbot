@@ -54,4 +54,18 @@ struct ReplyLinkPolicyTests {
         #expect(!ReplyLinkPolicy.allows(try url("https:///path-only")))
         #expect(!ReplyLinkPolicy.allows(try url("https:")))
     }
+
+    @Test("Userinfo is rejected — the visible 'host' before @ is not where it goes", arguments: [
+        "https://khanacademy.org@evil.example",
+        "https://khanacademy.org@evil.example/path",
+        "https://user:secret@example.com",
+        "https://:secret@example.com",
+        "https://user@example.com:8443/x",
+    ])
+    func rejectsUserinfo(_ s: String) throws {
+        let parsed = try url(s)
+        // Sanity: this is the spoof shape — the real host is after the @.
+        #expect(parsed.user(percentEncoded: false) != nil || parsed.password(percentEncoded: false) != nil)
+        #expect(!ReplyLinkPolicy.allows(parsed))
+    }
 }

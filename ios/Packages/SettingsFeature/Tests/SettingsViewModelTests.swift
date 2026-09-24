@@ -29,6 +29,12 @@ final class FakeSessionStorage: SessionResetting, @unchecked Sendable {
     }
 }
 
+/// Ordered record of which hooks fired, for call-order assertions.
+final class CallLog: @unchecked Sendable {
+    private(set) var entries: [String] = []
+    func append(_ entry: String) { entries.append(entry) }
+}
+
 final class InMemoryPreferenceStore: PreferenceStore, @unchecked Sendable {
     private var storage: [String: String] = [:]
     func string(for key: String) -> String? { storage[key] }
@@ -38,14 +44,17 @@ final class InMemoryPreferenceStore: PreferenceStore, @unchecked Sendable {
 }
 
 /// Records every id it was asked to delete. `error` makes the call throw;
-/// `delay` keeps it suspended so callers can observe the in-progress flag.
+/// `delay` keeps it suspended so callers can observe the in-progress flag;
+/// `onDelete` fires on entry so tests can log call order against other hooks.
 final class FakeSessionDeleter: SessionDeleting, @unchecked Sendable {
     var error: Error?
     var delay: Duration = .zero
+    var onDelete: (@Sendable () -> Void)?
     private(set) var deletedIds: [String] = []
 
     func deleteSession(sessionId: String) async throws {
         deletedIds.append(sessionId)
+        onDelete?()
         if delay > .zero {
             try await Task.sleep(for: delay)
         }
@@ -267,9 +276,68 @@ struct SettingsViewModelDeleteTests {
         #expect(extraResetCalls == 0)
         #expect(storage.storedId == "old-id")
         #expect(model.sessionId == "old-id")
-        #expect(model.deleteErrorMessage == SettingsViewModel.serverDeleteFailedMessage)
+        // A non-APIError gets the neutral copy, not the connection line.
+        #expect(model.deleteErrorMessage == SettingsViewModel.genericDeleteFailedMessage)
         #expect(model.deleteErrorMessage?.contains("reset this device only") == true)
         #expect(model.isDeleteInProgress == false)
+    }
+
+    @Test("Only connection failures get the 'check your connection' copy")
+    func failureCopyMatchesTheError() async {
+        let cases: [(error: APIError, expected: String)] = [
+            (.offline, SettingsViewModel.serverDeleteFailedMessage),
+            (.timeout, SettingsViewModel.serverDeleteFailedMessage),
+            (.rateLimited, APIError.rateLimited.userFacingMessage),
+            (.server(status: 500), APIError.server(status: 500).userFacingMessage),
+            (.invalidRequest(reason: "bad id"), APIError.invalidRequest(reason: "bad id").userFacingMessage),
+        ]
+        for c in cases {
+            let deleter = FakeSessionDeleter()
+            deleter.error = c.error
+            let model = makeModel(deleter: deleter)
+
+            #expect(await model.deleteServerDataAndStartOver() == false)
+            #expect(model.deleteErrorMessage == c.expected, "\(c.error)")
+        }
+        #expect(SettingsViewModel.deleteFailureMessage(for: .rateLimited)
+                != SettingsViewModel.serverDeleteFailedMessage)
+        #expect(SettingsViewModel.deleteFailureMessage(for: .server(status: 500))
+                != SettingsViewModel.serverDeleteFailedMessage)
+    }
+
+    @Test("cancelInFlight runs before the server delete")
+    func cancelsInFlightBeforeDelete() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        let log = CallLog()
+        deleter.onDelete = { log.append("deleteSession") }
+        let model = makeModel(storage: storage, deleter: deleter)
+        model.cancelInFlight = { log.append("cancelInFlight") }
+
+        #expect(await model.deleteServerDataAndStartOver() == true)
+        #expect(log.entries == ["cancelInFlight", "deleteSession"])
+    }
+
+    @Test("A failing delete after cancelInFlight still leaves the device untouched")
+    func failedDeleteAfterCancelLeavesDeviceUntouched() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id"
+        let deleter = FakeSessionDeleter()
+        deleter.error = APIError.server(status: 500)
+        let log = CallLog()
+        deleter.onDelete = { log.append("deleteSession") }
+        var extraResetCalls = 0
+        let model = makeModel(storage: storage, extraReset: { extraResetCalls += 1 }, deleter: deleter)
+        model.cancelInFlight = { log.append("cancelInFlight") }
+        model.loadSessionId()
+
+        #expect(await model.deleteServerDataAndStartOver() == false)
+        #expect(log.entries == ["cancelInFlight", "deleteSession"])
+        #expect(storage.resetCount == 0)
+        #expect(extraResetCalls == 0)
+        #expect(storage.storedId == "old-id")
+        #expect(model.sessionId == "old-id")
     }
 
     @Test("Retry after a server failure succeeds and still uses the old id")
@@ -411,6 +479,18 @@ struct SettingsViewModelConsentTests {
         #expect(notified == 1)
         #expect(deleter.deletedIds == ["old-id"])
         #expect(storage.resetCount == 1)
+    }
+
+    @Test("withdrawConsent cancels the in-flight reply before the server delete")
+    func withdrawCancelsInFlightFirst() async {
+        let deleter = FakeSessionDeleter()
+        let log = CallLog()
+        deleter.onDelete = { log.append("deleteSession") }
+        let model = makeModel(deleter: deleter)
+        model.cancelInFlight = { log.append("cancelInFlight") }
+
+        #expect(await model.withdrawConsent() == true)
+        #expect(log.entries == ["cancelInFlight", "deleteSession"])
     }
 
     @Test("withdrawConsent does NOT notify the host when the server delete fails")

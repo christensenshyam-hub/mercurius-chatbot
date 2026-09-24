@@ -129,40 +129,17 @@ App Store Connect accepts one "required" device size per supported family; all o
 
 > Mercurius AI is the native companion to the web-based Mayo AI Literacy Club tutor. It uses a small device-scoped session id (random 32-char string, stored in Keychain) to stitch conversations together across launches. There is no user account, no login, no ad network, and no third-party analytics. Chat content and any photo the student attaches are sent to our own backend (mercurius-chatbot-production.up.railway.app) which proxies through the Anthropic API; the backend logs interactions against the session id only.
 >
-> On first launch the app asks for the user's age (13+; under 13 is stopped and nothing is stored), shows a disclosure that messages and photos are forwarded to Anthropic's Claude, and asks for agreement before any request is made. To exercise the app: launch → pick an age of 13 or older → agree → tap Got it → tap one of the four starter prompts on the Chat tab → observe a streamed response → switch to the Curriculum tab → tap any unit → tap Start on a lesson. The Club tab surfaces schedule + blog content that lives on our public site at mayoailiteracy.com.
+> On first launch the app asks for the user's age (13+; under 13 is stopped and nothing is stored), shows a disclosure that messages and photos are forwarded to Anthropic's Claude, and asks for agreement before any request is made. To exercise the app on a fresh install: launch → tap Continue on the Meet Merc screen → spin the age wheel to 13 or older (it opens on "12 or younger") → tap Continue → turn on the "I understand my messages and photos are sent to Anthropic's Claude…" switch (Agree and continue stays disabled until it is on) → tap Agree and continue → tap Got it on the "What Merc can't do" screen → on "Your path" tap Just chat instead → tap one of the four starter prompts on the Chat tab → observe a streamed reply. The Club tab surfaces schedule + blog content that lives on our public site at mayoailiteracy.com.
 
-## Privacy policy template
+## Privacy policy
 
-Paste into your hosted privacy-policy page. Keep it aligned with `PrivacyInfo.xcprivacy` and the App Store nutrition label — any drift becomes a review rejection.
+The hosted policy — `marketing/privacy.html` in this repo, served at trymercurius.com/privacy and linked from the in-app disclosure — is the source of truth. Do not keep a second copy here; it drifted last time (it still said logs were kept "for the lifetime of the session record" and pointed at a "Start Over" button that no longer exists).
 
-> **Mercurius AI — Privacy Policy**
->
-> *Last updated: [DATE]*
->
-> Mercurius AI is an AI literacy tutor built by the Mayo AI Literacy Club. We collect the minimum needed to make the tutor work.
->
-> **What we collect**
-> - A device-scoped session identifier (32-char random string) kept in Keychain. This survives reinstalls on the same device so your streak and chat history stay continuous. It is not linked to your identity.
-> - The text of messages you send, and the responses the tutor generates. These are sent to our backend (Railway) and forwarded to Anthropic's Claude API so the tutor can respond.
-> - Photos you choose to attach to a message. These are uploaded to our backend and forwarded to Anthropic's Claude API in the same way. We never read your photo library; you pick each photo yourself.
->
-> **What we do not collect**
-> - Names, email addresses, phone numbers, or other contact info.
-> - Location.
-> - Advertising identifiers.
-> - Any third-party analytics data. There are no trackers.
->
-> **How we use data**
-> - Only to make the tutor function: answer your questions, keep your conversation coherent across sessions, and display your own progress on the leaderboard.
->
-> **How long we keep data**
-> - Session identifiers and associated message logs are retained for the lifetime of the session record on our backend. You can reset everything from Settings → Start Over.
->
-> **Children**
-> - The tutor is for users aged 13 and up. The app asks for your age on first launch; if you are under 13 it stops there. The age you pick is not stored. We do not knowingly collect information from children under 13.
->
-> **Contact**
-> - mayoailiteracy.com — send questions to [CONTACT EMAIL].
+What the hosted policy must keep saying, because the app, `PrivacyInfo.xcprivacy` and the nutrition label say it too (drift is a review rejection):
+
+- Retention: messages 90 days, photos 24 hours, reports 180 days, usage/lesson rows 400 days; sessions idle for 365 days are erased.
+- Deletion: the in-app "Delete my data & start over" (Settings → Privacy) erases the session on the server under the old id, then rotates the id on the device. "Reset this device only" is the offline fallback and leaves server data in place until it ages out.
+- Under 13 is stopped on-device and the age is never stored; the disclosure names Anthropic's Claude as the model provider.
 
 ## Version-bump checklist (each submission)
 

@@ -23,7 +23,9 @@ struct ReportFeedback: Equatable {
     var message: String {
         switch outcome {
         case .sent: return "Thanks — we'll review this response."
-        case .failed: return "Check your connection and try again."
+        // The real reason: `APIError.offline` / `.timeout` already carry the
+        // connection copy, and a 429/500 should not be blamed on the network.
+        case .failed(let reason): return reason
         }
     }
 }
