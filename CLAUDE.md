@@ -49,6 +49,8 @@ A single Express app. `server.js` holds the routes and the Claude streaming logi
 
 **Server↔client contract markers** — the server embeds control tags in the streamed reply which every client must strip and act on: `[LESSON_COMPLETE]` (server judged proficiency; iOS flips lesson state, widget advances) and per-turn `[CURRICULUM]` tagging. If you touch these, update **all three**: `server.js`, iOS `ChatViewModel`/`NetworkingKit`, and the web widget(s).
 
+**Progress sync** — `GET`/`PUT /api/progress/:sessionId` mirror the iOS `CurriculumProgressStore` in `curriculum_progress` (lesson `uN_lM` → `completed`, unit `unit_N` → `mastered`; in-progress lessons stay on-device) and merge **forward-only** (`PROGRESS_STATUS_RANK` in `lib/schemas.js`: `completed < mastered`, never a downgrade or delete), with the chat handler's own `[LESSON_COMPLETE]` judgement written server-side as belt and braces.
+
 **Two near-duplicate web widgets**: `public/widget.js` and `mayo-site/widget.js` (plus matching CSS). Feature changes must be applied to both or they drift. The club site actually deploys from a separate repo (`mayo-ai-literacy-club`) — the copy here is the working source.
 
 ### iOS (`ios/Packages` — local SPM packages, thin app shell)
