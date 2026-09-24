@@ -44,6 +44,10 @@ const killSwitch = require('./lib/killSwitch');
 const quotas = require('./lib/quotas');
 const alerts = require('./lib/alerts');
 const claudeCall = require('./lib/claudeCall');
+const systemBlocks = require('./lib/systemBlocks');
+const clubContext = require('./lib/clubContext');
+const curriculumTag = require('./lib/curriculumTag');
+const { SAFETY_CORE, SAFETY_CORE_TAGGED } = require('./lib/safetyCore');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
@@ -86,6 +90,11 @@ function isValidSessionId(id) {
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
+// Summarize-existing-content helpers (quiz, report card, concept map, meeting
+// briefing) run on Haiku: ~3× cheaper, and their errors land on a summary,
+// not on a student's grade or a verdict about truth — grading, fact-check
+// and analyze stay on the tutor model.
+const HELPER_MODEL = process.env.HELPER_MODEL || 'claude-haiku-4-5';
 
 // v2 unified-prompt rollout switch. OFF by default → the backend behaves
 // exactly as before (the 10 per-mode prompts). Set USE_UNIFIED_PROMPT=1 in
@@ -127,11 +136,20 @@ const BLOG_URL = 'https://mayoailiteracy.com/blog-content.json';
 let blogCache = null;
 let blogCacheTime = 0;
 
+// The admin-set events row used to be read from the database on EVERY chat
+// turn; it changes weekly at most. One read per minute is plenty.
+const eventsFromDbCached = clubContext.makeTtlCache(60_000, () => db.getEventsFromDB());
+
 async function getEventsData() {
   const now = Date.now();
 
-  // 1. Check SQLite first — admin-set data always wins
-  const dbEvents = await db.getEventsFromDB();
+  // 1. Check the database first — admin-set data always wins
+  let dbEvents = null;
+  try {
+    dbEvents = await eventsFromDbCached();
+  } catch (e) {
+    logger.warn({ err: e.message }, 'events read failed — falling back to the site feed');
+  }
   if (dbEvents) {
     eventsCache = dbEvents;
     eventsCacheTime = now;
@@ -1018,24 +1036,60 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 `;
 
 // ---------------------------------------------------------------------------
-// v2 cached system prefix — built once at startup. The unified prompt plus
-// the two STATIC libraries (club knowledge + source library). Because this
-// string is byte-identical on every request, it caches as a prompt prefix
-// (~0.1× cost after the first call). Per-request context (runtime, memory,
-// performance, meetings, blog) is injected SEPARATELY via buildRuntimeContext
-// as a second system block, so it never invalidates this cached prefix.
-// Only used when USE_UNIFIED_PROMPT is on.
+// Cached system prefixes — built once, byte-identical on every request, so
+// they cache as a prompt prefix (~0.1× cost after the first call). Every
+// model call sends ONE of these as its static block plus a small dynamic
+// block (lib/systemBlocks). Rules:
+//   - the shared safety block is always LAST in the static text ("overrides
+//     every rule above");
+//   - club knowledge appears only in the widget variants (club_v1 clients);
+//     the App Store app never pays for it, and lessons carry no club
+//     material for anyone;
+//   - anything per-request (date, mode, meeting/blog material, the
+//     "explain more" nudge) goes in the dynamic block — one byte of drift in
+//     a static prefix is a full cache miss.
 // ---------------------------------------------------------------------------
-const V2_STATIC_SYSTEM =
-  UNIFIED_PROMPT +
-  '\n\n<club_knowledge>\n' + CLUB_KNOWLEDGE.trim() + '\n</club_knowledge>' +
-  '\n\n<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
+const SOURCE_BLOCK = '<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
+const CLUB_BLOCK = clubContext.staticClubBlock({ capabilities: [clubContext.CLUB_V1], clubKnowledge: CLUB_KNOWLEDGE });
+// v2 (USE_UNIFIED_PROMPT) prefixes for free chat.
+const V2_STATIC_APP = systemBlocks.composeStatic([UNIFIED_PROMPT, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+const V2_STATIC_WIDGET = systemBlocks.composeStatic([UNIFIED_PROMPT, CLUB_BLOCK, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+// Legacy (flag off) and curriculum prefixes, memoized per variant.
+const LEGACY_MODE_PROMPTS = { socratic: SOCRATIC_PROMPT, debate: DEBATE_PROMPT, discussion: DISCUSSION_PROMPT };
+const staticPrefixCache = new Map();
+function legacyStatic(mode, isWidget) {
+  const m = LEGACY_MODE_PROMPTS[mode] ? mode : 'socratic';
+  const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
+  if (!staticPrefixCache.has(key)) {
+    staticPrefixCache.set(key, systemBlocks.composeStatic([
+      qualityPrefix(m),
+      LEGACY_MODE_PROMPTS[m],
+      isWidget ? CLUB_BLOCK : null,
+      SOURCE_BLOCK,
+      SAFETY_CORE,
+    ]));
+  }
+  return staticPrefixCache.get(key);
+}
+function curriculumStatic(wantsBlocks) {
+  const key = `curriculum:${wantsBlocks ? 'blocks' : 'prose'}`;
+  if (!staticPrefixCache.has(key)) {
+    staticPrefixCache.set(key, systemBlocks.composeStatic([
+      CURRICULUM_PROMPT,
+      wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : null,
+      SAFETY_CORE,
+    ]));
+  }
+  return staticPrefixCache.get(key);
+}
 
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
 async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
-  const dbHistory = await db.getMessages(sessionId, historyLimit);
+  // Free-chat turns only: lesson turns are their own threads and would make
+  // a "quiz on our conversation" quiz the student on a lesson transcript.
+  const dbHistory = await db.getMessages(sessionId, historyLimit, { kind: 'chat' });
   if (dbHistory.length < minMessages) {
     return { error: 'insufficient_history', message: 'Have a longer conversation first.' };
   }
@@ -1051,7 +1105,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     ip: req && req.ip,
     traceId: req && req.traceId,
     params: {
-      model: MODEL,
+      model: HELPER_MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [...history, { role: 'user', content: userMessage }],
@@ -1472,9 +1526,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // what keeps graded follow-ups (where [LESSON_COMPLETE] is emitted) in mode.
   // Computed up front because the quota gate charges lesson and chat turns
   // against different daily allowances.
-  const isCurriculumMsg = clientMessages.some(
-    (m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[CURRICULUM:'),
-  );
+  const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
@@ -1499,11 +1551,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // this just refreshes last_active.
   await db.getOrCreateSession(sessionId);
 
-  // Fetch streak, session state, and history in parallel
-  const [currentStreak, sessionState, dbHistory] = await Promise.all([
+  // Fetch streak and session state in parallel. The conversation itself comes
+  // from the client's thread (every shipped client sends it) — the server no
+  // longer replays a session's lifetime history from the database.
+  const [currentStreak, sessionState] = await Promise.all([
     db.updateStreak(sessionId),
     db.getSessionState(sessionId),
-    db.getMessages(sessionId, HISTORY_LIMITS.CHAT),
   ]);
   const mode = sessionState?.mode || 'socratic';
   const msgCount = sessionState?.message_count || 0;
@@ -1522,96 +1575,65 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     (latestUserMessage.content || '').trim().length > 0
       ? latestUserMessage.content
       : (imageId ? '[Shared an image]' : latestUserMessage.content);
-  await db.saveMessage(sessionId, 'user', userTextToSave);
+  await db.saveMessage(sessionId, 'user', userTextToSave, callKind);
 
   // ---------------------------------------------------------------------------
   // Determine which system prompt to use + test state transitions
   // ---------------------------------------------------------------------------
-  let systemPrompt;
-  // `effectiveMode` is the uppercase mode token the v2 unified prompt's
-  // <mode_router> reads. It tracks the SAME decision the legacy branching
-  // makes below — it's just the routing signal instead of a prompt swap.
+  // ---------------------------------------------------------------------------
+  // System payload = one byte-stable CACHED block + a small dynamic block
+  // (see the cached-prefix rules above the prefix constants). `effectiveMode`
+  // is the uppercase mode token the v2 unified prompt's <mode_router> reads.
+  // ---------------------------------------------------------------------------
+  const isWidget = clubContext.wantsClub(capabilities);
   let effectiveMode = 'SOCRATIC';
+  if (isCurriculumMsg) effectiveMode = 'CURRICULUM';
+  else if (mode === 'debate') effectiveMode = 'DEBATE';
+  else if (mode === 'discussion') effectiveMode = 'DISCUSSION';
 
+  // Live meeting schedule + blog library — fetched only when a widget will
+  // actually receive them (the app used to pay ~4,800 tokens a turn for text
+  // it never needed, including a "next meeting" dated last March).
+  let meetingContext = '';
+  let blogContext = '';
+  if (isWidget && !isCurriculumMsg) {
+    const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
+    meetingContext = buildMeetingContext(eventsData);
+    blogContext = buildBlogContext(blogPosts);
+  }
+
+  let staticText;
+  let dynamicText;
   if (isCurriculumMsg) {
-    // Structured curriculum lesson mode
-    // Capable clients get the block-markup appendix. Curriculum is exempt
-    // from the unified prompt (useUnifiedSystem), so this single concat
-    // covers lessons under BOTH USE_UNIFIED_PROMPT states.
-    systemPrompt = CURRICULUM_PROMPT
-      + (wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : '');
-    effectiveMode = 'CURRICULUM';
-
-  } else if (mode === 'debate') {
-    // Debate mode
-    systemPrompt = DEBATE_PROMPT;
-    effectiveMode = 'DEBATE';
-
-  } else if (mode === 'discussion') {
-    // Discussion mode — reasoning evaluation
-    systemPrompt = DISCUSSION_PROMPT;
-    effectiveMode = 'DISCUSSION';
-
-  } else {
-    // Normal Socratic mode (the default)
-    systemPrompt = SOCRATIC_PROMPT;
-    effectiveMode = 'SOCRATIC';
-  }
-
-  // Live meeting context + blog library — injected into all modes
-  const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
-  const meetingContext = buildMeetingContext(eventsData);
-  const blogContext = buildBlogContext(blogPosts);
-
-  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + SOURCE_LIBRARY + meetingContext + blogContext;
-
-  // Prepend the universal response-quality preamble + per-mode rules
-  // so the model reads concision + format guidance FIRST, before the
-  // deeper pedagogical material. Curriculum mode is exempted: it has
-  // its own structured-lesson contract that explicitly wants
-  // teach → exercise → feedback turns, which would conflict with the
-  // 3-6 sentence default.
-  if (!isCurriculumMsg) {
-    systemPrompt = qualityPrefix(mode) + systemPrompt;
-  }
-
-  // "Explain more" path: append the don't-repeat-yourself nudge.
-  if (responseMode === 'deep') {
-    systemPrompt += EXPAND_MODE_NOTE;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Choose the system payload. `systemForApi` is what actually goes on the
-  // wire — either the legacy concatenated string (flag off) or the v2
-  // two-block array (flag on): a cached static prefix + a per-request
-  // context block. The v2 prompt has the quality preamble / mode rules /
-  // response-mode contract baked in, so qualityPrefix + EXPAND_MODE_NOTE
-  // (applied above to `systemPrompt`) are intentionally NOT used in v2 —
-  // response_mode + the deep nudge live inside the unified prompt itself.
-  // ---------------------------------------------------------------------------
-  let systemForApi = systemPrompt;
-  // Use v2 only when the flag is on AND the unified prompt actually loaded.
-  // If the prompt file failed to load (UNIFIED_PROMPT === ''), fall back to
-  // the legacy path even with the flag on — never ship an empty system prompt.
-  //
-  // Curriculum is EXEMPT from the unified-prompt experiment (see
-  // useUnifiedSystem): mercurius-v2.md carries no lesson machinery, so
-  // swapping it in silently drops the beat structure AND the
-  // [CHECK]/[LESSON_COMPLETE] client contract — lessons then never complete
-  // on any client. CURRICULUM_PROMPT governs lessons regardless of the flag.
-  if (useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: isCurriculumMsg })) {
-    const runtimeContext = buildRuntimeContext({
+    // Curriculum is EXEMPT from the unified prompt (see useUnifiedSystem):
+    // mercurius-v2.md carries no lesson machinery, so swapping it in would
+    // drop the beat structure AND the [CHECK]/[LESSON_COMPLETE] client
+    // contract. CURRICULUM_PROMPT governs lessons on every path; capable
+    // clients get the block-markup appendix.
+    staticText = curriculumStatic(wantsBlocks);
+    dynamicText = responseMode === 'deep' ? EXPAND_MODE_NOTE : '';
+  } else if (useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false })) {
+    // v2: the quality preamble / mode rules / response-mode contract are
+    // baked into the unified prompt, so qualityPrefix + EXPAND_MODE_NOTE are
+    // intentionally not used — response_mode + the deep nudge live inside it.
+    staticText = isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+    dynamicText = buildRuntimeContext({
       mode: effectiveMode,
       responseMode,
       currentDate: new Date().toISOString().slice(0, 10),
       meeting: meetingContext,
       blog: blogContext,
     });
-    systemForApi = [
-      { type: 'text', text: V2_STATIC_SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: runtimeContext },
-    ];
+  } else {
+    // Legacy per-mode prompts (flag off): the quality preamble first so the
+    // model reads concision + format guidance before the pedagogy.
+    staticText = legacyStatic(mode, isWidget);
+    dynamicText = [
+      clubContext.dynamicClubBlock({ capabilities, meetingContext, blogContext }),
+      responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
+    ].filter(Boolean).join('\n\n');
   }
+  const systemForApi = systemBlocks.buildSystem({ staticText, dynamicText });
 
   // v3 vision: if the student attached an image (uploaded earlier via
   // POST /api/images), fetch it and make THIS user turn multimodal so Claude
@@ -1633,23 +1655,28 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   }
   const latestContent = buildUserContent(latestUserMessage.content, attachedImage);
 
-  // Build messages array for API.
+  // Build messages array for API from the CLIENT's thread — every shipped
+  // client (iOS, both widgets, the eval) sends it. The old per-session DB
+  // replay flattened every lesson and the main chat under one id (bleeding
+  // other lessons' tags into the current one) and re-sent a returning
+  // student's lifetime history on every turn.
   //
-  // Curriculum lessons are ISOLATED conversations on the client — each lesson is
-  // its own thread, and the client re-sends that whole thread every turn. The
-  // per-session `dbHistory`, by contrast, flattens EVERY lesson + the main chat
-  // under one sessionId, so it bleeds other lessons' content (and their
-  // `[CURRICULUM: …]` tags) into the current one — which makes the model think
-  // two lessons are in play and drift into the wrong one. For curriculum, trust
-  // the client's thread; only ordinary chat falls back to the session history.
-  const priorHistory = isCurriculumMsg
-    ? clientMessages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
-    : dbHistory;
+  // Lesson threads are normalized first: the iOS client re-tags the LAST
+  // user turn with the `[CURRICULUM: …]` opener as a legacy-server bridge, so
+  // the same message arrives untagged on the next turn. Stripping the tag
+  // from every user turn except the index-0 opener makes the replayed prefix
+  // byte-identical from turn to turn — a prerequisite for caching it later.
+  const priorHistory = curriculumTag.normalizeReplayedHistory(clientMessages)
+    .slice(0, -1)
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+    .map((m) => ({ role: m.role, content: m.content }));
   const apiMessages = priorHistory.length > 0
     ? [...priorHistory, { role: 'user', content: latestContent }]
     : [{ role: 'user', content: latestContent }];
 
-  const trimmed = apiMessages.slice(-40);
+  // Lessons are ~9 turns and need the whole thread; free chat is bounded to
+  // the last 20 messages (the context that matters for a Socratic turn).
+  const trimmed = apiMessages.slice(isCurriculumMsg ? -40 : -20);
   // The Anthropic API requires messages[0].role === 'user' (400 otherwise).
   // The slice can land on an assistant turn depending on window parity, so
   // drop leading assistant messages — the newest user turn is always last.
@@ -1819,7 +1846,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const reply = lessonOutcome.reply;
 
         try {
-          await db.saveMessage(sessionId, 'assistant', reply);
+          await db.saveMessage(sessionId, 'assistant', reply, callKind);
         } catch (e) {
           // The reply text is already in hand — log the failed save and still
           // deliver the 'complete'/[DONE] frames. A rejection here bypasses
@@ -1827,6 +1854,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           logger.forRequest(req).error({ err: e.message }, 'SSE assistant save failed');
         }
 
+        // EVAL_EXPOSE_USAGE=1 (eval servers only): put the settled usage on
+        // the frame so scripts/eval-pacing.mjs can prove the prefix cache hits.
+        const exposedUsage = process.env.EVAL_EXPOSE_USAGE === '1' && typeof stream.accounting === 'function' && stream.accounting()
+          ? { usage: stream.accounting().usage }
+          : {};
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
@@ -1834,6 +1866,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           mode,
           streak: currentStreak,
           lessonComplete: lessonOutcome.lessonComplete,
+          ...exposedUsage,
         })}\n\n`);
 
         safeWrite('data: [DONE]\n\n');
@@ -1913,7 +1946,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const reply = lessonOutcome.reply;
 
       // Save assistant reply to DB
-      await db.saveMessage(sessionId, 'assistant', reply);
+      await db.saveMessage(sessionId, 'assistant', reply, callKind);
 
       // Session summary suggestion — after 8+ exchanges, hint to the user
       const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0;
@@ -2287,6 +2320,46 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req,
 //   curl -X POST -H "x-admin-password: ..." -H "Content-Type: application/json" \
 //        -d '{"disabled":true}' https://<host>/api/admin/kill-switch
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Prompt-cache prewarm — 1-token calls against each cached prefix so a
+// classroom's first turns READ the cache instead of all writing it at once.
+// Admin-triggered before a club session; also run once at boot in production.
+// ---------------------------------------------------------------------------
+async function prewarmCaches(ip = null) {
+  const variants = [
+    { name: 'curriculum:blocks', text: curriculumStatic(true) },
+    { name: 'curriculum:prose', text: curriculumStatic(false) },
+    useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false })
+      ? { name: 'v2:app', text: V2_STATIC_APP }
+      : { name: 'legacy:socratic:app', text: legacyStatic('socratic', false) },
+  ];
+  const warmed = [];
+  for (const v of variants) {
+    try {
+      const msg = await claudeCall.createMessage({
+        route: '/api/admin/prewarm',
+        kind: 'helper',
+        sessionId: null,
+        ip,
+        params: {
+          model: MODEL,
+          max_tokens: 1,
+          system: systemBlocks.buildSystem({ staticText: v.text }),
+          messages: [{ role: 'user', content: 'ok' }],
+        },
+      });
+      warmed.push({ variant: v.name, approxTokens: systemBlocks.staticSize(v.text).approxTokens, usage: msg && msg.usage });
+    } catch (e) {
+      warmed.push({ variant: v.name, error: claudeCall.classifyError(e) });
+    }
+  }
+  return warmed;
+}
+
+app.post('/api/admin/prewarm', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  return res.json({ ok: true, warmed: await prewarmCaches(req.ip) });
+}));
+
 app.get('/api/admin/kill-switch', adminLimiter, requireAdmin, (_req, res) => {
   return res.json({ ok: true, ...killSwitch.state() });
 });
@@ -2402,7 +2475,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
       ip: req.ip,
       traceId: req.traceId,
       params: {
-        model: MODEL,
+        model: HELPER_MODEL,
         max_tokens: 800,
         system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
         messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
@@ -2778,6 +2851,11 @@ db.initSchema().then(async () => {
     // restarts up to 10 times before giving up).
     if (process.env.NODE_ENV === 'production') {
       alerts.notify('boot', `🚀 Mercurius server booted (budget today: $${spendCap.state().usd.toFixed(2)} of $${spendCap.budgetUsd()}${killSwitch.isKilled() ? ' — KILL SWITCH ON' : ''}).`).catch(() => {});
+      if (!killSwitch.isKilled()) {
+        prewarmCaches(null)
+          .then((warmed) => logger.info({ warmed }, 'prompt caches prewarmed'))
+          .catch((e) => logger.warn({ err: e.message }, 'prewarm failed'));
+      }
     }
     // Keep a single stdout line the integration-test spawner can grep
     // for — the test expects the literal word "Mercurius" to know the
