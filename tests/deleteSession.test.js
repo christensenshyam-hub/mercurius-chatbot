@@ -125,7 +125,7 @@ describe('DELETE /api/session/:sessionId', () => {
     let res = await fetch(`${BASE}/api/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: s, content: 'seed', reason: 'test' }),
+      body: JSON.stringify({ sessionId: s, content: 'seed', reason: 'other' }),
     });
     assert.equal(res.status, 200);
 
@@ -139,5 +139,22 @@ describe('DELETE /api/session/:sessionId', () => {
   test('rejects a malformed session id with 400', async () => {
     const res = await fetch(`${BASE}/api/session/not%20a%20valid%20id!`, { method: 'DELETE' });
     assert.equal(res.status, 400);
+  });
+
+  test('rejects a short (guessable) id with 400 — the id is the bearer capability', async () => {
+    const res = await fetch(`${BASE}/api/session/abc123`, { method: 'DELETE' });
+    assert.equal(res.status, 400);
+  });
+
+  test('a scripted sweep trips the dedicated 5/min delete limiter', async () => {
+    const statuses = [];
+    for (let i = 0; i < 8; i++) {
+      const res = await fetch(`${BASE}/api/session/${sid()}`, { method: 'DELETE' });
+      statuses.push(res.status);
+    }
+    assert.ok(statuses.includes(429), `expected a 429 in ${JSON.stringify(statuses)}`);
+    const tripped = await fetch(`${BASE}/api/session/${sid()}`, { method: 'DELETE' });
+    assert.equal(tripped.status, 429);
+    assert.equal((await tripped.json()).error, 'rate_limited');
   });
 });

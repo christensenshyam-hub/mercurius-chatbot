@@ -1183,6 +1183,10 @@ const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
 // an operator curls it in bursts — it gets its own, looser bucket so scrapes
 // never eat the credential-stuffing budget above.
 const metricsLimiter = ipLimiter('metrics', { windowMs: 60 * 1000, max: 60 });
+// Right-to-erasure is cheap to request and destructive to guess at: a tight
+// dedicated bucket keeps the unguessable-id assumption honest against a
+// scripted sweep without touching the global limiter students share.
+const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, max: 5 });
 // Image uploads are heavier than chat turns (multi-MB bodies, a DB write per
 // call), so they get a dedicated IP bucket rather than sharing the chat one.
 // 60/min/IP covers a classroom each attaching a couple of photos while
@@ -2704,14 +2708,18 @@ app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), as
 // Idempotent: deleting an unknown/already-deleted session still returns 200,
 // so a client can safely retry and existence isn't probeable beyond the
 // unguessable id itself. Rate-limited by the global 60/min/IP limiter.
-app.delete('/api/session/:sessionId', asyncRoute(async (req, res) => {
+app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (req, res) => {
   const { sessionId } = req.params;
-  if (!isValidSessionId(sessionId)) {
+  // The 32-char Keychain id (192 bits) is the bearer capability. Refuse
+  // short legacy-shaped ids outright so the route is never a cheap oracle.
+  if (!isValidSessionId(sessionId) || sessionId.length < 16) {
     return res.status(400).json({ error: 'invalid_request', message: 'Invalid session id.' });
   }
   try {
     const result = await db.deleteSession(sessionId);
-    logger.forRequest(req).warn({ deleted: result.deleted }, 'session erased on request');
+    // Log a hash, never the id itself — the logs are not the place a
+    // student's bearer capability should live.
+    logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId), deleted: result.deleted }, 'session erased on request');
     return res.json({ ok: true, deleted: result.deleted });
   } catch (err) {
     logger.forRequest(req).error({ err: err.message }, 'session deletion failed');
