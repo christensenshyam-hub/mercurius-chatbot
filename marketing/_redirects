@@ -27,3 +27,9 @@
 /support   /support.html   200
 /privacy   /privacy.html   200
 /terms     /terms.html     200
+
+# In-app "Send feedback" (Settings → About) points here. Until the pilot's
+# Google Form exists this lands on the support page (which carries the
+# support@ address); swap the target for the form URL when it is created.
+/feedback   /support.html   302
+/Feedback   /support.html   302
