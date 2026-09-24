@@ -47,6 +47,27 @@ extension APIClient {
         guard let session = response.stats.session, let streak = session.streak else { return nil }
         return SessionStreakSnapshot(streak: streak, lastSessionDate: session.lastSessionDate)
     }
+
+    /// Erase everything the server holds for a session — messages, images,
+    /// reports, usage, progression. Backs "Start Over" and consent withdrawal.
+    ///
+    /// `DELETE /api/session/:id` → `{ ok: true, deleted: {...} }`. Idempotent:
+    /// a session the server has never seen (or already erased) still returns
+    /// 200, so a retry after a dropped connection is safe. The id must be the
+    /// one the data was written under — call this BEFORE rotating it.
+    public func deleteSession(sessionId: String) async throws {
+        struct Response: Decodable {
+            let ok: Bool
+        }
+        let response: Response = try await send(
+            method: "DELETE",
+            path: "/api/session/\(sessionId)",
+            body: Optional<Empty>.none
+        )
+        guard response.ok else {
+            throw APIError.unknown(underlying: "Server did not confirm deletion")
+        }
+    }
 }
 
 /// Narrow protocol for reading session stats — mirrors `Reporting`.
@@ -55,3 +76,11 @@ public protocol SessionStatsFetching: Sendable {
 }
 
 extension APIClient: SessionStatsFetching {}
+
+/// Narrow protocol for erasing a session server-side. `SettingsViewModel`
+/// depends on this (not the concrete `APIClient`) so tests can inject a stub.
+public protocol SessionDeleting: Sendable {
+    func deleteSession(sessionId: String) async throws
+}
+
+extension APIClient: SessionDeleting {}

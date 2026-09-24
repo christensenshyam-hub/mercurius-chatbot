@@ -134,19 +134,43 @@ public final class APIClient: Sendable {
         case 200...299:
             return
         case 400:
-            let reason = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.message
-            throw APIError.invalidRequest(reason: reason)
+            throw APIError.invalidRequest(reason: errorBody(from: data)?.message)
         case 401, 403:
             throw APIError.unauthorized
         case 413:
             // express's JSON body cap. Non-retryable — a retry re-sends the
             // same oversized payload — and actionable, unlike `.unknown`.
-            let reason = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.message
             throw APIError.invalidRequest(
-                reason: reason ?? "That message is too long. Try a shorter one, or start a new chat."
+                reason: errorBody(from: data)?.message
+                    ?? "That message is too long. Try a shorter one, or start a new chat."
             )
         case 429:
+            // `daily_limit` is the day's allowance, not the per-minute limiter:
+            // it carries copy the student should read and must not be retried.
+            let body = errorBody(from: data)
+            if body?.error == ServerRefusalCode.dailyLimit.rawValue {
+                throw APIError.quotaExceeded(
+                    message: body?.humanMessage ?? Self.quotaFallbackMessage,
+                    retryAfter: body?.retryAfterSec
+                )
+            }
             throw APIError.rateLimited
+        case 503:
+            // A refusal (spend cap, paused, busy, restarting) or any 503 the
+            // server bothered to explain. Bare/HTML 503s from the proxy fall
+            // through to the generic server error.
+            if let body = errorBody(from: data) {
+                let code = body.error ?? body.code
+                let message = body.humanMessage
+                if ServerRefusalCode.isRefusal(code) || message != nil {
+                    throw APIError.serviceUnavailable(
+                        code: code ?? "service_unavailable",
+                        message: message ?? Self.unavailableFallbackMessage,
+                        retryAfter: body.retryAfterSec
+                    )
+                }
+            }
+            throw APIError.server(status: statusCode)
         case 500...599:
             throw APIError.server(status: statusCode)
         default:
@@ -154,9 +178,25 @@ public final class APIClient: Sendable {
         }
     }
 
+    private static func errorBody(from data: Data) -> ErrorBody? {
+        try? JSONDecoder().decode(ErrorBody.self, from: data)
+    }
+
+    // Used only when a refusal arrives without its human copy — the server
+    // always sends one, so these are belt-and-braces.
+    private static let quotaFallbackMessage =
+        "You've reached today's usage limit. Mercurius will be ready again tomorrow."
+    private static let unavailableFallbackMessage =
+        "Mercurius is temporarily unavailable. Please try again soon."
+
     public static func mapURLError(_ error: URLError) -> APIError {
         switch error.code {
-        case .notConnectedToInternet, .dataNotAllowed:
+        // The shapes a dead or flaky connection actually produces — a
+        // dropped socket, no route, DNS down, roaming off — not only the
+        // reachability verdict. Anything here reads as "check your
+        // connection" to the student, and is worth a retry.
+        case .notConnectedToInternet, .dataNotAllowed, .networkConnectionLost,
+             .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .internationalRoamingOff:
             return .offline
         case .timedOut:
             return .timeout
@@ -172,10 +212,24 @@ public final class APIClient: Sendable {
 
 struct Empty: Codable {}
 
+/// The server's JSON error envelope. `error` is the machine code on every
+/// route; `code` is accepted too because the SSE refusal frame spells it that
+/// way. `message` and `reply` carry the same human copy — `reply` is the
+/// legacy field older routes still populate.
 struct ErrorBody: Decodable {
     let error: String?
+    let code: String?
     let message: String?
+    let scope: String?
+    @LenientSeconds var retryAfterSec: TimeInterval?
     let reply: String?
+
+    /// The human copy, whichever field the route used.
+    var humanMessage: String? {
+        [message, reply]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+    }
 }
 
 /// Shape of the /api/health response.

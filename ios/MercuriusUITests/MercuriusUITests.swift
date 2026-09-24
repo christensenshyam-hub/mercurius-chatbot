@@ -20,6 +20,12 @@ import XCTest
 /// 7. Dynamic Type — at an accessibility text size the main header is still
 ///    readable and the starter prompts remain reachable (no off-screen
 ///    content, no clipped controls).
+/// 8. First-run gate (2.3.0) — Meet Merc → age picker → disclosure →
+///    limits → path lands in Lesson 1; under-13 is a dead end; "Not now"
+///    pauses and "Review" returns; an existing install (`hasSeenOnboarding`
+///    already true, consent never given) sees the gate once and then Home.
+///    All of it is client-side: the first network call happens only after
+///    the shell mounts, which the lesson-intro anchor sits in front of.
 ///
 /// What is NOT covered here
 /// ========================
@@ -48,9 +54,13 @@ final class MercuriusUITests: XCTestCase {
         // `-hasSeenOnboarding YES` uses UserDefaults' argument domain to
         // flip the `@AppStorage("hasSeenOnboarding")` flag for this
         // process only. Without it, a freshly-installed test build lands
-        // on InteractiveOnboardingView and every test that expects
-        // HomeView / TabView state would have to walk through the
-        // 7-step tutorial first.
+        // on the first-run flow and every test that expects HomeView /
+        // TabView state would have to walk through it first.
+        //
+        // `-consentVersion 1` is the same bypass for the 2.3.0 consent
+        // gate (`ConsentGate.currentVersion == 1`; `0` = never consented).
+        // The first-run tests below override both keys via `extraArgs`,
+        // which wins because it is appended after the defaults.
         //
         // `-seenAllModeDescriptions YES` is the equivalent bypass for
         // the first-time mode description sheets — see
@@ -66,6 +76,7 @@ final class MercuriusUITests: XCTestCase {
         var defaults = [
             "-UITests", "YES",
             "-hasSeenOnboarding", "YES",
+            "-consentVersion", "1",   // must equal ConsentGate.currentVersion (AppFeature) — bump in lockstep
             "-hasSeenChatInputHint", "YES",
         ]
         if bypassModeDescriptions {
@@ -421,6 +432,188 @@ final class MercuriusUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["Debate"].waitForExistence(timeout: Self.lookupTimeout),
             "Dismissing settings did not return focus to the chat screen"
+        )
+    }
+
+    // MARK: - First-run gate (2.3.0)
+
+    /// Launch budget for the first gate screen. Cold launch holds the
+    /// Merc launch screen for 3.5 s before `AppEntryView` renders, and
+    /// CI runners are slower still — same 15 s the Home anchor gets.
+    static let firstScreenTimeout: TimeInterval = 15
+
+    /// Launch arguments for a brand-new install: the tutorial flag and
+    /// the consent flag are both unset. Overrides the `launchApp`
+    /// defaults because `extraArgs` is appended after them.
+    static let freshInstallArgs = [
+        "-hasSeenOnboarding", "NO",
+        "-consentVersion", "0",   // 0 = never consented; any value below ConsentGate.currentVersion gates
+    ]
+
+    /// Launch arguments for an install that finished onboarding before
+    /// 2.3.0 and has never seen the consent gate.
+    static let preConsentInstallArgs = [
+        "-hasSeenOnboarding", "YES",
+        "-consentVersion", "0",   // 0 = never consented; any value below ConsentGate.currentVersion gates
+    ]
+
+    /// Look an onboarding element up by its accessibility identifier,
+    /// whatever element type SwiftUI happens to expose it as (button,
+    /// switch, static text, picker). The flow's identifiers are the
+    /// contract between the UI tests and `OnboardingFlow` — see the
+    /// `onboarding.*` strings below.
+    @MainActor
+    private func onboardingElement(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    /// Wait for an onboarding element and tap it. Fails the test with a
+    /// message naming the missing identifier.
+    @MainActor
+    private func tapOnboarding(
+        _ app: XCUIApplication,
+        _ identifier: String,
+        timeout: TimeInterval = MercuriusUITests.lookupTimeout
+    ) {
+        let element = onboardingElement(app, identifier)
+        XCTAssertTrue(
+            element.waitForExistence(timeout: timeout),
+            "Onboarding element '\(identifier)' did not appear within \(timeout)s"
+        )
+        element.tap()
+    }
+
+    /// Age step: wait for the picker, spin the wheel to `age`, continue.
+    /// The wheel values are the flow's own labels ("12 or younger",
+    /// "13" … "18 or older"), so `age` must match one exactly.
+    @MainActor
+    private func chooseAge(_ app: XCUIApplication, _ age: String, timeout: TimeInterval = MercuriusUITests.lookupTimeout) {
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.agePicker").waitForExistence(timeout: timeout),
+            "Age picker (onboarding.agePicker) did not appear within \(timeout)s"
+        )
+        app.pickerWheels.element.adjust(toPickerWheelValue: age)
+        tapOnboarding(app, "onboarding.ageContinue")
+    }
+
+    /// Disclosure step: tick the required consent checkbox, then agree.
+    @MainActor
+    private func acceptDisclosure(_ app: XCUIApplication) {
+        tapOnboarding(app, "onboarding.consentToggle")
+        tapOnboarding(app, "onboarding.agree")
+    }
+
+    @MainActor
+    func testFirstRunGateLandsInFirstLesson() {
+        let app = launchApp(extraArgs: Self.freshInstallArgs)
+
+        // Meet Merc is the first screen a fresh install sees.
+        tapOnboarding(app, "onboarding.continue", timeout: Self.firstScreenTimeout)
+        chooseAge(app, "15")
+        acceptDisclosure(app)
+        tapOnboarding(app, "onboarding.limitsAck")
+        tapOnboarding(app, "onboarding.startLesson1")
+
+        // "Start Lesson 1" opens the lesson cover on its speech-bubble
+        // intro. The intro's CTA is the anchor: it exists only inside
+        // `CurriculumLessonView`, and no network fires until it is tapped.
+        XCTAssertTrue(
+            app.buttons["Continue. Start the lesson."].waitForExistence(timeout: Self.firstScreenTimeout),
+            "Start Lesson 1 did not open the Lesson 1 intro (\"Continue. Start the lesson.\" missing)"
+        )
+    }
+
+    @MainActor
+    func testUnderThirteenIsBlocked() {
+        let app = launchApp(extraArgs: Self.freshInstallArgs)
+
+        tapOnboarding(app, "onboarding.continue", timeout: Self.firstScreenTimeout)
+        chooseAge(app, "12 or younger")
+
+        // Terminal screen: the title is the anchor, and none of the
+        // controls that would move the flow forward may remain.
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.underThirteen").waitForExistence(timeout: Self.lookupTimeout),
+            "Choosing '12 or younger' must land on the under-13 screen (onboarding.underThirteen missing)"
+        )
+        for identifier in ["onboarding.ageContinue", "onboarding.consentToggle", "onboarding.agree"] {
+            XCTAssertFalse(
+                onboardingElement(app, identifier).waitForExistence(timeout: 1),
+                "Under-13 screen must be a dead end — '\(identifier)' is still reachable"
+            )
+        }
+
+        // The wheel opens on "12 or younger", so the one way out is back to
+        // it: a 13+ student who tapped Continue too fast must not be stuck.
+        let retry = onboardingElement(app, "onboarding.ageRetry")
+        XCTAssertTrue(
+            retry.exists,
+            "Under-13 screen must offer 'I picked the wrong age' (onboarding.ageRetry missing)"
+        )
+        retry.tap()
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.agePicker").waitForExistence(timeout: Self.lookupTimeout),
+            "'I picked the wrong age' did not return to the age picker (onboarding.agePicker missing)"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.underThirteen").exists,
+            "Under-13 title still present after returning to the age picker"
+        )
+    }
+
+    @MainActor
+    func testNotNowPausesAndReviewReturns() {
+        let app = launchApp(extraArgs: Self.freshInstallArgs)
+
+        tapOnboarding(app, "onboarding.continue", timeout: Self.firstScreenTimeout)
+        chooseAge(app, "15")
+
+        // Declining the disclosure parks the student on the paused screen…
+        tapOnboarding(app, "onboarding.notNow")
+        let paused = onboardingElement(app, "onboarding.paused")
+        XCTAssertTrue(
+            paused.waitForExistence(timeout: Self.lookupTimeout),
+            "'Not now' should show the paused screen (onboarding.paused missing)"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.agree").waitForExistence(timeout: 1),
+            "Paused screen must not expose the Agree control"
+        )
+
+        // …and "Review" brings the disclosure back with its controls intact.
+        tapOnboarding(app, "onboarding.review")
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.consentToggle").waitForExistence(timeout: Self.lookupTimeout),
+            "'Review' did not return to the disclosure (onboarding.consentToggle missing)"
+        )
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.agree").exists,
+            "Disclosure came back without its Agree control"
+        )
+        XCTAssertFalse(
+            paused.exists,
+            "Paused screen title still present after returning to the disclosure"
+        )
+    }
+
+    @MainActor
+    func testExistingInstallSeesGateOnceThenHome() {
+        // An install that finished the pre-2.3.0 tutorial skips Meet Merc
+        // and the path screen; it only has to clear the consent gate.
+        let app = launchApp(extraArgs: Self.preConsentInstallArgs)
+
+        chooseAge(app, "15", timeout: Self.firstScreenTimeout)
+        acceptDisclosure(app)
+        tapOnboarding(app, "onboarding.limitsAck")
+
+        // Consent recorded → the regular Home doorman, not the lesson.
+        XCTAssertTrue(
+            app.buttons["Chat with Merc"].waitForExistence(timeout: Self.firstScreenTimeout),
+            "Existing install did not reach HomeView after clearing the consent gate"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.startLesson1").exists,
+            "Existing install must not be shown the first-run path screen"
         )
     }
 

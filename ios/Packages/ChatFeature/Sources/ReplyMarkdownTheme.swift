@@ -20,6 +20,14 @@ struct ReplyMarkdownStyling: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Replies are model output. A `![](url)` in one must never become
+            // a request to an arbitrary host, and a link only leaves the app
+            // when `ReplyLinkPolicy` allows it — everything else is dropped.
+            .markdownImageProvider(NoNetworkImageProvider())
+            .markdownInlineImageProvider(NoNetworkInlineImageProvider())
+            .environment(\.openURL, OpenURLAction { url in
+                ReplyLinkPolicy.allows(url) ? .systemAction : .discarded
+            })
             .markdownTextStyle {
                 FontFamily(face.markdownFamily)
                 ForegroundColor(BrandColor.assistantBubbleText)
@@ -109,6 +117,23 @@ struct ReplyMarkdownStyling: ViewModifier {
                 )
                 .markdownMargin(top: .em(0.4), bottom: .em(1.0))
             }
+    }
+}
+
+/// Block images (`![alt](url)` on their own line) render nothing.
+private struct NoNetworkImageProvider: ImageProvider {
+    func makeImage(url: URL?) -> some View {
+        EmptyView()
+    }
+}
+
+/// Inline images never load. MarkdownUI treats a throwing provider as "no
+/// image for that source" and still renders the surrounding text.
+private struct NoNetworkInlineImageProvider: InlineImageProvider {
+    struct Blocked: Error {}
+
+    func image(with url: URL, label: String) async throws -> Image {
+        throw Blocked()
     }
 }
 

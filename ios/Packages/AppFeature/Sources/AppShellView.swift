@@ -37,16 +37,29 @@ struct AppShellView: View {
     let achievementStore: AchievementStore
     let reminderStore: ReminderStore
 
+    /// A lesson to open in its full-screen window as soon as the shell is
+    /// up — the first-run flow's "Start Lesson 1". Presented exactly once
+    /// (see `presentInitialLessonIfNeeded`).
+    let initialLesson: Lesson?
+
     /// Called when the user taps the Home button in the chat header.
     /// `AppEntryView` wires this to flip `hasEnteredApp` back to
     /// false, which returns the user to `HomeView`.
     let onGoHome: @MainActor () -> Void
 
+    /// Called by Settings when the user withdraws the data-use agreement.
+    /// `AppEntryView` wires this to reset `consentVersion`, which re-mounts
+    /// the consent gate in place of this shell.
+    let onConsentWithdrawn: (@MainActor () -> Void)?
+
     // MARK: - Shared state
 
     @State private var selectedTab: Tab
     @State private var chatModel: ChatViewModel
-    @State private var progress = CurriculumProgressStore()
+    @State private var progress = CurriculumProgressStore(
+        preferences: AppEnvironment.curriculumProgressPreferences
+    )
+    @State private var didPresentInitialLesson = false
 
     /// Drives presentation of the Chat History sheet. Set to true by
     /// the `.history` tab-action; cleared by the row tap or the
@@ -103,7 +116,9 @@ struct AppShellView: View {
         achievementStore: AchievementStore,
         reminderStore: ReminderStore,
         initialTab: Tab = .chat,
-        onGoHome: @escaping @MainActor () -> Void
+        initialLesson: Lesson? = nil,
+        onGoHome: @escaping @MainActor () -> Void,
+        onConsentWithdrawn: (@MainActor () -> Void)? = nil
     ) {
         self.apiClient = apiClient
         self.sessionIdentity = sessionIdentity
@@ -112,7 +127,9 @@ struct AppShellView: View {
         self.streakStore = streakStore
         self.achievementStore = achievementStore
         self.reminderStore = reminderStore
+        self.initialLesson = initialLesson
         self.onGoHome = onGoHome
+        self.onConsentWithdrawn = onConsentWithdrawn
         // The Home screen's CTAs route here: "Chat with Merc" → .chat,
         // "Start learning" → .curriculum. Fresh @State each entry (the shell
         // leaves the tree when the user goes Home), so this always applies.
@@ -166,6 +183,7 @@ struct AppShellView: View {
         // the number before it could go stale.
         .onChange(of: scenePhase) { _, _ in refreshReminders() }
         .onChange(of: streakStore.lastUpdatedAt) { _, _ in refreshReminders() }
+        .onAppear(perform: presentInitialLessonIfNeeded)
         // (`-NotifPreview` fires from RootView's always-mounted root, since the
         // app opens on Home and this shell isn't in the tree until a CTA tap.)
         // A started lesson opens in its OWN full-screen curriculum window — not
@@ -279,6 +297,22 @@ struct AppShellView: View {
         }
     }
 
+    /// One-shot: open `initialLesson` after the shell is in the hierarchy. Not
+    /// `State(initialValue:)` — a `fullScreenCover(item:)` that is non-nil on
+    /// the very first render can fail to present until its host is mounted.
+    /// The short hop also lets the entry crossfade finish so the learning
+    /// path is visibly underneath when the lesson window slides up.
+    private func presentInitialLessonIfNeeded() {
+        guard let initialLesson, !didPresentInitialLesson else { return }
+        didPresentInitialLesson = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            if activeLesson == nil {
+                activeLesson = initialLesson
+            }
+        }
+    }
+
     /// Fetch the server's authoritative streak once on launch to seed the cache.
     private func seedStreakOnLaunch() async {
         guard let sid = try? sessionIdentity.current() else { return }
@@ -337,8 +371,8 @@ struct AppShellView: View {
             apiClient: apiClient,
             sessionIdentity: sessionIdentity,
             achievementStore: achievementStore,
-            settingsPresenter: { [sessionIdentity, themeStore, chatStore, chatModel,
-                                  streakStore, achievementStore, progress] in
+            settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
+                                  streakStore, achievementStore, progress, onConsentWithdrawn] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -351,7 +385,10 @@ struct AppShellView: View {
                         // conversations) and would otherwise survive the reset.
                         streakStore: streakStore,
                         achievementStore: achievementStore,
-                        progress: progress
+                        progress: progress,
+                        // The server-side erasure behind "Delete my data".
+                        sessionDeleter: apiClient,
+                        onConsentWithdrawn: onConsentWithdrawn
                     )
                 )
             },

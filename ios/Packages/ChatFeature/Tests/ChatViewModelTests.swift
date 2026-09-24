@@ -244,6 +244,92 @@ struct ChatViewModelErrorTests {
             Issue.record("Expected .failed phase")
         }
     }
+
+    // MARK: Server refusals (SSE `error` frame with a refusal code)
+
+    @Test("A daily_limit refusal shows the server's copy and is NOT retryable")
+    func refusalDailyLimitIsNotRetryable() async throws {
+        let client = FakeChatClient()
+        let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
+        client.outcome = .events([.refusal(code: "daily_limit", message: copy, retryAfter: 3600)])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: copy, isRetryable: false))
+        #expect(model.messages.last?.role == .assistant)
+        #expect(model.messages.last?.status == .failed(reason: copy))
+    }
+
+    @Test("A busy refusal shows the server's copy and IS retryable")
+    func refusalBusyIsRetryable() async throws {
+        let client = FakeChatClient()
+        let copy = "Mercurius is helping a lot of students right now. Try again in a minute."
+        client.outcome = .events([.refusal(code: "busy", message: copy, retryAfter: 60)])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: copy, isRetryable: true))
+        #expect(model.messages.last?.status == .failed(reason: copy))
+    }
+
+    @Test("Every non-daily_limit refusal code keeps Retry available", arguments: ["spend_cap", "service_disabled", "restarting"])
+    func otherRefusalsAreRetryable(code: String) async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.refusal(code: code, message: "Paused for now.", retryAfter: nil)])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: "Paused for now.", isRetryable: true))
+    }
+
+    @Test("A refusal's copy bypasses the billing sanitizer (server wording is trusted)")
+    func refusalCopyIsNotSanitized() async throws {
+        let client = FakeChatClient()
+        // Contains a word the streamError sanitizer would mask.
+        let copy = "Daily usage limit reached — billing resets tomorrow."
+        client.outcome = .events([.refusal(code: "spend_cap", message: copy, retryAfter: nil)])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: copy, isRetryable: true))
+    }
+
+    // MARK: JSON-path refusals (a real 429 / 503 on /api/chat)
+
+    @Test("APIError.quotaExceeded surfaces the server message and is not retryable")
+    func quotaExceededIsNotRetryable() async throws {
+        let client = FakeChatClient()
+        let copy = "You've reached today's usage limit. Mercurius will be ready again tomorrow."
+        client.outcome = .failure(APIError.quotaExceeded(message: copy, retryAfter: 7200))
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: copy, isRetryable: false))
+        #expect(model.messages.last?.status == .failed(reason: copy))
+    }
+
+    @Test("APIError.serviceUnavailable surfaces the server message and is retryable")
+    func serviceUnavailableIsRetryable() async throws {
+        let client = FakeChatClient()
+        let copy = "Mercurius is restarting — try again in a few seconds."
+        client.outcome = .failure(APIError.serviceUnavailable(code: "restarting", message: copy, retryAfter: 5))
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: copy, isRetryable: true))
+    }
 }
 
 @Suite("ChatViewModel retry")
@@ -548,48 +634,210 @@ struct ChatViewModelImageTests {
 // MARK: - Report (Guideline 1.2)
 
 private final class StubReporter: Reporting, @unchecked Sendable {
-    private(set) var reports: [(content: String, sessionId: String)] = []
-    func reportResponse(content: String, reason: String?, sessionId: String) async throws {
-        reports.append((content, sessionId))
+    struct Report {
+        let content: String
+        let reason: ReportReason
+        let userMessage: String?
+        let context: ReportContext
+        let sessionId: String
+    }
+
+    private(set) var reports: [Report] = []
+    /// When set, every submission throws this instead of recording.
+    var error: Error?
+
+    func reportResponse(
+        content: String,
+        reason: ReportReason,
+        userMessage: String?,
+        context: ReportContext,
+        sessionId: String
+    ) async throws {
+        if let error { throw error }
+        reports.append(Report(content: content, reason: reason, userMessage: userMessage,
+                              context: context, sessionId: sessionId))
     }
 }
 
+private func reportTestReply(_ text: String = "ok") -> ChatResponse {
+    ChatResponse(
+        reply: text, sessionId: "sess", mode: "socratic", unlocked: false,
+        justUnlocked: nil, streak: nil, difficulty: nil, suggestSummary: nil
+    )
+}
+
 @MainActor
-private func waitForReport(_ reporter: StubReporter, timeout: Duration = .seconds(1)) async throws {
-    let deadline = ContinuousClock.now.advanced(by: timeout)
-    while reporter.reports.isEmpty && ContinuousClock.now < deadline {
-        try await Task.sleep(for: .milliseconds(10))
-    }
+private func makeReportingModel(client: FakeChatClient = FakeChatClient(),
+                                reporter: StubReporter) -> ChatViewModel {
+    ChatViewModel(
+        chatClient: client, modeClient: FakeModeClient(),
+        sessionIdProvider: { "sess" }, store: nil, reporting: reporter
+    )
 }
 
 @Suite("ChatViewModel report")
 @MainActor
 struct ChatViewModelReportTests {
 
-    @Test("Reporting an assistant message sends its content + session to the reporter")
+    @Test("Reporting an assistant message sends its content, reason + session to the reporter")
     func reportsAssistantMessage() async throws {
         let reporter = StubReporter()
-        let model = ChatViewModel(
-            chatClient: FakeChatClient(), modeClient: FakeModeClient(),
-            sessionIdProvider: { "sess" }, store: nil, reporting: reporter
-        )
-        model.reportMessage(ChatMessage(role: .assistant, content: "a questionable reply"))
-        try await waitForReport(reporter)
+        let model = makeReportingModel(reporter: reporter)
 
+        let outcome = await model.reportMessage(
+            ChatMessage(role: .assistant, content: "a questionable reply"), reason: .harmful
+        )
+
+        #expect(outcome == .sent)
+        #expect(model.lastReportOutcome == .sent)
         #expect(reporter.reports.count == 1)
         #expect(reporter.reports.first?.content == "a questionable reply")
+        #expect(reporter.reports.first?.reason == .harmful)
         #expect(reporter.reports.first?.sessionId == "sess")
     }
 
-    @Test("Reporting a user message is a no-op")
+    @Test("Reporting a user message sends nothing")
     func ignoresUserMessage() async throws {
         let reporter = StubReporter()
-        let model = ChatViewModel(
-            chatClient: FakeChatClient(), modeClient: FakeModeClient(),
-            sessionIdProvider: { "s" }, store: nil, reporting: reporter
-        )
-        model.reportMessage(ChatMessage(role: .user, content: "hi"))
-        try await Task.sleep(for: .milliseconds(60))
+        let model = makeReportingModel(reporter: reporter)
+
+        let outcome = await model.reportMessage(ChatMessage(role: .user, content: "hi"), reason: .wrong)
+
         #expect(reporter.reports.isEmpty)
+        if case .failed = outcome {} else { Issue.record("Expected .failed, got \(outcome)") }
+    }
+
+    @Test("The report carries the nearest preceding VISIBLE user turn — even across an Explain more")
+    func reportIncludesPrecedingUserTurn() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(reportTestReply("Short answer."))])
+        let reporter = StubReporter()
+        let model = makeReportingModel(client: client, reporter: reporter)
+
+        model.draft = "What is an LLM?"
+        model.send()
+        try await waitUntilSettled(model)
+
+        // "Explain more" is wire-only: the visible thread gains an assistant
+        // reply but no user turn, so the report must map back to the question.
+        client.outcome = .events([.complete(reportTestReply("Longer answer."))])
+        model.explainMore()
+        try await waitUntilSettled(model)
+        let deeper = try #require(model.messages.last)
+        #expect(deeper.role == .assistant && deeper.content == "Longer answer.")
+
+        let outcome = await model.reportMessage(deeper, reason: .wrong)
+
+        #expect(outcome == .sent)
+        let report = try #require(reporter.reports.first)
+        #expect(report.content == "Longer answer.")
+        #expect(report.userMessage == "What is an LLM?")
+        #expect(report.context == ReportContext(surface: "chat", mode: "socratic", lessonId: nil, appVersion: nil))
+    }
+
+    @Test("A photo-only turn's placeholder text is the userMessage")
+    func reportUsesPhotoPlaceholderAsUserTurn() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(reportTestReply("Nice photo."))])
+        let reporter = StubReporter()
+        let model = ChatViewModel(
+            chatClient: client, modeClient: FakeModeClient(), sessionIdProvider: { "sess" },
+            store: nil, imageUploader: StubImageUploader(response: sampleUploadResponse()),
+            preparer: StubPreparer(), reporting: reporter
+        )
+
+        model.attachImage(data: Data([0x01]))
+        model.send()   // no text
+        try await waitUntilSettled(model)
+
+        let reply = try #require(model.messages.last)
+        _ = await model.reportMessage(reply, reason: .other)
+        #expect(reporter.reports.first?.userMessage == "[Shared an image]")
+    }
+
+    @Test("The first lesson reply has no visible user turn → userMessage is nil")
+    func firstLessonReplyReportHasNoUserMessage() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(reportTestReply("Welcome to the lesson."))])
+        let reporter = StubReporter()
+        let model = makeReportingModel(client: client, reporter: reporter)
+        model.onLessonComplete = { }   // marks this as a lesson thread
+
+        model.beginLessonConversation(starter: "[CURRICULUM: Unit 1, Lesson 1] Teach me.", lessonId: "u1_l1")
+        try await waitUntilSettled(model)
+        let opener = try #require(model.messages.last)
+        #expect(model.messages.count == 1, "the opener is wire-only; only the reply is visible")
+
+        let outcome = await model.reportMessage(opener, reason: .offTopic)
+
+        #expect(outcome == .sent)
+        let report = try #require(reporter.reports.first)
+        #expect(report.userMessage == nil)
+        #expect(report.content == "Welcome to the lesson.")
+        #expect(report.reason == .offTopic)
+    }
+
+    @Test("A lesson report's context carries surface, curriculum mode and the lessonId")
+    func reportContextForLessonCarriesLessonId() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(reportTestReply("Let's begin."))])
+        let reporter = StubReporter()
+        let model = makeReportingModel(client: client, reporter: reporter)
+        model.onLessonComplete = { }
+
+        model.beginLessonConversation(starter: "[CURRICULUM: Unit 2, Lesson 3] Go.", lessonId: "u2_l3")
+        try await waitUntilSettled(model)
+        #expect(model.currentLessonId == "u2_l3")
+
+        // A follow-up turn in the same lesson still reports under the lesson.
+        client.outcome = .events([.complete(reportTestReply("Good answer."))])
+        model.draft = "Bias comes from training data."
+        model.send()
+        try await waitUntilSettled(model)
+
+        let reply = try #require(model.messages.last)
+        _ = await model.reportMessage(reply, reason: .wrong)
+
+        let report = try #require(reporter.reports.first)
+        #expect(report.context == ReportContext(surface: "lesson", mode: "curriculum", lessonId: "u2_l3", appVersion: nil))
+        #expect(report.userMessage == "Bias comes from training data.")
+    }
+
+    @Test("Free chat has no lessonId and reports under the current mode")
+    func chatReportHasNoLessonId() async throws {
+        let reporter = StubReporter()
+        let model = makeReportingModel(reporter: reporter)
+        #expect(model.currentLessonId == nil)
+
+        _ = await model.reportMessage(ChatMessage(role: .assistant, content: "hm"), reason: .other)
+
+        let report = try #require(reporter.reports.first)
+        #expect(report.context.surface == "chat")
+        #expect(report.context.mode == "socratic")
+        #expect(report.context.lessonId == nil)
+    }
+
+    @Test("A failed submission surfaces the outcome instead of confirming")
+    func reportFailureSurfacesOutcome() async throws {
+        let reporter = StubReporter()
+        reporter.error = APIError.offline
+        let model = makeReportingModel(reporter: reporter)
+
+        let outcome = await model.reportMessage(
+            ChatMessage(role: .assistant, content: "a questionable reply"), reason: .wrong
+        )
+
+        #expect(outcome == .failed(APIError.offline.userFacingMessage))
+        #expect(model.lastReportOutcome == outcome)
+        #expect(reporter.reports.isEmpty)
+    }
+
+    @Test("Without a reporter wired, reporting fails rather than confirming")
+    func reportWithoutReporterFails() async throws {
+        let model = makeModel(client: FakeChatClient())   // no `reporting`
+        let outcome = await model.reportMessage(
+            ChatMessage(role: .assistant, content: "reply"), reason: .wrong
+        )
+        if case .failed = outcome {} else { Issue.record("Expected .failed, got \(outcome)") }
     }
 }

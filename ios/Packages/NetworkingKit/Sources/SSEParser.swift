@@ -103,8 +103,14 @@ func parseChatEvent(from payload: String) throws -> ChatStreamEvent? {
         return .complete(response)
 
     case "error":
-        let msg = decoded.error ?? "Unknown server error"
-        return .streamError(message: msg)
+        if let code = decoded.code, ServerRefusalCode.isRefusal(code) {
+            return .refusal(
+                code: code,
+                message: decoded.error ?? "Mercurius can't answer right now. Please try again soon.",
+                retryAfter: decoded.retryAfterSec
+            )
+        }
+        return .streamError(message: decoded.error ?? "Unknown server error")
 
     default:
         // Unknown types are ignored rather than throwing — forward

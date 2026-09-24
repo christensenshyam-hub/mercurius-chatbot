@@ -1,16 +1,26 @@
 import SwiftUI
 import DesignSystem
 import NetworkingKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Settings screen. Presented as a sheet from the chat header.
 ///
 /// Sections:
 /// - Appearance — theme preference
-/// - Session — session id preview + "Start Over" reset
-/// - About — version, credits, website
+/// - Session — full, copyable session id + "Delete my data & start over"
+/// - Privacy — pushes `PrivacyChoicesView` (disclosure + withdraw consent)
+/// - About — version, policy / support links
 public struct SettingsView: View {
     @State private var model: SettingsViewModel
-    @State private var showResetConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var showCopied = false
+    // Alerts are driven by view-local copies of the model's error text so a
+    // pushed `PrivacyChoicesView` can show its own alert without this
+    // screen's alert competing for the same presentation.
+    @State private var deleteFailure: String?
+    @State private var resetFailure: String?
 
     private let dismissAction: () -> Void
 
@@ -32,6 +42,7 @@ public struct SettingsView: View {
                     nudgesSection
                 }
                 sessionSection
+                privacySection
                 aboutSection
             }
             .scrollContentBackground(.hidden)
@@ -45,31 +56,65 @@ public struct SettingsView: View {
                     Button("Done", action: dismissAction)
                         .fontWeight(.semibold)
                         .foregroundStyle(BrandColor.accent)
+                        // Leaving mid-erasure would let a send start under the
+                        // OLD id: the server re-creates rows the user was told
+                        // were gone, and the message vanishes at the local reset.
+                        .disabled(model.isDeleteInProgress || model.isResetInProgress)
                 }
             }
+#if os(iOS)
+            .interactiveDismissDisabled(model.isDeleteInProgress || model.isResetInProgress)
+#endif
             .task { model.loadSessionId() }
             .alert(
-                "Start over?",
-                isPresented: $showResetConfirm
+                "Delete my data?",
+                isPresented: $showDeleteConfirm
             ) {
                 Button("Cancel", role: .cancel) { }
-                Button("Start Over", role: .destructive) {
-                    Task { await model.resetSession() }
-                }
+                Button("Delete", role: .destructive, action: deleteData)
             } message: {
-                Text("This clears your session ID and your chat history on this device. Your streak and chat memory on the server won't be deleted, but future activity won't be associated with them.")
+                Text("This erases your chats, lessons, streak and progress on this device and on our server, and gives you a new anonymous ID. This can't be undone.")
             }
-            .alert(
-                "Couldn't reset",
-                isPresented: Binding(
-                    get: { model.resetErrorMessage != nil },
-                    set: { if !$0 { model.clearResetError() } }
-                )
-            ) {
-                Button("OK", role: .cancel) { model.clearResetError() }
-            } message: {
-                Text(model.resetErrorMessage ?? "")
+            .modifier(DeleteFailureAlert(
+                message: $deleteFailure,
+                retry: deleteData,
+                resetDeviceOnly: resetDeviceOnly
+            ))
+            .modifier(ResetFailureAlert(message: $resetFailure))
+        }
+    }
+
+    // MARK: - Actions
+
+    private func deleteData() {
+        Task {
+            let ok = await model.deleteServerDataAndStartOver()
+            if !ok {
+                deleteFailure = model.deleteErrorMessage
+                model.clearDeleteError()
             }
+        }
+    }
+
+    private func resetDeviceOnly() {
+        Task {
+            let ok = await model.resetSession()
+            if !ok {
+                resetFailure = model.resetErrorMessage
+                model.clearResetError()
+            }
+        }
+    }
+
+    private func copySessionId() {
+        guard model.canCopySessionId else { return }
+#if canImport(UIKit)
+        UIPasteboard.general.string = model.sessionId
+#endif
+        showCopied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            showCopied = false
         }
     }
 
@@ -100,32 +145,63 @@ public struct SettingsView: View {
     @ViewBuilder
     private var sessionSection: some View {
         Section {
-            HStack {
-                Text("Session ID")
-                Spacer()
-                Text(model.sessionId.isEmpty ? "—" : "\(model.sessionId.prefix(8))…")
-                    .font(.system(.footnote, design: .monospaced))
+            VStack(alignment: .leading, spacing: BrandSpacing.xs) {
+                HStack {
+                    Text("Session ID")
+                    Spacer()
+                    Button(action: copySessionId) {
+                        Label(
+                            showCopied ? "Copied" : "Copy",
+                            systemImage: showCopied ? "checkmark" : "doc.on.doc"
+                        )
+                        .font(BrandFont.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(BrandColor.accent)
+                    .disabled(!model.canCopySessionId)
+                    .accessibilityLabel("Copy session ID")
+                }
+                Text(model.sessionId.isEmpty ? "—" : model.sessionId)
+                    .font(BrandFont.mono)
                     .foregroundStyle(BrandColor.textSecondary)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Session identifier: \(model.sessionId)")
             }
+            .padding(.vertical, BrandSpacing.xxs)
 
             Button(role: .destructive) {
-                showResetConfirm = true
+                showDeleteConfirm = true
             } label: {
                 HStack {
-                    Text("Start Over")
+                    Text("Delete my data & start over")
                     Spacer()
-                    if model.isResetInProgress {
+                    if model.isDeleteInProgress {
                         ProgressView().controlSize(.small)
                     }
                 }
             }
-            .disabled(model.isResetInProgress)
+            .disabled(model.isDeleteInProgress || model.isResetInProgress)
+            .accessibilityIdentifier("settings.deleteData")
         } header: {
             Text("Session")
         } footer: {
-            Text("Resets the identifier Mercurius uses for this device. Useful if you're handing your phone to someone else to try.")
+            Text("Deleting your data erases your chats, lessons, streak and progress on this device and on our server right away, and gives you a new anonymous ID. Your session ID is the only thing that links this device to your data — copy it if you ever need to contact us about it.")
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            NavigationLink {
+                PrivacyChoicesView(model: model)
+            } label: {
+                Text("Privacy choices")
+            }
+            .accessibilityIdentifier("settings.privacyChoices")
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("Where your messages go, and how to withdraw consent.")
         }
     }
 
@@ -133,6 +209,14 @@ public struct SettingsView: View {
         Section("About") {
             LabeledRow(title: "Version", value: "\(model.appVersion) (\(model.buildNumber))")
 
+            if let faq = URL(string: "https://trymercurius.com/support") {
+                Link("Help & FAQ", destination: faq)
+                    .foregroundStyle(BrandColor.accent)
+            }
+            if let support = URL(string: "mailto:support@trymercurius.com") {
+                Link("Contact support", destination: support)
+                    .foregroundStyle(BrandColor.accent)
+            }
             if let terms = URL(string: "https://trymercurius.com/terms") {
                 Link("Terms of Use", destination: terms)
                     .foregroundStyle(BrandColor.accent)

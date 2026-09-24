@@ -14,8 +14,8 @@ public struct ChatView: View {
     /// did nothing while Settings worked.
     @State private var activeSheet: ActiveSheet?
 
-    /// Confirmation shown after the user reports an AI response.
-    @State private var showReportConfirmation = false
+    /// Outcome of the most recent report, driving the one feedback alert.
+    @State private var reportFeedback: ReportFeedback?
 
     /// Brief "encouraging" Merc beat after a substantive exchange completes.
     @State private var encourage = false
@@ -143,9 +143,11 @@ public struct ChatView: View {
                         phase: model.phase,
                         onRetry: { model.retry() },
                         onExplainMore: { model.explainMore() },
-                        onReport: { message in
-                            model.reportMessage(message)
-                            showReportConfirmation = true
+                        onReport: { message, reason in
+                            Task { @MainActor in
+                                let outcome = await model.reportMessage(message, reason: reason)
+                                reportFeedback = ReportFeedback(outcome)
+                            }
                         },
                         onQuizMe: { activeSheet = .quiz },
                         mercMood: focalMercState.mood,
@@ -308,11 +310,7 @@ public struct ChatView: View {
                 )
             }
         }
-        .alert("Reported", isPresented: $showReportConfirmation) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Thanks — we'll review this response.")
-        }
+        .reportFeedbackAlert(reportFeedback)
         // Chat History presentation is owned by `AppShellView`
         // (the TabView host) so the History tab item there can
         // drive it without coupling ChatView to the action.
@@ -333,7 +331,8 @@ struct MessageListView: View {
     let phase: ChatViewModel.Phase
     let onRetry: () -> Void
     let onExplainMore: () -> Void
-    let onReport: (ChatMessage) -> Void
+    /// The reported message plus the reason the student picked.
+    let onReport: (ChatMessage, ReportReason) -> Void
     /// Lesson styling for the bubbles (presence line + callout + soft shadow).
     var lessonStyle: Bool = false
     /// Tap handler for the lesson check-question callout ("tap the question,
@@ -396,7 +395,7 @@ struct MessageListView: View {
                         let isLive = isFocal && !showsCoachIntro
                         MessageBubbleView(
                             message: message,
-                            onReport: { onReport(message) },
+                            onReport: { reason in onReport(message, reason) },
                             lessonStyle: lessonStyle,
                             showAvatar: !lessonStyle,
                             avatarMood: isLive ? mercMood : .neutral,

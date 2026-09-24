@@ -467,6 +467,386 @@ struct APIClientEndToEndTests {
         }
     }
 
+    // MARK: - Session deletion (APIClient+Session)
+
+    @Test("deleteSession: DELETE /api/session/:id, 200 {ok:true,deleted:{…}} resolves")
+    func deleteSessionHappyPath() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.httpMethod == "DELETE")
+            #expect(request.url?.path == "/api/session/\(testSessionId)")
+            #expect(request.bodyData().isEmpty)
+            return .response(
+                status: 200,
+                headers: ["Content-Type": "application/json"],
+                data: Data(#"{"ok":true,"deleted":{"messages":12,"images":1,"reports":0,"usage":3,"sessions":1}}"#.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        try await client.deleteSession(sessionId: testSessionId)
+    }
+
+    @Test("deleteSession: idempotent 200 for an unknown session still resolves")
+    func deleteSessionUnknownIsOK() async throws {
+        StubURLProtocol.handler = { _ in
+            .response(status: 200, data: Data(#"{"ok":true,"deleted":{}}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        try await client.deleteSession(sessionId: testSessionId)
+    }
+
+    @Test("deleteSession: 400 invalid_request → APIError.invalidRequest")
+    func deleteSessionInvalid() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 400, data: Data(#"{"error":"invalid_request","message":"Invalid session id."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            try await client.deleteSession(sessionId: "short")
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest(let reason) {
+            #expect(reason == "Invalid session id.")
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+    }
+
+    @Test("deleteSession: 429 rate_limited → APIError.rateLimited")
+    func deleteSessionRateLimited() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 429, data: Data(#"{"error":"rate_limited","message":"Too many requests."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            try await client.deleteSession(sessionId: testSessionId)
+            Issue.record("Expected APIError.rateLimited")
+        } catch APIError.rateLimited {
+            // expected
+        } catch {
+            Issue.record("Expected .rateLimited, got \(error)")
+        }
+    }
+
+    @Test("deleteSession: 500 → APIError.server(500)")
+    func deleteSessionServerError() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 500, data: Data(#"{"error":"server_error","message":"Could not delete this session. Please try again."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            try await client.deleteSession(sessionId: testSessionId)
+            Issue.record("Expected APIError.server")
+        } catch APIError.server(let status) {
+            #expect(status == 500)
+        } catch {
+            Issue.record("Expected .server, got \(error)")
+        }
+    }
+
+    @Test("deleteSession: offline → APIError.offline")
+    func deleteSessionOffline() async {
+        StubURLProtocol.handler = { _ in .urlError(.notConnectedToInternet) }
+        let client = makeTestAPIClient()
+        do {
+            try await client.deleteSession(sessionId: testSessionId)
+            Issue.record("Expected APIError.offline")
+        } catch APIError.offline {
+            // expected
+        } catch {
+            Issue.record("Expected .offline, got \(error)")
+        }
+    }
+
+    @Test("APIClient satisfies SessionDeleting and deletes through the protocol")
+    func deletesThroughProtocol() async throws {
+        StubURLProtocol.handler = { _ in .response(status: 200, data: Data(#"{"ok":true}"#.utf8)) }
+        let deleter: SessionDeleting = makeTestAPIClient()
+        try await deleter.deleteSession(sessionId: testSessionId)
+    }
+
+    // MARK: - Report (APIClient+Report)
+
+    @Test("reportResponse: POST /api/report carries exactly {sessionId, content, reason, userMessage, context}")
+    func reportBodyShape() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/report")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(#"{"ok":true,"id":42}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        try await client.reportResponse(
+            content: "The moon is made of cheese.",
+            reason: .wrong,
+            userMessage: "What is the moon made of?",
+            context: ReportContext(surface: "lesson", mode: "curriculum", lessonId: "u1-l2", appVersion: "2.3.0"),
+            sessionId: testSessionId
+        )
+
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(Set(json.keys) == ["sessionId", "content", "reason", "userMessage", "context"])
+        #expect(json["sessionId"] as? String == testSessionId)
+        #expect(json["content"] as? String == "The moon is made of cheese.")
+        #expect(json["reason"] as? String == "wrong")
+        #expect(json["userMessage"] as? String == "What is the moon made of?")
+
+        let context = try #require(json["context"] as? [String: Any])
+        #expect(Set(context.keys) == ["surface", "mode", "lessonId", "appVersion"])
+        #expect(context["surface"] as? String == "lesson")
+        #expect(context["mode"] as? String == "curriculum")
+        #expect(context["lessonId"] as? String == "u1-l2")
+        #expect(context["appVersion"] as? String == "2.3.0")
+    }
+
+    @Test("reportResponse: nil userMessage and nil context fields are omitted, never null")
+    func reportOmitsNilKeys() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(#"{"ok":true,"id":7}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        try await client.reportResponse(
+            content: "Let's talk about something else.",
+            reason: .offTopic,
+            userMessage: nil,
+            context: ReportContext(surface: "chat", mode: "socratic"),
+            sessionId: testSessionId
+        )
+
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        // The server's Zod schema accepts undefined but rejects null, so the
+        // keys must be ABSENT (the context object is strict, too).
+        #expect(Set(json.keys) == ["sessionId", "content", "reason", "context"])
+        #expect(json["reason"] as? String == "off_topic")
+
+        let context = try #require(json["context"] as? [String: Any])
+        #expect(Set(context.keys) == ["surface", "mode"])
+        #expect(context["surface"] as? String == "chat")
+        #expect(context["mode"] as? String == "socratic")
+    }
+
+    @Test("reportResponse: every ReportReason serialises to the server's enum value")
+    func reportReasonWireValues() async throws {
+        let expected: [ReportReason: String] = [
+            .wrong: "wrong", .harmful: "harmful", .offTopic: "off_topic", .other: "other",
+        ]
+        for (reason, wire) in expected {
+            var capturedBody: Data?
+            StubURLProtocol.handler = { request in
+                capturedBody = request.bodyData()
+                return .response(status: 200, data: Data(#"{"ok":true,"id":1}"#.utf8))
+            }
+            let client = makeTestAPIClient()
+            try await client.reportResponse(
+                content: "x", reason: reason, userMessage: nil,
+                context: ReportContext(surface: "chat"), sessionId: testSessionId
+            )
+            let body = try #require(capturedBody)
+            let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            #expect(json["reason"] as? String == wire, "reason \(reason)")
+        }
+    }
+
+    @Test("reportResponse: oversized content and userMessage are clamped to the server caps")
+    func reportClampsToServerCaps() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(#"{"ok":true,"id":1}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        try await client.reportResponse(
+            content: String(repeating: "a", count: APIClient.reportContentLimit + 500),
+            reason: .other,
+            userMessage: String(repeating: "u", count: APIClient.reportUserMessageLimit + 500),
+            context: ReportContext(surface: "chat"),
+            sessionId: testSessionId
+        )
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect((json["content"] as? String)?.count == APIClient.reportContentLimit)
+        #expect((json["userMessage"] as? String)?.count == APIClient.reportUserMessageLimit)
+    }
+
+    @Test("reportResponse: a bare {ok:true} without id still succeeds")
+    func reportLenientResponse() async throws {
+        StubURLProtocol.handler = { _ in .response(status: 200, data: Data(#"{"ok":true}"#.utf8)) }
+        let client = makeTestAPIClient()
+        try await client.reportResponse(
+            content: "x", reason: .harmful, userMessage: nil,
+            context: ReportContext(surface: "chat"), sessionId: testSessionId
+        )
+    }
+
+    @Test("reportResponse: 400 → APIError.invalidRequest with the server's message")
+    func reportRejected() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 400, data: Data(#"{"error":"invalid_request","message":"report_empty"}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            try await client.reportResponse(
+                content: "", reason: .wrong, userMessage: nil,
+                context: ReportContext(surface: "chat"), sessionId: testSessionId
+            )
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest(let reason) {
+            #expect(reason == "report_empty")
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+    }
+
+    @Test("APIClient satisfies Reporting and reports through the protocol")
+    func reportsThroughProtocol() async throws {
+        StubURLProtocol.handler = { _ in .response(status: 200, data: Data(#"{"ok":true,"id":3}"#.utf8)) }
+        let reporter: Reporting = makeTestAPIClient()
+        try await reporter.reportResponse(
+            content: "x", reason: .other, userMessage: "y",
+            context: ReportContext(surface: "lesson", lessonId: "u2-l1"), sessionId: testSessionId
+        )
+    }
+
+    // MARK: - Refusals through the real pipeline (JSON + SSE)
+
+    @Test("JSON 429 daily_limit → APIError.quotaExceeded with the server's copy")
+    func jsonDailyLimit() async {
+        StubURLProtocol.handler = { _ in
+            .response(
+                status: 429,
+                headers: ["Content-Type": "application/json", "Retry-After": "600"],
+                data: Data(#"{"error":"daily_limit","scope":"ip","message":"This network has reached today's usage limit.","reply":"This network has reached today's usage limit.","retryAfterSec":600}"#.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.generateQuiz(sessionId: testSessionId)
+            Issue.record("Expected APIError.quotaExceeded")
+        } catch APIError.quotaExceeded(let message, let retryAfter) {
+            #expect(message == "This network has reached today's usage limit.")
+            #expect(retryAfter == 600)
+        } catch {
+            Issue.record("Expected .quotaExceeded, got \(error)")
+        }
+    }
+
+    @Test("JSON 503 spend_cap → APIError.serviceUnavailable with the server's copy")
+    func jsonSpendCap() async {
+        StubURLProtocol.handler = { _ in
+            .response(
+                status: 503,
+                data: Data(#"{"error":"spend_cap","message":"Daily usage limit reached — please try again tomorrow.","reply":"Daily usage limit reached — please try again tomorrow."}"#.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.changeMode(to: .socratic, sessionId: testSessionId)
+            Issue.record("Expected APIError.serviceUnavailable")
+        } catch APIError.serviceUnavailable(let code, let message, let retryAfter) {
+            #expect(code == "spend_cap")
+            #expect(message == "Daily usage limit reached — please try again tomorrow.")
+            #expect(retryAfter == nil)
+        } catch {
+            Issue.record("Expected .serviceUnavailable, got \(error)")
+        }
+    }
+
+    @Test("Stream: refusal frame + [DONE] → exactly one .refusal event, then a clean finish")
+    func streamingRefusalFrame() async throws {
+        let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
+        StubURLProtocol.handler = { _ in
+            .stream { stub in
+                stub.yield(
+                    #"data: {"type":"error","code":"daily_limit","error":"\#(copy)","retryAfterSec":3600}"# + "\n\n"
+                )
+                stub.yield("data: [DONE]\n\n")
+                stub.finish()
+            }
+        }
+        let client = makeTestAPIClient()
+        let stream = client.streamChat(
+            messages: [ChatMessageDTO(role: "user", content: "hi")],
+            sessionId: "sid"
+        )
+        let events = try await drain(stream)
+        #expect(events == [.refusal(code: "daily_limit", message: copy, retryAfter: 3600)])
+    }
+
+    @Test("Stream: restarting refusal without retryAfterSec → .refusal with nil retryAfter")
+    func streamingRefusalNoRetryAfter() async throws {
+        StubURLProtocol.handler = { _ in
+            .stream { stub in
+                stub.yield(#"data: {"type":"error","code":"service_disabled","error":"Mercurius is temporarily paused — please try again soon."}"# + "\n\n")
+                stub.yield("data: [DONE]\n\n")
+                stub.finish()
+            }
+        }
+        let client = makeTestAPIClient()
+        let stream = client.streamChat(
+            messages: [ChatMessageDTO(role: "user", content: "hi")],
+            sessionId: "sid"
+        )
+        let events = try await drain(stream)
+        #expect(events == [.refusal(
+            code: "service_disabled",
+            message: "Mercurius is temporarily paused — please try again soon.",
+            retryAfter: nil
+        )])
+    }
+
+    @Test("Stream: real 503 busy before bytes → stream throws APIError.serviceUnavailable")
+    func streamingServiceUnavailable() async {
+        StubURLProtocol.handler = { _ in
+            .response(
+                status: 503,
+                data: Data(#"{"error":"busy","message":"Mercurius is helping a lot of students right now. Try again in a minute.","retryAfterSec":60}"#.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        let stream = client.streamChat(
+            messages: [ChatMessageDTO(role: "user", content: "hi")],
+            sessionId: "sid"
+        )
+        do {
+            for try await _ in stream {}
+            Issue.record("Expected .serviceUnavailable")
+        } catch APIError.serviceUnavailable(let code, let message, let retryAfter) {
+            #expect(code == "busy")
+            #expect(message == "Mercurius is helping a lot of students right now. Try again in a minute.")
+            #expect(retryAfter == 60)
+        } catch {
+            Issue.record("Expected .serviceUnavailable, got \(error)")
+        }
+    }
+
+    @Test("Stream: real 429 daily_limit before bytes → stream throws APIError.quotaExceeded")
+    func streamingQuotaExceeded() async {
+        StubURLProtocol.handler = { _ in
+            .response(
+                status: 429,
+                data: Data(#"{"error":"daily_limit","scope":"session","message":"You've used today's chat turns.","retryAfterSec":1200}"#.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        let stream = client.streamChat(
+            messages: [ChatMessageDTO(role: "user", content: "hi")],
+            sessionId: "sid"
+        )
+        do {
+            for try await _ in stream {}
+            Issue.record("Expected .quotaExceeded")
+        } catch APIError.quotaExceeded(let message, let retryAfter) {
+            #expect(message == "You've used today's chat turns.")
+            #expect(retryAfter == 1200)
+        } catch {
+            Issue.record("Expected .quotaExceeded, got \(error)")
+        }
+    }
+
     @Test("Stream: mid-stream error event surfaces as .streamError")
     func streamingServerErrorEvent() async throws {
         StubURLProtocol.handler = { _ in

@@ -139,6 +139,25 @@ public final class AppEnvironment: ObservableObject {
         ProcessInfo.processInfo.arguments.contains(uiTestArgument)
     }
 
+    /// Where `CurriculumProgressStore` persists. Under `-UITests` this is a
+    /// private, emptied defaults suite: the chat store is in-memory then, so
+    /// resume pointers left by an earlier simulator run would dangle — and
+    /// hide the lesson intro the first-run UI test anchors on. Evaluated once
+    /// per process so a re-mounted shell still sees what the test wrote.
+    public static let curriculumProgressPreferences: PreferenceStore =
+        makeCurriculumProgressPreferences(arguments: ProcessInfo.processInfo.arguments)
+
+    static let uiTestProgressSuite = "com.mayoailiteracy.mercurius.uitests.curriculumProgress"
+
+    static func makeCurriculumProgressPreferences(arguments: [String]) -> PreferenceStore {
+        guard arguments.contains(uiTestArgument),
+              let defaults = UserDefaults(suiteName: uiTestProgressSuite) else {
+            return UserDefaultsPreferenceStore()
+        }
+        defaults.removePersistentDomain(forName: uiTestProgressSuite)
+        return UserDefaultsPreferenceStore(defaults: defaults)
+    }
+
     /// Build an `InMemoryChatStore` preloaded with a 50-message
     /// conversation. Not representative of real Claude output —
     /// just long enough that a LazyVStack has to lazily create cells

@@ -51,6 +51,7 @@ final class AppStoreScreenshots: XCTestCase {
         app.launchArguments += [
             "-UITests", "YES",
             "-hasSeenOnboarding", "YES",       // skip the onboarding tutorial
+            "-consentVersion", "1",            // skip the first-run consent gate
             "-hasSeenChatInputHint", "YES",
             "-seenAllModeDescriptions", "YES", // skip first-tap mode sheets
             "-SeedDemoChat",                   // ~50-message in-memory conversation

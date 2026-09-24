@@ -653,6 +653,49 @@ struct SSERoundTripTests {
         await waitFor("phase idle") { model.phase == .idle }
         #expect(model.messages.last?.content == "ok")
     }
+
+    @Test("A refusal frame flows through the parser as a non-retryable daily_limit failure")
+    func refusalFrameFlowsThroughParser() async throws {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        model.draft = "Hi"
+        model.send()
+
+        // Exactly what `sendRefusal` writes on the SSE path, then [DONE].
+        let payloads = [
+            #"{"type":"error","code":"daily_limit","error":"You've used today's chat turns. Mercurius will be ready again tomorrow.","retryAfterSec":3600}"#,
+            "[DONE]",
+        ]
+        try await driveFromSSEPayloads(payloads, into: client)
+
+        await waitFor("phase becomes .failed") {
+            if case .failed = model.phase { return true }
+            return false
+        }
+        #expect(model.phase == .failed(
+            reason: "You've used today's chat turns. Mercurius will be ready again tomorrow.",
+            isRetryable: false
+        ))
+    }
+
+    @Test("A plain error frame (no refusal code) stays a retryable streamError")
+    func plainErrorFrameStaysRetryable() async throws {
+        let client = ControllableChatClient()
+        let model = makeModel(chat: client)
+        model.draft = "Hi"
+        model.send()
+
+        try await driveFromSSEPayloads(
+            [#"{"type":"error","code":"upstream_error","error":"Mercurius hit a snag. Try again in a moment."}"#],
+            into: client
+        )
+
+        await waitFor("phase becomes .failed") {
+            if case .failed = model.phase { return true }
+            return false
+        }
+        #expect(model.phase == .failed(reason: "Mercurius hit a snag. Try again in a moment.", isRetryable: true))
+    }
 }
 
 // MARK: - Lesson completion (marker fallback + flag + display sanitizing)

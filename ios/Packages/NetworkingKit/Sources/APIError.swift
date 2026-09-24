@@ -19,11 +19,22 @@ public enum APIError: Error, Equatable, Sendable {
     /// The server requires authentication or authorization (401 / 403).
     case unauthorized
 
-    /// The server rate-limited this client (429). The caller should back
-    /// off and try again later.
+    /// The server rate-limited this client (429, per-minute limiter). The
+    /// caller should back off and try again later.
     case rateLimited
 
-    /// The server failed unexpectedly (5xx).
+    /// Today's usage allowance is used up (429 with `error == "daily_limit"`).
+    /// `message` is the server's own human copy; `retryAfter` is seconds
+    /// until the allowance resets. Retrying sooner re-hits the same wall.
+    case quotaExceeded(message: String, retryAfter: TimeInterval?)
+
+    /// The server is up but not serving right now (503 with a
+    /// `ServerRefusalCode` such as `spend_cap` / `service_disabled` / `busy` /
+    /// `restarting`, or any 503 that carries a human message). `message` is
+    /// the server's copy; `retryAfter` is its suggested wait, when given.
+    case serviceUnavailable(code: String, message: String, retryAfter: TimeInterval?)
+
+    /// The server failed unexpectedly (5xx without a refusal payload).
     case server(status: Int)
 
     /// The response body did not match the expected shape.
@@ -52,6 +63,10 @@ public enum APIError: Error, Equatable, Sendable {
             return "You're not signed in to do that."
         case .rateLimited:
             return "You're moving fast — give it a moment, then try again."
+        case .quotaExceeded(let message, _), .serviceUnavailable(_, let message, _):
+            // The server writes this copy for students; it already names
+            // the reason and when to come back.
+            return message
         case .server:
             return "The server hit an error. Try again in a moment."
         case .decoding, .invalidModelOutput:
@@ -66,9 +81,9 @@ public enum APIError: Error, Equatable, Sendable {
     /// Whether the error is likely transient and a retry could succeed.
     public var isRetryable: Bool {
         switch self {
-        case .offline, .timeout, .server, .rateLimited, .unknown:
+        case .offline, .timeout, .server, .rateLimited, .serviceUnavailable, .unknown:
             return true
-        case .invalidRequest, .unauthorized, .decoding, .invalidModelOutput, .cancelled:
+        case .invalidRequest, .unauthorized, .quotaExceeded, .decoding, .invalidModelOutput, .cancelled:
             return false
         }
     }

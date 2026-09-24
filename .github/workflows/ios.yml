@@ -4,7 +4,8 @@ name: iOS
 # targeting main. Two jobs in parallel:
 #
 #   * spm       — `swift test` on the macOS host. Covers every SPM
-#                 package test target (174 tests / 37 suites) plus
+#                 package test target (the test/suite count is whatever
+#                 `swift test` prints — it is not pinned here) plus
 #                 ArchitectureTests which validate the package
 #                 dependency graph against the pinned manifest.json
 #                 fixture.
@@ -71,7 +72,7 @@ jobs:
   xcode:
     name: Xcode scheme tests
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
