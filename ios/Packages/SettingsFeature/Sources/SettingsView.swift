@@ -56,8 +56,15 @@ public struct SettingsView: View {
                     Button("Done", action: dismissAction)
                         .fontWeight(.semibold)
                         .foregroundStyle(BrandColor.accent)
+                        // Leaving mid-erasure would let a send start under the
+                        // OLD id: the server re-creates rows the user was told
+                        // were gone, and the message vanishes at the local reset.
+                        .disabled(model.isDeleteInProgress || model.isResetInProgress)
                 }
             }
+#if os(iOS)
+            .interactiveDismissDisabled(model.isDeleteInProgress || model.isResetInProgress)
+#endif
             .task { model.loadSessionId() }
             .alert(
                 "Delete my data?",

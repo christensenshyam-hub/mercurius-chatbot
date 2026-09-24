@@ -227,6 +227,26 @@ struct APIClientURLErrorTests {
         #expect(APIClient.mapURLError(err) == .offline)
     }
 
+    @Test("The shapes a dead connection actually produces map to offline", arguments: [
+        URLError.Code.networkConnectionLost,
+        .cannotConnectToHost,
+        .cannotFindHost,
+        .dnsLookupFailed,
+        .internationalRoamingOff,
+    ])
+    func connectionFailuresAreOffline(_ code: URLError.Code) {
+        #expect(APIClient.mapURLError(URLError(code)) == .offline)
+    }
+
+    @Test("Other URLErrors still fall through to unknown")
+    func otherURLErrorsAreUnknown() {
+        if case .unknown = APIClient.mapURLError(URLError(.badServerResponse)) {
+            // expected
+        } else {
+            Issue.record("badServerResponse should not be mapped to a connection error")
+        }
+    }
+
     @Test("Timed out maps to timeout")
     func timedOut() {
         let err = URLError(.timedOut)

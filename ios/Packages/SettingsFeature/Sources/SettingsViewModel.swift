@@ -108,10 +108,13 @@ public final class SettingsViewModel {
 
     /// The alert copy for a failed server delete. Only a connection problem
     /// gets the "check your connection" line; a 400/429/500 says what the
-    /// server actually did.
+    /// server actually did. `.unknown` is treated as a connection problem:
+    /// on this path it means the server never confirmed (an unmapped
+    /// `URLError`, a non-HTTP response), where "reach the server — or reset
+    /// this device only" is still the right escape hatch.
     static func deleteFailureMessage(for error: APIError) -> String {
         switch error {
-        case .offline, .timeout:
+        case .offline, .timeout, .unknown:
             return serverDeleteFailedMessage
         default:
             return error.userFacingMessage

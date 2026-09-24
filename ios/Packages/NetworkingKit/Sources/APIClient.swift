@@ -191,7 +191,12 @@ public final class APIClient: Sendable {
 
     public static func mapURLError(_ error: URLError) -> APIError {
         switch error.code {
-        case .notConnectedToInternet, .dataNotAllowed:
+        // The shapes a dead or flaky connection actually produces — a
+        // dropped socket, no route, DNS down, roaming off — not only the
+        // reachability verdict. Anything here reads as "check your
+        // connection" to the student, and is worth a retry.
+        case .notConnectedToInternet, .dataNotAllowed, .networkConnectionLost,
+             .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .internationalRoamingOff:
             return .offline
         case .timedOut:
             return .timeout

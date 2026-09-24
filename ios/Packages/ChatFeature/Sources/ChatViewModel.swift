@@ -713,12 +713,13 @@ public final class ChatViewModel {
         // Chat History with permanent zero-message "New chat" rows. But the
         // record must still exist: after `deleteAll()` (Settings resets) or
         // History deleting the active row, keeping the old id would make
-        // every later `append` a silent no-op and lose the whole chat.
+        // every later `append` a silent no-op and lose the whole chat. The
+        // store lookup faults the whole messages relationship, so it only
+        // runs when an empty thread could actually be reused.
         if let store {
-            let activeRecordIsGone = conversationId.map {
-                store.loadConversation(conversationId: $0) == nil
-            } ?? true
-            if hadMessages || activeRecordIsGone {
+            let canReuseRecord = !hadMessages
+                && conversationId.map { store.loadConversation(conversationId: $0) != nil } == true
+            if !canReuseRecord {
                 conversationId = store.createConversation(mode: currentMode)
             }
         }

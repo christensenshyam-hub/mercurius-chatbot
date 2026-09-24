@@ -23,6 +23,9 @@ struct PrivacyChoicesView: View {
         .navigationTitle("Privacy choices")
 #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        // Popping back mid-erasure would reach the Settings Done button's
+        // sibling paths; keep the user here until the server has answered.
+        .navigationBarBackButtonHidden(model.isDeleteInProgress)
 #endif
         .alert(
             "Withdraw consent?",

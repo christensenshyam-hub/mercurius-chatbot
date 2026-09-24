@@ -287,6 +287,10 @@ struct SettingsViewModelDeleteTests {
         let cases: [(error: APIError, expected: String)] = [
             (.offline, SettingsViewModel.serverDeleteFailedMessage),
             (.timeout, SettingsViewModel.serverDeleteFailedMessage),
+            // Never confirmed by the server: reach-the-server copy is still right.
+            (.unknown(underlying: "Non-HTTP response"), SettingsViewModel.serverDeleteFailedMessage),
+            // A dropped socket surfaces as a URLError, not the reachability verdict.
+            (APIClient.mapURLError(URLError(.networkConnectionLost)), SettingsViewModel.serverDeleteFailedMessage),
             (.rateLimited, APIError.rateLimited.userFacingMessage),
             (.server(status: 500), APIError.server(status: 500).userFacingMessage),
             (.invalidRequest(reason: "bad id"), APIError.invalidRequest(reason: "bad id").userFacingMessage),
