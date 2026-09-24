@@ -48,6 +48,8 @@ const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED } = require('./lib/safetyCore');
+const { notifyReport } = require('./lib/reportWebhook');
+const { createScheduler } = require('./lib/scheduler');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
@@ -1183,11 +1185,20 @@ const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
 // an operator curls it in bursts — it gets its own, looser bucket so scrapes
 // never eat the credential-stuffing budget above.
 const metricsLimiter = ipLimiter('metrics', { windowMs: 60 * 1000, max: 60 });
+// Right-to-erasure is cheap to request and destructive to guess at: a tight
+// dedicated bucket keeps the unguessable-id assumption honest against a
+// scripted sweep without touching the global limiter students share.
+const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, max: 5 });
 // Image uploads are heavier than chat turns (multi-MB bodies, a DB write per
 // call), so they get a dedicated IP bucket rather than sharing the chat one.
 // 60/min/IP covers a classroom each attaching a couple of photos while
 // capping bulk-abuse from a single source.
 const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: envInt('UPLOAD_IP_PER_MIN', 60) });
+// A content report is a ~14 KB insert plus a Discord post, so the global
+// bucket is far too loose for it. Keyed per IP, so like uploads it is sized
+// for a classroom behind one school NAT flagging the same bad reply, not for
+// one student (the shipped client swallows a 429 and still shows "reported").
+const reportLimiter = ipLimiter('report', { windowMs: 60 * 1000, max: envInt('REPORT_IP_PER_MIN', 60) });
 
 // ---------------------------------------------------------------------------
 // Admin auth — shared-password header with constant-time compare
@@ -1477,6 +1488,40 @@ async function refuseUnseenSession(req, res, sessionId) {
   return false;
 }
 
+// Lesson lifecycle events (start / turn / complete) — the founder's weekly
+// numbers come from these. `lib/lessonOutcome.js` already computes
+// completion; it was previously forwarded to the client and dropped. One row
+// per turn, written only once the reply is in hand: the opener turn IS the
+// 'start' row (a refused or failed opener plus the client's retry must not
+// count as two starts), so a lesson with no row after its start is abandoned.
+let scheduler = null;
+function lessonMetaFor(clientMessages) {
+  const opener = clientMessages.find(
+    (m) => m && m.role === 'user' && typeof m.content === 'string' && curriculumTag.parseCurriculumTag(m.content),
+  );
+  const tag = opener ? curriculumTag.parseCurriculumTag(opener.content) : null;
+  const turnIndex = clientMessages.filter((m) => m && m.role === 'user').length;
+  if (!tag) return { unit: null, lesson: null, lessonId: null, turnIndex };
+  return { unit: tag.unit, lesson: tag.lesson, lessonId: curriculumTag.lessonId(tag.unit, tag.lesson), turnIndex };
+}
+// A loose `[CURRICULUM:` thread (billed and quota-gated as a lesson) has no
+// parsable lesson id; its row is still written with lesson_id NULL.
+function recordLessonEvent(sessionId, meta, event) {
+  if (!meta) return;
+  Promise.resolve(db.recordLessonEvent({
+    ts: Date.now(),
+    sessionId,
+    unit: meta.unit,
+    lesson: meta.lesson,
+    lessonId: meta.lessonId,
+    event,
+    turnIndex: meta.turnIndex,
+  })).then((written) => {
+    // Counted on the write, not the call: a deduped 'complete' is not an event.
+    if (written) metrics.lessonEventsTotal.inc({ event });
+  }).catch(() => {});
+}
+
 // Per-session quota counters live in memory; the first time a session is
 // seen each UTC day, seed them from the usage ledger so a mid-day redeploy
 // doesn't hand every session a fresh allowance.
@@ -1538,6 +1583,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // against different daily allowances.
   const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
+  const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages) : null;
+  // The opener is the lesson's start — and so is any lesson thread with no
+  // assistant turn yet: a student whose opener got no reply (stop, timeout,
+  // refusal) and who types on instead of tapping Retry sends [opener, turn],
+  // which is still the first answered turn.
+  const lessonStart = Boolean(lessonMeta)
+    && (lessonMeta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant'));
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
@@ -1854,6 +1906,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
+        if (lessonMeta) {
+          recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
+          if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+        }
 
         try {
           await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -1954,6 +2010,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
+      if (lessonMeta) {
+        recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
+        if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+      }
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2386,6 +2446,49 @@ app.post('/api/admin/prewarm', adminLimiter, requireAdmin, asyncRoute(async (req
   return res.json({ ok: true, warmed: await prewarmCaches(req.ip) });
 }));
 
+// ---------------------------------------------------------------------------
+// Admin review queue for content reports (App Store Guideline 1.2 story:
+// users can report, and the developer can act on it).
+// ---------------------------------------------------------------------------
+app.get('/api/admin/reports', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 50));
+  const sinceRaw = req.query.since ? Number(req.query.since) : null;
+  const unresolvedOnly = req.query.unresolved === '1' || req.query.unresolved === 'true';
+  const reports = await db.listReports({ limit, since: Number.isFinite(sinceRaw) ? sinceRaw : null, unresolvedOnly });
+  return res.json({ ok: true, reports });
+}));
+
+app.post('/api/admin/reports/:id/resolve', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  // Plain decimal digits only: Number() also accepts '1e21', '0x10' and
+  // values past int4, all of which Postgres rejects with a 500.
+  if (!/^\d{1,9}$/.test(req.params.id)) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Report id must be an integer.' });
+  }
+  const id = Number(req.params.id);
+  // Idempotent: resolving twice keeps the first timestamp and reports
+  // resolved:false the second time.
+  const resolved = await db.resolveReport(id);
+  return res.json({ ok: true, id, resolved });
+}));
+
+// ---------------------------------------------------------------------------
+// Admin stats — the founder's weekly numbers. DAU/WAU, lessons, cost, D1/D7
+// retention from the usage ledger + lesson events; plus live rails state.
+// ---------------------------------------------------------------------------
+app.get('/api/admin/stats', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const days = Math.min(366, Math.max(1, Number(req.query.days) || 7));
+  const stats = await db.getAdminStats({ days });
+  return res.json({
+    ok: true,
+    ...stats,
+    budget: spendCap.state(),
+    killSwitch: killSwitch.state(),
+    inflight: quotas.inflight(),
+    draining,
+    scheduler: scheduler ? scheduler.state() : null,
+  });
+}));
+
 app.get('/api/admin/kill-switch', adminLimiter, requireAdmin, (_req, res) => {
   return res.json({ ok: true, ...killSwitch.state() });
 });
@@ -2677,17 +2780,33 @@ app.get('/api/images/:id', async (req, res) => {
 //
 // Required by App Store Review Guideline 1.2 (user-generated / AI content):
 // the app must let users report content and the developer must be able to act
-// on it. Reports land in the `reports` table for review. Covered by the
-// global rate limiter.
+// on it. Reports land in the `reports` table for review.
 // ---------------------------------------------------------------------------
-app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
-  const { sessionId, content, reason } = req.validated;
+app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
+  const { sessionId, content, reason, userMessage, context } = req.validated;
   try {
-    await db.saveReport({ sessionId, content, reason: reason ?? null, createdAt: Date.now() });
+    // A session this server has never seen has no reply to report; acknowledge
+    // and drop. Not refuseUnseenSession — that creates the row and spends the
+    // per-IP new-session quota on a request that carries no model call.
+    if (!(await db.sessionExists(sessionId))) {
+      logger.forRequest(req).debug({ reason: reason || null }, 'content report for an unknown session dropped');
+      return res.json({ ok: true });
+    }
+    const createdAt = Date.now();
+    const { id } = await db.saveReport({
+      sessionId,
+      content,
+      reason: reason ?? null,
+      userMessage: userMessage ?? null,
+      context: context ?? null,
+      createdAt,
+    });
     // Log the signal (reason only) so reports surface in observability; the
-    // full reported text lives in the DB for review.
-    logger.forRequest(req).warn({ reason: reason || null }, 'content report received');
-    return res.json({ ok: true });
+    // full reported text lives in the DB for review. The Discord alert is the
+    // only channel the founder actually sees between club meetings.
+    logger.forRequest(req).warn({ reportId: id, reason: reason || null, surface: context && context.surface }, 'content report received');
+    notifyReport({ id, ts: createdAt, sessionId, reason, content, userMessage, context }).catch(() => {});
+    return res.json({ ok: true, id });
   } catch (err) {
     logger.forRequest(req).error({ err: err.message }, 'failed to save content report');
     return res.status(500).json({ error: 'server_error', message: 'Could not submit the report.' });
@@ -2704,14 +2823,18 @@ app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), as
 // Idempotent: deleting an unknown/already-deleted session still returns 200,
 // so a client can safely retry and existence isn't probeable beyond the
 // unguessable id itself. Rate-limited by the global 60/min/IP limiter.
-app.delete('/api/session/:sessionId', asyncRoute(async (req, res) => {
+app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (req, res) => {
   const { sessionId } = req.params;
-  if (!isValidSessionId(sessionId)) {
+  // The 32-char Keychain id (192 bits) is the bearer capability. Refuse
+  // short legacy-shaped ids outright so the route is never a cheap oracle.
+  if (!isValidSessionId(sessionId) || sessionId.length < 16) {
     return res.status(400).json({ error: 'invalid_request', message: 'Invalid session id.' });
   }
   try {
     const result = await db.deleteSession(sessionId);
-    logger.forRequest(req).warn({ deleted: result.deleted }, 'session erased on request');
+    // Log a hash, never the id itself — the logs are not the place a
+    // student's bearer capability should live.
+    logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId), deleted: result.deleted }, 'session erased on request');
     return res.json({ ok: true, deleted: result.deleted });
   } catch (err) {
     logger.forRequest(req).error({ err: err.message }, 'session deletion failed');
@@ -2861,6 +2984,32 @@ db.initSchema().then(async () => {
   } catch (e) {
     logger.warn({ err: e.message }, 'kill switch init failed — using env default');
   }
+
+  // In-process daily digest + retention sweep (one replica, no cron
+  // service). Off under tests; SCHEDULER_ENABLED=0 disables it elsewhere.
+  if (process.env.NODE_ENV !== 'test' && process.env.SCHEDULER_ENABLED !== '0') {
+    try {
+      scheduler = createScheduler({
+        getSetting: (k) => db.getSetting(k),
+        setSetting: (k, v) => db.setSetting(k, v),
+        getAdminStats: (o) => db.getAdminStats(o),
+        notify: alerts.notify,
+        purge: {
+          messagesBefore: (ts) => db.purgeMessagesBefore(ts),
+          imagesBefore: (ts) => db.purgeImagesBefore(ts),
+          reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
+          usageBefore: (ts) => db.purgeUsageBefore(ts),
+          lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
+          inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
+          deleteSession: (id) => db.deleteSession(id),
+        },
+        logger,
+      });
+      scheduler.start().catch((e) => logger.warn({ err: e.message }, 'scheduler start failed'));
+    } catch (e) {
+      logger.warn({ err: e.message }, 'scheduler not started');
+    }
+  }
   try {
     const midnight = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
     const spentToday = await db.sumCostSince(midnight);
@@ -2915,6 +3064,7 @@ process.on('unhandledRejection', (err) => {
 function shutdown(signal, hardMs) {
   if (draining) return;
   draining = true;
+  if (scheduler) scheduler.stop();
   logger.info({ signal, inflightSse }, 'graceful shutdown: draining');
   if (server) {
     server.close(() => logger.info('all connections closed'));

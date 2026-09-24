@@ -137,13 +137,41 @@ async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
 
       -- User reports of objectionable AI responses (App Store Guideline 1.2).
+      -- user_message = the student's turn that preceded the reported reply,
+      -- context = a JSON blob the client attaches (lesson id, model, trace
+      -- id…), resolved_at = when an admin cleared it from the review queue
+      -- (NULL = still open). The ALTERs migrate databases created before
+      -- those three columns existed.
       CREATE TABLE IF NOT EXISTS reports (
         id SERIAL PRIMARY KEY,
         session_id TEXT NOT NULL,
         content TEXT NOT NULL,
         reason TEXT DEFAULT NULL,
-        created_at BIGINT NOT NULL
+        user_message TEXT DEFAULT NULL,
+        context TEXT DEFAULT NULL,
+        created_at BIGINT NOT NULL,
+        resolved_at BIGINT DEFAULT NULL
       );
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_message TEXT DEFAULT NULL;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS context TEXT DEFAULT NULL;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS resolved_at BIGINT DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
+
+      -- Lesson funnel events (start / turn / complete), one row per event.
+      -- Feeds the admin stats (lessons started, completed, abandoned) and is
+      -- session-keyed, so deleteSession and the retention purge clear it.
+      CREATE TABLE IF NOT EXISTS lesson_events (
+        id SERIAL PRIMARY KEY,
+        ts BIGINT NOT NULL,
+        session_id TEXT NOT NULL,
+        unit INTEGER,
+        lesson INTEGER,
+        lesson_id TEXT,
+        event TEXT NOT NULL CHECK(event IN ('start', 'turn', 'complete')),
+        turn_index INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_lesson_events_ts ON lesson_events(ts);
+      CREATE INDEX IF NOT EXISTS idx_lesson_events_session ON lesson_events(session_id, ts);
 
       -- Runtime key/value settings (ops safety rails): admin-flipped switches
       -- that must survive a restart, unlike the in-memory lib/killSwitch flag.
@@ -227,8 +255,24 @@ async function initSchema() {
         session_id TEXT NOT NULL,
         content TEXT NOT NULL,
         reason TEXT DEFAULT NULL,
-        created_at INTEGER NOT NULL
+        user_message TEXT DEFAULT NULL,
+        context TEXT DEFAULT NULL,
+        created_at INTEGER NOT NULL,
+        resolved_at INTEGER DEFAULT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
+      CREATE TABLE IF NOT EXISTS lesson_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        session_id TEXT NOT NULL,
+        unit INTEGER,
+        lesson INTEGER,
+        lesson_id TEXT,
+        event TEXT NOT NULL CHECK(event IN ('start', 'turn', 'complete')),
+        turn_index INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_lesson_events_ts ON lesson_events(ts);
+      CREATE INDEX IF NOT EXISTS idx_lesson_events_session ON lesson_events(session_id, ts);
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -277,6 +321,13 @@ async function initSchema() {
     const msgCols = sqliteDb.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
     if (!msgCols.includes('kind')) sqliteDb.exec("ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
     sqliteDb.exec("CREATE INDEX IF NOT EXISTS idx_messages_session_kind ON messages(session_id, kind, timestamp)");
+    // reports.user_message / context / resolved_at (trust rails) — see the pg
+    // block above. All three are nullable, so pre-existing reports simply read
+    // back as open reports with no captured context.
+    const reportCols = sqliteDb.prepare('PRAGMA table_info(reports)').all().map(c => c.name);
+    if (!reportCols.includes('user_message')) sqliteDb.exec('ALTER TABLE reports ADD COLUMN user_message TEXT DEFAULT NULL');
+    if (!reportCols.includes('context'))      sqliteDb.exec('ALTER TABLE reports ADD COLUMN context TEXT DEFAULT NULL');
+    if (!reportCols.includes('resolved_at'))  sqliteDb.exec('ALTER TABLE reports ADD COLUMN resolved_at INTEGER DEFAULT NULL');
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -334,6 +385,65 @@ async function queryRaw(sql, params = []) {
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+// Like num() but keeps NULL as null (nullable integer columns such as
+// lesson_events.unit or reports.resolved_at).
+function numOrNull(v) {
+  return v == null ? null : num(v);
+}
+
+// Run one mutation and return how many rows it touched (pg rowCount / SQLite
+// changes). query() deliberately returns [] for mutations, so the callers
+// that need the count (resolveReport, the purge helpers) come through here.
+async function execCount(sql, params = []) {
+  if (USE_PG) {
+    let idx = 0;
+    const res = await pool.query(sql.replace(/\?/g, () => `$${++idx}`), params);
+    return res.rowCount || 0;
+  }
+  return sqliteDb.prepare(sql).run(...params).changes;
+}
+
+// Run one INSERT and return the new row's integer id (SERIAL on pg,
+// AUTOINCREMENT rowid on SQLite). `sql` must not already carry RETURNING.
+async function insertReturningId(sql, params = []) {
+  if (USE_PG) {
+    let idx = 0;
+    const res = await pool.query(sql.replace(/\?/g, () => `$${++idx}`) + ' RETURNING id', params);
+    return res.rows[0] ? num(res.rows[0].id) : null;
+  }
+  const info = sqliteDb.prepare(sql).run(...params);
+  return info.lastInsertRowid != null ? Number(info.lastInsertRowid) : null;
+}
+
+// Delete every row of `table` matching `whereSql` in batches of PURGE_BATCH
+// (so a first-ever purge of a year of messages never holds one giant
+// transaction / lock), returning the total deleted. Never throws: a failure
+// mid-way is logged with the count so far, which is what the scheduler
+// reports. `idCol IN (SELECT idCol … LIMIT n)` is the one batching idiom both
+// drivers accept (SQLite has no DELETE … LIMIT without a compile flag).
+const PURGE_BATCH = 1000;
+async function purgeBatched(label, table, idCol, whereSql, params) {
+  let total = 0;
+  try {
+    for (;;) {
+      const n = await execCount(
+        `DELETE FROM ${table} WHERE ${idCol} IN (SELECT ${idCol} FROM ${table} WHERE ${whereSql} LIMIT ${PURGE_BATCH})`,
+        params,
+      );
+      total += n;
+      if (n < PURGE_BATCH) break;
+    }
+  } catch (e) {
+    logger.error({ err: e, table, deletedSoFar: total }, `${label} failed`);
+  }
+  return total;
+}
+
+const DAY_MS = 86400000;
+function isoDay(dayIndex) {
+  return new Date(dayIndex * DAY_MS).toISOString().slice(0, 10);
 }
 
 // ─── Streak day boundary ───
@@ -426,12 +536,152 @@ module.exports = {
     );
   },
 
-  // ─── Content reports (App Store Guideline 1.2) ───
-  async saveReport({ sessionId, content, reason, createdAt }) {
-    await query(
-      'INSERT INTO reports (session_id, content, reason, created_at) VALUES (?, ?, ?, ?)',
-      [sessionId, content, reason ?? null, createdAt],
+  // ─── Content reports (App Store Guideline 1.2 + admin review queue) ───
+  // A student flags an AI reply; an admin reviews it and resolves it. Contract:
+  //   saveReport({ sessionId, content, reason, userMessage, context, createdAt })
+  //       → { id }. `content` is the reported AI text, `userMessage` the
+  //         student's preceding turn (optional), `context` an object stored as
+  //         a JSON string (a string is stored verbatim; null/undefined → NULL).
+  //         `createdAt` defaults to now. Old 4-key callers keep working.
+  //   listReports({ limit = 50, since = null, unresolvedOnly = false })
+  //       → newest first (created_at DESC, id DESC), as
+  //         [{ id, session_id, content, reason, user_message, context,
+  //            created_at, resolved_at }] with `context` parsed back to an
+  //         object (null when absent or unparseable) and resolved_at null
+  //         while the report is open. `since` filters created_at >= since;
+  //         `limit` is clamped to 1..500.
+  //   resolveReport(id) → true when the row existed AND was still open (the
+  //         first resolution time is kept as the audit record, so a second
+  //         call for the same id returns false rather than overwriting it).
+  async saveReport({ sessionId, content, reason, userMessage, context, createdAt } = {}) {
+    let contextJson = null;
+    if (context != null) contextJson = typeof context === 'string' ? context : JSON.stringify(context);
+    const ts = Number(createdAt);
+    const id = await insertReturningId(
+      'INSERT INTO reports (session_id, content, reason, user_message, context, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [sessionId, content, reason ?? null, userMessage ?? null, contextJson, Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now()],
     );
+    return { id };
+  },
+
+  async listReports({ limit = 50, since = null, unresolvedOnly = false } = {}) {
+    let sql = 'SELECT id, session_id, content, reason, user_message, context, created_at, resolved_at FROM reports';
+    const where = [];
+    const params = [];
+    if (since != null && Number.isFinite(Number(since))) { where.push('created_at >= ?'); params.push(num(since)); }
+    if (unresolvedOnly) where.push('resolved_at IS NULL');
+    if (where.length) sql += ' WHERE ' + where.join(' AND ');
+    sql += ' ORDER BY created_at DESC, id DESC LIMIT ?';
+    const lim = Math.round(Number(limit));
+    params.push(Number.isFinite(lim) ? Math.min(Math.max(lim, 1), 500) : 50);
+    const rows = await query(sql, params);
+    return rows.map((r) => {
+      let context = null;
+      if (r.context != null) {
+        try {
+          const parsed = JSON.parse(r.context);
+          context = parsed != null && typeof parsed === 'object' ? parsed : null;
+        } catch { context = null; }
+      }
+      return {
+        id: num(r.id),
+        session_id: r.session_id,
+        content: r.content,
+        reason: r.reason ?? null,
+        user_message: r.user_message ?? null,
+        context,
+        created_at: num(r.created_at),
+        resolved_at: numOrNull(r.resolved_at),
+      };
+    });
+  },
+
+  async resolveReport(id) {
+    const n = Math.round(Number(id));
+    if (!Number.isFinite(n)) return false;
+    const changed = await execCount('UPDATE reports SET resolved_at = ? WHERE id = ? AND resolved_at IS NULL', [Date.now(), n]);
+    return changed > 0;
+  },
+
+  // ─── Lesson funnel events ───
+  // One row per lesson start / turn / complete, written from the lesson
+  // stream handler. Contract:
+  //   recordLessonEvent({ ts, sessionId, unit, lesson, lessonId, event, turnIndex })
+  //       → never throws (a lost analytics row must never fail a student's
+  //         turn); resolves true when written, false when dropped (logged).
+  //         `event` must be 'start' | 'turn' | 'complete' and `sessionId` is
+  //         required — anything else is dropped. `ts` defaults to now.
+  //         `lessonId` ('u1_l3') is derived from unit+lesson when absent, and
+  //         unit/lesson are parsed from a 'uN_lM' lessonId when absent, so a
+  //         caller may pass either form.
+  //         A 'complete' is recorded once per ATTEMPT: when the same session +
+  //         lesson_id already has a 'complete' at or after its latest 'start'
+  //         (ts 0 when there is none), the row is skipped (false, not logged).
+  //         The client keeps a passed lesson's thread open, so every later turn
+  //         would otherwise count as another completion; a re-take (a new
+  //         'start') can complete again.
+  //   lessonEventsSince(tsMs) → [{ id, ts, session_id, unit, lesson,
+  //         lesson_id, event, turn_index }] with ts >= tsMs, oldest first.
+  async recordLessonEvent(row = {}) {
+    try {
+      const event = String(row.event || '');
+      if (!['start', 'turn', 'complete'].includes(event)) {
+        logger.warn({ event: row.event }, 'recordLessonEvent: unknown event (row dropped)');
+        return false;
+      }
+      const sessionId = row.sessionId != null && row.sessionId !== '' ? String(row.sessionId) : null;
+      if (!sessionId) {
+        logger.warn({ event }, 'recordLessonEvent: missing sessionId (row dropped)');
+        return false;
+      }
+      const optInt = (v) => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) ? Math.round(n) : null; };
+      let unit = optInt(row.unit);
+      let lesson = optInt(row.lesson);
+      let lessonId = row.lessonId != null && row.lessonId !== '' ? String(row.lessonId) : null;
+      if (lessonId == null && unit != null && lesson != null) lessonId = `u${unit}_l${lesson}`;
+      if (lessonId != null && (unit == null || lesson == null)) {
+        const m = /^u(\d+)_l(\d+)$/.exec(lessonId);
+        if (m) { if (unit == null) unit = Number(m[1]); if (lesson == null) lesson = Number(m[2]); }
+      }
+      const tsRaw = Number(row.ts);
+      const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
+      if (event === 'complete' && lessonId != null) {
+        const startRow = await queryOne(
+          "SELECT COALESCE(MAX(ts), 0) AS ts FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event = 'start'",
+          [sessionId, lessonId],
+        );
+        const done = await queryOne(
+          "SELECT 1 AS one FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event = 'complete' AND ts >= ? LIMIT 1",
+          [sessionId, lessonId, startRow ? num(startRow.ts) : 0],
+        );
+        if (done) return false;
+      }
+      await query(
+        'INSERT INTO lesson_events (ts, session_id, unit, lesson, lesson_id, event, turn_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [ts, sessionId, unit, lesson, lessonId, event, optInt(row.turnIndex)],
+      );
+      return true;
+    } catch (e) {
+      logger.error({ err: e, event: row && row.event }, 'recordLessonEvent failed (row dropped)');
+      return false;
+    }
+  },
+
+  async lessonEventsSince(tsMs) {
+    const rows = await query(
+      'SELECT id, ts, session_id, unit, lesson, lesson_id, event, turn_index FROM lesson_events WHERE ts >= ? ORDER BY ts ASC, id ASC',
+      [num(tsMs)],
+    );
+    return rows.map((r) => ({
+      id: num(r.id),
+      ts: num(r.ts),
+      session_id: r.session_id,
+      unit: numOrNull(r.unit),
+      lesson: numOrNull(r.lesson),
+      lesson_id: r.lesson_id ?? null,
+      event: r.event,
+      turn_index: numOrNull(r.turn_index),
+    }));
   },
 
   // ─── Settings (persistent runtime key/value) ───
@@ -544,6 +794,216 @@ module.exports = {
     };
   },
 
+  // ─── Admin stats (the founder's weekly numbers) ───
+  // Everything is bucketed by UTC day: day = floor(ts / 86400000), which both
+  // drivers compute with plain integer division, so no driver-specific date
+  // functions are involved. The window is the `days` most recent UTC days
+  // INCLUDING the (partial) day that contains `now`. Contract:
+  //   getAdminStats({ days = 7, now = Date.now() }) →
+  //     { windowDays, generatedAt,
+  //       perDay: [{ day 'YYYY-MM-DD', dau, userMessages, lessonsStarted,
+  //                  lessonsCompleted, costUsd, errors }]  — one row per day
+  //                  in the window, oldest first, zero-filled,
+  //       wau, costUsdWindow, costPerWau,           — costPerWau null when wau = 0
+  //       lessonsStarted, lessonsCompleted, lessonsAbandoned,
+  //       retention: { d1: { cohortSize, retained, rate }, d7: { … } },  — rate
+  //                  null when the cohort is empty
+  //       topErrors: [{ route, error_kind, count }] (≤10),
+  //       topRoutesByCost: [{ route, calls, costUsd }] (≤10),
+  //       newSessions, reportsOpen }
+  // Definitions:
+  //   DAU / WAU        distinct session_id with a messages.role='user' row that
+  //                    day / anywhere in the window.
+  //   lessonsAbandoned 'start' rows whose 24 h judgement window has closed
+  //                    (start.ts + 24 h <= now) with NO 'turn' or 'complete'
+  //                    for the same session + lesson_id in [start, start+24 h].
+  //                    A 'start' row IS the opener turn (the server writes one
+  //                    row per answered turn), so "abandoned" means the student
+  //                    never got a turn beyond the opener within 24 h. A start
+  //                    younger than 24 h is neither abandoned nor finished
+  //                    yet, so it is not counted.
+  //   retention.dN     cohort = sessions whose created_at falls on a day D such
+  //                    that the return day D+N is a COMPLETE day inside the
+  //                    window; retained = a user message exists in
+  //                    [D+N, D+N+1). Anchoring on the return day (rather than
+  //                    requiring D itself to be inside the window) is what
+  //                    keeps d7 populated for the default 7-day window — with
+  //                    D inside a 7-day window, no D+7 could ever be complete.
+  //   reportsOpen      all-time count of reports with resolved_at IS NULL
+  //                    (the queue length, not a windowed figure).
+  async getAdminStats({ days = 7, now = Date.now() } = {}) {
+    const nowRaw = Number(now);
+    const nowMs = Number.isFinite(nowRaw) && nowRaw > 0 ? Math.floor(nowRaw) : Date.now();
+    const daysRaw = Math.round(Number(days));
+    const windowDays = Number.isFinite(daysRaw) ? Math.min(Math.max(daysRaw, 1), 366) : 7;
+    const today = Math.floor(nowMs / DAY_MS);
+    const firstDay = today - windowDays + 1;
+    const startMs = firstDay * DAY_MS;
+    const endMs = (today + 1) * DAY_MS;
+
+    const buckets = new Map();
+    for (let d = firstDay; d <= today; d++) {
+      buckets.set(d, { day: isoDay(d), dau: 0, userMessages: 0, lessonsStarted: 0, lessonsCompleted: 0, costUsd: 0, errors: 0 });
+    }
+    const bucket = (day) => buckets.get(num(day));
+
+    const msgDays = await query(
+      `SELECT m.timestamp / 86400000 AS day, COUNT(DISTINCT m.session_id) AS dau, COUNT(*) AS user_messages
+         FROM messages m WHERE m.role = 'user' AND m.timestamp >= ? AND m.timestamp < ? GROUP BY 1`,
+      [startMs, endMs],
+    );
+    for (const r of msgDays) { const b = bucket(r.day); if (b) { b.dau = num(r.dau); b.userMessages = num(r.user_messages); } }
+
+    const lessonDays = await query(
+      `SELECT e.ts / 86400000 AS day,
+              SUM(CASE WHEN e.event = 'start' THEN 1 ELSE 0 END) AS started,
+              SUM(CASE WHEN e.event = 'complete' THEN 1 ELSE 0 END) AS completed
+         FROM lesson_events e WHERE e.ts >= ? AND e.ts < ? GROUP BY 1`,
+      [startMs, endMs],
+    );
+    for (const r of lessonDays) { const b = bucket(r.day); if (b) { b.lessonsStarted = num(r.started); b.lessonsCompleted = num(r.completed); } }
+
+    const usageDays = await query(
+      `SELECT u.ts / 86400000 AS day, COALESCE(SUM(u.cost_usd), 0) AS usd,
+              SUM(CASE WHEN u.status <> 'ok' THEN 1 ELSE 0 END) AS errors
+         FROM usage u WHERE u.ts >= ? AND u.ts < ? GROUP BY 1`,
+      [startMs, endMs],
+    );
+    for (const r of usageDays) { const b = bucket(r.day); if (b) { b.costUsd = num(r.usd); b.errors = num(r.errors); } }
+
+    const perDay = [...buckets.values()];
+    const wauRow = await queryOne(
+      `SELECT COUNT(DISTINCT m.session_id) AS wau FROM messages m WHERE m.role = 'user' AND m.timestamp >= ? AND m.timestamp < ?`,
+      [startMs, endMs],
+    );
+    const wau = wauRow ? num(wauRow.wau) : 0;
+    const costRow = await queryOne('SELECT COALESCE(SUM(u.cost_usd), 0) AS usd FROM usage u WHERE u.ts >= ? AND u.ts < ?', [startMs, endMs]);
+    const costUsdWindow = costRow ? num(costRow.usd) : 0;
+
+    const abandonedRow = await queryOne(
+      `SELECT COUNT(*) AS c FROM lesson_events s
+        WHERE s.event = 'start' AND s.ts >= ? AND s.ts < ? AND s.ts + 86400000 <= ?
+          AND NOT EXISTS (
+            SELECT 1 FROM lesson_events e
+             WHERE e.session_id = s.session_id
+               AND COALESCE(e.lesson_id, '') = COALESCE(s.lesson_id, '')
+               AND e.event IN ('turn', 'complete')
+               AND e.ts >= s.ts AND e.ts <= s.ts + 86400000)`,
+      [startMs, endMs, nowMs],
+    );
+
+    const retention = {};
+    for (const n of [1, 7]) {
+      // Return day R = D + n must be complete and inside the window:
+      // R ∈ [firstDay, today - 1]  ⇒  D ∈ [firstDay - n, today - 1 - n].
+      const cohortStartMs = (firstDay - n) * DAY_MS;
+      const cohortEndMs = (today - n) * DAY_MS; // exclusive
+      let cohortSize = 0, retained = 0;
+      if (cohortEndMs > cohortStartMs) {
+        const r = await queryOne(
+          `SELECT COUNT(*) AS cohort,
+                  SUM(CASE WHEN EXISTS (
+                        SELECT 1 FROM messages m
+                         WHERE m.session_id = s.session_id AND m.role = 'user'
+                           AND m.timestamp >= (s.created_at / 86400000 + ${n}) * 86400000
+                           AND m.timestamp <  (s.created_at / 86400000 + ${n + 1}) * 86400000)
+                      THEN 1 ELSE 0 END) AS retained
+             FROM sessions s WHERE s.created_at >= ? AND s.created_at < ?`,
+          [cohortStartMs, cohortEndMs],
+        );
+        cohortSize = r ? num(r.cohort) : 0;
+        retained = r ? num(r.retained) : 0;
+      }
+      retention[`d${n}`] = { cohortSize, retained, rate: cohortSize > 0 ? retained / cohortSize : null };
+    }
+
+    const topErrors = await query(
+      `SELECT u.route, u.error_kind, COUNT(*) AS count FROM usage u
+        WHERE u.ts >= ? AND u.ts < ? AND u.status <> 'ok'
+        GROUP BY u.route, u.error_kind ORDER BY count DESC, u.route, u.error_kind LIMIT 10`,
+      [startMs, endMs],
+    );
+    const topRoutesByCost = await query(
+      `SELECT u.route, COUNT(*) AS calls, COALESCE(SUM(u.cost_usd), 0) AS usd FROM usage u
+        WHERE u.ts >= ? AND u.ts < ? GROUP BY u.route ORDER BY usd DESC, calls DESC, u.route LIMIT 10`,
+      [startMs, endMs],
+    );
+    const newRow = await queryOne('SELECT COUNT(*) AS c FROM sessions s WHERE s.created_at >= ? AND s.created_at < ?', [startMs, endMs]);
+    const openRow = await queryOne('SELECT COUNT(*) AS c FROM reports WHERE resolved_at IS NULL');
+
+    return {
+      windowDays,
+      generatedAt: nowMs,
+      perDay,
+      wau,
+      costUsdWindow,
+      costPerWau: wau > 0 ? costUsdWindow / wau : null,
+      lessonsStarted: perDay.reduce((a, b) => a + b.lessonsStarted, 0),
+      lessonsCompleted: perDay.reduce((a, b) => a + b.lessonsCompleted, 0),
+      lessonsAbandoned: abandonedRow ? num(abandonedRow.c) : 0,
+      retention,
+      topErrors: topErrors.map((r) => ({ route: r.route, error_kind: r.error_kind ?? null, count: num(r.count) })),
+      topRoutesByCost: topRoutesByCost.map((r) => ({ route: r.route, calls: num(r.calls), costUsd: num(r.usd) })),
+      newSessions: newRow ? num(newRow.c) : 0,
+      reportsOpen: openRow ? num(openRow.c) : 0,
+    };
+  },
+
+  // ─── Data retention (minors' data is not kept forever) ───
+  // Batched deletes for the retention scheduler. Each purge* helper deletes
+  // rows OLDER than `tsMs` (strict <) in batches of 1000, returns the number
+  // deleted, and never throws (a failure logs and returns the count so far).
+  // Counters on sessions (message_count) are deliberately left alone: they
+  // are lifetime tallies, not a mirror of surviving rows.
+  //   purgeMessagesBefore(tsMs)      messages.timestamp < tsMs
+  //   purgeImagesBefore(tsMs)        images.created_at < tsMs
+  //   purgeReportsBefore(tsMs, { resolvedOnly = true })
+  //                                  reports.created_at < tsMs; by default only
+  //                                  RESOLVED reports go (an open report is an
+  //                                  unreviewed safety signal), pass
+  //                                  resolvedOnly: false to purge open ones too
+  //   purgeUsageBefore(tsMs)         usage.ts < tsMs
+  //   purgeLessonEventsBefore(tsMs)  lesson_events.ts < tsMs
+  //   inactiveSessionIds(beforeTsMs, limit = 200)
+  //                                  → session ids with last_active < before,
+  //                                    least-recent first, so the scheduler
+  //                                    can deleteSession() them in batches.
+  //                                    Never throws (→ [] on error).
+  async purgeMessagesBefore(tsMs) {
+    return purgeBatched('purgeMessagesBefore', 'messages', 'id', 'timestamp < ?', [num(tsMs)]);
+  },
+
+  async purgeImagesBefore(tsMs) {
+    return purgeBatched('purgeImagesBefore', 'images', 'id', 'created_at < ?', [num(tsMs)]);
+  },
+
+  async purgeReportsBefore(tsMs, { resolvedOnly = true } = {}) {
+    const where = resolvedOnly ? 'created_at < ? AND resolved_at IS NOT NULL' : 'created_at < ?';
+    return purgeBatched('purgeReportsBefore', 'reports', 'id', where, [num(tsMs)]);
+  },
+
+  async purgeUsageBefore(tsMs) {
+    return purgeBatched('purgeUsageBefore', 'usage', 'id', 'ts < ?', [num(tsMs)]);
+  },
+
+  async purgeLessonEventsBefore(tsMs) {
+    return purgeBatched('purgeLessonEventsBefore', 'lesson_events', 'id', 'ts < ?', [num(tsMs)]);
+  },
+
+  async inactiveSessionIds(beforeTsMs, limit = 200) {
+    try {
+      const lim = Math.round(Number(limit));
+      const rows = await query(
+        'SELECT session_id FROM sessions WHERE last_active < ? ORDER BY last_active ASC, session_id ASC LIMIT ?',
+        [num(beforeTsMs), Number.isFinite(lim) && lim > 0 ? lim : 200],
+      );
+      return rows.map((r) => r.session_id);
+    } catch (e) {
+      logger.error({ err: e }, 'inactiveSessionIds failed');
+      return [];
+    }
+  },
+
   // ─── Health ───
   // ping() → true when `SELECT 1` answers within 2 s, false otherwise (error
   // or timeout). Never throws — it exists for the health endpoint, which must
@@ -574,12 +1034,12 @@ module.exports = {
   // to satisfy the FK constraints. Gamification tables (progression, xp_ledger)
   // exist only when GAMIFICATION_ENABLED has run, and student_memory only
   // until migrations/002 drops it — probe for those first so a DELETE against
-  // a missing table never aborts the transaction. The usage ledger is
-  // session-keyed too (ip_hash + token counts), so it is part of the cascade.
-  // Returns the per-table row counts for an auditable receipt.
+  // a missing table never aborts the transaction. The usage ledger and the
+  // lesson_events funnel are session-keyed too, so they are part of the
+  // cascade. Returns the per-table row counts for an auditable receipt.
   async deleteSession(sessionId) {
     // Child tables first (FK order), then the parent `sessions` row.
-    const base = ['messages', 'images', 'reports', 'usage'];
+    const base = ['messages', 'images', 'reports', 'usage', 'lesson_events'];
     const optional = ['xp_ledger', 'progression', 'student_memory'];
 
     if (USE_PG) {
