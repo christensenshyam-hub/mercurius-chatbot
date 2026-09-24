@@ -136,16 +136,17 @@
           first time, Mercurius generates a 32-character random identifier and
           stores it in the iOS Keychain on your device. The server sees this
           ID on every request so it can recognize you across sessions for
-          features like streaks and conversation memory. It is not tied to
-          your name, email, phone number, or any external identity.
+          features like streaks, the quiz and the report card. It is not tied
+          to your name, email, phone number, or any external identity.
         </p>
 
         <p class="lede">
           <strong>Your messages.</strong> Every chat message you send, and
           every lesson transcript, goes to our server and is forwarded to
           Anthropic's Claude API to generate the reply. Messages are stored on
-          our server under your session ID so Mercurius can remember the
-          conversation across launches.
+          our server under your session ID for 90 days so features like the
+          quiz and the report card can look back at your recent turns. The
+          conversation you see in the app lives on your phone.
         </p>
 
         <p class="lede">
@@ -170,8 +171,9 @@
         </p>
 
         <p class="lede">
-          <strong>Lesson progress.</strong> Which lessons you have started and
-          finished, so your progress is still there after a reinstall.
+          <strong>Lesson progress events.</strong> Anonymous rows recording
+          which lessons were started and finished, so we can see whether the
+          lessons work. Your own progress checklist lives on your phone.
         </p>
 
         <p class="lede">
@@ -308,10 +310,6 @@
               <tr>
                 <td>Lesson progress events</td>
                 <td>400 days</td>
-              </tr>
-              <tr>
-                <td>Lesson completion state</td>
-                <td>As long as the session exists, so progress survives a reinstall</td>
               </tr>
               <tr>
                 <td>The whole session</td>
