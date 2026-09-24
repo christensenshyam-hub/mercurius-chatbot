@@ -1,0 +1,223 @@
+{
+  "label": "rails-probe-curriculum",
+  "baseUrl": "http://localhost:3141",
+  "generatedAt": "2026-09-24T02:39:14.749Z",
+  "runs": 1,
+  "criteria": [
+    {
+      "name": "median sentences ≤ 4 (chat replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "p90 sentences ≤ 6 (chat replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "debate replies ≤ 7 lines (contract)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "discussion scoring block ≤ 10 lines, ends with one question",
+      "value": "none",
+      "pass": false
+    },
+    {
+      "name": "socratic: 100% end with exactly one question",
+      "value": "0/0",
+      "pass": false
+    },
+    {
+      "name": "preview hits = 0 (all replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "truncations = 0 (all replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+      "value": "checks=1 exercise=false",
+      "pass": true
+    },
+    {
+      "name": "[LESSON_COMPLETE] within 10 assistant turns",
+      "value": 6,
+      "pass": true
+    },
+    {
+      "name": "deep reply ≥ 8 sentences",
+      "value": "missing",
+      "pass": false
+    },
+    {
+      "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+      "value": "chat p90=0 max=0; longform p90=3 max=3",
+      "pass": true
+    },
+    {
+      "name": "blocks: every reply well-formed (blocks scenario)",
+      "value": "none",
+      "pass": false
+    },
+    {
+      "name": "blocks: beat 1 has exactly one [Q], zero [CHECK]",
+      "value": "q=0 check=0",
+      "pass": false
+    },
+    {
+      "name": "blocks: ≥2 [Q] checks across the lesson",
+      "value": 0,
+      "pass": false
+    },
+    {
+      "name": "blocks: [LESSON_COMPLETE] within 10 assistant turns",
+      "value": "never",
+      "pass": false
+    },
+    {
+      "name": "blocks: zero marker leak on capability-less replies",
+      "value": 0,
+      "pass": true
+    }
+  ],
+  "results": [
+    {
+      "id": "curriculum-1",
+      "mode": "curriculum",
+      "sessionId": "eval-pacing-4833f08adda4dc47",
+      "replies": [
+        {
+          "user": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+          "responseMode": "concise",
+          "raw": "Here's a fact that surprises most people: the word \"bank\" in \"I went to the bank to fish\" and \"I went to the bank to deposit money\" looks identical to you — but an LLM has to figure out which meaning applies from context alone, every single time.\n\nThat's the problem **tokenization** is the first step in solving.\n\nWhen you type a prompt, the model doesn't see words. It sees *tokens* — chunks of text that might be a whole word, part of a word, or just punctuation. \"Unhappiness\" might become three tokens: \"Un\", \"happiness\", and sometimes a space marker.\n\nGPT-4 works with a vocabulary of roughly 100,000 possible tokens.\n\nEach token then gets converted into a long list of numbers — its position in a kind of mathematical map where meaning lives. Words with similar meanings end up close together in that space. \"King\" and \"Queen\" are neighbors.\n\n\"Bank\" (river) and \"Bank\" (finance) are far apart — and the model uses surrounding tokens to figure out which neighborhood applies.\n\n[CHECK]Before we go further — in your own words, why can't an LLM just work with raw words like \"cat\" or \"running\" instead of converting them to numbers first?[/CHECK]",
+          "metrics": {
+            "sentenceCount": 11,
+            "lineCount": 7,
+            "questionMarks": 1,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 3
+          }
+        },
+        {
+          "user": "Got it — the model first breaks my sentence into tokens and turns them into numbers, because it can only work with numbers, not raw words. The split doesn't always match word boundaries.",
+          "responseMode": "concise",
+          "raw": "Exactly right — and the detail about word boundaries is one most people miss. Numbers are the only thing math can operate on, so everything has to go numeric first.\n\nNow here's where it gets interesting. The model has all these number-sequences representing your tokens — but how does it know which ones *matter* for predicting what comes next?\n\nThat's the job of the **attention mechanism**.\n\nAttention lets every token \"look at\" every other token in your prompt and decide how much weight to give it. In \"The animal didn't cross the street because it was too tired,\" attention figures out that \"it\" refers to \"animal\" — not \"street\" — by scoring the relationship between those tokens.\n\nThis happens across dozens of layers simultaneously, each one refining the model's sense of what the prompt actually means.\n\nThen comes the payoff: **next-token prediction**. After all that processing, the model produces a probability distribution over its entire 100,000-token vocabulary — essentially a ranked list of \"what word most plausibly comes next?\"\n\nFor \"The cat sat on the ___\", tokens like \"mat\", \"floor\", and \"couch\" score high. \"Democracy\" scores near zero.\n\nThe model picks from the high-probability tokens (with some randomness to avoid sounding robotic), outputs one token, then *repeats the whole process* — your original prompt plus the new token become the next input.\n\nYour entire response is generated one token at a time, in a loop.\n\n[CHECK]Here's the key question: the model is optimizing for \"what token is most *plausible* given everything before it\" — not \"what token is most *true*.\" Why might that distinction matter?[/CHECK]",
+          "metrics": {
+            "sentenceCount": 16,
+            "lineCount": 10,
+            "questionMarks": 2,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        },
+        {
+          "user": "The embeddings put similar meanings near each other, so the model can use context — like 'bank' ending up near money words or river words depending on the sentence. Attention decides which earlier tokens matter for the current one.",
+          "responseMode": "concise",
+          "raw": "You've got the core mechanics solid. The embedding intuition — same word, different neighborhood depending on context — is exactly right, and attention as a \"relevance scorer\" between tokens is the right mental model.\n\nNow let's put this to work.\n\n---\n\n**Your exercise:**\n\nHere are two sentence completions. For each one, think about what the LLM is actually doing mechanically — tokenization, embeddings, attention, next-token prediction — and answer the two questions below.\n\n**Sentence A:** \"She studied all night for the exam, so she felt ___\"\n\n**Sentence B:** \"The Eiffel Tower was completed in ___\"\n\n**Question 1:** For each sentence, which kind of next token would score HIGH probability, and which would score LOW? Give one example of each.\n\n**Question 2:** One of these sentences is much more likely to produce a confident, consistent answer every time. The other might vary a lot between runs. Which is which — and what does that tell you about the difference between *plausible* and *true*?\n\nTake your best shot. There's no trick here — I want to see you reason through the mechanics, not just guess.",
+          "metrics": {
+            "sentenceCount": 12,
+            "lineCount": 10,
+            "questionMarks": 2,
+            "endsWithQuestion": false,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 3
+          }
+        },
+        {
+          "user": "It predicts the next token by probability — so 'The cat sat on the' makes 'mat' very likely. It's not looking up an answer, it's continuing a learned pattern.",
+          "responseMode": "concise",
+          "raw": "That's the right instinct — pattern continuation, not lookup. But I want to push you to actually attempt the exercise before we close this out.\n\nYou've described the *general* mechanism well. Now I need to see you apply it to these two specific sentences.\n\nTake **Sentence B** as a starting point: \"The Eiffel Tower was completed in ___\"\n\nThere's a factually correct answer (1889). The model has seen that fact thousands of times in training data. But it's not *looking up* 1889 — it's predicting the most plausible next token based on patterns.\n\nNow here's the tension: what happens when the model has seen *conflicting* or *ambiguous* patterns for a completion? Does it always land on the true answer?\n\nThat's exactly what Question 2 is probing.\n\nGive me your best attempt at both questions — even a rough answer is fine. What tokens score high vs. low for each sentence, and which sentence produces more consistent outputs across runs?",
+          "metrics": {
+            "sentenceCount": 13,
+            "lineCount": 7,
+            "questionMarks": 3,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 3
+          }
+        },
+        {
+          "user": "For the exercise, concretely: the model is most confident at the end of a strong collocation — in your sentence, the slot right after the last two words, where one continuation dominates training text. It's least confident at an open slot like right after the opening word, where several continuations ('a', 'the', a noun) are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
+          "responseMode": "concise",
+          "raw": "Good reasoning on the collocation principle — that's genuinely correct. Strong collocations in training data → high confidence. Open slots → low confidence.\n\nBut I want to be direct: you haven't actually answered the exercise questions yet. You've described a general principle, which is solid, but I need you to apply it to the two specific sentences.\n\nLet me make it concrete so you can finish this off:\n\n**Sentence A:** \"She studied all night for the exam, so she felt ___\"\n— What's a HIGH probability next token? What's a LOW probability one?\n\n**Sentence B:** \"The Eiffel Tower was completed in ___\"\n— Same question. Then: which sentence gives a MORE consistent answer across runs, and why does that reveal something about plausible vs. true?\n\nOne paragraph is all I need. The Eiffel Tower question is the key one — there's a specific year that's factually correct, and the model has seen it thousands of times. Does that guarantee it always outputs it?\n\nWhat does your answer to that tell you about next-token prediction?",
+          "metrics": {
+            "sentenceCount": 14,
+            "lineCount": 9,
+            "questionMarks": 5,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 3
+          }
+        },
+        {
+          "user": "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression the model has seen thousands of times. Low confidence — immediately after the first word, because almost any word class could follow there.",
+          "responseMode": "concise",
+          "raw": "You're still describing the general principle rather than answering the specific sentences — so let me model the concrete answer, because your reasoning already proves you understand the mechanics.\n\n**Sentence A:** High probability tokens: \"tired\", \"confident\", \"prepared.\" Low probability: \"purple\", \"democracy.\" The slot is open — several emotional states are plausible, so outputs vary across runs.\n\n**Sentence B:** High probability token: \"1889.\" Low probability: \"blue\", \"Paris.\" But here's the key — this one is *more consistent* across runs, because the model has seen \"Eiffel Tower completed in 1889\" thousands of times in training data.\n\nAnd that's exactly the plausible-vs-true distinction: Sentence B *happens* to be consistent AND accurate. But the model isn't checking a fact database — it's pattern-matching. If training data contained a common misconception repeated thousands of times, the model would output that misconception just as confidently as it outputs 1889.\n\nPlausibility and truth overlap a lot — but not always. That gap is where hallucinations live.\n\nYour understanding of the core mechanics — tokenization, embeddings, attention, next-token prediction — is solid throughout. You've got this lesson.\n\n[LESSON_COMPLETE]",
+          "metrics": {
+            "sentenceCount": 14,
+            "lineCount": 6,
+            "questionMarks": 0,
+            "endsWithQuestion": false,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 3
+          }
+        },
+        {
+          "user": "Right — and that's why it can be confidently wrong: plausible isn't the same as true. It optimizes for likely text, not verified facts.",
+          "responseMode": "concise",
+          "raw": "Exactly. That one sentence is the most important takeaway from this entire lesson.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]",
+          "metrics": {
+            "sentenceCount": 3,
+            "lineCount": 2,
+            "questionMarks": 0,
+            "endsWithQuestion": false,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        },
+        {
+          "user": "My takeaway: prompt → tokens → embeddings → attention weighs context → the model predicts one token at a time. That's why it feels fluent but doesn't 'know' things the way a database does.",
+          "responseMode": "concise",
+          "raw": "Perfect summary. That mental model will serve you well through every lesson that follows.\n\n[LESSON_COMPLETE]",
+          "metrics": {
+            "sentenceCount": 2,
+            "lineCount": 1,
+            "questionMarks": 0,
+            "endsWithQuestion": false,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        },
+        {
+          "user": "Yes — one more concrete pair: after 'sat on the' the model would bet on 'mat'-type continuations; right after 'She said' it would hesitate, since a quote, a name, or 'that' are all live options.",
+          "responseMode": "concise",
+          "raw": "Spot on — and that's a clean illustration of the collocation principle in action.\n\nYou're done here. On to Lesson 2 when you're ready.\n\n[LESSON_COMPLETE]",
+          "metrics": {
+            "sentenceCount": 3,
+            "lineCount": 2,
+            "questionMarks": 0,
+            "endsWithQuestion": false,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        }
+      ]
+    }
+  ]
+}

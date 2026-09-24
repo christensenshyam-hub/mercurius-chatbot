@@ -14,7 +14,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { z } = require('zod');
-const Anthropic = require('@anthropic-ai/sdk');
 const db = require('./db');
 const logger = require('./lib/logger');
 const {
@@ -40,6 +39,11 @@ const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = 
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
+const spendCap = require('./lib/spendCap');
+const killSwitch = require('./lib/killSwitch');
+const quotas = require('./lib/quotas');
+const alerts = require('./lib/alerts');
+const claudeCall = require('./lib/claudeCall');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
@@ -82,7 +86,6 @@ function isValidSessionId(id) {
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const MODEL = 'claude-sonnet-4-6';
-const MEMORY_MODEL = process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
 
 // v2 unified-prompt rollout switch. OFF by default → the backend behaves
 // exactly as before (the 10 per-mode prompts). Set USE_UNIFIED_PROMPT=1 in
@@ -108,16 +111,10 @@ const gamificationXp = require('./lib/gamification/xp');
 // ---------------------------------------------------------------------------
 // Anthropic client
 // ---------------------------------------------------------------------------
-// Timeout lives on the client, not in per-request bodies. Anthropic's
-// current API rejects `timeout` as a body field with
-//   400 invalid_request_error: "timeout: Extra inputs are not permitted"
-// which silently broke every non-streaming endpoint (quiz, report-card,
-// concept-map, factcheck, analyze, pre-briefing, memory extraction) on
-// the deployed SDK. Setting it here applies to every call uniformly.
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  timeout: 30000,
-});
+// Every model call goes through lib/claudeCall (usage ledger, dollar budget,
+// quotas, metrics, alerts, and the ANTHROPIC_MOCK=1 stand-in for tests). It
+// is initialized in the boot sequence at the bottom of this file, after the
+// database is ready (the IP-hash salt lives in the settings table).
 
 // ---------------------------------------------------------------------------
 // Events data — fetched from mayoailiteracy.com/events-data.json, cached 1hr
@@ -904,7 +901,7 @@ You are NOT debating (that's Debate Mode). You are EVALUATING. You pose a provoc
 ## HOW A DISCUSSION WORKS
 
 **Step 1 — Pose the Question (your first message)**
-Choose one question from this bank (or generate one equally good). Pick based on the student's level and interests if you know them from memory.
+Choose one question from this bank (or generate one equally good). Pick based on the student's level and interests if the conversation so far shows them.
 
 Question Bank:
 - "A hospital AI correctly diagnoses a rare cancer that three doctors missed — but no one can explain how it reached that conclusion. Should the hospital use it?"
@@ -1035,58 +1032,9 @@ const V2_STATIC_SYSTEM =
   '\n\n<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
 
 // ---------------------------------------------------------------------------
-// Background memory extraction — runs after each response, non-blocking
-// ---------------------------------------------------------------------------
-async function extractAndSaveMemories(sessionId, userMessage, assistantReply, mode) {
-  try {
-    const memoryPrompt = `Analyze this student-AI exchange and extract key memories to store for future sessions.
-
-Student message: "${userMessage.slice(0, 500)}"
-AI response: "${assistantReply.slice(0, 500)}"
-Mode: ${mode}
-
-Return a JSON array of memory objects. Each object has "type" and "content".
-Types: "interest" (topic they're interested in), "strength" (something they understood well), "struggle" (something they got wrong or found hard), "insight" (a good point they made), "misconception" (an AI misconception they had), "topic" (the topic discussed), "position" (a stance they took in debate)
-
-Rules:
-- Only include genuinely notable items, not generic observations
-- Keep content under 50 characters each
-- Return 0-3 items max (empty array [] if nothing notable)
-- Return ONLY valid JSON array, nothing else
-
-Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"struggle","content":"confused training data with retrieval"}]`;
-
-    try {
-      const response = await anthropic.messages.create({
-        model: MEMORY_MODEL,
-        max_tokens: 200,
-        messages: [{ role: 'user', content: memoryPrompt }],
-      });
-
-      const text = response.content[0]?.text?.trim();
-      if (!text) return;
-
-      const memories = JSON.parse(text);
-      if (!Array.isArray(memories)) return;
-
-      for (const mem of memories.slice(0, 3)) {
-        if (mem.type && mem.content && typeof mem.content === 'string') {
-          await db.saveMemory(sessionId, mem.type, mem.content.slice(0, 100));
-        }
-      }
-    } catch (e) {
-      logger.warn({ err: e.message, model: MEMORY_MODEL }, 'memory extraction failed');
-      // Graceful degradation — memory extraction is best-effort
-    }
-  } catch (e) {
-    logger.warn({ err: e.message }, 'memory extraction failed');
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel }) {
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
   const dbHistory = await db.getMessages(sessionId, historyLimit);
   if (dbHistory.length < minMessages) {
     return { error: 'insufficient_history', message: 'Have a longer conversation first.' };
@@ -1096,11 +1044,18 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
   // drop leading assistant turns the slice may have exposed. The generated
   // `userMessage` appended below keeps the array non-empty.
   while (history.length > 0 && history[0].role !== 'user') history.shift();
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: [...history, { role: 'user', content: userMessage }],
+  const response = await claudeCall.createMessage({
+    route: route || 'helper',
+    kind: 'helper',
+    sessionId,
+    ip: req && req.ip,
+    traceId: req && req.traceId,
+    params: {
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [...history, { role: 'user', content: userMessage }],
+    },
   });
   const raw = response.content[0]?.text || '';
   let parsed;
@@ -1132,21 +1087,27 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
 // ---------------------------------------------------------------------------
 // Rate limiting
 //
-// Three limiters, all built from lib/rateLimiter.js so they share the
-// same backing store. With REDIS_URL unset (current Railway config)
-// these are in-memory, identical to the pre-Phase-5 behavior. With
-// REDIS_URL set, every replica reads + writes the same counters, so
-// limits are consistent after horizontal scaling.
+// Per-MINUTE limits, all built from lib/rateLimiter.js (in-memory on the
+// single Railway replica). Daily quotas, in-flight caps and the dollar
+// budget live in lib/quotas / lib/spendCap and are checked by `gate()`.
 //
-//   1. globalLimiter  — 60 req/min per IP across all /api/*
-//   2. chatLimiter    — 15 req/min per IP on /api/chat only
-//                       (Anthropic calls are expensive)
-//   3. isRateLimited  — 20 req/min per session (set by the client
-//                       in Keychain; survives IP rotation on mobile)
+// Sizing rule: a whole classroom shares ONE IP (school NAT), so per-IP
+// minute limits are set for 30 students bursting at once and the sharp
+// limit sits on the per-session bucket, which a human cannot exceed:
+//
+//   1. globalLimiter  — API_IP_PER_MIN  (default 400) across all /api/*
+//   2. chatLimiter    — CHAT_IP_PER_MIN (default 150) on model routes
+//   3. isRateLimited  — SESSION_PER_MIN (default 10) per session id
+//   4. uploadLimiter  — UPLOAD_IP_PER_MIN (default 60)
 // ---------------------------------------------------------------------------
 
-const globalLimiter = ipLimiter('global', { windowMs: 60 * 1000, max: 60 });
-const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: 15 });
+function envInt(name, fallback) {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+const globalLimiter = ipLimiter('global', { windowMs: 60 * 1000, max: envInt('API_IP_PER_MIN', 400) });
+const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: envInt('CHAT_IP_PER_MIN', 150) });
 // Admin endpoints get their own much tighter bucket so an attacker
 // can't credential-stuff against the shared admin password under
 // the cover of the broader 60/min `globalLimiter`. 10/min/IP keeps
@@ -1154,11 +1115,15 @@ const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: 15 });
 // while accommodating the realistic operator flow: load the panel,
 // stage edits, save — easily 5–8 requests in a burst.
 const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
+// /metrics is admin-authenticated too, but a scraper polls it every 15s and
+// an operator curls it in bursts — it gets its own, looser bucket so scrapes
+// never eat the credential-stuffing budget above.
+const metricsLimiter = ipLimiter('metrics', { windowMs: 60 * 1000, max: 60 });
 // Image uploads are heavier than chat turns (multi-MB bodies, a DB write per
 // call), so they get a dedicated IP bucket rather than sharing the chat one.
-// 20/min/IP comfortably covers a user attaching several photos in a sitting
-// while capping bulk-abuse from a single source.
-const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: 20 });
+// 60/min/IP covers a classroom each attaching a couple of photos while
+// capping bulk-abuse from a single source.
+const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: envInt('UPLOAD_IP_PER_MIN', 60) });
 
 // ---------------------------------------------------------------------------
 // Admin auth — shared-password header with constant-time compare
@@ -1200,9 +1165,10 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'unauthorized' });
 }
 
-// `isRateLimited(sessionId)` is now async because the Redis path
-// is. Callers `await` it.
-const isRateLimited = sessionLimiter(60 * 1000, 20);
+// `isRateLimited(sessionId)` is async (the limiter interface is). Callers
+// `await` it. 10/min is above any human typing rate — a lesson turn takes
+// 5–15 s to stream — and below what a script needs to be worth running.
+const isRateLimited = sessionLimiter(60 * 1000, envInt('SESSION_PER_MIN', 10));
 
 // ---------------------------------------------------------------------------
 // Async route wrapper — Express 4 does NOT forward rejections from async
@@ -1265,7 +1231,7 @@ const corsOptions = {
     }
     return callback(new Error(`CORS: origin ${origin} not allowed`), false);
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password', 'x-trace-id'],
   credentials: true,
 };
@@ -1292,9 +1258,10 @@ app.use((req, res, next) => {
 // before any route handler so the `res.finish` hook captures the
 // final status code + duration. The /metrics endpoint itself is
 // also a counted request (minor self-observation noise but
-// immaterial at any scrape rate).
+// immaterial at any scrape rate). The scrape endpoint is admin-only:
+// it exposes per-route cost and token counts.
 app.use(metrics.observe());
-metrics.mount(app, '/metrics');
+metrics.mount(app, '/metrics', metricsLimiter, requireAdmin);
 
 // Serve static files from the public directory
 app.use(express.static(require('path').join(__dirname, 'public')));
@@ -1305,6 +1272,166 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 // POST /api/chat
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Pre-call refusal gate: kill switch (P0-B) + global daily spend ceiling (P0-A)
+// ---------------------------------------------------------------------------
+// Single Railway replica, no Redis → the in-memory state in lib/killSwitch and
+// lib/spendCap is the whole mechanism. Every USER-FACING Anthropic route calls
+// this guard BEFORE doing model work and returns 503 when the process is
+// draining for a deploy, when Claude is disabled (admin kill switch /
+// CLAUDE_DISABLED), or when the day's budget is spent.
+//
+// Drain: on SIGTERM the process stops accepting model work immediately but
+// lets in-flight streams finish (up to DRAIN_TIMEOUT_MS) — every Railway
+// deploy used to cut lessons mid-sentence after a 10s hard exit.
+let draining = false;
+let inflightSse = 0;
+const DRAIN_TIMEOUT_MS = envInt('DRAIN_TIMEOUT_MS', 30000);
+const SSE_KEEPALIVE_MS = envInt('SSE_KEEPALIVE_MS', 15000);
+const STREAM_IDLE_MS = envInt('STREAM_IDLE_MS', 30000);
+// STREAM_WATCHDOG_MS is the legacy name for the hard cap (eval/CI overrides).
+const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 150000));
+
+// Pre-call gate, in order: draining → kill switch → global dollar budget →
+// per-session daily quota → per-IP daily quota → in-flight caps. Returns
+// true when it has already answered the request. `kind` is what the call
+// will be charged as: 'lesson' | 'chat' | 'helper' | 'image'.
+//
+// Wire contract (stable — clients key off `error`):
+//   503 restarting | service_disabled | spend_cap | busy
+//   429 daily_limit  { scope: 'session' | 'ip', retryAfterSec }
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Answer a refusal in the shape the CALLER can render. Shipped iOS builds map
+// every 429/503 to a generic "give it a moment" with a Retry button, but they
+// display the text of an SSE error frame verbatim — so a streaming chat
+// request gets its refusal as a 200 event-stream carrying one error frame.
+// Everyone else (widgets, the JSON path, helper routes) gets the JSON
+// envelope with the real status code.
+function sendRefusal(req, res, { status, error, scope, message, reply, retryAfterSec }) {
+  const wantsStream = req.path === '/api/chat' && (req.headers.accept || '').includes('text/event-stream');
+  if (retryAfterSec) res.setHeader('Retry-After', String(retryAfterSec));
+  if (wantsStream && !res.headersSent) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return true;
+  }
+  res.status(status || 429).json({
+    error,
+    scope,
+    reply: reply || message,
+    message,
+    retryAfterSec,
+  });
+  return true;
+}
+
+function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
+  if (draining) {
+    return sendRefusal(req, res, {
+      status: 503,
+      error: 'restarting',
+      reply: 'Mercurius is restarting. Try again in a few seconds.',
+      message: 'Mercurius is restarting — try again in a few seconds.',
+      retryAfterSec: 5,
+    });
+  }
+  if (killSwitch.isKilled()) {
+    metrics.quotaRejectionsTotal.inc({ scope: 'kill_switch' });
+    return sendRefusal(req, res, {
+      status: 503,
+      error: 'service_disabled',
+      reply: 'Mercurius is taking a short break for maintenance. Please try again soon.',
+      message: 'Mercurius is temporarily paused — please try again soon.',
+    });
+  }
+  if (spendCap.isCeilingExceeded()) {
+    metrics.quotaRejectionsTotal.inc({ scope: 'budget' });
+    return sendRefusal(req, res, {
+      status: 503,
+      error: 'spend_cap',
+      reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
+      message: "Daily usage limit reached — please try again tomorrow.",
+    });
+  }
+  // The route passes ITS session id explicitly — never read from the body
+  // here, or a caller could have the gate key on one id and the call on another.
+  const verdict = quotas.check({ sessionId, ip: req.ip, kind });
+  if (verdict.ok) return false;
+  return refuseWithVerdict(req, res, verdict);
+}
+
+function refuseWithVerdict(req, res, verdict) {
+  metrics.quotaRejectionsTotal.inc({ scope: `${verdict.scope}:${verdict.error}` });
+  if (verdict.scope === 'ip' && verdict.error === 'daily_limit') {
+    const h = claudeCall.hashIp(req.ip);
+    alerts.notify(`ip_cap:${h}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+  }
+  return sendRefusal(req, res, {
+    status: verdict.status || 429,
+    error: verdict.error,
+    scope: verdict.scope,
+    message: verdict.message,
+    retryAfterSec: verdict.retryAfterSec,
+  });
+}
+
+// claudeCall re-checks quotas atomically at call time (the gate above ran
+// before the route's DB awaits). When it refuses, answer with the same
+// envelope. Returns true when the error was a refusal and has been answered.
+function quotaErrorHandled(err, req, res) {
+  if (!(err instanceof claudeCall.QuotaError) || res.headersSent) return false;
+  refuseWithVerdict(req, res, err.verdict || { status: err.status, error: err.code, scope: err.scope, message: err.message });
+  return true;
+}
+
+// A session id the server has never seen counts against the per-IP
+// new-session quota BEFORE its row is created, so rotating ids can neither
+// sidestep the per-session limits nor fill the sessions table. Every model
+// route calls this; returns true when the request has been refused.
+async function refuseUnseenSession(req, res, sessionId) {
+  if (await db.sessionExists(sessionId)) return false;
+  const allowed = quotas.newSessionAllowed(req.ip);
+  if (!allowed.ok) {
+    metrics.quotaRejectionsTotal.inc({ scope: 'ip:new_sessions' });
+    return sendRefusal(req, res, {
+      status: allowed.status || 429,
+      error: allowed.error,
+      scope: allowed.scope,
+      message: allowed.message,
+      retryAfterSec: allowed.retryAfterSec,
+    });
+  }
+  const { created } = await db.ensureSession(sessionId);
+  if (created) quotas.noteNewSession(req.ip);
+  return false;
+}
+
+// Per-session quota counters live in memory; the first time a session is
+// seen each UTC day, seed them from the usage ledger so a mid-day redeploy
+// doesn't hand every session a fresh allowance.
+const hydratedSessions = new Set();
+let hydratedDay = new Date().toISOString().slice(0, 10);
+async function hydrateSessionQuota(sessionId) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
+  if (hydratedSessions.has(sessionId)) return;
+  hydratedSessions.add(sessionId);
+  try {
+    const midnight = Date.parse(`${today}T00:00:00Z`);
+    const rows = await db.sessionUsageSince(sessionId, midnight);
+    if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
+  } catch (e) {
+    logger.warn({ err: e.message }, 'session quota hydrate failed');
+  }
+}
+
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
   const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId, capabilities } = req.validated;
@@ -1339,6 +1466,23 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     });
   }
 
+  // Lessons stay in curriculum mode for the WHOLE conversation: the iOS client
+  // re-sends the [CURRICULUM: …] opener as a hidden first wire message on every
+  // turn, so detect the prefix on ANY user message, not just the last — that's
+  // what keeps graded follow-ups (where [LESSON_COMPLETE] is emitted) in mode.
+  // Computed up front because the quota gate charges lesson and chat turns
+  // against different daily allowances.
+  const isCurriculumMsg = clientMessages.some(
+    (m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[CURRICULUM:'),
+  );
+  const callKind = isCurriculumMsg ? 'lesson' : 'chat';
+
+  // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
+  // streaming and JSON model calls below (this handler is the only entry).
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  await hydrateSessionQuota(sessionId);
+  if (gate(req, res, { kind: callKind, sessionId })) return;
+
   // Sanitize user input
   const lastMsg = clientMessages[clientMessages.length - 1];
   if (lastMsg && lastMsg.content && typeof lastMsg.content === 'string') {
@@ -1351,14 +1495,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // The system prompt's instructions take priority over user messages.
   }
 
-  // Get or create session in DB
+  // The session row exists by now (refuseUnseenSession created it if needed);
+  // this just refreshes last_active.
   await db.getOrCreateSession(sessionId);
 
-  // Fetch streak, difficulty, struggled topics, session state, and history in parallel
-  const [currentStreak, difficulty, struggledTopics, sessionState, dbHistory] = await Promise.all([
+  // Fetch streak, session state, and history in parallel
+  const [currentStreak, sessionState, dbHistory] = await Promise.all([
     db.updateStreak(sessionId),
-    db.getDifficulty(sessionId),
-    db.getStruggledTopics(sessionId),
     db.getSessionState(sessionId),
     db.getMessages(sessionId, HISTORY_LIMITS.CHAT),
   ]);
@@ -1381,30 +1524,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       : (imageId ? '[Shared an image]' : latestUserMessage.content);
   await db.saveMessage(sessionId, 'user', userTextToSave);
 
-  // Build the memory profile from THIS student's own persistent memory.
-  // Scoped to sessionId (getMemories → student_memory WHERE session_id = ?),
-  // and returns '' when there's nothing remembered yet (new user).
-  //
-  // NOTE: a previous cross-session fallback here injected db.getPastSessions()
-  // — which returns OTHER sessions (WHERE session_id != ?) — as "STUDENT
-  // MEMORY (from previous sessions)". Because sessionId is the persistent
-  // per-device identity (a user only ever has one), that fallback could only
-  // ever surface OTHER USERS' conversations into this student's context,
-  // making brand-new sessions hallucinate "you've touched on this before"
-  // and leaking one student's chat into another's. Removed entirely.
-  let memoryContext = '';
-  try {
-    memoryContext = await db.buildMemoryProfile(sessionId);
-  } catch (e) { logger.warn({ err: e.message }, 'memory profile build failed'); }
-
-  // Welcome-back note — only when THIS student has real remembered history.
-  // With the cross-user fallback gone, memoryContext is non-empty only when
-  // buildMemoryProfile found genuine, session-scoped memories, so this fires
-  // accurately (a returning student) instead of on strangers.
-  if (dbHistory.length <= 1 && memoryContext.length > 50) {
-    memoryContext += '\n\n**WELCOME BACK NOTE:** This student is returning after a previous session. Reference something specific from their memory profile in your greeting — a topic they explored, a strength you noticed, or a question they left open. Make them feel recognized, not like a stranger. Keep it natural, one sentence max.';
-  }
-
   // ---------------------------------------------------------------------------
   // Determine which system prompt to use + test state transitions
   // ---------------------------------------------------------------------------
@@ -1414,53 +1533,29 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // makes below — it's just the routing signal instead of a prompt swap.
   let effectiveMode = 'SOCRATIC';
 
-  // Check if this is a curriculum lesson message
-  const lastUserMsg = clientMessages[clientMessages.length - 1]?.content || '';
-  // Lessons stay in curriculum mode for the WHOLE conversation: the iOS client
-  // re-sends the [CURRICULUM: …] opener as a hidden first wire message on every
-  // turn, so detect the prefix on ANY user message, not just the last — that's
-  // what keeps graded follow-ups (where [LESSON_COMPLETE] is emitted) in mode.
-  const isCurriculumMsg = clientMessages.some(
-    (m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[CURRICULUM:'),
-  );
-
   if (isCurriculumMsg) {
     // Structured curriculum lesson mode
     // Capable clients get the block-markup appendix. Curriculum is exempt
     // from the unified prompt (useUnifiedSystem), so this single concat
     // covers lessons under BOTH USE_UNIFIED_PROMPT states.
     systemPrompt = CURRICULUM_PROMPT
-      + (wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : '')
-      + memoryContext;
+      + (wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : '');
     effectiveMode = 'CURRICULUM';
 
   } else if (mode === 'debate') {
     // Debate mode
-    systemPrompt = DEBATE_PROMPT + memoryContext;
+    systemPrompt = DEBATE_PROMPT;
     effectiveMode = 'DEBATE';
 
   } else if (mode === 'discussion') {
     // Discussion mode — reasoning evaluation
-    systemPrompt = DISCUSSION_PROMPT + memoryContext;
+    systemPrompt = DISCUSSION_PROMPT;
     effectiveMode = 'DISCUSSION';
 
   } else {
     // Normal Socratic mode (the default)
-    systemPrompt = SOCRATIC_PROMPT + memoryContext;
+    systemPrompt = SOCRATIC_PROMPT;
     effectiveMode = 'SOCRATIC';
-  }
-
-  // Personalized learning injection — combines difficulty, struggled topics, and memory
-  let personalizationNote = '';
-  if (difficulty === 1) {
-    personalizationNote = '\n\n**PERSONALIZATION — BEGINNER (Level 1)**\nThis student is new. Use concrete examples, simple language, and lots of analogies. Build confidence. Ask questions with discoverable answers — don\'t let them flounder.';
-  } else if (difficulty === 2) {
-    personalizationNote = '\n\n**PERSONALIZATION — INTERMEDIATE (Level 2)**\nThis student has some foundation. Connect ideas across topics. Introduce technical vocabulary WITH explanation. Challenge them to reason, not just recall.';
-  } else if (difficulty === 3) {
-    personalizationNote = '\n\n**PERSONALIZATION — ADVANCED (Level 3)**\nThis student is strong. Ask nuanced, multi-part questions. Challenge assumptions. Expect evidence-based reasoning. Push toward the frontier — the parts that don\'t have easy answers. Treat them like a capable peer.';
-  }
-  if (struggledTopics.length > 0) {
-    personalizationNote += `\n\n**SPACED REPETITION — Topics this student has struggled with before:** ${struggledTopics.join(', ')}. Naturally weave one of these back into the conversation when relevant. Don\'t announce it — just bring the concept up organically and see if their understanding has improved.`;
   }
 
   // Live meeting context + blog library — injected into all modes
@@ -1468,7 +1563,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const meetingContext = buildMeetingContext(eventsData);
   const blogContext = buildBlogContext(blogPosts);
 
-  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + SOURCE_LIBRARY + personalizationNote + meetingContext + blogContext;
+  systemPrompt = systemPrompt + CLUB_KNOWLEDGE + SOURCE_LIBRARY + meetingContext + blogContext;
 
   // Prepend the universal response-quality preamble + per-mode rules
   // so the model reads concision + format guidance FIRST, before the
@@ -1509,8 +1604,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       mode: effectiveMode,
       responseMode,
       currentDate: new Date().toISOString().slice(0, 10),
-      memory: memoryContext,
-      performance: personalizationNote,
       meeting: meetingContext,
       blog: blogContext,
     });
@@ -1594,28 +1687,91 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // -----------------------------------------------------------------------
       // SSE streaming path (mobile app)
       // -----------------------------------------------------------------------
+      // Admission + the upstream request come FIRST, before any headers go
+      // out: claudeCall re-checks the quotas atomically and may refuse, and a
+      // refusal must be a proper response, not a frame inside an open stream.
+      // Usage (including aborted/errored streams) is settled by claudeCall.
+      const streamAbort = new AbortController();
+      let stream;
+      try {
+        stream = claudeCall.streamMessage({
+          route: '/api/chat',
+          kind: callKind,
+          sessionId,
+          ip: req.ip,
+          traceId: req.traceId,
+          signal: streamAbort.signal,
+          params: {
+            model: chosenModel,
+            max_tokens: maxTokens,
+            temperature,
+            system: systemForApi,
+            messages: trimmed,
+          },
+        });
+      } catch (err) {
+        if (quotaErrorHandled(err, req, res)) return;
+        throw err;
+      }
+      // A client that gave up during the DB awaits above must not hold a
+      // model call open on a dead socket. (Check the SOCKET: the request
+      // stream itself is auto-destroyed once its body has been read.)
+      if (res.destroyed || !req.socket || req.socket.destroyed) {
+        stream.abort();
+        return;
+      }
+
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
       });
 
-      const streamAbort = new AbortController();
-      // Distinguishes the watchdog firing from a client Stop/disconnect abort
+      // Helper to safely write to SSE response
+      const safeWrite = (data) => {
+        if (!res.writableEnded) {
+          try { res.write(data); } catch (e) { logger.warn({ err: e.message }, 'SSE write failed'); }
+        }
+      };
+
+      // SSE comment frames: every shipped parser (iOS SSEParser, both widgets,
+      // the eval script) ignores lines that don't start with `data: `, so a
+      // keepalive comment every SSE_KEEPALIVE_MS keeps school proxies and
+      // cellular NATs from dropping a quiet connection while the model thinks.
+      safeWrite(': connected\n\n');
+      const keepalive = setInterval(() => safeWrite(': ping\n\n'), SSE_KEEPALIVE_MS);
+      // Counted until the FINAL frames are written, so a drain never exits
+      // between the model finishing and the client receiving [DONE].
+      inflightSse += 1;
+      let sseReleased = false;
+      const releaseSse = () => {
+        if (sseReleased) return;
+        sseReleased = true;
+        inflightSse -= 1;
+      };
+
+      // Distinguishes a watchdog firing from a client Stop/disconnect abort
       // — only the former owes the client an SSE error frame.
       let timedOut = false;
-      // STREAM_WATCHDOG_MS: env override for eval/CI runs against a slow
-      // upstream (the default stays 45s for real clients).
-      const streamTimeout = setTimeout(() => { timedOut = true; streamAbort.abort(); },
-        Number(process.env.STREAM_WATCHDOG_MS) || 45000);
-
-      const stream = anthropic.messages.stream({
-        model: chosenModel,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemForApi,
-        messages: trimmed,
-      }, { signal: streamAbort.signal });
+      // Two watchdogs replace the old single 45s whole-stream timer: an IDLE
+      // timer (no delta for STREAM_IDLE_MS — the upstream is wedged) and a
+      // hard cap (STREAM_MAX_MS — a runaway reply). A healthy long lesson turn
+      // streams steadily and trips neither.
+      let idleTimer = null;
+      const touch = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { timedOut = true; streamAbort.abort(); }, STREAM_IDLE_MS);
+      };
+      touch();
+      const hardCap = setTimeout(() => { timedOut = true; streamAbort.abort(); }, STREAM_MAX_MS);
+      let timersStopped = false;
+      const stopTimers = () => {
+        if (timersStopped) return;
+        timersStopped = true;
+        clearInterval(keepalive);
+        if (idleTimer) clearTimeout(idleTimer);
+        clearTimeout(hardCap);
+      };
 
       let fullText = '';
 
@@ -1629,14 +1785,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
       });
 
-      // Helper to safely write to SSE response
-      const safeWrite = (data) => {
-        if (!res.writableEnded) {
-          try { res.write(data); } catch (e) { logger.warn({ err: e.message }, 'SSE write failed'); }
-        }
-      };
-
       stream.on('text', (text) => {
+        touch();
         const out = reflow.push(text);
         if (!out) return; // held back pending a sentence-boundary decision
         fullText += out;
@@ -1644,7 +1794,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       });
 
       stream.on('end', async () => {
-        clearTimeout(streamTimeout);
+        stopTimers();
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
@@ -1677,18 +1827,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           logger.forRequest(req).error({ err: e.message }, 'SSE assistant save failed');
         }
 
-        // Background: extract and save memories (non-blocking) — same as the
-        // JSON path; without this the streaming path (the iOS app and the
-        // widget's default send) never writes any student memory at all.
-        extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { logger.warn({ err: e.message }, 'background memory save failed'); });
-
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
           sessionId,
           mode,
           streak: currentStreak,
-          difficulty,
           lessonComplete: lessonOutcome.lessonComplete,
         })}\n\n`);
 
@@ -1696,47 +1840,65 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!res.writableEnded) {
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
+        releaseSse();
       });
 
       stream.on('error', (err) => {
-        clearTimeout(streamTimeout);
+        stopTimers();
         logger.forRequest(req).error({ err: err.message }, 'stream error');
         if (!res.writableEnded) {
           try {
-            res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+            // Never forward `err.message`: upstream billing/quota text used to
+            // reach students' screens verbatim. Detail is in the log line above.
+            res.write(`data: ${JSON.stringify({ type: 'error', code: 'upstream_error', error: 'Mercurius hit a snag. Try again in a moment.' })}\n\n`);
             res.end();
           } catch (e) { logger.warn({ err: e.message }, 'SSE error-write failed'); }
         }
+        releaseSse();
       });
 
-      // Aborts (watchdog timeout, client Stop/disconnect via req 'close') emit
-      // 'abort', NOT 'error'. Registering this listener also suppresses the
-      // SDK's deliberate Promise.reject for unhandled aborts (MessageStream
-      // _emit), which would otherwise crash the process on every disconnect.
+      // Aborts (watchdog timeout, client Stop/disconnect via the response
+      // 'close' below) emit 'abort', NOT 'error'. Registering this listener
+      // also suppresses the SDK's deliberate Promise.reject for unhandled
+      // aborts (MessageStream _emit), which would otherwise crash the process
+      // on every disconnect.
       stream.on('abort', () => {
-        clearTimeout(streamTimeout);
+        stopTimers();
         // Only the watchdog owes the client an answer — on a client-initiated
         // abort the other end is already gone.
         if (timedOut && !res.writableEnded) {
-          safeWrite(`data: ${JSON.stringify({ type: 'error', error: 'response timed out' })}\n\n`);
+          safeWrite(`data: ${JSON.stringify({ type: 'error', code: 'timeout', error: 'That reply took too long. Try again.' })}\n\n`);
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
+        releaseSse();
       });
 
-      req.on('close', () => {
-        stream.abort();
+      // Client Stop / disconnect. The RESPONSE's 'close' fires whether the
+      // socket died before or after this point (the request's 'close' had
+      // often already fired during the DB awaits, so a listener there never
+      // ran and the model kept generating into a dead socket). After a normal
+      // end, writableFinished is true and this is a no-op.
+      res.on('close', () => {
+        if (!res.writableFinished) stream.abort();
       });
 
     } else {
       // -----------------------------------------------------------------------
       // Standard JSON path (widget — existing behavior, unchanged)
       // -----------------------------------------------------------------------
-      const response = await anthropic.messages.create({
-        model: chosenModel,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemForApi,
-        messages: trimmed,
+      const response = await claudeCall.createMessage({
+        route: '/api/chat',
+        kind: callKind,
+        sessionId,
+        ip: req.ip,
+        traceId: req.traceId,
+        params: {
+          model: chosenModel,
+          max_tokens: maxTokens,
+          temperature,
+          system: systemForApi,
+          messages: trimmed,
+        },
       });
 
       const reflowed = reflowText(
@@ -1753,9 +1915,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply);
 
-      // Background: extract and save memories (non-blocking)
-      extractAndSaveMemories(sessionId, latestUserMessage.content, reply, mode).catch((e) => { logger.warn({ err: e.message }, 'background memory save failed'); });
-
       // Session summary suggestion — after 8+ exchanges, hint to the user
       const shouldSuggestSummary = msgCount > 0 && msgCount % 8 === 0;
 
@@ -1765,13 +1924,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         sessionId,
         mode,
         streak: currentStreak,
-        difficulty,
         suggestSummary: shouldSuggestSummary,
         lessonComplete: lessonOutcome.lessonComplete,
       });
     }
 
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Anthropic API error');
     return res.status(500).json({
       error: 'api_error',
@@ -1789,9 +1948,20 @@ app.get('/api/session/:sessionId', async (req, res) => {
     return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
   try {
-    const stats = await db.getSessionStats(sessionId);
-    const recentMessages = await db.getMessages(sessionId, 10);
-    res.json({ stats, recentMessages });
+    // Only what the client reads (the streak + its date, for the header
+    // chip). This route used to hand the whole session row plus the last 10
+    // messages to anyone holding the id, and ran a COUNT(DISTINCT) over all
+    // sessions on every app launch.
+    const { session } = await db.getSessionStats(sessionId);
+    const summary = session
+      ? {
+          streak: session.streak,
+          last_session_date: session.last_session_date,
+          message_count: session.message_count,
+          mode: session.mode,
+        }
+      : null;
+    res.json({ stats: { session: summary } });
   } catch (e) {
     logger.forRequest(req).error({ err: e.message }, 'Session fetch error');
     res.status(500).json({ error: 'db_error' });
@@ -1821,8 +1991,12 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
+      route: '/api/quiz',
+      req,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_PROMPT,
@@ -1834,6 +2008,7 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Quiz error');
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
   }
@@ -1849,8 +2024,12 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
+      route: '/api/report-card',
+      req,
       historyLimit: HISTORY_LIMITS.REPORT,
       minMessages: 4,
       systemPrompt: REPORT_CARD_PROMPT,
@@ -1862,6 +2041,7 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Report card error');
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
@@ -1881,14 +2061,23 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 400,
-      // Low temperature for grading consistency across retries.
-      temperature: 0.2,
-      system: UNIT_TEST_GRADER_PROMPT,
-      messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
+    const response = await claudeCall.createMessage({
+      route: '/api/unit-test/grade',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      params: {
+        model: MODEL,
+        max_tokens: 400,
+        // Low temperature for grading consistency across retries.
+        temperature: 0.2,
+        system: UNIT_TEST_GRADER_PROMPT,
+        messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
+      },
     });
     const raw = response.content[0]?.text || '';
     const result = parseUnitTestGrade(raw);
@@ -1897,6 +2086,7 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
     }
     return res.json(result);
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Unit test grade error');
     return res.status(500).json({ error: 'api_error', message: 'Could not grade your answer right now.' });
   }
@@ -1912,8 +2102,12 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
+      route: '/api/concept-map',
+      req,
       historyLimit: HISTORY_LIMITS.MAP,
       minMessages: 4,
       systemPrompt: CONCEPT_MAP_PROMPT,
@@ -1928,34 +2122,16 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Concept map error');
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
 }));
 
-// ---------------------------------------------------------------------------
-// GET /api/leaderboard
-// ---------------------------------------------------------------------------
-app.get('/api/leaderboard', async (req, res) => {
-  try {
-    return res.json(await db.getLeaderboard());
-  } catch(err) {
-    logger.forRequest(req).error({ err: err.message }, 'Leaderboard error');
-    return res.status(500).json({ error: 'db_error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/dashboard
-// ---------------------------------------------------------------------------
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    return res.json(await db.getDashboardStats());
-  } catch(err) {
-    logger.forRequest(req).error({ err: err.message }, 'Dashboard error');
-    return res.status(500).json({ error: 'db_error' });
-  }
-});
+// GET /api/leaderboard and GET /api/dashboard were removed: both were
+// unauthenticated, one loaded every session row into memory to sort in JS,
+// and together they published a fragment of every minor's session id. The
+// operator view of the same numbers is the admin-only stats route.
 
 // ---------------------------------------------------------------------------
 // Standby gamification (mascot: Mercury) — /api/progression/*
@@ -2105,6 +2281,28 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req,
 }));
 
 // ---------------------------------------------------------------------------
+// Claude kill switch (audit P0-B) — flip Anthropic calls off/on at runtime,
+// no redeploy. GET reads state; POST { disabled: true|false } sets it.
+//
+//   curl -X POST -H "x-admin-password: ..." -H "Content-Type: application/json" \
+//        -d '{"disabled":true}' https://<host>/api/admin/kill-switch
+// ---------------------------------------------------------------------------
+app.get('/api/admin/kill-switch', adminLimiter, requireAdmin, (_req, res) => {
+  return res.json({ ok: true, ...killSwitch.state() });
+});
+
+app.post('/api/admin/kill-switch', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const { disabled } = req.body || {};
+  if (typeof disabled !== 'boolean') {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide { "disabled": true | false }.' });
+  }
+  await killSwitch.set(disabled);
+  logger.warn({ disabled }, 'Claude kill switch toggled via admin endpoint');
+  alerts.notify('kill_switch', disabled ? '🛑 Kill switch ON — model calls are refused.' : '✅ Kill switch OFF — model calls resumed.').catch(() => {});
+  return res.json({ ok: true, ...killSwitch.state() });
+}));
+
+// ---------------------------------------------------------------------------
 // POST /api/factcheck — analyze a claim about AI
 // ---------------------------------------------------------------------------
 app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
@@ -2115,18 +2313,28 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 700,
-      system: FACTCHECK_PROMPT,
-      messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
+    const response = await claudeCall.createMessage({
+      route: '/api/factcheck',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      params: {
+        model: MODEL,
+        max_tokens: 700,
+        system: FACTCHECK_PROMPT,
+        messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
+      },
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Factcheck error');
     return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
   }
@@ -2143,18 +2351,28 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 700,
-      system: ANALYZE_PROMPT,
-      messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
+    const response = await claudeCall.createMessage({
+      route: '/api/analyze',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      params: {
+        model: MODEL,
+        max_tokens: 700,
+        system: ANALYZE_PROMPT,
+        messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
+      },
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Analyze error');
     return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
   }
@@ -2171,21 +2389,31 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
     const meetingContext = buildMeetingContext(eventsData);
     const blogContext = buildBlogContext(blogPosts);
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
-      messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
+    const response = await claudeCall.createMessage({
+      route: '/api/pre-briefing',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      params: {
+        model: MODEL,
+        max_tokens: 800,
+        system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
+        messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
+      },
     });
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'pre-briefing error');
     return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
@@ -2223,15 +2451,16 @@ app.get('/api/challenge', async (req, res) => {
 // POST /api/profile — set display name for a session
 // ---------------------------------------------------------------------------
 app.post('/api/profile', asyncRoute(async (req, res) => {
-  const { sessionId, displayName } = req.body;
-  if (!isValidSessionId(sessionId) || !displayName || typeof displayName !== 'string') {
-    return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId and displayName required.' });
+  // Display-name collection retired (audit P0-D): storing a (possibly minor's)
+  // name contradicted marketing/privacy.html ("No name … collected"). This
+  // route no longer persists anything — kept as a 200 no-op so any widget
+  // still cached in a browser doesn't error on its fire-and-forget POST. The
+  // name (if the stale UI sent one) is neither stored nor logged.
+  const { sessionId } = req.body || {};
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId required.' });
   }
-  const clean = displayName.trim().slice(0, 30).replace(/[^a-zA-Z0-9 _\-'.]/g, '');
-  if (!clean) return res.status(400).json({ error: 'invalid_name' });
-  await db.getOrCreateSession(sessionId);
-  await db.setDisplayName(sessionId, clean);
-  return res.json({ ok: true, displayName: clean });
+  return res.json({ ok: true });
 }));
 
 // ---------------------------------------------------------------------------
@@ -2256,6 +2485,23 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
   }
   const { buffer } = validated;
 
+  // Uploads cost no model tokens but each one becomes a vision turn later and
+  // bytes land in the database, so they have their own daily caps — per
+  // session AND per network (count + bytes), and an unseen session id counts
+  // against the per-IP new-session quota like any model route.
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  const imageVerdict = quotas.check({ sessionId, ip: req.ip, kind: 'image' });
+  if (!imageVerdict.ok) {
+    metrics.quotaRejectionsTotal.inc({ scope: `${imageVerdict.scope}:${imageVerdict.error}` });
+    if (imageVerdict.retryAfterSec) res.setHeader('Retry-After', String(imageVerdict.retryAfterSec));
+    return res.status(imageVerdict.status || 429).json({
+      error: imageVerdict.error,
+      scope: imageVerdict.scope,
+      message: imageVerdict.message,
+      retryAfterSec: imageVerdict.retryAfterSec,
+    });
+  }
+
   // Opaque, unguessable id (~192 bits). It doubles as the retrieval capability
   // — consistent with the app's bearer-style session model — and is the stable
   // handle future v3 features key off.
@@ -2277,6 +2523,7 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
   }
+  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0, bytes: buffer.length });
 
   // Log metadata only — never the image bytes or the (possibly personal) file name.
   logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
@@ -2349,9 +2596,39 @@ app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), as
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /api/session/:sessionId — right to erasure (audit P0-C)
+// ---------------------------------------------------------------------------
+// Honors the deletion right promised on marketing/privacy.html. The 32-char
+// session id IS the ownership capability (anonymous, Keychain-stored, never
+// exposed publicly), exactly as image-retrieval ids already work — presenting
+// it proves ownership, so no account/login exists to authenticate against.
+// Idempotent: deleting an unknown/already-deleted session still returns 200,
+// so a client can safely retry and existence isn't probeable beyond the
+// unguessable id itself. Rate-limited by the global 60/min/IP limiter.
+app.delete('/api/session/:sessionId', asyncRoute(async (req, res) => {
+  const { sessionId } = req.params;
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Invalid session id.' });
+  }
+  try {
+    const result = await db.deleteSession(sessionId);
+    logger.forRequest(req).warn({ deleted: result.deleted }, 'session erased on request');
+    return res.json({ ok: true, deleted: result.deleted });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'session deletion failed');
+    return res.status(500).json({ error: 'server_error', message: 'Could not delete this session. Please try again.' });
+  }
+}));
+
+// ---------------------------------------------------------------------------
 // GET /api/health
 // ---------------------------------------------------------------------------
 app.get('/api/health', async (_req, res) => {
+  // While draining for a deploy, report unhealthy so the platform shifts
+  // traffic to the new instance while this one finishes its open streams.
+  if (draining) {
+    return res.status(503).json({ status: 'draining', uptime: Math.floor(process.uptime()), inflight: inflightSse });
+  }
   const health = {
     status: 'ok',
     uptime: Math.floor(process.uptime()),
@@ -2360,8 +2637,9 @@ app.get('/api/health', async (_req, res) => {
     memory: Math.floor(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
   };
   try {
-    // Test DB connectivity
-    await db.getSessionStats('health-check-probe');
+    // SELECT 1 with a 2s timeout — the probe used to run a COUNT(DISTINCT)
+    // over every session on every platform health check.
+    if (!(await db.ping())) throw new Error('db ping failed');
     health.db = 'connected';
   } catch (e) {
     // Don't leak the underlying driver error to the public health
@@ -2452,11 +2730,55 @@ db.initSchema().then(async () => {
     await db.ensureGamificationSchema();
     logger.info('gamification standby: schema ensured (GAMIFICATION_ENABLED on)');
   }
+  // The IP-hash salt: env if set, otherwise generated once and kept in the
+  // settings table so an operator who forgets the variable never ships an
+  // unsalted (brute-forceable) hash of students' addresses into the ledger.
+  let ipHashSalt = process.env.IP_HASH_SALT || '';
+  if (!ipHashSalt) {
+    try {
+      ipHashSalt = await db.getSetting('ip_hash_salt');
+      if (!ipHashSalt) {
+        ipHashSalt = crypto.randomBytes(16).toString('hex');
+        await db.setSetting('ip_hash_salt', ipHashSalt);
+        logger.info('generated and stored a new IP_HASH_SALT');
+      }
+    } catch (e) {
+      ipHashSalt = crypto.randomBytes(16).toString('hex');
+      logger.warn({ err: e.message }, 'could not persist IP_HASH_SALT — using a per-boot salt');
+    }
+  }
+  claudeCall.init({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 30000,
+    db,
+    ipHashSalt,
+  });
+
+  // Durable state that must survive a redeploy: the kill-switch override and
+  // today's spend. Both are best-effort — a failure here logs and the
+  // in-memory defaults apply.
+  try {
+    await killSwitch.init(db);
+  } catch (e) {
+    logger.warn({ err: e.message }, 'kill switch init failed — using env default');
+  }
+  try {
+    const midnight = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+    const spentToday = await db.sumCostSince(midnight);
+    if (spentToday > 0) spendCap.hydrate(spentToday);
+  } catch (e) {
+    logger.warn({ err: e.message }, 'spend hydrate failed — starting today at $0');
+  }
   server = app.listen(PORT, () => {
     logger.info(
-      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL },
+      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL, killSwitch: killSwitch.state(), budget: spendCap.state() },
       'Mercurius Ⅰ is running'
     );
+    // A boot alert makes a crash loop visible from the phone (Railway
+    // restarts up to 10 times before giving up).
+    if (process.env.NODE_ENV === 'production') {
+      alerts.notify('boot', `🚀 Mercurius server booted (budget today: $${spendCap.state().usd.toFixed(2)} of $${spendCap.budgetUsd()}${killSwitch.isKilled() ? ' — KILL SWITCH ON' : ''}).`).catch(() => {});
+    }
     // Keep a single stdout line the integration-test spawner can grep
     // for — the test expects the literal word "Mercurius" to know the
     // server is ready. Structured logs with level INFO also match.
@@ -2473,16 +2795,39 @@ db.initSchema().then(async () => {
 // miss degrades to a logged error instead of the Node default (process exit),
 // which would drop every connected user and burn Railway's restart budget.
 process.on('unhandledRejection', (err) => {
-  logger.error({ err: err && err.message ? err.message : String(err), stack: err && err.stack }, 'unhandled rejection');
+  const message = err && err.message ? err.message : String(err);
+  logger.error({ err: message, stack: err && err.stack }, 'unhandled rejection');
+  alerts.notify('unhandled_rejection', `⚠️ Unhandled rejection in prod: ${message.slice(0, 200)}`, { throttleMs: 30 * 60 * 1000 }).catch(() => {});
 });
 
-process.on('SIGTERM', () => {
-  logger.info('graceful shutdown');
-  if (server) server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 10000);
-});
-process.on('SIGINT', () => {
-  logger.info('interrupted');
-  if (server) server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 5000);
-});
+// Graceful drain. Railway sends SIGTERM on every deploy: stop taking model
+// work (gate → 503 restarting, health → 503 so traffic shifts), stop
+// accepting new connections, let the streams already open finish, then
+// exit. The hard deadline is DRAIN_TIMEOUT_MS; set Railway's
+// RAILWAY_DEPLOYMENT_DRAINING_SECONDS at least that high.
+function shutdown(signal, hardMs) {
+  if (draining) return;
+  draining = true;
+  logger.info({ signal, inflightSse }, 'graceful shutdown: draining');
+  if (server) {
+    server.close(() => logger.info('all connections closed'));
+    if (typeof server.closeIdleConnections === 'function') server.closeIdleConnections();
+  }
+  // Wait for every open model call (streaming or not), for open SSE responses
+  // still writing their final frames, and for ledger rows still being written.
+  const poll = setInterval(() => {
+    if (inflightSse <= 0 && claudeCall.inflight() === 0 && claudeCall.pendingLedgerWrites() === 0) {
+      clearInterval(poll);
+      logger.info('drain complete');
+      process.exit(0);
+    }
+  }, 250);
+  const deadline = setTimeout(() => {
+    logger.warn({ inflightSse }, 'drain timeout — exiting with streams open');
+    process.exit(1);
+  }, hardMs);
+  poll.unref();
+  deadline.unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM', DRAIN_TIMEOUT_MS));
+process.on('SIGINT', () => shutdown('SIGINT', Math.min(DRAIN_TIMEOUT_MS, 5000)));

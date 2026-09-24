@@ -3,5 +3,14 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "node server.js"
+# Railway polls this route after each deploy and only routes traffic once it
+# returns 2xx. /api/health returns 503 when the DB is unreachable, so a bad
+# DATABASE_URL never takes traffic (see docs/DEPLOY.md → Health checks).
+healthcheckPath = "/api/health"
+# Seconds Railway waits for the first healthy response before marking the
+# deploy failed. 120 covers a cold better-sqlite3 build + Postgres connect.
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+# Crash-loop budget. 10 keeps the service self-healing across a transient
+# upstream/DB blip without letting a hard startup failure restart forever.
+restartPolicyMaxRetries = 10

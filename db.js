@@ -15,6 +15,21 @@ if (USE_PG) {
     ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30000,
+    // Bounded waits (ops safety rails): a wedged Postgres must surface as a
+    // fast error, not a request that hangs until the client gives up.
+    // statement_timeout is enforced server-side per connection; query_timeout
+    // is the client-side backstop; connectionTimeoutMillis caps checkout from
+    // the pool when every connection is busy or the host is unreachable.
+    statement_timeout: 10000,
+    query_timeout: 10000,
+    connectionTimeoutMillis: 5000,
+  });
+  // pg-pool emits 'error' for a failure on an IDLE client (Postgres restart,
+  // proxy reset). With no listener that is an uncaught exception that takes
+  // the whole process — and every open lesson stream — down. The pool drops
+  // the dead client itself; we only need to log it.
+  pool.on('error', (err) => {
+    logger.error({ err: err.message }, 'pg pool idle client error');
   });
   logger.info({ driver: 'pg' }, 'db driver: PostgreSQL (persistent)');
 } else {
@@ -93,14 +108,8 @@ async function initSchema() {
         updated_at BIGINT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS student_memory (
-        id SERIAL PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        memory_type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at BIGINT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_memory_session ON student_memory(session_id, memory_type);
+      -- student_memory (the LLM-extracted profile of each student) is gone:
+      -- never created here again, dropped in prod by migrations/002.
 
       -- v3 image uploads. The DB-backed image store (lib/imageStore.js)
       -- persists bytes here; swapping to object storage (S3/R2) later means
@@ -125,6 +134,45 @@ async function initSchema() {
         reason TEXT DEFAULT NULL,
         created_at BIGINT NOT NULL
       );
+
+      -- Runtime key/value settings (ops safety rails): admin-flipped switches
+      -- that must survive a restart, unlike the in-memory lib/killSwitch flag.
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at BIGINT NOT NULL
+      );
+
+      -- Per-call usage/cost ledger: one row per Anthropic call (or refusal).
+      -- Feeds the spend cap, per-session throttles and the admin stats view.
+      -- session_id is a plain column (no FK) so a row can outlive its session
+      -- for accounting — deleteSession still clears it (privacy cascade).
+      CREATE TABLE IF NOT EXISTS usage (
+        id SERIAL PRIMARY KEY,
+        ts BIGINT NOT NULL,
+        session_id TEXT,
+        ip_hash TEXT,
+        route TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cache_read_tokens INTEGER DEFAULT 0,
+        cache_write_tokens INTEGER DEFAULT 0,
+        cost_usd DOUBLE PRECISION DEFAULT 0,
+        status TEXT NOT NULL,
+        error_kind TEXT,
+        duration_ms INTEGER,
+        trace_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
+      CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
+
+      -- Read-path indexes for the admin/ops queries (recent sessions, per-session
+      -- report lookups, time-windowed message counts).
+      CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active);
+      CREATE INDEX IF NOT EXISTS idx_reports_session ON reports(session_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
     `);
   } else {
     sqliteDb.exec(`
@@ -153,14 +201,6 @@ async function initSchema() {
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS student_memory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT NOT NULL,
-        memory_type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_memory_session ON student_memory(session_id, memory_type);
       CREATE TABLE IF NOT EXISTS images (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -178,6 +218,34 @@ async function initSchema() {
         reason TEXT DEFAULT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        session_id TEXT,
+        ip_hash TEXT,
+        route TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cache_read_tokens INTEGER DEFAULT 0,
+        cache_write_tokens INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0,
+        status TEXT NOT NULL,
+        error_kind TEXT,
+        duration_ms INTEGER,
+        trace_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
+      CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
+      CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active);
+      CREATE INDEX IF NOT EXISTS idx_reports_session ON reports(session_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
     `);
     // Migrate existing SQLite DB: add new columns if missing
     const cols = sqliteDb.prepare('PRAGMA table_info(sessions)').all().map(c => c.name);
@@ -192,6 +260,62 @@ async function initSchema() {
     if (!cols.includes('display_name')) sqliteDb.exec("ALTER TABLE sessions ADD COLUMN display_name TEXT DEFAULT NULL");
     sqliteDb.exec("CREATE INDEX IF NOT EXISTS idx_sessions_leaderboard ON sessions(message_count, streak)");
   }
+
+  // Privacy: the name columns are dead (no reader or writer remains in the
+  // server), so any value still sitting in them is retained personal data
+  // with no purpose. Scrub on every boot until the columns are dropped. A
+  // scrub failure is logged loudly but never blocks boot — an unavailable
+  // app protects nobody.
+  try {
+    const scrubbed = await scrubLegacyNames();
+    if (scrubbed > 0) logger.info({ scrubbed }, 'scrubLegacyNames: cleared legacy name columns');
+  } catch (e) {
+    logger.error({ err: e }, 'scrubLegacyNames failed');
+  }
+}
+
+// ─── Legacy name scrub (privacy) ───
+// NULLs sessions.display_name / sessions.student_name wherever either is set.
+// Returns the number of rows touched (0 when already clean). Idempotent; runs
+// at the end of initSchema and is exported for the tests and ops scripts.
+async function scrubLegacyNames() {
+  const sql = 'UPDATE sessions SET display_name = NULL, student_name = NULL WHERE display_name IS NOT NULL OR student_name IS NOT NULL';
+  if (USE_PG) {
+    const r = await pool.query(sql);
+    return r.rowCount || 0;
+  }
+  return sqliteDb.prepare(sql).run().changes;
+}
+
+// ─── Raw access (scripts/migrate.mjs only) ───
+// Two thin escape hatches so the migration runner can share this file's
+// driver selection (DATABASE_URL → pg, else better-sqlite3 at SQLITE_PATH)
+// instead of duplicating it. Application code must use the typed API below.
+//
+//   runRaw(sql)          → execute a possibly multi-statement SQL string with
+//                          NO parameters, atomically: Postgres runs a
+//                          multi-statement simple query in one implicit
+//                          transaction; SQLite wraps exec() in an explicit one.
+//                          The string must therefore not contain its own
+//                          BEGIN/COMMIT. Resolves to undefined.
+//   queryRaw(sql, params) → one statement with `?` placeholders; resolves to
+//                          the result rows ([] for mutations on SQLite).
+async function runRaw(sql) {
+  if (USE_PG) {
+    await pool.query(sql);
+    return;
+  }
+  sqliteDb.transaction(() => { sqliteDb.exec(sql); })();
+}
+
+async function queryRaw(sql, params = []) {
+  return await query(sql, params);
+}
+
+// Coerce a driver value (pg returns COUNT/SUM(bigint) as strings) to a number.
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 // ─── Streak day boundary ───
@@ -208,6 +332,9 @@ function streakDay(now = new Date()) {
 // ─── Exported async API (same interface as before, but now async) ───
 module.exports = {
   initSchema,
+  scrubLegacyNames,
+  runRaw,
+  queryRaw,
 
   async getOrCreateSession(sessionId) {
     const now = Date.now();
@@ -222,6 +349,19 @@ module.exports = {
     // without it the loser throws duplicate-key — an unhandled rejection.
     await query('INSERT INTO sessions (session_id, created_at, last_active) VALUES (?, ?, ?) ON CONFLICT (session_id) DO NOTHING', [sessionId, now, now]);
     return await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
+  },
+
+  async sessionExists(sessionId) {
+    return Boolean(await queryOne('SELECT 1 AS one FROM sessions WHERE session_id = ?', [sessionId]));
+  },
+
+  // getOrCreateSession + "did this call create it": the per-IP new-session
+  // quota keys off `created`, which the timestamp-equality heuristic it
+  // replaces got wrong whenever a first turn errored before any write.
+  async ensureSession(sessionId) {
+    const existed = await this.sessionExists(sessionId);
+    const row = await this.getOrCreateSession(sessionId);
+    return { row, created: !existed };
   },
 
   async saveMessage(sessionId, role, content) {
@@ -258,6 +398,195 @@ module.exports = {
     );
   },
 
+  // ─── Settings (persistent runtime key/value) ───
+  // Small string-valued switches an admin flips at runtime and that must
+  // survive a restart (the in-memory lib/killSwitch flag does not). Values
+  // are stored as TEXT; callers parse. Contract:
+  //   getSetting(key)        → string | null (null when unset)
+  //   setSetting(key, value) → upsert; `value` is coerced with String()
+  async getSetting(key) {
+    const r = await queryOne('SELECT value FROM settings WHERE key = ?', [key]);
+    return r ? String(r.value) : null;
+  },
+
+  async setSetting(key, value) {
+    await query(
+      'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      [key, String(value), Date.now()],
+    );
+  },
+
+  // ─── Usage ledger (per-call cost accounting) ───
+  // One row per Anthropic call (or per refusal, when the caller records one).
+  // The spend cap, per-session throttles and admin stats all read from here,
+  // so it is the single source of truth for "what did we spend and on whom".
+  //
+  //   recordUsage(row) → never throws: a failed ledger write is logged and
+  //                      swallowed, because losing one accounting row must
+  //                      never fail the student's request. Resolves true when
+  //                      written, false when swallowed. Row keys are camelCase
+  //                      (sessionId, ipHash, inputTokens, …); the snake_case
+  //                      column names are accepted too. `ts` defaults to now;
+  //                      route/kind/status default to 'unknown' rather than
+  //                      violating NOT NULL. `status` is 'ok' for a completed
+  //                      call; any other value counts as an error in
+  //                      usageSummarySince, classified by `error_kind`.
+  //   sumCostSince(tsMs)                → number: USD summed over rows with
+  //                                       ts >= tsMs (0 when none).
+  //   sessionUsageSince(sessionId, tsMs) → [{ kind, count, usd }] per kind,
+  //                                       for per-session throttles.
+  //   usageSummarySince(tsMs)           → { calls, usd, byRoute: [{ route,
+  //                                       calls, usd }], errors: [{ route,
+  //                                       error_kind, count }] } for the admin
+  //                                       stats endpoint.
+  async recordUsage(row = {}) {
+    try {
+      const pick = (camel, snake) => (row[camel] !== undefined ? row[camel] : row[snake]);
+      const int = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : 0; };
+      const optInt = (v) => { const n = Number(v); return v != null && Number.isFinite(n) ? Math.round(n) : null; };
+      const str = (v, fallback = null) => (v == null || v === '' ? fallback : String(v));
+      const tsRaw = Number(row.ts);
+      const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
+      const cost = Number(pick('costUsd', 'cost_usd'));
+      await query(
+        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ts,
+          str(pick('sessionId', 'session_id')),
+          str(pick('ipHash', 'ip_hash')),
+          str(row.route, 'unknown'),
+          str(row.kind, 'unknown'),
+          str(row.model),
+          int(pick('inputTokens', 'input_tokens')),
+          int(pick('outputTokens', 'output_tokens')),
+          int(pick('cacheReadTokens', 'cache_read_tokens')),
+          int(pick('cacheWriteTokens', 'cache_write_tokens')),
+          Number.isFinite(cost) ? cost : 0,
+          str(row.status, 'unknown'),
+          str(pick('errorKind', 'error_kind')),
+          optInt(pick('durationMs', 'duration_ms')),
+          str(pick('traceId', 'trace_id')),
+        ],
+      );
+      return true;
+    } catch (e) {
+      logger.error({ err: e, route: row && row.route, kind: row && row.kind }, 'recordUsage failed (row dropped)');
+      return false;
+    }
+  },
+
+  async sumCostSince(tsMs) {
+    const r = await queryOne('SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE ts >= ?', [num(tsMs)]);
+    return r ? num(r.usd) : 0;
+  },
+
+  async sessionUsageSince(sessionId, tsMs) {
+    const rows = await query(
+      'SELECT kind, COUNT(*) AS count, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE session_id = ? AND ts >= ? GROUP BY kind ORDER BY kind',
+      [sessionId, num(tsMs)],
+    );
+    return rows.map((r) => ({ kind: r.kind, count: num(r.count), usd: num(r.usd) }));
+  },
+
+  async usageSummarySince(tsMs) {
+    const since = num(tsMs);
+    const total = await queryOne('SELECT COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE ts >= ?', [since]);
+    const byRoute = await query(
+      'SELECT route, COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE ts >= ? GROUP BY route ORDER BY calls DESC, route',
+      [since],
+    );
+    const errors = await query(
+      "SELECT route, error_kind, COUNT(*) AS count FROM usage WHERE ts >= ? AND status <> 'ok' GROUP BY route, error_kind ORDER BY count DESC, route, error_kind",
+      [since],
+    );
+    return {
+      calls: total ? num(total.calls) : 0,
+      usd: total ? num(total.usd) : 0,
+      byRoute: byRoute.map((r) => ({ route: r.route, calls: num(r.calls), usd: num(r.usd) })),
+      errors: errors.map((r) => ({ route: r.route, error_kind: r.error_kind ?? null, count: num(r.count) })),
+    };
+  },
+
+  // ─── Health ───
+  // ping() → true when `SELECT 1` answers within 2 s, false otherwise (error
+  // or timeout). Never throws — it exists for the health endpoint, which must
+  // report a dead database rather than hang on it. A ping that times out is
+  // left to finish in the background (its rejection is observed by the race,
+  // so it can't become an unhandled rejection).
+  async ping() {
+    let timer;
+    const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(false), 2000); });
+    try {
+      const ok = await Promise.race([
+        (async () => { await query('SELECT 1'); return true; })(),
+        timeout,
+      ]);
+      return ok === true;
+    } catch (e) {
+      logger.warn({ err: e }, 'db ping failed');
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  // ─── Right-to-erasure (audit P0-C) ───
+  // Delete EVERYTHING keyed to one session, in a single transaction, so the
+  // 30-day-deletion promise on marketing/privacy.html is honored by code
+  // rather than by hand-run SQL. Children are removed before the sessions row
+  // to satisfy the FK constraints. Gamification tables (progression, xp_ledger)
+  // exist only when GAMIFICATION_ENABLED has run, and student_memory only
+  // until migrations/002 drops it — probe for those first so a DELETE against
+  // a missing table never aborts the transaction. The usage ledger is
+  // session-keyed too (ip_hash + token counts), so it is part of the cascade.
+  // Returns the per-table row counts for an auditable receipt.
+  async deleteSession(sessionId) {
+    // Child tables first (FK order), then the parent `sessions` row.
+    const base = ['messages', 'images', 'reports', 'usage'];
+    const optional = ['xp_ledger', 'progression', 'student_memory'];
+
+    if (USE_PG) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const present = [];
+        for (const t of optional) {
+          const r = await client.query('SELECT to_regclass($1) AS reg', [t]);
+          if (r.rows[0] && r.rows[0].reg) present.push(t);
+        }
+        const deleted = {};
+        for (const t of [...present, ...base, 'sessions']) {
+          const r = await client.query(`DELETE FROM ${t} WHERE session_id = $1`, [sessionId]);
+          deleted[t] = r.rowCount;
+        }
+        await client.query('COMMIT');
+        return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+    }
+
+    // SQLite: better-sqlite3 transactions are synchronous + atomic.
+    const existing = sqliteDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('xp_ledger','progression')")
+      .all()
+      .map((r) => r.name);
+    const order = [...existing, ...base, 'sessions'];
+    const deleted = {};
+    const txn = sqliteDb.transaction(() => {
+      for (const t of order) {
+        const info = sqliteDb.prepare(`DELETE FROM ${t} WHERE session_id = ?`).run(sessionId);
+        deleted[t] = info.changes;
+      }
+    });
+    txn();
+    return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
+  },
+
   async getMessages(sessionId, limit = 50) {
     // Most RECENT N messages, returned in chronological order. ORDER BY ASC
     // with LIMIT would pin the window to the FIRST N rows ever saved, freezing
@@ -267,15 +596,9 @@ module.exports = {
     return rows.reverse();
   },
 
-  // NOTE: getPastSessions() was removed. It queried `WHERE session_id != ?`
-  // (i.e. OTHER users' sessions) and was used as a memory fallback, which
-  // leaked one student's conversation into another's context. Per-user
-  // memory lives in student_memory (see buildMemoryProfile), scoped by
-  // session_id. Do not reintroduce a cross-session reader here.
-
-  async updateTopics(sessionId, topics) {
-    await query('UPDATE sessions SET topics = ? WHERE session_id = ?', [JSON.stringify(topics), sessionId]);
-  },
+  // NOTE: there is deliberately no cross-session reader here. An old
+  // getPastSessions() queried OTHER users' sessions as a "memory" fallback and
+  // leaked one student's conversation into another's context.
 
   async getSessionStats(sessionId) {
     const session = await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
@@ -294,33 +617,6 @@ module.exports = {
 
   async setMode(sessionId, mode) {
     await query('UPDATE sessions SET mode = ? WHERE session_id = ?', [mode, sessionId]);
-  },
-
-  async getDifficulty(sessionId) {
-    const r = await queryOne('SELECT difficulty_level FROM sessions WHERE session_id = ?', [sessionId]);
-    return r ? (r.difficulty_level || 1) : 1;
-  },
-
-  async setDifficulty(sessionId, level) {
-    const clamped = Math.max(1, Math.min(3, level));
-    await query('UPDATE sessions SET difficulty_level = ? WHERE session_id = ?', [clamped, sessionId]);
-  },
-
-  async getStruggledTopics(sessionId) {
-    const r = await queryOne('SELECT struggled_topics FROM sessions WHERE session_id = ? AND struggled_topics IS NOT NULL', [sessionId]);
-    try {
-      const arr = JSON.parse(r?.struggled_topics || '[]');
-      return arr.length > 0 && JSON.stringify(arr) !== '[]' ? arr.slice(0, 5) : [];
-    } catch(e) { return []; }
-  },
-
-  async addStruggledTopic(sessionId, topic) {
-    const r = await queryOne('SELECT struggled_topics FROM sessions WHERE session_id = ?', [sessionId]);
-    let arr = [];
-    try { arr = JSON.parse(r?.struggled_topics || '[]'); } catch(e){}
-    if (!arr.includes(topic)) arr.push(topic);
-    if (arr.length > 10) arr = arr.slice(-10);
-    await query('UPDATE sessions SET struggled_topics = ? WHERE session_id = ?', [JSON.stringify(arr), sessionId]);
   },
 
   async updateStreak(sessionId) {
@@ -350,75 +646,9 @@ module.exports = {
     };
   },
 
-  async getLeaderboard() {
-    const rows = await query(`
-      SELECT session_id, streak, message_count, unlocked, last_session_date, topics, display_name
-      FROM sessions
-      WHERE message_count > 2
-    `);
-    // Rank by the EFFECTIVE streak: the stored streak only counts while it is
-    // still alive under updateStreak's own 2-day grace rule. The raw column is
-    // never recomputed for sessions that stop chatting, so without this a
-    // lapsed 30-day streak from months ago would top the board forever.
-    const today = streakDay();
-    const ranked = rows
-      .map((r) => {
-        const diffDays = r.last_session_date
-          ? Math.round((Date.parse(today) - Date.parse(r.last_session_date)) / 86400000)
-          : Infinity;
-        return { ...r, effStreak: diffDays <= 2 ? (r.streak || 1) : 0 };
-      })
-      .sort((a, b) => (b.effStreak - a.effStreak) || ((b.message_count || 0) - (a.message_count || 0)))
-      .slice(0, 20);
-    return ranked.map((r, i) => ({
-      rank: i + 1,
-      badge: r.session_id.slice(-4).toUpperCase(),
-      streak: r.effStreak,
-      messages: r.message_count || 0,
-      unlocked: !!(r.unlocked),
-      lastActive: r.last_session_date,
-      name: r.display_name || null,
-    }));
-  },
-
-  async getDashboardStats() {
-    const total = (await queryOne('SELECT COUNT(*) as c FROM sessions'))?.c || 0;
-    const unlocked = (await queryOne('SELECT COUNT(*) as c FROM sessions WHERE unlocked = 1'))?.c || 0;
-    const totalMessages = (await queryOne('SELECT COUNT(*) as c FROM messages'))?.c || 0;
-    const recentSessions = await query('SELECT session_id, message_count, streak, topics, unlocked, last_session_date FROM sessions ORDER BY last_active DESC LIMIT 20');
-    const topicCounts = {};
-    recentSessions.forEach(s => {
-      try {
-        const arr = JSON.parse(s.topics || '[]');
-        arr.forEach(t => { topicCounts[t] = (topicCounts[t] || 0) + 1; });
-      } catch(e){}
-    });
-    const topTopics = Object.entries(topicCounts).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([topic, count]) => ({ topic, count }));
-    return {
-      totalSessions: total,
-      unlockedCount: unlocked,
-      unlockRate: total > 0 ? Math.round((unlocked/total)*100) : 0,
-      totalMessages,
-      avgMessagesPerSession: total > 0 ? Math.round(totalMessages/total) : 0,
-      topTopics,
-      recentSessions: recentSessions.map(s => ({
-        badge: s.session_id.slice(-4).toUpperCase(),
-        messages: s.message_count,
-        streak: s.streak || 1,
-        unlocked: !!(s.unlocked),
-        lastActive: s.last_session_date,
-      })),
-    };
-  },
-
-  async getDisplayName(sessionId) {
-    const r = await queryOne('SELECT display_name FROM sessions WHERE session_id = ?', [sessionId]);
-    return r ? r.display_name : null;
-  },
-
-  async setDisplayName(sessionId, name) {
-    await query('UPDATE sessions SET display_name = ? WHERE session_id = ?', [name, sessionId]);
-  },
+  // display_name / student_name are never written any more (the widget stopped
+  // asking, and scrubLegacyNames() nulls what was stored). The columns stay
+  // only because dropping columns is awkward on SQLite.
 
   async getEventsFromDB() {
     const row = await queryOne('SELECT data FROM events WHERE id = 1');
@@ -442,67 +672,6 @@ module.exports = {
   async getEventsUpdatedAt() {
     const row = await queryOne('SELECT updated_at FROM events WHERE id = 1');
     return row ? row.updated_at : null;
-  },
-
-  // ─── Student memory (persistent across sessions) ───
-
-  async saveMemory(sessionId, type, content) {
-    const now = Date.now();
-    await query('INSERT INTO student_memory (session_id, memory_type, content, created_at) VALUES (?, ?, ?, ?)',
-      [sessionId, type, content, now]);
-  },
-
-  async getMemories(sessionId, limit = 20) {
-    return await query(
-      'SELECT memory_type, content, created_at FROM student_memory WHERE session_id = ? ORDER BY created_at DESC LIMIT ?',
-      [sessionId, limit]
-    );
-  },
-
-  async getMemoriesByType(sessionId, type, limit = 10) {
-    return await query(
-      'SELECT content, created_at FROM student_memory WHERE session_id = ? AND memory_type = ? ORDER BY created_at DESC LIMIT ?',
-      [sessionId, type, limit]
-    );
-  },
-
-  async buildMemoryProfile(sessionId) {
-    const memories = await this.getMemories(sessionId, 30);
-    if (memories.length === 0) return '';
-
-    const byType = {};
-    memories.forEach(m => {
-      if (!byType[m.memory_type]) byType[m.memory_type] = [];
-      byType[m.memory_type].push(m.content);
-    });
-
-    let profile = '\n\n### STUDENT MEMORY PROFILE\n';
-    profile += 'You remember the following about this student from past conversations. Use this naturally — reference it when relevant, build on it, never repeat information they already know.\n\n';
-
-    if (byType.interest) {
-      profile += '**Interests:** ' + byType.interest.join(', ') + '\n';
-    }
-    if (byType.strength) {
-      profile += '**Strengths:** ' + byType.strength.join(', ') + '\n';
-    }
-    if (byType.struggle) {
-      profile += '**Areas they struggled with:** ' + byType.struggle.join(', ') + '\n';
-    }
-    if (byType.insight) {
-      profile += '**Key insights they had:** ' + byType.insight.slice(0, 5).join(' | ') + '\n';
-    }
-    if (byType.misconception) {
-      profile += '**Misconceptions corrected:** ' + byType.misconception.join(', ') + '\n';
-    }
-    if (byType.topic) {
-      profile += '**Topics explored:** ' + [...new Set(byType.topic)].join(', ') + '\n';
-    }
-    if (byType.position) {
-      profile += '**Positions taken in debate:** ' + byType.position.slice(0, 3).join(' | ') + '\n';
-    }
-
-    profile += '\nDo NOT repeat things they already know. Build on their existing knowledge. If they struggled with something before, revisit it gently when the topic comes up again.';
-    return profile;
   },
 
   // ─────────────────────────────────────────────────────────────────────────
