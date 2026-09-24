@@ -2858,7 +2858,7 @@ app.get('/api/progress/:sessionId', requireSessionParam, asyncRoute(async (req, 
   return res.json(await db.getProgress(req.params.sessionId));
 }));
 
-app.put('/api/progress/:sessionId', requireSessionParam, validate(ProgressSyncRequest, { endpoint: '/api/progress' }), asyncRoute(async (req, res) => {
+app.put('/api/progress/:sessionId', requireSessionParam, validate(ProgressSyncRequest, { endpoint: '/api/progress', hasMessages: false }), asyncRoute(async (req, res) => {
   const { sessionId } = req.params;
   if (await refuseUnseenSession(req, res, sessionId)) return;
   const { curriculumVersion, items } = req.validated;

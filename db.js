@@ -1,7 +1,7 @@
 'use strict';
 
 const logger = require('./lib/logger');
-const { PROGRESS_STATUS_RANK } = require('./lib/schemas');
+const { PROGRESS_STATUS_RANK, INT4_MAX } = require('./lib/schemas');
 
 // ─── Database abstraction: PostgreSQL (production) or SQLite (local dev) ───
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -216,12 +216,16 @@ async function initSchema() {
       -- Server-synced curriculum progress (Phase 3A): one row per session +
       -- item (lesson 'u1_l3' or unit 'unit_1'), status forward-only (see
       -- PROGRESS_STATUS_RANK in lib/schemas.js). curriculum_version is the
-      -- client curriculum version the row was last confirmed at. No FK: the
-      -- server's own [LESSON_COMPLETE] judgement may land before any other
-      -- write; deleteSession cascades it and the retention sweep never purges
-      -- it on its own (an idle session's whole-session purge does).
+      -- client curriculum version the row was last confirmed at. The FK is
+      -- deliberate: every writer runs refuseUnseenSession → ensureSession
+      -- first, so the only write that can find no session is the chat
+      -- handler's fire-and-forget [LESSON_COMPLETE] upsert landing AFTER an
+      -- erasure — the FK refuses it (swallowed by its .catch) instead of
+      -- resurrecting the erased id as an orphan nothing would ever purge.
+      -- deleteSession cascades it and the retention sweep never purges it on
+      -- its own (an idle session's whole-session purge does).
       CREATE TABLE IF NOT EXISTS curriculum_progress (
-        session_id TEXT NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(session_id),
         item_id TEXT NOT NULL,
         item_type TEXT NOT NULL CHECK(item_type IN ('lesson', 'unit')),
         status TEXT NOT NULL,
@@ -327,7 +331,8 @@ async function initSchema() {
         status TEXT NOT NULL,
         curriculum_version INTEGER NOT NULL DEFAULT 1,
         updated_at INTEGER NOT NULL,
-        PRIMARY KEY (session_id, item_id)
+        PRIMARY KEY (session_id, item_id),
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id)
       );
       CREATE INDEX IF NOT EXISTS idx_curriculum_progress_session ON curriculum_progress(session_id);
     `);
@@ -746,9 +751,12 @@ module.exports = {
   //         moves only when the status actually changes; curriculum_version
   //         only ever rises. `curriculumVersion` omitted/invalid → the
   //         session's highest stored version, else 1 (the server's own
-  //         [LESSON_COMPLETE] write has no client version in hand). Items
-  //         with an unknown status/type or a malformed id are skipped — the
-  //         route schema is the real gate, this is belt and braces.
+  //         [LESSON_COMPLETE] write has no client version in hand); a value
+  //         above INT4_MAX (Postgres INTEGER) counts as invalid, not clamped.
+  //         Items with an unknown status/type or a malformed id are skipped —
+  //         the route schema is the real gate, this is belt and braces. The
+  //         session row must exist (FK): a write for an erased or never-seen
+  //         session throws, which the fire-and-forget caller swallows.
   async getProgress(sessionId) {
     const rows = await query(
       'SELECT item_id, item_type, status, curriculum_version, updated_at FROM curriculum_progress WHERE session_id = ? ORDER BY item_type, item_id',
@@ -768,7 +776,7 @@ module.exports = {
     const tsRaw = Number(now);
     const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
     let version = Math.round(Number(curriculumVersion));
-    if (!Number.isFinite(version) || version < 1) {
+    if (!Number.isFinite(version) || version < 1 || version > INT4_MAX) {
       const r = await queryOne('SELECT MAX(curriculum_version) AS v FROM curriculum_progress WHERE session_id = ?', [sessionId]);
       version = r && r.v != null ? Math.max(1, num(r.v)) : 1;
     }
