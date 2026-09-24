@@ -13,7 +13,7 @@
 (() => {
   'use strict';
 
-  // ---- Mode tabs (Socratic / Direct / Debate / Discussion) ----
+  // ---- Mode tabs (Socratic / Debate / Discussion) ----
   //
   // Tabs and panels are decoupled via `data-mode-panel`. Any element on
   // the page that wants to react to a mode change (the description
