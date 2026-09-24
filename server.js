@@ -48,6 +48,8 @@ const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED } = require('./lib/safetyCore');
+const { notifyReport } = require('./lib/reportWebhook');
+const { createScheduler } = require('./lib/scheduler');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
@@ -1481,6 +1483,33 @@ async function refuseUnseenSession(req, res, sessionId) {
   return false;
 }
 
+// Lesson lifecycle events (start / turn / complete) — the founder's weekly
+// numbers come from these. `lib/lessonOutcome.js` already computes
+// completion; it was previously forwarded to the client and dropped.
+let scheduler = null;
+function lessonMetaFor(clientMessages) {
+  const opener = clientMessages.find(
+    (m) => m && m.role === 'user' && typeof m.content === 'string' && curriculumTag.parseCurriculumTag(m.content),
+  );
+  const tag = opener ? curriculumTag.parseCurriculumTag(opener.content) : null;
+  const turnIndex = clientMessages.filter((m) => m && m.role === 'user').length;
+  if (!tag) return { unit: null, lesson: null, lessonId: null, turnIndex };
+  return { unit: tag.unit, lesson: tag.lesson, lessonId: curriculumTag.lessonId(tag.unit, tag.lesson), turnIndex };
+}
+function recordLessonEvent(sessionId, meta, event) {
+  if (!meta || !meta.lessonId) return;
+  metrics.lessonEventsTotal.inc({ event });
+  Promise.resolve(db.recordLessonEvent({
+    ts: Date.now(),
+    sessionId,
+    unit: meta.unit,
+    lesson: meta.lesson,
+    lessonId: meta.lessonId,
+    event,
+    turnIndex: meta.turnIndex,
+  })).catch(() => {});
+}
+
 // Per-session quota counters live in memory; the first time a session is
 // seen each UTC day, seed them from the usage ledger so a mid-day redeploy
 // doesn't hand every session a fresh allowance.
@@ -1542,6 +1571,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // against different daily allowances.
   const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
+  const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages) : null;
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
@@ -1590,6 +1620,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       ? latestUserMessage.content
       : (imageId ? '[Shared an image]' : latestUserMessage.content);
   await db.saveMessage(sessionId, 'user', userTextToSave, callKind);
+  if (lessonMeta) {
+    if (lessonMeta.turnIndex === 1) recordLessonEvent(sessionId, lessonMeta, 'start');
+    recordLessonEvent(sessionId, lessonMeta, 'turn');
+  }
 
   // ---------------------------------------------------------------------------
   // Determine which system prompt to use + test state transitions
@@ -1858,6 +1892,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
+        if (lessonMeta && lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
 
         try {
           await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -1958,6 +1993,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
+      if (lessonMeta && lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2390,6 +2426,47 @@ app.post('/api/admin/prewarm', adminLimiter, requireAdmin, asyncRoute(async (req
   return res.json({ ok: true, warmed: await prewarmCaches(req.ip) });
 }));
 
+// ---------------------------------------------------------------------------
+// Admin review queue for content reports (App Store Guideline 1.2 story:
+// users can report, and the developer can act on it).
+// ---------------------------------------------------------------------------
+app.get('/api/admin/reports', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 50));
+  const sinceRaw = req.query.since ? Number(req.query.since) : null;
+  const unresolvedOnly = req.query.unresolved === '1' || req.query.unresolved === 'true';
+  const reports = await db.listReports({ limit, since: Number.isFinite(sinceRaw) ? sinceRaw : null, unresolvedOnly });
+  return res.json({ ok: true, reports });
+}));
+
+app.post('/api/admin/reports/:id/resolve', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 0) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Report id must be an integer.' });
+  }
+  // Idempotent: resolving twice keeps the first timestamp and reports
+  // resolved:false the second time.
+  const resolved = await db.resolveReport(id);
+  return res.json({ ok: true, id, resolved });
+}));
+
+// ---------------------------------------------------------------------------
+// Admin stats — the founder's weekly numbers. DAU/WAU, lessons, cost, D1/D7
+// retention from the usage ledger + lesson events; plus live rails state.
+// ---------------------------------------------------------------------------
+app.get('/api/admin/stats', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
+  const days = Math.min(366, Math.max(1, Number(req.query.days) || 7));
+  const stats = await db.getAdminStats({ days });
+  return res.json({
+    ok: true,
+    ...stats,
+    budget: spendCap.state(),
+    killSwitch: killSwitch.state(),
+    inflight: quotas.inflight(),
+    draining,
+    scheduler: scheduler ? scheduler.state() : null,
+  });
+}));
+
 app.get('/api/admin/kill-switch', adminLimiter, requireAdmin, (_req, res) => {
   return res.json({ ok: true, ...killSwitch.state() });
 });
@@ -2685,13 +2762,23 @@ app.get('/api/images/:id', async (req, res) => {
 // global rate limiter.
 // ---------------------------------------------------------------------------
 app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
-  const { sessionId, content, reason } = req.validated;
+  const { sessionId, content, reason, userMessage, context } = req.validated;
   try {
-    await db.saveReport({ sessionId, content, reason: reason ?? null, createdAt: Date.now() });
+    const createdAt = Date.now();
+    const { id } = await db.saveReport({
+      sessionId,
+      content,
+      reason: reason ?? null,
+      userMessage: userMessage ?? null,
+      context: context ?? null,
+      createdAt,
+    });
     // Log the signal (reason only) so reports surface in observability; the
-    // full reported text lives in the DB for review.
-    logger.forRequest(req).warn({ reason: reason || null }, 'content report received');
-    return res.json({ ok: true });
+    // full reported text lives in the DB for review. The Discord alert is the
+    // only channel the founder actually sees between club meetings.
+    logger.forRequest(req).warn({ reportId: id, reason: reason || null, surface: context && context.surface }, 'content report received');
+    notifyReport({ id, ts: createdAt, sessionId, reason, content, userMessage, context }).catch(() => {});
+    return res.json({ ok: true, id });
   } catch (err) {
     logger.forRequest(req).error({ err: err.message }, 'failed to save content report');
     return res.status(500).json({ error: 'server_error', message: 'Could not submit the report.' });
@@ -2869,6 +2956,32 @@ db.initSchema().then(async () => {
   } catch (e) {
     logger.warn({ err: e.message }, 'kill switch init failed — using env default');
   }
+
+  // In-process daily digest + retention sweep (one replica, no cron
+  // service). Off under tests; SCHEDULER_ENABLED=0 disables it elsewhere.
+  if (process.env.NODE_ENV !== 'test' && process.env.SCHEDULER_ENABLED !== '0') {
+    try {
+      scheduler = createScheduler({
+        getSetting: (k) => db.getSetting(k),
+        setSetting: (k, v) => db.setSetting(k, v),
+        getAdminStats: (o) => db.getAdminStats(o),
+        notify: alerts.notify,
+        purge: {
+          messagesBefore: (ts) => db.purgeMessagesBefore(ts),
+          imagesBefore: (ts) => db.purgeImagesBefore(ts),
+          reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
+          usageBefore: (ts) => db.purgeUsageBefore(ts),
+          lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
+          inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
+          deleteSession: (id) => db.deleteSession(id),
+        },
+        logger,
+      });
+      scheduler.start().catch((e) => logger.warn({ err: e.message }, 'scheduler start failed'));
+    } catch (e) {
+      logger.warn({ err: e.message }, 'scheduler not started');
+    }
+  }
   try {
     const midnight = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
     const spentToday = await db.sumCostSince(midnight);
@@ -2923,6 +3036,7 @@ process.on('unhandledRejection', (err) => {
 function shutdown(signal, hardMs) {
   if (draining) return;
   draining = true;
+  if (scheduler) scheduler.stop();
   logger.info({ signal, inflightSse }, 'graceful shutdown: draining');
   if (server) {
     server.close(() => logger.info('all connections closed'));

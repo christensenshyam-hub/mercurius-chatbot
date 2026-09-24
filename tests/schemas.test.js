@@ -22,6 +22,7 @@ const {
   ImageUploadRequest,
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
+  ReportReason,
   ReportRequest,
   _legacyErrorCode,
 } = require('../lib/schemas');
@@ -273,16 +274,120 @@ describe('ChatRequest imageId (v3 vision)', () => {
 });
 
 describe('ReportRequest (Guideline 1.2)', () => {
-  test('accepts a report with content (+ optional reason)', () => {
-    assert.ok(ReportRequest.safeParse({ sessionId: 'abc', content: 'a bad reply' }).success);
-    const out = ReportRequest.safeParse({ sessionId: 'abc', content: 'x', reason: 'offensive' });
+  const base = { sessionId: 'abc', content: 'a bad reply' };
+
+  test('the old client shape { sessionId, content } is still valid (shipped iOS sends no reason)', () => {
+    const out = ReportRequest.safeParse(base);
     assert.ok(out.success);
-    assert.equal(out.data.reason, 'offensive');
+    assert.equal(out.data.reason, undefined);
+    assert.equal(out.data.userMessage, undefined);
+    assert.equal(out.data.context, undefined);
   });
 
   test('rejects empty content or missing session', () => {
     assert.ok(!ReportRequest.safeParse({ sessionId: 'abc', content: '' }).success);
     assert.ok(!ReportRequest.safeParse({ content: 'x' }).success);
+  });
+
+  test('content is still capped at 10_000 chars', () => {
+    assert.ok(ReportRequest.safeParse({ ...base, content: 'x'.repeat(10_000) }).success);
+    assert.ok(!ReportRequest.safeParse({ ...base, content: 'x'.repeat(10_001) }).success);
+  });
+
+  describe('reason', () => {
+    test('ReportReason is the closed enum wrong | harmful | off_topic | other', () => {
+      assert.deepEqual(ReportReason.options, ['wrong', 'harmful', 'off_topic', 'other']);
+    });
+
+    test('accepts each enum value and round-trips it', () => {
+      for (const reason of ReportReason.options) {
+        const out = ReportRequest.safeParse({ ...base, reason });
+        assert.ok(out.success, `expected reason ${reason} to parse`);
+        assert.equal(out.data.reason, reason);
+      }
+    });
+
+    test('rejects a free-text or mis-cased reason', () => {
+      for (const bad of ['offensive', 'WRONG', 'off-topic', '', 'x'.repeat(500)]) {
+        const out = ReportRequest.safeParse({ ...base, reason: bad });
+        assert.ok(!out.success, `expected reason ${JSON.stringify(bad)} to be rejected`);
+        assert.equal(_legacyErrorCode(out.error.issues), 'invalid_request');
+      }
+    });
+
+    test('rejects a non-string reason (null is not "omitted")', () => {
+      assert.ok(!ReportRequest.safeParse({ ...base, reason: null }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, reason: 1 }).success);
+    });
+  });
+
+  describe('userMessage', () => {
+    test('accepts an optional student turn up to 4000 chars', () => {
+      const out = ReportRequest.safeParse({ ...base, userMessage: 'what is a token?' });
+      assert.ok(out.success);
+      assert.equal(out.data.userMessage, 'what is a token?');
+      assert.ok(ReportRequest.safeParse({ ...base, userMessage: 'x'.repeat(4000) }).success);
+      assert.ok(ReportRequest.safeParse({ ...base, userMessage: '' }).success, 'empty string is allowed');
+    });
+
+    test('rejects userMessage over 4000 chars or non-string', () => {
+      assert.ok(!ReportRequest.safeParse({ ...base, userMessage: 'x'.repeat(4001) }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, userMessage: 42 }).success);
+    });
+  });
+
+  describe('context', () => {
+    test('accepts a full context and round-trips every key', () => {
+      const context = { surface: 'lesson', mode: 'socratic', lessonId: 'u1_l3', appVersion: '2.2.0 (13)' };
+      const out = ReportRequest.safeParse({ ...base, context });
+      assert.ok(out.success);
+      assert.deepEqual(out.data.context, context);
+    });
+
+    test('accepts a partial or empty context (every key optional)', () => {
+      assert.ok(ReportRequest.safeParse({ ...base, context: {} }).success);
+      const out = ReportRequest.safeParse({ ...base, context: { surface: 'chat' } });
+      assert.ok(out.success);
+      assert.deepEqual(out.data.context, { surface: 'chat' });
+    });
+
+    test('rejects an unknown context key (strict) → invalid_request', () => {
+      const out = ReportRequest.safeParse({ ...base, context: { surface: 'chat', deviceId: 'abc' } });
+      assert.ok(!out.success);
+      assert.equal(_legacyErrorCode(out.error.issues), 'invalid_request');
+    });
+
+    test('rejects a surface outside chat | lesson', () => {
+      assert.ok(!ReportRequest.safeParse({ ...base, context: { surface: 'quiz' } }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, context: { surface: 'Chat' } }).success);
+    });
+
+    test('enforces the per-key length caps (mode 32, lessonId 64, appVersion 32)', () => {
+      assert.ok(ReportRequest.safeParse({ ...base, context: { mode: 'x'.repeat(32) } }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, context: { mode: 'x'.repeat(33) } }).success);
+      assert.ok(ReportRequest.safeParse({ ...base, context: { lessonId: 'x'.repeat(64) } }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, context: { lessonId: 'x'.repeat(65) } }).success);
+      assert.ok(ReportRequest.safeParse({ ...base, context: { appVersion: 'x'.repeat(32) } }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, context: { appVersion: 'x'.repeat(33) } }).success);
+    });
+
+    test('rejects a non-object context', () => {
+      assert.ok(!ReportRequest.safeParse({ ...base, context: 'lesson' }).success);
+      assert.ok(!ReportRequest.safeParse({ ...base, context: null }).success);
+    });
+  });
+
+  test('a fully-populated new-client body parses with every field intact', () => {
+    const body = {
+      sessionId: 'abc',
+      content: 'Sure, here is how to hack your school wifi…',
+      reason: 'harmful',
+      userMessage: 'how do I get into the school wifi',
+      context: { surface: 'chat', mode: 'socratic', appVersion: '2.3.0' },
+    };
+    const out = ReportRequest.safeParse(body);
+    assert.ok(out.success);
+    assert.deepEqual(out.data, body);
   });
 });
 

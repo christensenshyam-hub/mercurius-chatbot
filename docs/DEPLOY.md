@@ -129,6 +129,14 @@ default; `0` refuses everything.
 | `MAX_INFLIGHT` | concurrent Claude calls for the whole process; beyond it requests get `503 busy`, not a queue | `80` |
 | `HELPER_MODEL` | model for the summarizing helpers (quiz, report card, concept map, briefing); the tutor/grader/fact-check/analyze stay on the tutor model in `server.js` | `claude-haiku-4-5` |
 | `EVAL_EXPOSE_USAGE` | eval servers only — puts settled usage on the SSE `complete` frame so `scripts/eval-pacing.mjs` can prove cache hits. Never set in production. | unset |
+| `SCHEDULER_ENABLED` | in-process daily digest + retention sweep (`lib/scheduler.js`); `0` disables. Off under `NODE_ENV=test`. | `1` |
+| `DIGEST_UTC_HOUR` | UTC hour after which the daily Discord digest posts once | `13` |
+| `RETENTION_UTC_HOUR` | UTC hour after which the daily retention sweep runs once | `8` |
+| `MESSAGE_RETENTION_DAYS` | chat/lesson transcripts older than this are deleted (`0`/`off` disables) | `90` |
+| `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer) | `24` |
+| `REPORT_RETENTION_DAYS` | resolved content reports older than this are deleted; open ones are kept | `180` |
+| `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
+| `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |
 
 ### Removed variables
 
