@@ -1,13 +1,21 @@
 'use strict';
 
 // End-to-end for the trust + ops rails wired into server.js:
-//   POST /api/report (reason / userMessage / context) → admin review queue
-//   GET  /api/admin/reports, POST /api/admin/reports/:id/resolve (idempotent)
-//   lesson_events start/turn/complete from real chat turns (mocked Anthropic)
+//   POST /api/report (reason / userMessage / context) → admin review queue;
+//     a report for a session the server has never seen is acknowledged and
+//     dropped; a dedicated 10/min/IP bucket
+//   GET  /api/admin/reports, POST /api/admin/reports/:id/resolve (idempotent;
+//     ids are plain decimal digits)
+//   lesson_events from real chat turns (mocked Anthropic): one row per
+//     answered turn, the opener is the start, complete once per attempt
 //   GET  /api/admin/stats — the founder's weekly numbers + live rails state
 //
-// Boots the real server once with ANTHROPIC_MOCK=1 and its own SQLite file.
-// The admin limiter is 10 req/min per IP, so this file makes < 10 admin calls.
+// Boots the real server once with ANTHROPIC_MOCK=1 and its own SQLite file,
+// which this process opens through db.js as well to read lesson_events
+// directly. The admin limiter is 10 req/min per IP, so the default client
+// makes < 10 admin calls; the id-format cases ride a second forwarded
+// address (server.js trusts one proxy hop). The report flood test is last
+// because it trips the report bucket for the rest of the minute.
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -21,9 +29,13 @@ const PORT = 9700 + Math.floor(Math.random() * 200);
 const BASE = `http://localhost:${PORT}`;
 const ADMIN_PASSWORD = 'test-admin-pw-' + crypto.randomBytes(4).toString('hex');
 const dbPath = path.join(os.tmpdir(), `merc-admin-trust-${crypto.randomBytes(4).toString('hex')}.db`);
+process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
+delete process.env.DATABASE_URL;          // force the SQLite driver
+const db = require('../db');
 let proc;
 
 function sid() { return 'test_' + crypto.randomBytes(8).toString('hex'); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const admin = { 'x-admin-password': ADMIN_PASSWORD };
 
 async function call(method, p, body, headers = {}) {
@@ -33,6 +45,12 @@ async function call(method, p, body, headers = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: res.status, json: await res.json().catch(() => null) };
+}
+
+// /api/mode is the cheapest route that creates the session row.
+async function createSession(s) {
+  const res = await call('POST', '/api/mode', { sessionId: s, mode: 'socratic' });
+  assert.equal(res.status, 200, JSON.stringify(res.json));
 }
 
 before(async () => {
@@ -82,6 +100,7 @@ describe('content reports → admin review queue', () => {
 
   test('a report round-trips with reason, user turn and context, then resolves exactly once', async () => {
     const s = sid();
+    await createSession(s);
     const posted = await call('POST', '/api/report', {
       sessionId: s,
       content: 'The model said the moon is made of cheese.',
@@ -116,22 +135,49 @@ describe('content reports → admin review queue', () => {
     assert.ok(!stillOpen.json.reports.some((r) => r.id === id), 'resolved report left the open queue');
   });
 
-  test('a non-integer report id is a 400, not a crash', async () => {
-    const res = await call('POST', '/api/admin/reports/abc/resolve', undefined, admin);
-    assert.equal(res.status, 400);
-    assert.equal(res.json.error, 'invalid_request');
+  test('a report for a session the server has never seen is acknowledged and dropped', async () => {
+    const marker = 'never-seen-' + crypto.randomBytes(4).toString('hex');
+    const posted = await call('POST', '/api/report', { sessionId: sid(), content: marker, reason: 'other' });
+    assert.equal(posted.status, 200);
+    assert.deepEqual(posted.json, { ok: true }, 'no id: nothing was stored');
+
+    const all = await call('GET', '/api/admin/reports?limit=50', undefined, admin);
+    assert.equal(all.status, 200);
+    assert.ok(!all.json.reports.some((r) => r.content === marker), 'not in the queue');
+    assert.ok(!(await db.listReports({ limit: 50 })).some((r) => r.content === marker), 'not in the table either');
+  });
+
+  test('report ids are plain decimal digits: exponents, hex, negatives, overflow and decimals are 400s', async () => {
+    // A second admin bucket: server.js trusts one proxy hop, so a forwarded
+    // address keeps these calls out of the 10/min the rest of the file uses.
+    const other = { ...admin, 'x-forwarded-for': '203.0.113.7' };
+    for (const bad of ['abc', '1e21', '0x10', '-1', '1234567890', '1.0', '%201']) {
+      const res = await call('POST', `/api/admin/reports/${bad}/resolve`, undefined, other);
+      assert.equal(res.status, 400, `${bad} → ${res.status}`);
+      assert.equal(res.json.error, 'invalid_request');
+    }
+    const unknown = await call('POST', '/api/admin/reports/999999999/resolve', undefined, other);
+    assert.equal(unknown.status, 200, 'nine digits is the widest accepted id');
+    assert.equal(unknown.json.resolved, false);
   });
 });
 
 describe('lesson events + admin stats', () => {
-  test('a lesson start and a completing turn show up in the weekly numbers', async () => {
+  test('one lesson_events row per answered turn: the opener is the start, the pass adds turn + complete, complete once per attempt', async () => {
     const s = sid();
     const opener = '[CURRICULUM: Unit 1, Lesson 1] Teach me what a token is.';
+    // The funnel rows are written after the reply, fire-and-forget: give them a beat.
+    const events = async () => {
+      await sleep(200);
+      return (await db.lessonEventsSince(0)).filter((r) => r.session_id === s);
+    };
 
-    // Turn 1: exactly one user message on the wire → start + turn.
+    // Turn 1: exactly one user message on the wire → exactly one row, the start.
     const t1 = await call('POST', '/api/chat', { sessionId: s, messages: [{ role: 'user', content: opener }] });
     assert.equal(t1.status, 200, JSON.stringify(t1.json));
     assert.equal(typeof t1.json.reply, 'string');
+    let rows = await events();
+    assert.deepEqual(rows.map((r) => [r.event, r.turn_index, r.lesson_id]), [['start', 1, 'u1_l1']]);
 
     // Turn 5: the mock appends [LESSON_COMPLETE] from the 5th user turn on.
     const thread = [{ role: 'user', content: opener }];
@@ -143,16 +189,26 @@ describe('lesson events + admin stats', () => {
     assert.equal(t5.status, 200, JSON.stringify(t5.json));
     assert.equal(t5.json.lessonComplete, true, 'server judged the lesson complete');
     assert.ok(!String(t5.json.reply).includes('[LESSON_COMPLETE]'), 'marker stripped from the reply');
+    rows = await events();
+    assert.deepEqual(rows.map((r) => [r.event, r.turn_index]), [['start', 1], ['turn', 5], ['complete', 5]]);
 
-    await new Promise((r) => setTimeout(r, 300));
+    // The iOS client keeps a passed lesson's thread open: the same request
+    // again is one more turn, not a second completion.
+    const again = await call('POST', '/api/chat', { sessionId: s, messages: thread });
+    assert.equal(again.status, 200, JSON.stringify(again.json));
+    assert.equal(again.json.lessonComplete, true, 'the client is still told it passed');
+    rows = await events();
+    assert.deepEqual(rows.map((r) => r.event), ['start', 'turn', 'complete', 'turn']);
+
     const stats = await call('GET', '/api/admin/stats?days=7', undefined, admin);
     assert.equal(stats.status, 200);
     const j = stats.json;
     assert.equal(j.ok, true);
     assert.equal(j.windowDays, 7);
     assert.ok(Array.isArray(j.perDay) && j.perDay.length === 7, 'one row per day in the window');
-    assert.ok(j.lessonsStarted >= 1, `lessonsStarted=${j.lessonsStarted}`);
-    assert.ok(j.lessonsCompleted >= 1, `lessonsCompleted=${j.lessonsCompleted}`);
+    assert.equal(j.lessonsStarted, 1, 'one start for one opener');
+    assert.equal(j.lessonsCompleted, 1, 'completions count passes, not turns after the pass');
+    assert.equal(j.lessonsAbandoned, 0);
     assert.ok(j.newSessions >= 1);
     assert.equal(typeof j.wau, 'number');
     assert.ok(j.retention && 'd1' in j.retention && 'd7' in j.retention);
@@ -167,5 +223,21 @@ describe('lesson events + admin stats', () => {
     const res = await call('GET', '/api/admin/stats?days=banana', undefined, admin);
     assert.equal(res.status, 200);
     assert.equal(res.json.windowDays, 7);
+  });
+});
+
+describe('POST /api/report flood', () => {
+  test('a dedicated 10/min/IP bucket trips long before the global limiter would', async () => {
+    const s = sid();
+    await createSession(s);
+    const statuses = [];
+    for (let i = 0; i < 12; i++) {
+      const r = await call('POST', '/api/report', { sessionId: s, content: `flood ${i}`, reason: 'other' });
+      statuses.push(r.status);
+      if (r.status === 429) assert.equal(r.json.error, 'rate_limited');
+    }
+    assert.equal(statuses[0], 200);
+    assert.ok(statuses.includes(429), `expected a 429 in ${JSON.stringify(statuses)}`);
+    assert.equal(statuses.at(-1), 429, 'stays tripped');
   });
 });

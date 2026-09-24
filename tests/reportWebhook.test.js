@@ -3,19 +3,21 @@
 // Tests for the report → Discord alert formatter/poster (lib/reportWebhook).
 //
 // Pure unit tests — `notify` is injected, so lib/alerts, the network and
-// DISCORD_WEBHOOK_URL are never touched. logger.warn is spied with the test
-// runner's mock where a failure path is expected to log.
+// DISCORD_WEBHOOK_URL are never touched (one test wires the real lib/alerts
+// with a fake fetch to prove the throttle). logger.warn is spied with the
+// test runner's mock where a failure path is expected to log.
 //
-//   1. Payload shape — key, header line, quoted student/merc lines, no
-//      throttle option.
-//   2. Truncation — student 300, merc 600, '…' appended only when cut.
-//   3. Missing optional fields — reason/surface/mode/appVersion fall back to
-//      'unspecified' / '?', the student line is omitted, null-safe.
+//   1. Payload shape — fixed key + 60 s throttle, header, counts line,
+//      review pointer.
+//   2. No content — the student's turn and the model's reply never appear,
+//      whatever their length; only their character counts do.
+//   3. Missing optional fields — id/reason/surface/mode/lessonId/appVersion
+//      fall back to '?' / 'unspecified', counts read 0, null-safe.
 //   4. Session id — only the first 8 chars are ever posted.
 //   5. Failure paths — notify rejects / throws sync / returns non-boolean →
 //      resolves false, never throws, warn carries the key but not the text.
-//   6. Hardening — newlines cannot escape the quote, mentions are defused,
-//      snake_case rows are accepted.
+//   6. Hardening — newlines cannot break the line, mentions are defused,
+//      snake_case rows are accepted; a burst collapses under lib/alerts.
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -24,12 +26,14 @@ const logger = require('../lib/logger');
 const {
   notifyReport,
   formatReport,
-  _alertKey,
-  STUDENT_MAX_CHARS,
-  MERC_MAX_CHARS,
+  ALERT_KEY,
+  REPORT_THROTTLE_MS,
+  REVIEW_HINT,
 } = require('../lib/reportWebhook');
 
 const SESSION = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const STUDENT_TEXT = 'how do I get into the school wifi';
+const MERC_TEXT = 'Sure, here is how to get into the school wifi.';
 
 // An injectable notify that records every call and answers `result`.
 function fakeNotify(result = true) {
@@ -48,18 +52,20 @@ function fullReport(overrides = {}) {
     ts: 1_700_000_000_000,
     sessionId: SESSION,
     reason: 'harmful',
-    content: 'Sure, here is how to get into the school wifi.',
-    userMessage: 'how do I get into the school wifi',
+    content: MERC_TEXT,
+    userMessage: STUDENT_TEXT,
     context: { surface: 'chat', mode: 'socratic', lessonId: 'u1_l3', appVersion: '2.3.0' },
     ...overrides,
   };
 }
 
+const HEADER = '🚩 Report #42: harmful · chat/socratic · lesson u1_l3 · 2.3.0 · session a1b2c3d4…';
+
 // ---------------------------------------------------------------------------
 // 1. Payload shape
 // ---------------------------------------------------------------------------
 describe('notifyReport payload shape', () => {
-  test('posts once under report:<id> with the header + quoted student/merc lines and no throttle', async () => {
+  test('posts once under the fixed key with a 60 s throttle: header, counts line, review pointer', async () => {
     const notify = fakeNotify(true);
 
     const posted = await notifyReport(fullReport(), { notify });
@@ -67,14 +73,17 @@ describe('notifyReport payload shape', () => {
     assert.equal(posted, true);
     assert.equal(notify.calls.length, 1);
     const { key, text, opts } = notify.calls[0];
-    assert.equal(key, 'report:42');
-    assert.ok(opts === undefined || !opts.throttleMs, 'a report alert must never be throttled');
+    assert.equal(key, 'report');
+    assert.equal(key, ALERT_KEY);
+    assert.deepEqual(opts, { throttleMs: 60_000 });
+    assert.equal(REPORT_THROTTLE_MS, 60_000);
 
     const lines = text.split('\n');
     assert.equal(lines.length, 3);
-    assert.equal(lines[0], '🚩 Report: harmful · session a1b2c3d4… · chat/socratic · 2.3.0');
-    assert.equal(lines[1], '> **student:** how do I get into the school wifi');
-    assert.equal(lines[2], '> **merc:** Sure, here is how to get into the school wifi.');
+    assert.equal(lines[0], HEADER);
+    assert.equal(lines[1], `student ${STUDENT_TEXT.length} chars · merc ${MERC_TEXT.length} chars`);
+    assert.equal(lines[2], 'Review: GET /api/admin/reports?unresolved=1');
+    assert.equal(lines[2], REVIEW_HINT);
   });
 
   test('formatReport returns exactly the text notifyReport posts', async () => {
@@ -84,24 +93,18 @@ describe('notifyReport payload shape', () => {
     assert.equal(notify.calls[0].text, formatReport(report));
   });
 
-  test('lessonId is carried by the queue row, not the alert', () => {
-    const text = formatReport(fullReport());
-    assert.ok(!text.includes('u1_l3'));
-  });
-
   test('every enum reason renders verbatim in the header', () => {
     for (const reason of ['wrong', 'harmful', 'off_topic', 'other']) {
-      assert.ok(formatReport(fullReport({ reason })).startsWith(`🚩 Report: ${reason} · `));
+      assert.ok(formatReport(fullReport({ reason })).startsWith(`🚩 Report #42: ${reason} · `));
     }
   });
 
-  test('the key falls back to report:<ts> when the row has no id', () => {
-    assert.equal(_alertKey({ ts: 1_700_000_000_000 }), 'report:1700000000000');
-    assert.equal(_alertKey({ createdAt: 5 }), 'report:5');
-    assert.equal(_alertKey({ created_at: 6 }), 'report:6');
-    assert.equal(_alertKey({ id: 0 }), 'report:0', 'id 0 is a real id');
-    assert.equal(_alertKey({ id: 'abc', ts: 1 }), 'report:abc', 'id wins over ts');
-    assert.match(_alertKey({}), /^report:\d+$/, 'no id and no ts → now()');
+  test('the key never varies per report, so a burst shares one throttle clock', async () => {
+    const notify = fakeNotify(true);
+    await notifyReport(fullReport({ id: 1 }), { notify });
+    await notifyReport(fullReport({ id: 2, ts: 5 }), { notify });
+    await notifyReport({}, { notify });
+    assert.deepEqual(notify.calls.map((c) => c.key), ['report', 'report', 'report']);
   });
 
   test('resolves whatever boolean notify answers (false when Discord did not take it)', async () => {
@@ -111,43 +114,36 @@ describe('notifyReport payload shape', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Truncation
+// 2. No content leaves the server
 // ---------------------------------------------------------------------------
-describe('formatReport truncation', () => {
-  test('student line is cut at 300 chars with a trailing ellipsis', () => {
-    const userMessage = 's'.repeat(STUDENT_MAX_CHARS) + 'ZTAIL';
-    const text = formatReport(fullReport({ userMessage }));
-    const line = text.split('\n')[1];
-    assert.equal(line, `> **student:** ${'s'.repeat(STUDENT_MAX_CHARS)}…`);
-    assert.ok(!line.includes('Z'));
+describe('formatReport carries no student or model text', () => {
+  test('the student turn and the model reply are absent; only their lengths are posted', () => {
+    const text = formatReport(fullReport({ userMessage: 'SECRET-STUDENT-TEXT', content: 'SECRET-MERC-TEXT-LONGER' }));
+    assert.ok(!text.includes('SECRET'));
+    assert.ok(!text.includes('wifi'));
+    assert.match(text, /^student 19 chars · merc 23 chars$/m);
   });
 
-  test('merc line is cut at 600 chars with a trailing ellipsis', () => {
-    const content = 'm'.repeat(MERC_MAX_CHARS) + 'ZTAIL';
-    const text = formatReport(fullReport({ content }));
-    const line = text.split('\n')[2];
-    assert.equal(line, `> **merc:** ${'m'.repeat(MERC_MAX_CHARS)}…`);
-    assert.ok(!line.includes('Z'));
-  });
-
-  test('text exactly at the cap is left alone (no ellipsis)', () => {
-    const text = formatReport(fullReport({
-      userMessage: 's'.repeat(STUDENT_MAX_CHARS),
-      content: 'm'.repeat(MERC_MAX_CHARS),
-    }));
-    const [, student, merc] = text.split('\n');
-    assert.equal(student, `> **student:** ${'s'.repeat(STUDENT_MAX_CHARS)}`);
-    assert.equal(merc, `> **merc:** ${'m'.repeat(MERC_MAX_CHARS)}`);
+  test('no fragment of a long reply appears, and the message stays tiny', () => {
+    const content = Array.from({ length: 400 }, (_, i) => `token${i}`).join(' ');
+    const userMessage = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ');
+    const text = formatReport(fullReport({ content, userMessage }));
+    assert.ok(!text.includes('token'));
+    assert.ok(!text.includes('word'));
+    assert.match(text, new RegExp(`student ${userMessage.length} chars · merc ${content.length} chars`));
+    assert.ok(text.length < 300, `message is ${text.length} chars`);
   });
 
   test('a 10 000-char report stays well inside Discord\'s 2000-char limit', () => {
     const text = formatReport(fullReport({ content: 'x'.repeat(10_000), userMessage: 'y'.repeat(4000) }));
-    assert.ok(text.length < 1900, `message is ${text.length} chars`);
+    assert.ok(text.length < 300, `message is ${text.length} chars`);
+    assert.match(text, /student 4000 chars · merc 10000 chars/);
   });
 
-  test('exports the caps the contract promises', () => {
-    assert.equal(STUDENT_MAX_CHARS, 300);
-    assert.equal(MERC_MAX_CHARS, 600);
+  test('non-string content counts as 0 chars rather than being stringified', () => {
+    const text = formatReport(fullReport({ content: { nested: 'SECRET' }, userMessage: 12345 }));
+    assert.ok(!text.includes('SECRET'));
+    assert.match(text, /student 0 chars · merc 0 chars/);
   });
 });
 
@@ -155,43 +151,37 @@ describe('formatReport truncation', () => {
 // 3. Missing optional fields
 // ---------------------------------------------------------------------------
 describe('formatReport with missing optional fields', () => {
-  test('the old-client shape { sessionId, content } renders with unspecified/?/? and no student line', () => {
+  test('the old-client shape { sessionId, content } renders with ?/unspecified and a 0-char student', () => {
     const text = formatReport({ sessionId: SESSION, content: 'a bad reply' });
     const lines = text.split('\n');
-    assert.equal(lines.length, 2);
-    assert.equal(lines[0], '🚩 Report: unspecified · session a1b2c3d4… · ?/? · ?');
-    assert.equal(lines[1], '> **merc:** a bad reply');
-    assert.ok(!text.includes('student'));
+    assert.equal(lines.length, 3);
+    assert.equal(lines[0], '🚩 Report #?: unspecified · ?/? · lesson ? · ? · session a1b2c3d4…');
+    assert.equal(lines[1], 'student 0 chars · merc 11 chars');
+    assert.equal(lines[2], REVIEW_HINT);
   });
 
   test('a null reason (the DB row default) reads as unspecified', () => {
-    assert.ok(formatReport(fullReport({ reason: null })).startsWith('🚩 Report: unspecified · '));
-    assert.ok(formatReport(fullReport({ reason: '' })).startsWith('🚩 Report: unspecified · '));
+    assert.ok(formatReport(fullReport({ reason: null })).startsWith('🚩 Report #42: unspecified · '));
+    assert.ok(formatReport(fullReport({ reason: '' })).startsWith('🚩 Report #42: unspecified · '));
   });
 
   test('a partial context fills only the keys it has', () => {
     const text = formatReport(fullReport({ context: { surface: 'lesson' } }));
-    assert.equal(text.split('\n')[0], '🚩 Report: harmful · session a1b2c3d4… · lesson/? · ?');
+    assert.equal(text.split('\n')[0], '🚩 Report #42: harmful · lesson/? · lesson ? · ? · session a1b2c3d4…');
   });
 
-  test('an empty or whitespace-only userMessage omits the student line', () => {
-    for (const userMessage of ['', '   ', null, undefined]) {
-      const text = formatReport(fullReport({ userMessage }));
-      assert.equal(text.split('\n').length, 2, `userMessage=${JSON.stringify(userMessage)}`);
-      assert.ok(!text.includes('**student:**'));
-    }
+  test('id 0 is a real id; a missing id is ?', () => {
+    assert.ok(formatReport(fullReport({ id: 0 })).startsWith('🚩 Report #0: '));
+    assert.ok(formatReport(fullReport({ id: undefined })).startsWith('🚩 Report #?: '));
+    assert.ok(formatReport(fullReport({ id: null })).startsWith('🚩 Report #?: '));
   });
 
-  test('a missing content still yields a merc line (never a crash)', () => {
-    const text = formatReport({ sessionId: SESSION });
-    assert.equal(text.split('\n')[1], '> **merc:** ');
-  });
-
-  test('garbage input (null / undefined / a string) still returns a string', () => {
+  test('garbage input (null / undefined / a string) still returns the three lines', () => {
     for (const junk of [null, undefined, 'nope', 42, []]) {
       const text = formatReport(junk);
       assert.equal(typeof text, 'string');
-      assert.ok(text.startsWith('🚩 Report: unspecified · session ? · ?/? · ?'));
+      assert.equal(text.split('\n')[0], '🚩 Report #?: unspecified · ?/? · lesson ? · ? · session ?');
+      assert.equal(text.split('\n')[1], 'student 0 chars · merc 0 chars');
     }
   });
 });
@@ -211,8 +201,8 @@ describe('session id handling', () => {
   });
 
   test('a missing session id renders as ? rather than throwing', () => {
-    assert.ok(formatReport({ content: 'x' }).includes('session ? ·'));
-    assert.ok(formatReport({ sessionId: null, content: 'x' }).includes('session ? ·'));
+    assert.ok(formatReport({ content: 'x' }).includes('session ?'));
+    assert.ok(formatReport({ sessionId: null, content: 'x' }).includes('session ?'));
   });
 });
 
@@ -229,7 +219,7 @@ describe('notifyReport swallows failures', () => {
     assert.equal(result, false);
     assert.equal(warn.mock.callCount(), 1);
     const [fields, msg] = warn.mock.calls[0].arguments;
-    assert.equal(fields.key, 'report:42');
+    assert.equal(fields.key, 'report');
     assert.equal(fields.err.message, 'ECONNRESET');
     assert.match(msg, /reportWebhook/);
   });
@@ -240,7 +230,7 @@ describe('notifyReport swallows failures', () => {
     assert.equal(await notifyReport(fullReport(), { notify }), false);
   });
 
-  test('the report text is never passed to the logger on failure', async (t) => {
+  test('the report is never passed to the logger on failure', async (t) => {
     const warn = t.mock.method(logger, 'warn', () => {});
     const notify = async () => { throw new Error('boom'); };
     await notifyReport(fullReport({ content: 'SECRET-MERC-TEXT', userMessage: 'SECRET-STUDENT-TEXT' }), { notify });
@@ -259,7 +249,7 @@ describe('notifyReport swallows failures', () => {
   test('a null report still resolves a boolean (formatter is null-safe)', async () => {
     const notify = fakeNotify(true);
     assert.equal(await notifyReport(null, { notify }), true);
-    assert.match(notify.calls[0].key, /^report:\d+$/);
+    assert.equal(notify.calls[0].key, 'report');
   });
 
   test('without an injected notify it falls back to lib/alerts, which no-ops to false when DISCORD_WEBHOOK_URL is unset', async (t) => {
@@ -282,25 +272,25 @@ describe('notifyReport swallows failures', () => {
 // 6. Hardening
 // ---------------------------------------------------------------------------
 describe('formatReport hardening', () => {
-  test('newlines in the quoted text are collapsed so the reply cannot leave the > block', () => {
+  test('newlines in the posted metadata are collapsed so a field cannot add lines', () => {
     const text = formatReport(fullReport({
-      content: 'line one\nline two\r\nline three',
-      userMessage: 'q1\nq2',
+      reason: 'wrong\nline',
+      context: { surface: 'chat\r\nx', mode: 'so\ncratic', lessonId: 'u1\n_l3', appVersion: '2.3\n.0' },
     }));
     const lines = text.split('\n');
     assert.equal(lines.length, 3);
-    assert.equal(lines[1], '> **student:** q1 q2');
-    assert.equal(lines[2], '> **merc:** line one line two line three');
+    assert.equal(lines[0], '🚩 Report #42: wrong line · chat x/so cratic · lesson u1 _l3 · 2.3 .0 · session a1b2c3d4…');
   });
 
-  test('@everyone / @here / <@id> in student text cannot ping the channel', () => {
+  test('@everyone / @here / <@id> in posted fields cannot ping the channel', () => {
     const text = formatReport(fullReport({
-      userMessage: 'hey @everyone and @here look <@123>',
-      content: 'ok @EVERYONE',
+      reason: 'hey @everyone',
+      context: { surface: '@here', mode: '<@123>', lessonId: '@EVERYONE', appVersion: '@Here' },
     }));
     assert.ok(!text.includes('@everyone'));
     assert.ok(!text.includes('@here'));
     assert.ok(!text.includes('@EVERYONE'));
+    assert.ok(!text.includes('@Here'));
     assert.ok(!text.includes('<@123>'));
     assert.ok(text.includes('@​everyone'), 'defused with a zero-width space, not deleted');
   });
@@ -319,13 +309,41 @@ describe('formatReport hardening', () => {
       app_version: '2.3.0',
     };
     const text = formatReport(row);
-    assert.equal(text.split('\n')[0], '🚩 Report: wrong · session a1b2c3d4… · lesson/debate · 2.3.0');
-    assert.equal(text.split('\n')[1], '> **student:** what is 2+2');
-    assert.equal(_alertKey(row), 'report:7');
+    assert.equal(text.split('\n')[0], '🚩 Report #7: wrong · lesson/debate · lesson u2_l1 · 2.3.0 · session a1b2c3d4…');
+    assert.equal(text.split('\n')[1], 'student 11 chars · merc 20 chars');
+    assert.ok(!text.includes('2+2'));
+    assert.ok(!text.includes('five'));
   });
 
   test('context keys win over flat fallbacks when both are present', () => {
     const text = formatReport(fullReport({ surface: 'lesson', context: { surface: 'chat' } }));
     assert.ok(text.includes(' · chat/? · '));
+  });
+
+  test('through the real lib/alerts, a burst inside 60 s becomes one Discord post', async (t) => {
+    t.mock.method(logger, 'warn', () => {});
+    const alerts = require('../lib/alerts');
+    alerts.__resetForTest();
+    let clock = 1_700_000_000_000;
+    const posts = [];
+    alerts.configure({
+      webhookUrl: 'https://discord.example/webhook',
+      now: () => clock,
+      fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true, status: 204 }; },
+    });
+    try {
+      assert.equal(await notifyReport(fullReport({ id: 1 })), true);
+      assert.equal(await notifyReport(fullReport({ id: 2 })), false, 'collapsed');
+      clock += 59_000;
+      assert.equal(await notifyReport(fullReport({ id: 3 })), false, 'still inside the window');
+      clock += 1_000;
+      assert.equal(await notifyReport(fullReport({ id: 4 })), true, 'the next window posts again');
+      assert.equal(posts.length, 2);
+      assert.ok(posts[0].startsWith('🚩 Report #1:'));
+      assert.ok(posts[1].startsWith('🚩 Report #4:'));
+      assert.ok(posts.every((p) => !p.includes('wifi')), 'no content in any post');
+    } finally {
+      alerts.__resetForTest();
+    }
   });
 });

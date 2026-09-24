@@ -134,7 +134,7 @@ default; `0` refuses everything.
 | `RETENTION_UTC_HOUR` | UTC hour after which the daily retention sweep runs once | `8` |
 | `MESSAGE_RETENTION_DAYS` | chat/lesson transcripts older than this are deleted (`0`/`off` disables) | `90` |
 | `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer) | `24` |
-| `REPORT_RETENTION_DAYS` | resolved content reports older than this are deleted; open ones are kept | `180` |
+| `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved (a report quotes a student's turn verbatim, so it must not outlive the transcript) | `180` |
 | `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
 | `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |
 

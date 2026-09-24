@@ -173,6 +173,33 @@ describe('lesson events', () => {
     assert.equal((await db.lessonEventsSince(t0 + 3)).filter((r) => r.session_id === s).length, 1, 'since is inclusive');
   });
 
+  test('complete is recorded once per attempt: a repeat is dropped, a re-take (new start) can complete again', async () => {
+    const s = sid();
+    const t0 = 1_600_250_000_000;
+    await db.getOrCreateSession(s);
+    const ev = (ts, event, turnIndex) => db.recordLessonEvent({ ts, sessionId: s, lessonId: 'u3_l2', event, turnIndex });
+    assert.equal(await ev(t0 + 1, 'start', 1), true);
+    assert.equal(await ev(t0 + 2, 'turn', 2), true);
+    assert.equal(await ev(t0 + 3, 'complete', 5), true, 'first pass');
+    assert.equal(await ev(t0 + 4, 'turn', 6), true, 'the thread stays open after a pass');
+    assert.equal(await ev(t0 + 4, 'complete', 6), false, 'the same attempt cannot complete twice');
+    assert.equal(await ev(t0 + 5, 'complete', 7), false);
+    // Another lesson in the same session is its own attempt (no start needed).
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 6, sessionId: s, lessonId: 'u3_l3', event: 'complete' }), true);
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 7, sessionId: s, lessonId: 'u3_l3', event: 'complete' }), false);
+    // A re-take: the new start opens a new attempt, which may complete again.
+    assert.equal(await ev(t0 + 10, 'start', 1), true);
+    assert.equal(await ev(t0 + 11, 'complete', 5), true, 'a re-take completes again');
+    assert.equal(await ev(t0 + 12, 'complete', 6), false);
+
+    const rows = (await db.lessonEventsSince(t0)).filter((r) => r.session_id === s && r.lesson_id === 'u3_l2');
+    assert.deepEqual(rows.map((r) => r.event), ['start', 'turn', 'complete', 'turn', 'start', 'complete']);
+    // No lesson_id → nothing to dedupe against, every complete is kept.
+    const t1 = t0 + 100;
+    assert.equal(await db.recordLessonEvent({ ts: t1, sessionId: s, event: 'complete' }), true);
+    assert.equal(await db.recordLessonEvent({ ts: t1 + 1, sessionId: s, event: 'complete' }), true);
+  });
+
   test('recordLessonEvent never throws: bad event / missing session / broken table → false', async () => {
     const s = sid();
     assert.equal(await db.recordLessonEvent({ sessionId: s, event: 'bogus' }), false);

@@ -3,9 +3,11 @@
 // Tests for the in-process daily scheduler (lib/scheduler): the Discord
 // digest and the retention sweep.
 //
-// Pure unit tests — every dependency is a fake and the clock is injected, so
-// no db, no network, no real timers (the start/stop tests use the test
-// runner's mock timers or a call-through setInterval spy).
+// Unit tests — every dependency is a fake and the clock is injected, so no
+// network and no real timers (the start/stop tests use the test runner's mock
+// timers or a call-through setInterval spy). Section 5 alone seeds a temp
+// SQLite through db.js so the digest is proven against the real
+// getAdminStats shape rather than a hand-written one.
 //
 //   1. Digest — fires once per UTC day at/after DIGEST_UTC_HOUR, never
 //      before; survives a restart via the settings row; retries when the
@@ -18,12 +20,19 @@
 //      of missing/odd stats.
 //   4. Lifecycle — tick() never rejects, overlapping ticks coalesce,
 //      start()/stop(), unref'd interval, state() shape, deps validation.
+//   5. digestStatsFromAdminStats — the adapter from db.getAdminStats' shape,
+//      on a fixture and on the real db.
 
-const { describe, test, mock } = require('node:test');
+const { describe, test, before, after, mock } = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs');
+const crypto = require('node:crypto');
 
 const {
   createScheduler,
+  digestStatsFromAdminStats,
   formatDigest,
   formatRetentionSummary,
   SESSION_BATCH,
@@ -36,7 +45,43 @@ const HOUR = 3_600_000;
 // 2026-09-24T14:00:00Z — after both default hours (8 and 13).
 const T0 = Date.UTC(2026, 8, 24, 14, 0, 0);
 
-const STATS = {
+// What db.getAdminStats({ days: 7 }) returns — the fake deps hand this to
+// runDigest, which adapts it. Today is the last perDay row.
+const ADMIN_STATS = {
+  windowDays: 7,
+  generatedAt: T0,
+  perDay: [
+    { day: '2026-09-18', dau: 5, userMessages: 100, lessonsStarted: 2, lessonsCompleted: 1, costUsd: 2.0, errors: 0 },
+    { day: '2026-09-19', dau: 6, userMessages: 120, lessonsStarted: 3, lessonsCompleted: 2, costUsd: 2.1, errors: 1 },
+    { day: '2026-09-20', dau: 4, userMessages: 80, lessonsStarted: 1, lessonsCompleted: 1, costUsd: 1.5, errors: 0 },
+    { day: '2026-09-21', dau: 7, userMessages: 150, lessonsStarted: 4, lessonsCompleted: 3, costUsd: 2.3, errors: 2 },
+    { day: '2026-09-22', dau: 6, userMessages: 130, lessonsStarted: 3, lessonsCompleted: 2, costUsd: 1.87, errors: 0 },
+    { day: '2026-09-23', dau: 8, userMessages: 200, lessonsStarted: 8, lessonsCompleted: 4, costUsd: 1.23, errors: 4 },
+    { day: '2026-09-24', dau: 12, userMessages: 340, lessonsStarted: 9, lessonsCompleted: 5, costUsd: 0.4, errors: 1 },
+  ],
+  wau: 40,
+  costUsdWindow: 12.4,
+  costPerWau: 0.31,
+  lessonsStarted: 30,
+  lessonsCompleted: 18,
+  lessonsAbandoned: 4,
+  retention: {
+    d1: { cohortSize: 20, retained: 5, rate: 0.25 },
+    d7: { cohortSize: 10, retained: 1, rate: 0.1 },
+  },
+  topErrors: [
+    { route: '/api/chat', error_kind: 'rate_limit', count: 4 },
+    { route: '/api/chat', error_kind: 'overloaded', count: 2 },
+    { route: '/api/quiz', error_kind: 'timeout', count: 1 },
+    { route: '/api/chat', error_kind: 'unknown', count: 1 },
+  ],
+  topRoutesByCost: [{ route: '/api/chat', calls: 900, costUsd: 12.4 }],
+  newSessions: 9,
+  reportsOpen: 2,
+};
+
+// The canonical digest shape (what the adapter produces), for formatDigest.
+const DIGEST_STATS = {
   dau: 12,
   wau: 40,
   userMessages: 340,
@@ -69,7 +114,7 @@ function fakeClock(start = T0) {
 // Builds a full fake deps object. `inactiveIds` is what inactiveSessionIds
 // returns (sliced to the limit it is given). Overrides are shallow-merged;
 // `purge` overrides are merged into the default purge fakes.
-function makeDeps({ inactiveIds = [], env = {}, stats = STATS, purge: purgeOverrides = {}, ...overrides } = {}) {
+function makeDeps({ inactiveIds = [], env = {}, stats = ADMIN_STATS, purge: purgeOverrides = {}, ...overrides } = {}) {
   const now = fakeClock();
   const settings = new Map();
   const calls = { purges: [], notify: [], stats: [], setSetting: [], deleted: [], getSetting: 0 };
@@ -129,11 +174,13 @@ describe('digest', () => {
     const s = createScheduler(deps);
 
     await s.tick();
-    assert.deepEqual(calls.stats, [{ days: 1 }]);
+    assert.deepEqual(calls.stats, [{ days: 7 }], 'one 7-day query serves both the today and the week figures');
     const d = notifies(calls, 'digest');
     assert.equal(d.length, 1);
     assert.deepEqual(d[0].opts, { throttleMs: 0 });
-    assert.equal(d[0].text, formatDigest(STATS, { day: '2026-09-24' }));
+    assert.equal(d[0].text, formatDigest(digestStatsFromAdminStats(ADMIN_STATS), { day: '2026-09-24' }));
+    assert.match(d[0].text, /DAU 12 · user messages 340/, 'today, not the window');
+    assert.match(d[0].text, /WAU 40 · cost\/WAU \$0\.31/, 'the window');
     assert.equal(settings.get('last_digest_day'), '2026-09-24');
     assert.equal(s.state().lastDigestDay, '2026-09-24');
 
@@ -192,7 +239,7 @@ describe('digest', () => {
       getAdminStats: async (opts) => {
         calls.stats.push(opts);
         if (failures-- > 0) throw new Error('db down');
-        return STATS;
+        return ADMIN_STATS;
       },
     });
     const s = createScheduler(deps);
@@ -272,7 +319,9 @@ describe('retention', () => {
 
     assert.deepEqual(purgeCalls(calls, 'messagesBefore'), [['messagesBefore', t - 90 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'imagesBefore'), [['imagesBefore', t - 24 * HOUR]]);
-    assert.deepEqual(purgeCalls(calls, 'reportsBefore'), [['reportsBefore', t - 180 * DAY, { resolvedOnly: true }]]);
+    // Open or resolved: a report quotes a minor's turn and must not outlive
+    // the 90-day transcript purge by more than the review window.
+    assert.deepEqual(purgeCalls(calls, 'reportsBefore'), [['reportsBefore', t - 180 * DAY, { resolvedOnly: false }]]);
     assert.deepEqual(purgeCalls(calls, 'usageBefore'), [['usageBefore', t - 400 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'lessonEventsBefore'), [['lessonEventsBefore', t - 400 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'inactiveSessionIds'), [['inactiveSessionIds', t - 365 * DAY, SESSION_BATCH]]);
@@ -285,7 +334,8 @@ describe('retention', () => {
     assert.deepEqual(r[0].opts, { throttleMs: 0 });
     assert.match(r[0].text, /messages 5/);
     assert.match(r[0].text, /images 2/);
-    assert.match(r[0].text, /reports 1 \(resolved\)/);
+    assert.match(r[0].text, /reports 1 · /);
+    assert.ok(!r[0].text.includes('(resolved)'), 'no longer a resolved-only purge');
     assert.match(r[0].text, /sessions 2/);
     assert.match(r[0].text, /10 rows removed/);
 
@@ -321,7 +371,7 @@ describe('retention', () => {
 
     assert.deepEqual(purgeCalls(calls, 'messagesBefore'), [['messagesBefore', t - 30 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'imagesBefore'), [['imagesBefore', t - 6 * HOUR]]);
-    assert.deepEqual(purgeCalls(calls, 'reportsBefore'), [['reportsBefore', t - 10 * DAY, { resolvedOnly: true }]]);
+    assert.deepEqual(purgeCalls(calls, 'reportsBefore'), [['reportsBefore', t - 10 * DAY, { resolvedOnly: false }]]);
     assert.deepEqual(purgeCalls(calls, 'usageBefore'), [['usageBefore', t - 1.5 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'lessonEventsBefore'), [['lessonEventsBefore', t - 7 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'inactiveSessionIds'), [['inactiveSessionIds', t - 100 * DAY, SESSION_BATCH]]);
@@ -496,11 +546,11 @@ describe('retention', () => {
 // ---------------------------------------------------------------------------
 describe('formatDigest', () => {
   test('includes every headline number and the top 3 errors only', () => {
-    const text = formatDigest(STATS, { day: '2026-09-24' });
+    const text = formatDigest(DIGEST_STATS, { day: '2026-09-24' });
     assert.match(text, /2026-09-24/);
     assert.match(text, /DAU 12/);
     assert.match(text, /user messages 340/);
-    assert.match(text, /9 started · 5 completed · 4 abandoned/);
+    assert.match(text, /9 started · 5 completed · 4 abandoned \(7d\)/);
     assert.match(text, /yesterday \$1\.23 · today so far \$0\.40/);
     assert.match(text, /WAU 40/);
     assert.match(text, /cost\/WAU \$0\.31/); // 12.4 / 40
@@ -513,7 +563,7 @@ describe('formatDigest', () => {
 
   test('is ≤ 1,900 chars even with absurd inputs', () => {
     const stats = {
-      ...STATS,
+      ...DIGEST_STATS,
       topErrors: Array.from({ length: 500 }, (_, i) => ({ kind: 'k'.repeat(500) + i, count: i })),
     };
     const text = formatDigest(stats, { day: 'x'.repeat(5000) });
@@ -547,7 +597,7 @@ describe('formatDigest', () => {
     });
     assert.match(text, /DAU 7/);
     assert.match(text, /user messages 100/);
-    assert.match(text, /3 started · 2 completed · 1 abandoned/);
+    assert.match(text, /3 started · 2 completed · 1 abandoned \(7d\)/);
     assert.match(text, /yesterday \$2\.00 · today so far \$0\.50/);
     assert.match(text, /WAU 21 · cost\/WAU \$0\.75 · D1 50% · D7 0%/);
     assert.match(text, /Open reports: 0/);
@@ -559,6 +609,115 @@ describe('formatDigest', () => {
     assert.match(formatDigest({ wau: 10, cost: { week: 3 } }), /cost\/WAU \$0\.30/);
     assert.match(formatDigest({ wau: 10 }), /cost\/WAU n\/a/);
     assert.match(formatDigest({ cost: { today: 0.001 } }), /today so far <\$0\.01/);
+  });
+
+  test('retention: an explicit null (no cohort yet) is —, a missing field is n/a, a rate object is unwrapped', () => {
+    assert.match(formatDigest({ retention: { d1: null, d7: 0.5 } }), /D1 — · D7 50%/);
+    assert.match(formatDigest({}), /D1 n\/a · D7 n\/a/);
+    assert.match(formatDigest({ retention: { d1: { cohortSize: 0, retained: 0, rate: null }, d7: { cohortSize: 4, retained: 1, rate: 0.25 } } }), /D1 — · D7 25%/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. digestStatsFromAdminStats
+// ---------------------------------------------------------------------------
+describe('digestStatsFromAdminStats', () => {
+  test('today comes from the last perDay row, yesterday from the one before, the rest from the window totals', () => {
+    const d = digestStatsFromAdminStats(ADMIN_STATS);
+    assert.deepEqual(d, {
+      dau: 12,
+      wau: 40,
+      userMessages: 340,
+      lessons: { started: 9, completed: 5, abandoned: 4 },
+      cost: { today: 0.4, yesterday: 1.23, week: 12.4 },
+      costPerWau: 0.31,
+      openReports: 2,
+      retention: { d1: 0.25, d7: 0.1 },
+      topErrors: ADMIN_STATS.topErrors,
+    });
+    const text = formatDigest(d, { day: '2026-09-24' });
+    assert.match(text, /DAU 12 · user messages 340/);
+    assert.match(text, /Lessons: 9 started · 5 completed · 4 abandoned \(7d\)/);
+    assert.match(text, /Cost: yesterday \$1\.23 · today so far \$0\.40/);
+    assert.match(text, /WAU 40 · cost\/WAU \$0\.31 · D1 25% · D7 10%/);
+    assert.match(text, /Open reports: 2/);
+    assert.match(text, /Top errors: rate_limit 4, overloaded 2, timeout 1$/m);
+    assert.ok(!text.includes('n/a'));
+  });
+
+  test('empty cohorts become — and a 1-day window has no yesterday; junk never throws', () => {
+    const d = digestStatsFromAdminStats({
+      perDay: [{ day: '2026-09-24', dau: 0, userMessages: 0, lessonsStarted: 0, lessonsCompleted: 0, costUsd: 0, errors: 0 }],
+      wau: 0, costUsdWindow: 0, costPerWau: null, lessonsAbandoned: 0, reportsOpen: 0, topErrors: [],
+      retention: { d1: { cohortSize: 0, retained: 0, rate: null }, d7: { cohortSize: 0, retained: 0, rate: null } },
+    });
+    assert.equal(d.cost.yesterday, undefined);
+    assert.deepEqual(d.retention, { d1: null, d7: null });
+    const text = formatDigest(d);
+    assert.match(text, /DAU 0 · user messages 0/);
+    assert.match(text, /yesterday n\/a · today so far \$0\.00/);
+    assert.match(text, /WAU 0 · cost\/WAU \$0\.00 · D1 — · D7 —/);
+    for (const bad of [undefined, null, {}, 'junk', 42, []]) {
+      assert.match(formatDigest(digestStatsFromAdminStats(bad)), /DAU n\/a/);
+    }
+  });
+
+  describe('against the real db.getAdminStats (temp SQLite)', () => {
+    const tag = crypto.randomBytes(4).toString('hex');
+    const dbPath = path.join(os.tmpdir(), `merc-digest-${tag}.db`);
+    const A = `digest_a_${tag}`;
+    const B = `digest_b_${tag}`;
+    let db;
+
+    before(async () => {
+      process.env.SQLITE_PATH = dbPath;   // before db.js is required
+      delete process.env.DATABASE_URL;    // force the SQLite driver
+      db = require('../db');
+      await db.initSchema();
+      const now = Date.now();
+      await db.getOrCreateSession(A);
+      await db.getOrCreateSession(B);
+      await db.saveMessage(A, 'user', 'today');                          // DAU 1 today
+      await db.queryRaw(
+        'INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES (?, ?, ?, ?, ?)',
+        [B, 'user', 'three days ago', now - 3 * DAY, 'chat'],            // WAU 2, not DAU
+      );
+      await db.recordUsage({ ts: now, sessionId: A, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.10 });
+      await db.recordUsage({ ts: now - 3 * DAY, sessionId: B, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.30 });
+      await db.recordUsage({ ts: now - DAY, sessionId: B, route: '/api/chat', kind: 'chat', status: 'error', costUsd: 0, errorKind: 'overloaded' });
+      await db.saveReport({ sessionId: A, content: 'bad reply', reason: 'wrong', createdAt: now });
+      await db.recordLessonEvent({ ts: now - 60_000, sessionId: A, lessonId: 'u1_l1', event: 'start', turnIndex: 1 });
+      await db.recordLessonEvent({ ts: now, sessionId: A, lessonId: 'u1_l1', event: 'complete', turnIndex: 5 });
+    });
+    after(() => {
+      for (const suffix of ['', '-wal', '-shm']) {
+        try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* ignore */ }
+      }
+    });
+
+    test('every headline figure is a number and the WAU line carries the 7-day totals', async () => {
+      const stats = await db.getAdminStats({ days: 7 });
+      const d = digestStatsFromAdminStats(stats);
+      assert.equal(d.dau, 1);
+      assert.equal(d.userMessages, 1);
+      assert.equal(d.wau, 2);
+      assert.ok(Math.abs(d.cost.today - 0.10) < 1e-9, `cost.today=${d.cost.today}`);
+      assert.equal(d.cost.yesterday, 0);
+      assert.ok(Math.abs(d.cost.week - 0.40) < 1e-9, `cost.week=${d.cost.week}`);
+      assert.ok(Math.abs(d.costPerWau - 0.20) < 1e-9, `costPerWau=${d.costPerWau}`);
+      assert.equal(d.openReports, 1);
+      assert.deepEqual(d.lessons, { started: 1, completed: 1, abandoned: 0 });
+      assert.deepEqual(d.retention, { d1: null, d7: null }, 'sessions created today are in no cohort yet');
+
+      const text = formatDigest(d, { day: '2026-09-24' });
+      assert.match(text, /^DAU 1 · user messages 1$/m);
+      assert.match(text, /^Lessons: 1 started · 1 completed · 0 abandoned \(7d\)$/m);
+      assert.match(text, /^Cost: yesterday \$0\.00 · today so far \$0\.10$/m);
+      assert.match(text, /^WAU 2 · cost\/WAU \$0\.20 · D1 — · D7 —$/m, 'week cost over week actives');
+      assert.match(text, /^Open reports: 1$/m);
+      assert.match(text, /^Top errors: overloaded 1$/m);
+      assert.ok(!text.includes('n/a'), text);
+    });
   });
 });
 

@@ -614,6 +614,12 @@ module.exports = {
   //         `lessonId` ('u1_l3') is derived from unit+lesson when absent, and
   //         unit/lesson are parsed from a 'uN_lM' lessonId when absent, so a
   //         caller may pass either form.
+  //         A 'complete' is recorded once per ATTEMPT: when the same session +
+  //         lesson_id already has a 'complete' at or after its latest 'start'
+  //         (ts 0 when there is none), the row is skipped (false, not logged).
+  //         The client keeps a passed lesson's thread open, so every later turn
+  //         would otherwise count as another completion; a re-take (a new
+  //         'start') can complete again.
   //   lessonEventsSince(tsMs) → [{ id, ts, session_id, unit, lesson,
   //         lesson_id, event, turn_index }] with ts >= tsMs, oldest first.
   async recordLessonEvent(row = {}) {
@@ -639,6 +645,17 @@ module.exports = {
       }
       const tsRaw = Number(row.ts);
       const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
+      if (event === 'complete' && lessonId != null) {
+        const startRow = await queryOne(
+          "SELECT COALESCE(MAX(ts), 0) AS ts FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event = 'start'",
+          [sessionId, lessonId],
+        );
+        const done = await queryOne(
+          "SELECT 1 AS one FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event = 'complete' AND ts >= ? LIMIT 1",
+          [sessionId, lessonId, startRow ? num(startRow.ts) : 0],
+        );
+        if (done) return false;
+      }
       await query(
         'INSERT INTO lesson_events (ts, session_id, unit, lesson, lesson_id, event, turn_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [ts, sessionId, unit, lesson, lessonId, event, optInt(row.turnIndex)],
@@ -800,8 +817,11 @@ module.exports = {
   //   lessonsAbandoned 'start' rows whose 24 h judgement window has closed
   //                    (start.ts + 24 h <= now) with NO 'turn' or 'complete'
   //                    for the same session + lesson_id in [start, start+24 h].
-  //                    A start younger than 24 h is neither abandoned nor
-  //                    finished yet, so it is not counted.
+  //                    A 'start' row IS the opener turn (the server writes one
+  //                    row per answered turn), so "abandoned" means the student
+  //                    never got a turn beyond the opener within 24 h. A start
+  //                    younger than 24 h is neither abandoned nor finished
+  //                    yet, so it is not counted.
   //   retention.dN     cohort = sessions whose created_at falls on a day D such
   //                    that the return day D+N is a COMPLETE day inside the
   //                    window; retained = a user message exists in

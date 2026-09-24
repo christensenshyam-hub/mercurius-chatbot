@@ -121,13 +121,14 @@ describe('DELETE /api/session/:sessionId', () => {
 
   test('reports a report, then erases the whole session (200 ok)', async () => {
     const s = sid();
-    // Seed a row through a real route so the session exists server-side.
-    let res = await fetch(`${BASE}/api/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: s, content: 'seed', reason: 'other' }),
-    });
+    const headers = { 'Content-Type': 'application/json' };
+    // Create the session through a real route first: /api/report acknowledges
+    // and drops a report for a session the server has never seen.
+    let res = await fetch(`${BASE}/api/mode`, { method: 'POST', headers, body: JSON.stringify({ sessionId: s, mode: 'socratic' }) });
     assert.equal(res.status, 200);
+    res = await fetch(`${BASE}/api/report`, { method: 'POST', headers, body: JSON.stringify({ sessionId: s, content: 'seed', reason: 'other' }) });
+    assert.equal(res.status, 200);
+    assert.ok(Number.isInteger((await res.json()).id), 'the report was stored');
 
     res = await fetch(`${BASE}/api/session/${s}`, { method: 'DELETE' });
     const json = await res.json();

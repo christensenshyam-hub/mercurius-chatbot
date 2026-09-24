@@ -1194,6 +1194,9 @@ const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, 
 // 60/min/IP covers a classroom each attaching a couple of photos while
 // capping bulk-abuse from a single source.
 const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: envInt('UPLOAD_IP_PER_MIN', 60) });
+// A content report is a ~14 KB insert plus a Discord post; a real student
+// files a handful a day at most, so the global bucket is far too loose for it.
+const reportLimiter = ipLimiter('report', { windowMs: 60 * 1000, max: 10 });
 
 // ---------------------------------------------------------------------------
 // Admin auth — shared-password header with constant-time compare
@@ -1485,7 +1488,10 @@ async function refuseUnseenSession(req, res, sessionId) {
 
 // Lesson lifecycle events (start / turn / complete) — the founder's weekly
 // numbers come from these. `lib/lessonOutcome.js` already computes
-// completion; it was previously forwarded to the client and dropped.
+// completion; it was previously forwarded to the client and dropped. One row
+// per turn, written only once the reply is in hand: the opener turn IS the
+// 'start' row (a refused or failed opener plus the client's retry must not
+// count as two starts), so a lesson with no row after its start is abandoned.
 let scheduler = null;
 function lessonMetaFor(clientMessages) {
   const opener = clientMessages.find(
@@ -1620,10 +1626,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       ? latestUserMessage.content
       : (imageId ? '[Shared an image]' : latestUserMessage.content);
   await db.saveMessage(sessionId, 'user', userTextToSave, callKind);
-  if (lessonMeta) {
-    if (lessonMeta.turnIndex === 1) recordLessonEvent(sessionId, lessonMeta, 'start');
-    recordLessonEvent(sessionId, lessonMeta, 'turn');
-  }
 
   // ---------------------------------------------------------------------------
   // Determine which system prompt to use + test state transitions
@@ -1892,7 +1894,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
-        if (lessonMeta && lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+        if (lessonMeta) {
+          recordLessonEvent(sessionId, lessonMeta, lessonMeta.turnIndex === 1 ? 'start' : 'turn');
+          if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+        }
 
         try {
           await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -1993,7 +1998,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
-      if (lessonMeta && lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+      if (lessonMeta) {
+        recordLessonEvent(sessionId, lessonMeta, lessonMeta.turnIndex === 1 ? 'start' : 'turn');
+        if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
+      }
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2439,10 +2447,12 @@ app.get('/api/admin/reports', adminLimiter, requireAdmin, asyncRoute(async (req,
 }));
 
 app.post('/api/admin/reports/:id/resolve', adminLimiter, requireAdmin, asyncRoute(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 0) {
+  // Plain decimal digits only: Number() also accepts '1e21', '0x10' and
+  // values past int4, all of which Postgres rejects with a 500.
+  if (!/^\d{1,9}$/.test(req.params.id)) {
     return res.status(400).json({ error: 'invalid_request', message: 'Report id must be an integer.' });
   }
+  const id = Number(req.params.id);
   // Idempotent: resolving twice keeps the first timestamp and reports
   // resolved:false the second time.
   const resolved = await db.resolveReport(id);
@@ -2758,12 +2768,18 @@ app.get('/api/images/:id', async (req, res) => {
 //
 // Required by App Store Review Guideline 1.2 (user-generated / AI content):
 // the app must let users report content and the developer must be able to act
-// on it. Reports land in the `reports` table for review. Covered by the
-// global rate limiter.
+// on it. Reports land in the `reports` table for review.
 // ---------------------------------------------------------------------------
-app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
+app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
   const { sessionId, content, reason, userMessage, context } = req.validated;
   try {
+    // A session this server has never seen has no reply to report; acknowledge
+    // and drop. Not refuseUnseenSession — that creates the row and spends the
+    // per-IP new-session quota on a request that carries no model call.
+    if (!(await db.sessionExists(sessionId))) {
+      logger.forRequest(req).debug({ reason: reason || null }, 'content report for an unknown session dropped');
+      return res.json({ ok: true });
+    }
     const createdAt = Date.now();
     const { id } = await db.saveReport({
       sessionId,
