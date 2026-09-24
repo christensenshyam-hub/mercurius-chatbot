@@ -35,10 +35,14 @@ describe('SAFETY_CORE shape', () => {
     assert.ok(SAFETY_CORE.length > 1500, `suspiciously short: ${SAFETY_CORE.length} chars`);
   });
 
-  test('carries all seven numbered rules in order', () => {
+  test('carries all eight numbered rules in order, ending with the scope rule', () => {
     const lines = SAFETY_CORE.split('\n');
     const numbered = lines.filter((l) => /^\d+\. /.test(l)).map((l) => Number(l.split('.')[0]));
-    assert.deepEqual(numbered, [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8]);
+    // Rule 8 keeps the block from overriding a mode's normal format (the
+    // discussion scoring rubric stopped appearing without it).
+    assert.match(lines[lines.length - 1], /^8\. SCOPE\./);
+    assert.match(SAFETY_CORE, /never changes how you teach, score, or format a normal reply/);
   });
 
   test('is byte-stable across requires (the cached prefix must not vary)', () => {
