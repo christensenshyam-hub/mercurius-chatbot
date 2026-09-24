@@ -96,10 +96,20 @@ async function initSchema() {
         session_id TEXT NOT NULL REFERENCES sessions(session_id),
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
-        timestamp BIGINT NOT NULL
+        timestamp BIGINT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'chat'
       );
 
+      -- messages.kind ('chat' | 'lesson'): lets the free-chat history replay
+      -- and the quiz/report-card/concept-map helpers read only the turns that
+      -- belong to them. Existing rows predate the column and are all free
+      -- chat, so the DEFAULT backfills them correctly. The ALTER is the
+      -- migration for databases created before the column existed; it must
+      -- run BEFORE the (session_id, kind, timestamp) index is created.
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'chat';
+
       CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
+      CREATE INDEX IF NOT EXISTS idx_messages_session_kind ON messages(session_id, kind, timestamp);
       CREATE INDEX IF NOT EXISTS idx_sessions_leaderboard ON sessions(message_count, streak);
 
       CREATE TABLE IF NOT EXISTS events (
@@ -193,6 +203,7 @@ async function initSchema() {
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
         content TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'chat',
         FOREIGN KEY (session_id) REFERENCES sessions(session_id)
       );
       CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
@@ -259,6 +270,13 @@ async function initSchema() {
     if (!cols.includes('total_session_count'))sqliteDb.exec("ALTER TABLE sessions ADD COLUMN total_session_count INTEGER DEFAULT 1");
     if (!cols.includes('display_name')) sqliteDb.exec("ALTER TABLE sessions ADD COLUMN display_name TEXT DEFAULT NULL");
     sqliteDb.exec("CREATE INDEX IF NOT EXISTS idx_sessions_leaderboard ON sessions(message_count, streak)");
+    // messages.kind ('chat' | 'lesson') — see the pg block above. SQLite
+    // allows ADD COLUMN ... NOT NULL only with a non-null DEFAULT, which is
+    // exactly what backfills every pre-existing row as free chat. The index
+    // is created here (not in the exec block) so it never precedes the column.
+    const msgCols = sqliteDb.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
+    if (!msgCols.includes('kind')) sqliteDb.exec("ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
+    sqliteDb.exec("CREATE INDEX IF NOT EXISTS idx_messages_session_kind ON messages(session_id, kind, timestamp)");
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -364,9 +382,27 @@ module.exports = {
     return { row, created: !existed };
   },
 
-  async saveMessage(sessionId, role, content) {
+  // ─── Messages ───
+  // Every persisted turn carries a `kind` so readers can pick the slice of
+  // history that belongs to them instead of replaying a session's lifetime:
+  //   'chat'   — free-chat turns (the default; every row that predates the
+  //              column is free chat and was backfilled as such).
+  //   'lesson' — curriculum turns, which the quiz / report-card / concept-map
+  //              helpers must NOT ingest.
+  // Contract:
+  //   saveMessage(sessionId, role, content, kind = 'chat')
+  //       → `kind` is coerced to 'chat' | 'lesson'; anything else (undefined,
+  //         a typo, an old 3-arg caller) is stored as 'chat', never rejected.
+  //   getMessages(sessionId, limit = 50, { kind } = {})
+  //       → the most RECENT `limit` rows, in chronological order, as
+  //         [{ role, content }] — exactly the shape the Anthropic messages
+  //         array takes, so no extra columns are ever returned. With `kind`
+  //         set, only rows of that kind are considered (the window is applied
+  //         AFTER the filter, so 50 lesson turns never crowd out chat turns).
+  async saveMessage(sessionId, role, content, kind = 'chat') {
     const now = Date.now();
-    await query('INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)', [sessionId, role, content, now]);
+    const k = kind === 'lesson' ? 'lesson' : 'chat';
+    await query('INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES (?, ?, ?, ?, ?)', [sessionId, role, content, now, k]);
     await query('UPDATE sessions SET message_count = message_count + 1, last_active = ? WHERE session_id = ?', [now, sessionId]);
   },
 
@@ -587,12 +623,19 @@ module.exports = {
     return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
   },
 
-  async getMessages(sessionId, limit = 50) {
+  async getMessages(sessionId, limit = 50, { kind } = {}) {
     // Most RECENT N messages, returned in chronological order. ORDER BY ASC
     // with LIMIT would pin the window to the FIRST N rows ever saved, freezing
     // the model's context once a session outgrows the limit. The `id DESC`
     // tie-break keeps same-millisecond user/assistant pairs ordered correctly.
-    const rows = await query('SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp DESC, id DESC LIMIT ?', [sessionId, limit]);
+    // The optional `kind` filter narrows the window to one class of turn
+    // (see the Messages contract above saveMessage).
+    let sql = 'SELECT role, content FROM messages WHERE session_id = ?';
+    const params = [sessionId];
+    if (kind != null) { sql += ' AND kind = ?'; params.push(String(kind)); }
+    sql += ' ORDER BY timestamp DESC, id DESC LIMIT ?';
+    params.push(limit);
+    const rows = await query(sql, params);
     return rows.reverse();
   },
 
