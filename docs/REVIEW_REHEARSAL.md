@@ -211,10 +211,8 @@ Tick each line only when you saw the expected result yourself.
     and the chat input all remain readable and reachable; no clipped buttons,
     no text running off screen. Set it back afterwards.
 
-21. **iPad landscape (only if the build still supports iPad).** If
-    `TARGETED_DEVICE_FAMILY` is `"1"` in `ios/project.yml`, skip — the listing
-    is iPhone only. If it is `"1,2"`, either fix the project (preferred) or
-    install on an iPad, rotate to landscape, and check the age gate, a lesson
+21. **iPad landscape.** The build is universal, so install on an iPad (13"
+    simulator is fine), rotate to landscape, and check the age gate, a lesson
     and Settings all lay out sanely.
 
 ### Store surfaces

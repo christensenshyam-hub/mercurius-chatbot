@@ -9,7 +9,7 @@ Before submitting, rehearse the build on a device with
 
 Product facts this pack is written against (do not advertise anything else):
 
-- Store name **Mercurius AI**, Education, iPhone only, iOS 17+, free, no
+- Store name **Mercurius AI**, Education, iPhone + iPad (universal), iOS 17+, free, no
   accounts, no ads, no tracking. Age rating **13+** (forced via the
   minimum-age option).
 - Three modes — **Socratic** (default), **Discussion**, **Debate**. There is no
@@ -117,7 +117,7 @@ Mercurius 2.3 is about trust and clarity.
 
 **Category**: Primary **Education**. No secondary category.
 
-**Availability**: iPhone only. Under *Pricing and Availability → App
+**Availability**: iPhone and iPad (the build is universal — `TARGETED_DEVICE_FAMILY: "1,2"`). Under *Pricing and Availability → App
 availability* leave **Mac** (Apple silicon) and **Apple Vision** unchecked.
 Free, all territories.
 
@@ -228,12 +228,10 @@ Support: support@trymercurius.com
 
 ## 5. Screenshots (6.9" iPhone)
 
-**Required size:** iPhone 6.9" (iPhone 16 Pro Max / 17 Pro Max simulator),
-portrait, **1320 × 2868** px. Capture on the simulator with ⌘S (saves at
-exact resolution) or with `ios/scripts/screenshots.sh`. Because the app is
-iPhone only, no iPad set is required — if App Store Connect still asks for
-iPad 13" shots, the build was archived with `TARGETED_DEVICE_FAMILY: "1,2"`
-in `ios/project.yml`; fix that before uploading rather than adding iPad shots.
+**Required sizes:** iPhone 6.9" (iPhone 16 Pro Max / 17 Pro Max simulator),
+portrait, **1320 × 2868** px, and iPad 13" (**2064 × 2752** px) because the
+build is universal. Capture on the simulator with ⌘S (saves at exact
+resolution) or with `ios/scripts/screenshots.sh`, which produces both sets.
 
 Rules for every shot: real app content, no staged numbers, no invented
 usernames. **Never show a "0" streak** — either a real streak of 1+ from a
@@ -261,7 +259,7 @@ consistent. Order matters: the first three show in search results.
 Do these in order. Tick each one.
 
 **Build**
-- [ ] `ios/project.yml`: `MARKETING_VERSION` is `2.3.0`, `CURRENT_PROJECT_VERSION` is higher than the last uploaded build, `TARGETED_DEVICE_FAMILY` is `"1"` (iPhone only) for both the app and the widgets target.
+- [ ] `ios/project.yml`: `MARKETING_VERSION` is `2.3.0`, `CURRENT_PROJECT_VERSION` is higher than the last uploaded build, `TARGETED_DEVICE_FAMILY` is still `"1,2"` (universal) for both the app and the widgets target.
 - [ ] `xcodegen generate`, then `swift test` in `ios/Packages` and the `xcodebuild test` run pass.
 - [ ] Archive and upload with `ios/scripts/release.sh`; wait for processing.
 - [ ] `PrivacyInfo.xcprivacy` lists User ID, Other User Content and Photos or Videos — the same three types as §3.
