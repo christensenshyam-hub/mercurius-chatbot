@@ -3,7 +3,7 @@
 // End-to-end for the trust + ops rails wired into server.js:
 //   POST /api/report (reason / userMessage / context) → admin review queue;
 //     a report for a session the server has never seen is acknowledged and
-//     dropped; a dedicated 10/min/IP bucket
+//     dropped; a dedicated per-IP bucket (REPORT_IP_PER_MIN, set low here)
 //   GET  /api/admin/reports, POST /api/admin/reports/:id/resolve (idempotent;
 //     ids are plain decimal digits)
 //   lesson_events from real chat turns (mocked Anthropic): one row per
@@ -68,6 +68,9 @@ before(async () => {
         ALLOWED_ORIGIN: `http://localhost:${PORT}`,
         NODE_ENV: 'test',
         DISCORD_WEBHOOK_URL: '',
+        // Low enough for the flood test to trip it quickly; the default (60)
+        // would not, which is what proves the env knob is honored.
+        REPORT_IP_PER_MIN: '12',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -219,6 +222,25 @@ describe('lesson events + admin stats', () => {
     assert.equal(j.scheduler, null, 'scheduler is off under NODE_ENV=test');
   });
 
+  test('a lesson thread with no assistant turn yet is a start, even with two user messages on the wire', async () => {
+    // The opener got no reply (stop / timeout / refusal) and the student typed
+    // on instead of tapping Retry: [opener, turn] is still the first answered
+    // turn, so it must be the start — otherwise the lesson could complete
+    // without starting and could never count as abandoned.
+    const s = sid();
+    const res = await call('POST', '/api/chat', {
+      sessionId: s,
+      messages: [
+        { role: 'user', content: '[CURRICULUM: Unit 1, Lesson 2] Teach me about context windows.' },
+        { role: 'user', content: 'Answer 2: I think it is how much text the model can see at once.' },
+      ],
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.json));
+    await sleep(200);
+    const rows = (await db.lessonEventsSince(0)).filter((r) => r.session_id === s);
+    assert.deepEqual(rows.map((r) => [r.event, r.turn_index, r.lesson_id]), [['start', 2, 'u1_l2']]);
+  });
+
   test('days is clamped and non-numeric input falls back to 7', async () => {
     const res = await call('GET', '/api/admin/stats?days=banana', undefined, admin);
     assert.equal(res.status, 200);
@@ -227,11 +249,13 @@ describe('lesson events + admin stats', () => {
 });
 
 describe('POST /api/report flood', () => {
-  test('a dedicated 10/min/IP bucket trips long before the global limiter would', async () => {
+  test('the dedicated per-IP bucket (REPORT_IP_PER_MIN) trips long before the global limiter would', async () => {
     const s = sid();
     await createSession(s);
     const statuses = [];
-    for (let i = 0; i < 12; i++) {
+    // Two reports were already posted above; 16 more clears the 12/min set
+    // for this server, while the 400/min global bucket is nowhere near.
+    for (let i = 0; i < 16; i++) {
       const r = await call('POST', '/api/report', { sessionId: s, content: `flood ${i}`, reason: 'other' });
       statuses.push(r.status);
       if (r.status === 429) assert.equal(r.json.error, 'rate_limited');

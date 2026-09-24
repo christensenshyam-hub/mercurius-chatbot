@@ -104,6 +104,7 @@ of students never looks like one abusive client.
 | `API_IP_PER_MIN` | all `/api/*` requests, per client IP | `400` |
 | `CHAT_IP_PER_MIN` | `/api/chat`, per client IP | `150` |
 | `UPLOAD_IP_PER_MIN` | `/api/images` uploads, per client IP | `60` |
+| `REPORT_IP_PER_MIN` | `/api/report` content reports, per client IP (a classroom behind one NAT; the client shows "reported" even on a 429) | `60` |
 | `SESSION_PER_MIN` | `/api/chat` turns, per session id | `10` |
 
 ### Daily quotas + in-flight caps (`lib/quotas.js`)
@@ -134,7 +135,7 @@ default; `0` refuses everything.
 | `RETENTION_UTC_HOUR` | UTC hour after which the daily retention sweep runs once | `8` |
 | `MESSAGE_RETENTION_DAYS` | chat/lesson transcripts older than this are deleted (`0`/`off` disables) | `90` |
 | `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer) | `24` |
-| `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved (a report quotes a student's turn verbatim, so it must not outlive the transcript) | `180` |
+| `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved. A report quotes a student's turn verbatim, so it is not kept indefinitely; it outlives the 90-day transcript because it is the review record for a flagged reply | `180` |
 | `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
 | `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |
 

@@ -82,11 +82,13 @@ const ADMIN_STATS = {
 
 // The canonical digest shape (what the adapter produces), for formatDigest.
 const DIGEST_STATS = {
+  day: '2026-09-24',
   dau: 12,
   wau: 40,
   userMessages: 340,
   lessons: { started: 9, completed: 5, abandoned: 4 },
   cost: { today: 0.4, yesterday: 1.23, week: 12.4 },
+  today: { dau: 3, userMessages: 12 },
   openReports: 2,
   topErrors: [
     { kind: 'rate_limit', count: 4 },
@@ -178,8 +180,12 @@ describe('digest', () => {
     const d = notifies(calls, 'digest');
     assert.equal(d.length, 1);
     assert.deepEqual(d[0].opts, { throttleMs: 0 });
-    assert.equal(d[0].text, formatDigest(digestStatsFromAdminStats(ADMIN_STATS), { day: '2026-09-24' }));
-    assert.match(d[0].text, /DAU 12 · user messages 340/, 'today, not the window');
+    assert.equal(d[0].text, formatDigest(digestStatsFromAdminStats(ADMIN_STATS), { day: '2026-09-23' }));
+    // At 13:00 UTC the current UTC day is 8 pm–9 am ET: the headline is the
+    // last COMPLETE day, the partial one only rides along as "today so far".
+    assert.match(d[0].text, /— 2026-09-23 \(UTC, last full day\)/);
+    assert.match(d[0].text, /DAU 8 · user messages 200/, 'the full day');
+    assert.match(d[0].text, /today so far \$0\.40 · today so far: DAU 12 · msgs 340/, 'the partial day');
     assert.match(d[0].text, /WAU 40 · cost\/WAU \$0\.31/, 'the window');
     assert.equal(settings.get('last_digest_day'), '2026-09-24');
     assert.equal(s.state().lastDigestDay, '2026-09-24');
@@ -319,8 +325,9 @@ describe('retention', () => {
 
     assert.deepEqual(purgeCalls(calls, 'messagesBefore'), [['messagesBefore', t - 90 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'imagesBefore'), [['imagesBefore', t - 24 * HOUR]]);
-    // Open or resolved: a report quotes a minor's turn and must not outlive
-    // the 90-day transcript purge by more than the review window.
+    // Open or resolved: a report quotes a minor's turn, so it is not kept
+    // indefinitely — longer than the 90-day transcript only because it is the
+    // review record for a flagged reply.
     assert.deepEqual(purgeCalls(calls, 'reportsBefore'), [['reportsBefore', t - 180 * DAY, { resolvedOnly: false }]]);
     assert.deepEqual(purgeCalls(calls, 'usageBefore'), [['usageBefore', t - 400 * DAY]]);
     assert.deepEqual(purgeCalls(calls, 'lessonEventsBefore'), [['lessonEventsBefore', t - 400 * DAY]]);
@@ -547,11 +554,11 @@ describe('retention', () => {
 describe('formatDigest', () => {
   test('includes every headline number and the top 3 errors only', () => {
     const text = formatDigest(DIGEST_STATS, { day: '2026-09-24' });
-    assert.match(text, /2026-09-24/);
+    assert.match(text, /— 2026-09-24 \(UTC, last full day\)/);
     assert.match(text, /DAU 12/);
     assert.match(text, /user messages 340/);
     assert.match(text, /9 started · 5 completed · 4 abandoned \(7d\)/);
-    assert.match(text, /yesterday \$1\.23 · today so far \$0\.40/);
+    assert.match(text, /yesterday \$1\.23 · today so far \$0\.40 · today so far: DAU 3 · msgs 12/);
     assert.match(text, /WAU 40/);
     assert.match(text, /cost\/WAU \$0\.31/); // 12.4 / 40
     assert.match(text, /D1 25% · D7 10%/);
@@ -622,43 +629,50 @@ describe('formatDigest', () => {
 // 5. digestStatsFromAdminStats
 // ---------------------------------------------------------------------------
 describe('digestStatsFromAdminStats', () => {
-  test('today comes from the last perDay row, yesterday from the one before, the rest from the window totals', () => {
+  test('the headline is the last COMPLETE perDay row; the partial last row feeds only "today so far"; the rest are window totals', () => {
     const d = digestStatsFromAdminStats(ADMIN_STATS);
     assert.deepEqual(d, {
-      dau: 12,
+      day: '2026-09-23',
+      dau: 8,
       wau: 40,
-      userMessages: 340,
-      lessons: { started: 9, completed: 5, abandoned: 4 },
+      userMessages: 200,
+      lessons: { started: 8, completed: 4, abandoned: 4 },
       cost: { today: 0.4, yesterday: 1.23, week: 12.4 },
+      today: { dau: 12, userMessages: 340 },
       costPerWau: 0.31,
       openReports: 2,
       retention: { d1: 0.25, d7: 0.1 },
       topErrors: ADMIN_STATS.topErrors,
     });
-    const text = formatDigest(d, { day: '2026-09-24' });
-    assert.match(text, /DAU 12 · user messages 340/);
-    assert.match(text, /Lessons: 9 started · 5 completed · 4 abandoned \(7d\)/);
-    assert.match(text, /Cost: yesterday \$1\.23 · today so far \$0\.40/);
+    const text = formatDigest(d, { day: d.day });
+    assert.match(text, /— 2026-09-23 \(UTC, last full day\)/);
+    assert.match(text, /DAU 8 · user messages 200/);
+    assert.match(text, /Lessons: 8 started · 4 completed · 4 abandoned \(7d\)/);
+    assert.match(text, /Cost: yesterday \$1\.23 · today so far \$0\.40 · today so far: DAU 12 · msgs 340/);
     assert.match(text, /WAU 40 · cost\/WAU \$0\.31 · D1 25% · D7 10%/);
     assert.match(text, /Open reports: 2/);
     assert.match(text, /Top errors: rate_limit 4, overloaded 2, timeout 1$/m);
     assert.ok(!text.includes('n/a'));
   });
 
-  test('empty cohorts become — and a 1-day window has no yesterday; junk never throws', () => {
+  test('a one-row window headlines its only row; empty cohorts become —; junk never throws', () => {
     const d = digestStatsFromAdminStats({
       perDay: [{ day: '2026-09-24', dau: 0, userMessages: 0, lessonsStarted: 0, lessonsCompleted: 0, costUsd: 0, errors: 0 }],
       wau: 0, costUsdWindow: 0, costPerWau: null, lessonsAbandoned: 0, reportsOpen: 0, topErrors: [],
       retention: { d1: { cohortSize: 0, retained: 0, rate: null }, d7: { cohortSize: 0, retained: 0, rate: null } },
     });
-    assert.equal(d.cost.yesterday, undefined);
+    assert.equal(d.day, '2026-09-24');
+    assert.equal(d.cost.yesterday, 0, 'the only row is both the headline and "today so far"');
+    assert.deepEqual(d.today, { dau: 0, userMessages: 0 });
     assert.deepEqual(d.retention, { d1: null, d7: null });
     const text = formatDigest(d);
     assert.match(text, /DAU 0 · user messages 0/);
-    assert.match(text, /yesterday n\/a · today so far \$0\.00/);
+    assert.match(text, /yesterday \$0\.00 · today so far \$0\.00 · today so far: DAU 0 · msgs 0/);
     assert.match(text, /WAU 0 · cost\/WAU \$0\.00 · D1 — · D7 —/);
     for (const bad of [undefined, null, {}, 'junk', 42, []]) {
-      assert.match(formatDigest(digestStatsFromAdminStats(bad)), /DAU n\/a/);
+      const junk = digestStatsFromAdminStats(bad);
+      assert.equal(junk.day, undefined);
+      assert.match(formatDigest(junk), /DAU n\/a/);
     }
   });
 
@@ -667,6 +681,8 @@ describe('digestStatsFromAdminStats', () => {
     const dbPath = path.join(os.tmpdir(), `merc-digest-${tag}.db`);
     const A = `digest_a_${tag}`;
     const B = `digest_b_${tag}`;
+    const now = Date.now();
+    const yesterday = new Date(now - DAY).toISOString().slice(0, 10);
     let db;
 
     before(async () => {
@@ -674,20 +690,22 @@ describe('digestStatsFromAdminStats', () => {
       delete process.env.DATABASE_URL;    // force the SQLite driver
       db = require('../db');
       await db.initSchema();
-      const now = Date.now();
+      const msg = (id, ts) => db.queryRaw(
+        'INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES (?, ?, ?, ?, ?)',
+        [id, 'user', `at ${ts}`, ts, 'chat'],
+      );
       await db.getOrCreateSession(A);
       await db.getOrCreateSession(B);
-      await db.saveMessage(A, 'user', 'today');                          // DAU 1 today
-      await db.queryRaw(
-        'INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES (?, ?, ?, ?, ?)',
-        [B, 'user', 'three days ago', now - 3 * DAY, 'chat'],            // WAU 2, not DAU
-      );
-      await db.recordUsage({ ts: now, sessionId: A, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.10 });
-      await db.recordUsage({ ts: now - 3 * DAY, sessionId: B, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.30 });
+      await msg(A, now - DAY);            // yesterday (the headline): DAU 1, 1 message
+      await msg(A, now);                  // today so far: DAU 1, 1 message
+      await msg(B, now - 3 * DAY);        // WAU 2
+      await db.recordUsage({ ts: now - DAY, sessionId: A, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.10 });
+      await db.recordUsage({ ts: now, sessionId: A, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.05 });
+      await db.recordUsage({ ts: now - 3 * DAY, sessionId: B, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.25 });
       await db.recordUsage({ ts: now - DAY, sessionId: B, route: '/api/chat', kind: 'chat', status: 'error', costUsd: 0, errorKind: 'overloaded' });
       await db.saveReport({ sessionId: A, content: 'bad reply', reason: 'wrong', createdAt: now });
-      await db.recordLessonEvent({ ts: now - 60_000, sessionId: A, lessonId: 'u1_l1', event: 'start', turnIndex: 1 });
-      await db.recordLessonEvent({ ts: now, sessionId: A, lessonId: 'u1_l1', event: 'complete', turnIndex: 5 });
+      await db.recordLessonEvent({ ts: now - DAY, sessionId: A, lessonId: 'u1_l1', event: 'start', turnIndex: 1 });
+      await db.recordLessonEvent({ ts: now - DAY, sessionId: A, lessonId: 'u1_l1', event: 'complete', turnIndex: 5 });
     });
     after(() => {
       for (const suffix of ['', '-wal', '-shm']) {
@@ -695,24 +713,27 @@ describe('digestStatsFromAdminStats', () => {
       }
     });
 
-    test('every headline figure is a number and the WAU line carries the 7-day totals', async () => {
+    test('yesterday is the headline, today rides along, the WAU line carries the 7-day totals — no n/a anywhere', async () => {
       const stats = await db.getAdminStats({ days: 7 });
       const d = digestStatsFromAdminStats(stats);
+      assert.equal(d.day, yesterday);
       assert.equal(d.dau, 1);
       assert.equal(d.userMessages, 1);
+      assert.deepEqual(d.today, { dau: 1, userMessages: 1 });
       assert.equal(d.wau, 2);
-      assert.ok(Math.abs(d.cost.today - 0.10) < 1e-9, `cost.today=${d.cost.today}`);
-      assert.equal(d.cost.yesterday, 0);
+      assert.ok(Math.abs(d.cost.today - 0.05) < 1e-9, `cost.today=${d.cost.today}`);
+      assert.ok(Math.abs(d.cost.yesterday - 0.10) < 1e-9, `cost.yesterday=${d.cost.yesterday}`);
       assert.ok(Math.abs(d.cost.week - 0.40) < 1e-9, `cost.week=${d.cost.week}`);
       assert.ok(Math.abs(d.costPerWau - 0.20) < 1e-9, `costPerWau=${d.costPerWau}`);
       assert.equal(d.openReports, 1);
       assert.deepEqual(d.lessons, { started: 1, completed: 1, abandoned: 0 });
       assert.deepEqual(d.retention, { d1: null, d7: null }, 'sessions created today are in no cohort yet');
 
-      const text = formatDigest(d, { day: '2026-09-24' });
+      const text = formatDigest(d, { day: d.day });
+      assert.match(text, new RegExp(`— ${yesterday} \\(UTC, last full day\\)`));
       assert.match(text, /^DAU 1 · user messages 1$/m);
       assert.match(text, /^Lessons: 1 started · 1 completed · 0 abandoned \(7d\)$/m);
-      assert.match(text, /^Cost: yesterday \$0\.00 · today so far \$0\.10$/m);
+      assert.match(text, /^Cost: yesterday \$0\.10 · today so far \$0\.05 · today so far: DAU 1 · msgs 1$/m);
       assert.match(text, /^WAU 2 · cost\/WAU \$0\.20 · D1 — · D7 —$/m, 'week cost over week actives');
       assert.match(text, /^Open reports: 1$/m);
       assert.match(text, /^Top errors: overloaded 1$/m);

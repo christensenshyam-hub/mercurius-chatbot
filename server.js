@@ -1194,9 +1194,11 @@ const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, 
 // 60/min/IP covers a classroom each attaching a couple of photos while
 // capping bulk-abuse from a single source.
 const uploadLimiter = ipLimiter('image-upload', { windowMs: 60 * 1000, max: envInt('UPLOAD_IP_PER_MIN', 60) });
-// A content report is a ~14 KB insert plus a Discord post; a real student
-// files a handful a day at most, so the global bucket is far too loose for it.
-const reportLimiter = ipLimiter('report', { windowMs: 60 * 1000, max: 10 });
+// A content report is a ~14 KB insert plus a Discord post, so the global
+// bucket is far too loose for it. Keyed per IP, so like uploads it is sized
+// for a classroom behind one school NAT flagging the same bad reply, not for
+// one student (the shipped client swallows a 429 and still shows "reported").
+const reportLimiter = ipLimiter('report', { windowMs: 60 * 1000, max: envInt('REPORT_IP_PER_MIN', 60) });
 
 // ---------------------------------------------------------------------------
 // Admin auth — shared-password header with constant-time compare
@@ -1502,9 +1504,10 @@ function lessonMetaFor(clientMessages) {
   if (!tag) return { unit: null, lesson: null, lessonId: null, turnIndex };
   return { unit: tag.unit, lesson: tag.lesson, lessonId: curriculumTag.lessonId(tag.unit, tag.lesson), turnIndex };
 }
+// A loose `[CURRICULUM:` thread (billed and quota-gated as a lesson) has no
+// parsable lesson id; its row is still written with lesson_id NULL.
 function recordLessonEvent(sessionId, meta, event) {
-  if (!meta || !meta.lessonId) return;
-  metrics.lessonEventsTotal.inc({ event });
+  if (!meta) return;
   Promise.resolve(db.recordLessonEvent({
     ts: Date.now(),
     sessionId,
@@ -1513,7 +1516,10 @@ function recordLessonEvent(sessionId, meta, event) {
     lessonId: meta.lessonId,
     event,
     turnIndex: meta.turnIndex,
-  })).catch(() => {});
+  })).then((written) => {
+    // Counted on the write, not the call: a deduped 'complete' is not an event.
+    if (written) metrics.lessonEventsTotal.inc({ event });
+  }).catch(() => {});
 }
 
 // Per-session quota counters live in memory; the first time a session is
@@ -1578,6 +1584,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
   const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages) : null;
+  // The opener is the lesson's start — and so is any lesson thread with no
+  // assistant turn yet: a student whose opener got no reply (stop, timeout,
+  // refusal) and who types on instead of tapping Retry sends [opener, turn],
+  // which is still the first answered turn.
+  const lessonStart = Boolean(lessonMeta)
+    && (lessonMeta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant'));
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
@@ -1895,7 +1907,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
         if (lessonMeta) {
-          recordLessonEvent(sessionId, lessonMeta, lessonMeta.turnIndex === 1 ? 'start' : 'turn');
+          recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
           if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
         }
 
@@ -1999,7 +2011,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
       if (lessonMeta) {
-        recordLessonEvent(sessionId, lessonMeta, lessonMeta.turnIndex === 1 ? 'start' : 'turn');
+        recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
         if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
       }
 
