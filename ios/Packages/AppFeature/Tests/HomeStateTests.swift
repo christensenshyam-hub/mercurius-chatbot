@@ -33,7 +33,6 @@ struct HomeStateTests {
         #expect(state.next == .lesson(unit1.lessons[0]))
         #expect(!state.hasProgress)
         #expect(!state.resumesNext)
-        #expect(state.lastLessonTitle == nil)
         #expect(state.primaryActionTitle == "Start Lesson 1")
         #expect(state.week.done == 0)
         #expect(state.weekLabel == "This week · 0 of 2")
@@ -46,9 +45,28 @@ struct HomeStateTests {
         store.markOpened(unit1.lessons[0].id)
         let state = build(store)
         #expect(state.resumesNext)
-        #expect(state.lastLessonTitle == unit1.lessons[0].title)
         #expect(state.primaryActionTitle == "Continue · Lesson 1: \(unit1.lessons[0].title)")
         #expect(state.greeting(hour: 15) == "Welcome back! Let's pick up “\(unit1.lessons[0].title)”.")
+    }
+
+    @Test("Reviewing an earlier lesson: Merc names the lesson Continue opens, not the one opened last")
+    func greetingNamesTheContinueLesson() {
+        let store = makeStore()
+        store.markCompleted(unit1.lessons[0].id)
+        store.markCompleted(unit1.lessons[1].id)
+        store.markOpened(unit1.lessons[2].id)
+        store.markInProgress(unit1.lessons[2].id, conversationId: UUID())
+        // Back to Lesson 1 for a review, then Home.
+        store.markOpened(unit1.lessons[0].id)
+        let third = unit1.lessons[2]
+        let state = build(store)
+        #expect(state.next == .lesson(third))
+        #expect(state.primaryActionTitle == "Continue · Lesson 3: \(third.title)")
+        #expect(state.greeting(hour: 15) == "Welcome back! Let's pick up “\(third.title)”.")
+
+        // Opening another unit's first lesson doesn't move it either.
+        store.markOpened(MercuriusCurriculum.units[1].lessons[0].id)
+        #expect(build(store).greeting(hour: 15) == "Welcome back! Let's pick up “\(third.title)”.")
     }
 
     @Test("Two lessons done this week: next is Lesson 3, the week ring is full")

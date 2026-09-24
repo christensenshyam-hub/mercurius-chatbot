@@ -588,6 +588,29 @@
       "dependencies" : [
         {
           "byName" : [
+            "MercuriusActivity",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "MercuriusActivityTests",
+      "packageAccess" : true,
+      "path" : "MercuriusActivity/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
             "DesignSystem",
             null
           ]
@@ -659,7 +682,19 @@
         },
         {
           "byName" : [
+            "ChatFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
             "CurriculumFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "EngagementFeature",
             null
           ]
         },

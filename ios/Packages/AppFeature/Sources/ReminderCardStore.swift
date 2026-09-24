@@ -5,9 +5,10 @@ import UserNotifications
 #endif
 
 /// The one-time Home card that offers the weekly nudges to installs which
-/// finished onboarding before the nudges existed. New installs answer the
-/// same question on onboarding's "Your path" step, which marks the card
-/// handled, so they never see it.
+/// finished onboarding without choosing them — every install upgraded from
+/// before the nudges existed. New installs answer the same question on
+/// onboarding's "Your path" step, which marks the card handled, so they never
+/// see it.
 @MainActor
 @Observable
 final class ReminderCardStore {
@@ -29,20 +30,40 @@ final class ReminderCardStore {
         defaults.set(true, forKey: Self.storageKey)
     }
 
-    /// Only offered while iOS would still show its permission prompt: a
-    /// student who already allowed notifications gets the weekly nudges by
-    /// default, and one who declined shouldn't be asked again from Home.
-    static func shows(handled: Bool, canAskPermission: Bool) -> Bool {
-        !handled && canAskPermission
+    /// Where iOS stands on notifications for Mercurius.
+    enum Permission: Equatable {
+        case notDetermined
+        case denied
+        /// Authorized, provisional or ephemeral.
+        case allowed
     }
 
-    /// Whether the system permission prompt has never been answered.
-    static func canAskForNotifications() async -> Bool {
+    /// Offered once to a student whose weekly nudges are off, after
+    /// onboarding. An authorized install is asked too, since nudges it never
+    /// chose stay off. Not when iOS notifications are off — Home shouldn't
+    /// ask for what iOS Settings has refused — and not before the permission
+    /// is known (`nil`).
+    static func shows(
+        weeklyEnabled: Bool,
+        handled: Bool,
+        onboardingComplete: Bool,
+        permission: Permission?
+    ) -> Bool {
+        guard !weeklyEnabled, !handled, onboardingComplete, let permission else { return false }
+        return permission != .denied
+    }
+
+    static func notificationPermission() async -> Permission {
         #if os(iOS)
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        return settings.authorizationStatus == .notDetermined
+        switch settings.authorizationStatus {
+        case .notDetermined: return .notDetermined
+        case .authorized, .provisional, .ephemeral: return .allowed
+        case .denied: return .denied
+        @unknown default: return .denied
+        }
         #else
-        return false
+        return .notDetermined
         #endif
     }
 }

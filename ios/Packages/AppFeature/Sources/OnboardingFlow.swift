@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import EngagementFeature
 import PersistenceKit
 
 /// The first-run flow and the versioned consent gate, as one small state
@@ -7,7 +8,8 @@ import PersistenceKit
 ///
 /// Nothing here touches the network, and nothing is persisted until the
 /// user acts: `consentVersion` is written when "Got it" is tapped on the
-/// limits screen, `hasSeenOnboarding` when the full flow finishes. The
+/// limits screen (and cleared on the under-13 and paused dead ends),
+/// `hasSeenOnboarding` when the full flow finishes. The
 /// self-declared age is compared on-device and dropped.
 ///
 /// - `.full` (first run): Meet Merc → age → disclosure → limits → Your path.
@@ -31,6 +33,9 @@ struct OnboardingFlow: View {
 
     let mode: Mode
     let reminderStore: ReminderStore
+    /// The entry view's scheduler, so "Your path"'s switches queue behind its
+    /// re-plans instead of racing them.
+    let scheduler: NotificationScheduler
     let streakStore: StreakStore
     /// "Your path" asks about reminders, so Home never repeats the question.
     let reminderCardStore: ReminderCardStore
@@ -49,6 +54,7 @@ struct OnboardingFlow: View {
     init(
         mode: Mode,
         reminderStore: ReminderStore,
+        scheduler: NotificationScheduler,
         streakStore: StreakStore,
         reminderCardStore: ReminderCardStore,
         onStartLesson1: @escaping () -> Void,
@@ -57,6 +63,7 @@ struct OnboardingFlow: View {
     ) {
         self.mode = mode
         self.reminderStore = reminderStore
+        self.scheduler = scheduler
         self.streakStore = streakStore
         self.reminderCardStore = reminderCardStore
         self.onStartLesson1 = onStartLesson1
@@ -100,7 +107,7 @@ struct OnboardingFlow: View {
                 } else {
                     OnboardingTelemetry.ageBlocked()
                 }
-                step = Self.step(afterAgeEligible: eligible)
+                show(Self.step(afterAgeEligible: eligible))
             })
         case .underThirteen:
             // `.id(step)` re-mounts the age step fresh (wheel back on the
@@ -114,7 +121,7 @@ struct OnboardingFlow: View {
                 },
                 onNotNow: {
                     OnboardingTelemetry.disclosurePaused()
-                    step = .paused
+                    show(.paused)
                 }
             )
         case .paused:
@@ -124,6 +131,7 @@ struct OnboardingFlow: View {
         case .path:
             YourPathStep(
                 reminderStore: reminderStore,
+                scheduler: scheduler,
                 streakStore: streakStore,
                 reminderCardStore: reminderCardStore,
                 onStartLesson1: { finish(startingLesson: true) },
@@ -133,6 +141,15 @@ struct OnboardingFlow: View {
     }
 
     // MARK: - Actions
+
+    /// Move to `next`. The dead ends also drop consent a previous launch
+    /// recorded (an install that agreed but never finished the full flow),
+    /// so nothing that waits for consent — the reminders included — runs
+    /// behind the under-13 or paused screen.
+    private func show(_ next: Step) {
+        if Self.dropsConsent(next) { consentVersion = 0 }
+        step = next
+    }
 
     /// The one place consent is recorded.
     private func acknowledgeLimits() {
@@ -171,6 +188,11 @@ struct OnboardingFlow: View {
     /// `nil` means the flow is done (gate-only installs fall through to Home).
     static func stepAfterLimits(mode: Mode) -> Step? {
         mode == .full ? .path : nil
+    }
+
+    /// The screens that block the student: consent can't stand behind them.
+    static func dropsConsent(_ step: Step) -> Bool {
+        step == .underThirteen || step == .paused
     }
 
     /// DEBUG `-GateStep <meet|age|underThirteen|disclosure|paused|limits|path>`

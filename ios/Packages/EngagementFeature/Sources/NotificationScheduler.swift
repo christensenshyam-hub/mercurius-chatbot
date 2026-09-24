@@ -50,7 +50,9 @@ public final class NotificationScheduler {
     ///
     /// - Parameters:
     ///   - enabled: the daily streak reminder preference. Daily reminders are
-    ///     only scheduled while there's a live `streak` to protect.
+    ///     only scheduled while there's a live `streak` to protect, and only
+    ///     through the last day a chat can still save it.
+    ///   - streakDay: the day `streak` was last confirmed on.
     ///   - weeklyEnabled: the weekly nudges (Wednesday + Sunday).
     ///   - nextLessonId: when given, every reminder opens that lesson on tap.
     public func refresh(
@@ -58,18 +60,31 @@ public final class NotificationScheduler {
         hour: Int,
         minute: Int,
         streak: Int?,
+        streakDay: Date?,
         chattedToday: Bool,
         weeklyEnabled: Bool,
         nextLessonId: String? = nil
     ) {
-        apply(daily: enabled && streak != nil ? (hour, minute, streak, chattedToday) : nil,
-              weekly: weeklyEnabled, nextLessonId: nextLessonId)
+        var daily: DailyInputs?
+        if enabled, let streak, let streakDay {
+            daily = DailyInputs(hour: hour, minute: minute, streak: streak,
+                                streakDay: streakDay, chattedToday: chattedToday)
+        }
+        apply(daily: daily, weekly: weeklyEnabled, nextLessonId: nextLessonId)
+    }
+
+    private struct DailyInputs {
+        let hour: Int
+        let minute: Int
+        let streak: Int
+        let streakDay: Date
+        let chattedToday: Bool
     }
 
     /// Clear and re-add the daily family (`daily == nil` → none planned) and
     /// the weekly family (added only when `weekly` is true).
     private func apply(
-        daily: (hour: Int, minute: Int, streak: Int?, chattedToday: Bool)?,
+        daily: DailyInputs?,
         weekly: Bool,
         nextLessonId: String?
     ) {
@@ -84,7 +99,8 @@ public final class NotificationScheduler {
             if let daily {
                 planned += ReminderPlanner.plan(
                     now: Date(), hour: daily.hour, minute: daily.minute,
-                    streak: daily.streak, chattedToday: daily.chattedToday,
+                    streak: daily.streak, streakDay: daily.streakDay,
+                    chattedToday: daily.chattedToday,
                     quietWeekdays: weekly ? ReminderPlanner.weeklyWeekdays : []
                 ).map { (reminder: $0, repeats: false) }
             }
@@ -214,6 +230,7 @@ public final class NotificationScheduler {
         hour: Int,
         minute: Int,
         streak: Int?,
+        streakDay: Date?,
         chattedToday: Bool,
         weeklyEnabled: Bool,
         nextLessonId: String? = nil

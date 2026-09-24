@@ -76,6 +76,41 @@ struct StreakStoreTests {
         store.seed(streak: 5, lastSessionDate: "2020-01-01")
         #expect(store.isCurrentFresh)
     }
+
+    private func calendar(_ zone: String) -> Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: zone)!
+        return c
+    }
+
+    @Test("A seed's UTC-midnight stamp is the server's day, even west of UTC")
+    func seedStampIsItsUTCDay() throws {
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-21")
+        let stamp = try #require(store.lastUpdatedAt)
+        // Read locally in New York this is 20:00 on the 20th.
+        let newYork = calendar("America/New_York")
+        let day = StreakStore.confirmedDay(for: stamp, calendar: newYork)
+        #expect(newYork.dateComponents([.year, .month, .day, .hour], from: day)
+                == DateComponents(year: 2026, month: 9, day: 21, hour: 0))
+        let tokyo = calendar("Asia/Tokyo")
+        #expect(tokyo.dateComponents([.day], from: StreakStore.confirmedDay(for: stamp, calendar: tokyo)).day == 21)
+    }
+
+    @Test("An in-app confirmation is the local day of the chat")
+    func updateStampIsItsLocalDay() {
+        let newYork = calendar("America/New_York")
+        // 21:30 on Monday the 21st in New York is already the 22nd in UTC.
+        let lateChat = newYork.date(from: DateComponents(year: 2026, month: 9, day: 21, hour: 21, minute: 30))!
+        let day = StreakStore.confirmedDay(for: lateChat, calendar: newYork)
+        #expect(newYork.dateComponents([.month, .day, .hour], from: day)
+                == DateComponents(month: 9, day: 21, hour: 0))
+    }
+
+    @Test("No confirmation, no confirmed day")
+    func noConfirmedDay() {
+        #expect(StreakStore(defaults: freshDefaults("streak")).lastConfirmedDay == nil)
+    }
 }
 
 @MainActor
@@ -175,13 +210,26 @@ struct AchievementStoreTests {
 @MainActor
 @Suite("ReminderStore")
 struct ReminderStoreTests {
-    @Test("defaults: daily disabled at 6:00 PM, weekly nudges on")
+    @Test("defaults: every reminder off, daily time 6:00 PM")
     func defaults() {
         let store = ReminderStore(defaults: freshDefaults("rem"))
         #expect(store.enabled == false)
-        #expect(store.weeklyEnabled == true)
+        #expect(store.weeklyEnabled == false)
         #expect(store.hour == 18)
         #expect(store.minute == 0)
+    }
+
+    @Test("An upgraded install (no weekly key) reads weekly off, whatever its daily choice")
+    func upgradeReadsWeeklyOff() {
+        for daily in [true, false] {
+            let d = freshDefaults("rem")
+            d.set(daily, forKey: "engagement.reminder.enabled")
+            let store = ReminderStore(defaults: d)
+            #expect(store.enabled == daily)
+            #expect(store.weeklyEnabled == false)
+            // Nothing is written until the student chooses.
+            #expect(d.object(forKey: "engagement.reminder.weeklyEnabled") == nil)
+        }
     }
 
     @Test("persists changes across instances")

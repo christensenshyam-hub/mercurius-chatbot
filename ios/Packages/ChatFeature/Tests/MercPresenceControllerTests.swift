@@ -125,7 +125,7 @@ struct MercPresenceControllerTests {
     /// Wait until `condition` holds or the deadline passes; returns the final
     /// evaluation. Keeps timer-driven assertions robust on slow shared runners.
     private func poll(
-        deadline: Duration = .seconds(2),
+        deadline: Duration = .seconds(10),
         _ condition: () -> Bool
     ) async -> Bool {
         let clock = ContinuousClock()

@@ -50,12 +50,11 @@ struct ReminderEnablerTests {
         UserDefaults(suiteName: "test-enabler-\(UUID().uuidString)")!
     }
 
-    @Test("Denied permission reports false and changes nothing")
-    func denialLeavesPreferences() async {
+    @Test("Denied permission reports false and changes nothing", arguments: [ReminderEnabler.Kind.weekly, .daily])
+    func denialLeavesPreferences(kind: ReminderEnabler.Kind) async {
         let store = ReminderStore(defaults: freshDefaults())
-        store.weeklyEnabled = false
         let granted = await ReminderEnabler.enable(
-            store: store, scheduler: NotificationScheduler(),
+            kind, store: store, scheduler: NotificationScheduler(),
             streakStore: StreakStore(defaults: freshDefaults())
         )
         #expect(!granted)
@@ -63,14 +62,30 @@ struct ReminderEnablerTests {
         #expect(store.weeklyEnabled == false)
     }
 
-    @Test("A single-kind denial also leaves the default-on weekly preference alone")
-    func singleKindDenial() async {
+    @Test("A denial leaves a reminder the student already chose on")
+    func denialKeepsOtherChoice() async {
         let store = ReminderStore(defaults: freshDefaults())
+        store.weeklyEnabled = true
         let granted = await ReminderEnabler.enable(
-            [.daily], store: store, scheduler: NotificationScheduler(), streakStore: nil
+            .daily, store: store, scheduler: NotificationScheduler(), streakStore: nil
         )
         #expect(!granted)
         #expect(store.enabled == false)
         #expect(store.weeklyEnabled == true)
+    }
+
+    @Test("Turning everything off stores both preferences as false, not as missing keys")
+    func disableAll() {
+        let defaults = freshDefaults()
+        let store = ReminderStore(defaults: defaults)
+        store.enabled = true
+        store.weeklyEnabled = true
+        ReminderEnabler.disableAll(store: store, scheduler: NotificationScheduler())
+        #expect(store.enabled == false)
+        #expect(store.weeklyEnabled == false)
+        #expect(defaults.object(forKey: "engagement.reminder.enabled") as? Bool == false)
+        #expect(defaults.object(forKey: "engagement.reminder.weeklyEnabled") as? Bool == false)
+        let reloaded = ReminderStore(defaults: defaults)
+        #expect(!reloaded.enabled && !reloaded.weeklyEnabled)
     }
 }

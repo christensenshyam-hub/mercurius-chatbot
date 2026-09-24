@@ -22,6 +22,15 @@ struct OnboardingFlowRoutingTests {
         #expect(OnboardingFlow.stepAfterLimits(mode: .gateOnly) == nil)
     }
 
+    @Test("The under-13 and paused dead ends drop consent, so the reminder guard cancels behind them")
+    func deadEndsDropConsent() {
+        let dropping = OnboardingFlow.Step.allCases.filter(OnboardingFlow.dropsConsent)
+        #expect(dropping == [.underThirteen, .paused])
+        // An install that consented in an earlier launch but never finished
+        // the full flow reads version 0 again once it reaches a dead end.
+        #expect(AppEntryView.reminderReplan(consentVersion: 0, clearedThisLaunch: false) == .cancel)
+    }
+
     @Test("hasSeenOnboarding key is unchanged from 2.2.0")
     func storageKey() {
         #expect(OnboardingFlow.storageKey == "hasSeenOnboarding")

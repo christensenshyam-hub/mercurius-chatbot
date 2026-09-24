@@ -106,8 +106,7 @@ final class CurriculumProgressSync {
         progress.merge(
             completed: remoteState.completed.sorted(),
             mastered: remoteState.mastered.sorted(),
-            remoteVersion: remoteSnapshot.curriculumVersion,
-            remoteUpdatedAt: remoteState.updatedAt
+            remoteVersion: remoteSnapshot.curriculumVersion
         )
 
         // Compared against the server's ids as sent: when a curriculum
@@ -148,18 +147,17 @@ final class CurriculumProgressSync {
 
     /// Server items → the sets `merge` takes. A mastered lesson still counts
     /// as completed; any status this build doesn't know is ignored.
-    static func remoteState(_ dto: ProgressSnapshotDTO) -> (
-        completed: Set<String>, mastered: Set<String>, updatedAt: [String: Date]
-    ) {
+    ///
+    /// No completion dates: a row's `updatedAt` is when the server wrote it,
+    /// and for a row this device uploaded (every pre-2.3.0 lesson, on the
+    /// first sync) that is the upload time. Merged lessons stay undated, like
+    /// those lessons are on the device that finished them, so they never
+    /// count toward the weekly plan.
+    static func remoteState(_ dto: ProgressSnapshotDTO) -> (completed: Set<String>, mastered: Set<String>) {
         let lessonStatuses: Set<String> = [ProgressStatus.completed.rawValue, ProgressStatus.mastered.rawValue]
         let lessons = dto.lessons.filter { lessonStatuses.contains($0.status) }
         let units = dto.units.filter { $0.status == ProgressStatus.mastered.rawValue }
-        var updatedAt: [String: Date] = [:]
-        for lesson in lessons {
-            guard let date = lesson.updatedAt else { continue }
-            updatedAt[lesson.id] = min(updatedAt[lesson.id] ?? date, date)
-        }
-        return (Set(lessons.map(\.id)), Set(units.map(\.id)), updatedAt)
+        return (Set(lessons.map(\.id)), Set(units.map(\.id)))
     }
 
     /// The whole snapshot as PUT items, sorted so a request body is stable.

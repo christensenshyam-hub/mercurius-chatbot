@@ -47,6 +47,29 @@ func eventually(
 
 struct StubFailure: Error {}
 
+/// Hermetic `KeychainStore`, so a test's session resets never touch the
+/// host's Keychain.
+final class InMemoryKeychain: KeychainStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String: String] = [:]
+
+    func set(_ value: String, for key: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        storage[key] = value
+    }
+
+    func get(_ key: String) throws -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard let value = storage[key] else { throw Keychain.KeychainError.itemNotFound }
+        return value
+    }
+
+    func delete(_ key: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        storage.removeValue(forKey: key)
+    }
+}
+
 /// Records every call; answers with `remote` or throws the configured error.
 actor StubProgressRemote: ProgressSyncing {
     struct Put: Equatable {

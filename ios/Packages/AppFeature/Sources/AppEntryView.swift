@@ -10,7 +10,8 @@ import SettingsFeature
 /// the Home → AppShell handoff so that `RootView` can stay focused on
 /// bootstrap concerns (session resolve, container readiness). Always
 /// mounted once bootstrap is ready, so it also owns the reminder re-plan
-/// and the routing of tapped reminders.
+/// (which only schedules while consent is current) and the routing of
+/// tapped reminders.
 ///
 /// Three mutually exclusive states:
 ///
@@ -62,6 +63,25 @@ struct AppEntryView: View {
             && (ConsentGate.needsGate(storedVersion: consentVersion) || !hasSeenOnboarding)
     }
 
+    /// What a reminder re-plan does.
+    enum ReminderReplan: Equatable {
+        /// Plan from the stored preferences.
+        case plan
+        /// Cancel every pending reminder and schedule nothing.
+        case cancel
+    }
+
+    /// Pure consent guard for every reminder re-plan (covered by
+    /// AppEntryGateTests): reminders only run while the data-use agreement is
+    /// in force. Keyed on recorded consent rather than `showsGate`, because
+    /// "Your path" still shows the gate after consent is recorded and the
+    /// reminders chosen there must stand. The preferences themselves are
+    /// never cleared here, so a choice made before the gate appeared comes
+    /// back once the student agrees.
+    static func reminderReplan(consentVersion: Int, clearedThisLaunch: Bool) -> ReminderReplan {
+        clearedThisLaunch || !ConsentGate.needsGate(storedVersion: consentVersion) ? .plan : .cancel
+    }
+
     /// The gate decision for a launch, read from the same defaults
     /// `@AppStorage` reads (argument domain included).
     static func gateShowsAtLaunch(defaults: UserDefaults = .standard) -> Bool {
@@ -94,9 +114,9 @@ struct AppEntryView: View {
     @State private var scheduler = NotificationScheduler()
     @Environment(\.scenePhase) private var scenePhase
 
-    /// Whether iOS would still show its notification prompt (the reminder
-    /// card is only offered then). Nil until checked.
-    @State private var canAskForNotifications: Bool?
+    /// Where iOS stands on notifications, for the Home reminder card. Nil
+    /// until checked.
+    @State private var notificationPermission: ReminderCardStore.Permission?
 
     /// - Parameter resumeTab: the tab to reopen on this cold launch
     ///   (`LaunchResume`), or nil to start at Home.
@@ -167,16 +187,19 @@ struct AppEntryView: View {
                     env.lastActivityStore.touch()
                 }
                 // Permission may have changed in the iOS Settings app.
-                if phase == .active { Task { await refreshNotificationAsk() } }
+                if phase == .active { Task { await refreshNotificationPermission() } }
             }
             .onChange(of: env.streakStore.lastUpdatedAt) { _, _ in refreshReminders() }
             .onChange(of: env.progressStore.revision) { _, _ in refreshReminders() }
+            // Withdrawing consent cancels at once; agreeing re-plans.
+            .onChange(of: consentVersion) { _, _ in refreshReminders() }
+            .onChange(of: gateClearedThisLaunch) { _, _ in refreshReminders() }
             // Consent given in this launch: the launch hold skipped the
             // streak seed (it never fetches before consent), so run it now.
             // Entering the shell retries one that failed.
             .task(id: showsGate) {
                 guard !showsGate else { return }
-                await refreshNotificationAsk()
+                await refreshNotificationPermission()
                 await env.seedStreakIfNeeded()
             }
             .onChange(of: hasEnteredApp) { _, entered in
@@ -186,7 +209,7 @@ struct AppEntryView: View {
                         await env.seedStreakIfNeeded()
                     } else {
                         // Back on Home: the Progress hub may have asked already.
-                        await refreshNotificationAsk()
+                        await refreshNotificationPermission()
                     }
                 }
             }
@@ -198,6 +221,7 @@ struct AppEntryView: View {
             OnboardingFlow(
                 mode: hasSeenOnboarding ? .gateOnly : .full,
                 reminderStore: env.reminderStore,
+                scheduler: scheduler,
                 streakStore: env.streakStore,
                 reminderCardStore: env.reminderCardStore,
                 onStartLesson1: {
@@ -244,8 +268,10 @@ struct AppEntryView: View {
                 // gate (gate-only mode, since the first run already happened).
                 // The entry stop/tab are cleared too — otherwise a first-run
                 // "Start Lesson 1" would re-open Lesson 1 from "Chat with Merc"
-                // after re-consenting.
+                // after re-consenting. Withdrawal is a full deletion, so the
+                // reminders go too, not just while the gate shows.
                 onConsentWithdrawn: {
+                    ReminderEnabler.disableAll(store: env.reminderStore, scheduler: scheduler)
                     consentVersion = 0
                     gateClearedThisLaunch = false
                     hasEnteredApp = false
@@ -266,8 +292,10 @@ struct AppEntryView: View {
                     hasEnteredApp = true
                 },
                 showsReminderCard: ReminderCardStore.shows(
+                    weeklyEnabled: env.reminderStore.weeklyEnabled,
                     handled: env.reminderCardStore.isHandled,
-                    canAskPermission: canAskForNotifications == true
+                    onboardingComplete: hasSeenOnboarding,
+                    permission: notificationPermission
                 ),
                 onAcceptReminders: acceptReminders,
                 onDismissReminderCard: { env.reminderCardStore.markHandled() }
@@ -308,7 +336,7 @@ struct AppEntryView: View {
         Task {
             // Weekly only — the card promises twice a week, not a daily ping.
             _ = await ReminderEnabler.enable(
-                [.weekly],
+                .weekly,
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
@@ -319,17 +347,22 @@ struct AppEntryView: View {
 
     // MARK: - Reminders + routing
 
-    private func refreshNotificationAsk() async {
-        canAskForNotifications = await ReminderCardStore.canAskForNotifications()
+    private func refreshNotificationPermission() async {
+        notificationPermission = await ReminderCardStore.notificationPermission()
     }
 
     private func refreshReminders() {
-        ReminderEnabler.refresh(
-            store: env.reminderStore,
-            scheduler: scheduler,
-            streakStore: env.streakStore,
-            nextLessonId: env.progressStore.frontierLessonId
-        )
+        switch Self.reminderReplan(consentVersion: consentVersion, clearedThisLaunch: gateClearedThisLaunch) {
+        case .plan:
+            ReminderEnabler.refresh(
+                store: env.reminderStore,
+                scheduler: scheduler,
+                streakStore: env.streakStore,
+                nextLessonId: env.progressStore.frontierLessonId
+            )
+        case .cancel:
+            scheduler.cancel()
+        }
     }
 
     /// A lesson was asked for while the shell isn't up: go in on the

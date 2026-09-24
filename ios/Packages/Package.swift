@@ -124,6 +124,11 @@ let package = Package(
             dependencies: ["DesignSystem"],
             path: "MercuriusActivity/Sources"
         ),
+        .testTarget(
+            name: "MercuriusActivityTests",
+            dependencies: ["MercuriusActivity"],
+            path: "MercuriusActivity/Tests"
+        ),
 
         // MARK: AppFeature
         .target(
@@ -142,7 +147,8 @@ let package = Package(
         ),
         .testTarget(
             name: "AppFeatureTests",
-            dependencies: ["AppFeature", "CurriculumFeature", "NetworkingKit", "PersistenceKit", "SettingsFeature"],
+            dependencies: ["AppFeature", "ChatFeature", "CurriculumFeature", "EngagementFeature",
+                           "NetworkingKit", "PersistenceKit", "SettingsFeature"],
             path: "AppFeature/Tests"
         ),
 

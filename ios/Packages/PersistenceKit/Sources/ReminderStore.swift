@@ -13,9 +13,10 @@ public final class ReminderStore {
     public var enabled: Bool {
         didSet { defaults.set(enabled, forKey: Key.enabled) }
     }
-    /// The weekly nudges (Wednesday + Sunday). On unless the user turned it
-    /// off — inert until notification permission is granted, so defaulting
-    /// on never schedules anything by itself.
+    /// The weekly nudges (Wednesday + Sunday). Off until the student turns
+    /// them on (Home's card, onboarding's "Your path", or the Progress hub).
+    /// A missing key reads as off, so no install — including one upgraded
+    /// from before the nudges existed — gets them without choosing them.
     public var weeklyEnabled: Bool {
         didSet { defaults.set(weeklyEnabled, forKey: Key.weeklyEnabled) }
     }
@@ -39,9 +40,7 @@ public final class ReminderStore {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.enabled = defaults.bool(forKey: Key.enabled)
-        self.weeklyEnabled = defaults.object(forKey: Key.weeklyEnabled) == nil
-            ? true
-            : defaults.bool(forKey: Key.weeklyEnabled)
+        self.weeklyEnabled = defaults.bool(forKey: Key.weeklyEnabled)
         // Default to 6:00 PM if the user has never set a time.
         if defaults.object(forKey: Key.hour) != nil {
             self.hour = defaults.integer(forKey: Key.hour)

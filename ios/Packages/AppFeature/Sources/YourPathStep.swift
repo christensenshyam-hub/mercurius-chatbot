@@ -10,12 +10,11 @@ import PersistenceKit
 /// CurriculumFeature.
 struct YourPathStep: View {
     let reminderStore: ReminderStore
+    let scheduler: NotificationScheduler
     let streakStore: StreakStore
     let reminderCardStore: ReminderCardStore
     let onStartLesson1: () -> Void
     let onJustChat: () -> Void
-
-    @State private var scheduler = NotificationScheduler()
 
     private var unit: CurriculumFeature.Unit? { MercuriusCurriculum.units.first }
 

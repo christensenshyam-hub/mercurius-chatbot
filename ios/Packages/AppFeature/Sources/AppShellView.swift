@@ -100,9 +100,13 @@ struct AppShellView: View {
     /// window has finished dismissing.
     @State private var queuedUnitTest: CurriculumFeature.Unit?
 
-    /// A completion just earned the App Store review prompt; it's asked once
-    /// the lesson (and any unit check) has closed.
-    @State private var reviewPromptDue = false
+    /// A completion earned the App Store review prompt; it's asked once the
+    /// lesson (and any unit check) has closed.
+    @State private var reviewPrompt = ReviewPromptTiming()
+
+    /// Bumped to close ChatView's own sheet (Settings, the quiz), which this
+    /// view can't reach otherwise.
+    @State private var chatSheetsDismissToken = 0
 
     /// The Live Activity is showing a finished unit's lingering win, which
     /// leaving the lesson must not clear.
@@ -223,7 +227,8 @@ struct AppShellView: View {
         // just the SPM test host (where the lesson window isn't presented).
 #if os(iOS)
         .fullScreenCover(item: $activeLesson, onDismiss: lessonWindowDismissed) { lesson in
-            let next = MercuriusCurriculum.nextStop(after: lesson.id)
+            // One resolved value for the celebration's label AND its action.
+            let next = Self.resolvedNextStop(after: lesson.id, progress: progress)
             let parentUnit = parentUnit(of: lesson.id)
             CurriculumLessonView(
                 lessonId: lesson.id,
@@ -361,21 +366,31 @@ struct AppShellView: View {
     private func presentPendingLesson() {
         guard let lessonId = pendingLessonId else { return }
         pendingLessonId = nil
+        let delay = Self.pendingLessonDelay(closingUnitTest: activeUnitTest != nil, fromTab: selectedTab)
         selectedTab = .curriculum
         guard let unit = MercuriusCurriculum.unit(containingLesson: lessonId),
               let lesson = unit.lessons.first(where: { $0.id == lessonId }),
               progress.isLessonUnlocked(lesson, in: unit),
               activeLesson?.id != lessonId
         else { return }
-        // Only one presentation can be up on the TabView; clear the way.
+        // Only one presentation can be up at a time; clear the way —
+        // ChatView's own sheet included.
         showChatHistory = false
         showProgress = false
-        let closingUnitTest = activeUnitTest != nil
+        chatSheetsDismissToken += 1
         activeUnitTest = nil
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(closingUnitTest ? 600 : 250))
+            try? await Task.sleep(for: delay)
             handleStartLesson(lesson)
         }
+    }
+
+    /// How long `presentPendingLesson` waits before presenting. A sheet
+    /// ChatView presented (Settings, the quiz) hangs off the Chat tab's
+    /// content, not this TabView, so its close has to finish first, like a
+    /// unit check's. From the Curriculum tab no such sheet can be up.
+    static func pendingLessonDelay(closingUnitTest: Bool, fromTab: Tab) -> Duration {
+        closingUnitTest || fromTab != .curriculum ? .milliseconds(600) : .milliseconds(250)
     }
 
     /// Remember the destination tab for the cold-launch resume.
@@ -431,7 +446,7 @@ struct AppShellView: View {
             achievementStore: achievementStore,
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
                                   streakStore, achievementStore, progress, progressSync,
-                                  onConsentWithdrawn] in
+                                  reminderStore, scheduler, onConsentWithdrawn] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -446,6 +461,10 @@ struct AppShellView: View {
                         achievementStore: achievementStore,
                         progress: progress,
                         progressSync: progressSync,
+                        // Deleting the data (or withdrawing consent) turns
+                        // every reminder off.
+                        reminderStore: reminderStore,
+                        scheduler: scheduler,
                         // The server-side erasure behind "Delete my data".
                         sessionDeleter: apiClient,
                         onConsentWithdrawn: onConsentWithdrawn
@@ -455,7 +474,8 @@ struct AppShellView: View {
             headerAccessory: {
                 AnyView(StreakChip(streakStore: streakStore, action: { showProgress = true }))
             },
-            onGoHome: onGoHome
+            onGoHome: onGoHome,
+            dismissSheetsToken: chatSheetsDismissToken
         )
     }
 
@@ -620,12 +640,17 @@ struct AppShellView: View {
     /// Ask for an App Store review once nothing is covering the shell. The
     /// system decides whether the sheet actually shows.
     private func presentReviewPromptIfDue() {
-        guard reviewPromptDue, activeLesson == nil, activeUnitTest == nil, queuedUnitTest == nil else { return }
-        reviewPromptDue = false
+        guard reviewPrompt.startIfClear(covered: isShellCovered) else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(600))
-            requestReview()
+            if reviewPrompt.askAfterSettling(covered: isShellCovered) {
+                requestReview()
+            }
         }
+    }
+
+    private var isShellCovered: Bool {
+        activeLesson != nil || activeUnitTest != nil || queuedUnitTest != nil
     }
 
     private static var isUITesting: Bool {
@@ -644,7 +669,7 @@ struct AppShellView: View {
         // Only a first completion counts toward the review prompt (the 3rd
         // and 10th); UI tests never ask.
         if isFirstCompletion, reviewPromptStore.recordCompletion(), !Self.isUITesting {
-            reviewPromptDue = true
+            reviewPrompt.earn()
         }
         achievementStore.award(AchievementCatalog.explorer)
         // Push the fresh count into the Live Activity (after markCompleted so
@@ -700,6 +725,23 @@ struct AppShellView: View {
         MercuriusCurriculum.unit(containingLesson: lessonId)
     }
 
+    /// The celebration's next stop, resolved against progress so it never
+    /// offers a unit check that is still locked. That happens when a unit's
+    /// last lesson is done but an earlier one isn't (legacy data from builds
+    /// that marked lessons complete on open): the student goes to that gap
+    /// instead, or, with none to name, "Back to lessons" leads.
+    @MainActor
+    static func resolvedNextStop(
+        after lessonId: String,
+        progress: CurriculumProgressStore
+    ) -> MercuriusCurriculum.PathStop? {
+        guard let stop = MercuriusCurriculum.nextStop(after: lessonId) else { return nil }
+        guard case .unitTest(let unit) = stop, !progress.isUnitTestUnlocked(unit) else { return stop }
+        return unit.lessons
+            .first { $0.id != lessonId && !progress.isCompleted($0.id) }
+            .map { .lesson($0) }
+    }
+
     /// The path's next stop in the celebration's plain-value form
     /// (ChatFeature can't see the curriculum).
     static func celebrationStop(_ stop: MercuriusCurriculum.PathStop) -> LessonCompleteOverlay.NextStop {
@@ -742,5 +784,36 @@ struct AppShellView: View {
             return "UNIT \(unit.number)"
         }
         return "CURRICULUM"
+    }
+}
+
+extension AppShellView {
+    /// When an earned review prompt is asked: once every cover has closed,
+    /// after a settle delay. The covers are checked again after the delay —
+    /// the system sheet would land on anything presented meanwhile (a path
+    /// node tapped, a reminder's lesson) — and a prompt that finds one waits
+    /// for that cover to close instead.
+    struct ReviewPromptTiming: Equatable {
+        private(set) var isDue = false
+
+        /// A first completion earned it.
+        mutating func earn() {
+            isDue = true
+        }
+
+        /// A cover closed: whether to start the settle delay now.
+        mutating func startIfClear(covered: Bool) -> Bool {
+            guard isDue, !covered else { return false }
+            isDue = false
+            return true
+        }
+
+        /// The settle delay is over: whether to ask now. A cover that went up
+        /// during it re-arms the prompt for when that cover closes.
+        mutating func askAfterSettling(covered: Bool) -> Bool {
+            guard covered else { return true }
+            isDue = true
+            return false
+        }
     }
 }

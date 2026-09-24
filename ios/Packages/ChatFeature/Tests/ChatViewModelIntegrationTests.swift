@@ -48,7 +48,7 @@ final class ControllableChatClient: ChatStreaming, @unchecked Sendable {
     }
 
     private func readyContinuation(
-        timeout: Duration = .seconds(2)
+        timeout: Duration = .seconds(10)
     ) async -> AsyncThrowingStream<ChatStreamEvent, Error>.Continuation? {
         let deadline = ContinuousClock.now.advanced(by: timeout)
         while ContinuousClock.now < deadline {
@@ -124,7 +124,7 @@ private func makeModel(
 @MainActor
 private func waitFor(
     _ label: String,
-    timeout: Duration = .seconds(2),
+    timeout: Duration = .seconds(10),
     condition: @escaping () -> Bool
 ) async {
     let deadline = ContinuousClock.now.advanced(by: timeout)

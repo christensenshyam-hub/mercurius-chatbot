@@ -64,6 +64,26 @@ public final class StreakStore {
         return Calendar.current.isDateInToday(lastUpdatedAt)
     }
 
+    /// The start (in the local calendar) of the day the streak was last
+    /// confirmed on — the day the server counts its one-day grace gap from.
+    /// Nil when nothing was ever confirmed.
+    public var lastConfirmedDay: Date? {
+        lastUpdatedAt.map { Self.confirmedDay(for: $0, calendar: .current) }
+    }
+
+    /// `update` stamps the moment of the chat, read in `calendar`. `seed`
+    /// stamps UTC midnight of the server's `last_session_date`, which west of
+    /// UTC reads locally as the evening before — so a stamp at exactly UTC
+    /// midnight is taken as that UTC date.
+    nonisolated public static func confirmedDay(for stamp: Date, calendar: Calendar) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        guard stamp == utc.startOfDay(for: stamp),
+              let day = calendar.date(from: utc.dateComponents([.year, .month, .day], from: stamp))
+        else { return calendar.startOfDay(for: stamp) }
+        return calendar.startOfDay(for: day)
+    }
+
     /// Record the latest authoritative streak from the server. No-op for
     /// non-positive values (the server's minimum is 1).
     ///

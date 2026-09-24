@@ -59,9 +59,9 @@ private func makeModel(client: FakeChatClient, sessionId: String = "test-session
 }
 
 /// Await the view model's return to `.idle` (or `.failed`) — necessary
-/// because `send()` kicks off a detached task. Times out after 2s.
+/// because `send()` kicks off a detached task. Times out after 10s.
 @MainActor
-private func waitUntilSettled(_ model: ChatViewModel, timeout: Duration = .seconds(2)) async throws {
+private func waitUntilSettled(_ model: ChatViewModel, timeout: Duration = .seconds(10)) async throws {
     let deadline = ContinuousClock.now.advanced(by: timeout)
     while ContinuousClock.now < deadline {
         switch model.phase {

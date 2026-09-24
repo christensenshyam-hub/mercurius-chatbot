@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import PersistenceKit
 @testable import EngagementFeature
 
 /// Pins the reminder plan: rotating Merc copy, streak-defense selection, and
@@ -102,6 +103,55 @@ struct ReminderPlannerTests {
         #expect(week.count == 7)
         // 14 daily + 2 weekly stays far under iOS's 64 pending-request cap.
         #expect(plan(streak: 3).count + ReminderPlanner.weeklyPlan().count <= 64)
+    }
+
+    // MARK: - Streak horizon
+
+    private func day(_ d: Int, hour: Int = 0, in calendar: Calendar? = nil) -> Date {
+        (calendar ?? self.calendar).date(from: DateComponents(year: 2026, month: 7, day: d, hour: hour))!
+    }
+
+    @Test("The daily window runs through the last day a chat still saves the streak")
+    func dailyHorizonDays() {
+        // Confirmed Monday the 6th: a chat Tuesday or Wednesday continues it.
+        let monday = day(6)
+        #expect(ReminderPlanner.dailyHorizon(now: day(6, hour: 12), streakDay: monday, calendar: calendar) == 3)
+        #expect(ReminderPlanner.dailyHorizon(now: day(7, hour: 9), streakDay: monday, calendar: calendar) == 2)
+        #expect(ReminderPlanner.dailyHorizon(now: day(8, hour: 23), streakDay: monday, calendar: calendar) == 1)
+        #expect(ReminderPlanner.dailyHorizon(now: day(9, hour: 0), streakDay: monday, calendar: calendar) == 0)
+        #expect(ReminderPlanner.dailyHorizon(now: day(30), streakDay: monday, calendar: calendar) == 0)
+    }
+
+    @Test("A Monday chat plans Tuesday and Wednesday only — nothing once the streak has lapsed")
+    func streakDayBoundsThePlan() {
+        let p = ReminderPlanner.plan(now: day(6, hour: 12), calendar: calendar, hour: 18, minute: 0,
+                                     streak: 4, streakDay: day(6), chattedToday: true)
+        #expect(p.map(\.fireDate.day) == [7, 8])
+        #expect(p[0].body.contains("4-day streak"))
+
+        // With the weekly nudges on, Wednesday's rotation slot yields to the nudge.
+        let quiet = ReminderPlanner.plan(now: day(6, hour: 12), calendar: calendar, hour: 18, minute: 0,
+                                         streak: 4, streakDay: day(6), chattedToday: true,
+                                         quietWeekdays: ReminderPlanner.weeklyWeekdays)
+        #expect(quiet.map(\.fireDate.day) == [7])
+
+        // Opened again on Thursday without chatting: the streak is gone.
+        let lapsed = ReminderPlanner.plan(now: day(9, hour: 10), calendar: calendar, hour: 18, minute: 0,
+                                          streak: 4, streakDay: day(6), chattedToday: false)
+        #expect(lapsed.isEmpty)
+    }
+
+    @Test("A launch seed's UTC-midnight stamp doesn't cut the last save day west of UTC")
+    func seedStampKeepsLastSaveDay() {
+        var newYork = Calendar(identifier: .gregorian)
+        newYork.timeZone = TimeZone(identifier: "America/New_York")!
+        // `seed` for last_session_date 2026-07-06 stamps 00:00 UTC — 20:00
+        // on Sunday the 5th in New York.
+        let seedStamp = calendar.date(from: DateComponents(year: 2026, month: 7, day: 6))!
+        let streakDay = StreakStore.confirmedDay(for: seedStamp, calendar: newYork)
+        let p = ReminderPlanner.plan(now: day(6, hour: 12, in: newYork), calendar: newYork, hour: 18, minute: 0,
+                                     streak: 2, streakDay: streakDay, chattedToday: false)
+        #expect(p.map(\.fireDate.day) == [6, 7, 8])
     }
 
     // MARK: - Weekly nudges

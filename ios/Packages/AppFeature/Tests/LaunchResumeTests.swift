@@ -113,11 +113,49 @@ struct LaunchWorkTests {
 @MainActor
 struct ReminderCardStoreTests {
 
-    @Test("Shown only while unanswered and while iOS would still ask for permission")
-    func visibility() {
-        #expect(ReminderCardStore.shows(handled: false, canAskPermission: true))
-        #expect(!ReminderCardStore.shows(handled: true, canAskPermission: true))
-        #expect(!ReminderCardStore.shows(handled: false, canAskPermission: false))
+    struct Row: Sendable, CustomTestStringConvertible {
+        let weeklyEnabled: Bool
+        let handled: Bool
+        let onboardingComplete: Bool
+        let permission: ReminderCardStore.Permission?
+        let shows: Bool
+        var testDescription: String {
+            "weekly \(weeklyEnabled), handled \(handled), onboarded \(onboardingComplete), "
+                + "permission \(permission.map { "\($0)" } ?? "unknown") → \(shows ? "shown" : "hidden")"
+        }
+    }
+
+    @Test("Offered once to an onboarded student whose weekly nudges are off, unless iOS refused notifications",
+          arguments: [
+              // A 2.2 install that never allowed notifications.
+              Row(weeklyEnabled: false, handled: false, onboardingComplete: true, permission: .notDetermined, shows: true),
+              // A 2.2 install that allowed them, then turned the daily reminder off: asked, not subscribed.
+              Row(weeklyEnabled: false, handled: false, onboardingComplete: true, permission: .allowed, shows: true),
+              Row(weeklyEnabled: false, handled: false, onboardingComplete: true, permission: .denied, shows: false),
+              Row(weeklyEnabled: false, handled: false, onboardingComplete: true, permission: nil, shows: false),
+              // Already on (Progress hub, "Your path"): nothing to offer.
+              Row(weeklyEnabled: true, handled: false, onboardingComplete: true, permission: .allowed, shows: false),
+              // "Remind me", "Not now", or answered on "Your path".
+              Row(weeklyEnabled: false, handled: true, onboardingComplete: true, permission: .notDetermined, shows: false),
+              Row(weeklyEnabled: false, handled: true, onboardingComplete: true, permission: .allowed, shows: false),
+              Row(weeklyEnabled: false, handled: false, onboardingComplete: false, permission: .notDetermined, shows: false),
+          ])
+    func visibility(_ row: Row) {
+        #expect(ReminderCardStore.shows(
+            weeklyEnabled: row.weeklyEnabled,
+            handled: row.handled,
+            onboardingComplete: row.onboardingComplete,
+            permission: row.permission
+        ) == row.shows)
+    }
+
+    @Test("'Not now' persists as handled, so the card never comes back")
+    func notNowPersists() {
+        let defaults = freshDefaults("card.notNow")
+        ReminderCardStore(defaults: defaults).markHandled()
+        let reloaded = ReminderCardStore(defaults: defaults)
+        #expect(!ReminderCardStore.shows(weeklyEnabled: false, handled: reloaded.isHandled,
+                                         onboardingComplete: true, permission: .notDetermined))
     }
 
     @Test("Handled persists across instances")

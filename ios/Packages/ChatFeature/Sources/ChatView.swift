@@ -61,6 +61,11 @@ public struct ChatView: View {
     /// previews / tests / any future non-TabView host can omit it.
     private let onGoHome: (@MainActor () -> Void)?
 
+    /// Each change closes whichever sheet this view is presenting, so a host
+    /// about to present something of its own (a tapped reminder's lesson)
+    /// isn't blocked by a sheet it can't otherwise reach.
+    private let dismissSheetsToken: Int
+
     public init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
@@ -84,6 +89,7 @@ public struct ChatView: View {
         self.settingsPresenter = settingsPresenter
         self.headerAccessory = headerAccessory
         self.onGoHome = onGoHome
+        self.dismissSheetsToken = 0
     }
 
     /// Alternate initializer used by `AppShellView`: share an existing
@@ -96,7 +102,8 @@ public struct ChatView: View {
         achievementStore: AchievementStore? = nil,
         settingsPresenter: (@MainActor () -> AnyView)? = nil,
         headerAccessory: (@MainActor () -> AnyView)? = nil,
-        onGoHome: (@MainActor () -> Void)? = nil
+        onGoHome: (@MainActor () -> Void)? = nil,
+        dismissSheetsToken: Int = 0
     ) {
         _model = State(initialValue: model)
         self.apiClient = apiClient
@@ -105,6 +112,7 @@ public struct ChatView: View {
         self.settingsPresenter = settingsPresenter
         self.headerAccessory = headerAccessory
         self.onGoHome = onGoHome
+        self.dismissSheetsToken = dismissSheetsToken
     }
 
     public var body: some View {
@@ -185,6 +193,7 @@ public struct ChatView: View {
                 triggerEncourage()
             }
         }
+        .onChange(of: dismissSheetsToken) { _, _ in activeSheet = nil }
     }
 
     private func dismissChatInputHint() {

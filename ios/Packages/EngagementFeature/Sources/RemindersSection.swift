@@ -3,8 +3,9 @@ import DesignSystem
 import PersistenceKit
 
 /// Reminder controls for the Progress hub and onboarding: the weekly nudges
-/// and the daily streak reminder (+ its time). Both switches go through
-/// `ReminderEnabler`, which asks for notification permission on enable.
+/// and the daily streak reminder (+ its time). Each switch turns on only its
+/// own reminder, through `ReminderEnabler`, which asks for notification
+/// permission on enable.
 /// Self-contained in EngagementFeature so it doesn't pull SettingsFeature
 /// into the dependency.
 public struct RemindersSection: View {
@@ -19,9 +20,9 @@ public struct RemindersSection: View {
 
     @Environment(\.scenePhase) private var scenePhase
     /// Whether iOS currently lets Mercurius post notifications. A switch only
-    /// reads ON when its preference is set AND delivery is possible — weekly
-    /// nudges default on, and a never-asked or denied user must not see an ON
-    /// switch that delivers nothing.
+    /// reads ON when its preference is set AND delivery is possible — a
+    /// student who turned notifications off in iOS Settings must not see an
+    /// ON switch that delivers nothing.
     @State private var authorized = false
     @State private var permissionDenied = false
     /// Switches whose permission request is in flight. They stay ON meanwhile
@@ -123,7 +124,7 @@ public struct RemindersSection: View {
         pending.insert(kind)
         Task {
             let granted = await ReminderEnabler.enable(
-                [kind], store: store, scheduler: scheduler,
+                kind, store: store, scheduler: scheduler,
                 streakStore: streakStore, nextLessonId: nextLessonId
             )
             authorized = granted

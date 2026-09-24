@@ -77,7 +77,7 @@ struct LockCardView: View {
                 .tracking(-0.1)
                 .foregroundStyle(theme.sub.resolved(scheme))
                 .lineLimit(1)
-            state.metaLine(for: effectivePhase)
+            state.metaLine(for: effectivePhase, compact: true)
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(-0.1)
                 .foregroundStyle(theme.sub.resolved(scheme).opacity(0.85))

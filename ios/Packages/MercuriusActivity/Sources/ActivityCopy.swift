@@ -28,12 +28,16 @@ extension LearningActivityAttributes.ContentState {
 
     /// The countdown is the ONLY live value — a system timer from
     /// `deadline`, never a pre-formatted string. Hidden when stale.
-    func metaLine(for phase: Phase) -> Text {
+    /// `compact` is the lock card's short form, so the countdown isn't
+    /// truncated off its narrow text column.
+    func metaLine(for phase: Phase, compact: Bool = false) -> Text {
         switch phase {
         case .active:
-            return Text("\(lessonsLeftPhrase) · ")
+            let phrase = ActivityMetaCopy.lessonsLeftPhrase(
+                lessonsLeft: lessonsToLevel, unitNumber: unitNumber, compact: compact)
+            return Text(phrase + ActivityMetaCopy.separator)
                 + Text(timerInterval: countdownRange, countsDown: true)
-                + Text(" left")
+                + Text(ActivityMetaCopy.countdownSuffix)
         case .completed:
             return Text(unitNumber > 0 ? "Unit \(unitNumber) complete" : "All lessons done")
         case .stale:
@@ -41,17 +45,6 @@ extension LearningActivityAttributes.ContentState {
         case .error:
             return Text("Check your connection")
         }
-    }
-
-    private var lessonsLeftPhrase: String {
-        let left = max(lessonsToLevel, 0)
-        let unit = unitNumber > 0 ? "Unit \(unitNumber)" : nil
-        if left == 0 {
-            // Replaying a lesson in a unit that's already finished.
-            return unit.map { "\($0) complete" } ?? "All lessons done"
-        }
-        let count = left == 1 ? "1 lesson left" : "\(left) lessons left"
-        return unit.map { "\(count) in \($0)" } ?? count
     }
 }
 #endif

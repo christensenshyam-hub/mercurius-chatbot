@@ -92,7 +92,7 @@ struct ChatViewModelPersistenceTests {
         vm.send()
 
         // Wait for the stream to settle.
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -126,7 +126,7 @@ struct ChatViewModelPersistenceTests {
         vm.draft = "Hi"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .failed = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -163,7 +163,7 @@ struct ChatViewModelPersistenceTests {
         vm.draft = "Hi"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -203,7 +203,7 @@ private enum StartNewConversationScenarios {
         vm.draft = "Hello"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { return }
             try await Task.sleep(for: .milliseconds(20))

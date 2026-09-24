@@ -2,13 +2,13 @@ import Foundation
 
 /// Plans the reminder notifications:
 ///
-/// - **Daily** — the next two weeks of one-off reminders: rotating Merc-voiced
-///   copy, with the FIRST upcoming slot upgraded to a streak-defense line when
-///   there's a live streak to protect. A repeating trigger can only ever say
-///   the same sentence and can't know about the streak; planning a rolling
+/// - **Daily** — one-off reminders through the last day a chat can still save
+///   the streak: rotating Merc-voiced copy, with the FIRST upcoming slot
+///   upgraded to a streak-defense line. A repeating trigger can only ever say
+///   the same sentence and can't know about the streak; planning a short
 ///   window (re-planned on every launch / foreground / streak change) lets the
-///   copy rotate, keeps the streak number accurate, and means a user who stops
-///   opening the app stops getting daily pings once the window runs out.
+///   copy rotate, keeps the streak number accurate, and means the pings stop
+///   when the streak lapses even if the app is never opened again.
 /// - **Weekly** — two fixed nudges (Wednesday evening, Sunday evening) on
 ///   repeating triggers. They keep going while the user is away — that's their
 ///   job — so they're capped at two a week and turned off with one switch.
@@ -89,11 +89,31 @@ public enum ReminderPlanner {
         "Your \(streak)-day streak is on the line! A two-minute chat with Merc saves it."
     }
 
+    /// The server keeps a streak through one missed day: a chat up to two
+    /// days after the last one continues it (`diffDays <= 2` in
+    /// `db.updateStreak`).
+    static let streakGraceDays = 2
+
+    /// How many days, starting today, the daily reminders may cover: through
+    /// the last day a chat still saves the streak confirmed on `streakDay`.
+    /// 0 once that day has passed.
+    public static func dailyHorizon(now: Date, streakDay: Date, calendar: Calendar = .current) -> Int {
+        let today = calendar.startOfDay(for: now)
+        guard let lastSaveDay = calendar.date(byAdding: .day, value: streakGraceDays,
+                                              to: calendar.startOfDay(for: streakDay)),
+              let days = calendar.dateComponents([.day], from: today, to: lastSaveDay).day
+        else { return 0 }
+        return max(days + 1, 0)
+    }
+
     /// Build the daily plan.
     ///
     /// - Parameters:
     ///   - streak: the live, server-confirmed streak to defend, or `nil` when
     ///     there's nothing at risk (no streak, or the cache isn't fresh).
+    ///   - streakDay: the day that streak was last confirmed on. The plan ends
+    ///     with the last day a chat can still save it (`dailyHorizon`), so a
+    ///     lapsed streak gets no more pings. The scheduler always passes it.
     ///   - chattedToday: today's slot is dropped when the user already chatted
     ///     (that day is saved — pinging them after the fact reads as noise),
     ///     and the defense line moves to the first future slot.
@@ -106,14 +126,18 @@ public enum ReminderPlanner {
         hour: Int,
         minute: Int,
         streak: Int?,
+        streakDay: Date? = nil,
         chattedToday: Bool,
         horizonDays: Int = 14,
         quietWeekdays: Set<Int> = []
     ) -> [PlannedReminder] {
         var reminders: [PlannedReminder] = []
         var defensePending = streak != nil
+        let days = streakDay.map {
+            min(horizonDays, dailyHorizon(now: now, streakDay: $0, calendar: calendar))
+        } ?? horizonDays
 
-        for offset in 0..<horizonDays {
+        for offset in 0..<max(days, 0) {
             guard let day = calendar.date(byAdding: .day, value: offset, to: now),
                   let fire = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
             else { continue }

@@ -55,9 +55,26 @@ struct CurriculumProgressSyncTests {
         #expect(!store.isCompleted("u1_l3"), "unknown statuses are ignored")
         #expect(store.isUnitMastered("unit_1"))
         #expect(!store.isUnitMastered("unit_2"), "only a mastered unit is mastery")
-        #expect(store.completedAt("u1_l1") == at)
+        #expect(store.completedAt("u1_l1") == nil, "a row's updatedAt is not a completion date")
         #expect(await remote.fetches == ["sid-1"])
         #expect(await remote.puts.isEmpty)
+    }
+
+    @Test("After a reinstall, lessons the device uploaded this week don't count as done this week")
+    func reuploadedLessonsStayUndated() async {
+        // The first 2.3.0 launch pushed legacy lessons, so the server stamped
+        // them with the upload time — this week.
+        let uploadedAt = Date()
+        let remote = StubProgressRemote(remote: ProgressSnapshotDTO(
+            curriculumVersion: MercuriusCurriculum.version,
+            lessons: [.lesson("u1_l1", at: uploadedAt), .lesson("u1_l2", at: uploadedAt),
+                      .lesson("u1_l3", at: uploadedAt)]
+        ))
+        let store = makeStore()
+        await makeSync(store, remote).pullOnLaunch()
+
+        #expect(store.totalCompleted() == 3)
+        #expect(WeeklyPlan.compute(progress: store, now: uploadedAt).done == 0)
     }
 
     @Test("When the device holds lessons the server lacks, the pull PUTs the merged snapshot exactly once")
