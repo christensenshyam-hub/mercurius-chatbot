@@ -123,8 +123,12 @@ default; `0` refuses everything.
 | `SESSION_DAILY_IMAGES` | image uploads per session | `20` |
 | `IP_DAILY_USD` | Anthropic spend per client IP, summed over its sessions | `10` |
 | `IP_DAILY_NEW_SESSIONS` | new session ids per client IP (curbs id rotation) | `60` |
+| `IP_DAILY_IMAGES` | image uploads per client IP per day, summed over sessions | `200` |
+| `IP_DAILY_IMAGE_BYTES` | image bytes a client IP may store per day | `524288000` |
 | `IP_MAX_INFLIGHT` | concurrent Claude calls per client IP | `40` |
 | `MAX_INFLIGHT` | concurrent Claude calls for the whole process; beyond it requests get `503 busy`, not a queue | `80` |
+| `HELPER_MODEL` | model for the summarizing helpers (quiz, report card, concept map, briefing); the tutor/grader/fact-check/analyze stay on the tutor model in `server.js` | `claude-haiku-4-5` |
+| `EVAL_EXPOSE_USAGE` | eval servers only — puts settled usage on the SSE `complete` frame so `scripts/eval-pacing.mjs` can prove cache hits. Never set in production. | unset |
 
 ### Removed variables
 
