@@ -458,10 +458,7 @@
 
       '  </div>',
       '  <div class="merc-sidebar-footer">',
-      '    <div class="merc-display-name-row" id="merc-display-name-row">',
-      '      <span class="merc-display-name" id="merc-display-name">Add your name</span>',
-      '      <button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>',
-      '    </div>',
+      // Display-name UI removed (audit P0-D): no name is collected.
       '    <div class="merc-streak-badge merc-hidden" id="merc-header-streak"><span id="merc-streak-val"></span> day streak</div>',
       '    <button class="merc-info-btn" id="merc-btn-info">About Mercurius \u2160</button>',
       '  </div>',
@@ -535,8 +532,7 @@
       '    </div>',
       '    <div class="merc-onboard-step" data-step="2">',
       '      <h2>One Last Thing</h2>',
-      '      <p>Add your name so we can personalize your experience. (Completely optional.)</p>',
-      '      <input class="merc-onboard-name-input" id="merc-onboard-name" type="text" placeholder="Your first name or nickname" maxlength="30">',
+      '      <p>No sign-up, no name, no email — what you type stays private. Ready when you are.</p>',
       '    </div>',
       '    <div class="merc-onboard-footer">',
       '      <div class="merc-onboard-dots">',

@@ -40,6 +40,8 @@ const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = 
 const { pickModel } = require('./lib/modelAllowlist');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
+const spendCap = require('./lib/spendCap');
+const killSwitch = require('./lib/killSwitch');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
@@ -1038,6 +1040,10 @@ const V2_STATIC_SYSTEM =
 // Background memory extraction — runs after each response, non-blocking
 // ---------------------------------------------------------------------------
 async function extractAndSaveMemories(sessionId, userMessage, assistantReply, mode) {
+  // This background call fires on EVERY chat turn (doubling per-turn cost), so
+  // it is NOT exempt from the kill switch or the daily spend ceiling — skip it
+  // when Claude is disabled or over budget.
+  if (killSwitch.isKilled() || spendCap.isCeilingExceeded()) return;
   try {
     const memoryPrompt = `Analyze this student-AI exchange and extract key memories to store for future sessions.
 
@@ -1062,6 +1068,7 @@ Example: [{"type":"interest","content":"AI in healthcare diagnostics"},{"type":"
         max_tokens: 200,
         messages: [{ role: 'user', content: memoryPrompt }],
       });
+      spendCap.recordUsage(response.usage);
 
       const text = response.content[0]?.text?.trim();
       if (!text) return;
@@ -1102,6 +1109,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     system: systemPrompt,
     messages: [...history, { role: 'user', content: userMessage }],
   });
+  spendCap.recordUsage(response.usage);
   const raw = response.content[0]?.text || '';
   let parsed;
   try {
@@ -1265,7 +1273,7 @@ const corsOptions = {
     }
     return callback(new Error(`CORS: origin ${origin} not allowed`), false);
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password', 'x-trace-id'],
   credentials: true,
 };
@@ -1305,6 +1313,33 @@ app.use('/api/', globalLimiter);
 // ---------------------------------------------------------------------------
 // POST /api/chat
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Pre-call refusal gate: kill switch (P0-B) + global daily spend ceiling (P0-A)
+// ---------------------------------------------------------------------------
+// Single Railway replica, no Redis → the in-memory state in lib/killSwitch and
+// lib/spendCap is the whole mechanism. Every USER-FACING Anthropic route calls
+// this guard BEFORE doing model work and returns 503 when Claude is disabled
+// (admin kill switch / CLAUDE_DISABLED) or the day's token budget is spent;
+// the background memory-extraction call skips (no res to 503) instead.
+// Each Anthropic call records its usage back into the spend counter.
+function spendCeilingHit(res) {
+  if (killSwitch.isKilled()) {
+    res.status(503).json({
+      error: 'service_disabled',
+      reply: 'Mercurius is taking a short break for maintenance. Please try again soon.',
+      message: 'Mercurius is temporarily paused — please try again soon.',
+    });
+    return true;
+  }
+  if (!spendCap.isCeilingExceeded()) return false;
+  res.status(503).json({
+    error: 'spend_cap',
+    reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
+    message: "Daily usage limit reached — please try again tomorrow.",
+  });
+  return true;
+}
+
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
   // Schema guarantees shape + types; handler-level validation removed.
   const { messages: clientMessages, sessionId, model: requestedModel, responseMode: rawResponseMode, imageId, capabilities } = req.validated;
@@ -1338,6 +1373,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       reply: "You're moving fast! Take 60 seconds to think about what we've discussed so far, then come back."
     });
   }
+
+  // Global daily spend ceiling — covers both the streaming and JSON Anthropic
+  // calls below (this handler is the only entry to both).
+  if (spendCeilingHit(res)) return;
 
   // Sanitize user input
   const lastMsg = clientMessages[clientMessages.length - 1];
@@ -1617,6 +1656,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         messages: trimmed,
       }, { signal: streamAbort.signal });
 
+      // Record token usage for the daily spend ceiling once the final message
+      // is assembled — the 'message' event carries `usage`. Best-effort: an
+      // aborted/errored stream may not emit it, which only undercounts.
+      stream.on('message', (m) => spendCap.recordUsage(m.usage));
+
       let fullText = '';
 
       // Deterministic airiness: reflow the stream so no prose paragraph
@@ -1738,6 +1782,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         system: systemForApi,
         messages: trimmed,
       });
+      spendCap.recordUsage(response.usage);
 
       const reflowed = reflowText(
         response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?",
@@ -1821,6 +1866,7 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.QUIZ,
@@ -1849,6 +1895,7 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const result = await generateFromHistory(sessionId, {
       historyLimit: HISTORY_LIMITS.REPORT,
@@ -1881,6 +1928,7 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -1890,6 +1938,7 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
       system: UNIT_TEST_GRADER_PROMPT,
       messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
     });
+    spendCap.recordUsage(response.usage);
     const raw = response.content[0]?.text || '';
     const result = parseUnitTestGrade(raw);
     if (!result) {
@@ -2105,6 +2154,27 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req,
 }));
 
 // ---------------------------------------------------------------------------
+// Claude kill switch (audit P0-B) — flip Anthropic calls off/on at runtime,
+// no redeploy. GET reads state; POST { disabled: true|false } sets it.
+//
+//   curl -X POST -H "x-admin-password: ..." -H "Content-Type: application/json" \
+//        -d '{"disabled":true}' https://<host>/api/admin/kill-switch
+// ---------------------------------------------------------------------------
+app.get('/api/admin/kill-switch', adminLimiter, requireAdmin, (_req, res) => {
+  return res.json({ ok: true, ...killSwitch.state() });
+});
+
+app.post('/api/admin/kill-switch', adminLimiter, requireAdmin, (req, res) => {
+  const { disabled } = req.body || {};
+  if (typeof disabled !== 'boolean') {
+    return res.status(400).json({ error: 'invalid_request', message: 'Provide { "disabled": true | false }.' });
+  }
+  killSwitch.set(disabled);
+  logger.warn({ disabled }, 'Claude kill switch toggled via admin endpoint');
+  return res.json({ ok: true, ...killSwitch.state() });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/factcheck — analyze a claim about AI
 // ---------------------------------------------------------------------------
 app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
@@ -2115,6 +2185,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -2122,6 +2193,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
       system: FACTCHECK_PROMPT,
       messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
     });
+    spendCap.recordUsage(response.usage);
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
@@ -2143,6 +2215,7 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -2150,6 +2223,7 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
       system: ANALYZE_PROMPT,
       messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
     });
+    spendCap.recordUsage(response.usage);
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
@@ -2171,6 +2245,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
+  if (spendCeilingHit(res)) return;
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
     const meetingContext = buildMeetingContext(eventsData);
@@ -2181,6 +2256,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
       system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
       messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
     });
+    spendCap.recordUsage(response.usage);
     const raw = response.content[0]?.text || '';
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
@@ -2223,15 +2299,16 @@ app.get('/api/challenge', async (req, res) => {
 // POST /api/profile — set display name for a session
 // ---------------------------------------------------------------------------
 app.post('/api/profile', asyncRoute(async (req, res) => {
-  const { sessionId, displayName } = req.body;
-  if (!isValidSessionId(sessionId) || !displayName || typeof displayName !== 'string') {
-    return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId and displayName required.' });
+  // Display-name collection retired (audit P0-D): storing a (possibly minor's)
+  // name contradicted marketing/privacy.html ("No name … collected"). This
+  // route no longer persists anything — kept as a 200 no-op so any widget
+  // still cached in a browser doesn't error on its fire-and-forget POST. The
+  // name (if the stale UI sent one) is neither stored nor logged.
+  const { sessionId } = req.body || {};
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Valid sessionId required.' });
   }
-  const clean = displayName.trim().slice(0, 30).replace(/[^a-zA-Z0-9 _\-'.]/g, '');
-  if (!clean) return res.status(400).json({ error: 'invalid_name' });
-  await db.getOrCreateSession(sessionId);
-  await db.setDisplayName(sessionId, clean);
-  return res.json({ ok: true, displayName: clean });
+  return res.json({ ok: true });
 }));
 
 // ---------------------------------------------------------------------------
@@ -2347,6 +2424,31 @@ app.post('/api/report', validate(ReportRequest, { endpoint: '/api/report' }), as
     return res.status(500).json({ error: 'server_error', message: 'Could not submit the report.' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// DELETE /api/session/:sessionId — right to erasure (audit P0-C)
+// ---------------------------------------------------------------------------
+// Honors the deletion right promised on marketing/privacy.html. The 32-char
+// session id IS the ownership capability (anonymous, Keychain-stored, never
+// exposed publicly), exactly as image-retrieval ids already work — presenting
+// it proves ownership, so no account/login exists to authenticate against.
+// Idempotent: deleting an unknown/already-deleted session still returns 200,
+// so a client can safely retry and existence isn't probeable beyond the
+// unguessable id itself. Rate-limited by the global 60/min/IP limiter.
+app.delete('/api/session/:sessionId', asyncRoute(async (req, res) => {
+  const { sessionId } = req.params;
+  if (!isValidSessionId(sessionId)) {
+    return res.status(400).json({ error: 'invalid_request', message: 'Invalid session id.' });
+  }
+  try {
+    const result = await db.deleteSession(sessionId);
+    logger.forRequest(req).warn({ deleted: result.deleted }, 'session erased on request');
+    return res.json({ ok: true, deleted: result.deleted });
+  } catch (err) {
+    logger.forRequest(req).error({ err: err.message }, 'session deletion failed');
+    return res.status(500).json({ error: 'server_error', message: 'Could not delete this session. Please try again.' });
+  }
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/health

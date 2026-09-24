@@ -1,0 +1,626 @@
+{
+  "label": "gate8-flag-on-debate",
+  "baseUrl": "http://localhost:3137",
+  "generatedAt": "2026-07-24T17:02:04.286Z",
+  "runs": 3,
+  "criteria": [
+    {
+      "name": "median sentences ≤ 4 (chat replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "p90 sentences ≤ 6 (chat replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "debate replies ≤ 7 lines (contract)",
+      "value": "4 (runs: 4, 5, 4)",
+      "pass": true
+    },
+    {
+      "name": "discussion scoring block ≤ 10 lines, ends with one question",
+      "value": "0/3 runs pass (none | none | none)",
+      "pass": false
+    },
+    {
+      "name": "socratic: 100% end with exactly one question",
+      "value": "0/3 runs pass (0/0 | 0/0 | 0/0)",
+      "pass": false
+    },
+    {
+      "name": "preview hits = 0 (all replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "truncations = 0 (all replies)",
+      "value": "0 (runs: 0, 0, 0)",
+      "pass": true
+    },
+    {
+      "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+      "value": "0/3 runs pass (checks=0 exercise=false | checks=0 exercise=false | checks=0 exercise=false)",
+      "pass": false
+    },
+    {
+      "name": "[LESSON_COMPLETE] within 10 assistant turns",
+      "value": "0/3 runs pass (never | never | never)",
+      "pass": false
+    },
+    {
+      "name": "deep reply ≥ 8 sentences",
+      "value": "0/3 runs pass (missing | missing | missing)",
+      "pass": false
+    },
+    {
+      "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+      "value": "3/3 runs pass (chat p90=0 max=0; longform p90=0 max=0 | chat p90=0 max=0; longform p90=0 max=0 | chat p90=0 max=0; longform p90=0 max=0)",
+      "pass": true
+    }
+  ],
+  "perRun": [
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "none",
+          "pass": false
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "0/0",
+          "pass": false
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=0 exercise=false",
+          "pass": false
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": "never",
+          "pass": false
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": "missing",
+          "pass": false
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=0 max=0; longform p90=0 max=0",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-b2967d75fd39002f",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before I step into the opposing role — I want to make sure you get the most out of this.\n\nIn DEBATE mode, my job is to **coach you**, not beat you. If I argue the other side for you, you walk away with nothing to defend in a real round.\n\nSo let's do this right: you're arguing *for* the ban. What's your **warrant** — the causal chain that connects \"AI exists in schools\" to \"students stop thinking\"?\n\nGive me the mechanism, not just the claim.",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "Solid start. Now stress-test it.\n\nYour warrant assumes students *would* practice the skill without AI — but what if they were copying from friends, SparkNotes, or answer keys before AI existed?\n\nHow does your argument survive that?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "That's my question back at you — you're arguing *for* the ban, so you need to answer it.\n\nIf cheating existed before AI, why does AI specifically deserve a ban? What makes it **qualitatively different** from older shortcuts?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 2,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "Your impact needs a number or a mechanism — \"a generation that can't reason\" is a feeling, not an impact.\n\nWhat's the **measurable harm**? Test scores? Workforce outcomes? Democratic participation? Pick one and tell me why AI causes it more than calculators, GPS, or Google already did.",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 2,
+                "questionMarks": 4,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 5
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-7eccdedec39e03c1",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong opening position. Let's sharpen it before I push back.\n\n\"Privacy comes first\" is a value claim, not a warrant. **Why** does privacy outweigh the security benefits governments will cite — reduced crime, faster suspect identification, missing persons recovery?\n\nGive me your causal chain: facial recognition exists → what specific harm follows → why banning it fixes that harm better than regulation would.",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Solid warrant — chilling effects are real and documented.\n\nBut here's your vulnerability: **does banning facial recognition actually remove the chilling effect**, or do people just fear surveillance generally?\n\nIf someone behaves differently because they *think* they might be watched — even without facial recognition — your ban doesn't solve the problem. It just removes one tool while the chilling effect persists.\n\nHow do you answer that?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's your strongest point so far — but you just switched arguments.\n\nYou moved from **chilling effects** to **disparate impact on minorities**. Both are good, but they're different warrants requiring different evidence.\n\nPick one as your primary. Which harm is bigger: the chilling effect on *everyone's* behavior, or the concrete, documented misidentification of *specific groups*?\n\nThe answer shapes your whole case.",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "I'll coach you to build it — not hand it to you.\n\nThe strongest rebuttal will attack your **impact**. Ask yourself: if facial recognition is banned, what enforcement mechanism replaces it — and is that alternative *less* biased or just less visible?\n\nWhat's your answer to that?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 5,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "none",
+          "pass": false
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "0/0",
+          "pass": false
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=0 exercise=false",
+          "pass": false
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": "never",
+          "pass": false
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": "missing",
+          "pass": false
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=0 max=0; longform p90=0 max=0",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-7e3455ed6e6fc6c8",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before I take the opposing side — quick coaching note, because this will make the debate sharper for both of us.\n\n\"Stop thinking for themselves\" needs a mechanism. *How* does AI cause that? Dependency? Skill atrophy? Reduced struggle?\n\nName the causal chain in one sentence, then I'll argue against it hard.",
+              "metrics": {
+                "sentenceCount": 7,
+                "lineCount": 3,
+                "questionMarks": 4,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 5
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "Good — that's a real warrant. Here's my counter:\n\nThe problem you're describing is **copying**, not AI. Students copied from SparkNotes, friends, and answer keys long before chatbots existed.\n\nBanning the tool doesn't fix the behavior. It just changes the source.\n\nNow defend the distinction: why is AI-copying *worse* than those older forms — what makes it uniquely harmful to skill development?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "Actually, it undercuts yours.\n\nYour claim is that AI should be **banned** — that requires showing AI causes *unique, irreversible* harm that older cheating didn't. If the problem existed before AI, the solution is better assessment design, not a ban.\n\nCan you show me what AI does to skill development that SparkNotes couldn't?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "That impact needs a comparison.\n\nHumans have always reasoned *with* tools — calculators, dictionaries, search engines. We didn't call that a reasoning collapse.\n\nYour burden is to show AI is **categorically different**, not just another tool. What's the mechanism that makes AI dependency uniquely destroy reasoning capacity, where calculators didn't?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-907c72ccefe73ab4",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong opening position. Now let me stress-test it before we go further.\n\n\"Privacy comes first\" is a value claim, not an argument — and in a real round, your opponent will ask: *first compared to what, and why?*\n\nWhat's your **warrant**? Walk me the causal chain: facial recognition in public spaces → what specific harm → to whom → at what scale?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Solid instinct — chilling effects is a real, documented phenomenon.\n\nBut here's the weak joint: **\"behave differently\" cuts both ways.**\n\nYour opponent will say: good. Criminals behave differently when watched too. That's the point.\n\nSo you need to specify whose behavior is chilled and why that's a *harm* rather than a benefit. Are you claiming it suppresses lawful protest? Minority communities disproportionately? Journalists and activists specifically?\n\nPick the population and the behavior — then your warrant has teeth.",
+              "metrics": {
+                "sentenceCount": 10,
+                "lineCount": 5,
+                "questionMarks": 3,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 4
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's a strong hit — but you just switched from **chilling effects** to **disparate error rates**. Those are two different arguments.\n\nIn a real round, your opponent notices that and calls it a moving target.\n\nWhich one is your *primary* warrant? Pick the stronger pillar and build the impact there — then the other becomes a supporting point, not a second main claim.",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "That's my job to coach you to build, not hand over.\n\nHere's the move instead: **argue against yourself first.**\n\nYou've got two claims — chilling effects and disparate error rates. Which one do *you* think is easier to attack? Tell me, and I'll tell you if you found the real vulnerability.",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "criteria": [
+        {
+          "name": "median sentences ≤ 4 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "p90 sentences ≤ 6 (chat replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "debate replies ≤ 7 lines (contract)",
+          "value": 4,
+          "pass": true
+        },
+        {
+          "name": "discussion scoring block ≤ 10 lines, ends with one question",
+          "value": "none",
+          "pass": false
+        },
+        {
+          "name": "socratic: 100% end with exactly one question",
+          "value": "0/0",
+          "pass": false
+        },
+        {
+          "name": "preview hits = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "truncations = 0 (all replies)",
+          "value": 0,
+          "pass": true
+        },
+        {
+          "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+          "value": "checks=0 exercise=false",
+          "pass": false
+        },
+        {
+          "name": "[LESSON_COMPLETE] within 10 assistant turns",
+          "value": "never",
+          "pass": false
+        },
+        {
+          "name": "deep reply ≥ 8 sentences",
+          "value": "missing",
+          "pass": false
+        },
+        {
+          "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+          "value": "chat p90=0 max=0; longform p90=0 max=0",
+          "pass": true
+        }
+      ],
+      "results": [
+        {
+          "id": "debate-1",
+          "mode": "debate",
+          "sessionId": "eval-pacing-bc81e279333d4bf0",
+          "replies": [
+            {
+              "user": "Let's debate: schools should ban AI chatbots. I'll argue for the ban — you argue against. My claim: AI makes students stop thinking for themselves.",
+              "responseMode": "concise",
+              "raw": "Before I take the opposing side — I want to make sure you're actually building debate skills here, not just watching me perform.\n\nSo: what's your **warrant**? Why does AI access cause students to stop thinking, rather than, say, think differently or think more?\n\nWalk me through the causal chain first, then I'll push back hard.",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 2,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant: students just copy answers, so they never practice the skill.",
+              "responseMode": "concise",
+              "raw": "That's a real mechanism — but it has a hidden assumption.\n\nYou're assuming students *would* practice the skill without AI. But students have been copying from SparkNotes, answer keys, and each other for decades.\n\nSo here's my counter: **the problem is the copying behavior, not the tool.** Banning AI doesn't fix the student who won't do the work — it just changes what they copy from.\n\nNow your move: why is AI *specifically* worse than those older shortcuts?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "But cheating existed before AI — doesn't that undercut your position?",
+              "responseMode": "concise",
+              "raw": "Actually, that helps my side.\n\nIf cheating predates AI, then banning AI doesn't solve the underlying problem — it just removes one tool while the behavior persists.\n\nBut here's where **you** should push back: is AI meaningfully different in *scale or ease* compared to SparkNotes? If AI makes copying so frictionless that even students who *would* have done the work now don't bother — that's a stronger warrant than \"students cheat.\"\n\nCan you make that argument?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 4,
+                "questionMarks": 2,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Okay, attack my impact: a generation that can't reason without a tool.",
+              "responseMode": "concise",
+              "raw": "The impact is vivid — but it needs a mechanism.\n\nHumans have always outsourced cognition to tools: calculators, spell-check, GPS. We didn't lose the ability to navigate — we redirected attention elsewhere.\n\nSo your burden is proving AI is **categorically different** — that it doesn't just handle a task but actually *atrophies* the underlying skill. That requires evidence, not intuition.\n\nDo you have a reason to believe AI offloading degrades reasoning specifically, rather than just changing what we practice?",
+              "metrics": {
+                "sentenceCount": 6,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "debate-2",
+          "mode": "debate",
+          "sessionId": "eval-pacing-371607a1ec611858",
+          "replies": [
+            {
+              "user": "Debate me: governments should ban facial recognition in public spaces. I say ban it — privacy comes first. Your move.",
+              "responseMode": "concise",
+              "raw": "Strong opening position. Let's make it bleed-proof before you take it into a real round.\n\nYour claim is clear, but your **warrant** is missing — \"privacy comes first\" is a value assertion, not a causal argument.\n\nWalk me this chain: facial recognition in public spaces → what specific harm → to whom → how severe and how likely?",
+              "metrics": {
+                "sentenceCount": 4,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "My warrant is chilling effects: people behave differently when watched.",
+              "responseMode": "concise",
+              "raw": "Good — chilling effects is a real, documented mechanism. Now stress-test it.\n\nThe opponent's obvious counter: **public spaces have never been private.** A cop could always watch you walk down the street. What does facial recognition add that changes the privacy calculus?",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 2,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 3
+              }
+            },
+            {
+              "user": "Your security argument ignores false positives hitting minorities hardest.",
+              "responseMode": "concise",
+              "raw": "That's a strong impact — but you just switched arguments.\n\nYou moved from chilling effects to **disparate harm from misidentification**. Both are real, but they're different warrants needing different evidence.\n\nWhich one is your *primary* claim? Pick the stronger one and I'll help you make it airtight.",
+              "metrics": {
+                "sentenceCount": 5,
+                "lineCount": 3,
+                "questionMarks": 1,
+                "endsWithQuestion": false,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 2
+              }
+            },
+            {
+              "user": "Give me your strongest rebuttal so I can prep against it.",
+              "responseMode": "concise",
+              "raw": "The strongest hit against you:\n\n**Bans don't eliminate surveillance — they just freeze the technology at its worst.**\n\nRegulated facial recognition with accuracy mandates, audit requirements, and bias testing could protect minorities *better* than a ban that leaves police using cruder, less accountable methods.\n\nYour job: why is a ban still preferable to strict regulation?",
+              "metrics": {
+                "sentenceCount": 3,
+                "lineCount": 4,
+                "questionMarks": 1,
+                "endsWithQuestion": true,
+                "truncated": false,
+                "previewHit": false,
+                "maxParagraphSentences": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

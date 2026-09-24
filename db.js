@@ -258,6 +258,60 @@ module.exports = {
     );
   },
 
+  // ─── Right-to-erasure (audit P0-C) ───
+  // Delete EVERYTHING keyed to one session, in a single transaction, so the
+  // 30-day-deletion promise on marketing/privacy.html is honored by code
+  // rather than by hand-run SQL. Children are removed before the sessions row
+  // to satisfy the FK constraints. Gamification tables (progression, xp_ledger)
+  // exist only when GAMIFICATION_ENABLED has run — probe for them first so a
+  // DELETE against a missing table never aborts the transaction. Returns the
+  // per-table row counts for an auditable receipt.
+  async deleteSession(sessionId) {
+    // Child tables first (FK order), then the parent `sessions` row.
+    const base = ['messages', 'student_memory', 'images', 'reports'];
+    const optional = ['xp_ledger', 'progression'];
+
+    if (USE_PG) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const present = [];
+        for (const t of optional) {
+          const r = await client.query('SELECT to_regclass($1) AS reg', [t]);
+          if (r.rows[0] && r.rows[0].reg) present.push(t);
+        }
+        const deleted = {};
+        for (const t of [...present, ...base, 'sessions']) {
+          const r = await client.query(`DELETE FROM ${t} WHERE session_id = $1`, [sessionId]);
+          deleted[t] = r.rowCount;
+        }
+        await client.query('COMMIT');
+        return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+    }
+
+    // SQLite: better-sqlite3 transactions are synchronous + atomic.
+    const existing = sqliteDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('xp_ledger','progression')")
+      .all()
+      .map((r) => r.name);
+    const order = [...existing, ...base, 'sessions'];
+    const deleted = {};
+    const txn = sqliteDb.transaction(() => {
+      for (const t of order) {
+        const info = sqliteDb.prepare(`DELETE FROM ${t} WHERE session_id = ?`).run(sessionId);
+        deleted[t] = info.changes;
+      }
+    });
+    txn();
+    return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
+  },
+
   async getMessages(sessionId, limit = 50) {
     // Most RECENT N messages, returned in chronological order. ORDER BY ASC
     // with LIMIT would pin the window to the FIRST N rows ever saved, freezing
@@ -351,8 +405,12 @@ module.exports = {
   },
 
   async getLeaderboard() {
+    // NOTE: display_name is deliberately NOT selected or returned (audit P0-D).
+    // This endpoint is unauthenticated; serving a (possibly minor's) name here
+    // contradicted marketing/privacy.html ("No name … collected"). Only the
+    // anonymous last-4 badge identifies a row.
     const rows = await query(`
-      SELECT session_id, streak, message_count, unlocked, last_session_date, topics, display_name
+      SELECT session_id, streak, message_count, unlocked, last_session_date, topics
       FROM sessions
       WHERE message_count > 2
     `);
@@ -377,7 +435,6 @@ module.exports = {
       messages: r.message_count || 0,
       unlocked: !!(r.unlocked),
       lastActive: r.last_session_date,
-      name: r.display_name || null,
     }));
   },
 
