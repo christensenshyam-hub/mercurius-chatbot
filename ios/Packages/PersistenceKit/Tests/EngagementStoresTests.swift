@@ -97,6 +97,43 @@ struct StreakStoreTests {
         #expect(tokyo.dateComponents([.day], from: StreakStore.confirmedDay(for: stamp, calendar: tokyo)).day == 21)
     }
 
+    @Test("A seed stamp reads as the same day in Buddhist and Japanese device calendars",
+          arguments: [(Calendar.Identifier.buddhist, "Asia/Bangkok"), (.japanese, "Asia/Tokyo")])
+    func seedStampInNonGregorianCalendars(identifier: Calendar.Identifier, zone: String) throws {
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-21")
+        let stamp = try #require(store.lastUpdatedAt)
+        var deviceCalendar = Calendar(identifier: identifier)
+        deviceCalendar.timeZone = TimeZone(identifier: zone)!
+        let expected = calendar(zone).date(from: DateComponents(year: 2026, month: 9, day: 21))!
+        #expect(StreakStore.confirmedDay(for: stamp, calendar: deviceCalendar) == expected)
+        #expect(StreakStore.confirmedDay(for: stamp, calendar: calendar(zone)) == expected)
+    }
+
+    @Test("A seed for today counts as confirmed today, even west of UTC")
+    func seedTodayIsConfirmedToday() throws {
+        let chicago = calendar("America/Chicago")
+        let now = chicago.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 10))!
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-24")
+        let stamp = try #require(store.lastUpdatedAt)
+        // The raw stamp is 19:00 on the 23rd in Chicago…
+        #expect(!chicago.isDate(stamp, inSameDayAs: now))
+        // …but it confirms the 24th, the day the server counted.
+        #expect(StreakStore.isConfirmed(on: now, stamp: stamp, calendar: chicago))
+        #expect(!StreakStore.isConfirmed(on: now.addingTimeInterval(86_400), stamp: stamp, calendar: chicago))
+        #expect(!StreakStore.isConfirmed(on: now, stamp: nil, calendar: chicago))
+
+        // The store's own reading, with today's date in the host's zone.
+        var hostGregorian = Calendar(identifier: .gregorian)
+        hostGregorian.timeZone = .current
+        let host = hostGregorian.dateComponents([.year, .month, .day], from: Date())
+        let today = String(format: "%04d-%02d-%02d", host.year!, host.month!, host.day!)
+        let seeded = StreakStore(defaults: freshDefaults("streak"))
+        seeded.seed(streak: 2, lastSessionDate: today)
+        #expect(seeded.confirmedToday)
+    }
+
     @Test("An in-app confirmation is the local day of the chat")
     func updateStampIsItsLocalDay() {
         let newYork = calendar("America/New_York")

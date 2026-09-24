@@ -726,20 +726,36 @@ struct AppShellView: View {
     }
 
     /// The celebration's next stop, resolved against progress so it never
-    /// offers a unit check that is still locked. That happens when a unit's
-    /// last lesson is done but an earlier one isn't (legacy data from builds
-    /// that marked lessons complete on open): the student goes to that gap
-    /// instead, or, with none to name, "Back to lessons" leads.
+    /// offers a unit check that is still locked, nor a finished lesson while
+    /// the unit still has work. Both happen with gaps in a unit (legacy data
+    /// from builds that marked lessons complete on open): the student goes to
+    /// the unit's first unfinished lesson, else its unmastered check, else a
+    /// plain review hop to the next lesson; after a unit's last lesson with
+    /// nothing left to name, "Back to lessons" leads.
     @MainActor
     static func resolvedNextStop(
         after lessonId: String,
         progress: CurriculumProgressStore
     ) -> MercuriusCurriculum.PathStop? {
-        guard let stop = MercuriusCurriculum.nextStop(after: lessonId) else { return nil }
-        guard case .unitTest(let unit) = stop, !progress.isUnitTestUnlocked(unit) else { return stop }
-        return unit.lessons
-            .first { $0.id != lessonId && !progress.isCompleted($0.id) }
-            .map { .lesson($0) }
+        guard let stop = MercuriusCurriculum.nextStop(after: lessonId),
+              let unit = MercuriusCurriculum.unit(containingLesson: lessonId)
+        else { return nil }
+        switch stop {
+        case .lesson(let next) where !progress.isCompleted(next.id):
+            return stop
+        case .unitTest where progress.isUnitTestUnlocked(unit):
+            return stop
+        default:
+            break
+        }
+        if let gap = unit.lessons.first(where: { $0.id != lessonId && !progress.isCompleted($0.id) }) {
+            return .lesson(gap)
+        }
+        if progress.isUnitTestUnlocked(unit), !progress.isUnitMastered(unit.id) {
+            return .unitTest(unit)
+        }
+        if case .lesson = stop { return stop }
+        return nil
     }
 
     /// The path's next stop in the celebration's plain-value form

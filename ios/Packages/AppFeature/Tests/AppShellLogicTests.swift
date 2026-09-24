@@ -39,6 +39,32 @@ struct CelebrationNextStopTests {
         // opens what it names, since `advance(to:)` gets this same value.
         #expect(next.map(AppShellView.celebrationStop)
                 == .lesson(number: unit1.lessons[1].number, title: unit1.lessons[1].title))
+
+        // Finishing that gap unlocks the check: offered next, not a review
+        // of the already-finished Lesson 3 — matching Home's frontier.
+        store.markCompleted(unit1.lessons[1].id)
+        #expect(AppShellView.resolvedNextStop(after: unit1.lessons[1].id, progress: store) == .unitTest(unit1))
+        #expect(store.frontier() == .unitTest(unit1))
+    }
+
+    @Test("A finished next lesson is skipped for the unit's first unfinished one")
+    func finishedNextLessonGoesToTheGap() {
+        // Lessons 1 and 3 done; Lesson 2 just finished; Lesson 4 never was.
+        let store = makeStore()
+        store.markCompleted(unit1.lessons[0].id)
+        store.markCompleted(unit1.lessons[2].id)
+        store.markCompleted(unit1.lessons[1].id)
+        #expect(AppShellView.resolvedNextStop(after: unit1.lessons[1].id, progress: store)
+                == .lesson(unit1.lessons[3]))
+    }
+
+    @Test("Replaying inside a mastered unit is a plain review hop to the next lesson")
+    func reviewHopInMasteredUnit() {
+        let store = makeStore()
+        for lesson in unit1.lessons { store.markCompleted(lesson.id) }
+        store.markUnitMastered(unit1.id)
+        #expect(AppShellView.resolvedNextStop(after: unit1.lessons[1].id, progress: store)
+                == .lesson(unit1.lessons[2]))
     }
 
     @Test("Before the last lesson itself is marked complete, no check and no self-referral")

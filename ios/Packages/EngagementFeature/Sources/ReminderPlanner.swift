@@ -97,6 +97,8 @@ public enum ReminderPlanner {
     /// How many days, starting today, the daily reminders may cover: through
     /// the last day a chat still saves the streak confirmed on `streakDay`.
     /// 0 once that day has passed.
+    /// Counted in local days, assuming they match the server's STREAK_TZ
+    /// days; a streak expiry sent by the server is the real fix.
     public static func dailyHorizon(now: Date, streakDay: Date, calendar: Calendar = .current) -> Int {
         let today = calendar.startOfDay(for: now)
         guard let lastSaveDay = calendar.date(byAdding: .day, value: streakGraceDays,

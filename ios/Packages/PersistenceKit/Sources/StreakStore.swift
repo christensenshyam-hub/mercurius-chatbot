@@ -56,12 +56,10 @@ public final class StreakStore {
     /// Whether the streak was confirmed today (local calendar) — i.e. the user
     /// already chatted today and the day is "saved". Drives the streak-defense
     /// reminder: no point warning someone about a day they already banked.
-    /// (A launch `seed` stamps UTC midnight of the last chat day, which can
-    /// read as "yesterday" locally — worst case one redundant reminder after a
-    /// fresh install; a real in-app chat stamps precisely via `update`.)
+    /// Reads the same day `lastConfirmedDay` does, so a launch seed counts on
+    /// the server's day rather than the evening before it.
     public var confirmedToday: Bool {
-        guard let lastUpdatedAt else { return false }
-        return Calendar.current.isDateInToday(lastUpdatedAt)
+        Self.isConfirmed(on: Date(), stamp: lastUpdatedAt, calendar: .current)
     }
 
     /// The start (in the local calendar) of the day the streak was last
@@ -74,14 +72,25 @@ public final class StreakStore {
     /// `update` stamps the moment of the chat, read in `calendar`. `seed`
     /// stamps UTC midnight of the server's `last_session_date`, which west of
     /// UTC reads locally as the evening before — so a stamp at exactly UTC
-    /// midnight is taken as that UTC date.
+    /// midnight is taken as that date. The date is rebuilt in a Gregorian
+    /// calendar (in `calendar`'s zone): a Buddhist or Japanese device calendar
+    /// would read its year in that calendar's era.
     nonisolated public static func confirmedDay(for stamp: Date, calendar: Calendar) -> Date {
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = calendar.timeZone
         guard stamp == utc.startOfDay(for: stamp),
-              let day = calendar.date(from: utc.dateComponents([.year, .month, .day], from: stamp))
+              let day = local.date(from: utc.dateComponents([.year, .month, .day], from: stamp))
         else { return calendar.startOfDay(for: stamp) }
         return calendar.startOfDay(for: day)
+    }
+
+    /// Whether `stamp` confirms the day containing `now`, read as
+    /// `confirmedDay` reads it.
+    nonisolated static func isConfirmed(on now: Date, stamp: Date?, calendar: Calendar) -> Bool {
+        guard let stamp else { return false }
+        return calendar.isDate(confirmedDay(for: stamp, calendar: calendar), inSameDayAs: now)
     }
 
     /// Record the latest authoritative streak from the server. No-op for
@@ -108,8 +117,9 @@ public final class StreakStore {
     /// lapsed user's row can carry a dead streak for weeks — stamping
     /// `lastUpdatedAt` with the fetch time would defeat `isCurrentFresh` and let
     /// the Home greeting claim a dead streak is alive. Freshness is therefore
-    /// taken from the server's own `last_session_date` ("yyyy-MM-dd", UTC): a
-    /// month-old row seeds a month-old `lastUpdatedAt` and stays not-fresh.
+    /// taken from the server's own `last_session_date` ("yyyy-MM-dd", the
+    /// server's streak day): a month-old row seeds a month-old `lastUpdatedAt`
+    /// and stays not-fresh.
     ///
     /// The stamp only ever moves FORWARD: the date parses to UTC midnight of
     /// the last chat day, so a same-day chat confirmation recorded by
@@ -130,7 +140,8 @@ public final class StreakStore {
         }
     }
 
-    /// Parse the server's `last_session_date` ("yyyy-MM-dd", UTC midnight).
+    /// Parse the server's `last_session_date` — a "yyyy-MM-dd" day in its
+    /// STREAK_TZ, not a UTC date — as UTC midnight of that date.
     private static func parseSessionDate(_ raw: String?) -> Date? {
         guard let raw else { return nil }
         let formatter = DateFormatter()
