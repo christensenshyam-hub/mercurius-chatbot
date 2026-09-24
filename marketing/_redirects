@@ -14,3 +14,16 @@
 /beta   https://testflight.apple.com/join/3ujBtDsa   302
 /Beta   https://testflight.apple.com/join/3ujBtDsa   302
 /BETA   https://testflight.apple.com/join/3ujBtDsa   302
+
+# "Get the app" shortcut for posters, bios and the club site.
+# Points at TestFlight while app 2.3.0 is in review. Once 2.3.0 is approved
+# on the App Store, flip the target to https://apps.apple.com/app/id6773192313
+# (keep the 302 — same caching reasoning as /beta above).
+/get    https://testflight.apple.com/join/3ujBtDsa   302
+
+# Clean URLs for the support and policy pages. 200 = rewrite, so the
+# address bar keeps the short form and the existing .html links keep
+# working too.
+/support   /support.html   200
+/privacy   /privacy.html   200
+/terms     /terms.html     200
