@@ -4,20 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0B1330" />
+  <meta name="apple-itunes-app" content="app-id=6773192313" />
 
   <title>Privacy — Mercurius AI</title>
-  <meta name="description" content="What Mercurius AI collects, what it doesn't, and how we treat the data that powers the tutor." />
+  <meta name="description" content="What Mercurius AI collects, what it doesn't, who processes it, how long we keep it, and how to delete it." />
   <link rel="canonical" href="https://trymercurius.com/privacy.html" />
 
   <meta property="og:type" content="article" />
   <meta property="og:title" content="Privacy — Mercurius AI" />
-  <meta property="og:description" content="What we collect, what we don't, and what happens to your chat messages." />
+  <meta property="og:description" content="What we collect, what we don't, how long we keep it, and how to delete it." />
   <meta property="og:image" content="/assets/mercurius-logo.png" />
   <meta property="og:url" content="https://trymercurius.com/privacy.html" />
   <meta property="og:site_name" content="Mercurius AI" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Privacy — Mercurius AI" />
-  <meta name="twitter:description" content="What we collect, what we don't, and what happens to your chat messages." />
+  <meta name="twitter:description" content="What we collect, what we don't, how long we keep it, and how to delete it." />
   <meta name="twitter:image" content="/assets/mercurius-logo.png" />
 
   <link rel="icon" type="image/png" sizes="512x512" href="/assets/mercurius-icon.png" />
@@ -27,6 +28,46 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="/styles.css?v=7" />
+
+  <style>
+    /* Retention table — page-local because it's the only table on the
+       site. Uses the brand tokens from styles.css so it matches the
+       trust-list cards around it. */
+    .retention-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      margin-bottom: var(--space-6);
+    }
+    .retention-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-body);
+      color: var(--ink-soft);
+    }
+    .retention-table th,
+    .retention-table td {
+      text-align: left;
+      vertical-align: top;
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .retention-table th {
+      color: var(--navy);
+      font-weight: 600;
+      font-size: var(--fs-small);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: var(--gradient-soft);
+    }
+    .retention-table tr:last-child td { border-bottom: none; }
+    .retention-table td:first-child {
+      color: var(--navy);
+      font-weight: 600;
+      width: 42%;
+    }
+  </style>
 </head>
 
 <body>
@@ -56,17 +97,37 @@
           What we collect — and what we <span class="text-gradient">don't.</span>
         </h1>
         <p class="lede">
-          Mercurius is built to teach AI literacy. Pretending you can't see how
-          a product handles your data would be dishonest on both counts. So:
-          the full picture, in plain language.
+          Mercurius AI teaches AI literacy. Hiding how the app itself handles
+          your data would make a poor lesson. So here is the full picture, in
+          plain language, for students and for parents.
         </p>
         <p class="lede" style="font-size: var(--fs-small); margin-top: var(--space-4);">
-          Last updated: May 2026 · Subject to change as the product evolves.
+          Effective: September 2026 · We update this page whenever the facts change.
         </p>
       </div>
     </section>
 
-    <section class="section" aria-label="What we collect">
+    <section class="section" aria-label="Who it is for">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">Who Mercurius is for</h2>
+        <p class="lede">
+          Mercurius AI is built for teens aged 13 to 18. If you are under 13,
+          you may not use it.
+        </p>
+        <p class="lede">
+          Starting with app version 2.3, the app asks for your birth year the
+          first time you open it. If you are under 13, it stops there. Your
+          birth year is not sent to us or stored anywhere — it is only used to
+          answer that one question on your phone.
+        </p>
+        <p class="lede">
+          There are no accounts. You never give us a name, an email address,
+          or a password.
+        </p>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="What we collect">
       <div class="container" style="max-width: 760px;">
         <h2 class="section-title">What we collect</h2>
 
@@ -80,41 +141,72 @@
         </p>
 
         <p class="lede">
-          <strong>Your chat messages.</strong> Every message you send is sent
-          to our server (hosted on Railway) and forwarded to Anthropic's Claude
-          API to generate a response. The messages are also stored on our
-          server, keyed by your session ID, so Mercurius can remember the
+          <strong>Your messages.</strong> Every chat message you send, and
+          every lesson transcript, goes to our server and is forwarded to
+          Anthropic's Claude API to generate the reply. Messages are stored on
+          our server under your session ID so Mercurius can remember the
           conversation across launches.
         </p>
 
         <p class="lede">
-          <strong>Anonymous usage signals.</strong> Standard server logs
-          capture the time and outcome of each request (e.g. "chat request
-          succeeded"). They do not include message content, your IP address
-          in clear form, or any personal information.
+          <strong>Photos you attach.</strong> If you attach a photo to a
+          message (a worksheet, a screenshot), it takes the same path as a
+          message: to our server, then to Anthropic to generate the reply.
+          Photos are deleted from our server after 24 hours.
+        </p>
+
+        <p class="lede">
+          <strong>Content you report.</strong> If you report a reply as wrong
+          or harmful, that reply and the message you sent just before it are
+          saved as a report on our server for the developer to review. A
+          notification with the report's number and reason — never the text —
+          goes to a private Discord channel that only the developer reads.
+        </p>
+
+        <p class="lede">
+          <strong>Anonymous usage rows.</strong> For each request we record
+          which feature was used, how many tokens it took, and what it cost.
+          These rows contain no message content.
+        </p>
+
+        <p class="lede">
+          <strong>Lesson progress.</strong> Which lessons you have started and
+          finished, so your progress is still there after a reinstall.
+        </p>
+
+        <p class="lede">
+          <strong>A hashed network address.</strong> Your phone's IP address
+          is scrambled with a secret key before anything is stored. We keep
+          only the scrambled version, never the raw address, and we use it
+          only to protect the service from abuse.
         </p>
       </div>
     </section>
 
-    <section class="section section-soft" aria-label="What we don't collect">
+    <section class="section" aria-label="What we don't collect">
       <div class="container" style="max-width: 760px;">
         <h2 class="section-title">What we don't collect</h2>
         <ul class="trust-list">
           <li>
-            <strong>No name, email, phone number, or address.</strong>
-            Mercurius doesn't ask for an account and doesn't have one.
+            <strong>No accounts, names, or emails.</strong> Mercurius doesn't
+            ask for an account and doesn't have one. No name, email, phone
+            number, or password.
           </li>
           <li>
-            <strong>No demographic data.</strong> No age, gender, ethnicity,
-            location, or school affiliation.
+            <strong>No contacts, no location.</strong> The app never reads your
+            contacts and never asks for your location.
           </li>
           <li>
-            <strong>No third-party tracking.</strong> No Google Analytics, no
-            Facebook Pixel, no advertising SDKs. None.
+            <strong>No advertising identifiers.</strong> We don't read the
+            device advertising ID, and there are no ads.
           </li>
           <li>
-            <strong>No ad targeting.</strong> Your chat history is not used to
-            sell anything to anyone.
+            <strong>No third-party analytics SDKs.</strong> No Google
+            Analytics, no Facebook Pixel, no tracking libraries. None.
+          </li>
+          <li>
+            <strong>Nothing is sold.</strong> Your messages are not sold,
+            shared for advertising, or used to target you with anything.
           </li>
           <li>
             <strong>No device fingerprinting.</strong> The session ID is
@@ -124,55 +216,156 @@
       </div>
     </section>
 
-    <section class="section" aria-label="Where data goes">
+    <section class="section section-soft" aria-label="What not linked to you means">
       <div class="container" style="max-width: 760px;">
-        <h2 class="section-title">Who sees what</h2>
+        <h2 class="section-title">What "not linked to you" means in practice</h2>
         <p class="lede">
-          To generate replies, Mercurius sends your messages to two third
-          parties:
+          On our server, your conversations sit under a random string of
+          letters and numbers. There is no name, email, or phone number next
+          to it. If someone looked at the database, they would see what was
+          said, but not who said it.
         </p>
-        <ul class="trust-list">
-          <li>
-            <strong>Anthropic</strong> (anthropic.com) — runs the Claude
-            language model that produces the actual answers. Their data
-            policies are at
-            <a href="https://www.anthropic.com/legal/commercial-terms" style="color: var(--violet);">anthropic.com/legal</a>.
-            Anthropic does not train future models on API requests by default.
-          </li>
-          <li>
-            <strong>Railway</strong> (railway.app) — hosts our backend server.
-            Standard hosting provider; sees the encrypted HTTPS traffic and
-            the database that stores conversations.
-          </li>
-        </ul>
-        <p class="lede" style="margin-top: var(--space-6);">
-          We do not share, sell, or transfer your messages to anyone else.
+        <p class="lede">
+          The exception is you. If you type your full name, your school, or
+          your address into a chat, that text is stored with the rest of the
+          message. The tutor doesn't need those details, so please leave them
+          out.
+        </p>
+        <p class="lede">
+          The scrambled network address cannot be turned back into a real
+          address, and we never store the real one.
         </p>
       </div>
     </section>
 
-    <section class="section section-soft" aria-label="Your controls">
+    <section class="section" aria-label="Who processes your data">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">Who sees what</h2>
+        <p class="lede">
+          Three outside services touch your data. Two of them see message
+          content, and one sees only what you choose to report.
+        </p>
+        <ul class="trust-list">
+          <li>
+            <strong>Anthropic — Claude.</strong> Runs the language model that
+            writes the replies. Every message and photo is sent to Anthropic's
+            API to generate a response. Their terms are at
+            <a href="https://www.anthropic.com/legal/commercial-terms" style="color: var(--violet);">anthropic.com/legal</a>.
+            Anthropic does not train future models on API requests by default.
+          </li>
+          <li>
+            <strong>Railway — hosting.</strong> Hosts our server and database
+            in the United States. Standard hosting provider; it holds the
+            encrypted traffic and the database that stores conversations.
+          </li>
+          <li>
+            <strong>Discord — report notifications only.</strong> When you
+            report a reply, a notification with the report's number, reason
+            and which part of the app it came from goes to a private Discord
+            channel that only the developer can read. The reported text itself
+            stays on our server. Nothing else ever goes to Discord.
+          </li>
+        </ul>
+        <p class="lede" style="margin-top: var(--space-6);">
+          Anthropic and Railway are the only companies that process message
+          content. We do not share, sell, or transfer your messages to anyone
+          else.
+        </p>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="How long we keep it">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">How long we keep it</h2>
+        <p class="lede">
+          Deletion is automatic. You don't have to ask for any of these.
+        </p>
+        <div class="retention-wrap">
+          <table class="retention-table">
+            <thead>
+              <tr>
+                <th scope="col">What</th>
+                <th scope="col">Kept for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Chat and lesson messages</td>
+                <td>90 days</td>
+              </tr>
+              <tr>
+                <td>Photos you attach</td>
+                <td>24 hours</td>
+              </tr>
+              <tr>
+                <td>Content reports</td>
+                <td>180 days, whether or not we have reviewed them.</td>
+              </tr>
+              <tr>
+                <td>Anonymous usage rows</td>
+                <td>400 days</td>
+              </tr>
+              <tr>
+                <td>Lesson progress events</td>
+                <td>400 days</td>
+              </tr>
+              <tr>
+                <td>Lesson completion state</td>
+                <td>As long as the session exists, so progress survives a reinstall</td>
+              </tr>
+              <tr>
+                <td>The whole session</td>
+                <td>Erased entirely after 365 days with no activity</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Your controls">
       <div class="container" style="max-width: 760px;">
         <h2 class="section-title">Your controls</h2>
         <ul class="trust-list">
           <li>
-            <strong>Start Over.</strong> The Settings sheet inside the app has
-            a "Start Over" button. Tapping it clears your local chat history,
-            wipes your session ID from the Keychain, and generates a fresh
-            one. From the server's perspective you become a brand-new user.
+            <strong>Delete everything from inside the app.</strong> Open
+            Settings and tap <em>"Delete my data &amp; start over."</em> This
+            erases everything on our server tied to your session ID and gives
+            you a brand-new ID. From the server's point of view you have never
+            been here before. Available in app version 2.3 and later; on an
+            older version, update the app or use the email option below.
           </li>
           <li>
-            <strong>Delete the app.</strong> Removing Mercurius from your
-            device clears local chat history. Server-side conversation data
-            keyed to your old session ID becomes unreachable from your device.
+            <strong>Or email us.</strong> Write to
+            <strong>privacy@trymercurius.com</strong> and paste your session
+            ID, which is shown in Settings. We delete the data within 7 days.
           </li>
           <li>
-            <strong>Email us for full deletion.</strong> If you want server-
-            side data tied to your session ID permanently deleted, email the
-            address below with your session ID (visible in the app's Settings
-            sheet). We'll process the deletion within 30 days.
+            <strong>Deleting the app is not enough.</strong> Removing Mercurius
+            from your phone does not delete what is on the server. Use one of
+            the two options above, or wait for the automatic limits in the
+            table.
           </li>
         </ul>
+      </div>
+    </section>
+
+    <section class="section section-soft" aria-label="For parents and schools">
+      <div class="container" style="max-width: 760px;">
+        <h2 class="section-title">For parents and schools</h2>
+        <p class="lede">
+          There is no account to review and no name on file, so we cannot
+          look up a student by name. What we can tell you: the app is for
+          ages 13 and up, it blocks under-13s at first launch, it collects
+          no contacts or location, it shows no ads, and everything it stores
+          is deleted on the schedule above or on request.
+        </p>
+        <p class="lede">
+          If you want a student's data deleted, ask them to use the button in
+          Settings, or email us their session ID. Questions from a parent or
+          school go to <strong>privacy@trymercurius.com</strong> and we answer
+          them ourselves.
+        </p>
       </div>
     </section>
 
@@ -180,12 +373,13 @@
       <div class="container" style="max-width: 760px;">
         <h2 class="section-title">Contact</h2>
         <p class="lede">
-          For privacy questions or data-deletion requests:
+          Privacy questions and deletion requests:
           <strong>privacy@trymercurius.com</strong>
         </p>
         <p class="lede">
-          For everything else, the marketing site's main pages cover what
-          Mercurius is and what it isn't.
+          Everything else, including bugs and feature questions:
+          <strong>support@trymercurius.com</strong> or the
+          <a href="/support.html" style="color: var(--violet);">Support page</a>.
         </p>
       </div>
     </section>
@@ -194,9 +388,9 @@
       <div class="container">
         <div>
           <p class="eyebrow">Related</p>
-          <h3>Read how we approach responsibility.</h3>
+          <h3>Read the terms for using the app.</h3>
         </div>
-        <a class="next-strip-link" href="/trust.html">Responsibility →</a>
+        <a class="next-strip-link" href="/terms.html">Terms →</a>
       </div>
     </section>
   </main>
@@ -215,6 +409,8 @@
         <a href="/how-it-works.html">How it works</a>
         <a href="/trust.html">Responsibility</a>
         <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/support.html">Support</a>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
     </div>

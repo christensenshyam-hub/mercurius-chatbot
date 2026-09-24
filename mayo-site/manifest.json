@@ -1,6 +1,6 @@
 {
-  "name": "Mercurius Ⅰ — AI Literacy Tutor",
-  "short_name": "Mercurius Ⅰ",
+  "name": "Mercurius AI — AI Literacy Tutor",
+  "short_name": "Mercurius AI",
   "description": "An AI literacy tutor built by Mayo AI Literacy Club. Think critically about AI.",
   "start_url": "/mercurius.html",
   "display": "standalone",
