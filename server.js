@@ -1042,11 +1042,11 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 // they cache as a prompt prefix (~0.1× cost after the first call). Every
 // model call sends ONE of these as its static block plus a small dynamic
 // block (lib/systemBlocks). Rules:
-//   - the shared safety block is position-neutral in wording; it goes LAST
-//     in the v2 and curriculum prefixes (their mode routing / lesson beats
-//     are re-asserted after it) but FIRST in the legacy free-chat prefix,
-//     where the mode prompt's reply format must be the last thing the model
-//     reads — with the safety block last, discussion mode stopped scoring;
+//   - the shared safety block goes LAST in every prefix (its wording is
+//     position-neutral). Putting it first in the legacy prefix was tried
+//     and loosened debate's line contract (9–10 lines vs ≤ 7); the
+//     discussion-scoring regression it was meant to fix was actually the
+//     mode prompt's own "pose a question first" rule, fixed in the prompt;
 //   - club knowledge appears only in the widget variants (club_v1 clients);
 //     the App Store app never pays for it, and lessons carry no club
 //     material for anyone; the source library (curated URLs + the
@@ -1068,11 +1068,11 @@ function legacyStatic(mode, isWidget) {
   const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
   if (!staticPrefixCache.has(key)) {
     staticPrefixCache.set(key, systemBlocks.composeStatic([
-      SAFETY_CORE,
       qualityPrefix(m),
       LEGACY_MODE_PROMPTS[m],
       isWidget ? CLUB_BLOCK : null,
       SOURCE_BLOCK,
+      SAFETY_CORE,
     ]));
   }
   return staticPrefixCache.get(key);
