@@ -1162,7 +1162,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
 // limit sits on the per-session bucket, which a human cannot exceed:
 //
 //   1. globalLimiter  — API_IP_PER_MIN  (default 400) across all /api/*
-//   2. chatLimiter    — CHAT_IP_PER_MIN (default 150) on model routes
+//   2. chatLimiter    — CHAT_IP_PER_MIN (default 300) on model routes
 //   3. isRateLimited  — SESSION_PER_MIN (default 10) per session id
 //   4. uploadLimiter  — UPLOAD_IP_PER_MIN (default 60)
 // ---------------------------------------------------------------------------
@@ -1173,7 +1173,7 @@ function envInt(name, fallback) {
 }
 
 const globalLimiter = ipLimiter('global', { windowMs: 60 * 1000, max: envInt('API_IP_PER_MIN', 400) });
-const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: envInt('CHAT_IP_PER_MIN', 150) });
+const chatLimiter = ipLimiter('chat', { windowMs: 60 * 1000, max: envInt('CHAT_IP_PER_MIN', 300) });
 // Admin endpoints get their own much tighter bucket so an attacker
 // can't credential-stuff against the shared admin password under
 // the cover of the broader 60/min `globalLimiter`. 10/min/IP keeps

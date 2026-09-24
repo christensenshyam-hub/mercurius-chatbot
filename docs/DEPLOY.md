@@ -102,7 +102,7 @@ of students never looks like one abusive client.
 | Var | Scope | Default |
 |---|---|---|
 | `API_IP_PER_MIN` | all `/api/*` requests, per client IP | `400` |
-| `CHAT_IP_PER_MIN` | `/api/chat`, per client IP | `150` |
+| `CHAT_IP_PER_MIN` | `/api/chat`, per client IP (300 = a 30-student room at 5 turns each with 2× headroom; see docs/LOAD_REHEARSAL.md) | `300` |
 | `UPLOAD_IP_PER_MIN` | `/api/images` uploads, per client IP | `60` |
 | `REPORT_IP_PER_MIN` | `/api/report` content reports, per client IP (a classroom behind one NAT; the client shows "reported" even on a 429) | `60` |
 | `SESSION_PER_MIN` | `/api/chat` turns, per session id | `10` |
