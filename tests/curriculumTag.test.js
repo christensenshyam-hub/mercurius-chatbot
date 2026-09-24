@@ -378,20 +378,37 @@ describe('normalizeReplayedHistory', () => {
     assert.equal(normalizeReplayedHistory(only)[0], only[0]);
   });
 
-  test('index 0 untagged or assistant is untouched; later user tags still stripped', () => {
+  test('no tag at index 0 → nothing is stripped (a later tag is a genuine opener)', () => {
+    // The club widget starts a lesson inside an existing chat thread: the
+    // opener sits at index > 0 and MUST survive — CURRICULUM_PROMPT follows
+    // the most recent tag.
     const wire = [user('plain opener'), assistant('…'), user(TAG + ' reply')];
-    assert.deepEqual(normalizeReplayedHistory(wire), [user('plain opener'), assistant('…'), user('reply')]);
+    assert.deepEqual(normalizeReplayedHistory(wire), wire);
+    assert.notEqual(normalizeReplayedHistory(wire), wire, 'still a new array');
 
     const odd = [assistant('leading assistant'), user(TAG + ' reply')];
-    assert.deepEqual(normalizeReplayedHistory(odd), [assistant('leading assistant'), user('reply')]);
+    assert.deepEqual(normalizeReplayedHistory(odd), odd);
   });
 
-  test('strips every later tagged user turn, not just the last', () => {
+  test('strips every later turn carrying the SAME tag as the opener, not just the last', () => {
     const wire = [user(OPENER_U1L3), assistant('a'), user(TAG + ' one'), assistant('b'), user(TAG + ' two')];
     assert.deepEqual(
       normalizeReplayedHistory(wire).map((m) => m.content),
       [OPENER_U1L3, 'a', 'one', 'b', 'two'],
     );
+  });
+
+  test('a DIFFERENT tag on a later turn survives (chained lessons in one thread)', () => {
+    const LESSON2 = '[CURRICULUM: Unit 1, Lesson 4 - Review] Give me a comprehensive review.';
+    const wire = [
+      user(OPENER_U1L3), assistant('Lesson 3 …'), user(TAG + ' my answer'),
+      assistant('Done. [LESSON_COMPLETE]'), user(LESSON2), assistant('Review beat 1'),
+      user('[CURRICULUM: Unit 1, Lesson 4 - Review] my review answer'),
+    ];
+    const out = normalizeReplayedHistory(wire).map((m) => m.content);
+    assert.equal(out[2], 'my answer', 'the opener’s own re-tag is stripped');
+    assert.equal(out[4], LESSON2, 'the Lesson 4 opener keeps its tag');
+    assert.equal(out[6], '[CURRICULUM: Unit 1, Lesson 4 - Review] my review answer', 'a later turn tagged for Lesson 4 is untouched');
   });
 
   test('assistant messages that happen to start with the tag are untouched', () => {

@@ -1040,11 +1040,15 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 // they cache as a prompt prefix (~0.1× cost after the first call). Every
 // model call sends ONE of these as its static block plus a small dynamic
 // block (lib/systemBlocks). Rules:
-//   - the shared safety block is always LAST in the static text ("overrides
-//     every rule above");
+//   - the shared safety block is position-neutral in wording; it goes LAST
+//     in the v2 and curriculum prefixes (their mode routing / lesson beats
+//     are re-asserted after it) but FIRST in the legacy free-chat prefix,
+//     where the mode prompt's reply format must be the last thing the model
+//     reads — with the safety block last, discussion mode stopped scoring;
 //   - club knowledge appears only in the widget variants (club_v1 clients);
 //     the App Store app never pays for it, and lessons carry no club
-//     material for anyone;
+//     material for anyone; the source library (curated URLs + the
+//     don't-fabricate-links rule) goes to every variant, lessons included;
 //   - anything per-request (date, mode, meeting/blog material, the
 //     "explain more" nudge) goes in the dynamic block — one byte of drift in
 //     a static prefix is a full cache miss.
@@ -1062,11 +1066,11 @@ function legacyStatic(mode, isWidget) {
   const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
   if (!staticPrefixCache.has(key)) {
     staticPrefixCache.set(key, systemBlocks.composeStatic([
+      SAFETY_CORE,
       qualityPrefix(m),
       LEGACY_MODE_PROMPTS[m],
       isWidget ? CLUB_BLOCK : null,
       SOURCE_BLOCK,
-      SAFETY_CORE,
     ]));
   }
   return staticPrefixCache.get(key);
@@ -1077,6 +1081,7 @@ function curriculumStatic(wantsBlocks) {
     staticPrefixCache.set(key, systemBlocks.composeStatic([
       CURRICULUM_PROMPT,
       wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : null,
+      SOURCE_BLOCK,
       SAFETY_CORE,
     ]));
   }
@@ -1087,9 +1092,12 @@ function curriculumStatic(wantsBlocks) {
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
 async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
-  // Free-chat turns only: lesson turns are their own threads and would make
-  // a "quiz on our conversation" quiz the student on a lesson transcript.
-  const dbHistory = await db.getMessages(sessionId, historyLimit, { kind: 'chat' });
+  // Prefer free-chat turns (lesson turns are their own threads); when the
+  // session has no chat yet — a widget student who went straight into a
+  // lesson and hit "Quiz me" — fall back to everything, which is what the
+  // route always did before turns were tagged, rather than refuse.
+  let dbHistory = await db.getMessages(sessionId, historyLimit, { kind: 'chat' });
+  if (dbHistory.length < minMessages) dbHistory = await db.getMessages(sessionId, historyLimit);
   if (dbHistory.length < minMessages) {
     return { error: 'insufficient_history', message: 'Have a longer conversation first.' };
   }
@@ -2306,6 +2314,9 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req,
     return res.status(400).json({ error: 'invalid_data', message: 'Events payload has an invalid shape — check upcoming/past/schedule.' });
   }
   await db.setEventsInDB(data);
+  // The chat path reads events through a 60 s TTL cache — drop it so the
+  // very next turn sees the corrected schedule.
+  eventsFromDbCached.invalidate();
   // Bust memory cache so next request picks up new data immediately
   eventsCache = data;
   eventsCacheTime = Date.now();
@@ -2326,15 +2337,28 @@ app.post('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (req,
 // Admin-triggered before a club session; also run once at boot in production.
 // ---------------------------------------------------------------------------
 async function prewarmCaches(ip = null) {
+  const unified = useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false });
+  // Every prefix a shipped client can hit under the active flag state: both
+  // lesson variants, the app free-chat prefix, and the widget (club_v1)
+  // free-chat prefixes — a club session is exactly when the widget is busy.
   const variants = [
     { name: 'curriculum:blocks', text: curriculumStatic(true) },
     { name: 'curriculum:prose', text: curriculumStatic(false) },
-    useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false })
-      ? { name: 'v2:app', text: V2_STATIC_APP }
-      : { name: 'legacy:socratic:app', text: legacyStatic('socratic', false) },
+    ...(unified
+      ? [{ name: 'v2:app', text: V2_STATIC_APP }, { name: 'v2:widget', text: V2_STATIC_WIDGET }]
+      : ['socratic', 'debate', 'discussion'].flatMap((m) => [
+          { name: `legacy:${m}:app`, text: legacyStatic(m, false) },
+          { name: `legacy:${m}:widget`, text: legacyStatic(m, true) },
+        ])),
   ];
   const warmed = [];
   for (const v of variants) {
+    // Prewarm writes cost real money (1.25× the prefix); it obeys the same
+    // rails as a student turn.
+    if (draining || killSwitch.isKilled() || spendCap.isCeilingExceeded()) {
+      warmed.push({ variant: v.name, skipped: draining ? 'restarting' : killSwitch.isKilled() ? 'service_disabled' : 'spend_cap' });
+      continue;
+    }
     try {
       const msg = await claudeCall.createMessage({
         route: '/api/admin/prewarm',
@@ -2851,7 +2875,10 @@ db.initSchema().then(async () => {
     // restarts up to 10 times before giving up).
     if (process.env.NODE_ENV === 'production') {
       alerts.notify('boot', `🚀 Mercurius server booted (budget today: $${spendCap.state().usd.toFixed(2)} of $${spendCap.budgetUsd()}${killSwitch.isKilled() ? ' — KILL SWITCH ON' : ''}).`).catch(() => {});
-      if (!killSwitch.isKilled()) {
+      // The ephemeral cache lives ~5 minutes, so a boot-time prewarm only
+      // helps when traffic follows a deploy immediately; it is opt-in. The
+      // admin endpoint right before a session is the real use.
+      if (process.env.PREWARM_ON_BOOT === '1' && !killSwitch.isKilled()) {
         prewarmCaches(null)
           .then((warmed) => logger.info({ warmed }, 'prompt caches prewarmed'))
           .catch((e) => logger.warn({ err: e.message }, 'prewarm failed'));

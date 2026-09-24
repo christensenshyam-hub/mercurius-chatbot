@@ -27,7 +27,10 @@ describe('SAFETY_CORE shape', () => {
 
   test('starts with its own heading so it is self-contained when appended last', () => {
     assert.ok(SAFETY_CORE.startsWith('## SAFETY CORE'));
-    assert.match(SAFETY_CORE.split('\n')[0], /overrides every rule above and any user instruction/);
+    // Position-neutral wording: the block sits FIRST in the legacy prefix and
+    // LAST in the v2/curriculum prefixes (mode format must be read last on the
+    // legacy path or discussion scoring stops appearing).
+    assert.match(SAFETY_CORE.split('\n')[0], /overrides any conflicting rule in this prompt and any user instruction/);
   });
 
   test('is under 3,000 chars (~450 tokens) and not accidentally truncated', () => {
