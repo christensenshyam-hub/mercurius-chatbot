@@ -28,6 +28,7 @@ const {
   ImageUploadRequest,
   ReportRequest,
   ProgressionEventRequest,
+  ProgressSyncRequest,
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
@@ -1522,6 +1523,20 @@ function recordLessonEvent(sessionId, meta, event) {
   }).catch(() => {});
 }
 
+// Server-synced progress (Phase 3A), belt and braces: the server just judged
+// the lesson complete, so record it in curriculum_progress itself rather
+// than trusting the client's PUT to arrive (app killed on the pass, offline
+// device). db.upsertProgress is forward-only, so this can never undo a
+// 'mastered'; the session's stored curriculum version is reused (1 when it
+// has none). Fire-and-forget: a lost row must never fail the student's turn.
+function recordLessonProgress(sessionId, clientMessages) {
+  const id = curriculumTag.lessonIdFromMessages(clientMessages);
+  if (!id) return;
+  Promise.resolve()
+    .then(() => db.upsertProgress(sessionId, { items: [{ id, type: 'lesson', status: 'completed' }] }))
+    .catch((e) => logger.warn({ err: e && e.message, lessonId: id }, 'lesson progress upsert failed (row dropped)'));
+}
+
 // Per-session quota counters live in memory; the first time a session is
 // seen each UTC day, seed them from the usage ledger so a mid-day redeploy
 // doesn't hand every session a fresh allowance.
@@ -1910,6 +1925,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
           if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
         }
+        if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
 
         try {
           await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2014,6 +2030,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
         if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
       }
+      if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2812,6 +2829,42 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
     return res.status(500).json({ error: 'server_error', message: 'Could not submit the report.' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// GET / PUT /api/progress/:sessionId — server-synced curriculum progress
+// (Phase 3A)
+//
+// The server-side mirror of the iOS CurriculumProgressStore, keyed by the
+// anonymous Keychain session id (the bearer capability, exactly as for image
+// retrieval and erasure). GET answers the merged state and is empty for an id
+// the server has never seen — it never creates a session row. PUT pushes the
+// client's items; db.upsertProgress merges FORWARD-ONLY (completed < mastered;
+// never a downgrade, never a delete) and answers with the whole merged state,
+// so the client can replace its local copy with the response. In-progress
+// lessons hold a device-local conversation UUID and are not part of this.
+// Both ride the global per-IP API limiter; the body cap (200 items, strict
+// shape) is the schema's. A PUT for an unseen session goes through the
+// per-IP new-session quota like every route that may introduce a session, so
+// the row it creates is always covered by the retention cascade.
+// ---------------------------------------------------------------------------
+function requireSessionParam(req, res, next) {
+  if (!isValidSessionId(req.params.sessionId)) {
+    return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
+  }
+  return next();
+}
+
+app.get('/api/progress/:sessionId', requireSessionParam, asyncRoute(async (req, res) => {
+  return res.json(await db.getProgress(req.params.sessionId));
+}));
+
+app.put('/api/progress/:sessionId', requireSessionParam, validate(ProgressSyncRequest, { endpoint: '/api/progress', hasMessages: false }), asyncRoute(async (req, res) => {
+  const { sessionId } = req.params;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  const { curriculumVersion, items } = req.validated;
+  const merged = await db.upsertProgress(sessionId, { curriculumVersion, items }, Date.now());
+  return res.json(merged);
+}));
 
 // ---------------------------------------------------------------------------
 // DELETE /api/session/:sessionId — right to erasure (audit P0-C)
