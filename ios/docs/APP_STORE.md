@@ -2,7 +2,7 @@
 
 Tracks what's already in the repo, what needs manual work per submission, and what needs action only before the very first review.
 
-_Last touched: 2.3.0 (build 14) — photos in the nutrition label, 13+ age rating, first-run disclosure._
+_Last touched: 2.3.0 (build 15) — product interaction (synced lesson progress) added to the nutrition label, on top of build 14's photos, 13+ age rating and first-run disclosure._
 
 ## Status of each gate
 
@@ -17,7 +17,7 @@ _Last touched: 2.3.0 (build 14) — photos in the nutrition label, 13+ age ratin
 | App Transport Security | ✅ | `NSAllowsArbitraryLoads: false` — strict HTTPS only. |
 | Encryption declaration | ✅ | `ITSAppUsesNonExemptEncryption: false` — skips the export-compliance questionnaire each submission. |
 | App Store category | ✅ | `LSApplicationCategoryType: public.app-category.education` |
-| Privacy manifest | ✅ | `Mercurius/Resources/PrivacyInfo.xcprivacy` — declares no tracking, no tracking domains, three collected data types (user ID, other user content, photos or videos — all for app functionality, none linked/tracked), one required-reason API (UserDefaults / `CA92.1`). |
+| Privacy manifest | ✅ | `Mercurius/Resources/PrivacyInfo.xcprivacy` — declares no tracking, no tracking domains, four collected data types (user ID, other user content, photos or videos — app functionality; product interaction — app functionality + analytics; none linked/tracked), one required-reason API (UserDefaults / `CA92.1`). |
 | Age rating | ✅ | 13+ in App Store Connect. The app asks for age on first run and stops under-13 users at a terminal screen; see §Age rating and first-run disclosure. |
 | Privacy policy URL | ⬜ | Needs a hosted URL for App Store Connect. Draft at `PRIVACY_POLICY.md` below. |
 | Support URL | ⬜ | Needs a public page (e.g. `mayoailiteracy.com/support`). |
@@ -32,6 +32,7 @@ Every entry in `PrivacyInfo.xcprivacy` must also appear in the App Store Connect
 - **User ID** — device-scoped random session id kept in Keychain, sent to the Mercurius backend with each request so conversations stitch together across app launches. Not linked to any identity. Not used for tracking.
 - **Other User Content** — the text of chat messages, sent to the backend so Claude can respond. Not linked. Not tracking.
 - **Photos or Videos** — a photo the student chooses to attach to a chat message (system `PhotosPicker`, so no photo-library permission string is needed). Uploaded to the backend and forwarded to Anthropic so Claude can respond about it. App functionality only. Not linked. Not tracking. _Added in 2.3.0 — set it in the App Store Connect label before submitting build 14._
+- **Product Interaction** (Usage Data) — which lessons are finished or mastered, synced to the backend under the session id (`GET`/`PUT /api/progress`) so progress survives a reinstall, plus the lesson start/finish rows the backend keeps to see whether lessons work. App functionality and analytics. Not linked. Not tracking. _Added for build 15 — set it in the App Store Connect label before submitting._
 
 Not a data type: the age picked on first run. It is used once to gate the flow and is never persisted or logged, so it does not appear in the manifest or the label.
 
@@ -49,7 +50,7 @@ The UI tests in `MercuriusUITests` walk every branch of the gate with the `onboa
 
 Only one in our own code:
 
-- **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`), reason `CA92.1` — persisting theme preference and completed-lesson set on-device.
+- **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`), reason `CA92.1` — persisting theme preference, the completed-lesson set, streak, reminder settings, last-activity time and the review-prompt counter on-device.
 
 Keychain, SwiftData, and URLSession internals that Apple frameworks call do not need app-level declarations — those are Apple's responsibility.
 
@@ -117,19 +118,21 @@ App Store Connect accepts one "required" device size per supported family; all o
 | iPhone 5.5″ (legacy) | iPhone 8 Plus | 414 × 736 | 1242 × 2208 |
 | iPad 13″ (if iPad supported) | iPad Pro 13-inch (M4) | 1024 × 1366 | 2048 × 2732 |
 
-3–5 screenshots per size is the usual submission bundle. Suggested shots that reflect what the app actually does:
+3–5 screenshots per size is the usual submission bundle. `./scripts/screenshots.sh` captures the network-free ones from a seeded app (`00-home`, `01-chat`, `02-settings`, `03-curriculum`, `04-history`); the rest are captured by hand. Suggested shots that reflect what the app actually does:
 
-1. Empty chat (light mode) — shows the tutor's framing + starter prompts
-2. Mid-conversation chat with a streamed assistant reply
-3. Quiz sheet mid-session (loaded state)
-4. Curriculum tab, first unit expanded
-5. Report card sheet with real scores
+1. Home — Merc with the next-stop button ("Start Lesson 1 …") and "Chat with Merc" (`00-home`)
+2. Mid-conversation chat with a streamed assistant reply (`01-chat`, seeded)
+3. Curriculum tab — the learning path (`03-curriculum`)
+4. Lesson complete — the celebration overlay with its share button (DEBUG build: `-LessonPreview -LessonSkipIntro -ForceCelebrate`)
+5. Quiz sheet mid-session (loaded state; needs the live backend)
+
+`02-settings` changed in build 15: About now lists "How Mercurius teaches" and "Send feedback". Re-capture it if Settings is in the bundle.
 
 ## Reviewer notes (paste into App Store Connect)
 
-> Mercurius AI is the native companion to the web-based Mayo AI Literacy Club tutor. It uses a small device-scoped session id (random 32-char string, stored in Keychain) to stitch conversations together across launches. There is no user account, no login, no ad network, and no third-party analytics. Chat content and any photo the student attaches are sent to our own backend (mercurius-chatbot-production.up.railway.app) which proxies through the Anthropic API; the backend logs interactions against the session id only.
+> Mercurius AI is the native companion to the web-based Mayo AI Literacy Club tutor. It uses a small device-scoped session id (random 32-char string, stored in Keychain) to stitch conversations together across launches. There is no user account, no login, no ad network, and no third-party analytics. Chat content and any photo the student attaches are sent to our own backend (mercurius-chatbot-production.up.railway.app) which proxies through the Anthropic API; the backend logs interactions against the session id only, and keeps the student's lesson progress under the same id so it survives a reinstall.
 >
-> On first launch the app asks for the user's age (13+; under 13 is stopped and nothing is stored), shows a disclosure that messages and photos are forwarded to Anthropic's Claude, and asks for agreement before any request is made. To exercise the app on a fresh install: launch → tap Continue on the Meet Merc screen → spin the age wheel to 13 or older (it opens on "12 or younger") → tap Continue → turn on the "I understand my messages and photos are sent to Anthropic's Claude…" switch (Agree and continue stays disabled until it is on) → tap Agree and continue → tap Got it on the "What Merc can't do" screen → on "Your path" tap Just chat instead → tap one of the four starter prompts on the Chat tab → observe a streamed reply. The Club tab surfaces schedule + blog content that lives on our public site at mayoailiteracy.com.
+> On first launch the app asks for the user's age (13+; under 13 is stopped and nothing is stored), shows a disclosure that messages and photos are forwarded to Anthropic's Claude, and asks for agreement before any request is made. To exercise the app on a fresh install: launch → tap Continue on the Meet Merc screen → spin the age wheel to 13 or older (it opens on "12 or younger") → tap Continue → turn on the "I understand my messages and photos are sent to Anthropic's Claude…" switch (Agree and continue stays disabled until it is on) → tap Agree and continue → tap Got it on the "What Merc can't do" screen → on "Your path" tap Just chat instead → tap one of the four starter prompts on the Chat tab → observe a streamed reply. The app may ask for notification permission for weekly lesson reminders (Wednesday and Sunday) and an optional daily streak reminder; declining leaves everything else working.
 
 ## Privacy policy
 
@@ -140,6 +143,7 @@ What the hosted policy must keep saying, because the app, `PrivacyInfo.xcprivacy
 - Retention: messages 90 days, photos 24 hours, reports 180 days, usage/lesson rows 400 days; sessions idle for 365 days are erased.
 - Deletion: the in-app "Delete my data & start over" (Settings → Privacy) erases the session on the server under the old id, then rotates the id on the device. "Reset this device only" is the offline fallback and leaves server data in place until it ages out.
 - Under 13 is stopped on-device and the age is never stored; the disclosure names Anthropic's Claude as the model provider.
+- Lesson progress (finished and mastered lessons) is kept on the server under the session id as well as on the phone, for as long as the session exists; deleting the data or the session's idle purge removes it. _New for build 15 — `marketing/privacy.html` still says the progress checklist lives only on the phone._
 
 ## Version-bump checklist (each submission)
 
@@ -147,6 +151,6 @@ What the hosted policy must keep saying, because the app, `PrivacyInfo.xcprivacy
 2. `xcodegen generate`.
 3. Run the full test suite: `./scripts/coverage.sh all` (or just `swift test` + `xcodebuild test`).
 4. Archive + validate as above.
-5. Review privacy nutrition label in App Store Connect — should match `PrivacyInfo.xcprivacy` (User ID, Other User Content, Photos or Videos). Confirm the age rating is still 13+.
+5. Review privacy nutrition label in App Store Connect — should match `PrivacyInfo.xcprivacy` (User ID, Other User Content, Photos or Videos, Product Interaction). Confirm the age rating is still 13+.
 6. Capture / refresh screenshots if any UI changed.
 7. Upload via Xcode's Organizer or `xcrun altool --upload-app` once you're happy.

@@ -7,11 +7,10 @@ import PersistenceKit
 /// list, input bar, and empty state.
 public struct ChatView: View {
     @State private var model: ChatViewModel
-    /// A single presented sheet. Settings + the analytical tools all route
-    /// through ONE `.sheet(item:)` — stacking multiple `.sheet` modifiers on the
-    /// same view is a SwiftUI footgun where only one presents (the others
-    /// silently no-op), which is exactly why "Generate Quiz" / "Report Card"
-    /// did nothing while Settings worked.
+    /// A single presented sheet. Settings and the quiz both route through ONE
+    /// `.sheet(item:)` — stacking multiple `.sheet` modifiers on the same view
+    /// is a SwiftUI footgun where only one presents (the others silently
+    /// no-op).
     @State private var activeSheet: ActiveSheet?
 
     /// Outcome of the most recent report, driving the one feedback alert.
@@ -41,7 +40,7 @@ public struct ChatView: View {
 
     private let apiClient: APIClient
     private let sessionIdentity: SessionIdentity
-    /// Awards tool-driven achievements (Quiz Master, Report Card). Lives in
+    /// Awards tool-driven achievements (Quiz Master). Lives in
     /// PersistenceKit (a ChatFeature dependency). Optional for previews/tests.
     private let achievementStore: AchievementStore?
 
@@ -244,7 +243,7 @@ public struct ChatView: View {
         // was redundant — the app is obviously Mercurius — so the bar is now
         // just the controls: the in-screen pair (streak chip + Settings)
         // leads together, Home trails alone. (New Chat / History live in the
-        // bottom tab bar; Quiz / Report Card were removed.)
+        // bottom tab bar; the Quiz / Report Card buttons were removed.)
         HStack(spacing: BrandSpacing.sm) {
             if let headerAccessory {
                 headerAccessory()

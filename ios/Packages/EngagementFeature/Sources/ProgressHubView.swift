@@ -15,6 +15,8 @@ public struct ProgressHubView: View {
     /// existing callers are unaffected; the Progress card renders only when a
     /// store is passed AND it reports `enabled` (server flag on). Off by default.
     private let gamificationStore: GamificationStore?
+    /// The lesson a tapped reminder opens (see `RemindersSection`).
+    private let nextLessonId: String?
     private let onDone: () -> Void
 
     public init(
@@ -23,6 +25,7 @@ public struct ProgressHubView: View {
         reminderStore: ReminderStore,
         scheduler: NotificationScheduler,
         gamificationStore: GamificationStore? = nil,
+        nextLessonId: String? = nil,
         onDone: @escaping () -> Void
     ) {
         self.streakStore = streakStore
@@ -30,6 +33,7 @@ public struct ProgressHubView: View {
         self.reminderStore = reminderStore
         self.scheduler = scheduler
         self.gamificationStore = gamificationStore
+        self.nextLessonId = nextLessonId
         self.onDone = onDone
     }
 
@@ -54,8 +58,8 @@ public struct ProgressHubView: View {
                     // they're shown bare (wrapping them in section() would double
                     // the title).
                     AchievementsGalleryView(store: achievementStore)
-                    DailyReminderSection(store: reminderStore, scheduler: scheduler,
-                                         streakStore: streakStore)
+                    RemindersSection(store: reminderStore, scheduler: scheduler,
+                                     streakStore: streakStore, nextLessonId: nextLessonId)
                 }
                 .padding(BrandSpacing.lg)
             }

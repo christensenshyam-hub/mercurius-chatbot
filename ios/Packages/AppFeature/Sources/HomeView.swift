@@ -1,44 +1,55 @@
 import SwiftUI
 import DesignSystem
+import CurriculumFeature
+import SettingsFeature
 
 /// The first screen a user sees after the app finishes bootstrapping —
 /// reimagined as a **Merc welcome moment** (the Duolingo pattern: the mascot
 /// IS the front door, not a logo card).
 ///
 /// On appear, a large Merc pops in with a spring, waves hello, and "speaks" a
-/// contextual greeting through a typewriter speech bubble (streak-aware when
-/// the learner has one going). He then keeps living — idle antics every few
-/// seconds, a poke reaction on tap — while two chunky CTAs guide the user
-/// into the two halves of the app:
+/// greeting through a typewriter speech bubble that knows where the student
+/// is (streak, this week, the next stop). He then keeps living — idle antics
+/// every few seconds, a poke reaction on tap — while two chunky CTAs guide
+/// the user into the two halves of the app:
 ///
-/// - **Start learning** — jumps into the learning path (Curriculum tab).
+/// - **The next stop** ("Start Lesson 1", "Continue · Lesson 3: …", "Take the
+///   Unit 1 check") — opens it directly, over the learning path.
 /// - **Chat with Merc** — opens the free Discussion chat (Chat tab).
-/// - **How it works** — the subdued explainer link, unchanged.
+///
+/// Above them, "This week · 1 of 2" tracks the weekly goal. Installs that
+/// finished onboarding before the weekly nudges existed get a one-time card
+/// offering them.
 ///
 /// Motion is fully gated on Reduce Motion (everything renders settled, full
 /// greeting shown instantly). At accessibility type sizes Merc shrinks so the
 /// scaled text and CTAs keep the room. VoiceOver reads the complete greeting
 /// immediately — never the mid-typewriter fragment.
-public struct HomeView: View {
+struct HomeView: View {
 
     // MARK: - Inputs
 
+    private let state: HomeState
+    private let onStartNext: () -> Void
     private let onStartChat: () -> Void
-    private let onStartLearning: () -> Void
-    private let onHowItWorks: () -> Void
-    /// Current streak (days). > 1 flavors the greeting Duolingo-style.
-    private let streak: Int
+    private let showsReminderCard: Bool
+    private let onAcceptReminders: () -> Void
+    private let onDismissReminderCard: () -> Void
 
-    public init(
+    init(
+        state: HomeState,
+        onStartNext: @escaping () -> Void,
         onStartChat: @escaping () -> Void,
-        onStartLearning: @escaping () -> Void,
-        onHowItWorks: @escaping () -> Void,
-        streak: Int = 0
+        showsReminderCard: Bool = false,
+        onAcceptReminders: @escaping () -> Void = {},
+        onDismissReminderCard: @escaping () -> Void = {}
     ) {
+        self.state = state
+        self.onStartNext = onStartNext
         self.onStartChat = onStartChat
-        self.onStartLearning = onStartLearning
-        self.onHowItWorks = onHowItWorks
-        self.streak = streak
+        self.showsReminderCard = showsReminderCard
+        self.onAcceptReminders = onAcceptReminders
+        self.onDismissReminderCard = onDismissReminderCard
     }
 
     // MARK: - State
@@ -59,7 +70,7 @@ public struct HomeView: View {
 
     // MARK: - Body
 
-    public var body: some View {
+    var body: some View {
         NavigationStack {
             ZStack {
                 BrandColor.background
@@ -85,6 +96,12 @@ public struct HomeView: View {
                 VStack(spacing: 0) {
                     brandRow
                         .padding(.top, BrandSpacing.md)
+
+                    if showsReminderCard {
+                        reminderCard
+                            .padding(.top, BrandSpacing.lg)
+                            .transition(.opacity)
+                    }
 
                     Spacer(minLength: BrandSpacing.xl)
 
@@ -180,24 +197,20 @@ public struct HomeView: View {
         dynamicTypeSize.isAccessibilitySize ? 150 : 216
     }
 
-    /// Two chunky Duolingo-style CTAs: lessons first (the growth loop), chat
-    /// second, and the subdued explainer link last.
+    /// The week ring over two chunky Duolingo-style CTAs: the next stop first
+    /// (the growth loop), chat second.
     private var ctaSection: some View {
         VStack(spacing: BrandSpacing.md) {
-            DuoButton("Start learning", style: .primary, action: onStartLearning)
-                .accessibilityHint("Opens your learning path of lessons")
+            if state.next != nil {
+                weekRow
+            }
+
+            DuoButton(state.primaryActionTitle, style: .primary, action: onStartNext)
+                .accessibilityHint(state.primaryActionHint)
+                .accessibilityIdentifier("home.nextStop")
 
             DuoButton("Chat with Merc", style: .secondary, action: onStartChat)
                 .accessibilityHint("Opens a free-form conversation with the tutor")
-
-            Button(action: onHowItWorks) {
-                Text("How it works")
-                    .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accent)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Opens a short explanation of how Mercurius teaches")
         }
         // Cap the CTA width on larger devices (iPad) so the buttons
         // don't stretch across the entire screen.
@@ -208,10 +221,75 @@ public struct HomeView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// "This week · 1 of 2" with a small progress ring (the GamifiedTopBar
+    /// level-ring pattern).
+    private var weekRow: some View {
+        HStack(spacing: BrandSpacing.sm) {
+            ZStack {
+                Circle()
+                    .stroke(BrandColor.surfaceElevated, lineWidth: 4)
+                Circle()
+                    .trim(from: 0, to: state.weekProgress)
+                    .stroke(BrandGradient.mercHorizontal, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 22, height: 22)
+
+            Text(state.weekLabel)
+                .font(BrandFont.roundedCaption)
+                .foregroundStyle(BrandColor.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.weekAccessibilityLabel)
+    }
+
+    /// The one-time weekly-nudge offer. Compact, above Merc, so it never
+    /// pushes the CTAs out of reach.
+    private var reminderCard: some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            HStack(alignment: .top, spacing: BrandSpacing.sm) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(BrandColor.accent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Want Merc to remind you twice a week?")
+                        .font(BrandFont.roundedBodyEmphasized)
+                        .foregroundStyle(BrandColor.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Wednesday at 7 PM and Sunday at 6 PM. You can change this in Progress.")
+                        .font(BrandFont.caption)
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            let buttons = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: BrandSpacing.xs))
+                : AnyLayout(HStackLayout(spacing: BrandSpacing.sm))
+            buttons {
+                BrandButton("Remind me", style: .primary, action: onAcceptReminders)
+                    .accessibilityIdentifier("home.reminderCard.accept")
+                BrandButton("Not now", style: .ghost, action: onDismissReminderCard)
+                    .accessibilityIdentifier("home.reminderCard.dismiss")
+            }
+        }
+        .padding(BrandSpacing.md)
+        .frame(maxWidth: 420, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
+                .fill(BrandColor.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
+                        .strokeBorder(BrandColor.border, lineWidth: 1)
+                )
+        )
+    }
+
     // MARK: - Entrance choreography
 
     private func enter() {
-        greeting = makeGreeting()
+        greeting = state.greeting(hour: Calendar.current.component(.hour, from: Date()))
         guard !reduceMotion else {
             // Reduce Motion: no pop, no wave, no typewriter — everything
             // renders settled with the full greeting.
@@ -247,27 +325,6 @@ public struct HomeView: View {
         }
     }
 
-    /// A short, contextual line: streak-aware when one is alive, otherwise a
-    /// time-of-day opener with a rotating invitation.
-    private func makeGreeting() -> String {
-        if streak > 1 {
-            return "Day \(streak) — let's keep your streak alive!"
-        }
-        let hour = Calendar.current.component(.hour, from: Date())
-        let opener: String
-        switch hour {
-        case 5..<12:  opener = "Good morning!"
-        case 12..<17: opener = "Good afternoon!"
-        case 17..<22: opener = "Good evening!"
-        default:      opener = "Up late? Perfect time to learn."
-        }
-        let invitations = [
-            "Ready to sharpen your AI skills?",
-            "Let's learn something new today.",
-            "Your next lesson is waiting.",
-        ]
-        return opener + " " + (invitations.randomElement() ?? invitations[0])
-    }
 }
 
 /// The little downward triangle hanging off the speech bubble (filled; its
@@ -298,30 +355,29 @@ private struct BubbleTailEdges: Shape {
 
 // MARK: - Preview
 
-#Preview("Light") {
-    HomeView(
-        onStartChat: { print("Chat") },
-        onStartLearning: { print("Learn") },
-        onHowItWorks: { print("How it works") }
+#if DEBUG
+@MainActor
+private func previewState(streak: Int = 0) -> HomeState {
+    let suite = "preview.home.\(streak)"
+    UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+    let progress = CurriculumProgressStore(
+        preferences: UserDefaultsPreferenceStore(defaults: UserDefaults(suiteName: suite) ?? .standard)
     )
-    .preferredColorScheme(.light)
+    return HomeState.build(streak: streak, progress: progress)
+}
+
+#Preview("Light") {
+    HomeView(state: previewState(), onStartNext: {}, onStartChat: {}, showsReminderCard: true)
+        .preferredColorScheme(.light)
 }
 
 #Preview("Dark") {
-    HomeView(
-        onStartChat: { print("Chat") },
-        onStartLearning: { print("Learn") },
-        onHowItWorks: { print("How it works") },
-        streak: 5
-    )
-    .preferredColorScheme(.dark)
+    HomeView(state: previewState(streak: 5), onStartNext: {}, onStartChat: {})
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Accessibility XXL") {
-    HomeView(
-        onStartChat: { print("Chat") },
-        onStartLearning: { print("Learn") },
-        onHowItWorks: { print("How it works") }
-    )
-    .environment(\.dynamicTypeSize, .accessibility3)
+    HomeView(state: previewState(), onStartNext: {}, onStartChat: {}, showsReminderCard: true)
+        .environment(\.dynamicTypeSize, .accessibility3)
 }
+#endif

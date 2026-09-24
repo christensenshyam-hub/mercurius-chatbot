@@ -128,7 +128,8 @@ struct ProgressRing: View {
 
 /// `🔥 24 day streak` — flame glyph on the flame gradient (gold in Dawn),
 /// count 15/800, label 12/600 muted. Compact drops the label (DI budget:
-/// ≤ ~4 glyphs per side).
+/// ≤ ~4 glyphs per side). With no streak yet it never shows a "0": the
+/// flame alone (compact) or the flame with "Start a streak".
 struct StreakChipView: View {
     let state: LearningActivityAttributes.ContentState
     var compact: Bool = false
@@ -144,20 +145,26 @@ struct StreakChipView: View {
                 .foregroundStyle(ActivityTheme.flame)
             // `fixedSize` — the chip must never wrap ("2\n4", "day\nstreak")
             // when the lock card's text column is width-squeezed.
-            Text("\(state.streakCount)")
-                .font(.system(size: 15, weight: .heavy))
-                .tracking(-0.2)
-                .foregroundStyle(onIsland ? .white : theme.text.resolved(scheme))
-                .lineLimit(1)
-                .fixedSize()
+            if state.streakCount > 0 {
+                Text("\(state.streakCount)")
+                    .font(.system(size: 15, weight: .heavy))
+                    .tracking(-0.2)
+                    .foregroundStyle(onIsland ? .white : theme.text.resolved(scheme))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
             if !compact {
-                Text("day streak")
+                Text(state.streakCount > 0 ? "day streak" : "Start a streak")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(onIsland ? .white.opacity(0.78) : theme.sub.resolved(scheme))
                     .lineLimit(1)
                     .fixedSize()
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            state.streakCount > 0 ? "\(state.streakCount) day streak" : "Start a streak"
+        )
     }
 }
 

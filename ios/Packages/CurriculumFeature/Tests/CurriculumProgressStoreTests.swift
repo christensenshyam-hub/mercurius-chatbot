@@ -3,17 +3,6 @@ import Foundation
 @testable import CurriculumFeature
 @testable import SettingsFeature
 
-/// Minimal in-memory `PreferenceStore` for tests. Mirrors the one in
-/// SettingsFeatureTests but kept local so this package's tests don't
-/// cross-module-depend on another package's test target.
-private final class InMemoryPreferenceStore: PreferenceStore, @unchecked Sendable {
-    private var storage: [String: String] = [:]
-    func string(for key: String) -> String? { storage[key] }
-    func set(_ value: String?, for key: String) {
-        if let value { storage[key] = value } else { storage.removeValue(forKey: key) }
-    }
-}
-
 @Suite("MercuriusCurriculum data")
 struct CurriculumDataTests {
 

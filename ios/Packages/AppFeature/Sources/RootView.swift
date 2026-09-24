@@ -4,7 +4,6 @@ import DesignSystem
 import ChatFeature
 import CurriculumFeature
 import EngagementFeature
-import MercFlowFeature
 import MercuriusActivity
 import NetworkingKit
 import PersistenceKit
@@ -13,7 +12,10 @@ import PersistenceKit
 /// Root view of the app. Focused on **bootstrap** only:
 ///
 /// - `.loading`  — session identity is being resolved (+ SwiftData
-///                 container spinning up via `AppEnvironment`).
+///                 container spinning up via `AppEnvironment`), and — when
+///                 consent is already current — the streak seed and the
+///                 progress pull run under the launch screen, so Home opens
+///                 on fresh numbers.
 /// - `.ready`    — hand off to `AppEntryView`, which owns the user-
 ///                 facing entry flow (Onboarding → Home → AppShell).
 /// - `.failed`   — show a recoverable error with a Try-again CTA.
@@ -26,6 +28,9 @@ public struct RootView: View {
     @EnvironmentObject private var env: AppEnvironment
 
     @State private var bootstrapState: BootstrapState = .loading
+    /// Decided once, as bootstrap finishes: the tab this cold launch resumes
+    /// (`LaunchResume`), or nil for Home.
+    @State private var resumeTab: AppShellView.Tab?
 
     private enum BootstrapState: Equatable {
         case loading
@@ -54,9 +59,7 @@ public struct RootView: View {
 
     public var body: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-MercFlow") {
-            MercFlowFeature.LessonView()
-        } else if ProcessInfo.processInfo.arguments.contains("-LessonPreview") {
+        if ProcessInfo.processInfo.arguments.contains("-LessonPreview") {
             lessonPreview
         } else if ProcessInfo.processInfo.arguments.contains("-MercPreview") {
             MercPreviewView()
@@ -80,7 +83,7 @@ public struct RootView: View {
     /// be screenshotted without navigating the whole app.
     @ViewBuilder private var lessonPreview: some View {
         if let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first {
-            let next = unit.lessons.dropFirst().first
+            let next = MercuriusCurriculum.nextStop(after: lesson.id)
             // A fake resume id skips the speech-bubble intro (and harmlessly
             // falls through to a fresh start) so the chat can be previewed.
             let fakeResume: UUID? = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
@@ -100,11 +103,10 @@ public struct RootView: View {
                 onStarted: { _, _ in },
                 onLessonComplete: { _ in },
                 onExit: {},
-                nextLessonNumber: next?.number,
-                nextLessonTitle: next?.title,
                 onAdvanceToNext: {},
                 completedInUnit: 3,
-                totalInUnit: unit.lessons.count
+                totalInUnit: unit.lessons.count,
+                nextStop: next.map(AppShellView.celebrationStop)
             )
             .preferredColorScheme(env.themeStore.theme.colorScheme)
         } else {
@@ -145,7 +147,7 @@ public struct RootView: View {
             case .loading:
                 loadingView
             case .ready:
-                AppEntryView()
+                AppEntryView(resumeTab: resumeTab)
                     .transition(.opacity)
             case .failed(let reason):
                 failureView(reason: reason)
@@ -157,11 +159,13 @@ public struct RootView: View {
         .task {
             #if DEBUG
             // `-NotifPreview`: fire one of each reminder banner flavor (defense
-            // / wave / celebrate) seconds from now so the Merc pose art can be
-            // seen without waiting for a real reminder time. Fires from the
-            // always-mounted root (the AppShell hook never runs from Home).
+            // / weekly / celebrate) seconds from now so the Merc pose art can
+            // be seen without waiting for a real reminder time; tapping one
+            // opens the next lesson. Fires from the always-mounted root.
             if ProcessInfo.processInfo.arguments.contains("-NotifPreview") {
-                EngagementFeature.NotificationScheduler().scheduleDemo()
+                EngagementFeature.NotificationScheduler().scheduleDemo(
+                    nextLessonId: env.progressStore.frontierLessonId
+                )
             }
             // `-LiveActivityPreview`: start the learning Live Activity with
             // the design handoff's exact sample data (streak 24, lesson 3/5,
@@ -210,9 +214,13 @@ public struct RootView: View {
     // MARK: - Bootstrap
 
     /// How long the branded launch screen stays up even when bootstrap
-    /// finishes instantly — the Duolingo beat. Long enough to register as a
-    /// welcome, short enough to never feel like waiting.
-    private static let minimumLaunchHold: Duration = .seconds(3.5)
+    /// finishes instantly — a beat that registers as a welcome without ever
+    /// feeling like waiting.
+    private static let minimumLaunchHold: Duration = .seconds(1.2)
+
+    /// The most the launch screen waits on each server read. A slower reply
+    /// still lands, just after Home is up.
+    private static let launchFetchLimit: Duration = .seconds(2.5)
 
     private func bootstrap() async {
         let start = ContinuousClock.now
@@ -226,14 +234,40 @@ public struct RootView: View {
         } catch {
             result = .failed(reason: "Could not create a session on this device. Please restart the app.")
         }
-        // Hold the launch screen for its minimum beat before revealing Home.
         // Failures skip the hold — an error should surface immediately, and
         // the beat only pads the happy-path cold open.
-        let elapsed = start.duration(to: .now)
-        if case .ready = result, elapsed < Self.minimumLaunchHold {
-            try? await Task.sleep(for: Self.minimumLaunchHold - elapsed)
+        if case .ready = result {
+            await holdLaunchScreen(since: start)
+            resumeTab = LaunchResume.tab(
+                store: env.lastActivityStore,
+                gateShows: AppEntryView.gateShowsAtLaunch()
+            )
         }
         bootstrapState = result
+    }
+
+    /// The minimum beat, overlapped with the streak seed and the progress
+    /// pull (each bounded) so Home opens on current numbers. The fetches run
+    /// only when consent is already current — before the data-use agreement
+    /// nothing may reach the server; the entry view seeds after the gate.
+    private func holdLaunchScreen(since start: ContinuousClock.Instant) async {
+        let fetches = !AppEntryView.gateShowsAtLaunch()
+        let hold = Self.minimumLaunchHold
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                let elapsed = start.duration(to: .now)
+                if elapsed < hold {
+                    try? await Task.sleep(for: hold - elapsed)
+                }
+            }
+            guard fetches else { return }
+            group.addTask { @MainActor [env] in
+                await LaunchWork.waitAtMost(Self.launchFetchLimit) { await env.seedStreakIfNeeded() }
+            }
+            group.addTask { @MainActor [env] in
+                await LaunchWork.waitAtMost(Self.launchFetchLimit) { await env.progressSync.pullOnLaunch() }
+            }
+        }
     }
 }
 

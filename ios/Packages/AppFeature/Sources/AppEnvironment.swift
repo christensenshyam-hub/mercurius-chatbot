@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
@@ -36,6 +37,26 @@ public final class AppEnvironment: ObservableObject {
     public let streakStore: StreakStore
     public let achievementStore: AchievementStore
     public let reminderStore: ReminderStore
+
+    /// Lesson completion + unit mastery. One instance for the process, so
+    /// Home, the shell, the reset path and the server sync all see the same
+    /// state.
+    public let progressStore: CurriculumProgressStore
+    /// Keeps `progressStore` in step with `/api/progress`.
+    let progressSync: CurriculumProgressSync
+    /// When the student last did something, for the cold-launch resume.
+    public let lastActivityStore: LastActivityStore
+    /// The per-device App Store review prompt budget. Never reset.
+    public let reviewPromptStore: ReviewPromptStore
+    /// Whether the Home card offering weekly nudges has been answered.
+    let reminderCardStore: ReminderCardStore
+
+    /// A lesson a tapped reminder (or a `mercurius://lesson/<id>` link) asked
+    /// to open. The shell presents it and clears it.
+    @Published public var pendingLessonId: String?
+
+    /// The streak seed has succeeded this process.
+    private var didSeedStreak = false
 
     public convenience init(environment: APIEnvironment = .production) {
         // DEBUG-only dev hook: launch with `-UseLocalServer` (Xcode / simctl)
@@ -96,6 +117,46 @@ public final class AppEnvironment: ObservableObject {
         self.streakStore = StreakStore()
         self.achievementStore = AchievementStore()
         self.reminderStore = ReminderStore()
+
+        let arguments = ProcessInfo.processInfo.arguments
+        let isUITesting = arguments.contains(Self.uiTestArgument)
+        let progress = CurriculumProgressStore(preferences: Self.curriculumProgressPreferences)
+        self.progressStore = progress
+        self.progressSync = CurriculumProgressSync(
+            progress: progress,
+            remote: apiClient,
+            sessionId: { try identity.current() },
+            // UI tests are network-free, and a real pull could mark Lesson 1
+            // complete from the simulator's Keychain session.
+            isEnabled: !isUITesting
+        )
+        self.lastActivityStore = LastActivityStore(
+            defaults: Self.makeDefaults(suite: Self.uiTestLastActivitySuite, arguments: arguments))
+        self.reviewPromptStore = ReviewPromptStore(
+            defaults: Self.makeDefaults(suite: Self.uiTestReviewPromptSuite, arguments: arguments))
+        self.reminderCardStore = ReminderCardStore(
+            defaults: Self.makeDefaults(suite: Self.uiTestReminderCardSuite, arguments: arguments))
+        if isUITesting {
+            // Every UI test anchors on Home's CTAs; the card would push them
+            // down. Its logic is covered by the AppFeature unit tests.
+            reminderCardStore.markHandled()
+        }
+    }
+
+    /// Seed the streak cache from the server's session row. Runs at most once
+    /// successfully per process: the launch hold runs it when consent is
+    /// already current, and the entry view retries after the gate clears.
+    /// Callers must only invoke it once the data-use agreement is current.
+    func seedStreakIfNeeded() async {
+        guard !didSeedStreak, let sid = try? sessionIdentity.current() else { return }
+        guard let snapshot = try? await apiClient.sessionStreak(sessionId: sid) else { return }
+        // `seed`, not `update`: the session row's streak is only recomputed
+        // when the user chats, so a lapsed user's row can be weeks stale —
+        // freshness must come from the row's own `last_session_date`, not
+        // from when we happened to fetch it, or the Home greeting would
+        // claim a dead streak is alive.
+        streakStore.seed(streak: snapshot.streak, lastSessionDate: snapshot.lastSessionDate)
+        didSeedStreak = true
     }
 
     /// Constructs the production default `ChatStore` — disk-backed
@@ -143,19 +204,30 @@ public final class AppEnvironment: ObservableObject {
     /// private, emptied defaults suite: the chat store is in-memory then, so
     /// resume pointers left by an earlier simulator run would dangle — and
     /// hide the lesson intro the first-run UI test anchors on. Evaluated once
-    /// per process so a re-mounted shell still sees what the test wrote.
+    /// per process, so the wipe happens once per launch.
     public static let curriculumProgressPreferences: PreferenceStore =
         makeCurriculumProgressPreferences(arguments: ProcessInfo.processInfo.arguments)
 
     static let uiTestProgressSuite = "com.mayoailiteracy.mercurius.uitests.curriculumProgress"
+    static let uiTestLastActivitySuite = "com.mayoailiteracy.mercurius.uitests.lastActivity"
+    static let uiTestReviewPromptSuite = "com.mayoailiteracy.mercurius.uitests.reviewPrompt"
+    static let uiTestReminderCardSuite = "com.mayoailiteracy.mercurius.uitests.reminderCard"
 
     static func makeCurriculumProgressPreferences(arguments: [String]) -> PreferenceStore {
+        guard arguments.contains(uiTestArgument) else { return UserDefaultsPreferenceStore() }
+        return UserDefaultsPreferenceStore(defaults: makeDefaults(suite: uiTestProgressSuite, arguments: arguments))
+    }
+
+    /// `.standard`, or under `-UITests` the named private suite, emptied —
+    /// so what one UI test leaves behind (a recent-activity stamp that would
+    /// skip Home, a dismissed card) never reaches the next launch.
+    static func makeDefaults(suite: String, arguments: [String]) -> UserDefaults {
         guard arguments.contains(uiTestArgument),
-              let defaults = UserDefaults(suiteName: uiTestProgressSuite) else {
-            return UserDefaultsPreferenceStore()
+              let defaults = UserDefaults(suiteName: suite) else {
+            return .standard
         }
-        defaults.removePersistentDomain(forName: uiTestProgressSuite)
-        return UserDefaultsPreferenceStore(defaults: defaults)
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
     }
 
     /// Build an `InMemoryChatStore` preloaded with a 50-message

@@ -4,13 +4,14 @@ import CurriculumFeature
 import EngagementFeature
 import PersistenceKit
 
-/// The last screen of the full first-run flow: Unit 1's four lessons, the
-/// daily-reminder toggle, and the two ways into the app. The rows are built
-/// here rather than reusing the learning path's nodes, which are internal
-/// to CurriculumFeature.
+/// The last screen of the full first-run flow: Unit 1's lessons, the
+/// reminder switches, and the two ways into the app. The rows are built here
+/// rather than reusing the learning path's nodes, which are internal to
+/// CurriculumFeature.
 struct YourPathStep: View {
     let reminderStore: ReminderStore
     let streakStore: StreakStore
+    let reminderCardStore: ReminderCardStore
     let onStartLesson1: () -> Void
     let onJustChat: () -> Void
 
@@ -34,7 +35,12 @@ struct YourPathStep: View {
                 }
                 .background(BrandColor.surface, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
 
-                DailyReminderSection(store: reminderStore, scheduler: scheduler, streakStore: streakStore)
+                RemindersSection(
+                    store: reminderStore,
+                    scheduler: scheduler,
+                    streakStore: streakStore,
+                    nextLessonId: unit?.lessons.first?.id
+                )
             }
             .padding(.top, BrandSpacing.sm)
         } cta: {
@@ -44,7 +50,12 @@ struct YourPathStep: View {
             DuoButton("Just chat instead", style: .secondary, action: onJustChat)
                 .accessibilityIdentifier("onboarding.justChat")
         }
-        .onAppear { OnboardingTelemetry.pathShown() }
+        .onAppear {
+            OnboardingTelemetry.pathShown()
+            // New installs answer the reminder question here; Home's one-time
+            // card is for installs that onboarded before it existed.
+            reminderCardStore.markHandled()
+        }
     }
 
     private func lessonRow(_ lesson: Lesson) -> some View {

@@ -17,7 +17,7 @@ settings:
     # only a warning, not a rejection).
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "2.3.0"
-    CURRENT_PROJECT_VERSION: "14"
+    CURRENT_PROJECT_VERSION: "15"
     DEVELOPMENT_TEAM: "TMBPRHZYW2"
   configs:
     # Pin signing per configuration. Debug stays on automatic (Xcode handles
@@ -89,6 +89,10 @@ targets:
         product: DesignSystem
       - package: LocalPackages
         product: NetworkingKit
+      # MercuriusApp installs EngagementFeature's NotificationRouter as the
+      # notification-center delegate at launch.
+      - package: LocalPackages
+        product: EngagementFeature
       # Widget extension hosting the learning-session Live Activity
       # (lock screen banner + Dynamic Island). Embedded into PlugIns.
       - target: MercuriusWidgets
@@ -132,8 +136,8 @@ targets:
         LSApplicationCategoryType: public.app-category.education
         # Learning-session Live Activity (lock screen + Dynamic Island).
         NSSupportsLiveActivities: true
-        # Deep link the Live Activity taps into (mercurius://session →
-        # AppEntryView routes to the learning path).
+        # Deep links: mercurius://session (Live Activity tap → learning
+        # path) and mercurius://lesson/<id> (reminder tap → that lesson).
         CFBundleURLTypes:
           - CFBundleURLName: com.mayoailiteracy.mercurius.native
             CFBundleURLSchemes:

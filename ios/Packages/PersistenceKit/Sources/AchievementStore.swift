@@ -29,7 +29,10 @@ public final class AchievementStore {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Ids of badges since retired from the catalog stay in older installs'
+        // defaults; counting them would let the gallery read "10 / 9".
         self.earned = Set(defaults.stringArray(forKey: key) ?? [])
+            .filter { AchievementCatalog.achievement(id: $0) != nil }
     }
 
     /// Earn an achievement. Returns `true` only if it was newly earned (so the

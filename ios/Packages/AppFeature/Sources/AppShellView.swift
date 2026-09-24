@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 import DesignSystem
 import ChatFeature
 import CurriculumFeature
@@ -36,11 +37,23 @@ struct AppShellView: View {
     let streakStore: StreakStore
     let achievementStore: AchievementStore
     let reminderStore: ReminderStore
+    let progress: CurriculumProgressStore
+    let progressSync: CurriculumProgressSync
+    let lastActivityStore: LastActivityStore
+    let reviewPromptStore: ReviewPromptStore
+    /// The entry view's scheduler (it owns the re-plan), shared with the
+    /// Progress hub's reminder switches so their changes queue behind it.
+    let scheduler: NotificationScheduler
 
-    /// A lesson to open in its full-screen window as soon as the shell is
-    /// up — the first-run flow's "Start Lesson 1". Presented exactly once
-    /// (see `presentInitialLessonIfNeeded`).
+    /// A lesson a tapped reminder asked for. Presented and cleared here while
+    /// the shell is up.
+    @Binding var pendingLessonId: String?
+
+    /// A stop to open as soon as the shell is up — the first-run flow's
+    /// "Start Lesson 1", or Home's next-stop CTA. Presented exactly once
+    /// (see `presentInitialStopIfNeeded`).
     let initialLesson: Lesson?
+    let initialUnitTest: CurriculumFeature.Unit?
 
     /// Called when the user taps the Home button in the chat header.
     /// `AppEntryView` wires this to flip `hasEnteredApp` back to
@@ -56,10 +69,7 @@ struct AppShellView: View {
 
     @State private var selectedTab: Tab
     @State private var chatModel: ChatViewModel
-    @State private var progress = CurriculumProgressStore(
-        preferences: AppEnvironment.curriculumProgressPreferences
-    )
-    @State private var didPresentInitialLesson = false
+    @State private var didPresentInitialStop = false
 
     /// Drives presentation of the Chat History sheet. Set to true by
     /// the `.history` tab-action; cleared by the row tap or the
@@ -70,10 +80,7 @@ struct AppShellView: View {
     /// opened from the streak chip in the chat header.
     @State private var showProgress: Bool = false
 
-    /// Wraps UNUserNotificationCenter for the daily reminder.
-    @State private var scheduler = NotificationScheduler()
-
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.requestReview) private var requestReview
 
     /// Standby gamification (quiet progress) cache. Default-constructed, so
     /// `clientEnabled` is false — it makes no network calls and renders nothing
@@ -81,30 +88,35 @@ struct AppShellView: View {
     @State private var gamificationStore = GamificationStore()
 
     /// The lesson currently presented in its own full-screen curriculum window
-    /// (separate from the chat tab and the four modes). nil when none is open.
+    /// (separate from the chat tab and the three modes). nil when none is open.
     @State private var activeLesson: Lesson?
 
     /// The unit whose cumulative unit test is presented full-screen. nil when
     /// none is open. Qualified because Foundation also exports a `Unit` type.
     @State private var activeUnitTest: CurriculumFeature.Unit?
 
-    enum Tab: Hashable {
+    /// A unit check chosen from the lesson celebration. Both covers hang off
+    /// the TabView and only one can be up, so it's presented once the lesson
+    /// window has finished dismissing.
+    @State private var queuedUnitTest: CurriculumFeature.Unit?
+
+    /// A completion just earned the App Store review prompt; it's asked once
+    /// the lesson (and any unit check) has closed.
+    @State private var reviewPromptDue = false
+
+    /// The Live Activity is showing a finished unit's lingering win, which
+    /// leaving the lesson must not clear.
+    @State private var activityShowsWin = false
+
+    enum Tab: String, Hashable {
         case chat
         case history       // action: present chat-history sheet
         case newChat       // action: startNewConversation()
         case curriculum
-    }
 
-    /// Re-plan the outside-app reminder window from current state. The
-    /// scheduler no-ops when the toggle is off or permission is missing.
-    private func refreshReminders() {
-        scheduler.refresh(
-            enabled: reminderStore.enabled,
-            hour: reminderStore.hour,
-            minute: reminderStore.minute,
-            streak: streakStore.isCurrentFresh ? streakStore.current : nil,
-            chattedToday: streakStore.confirmedToday
-        )
+        /// A real destination (not an action tab) — the only tabs worth
+        /// reopening on a later launch.
+        var isDestination: Bool { self == .chat || self == .curriculum }
     }
 
     init(
@@ -115,8 +127,15 @@ struct AppShellView: View {
         streakStore: StreakStore,
         achievementStore: AchievementStore,
         reminderStore: ReminderStore,
+        progress: CurriculumProgressStore,
+        progressSync: CurriculumProgressSync,
+        lastActivityStore: LastActivityStore,
+        reviewPromptStore: ReviewPromptStore,
+        scheduler: NotificationScheduler,
+        pendingLessonId: Binding<String?>,
         initialTab: Tab = .chat,
         initialLesson: Lesson? = nil,
+        initialUnitTest: CurriculumFeature.Unit? = nil,
         onGoHome: @escaping @MainActor () -> Void,
         onConsentWithdrawn: (@MainActor () -> Void)? = nil
     ) {
@@ -127,12 +146,19 @@ struct AppShellView: View {
         self.streakStore = streakStore
         self.achievementStore = achievementStore
         self.reminderStore = reminderStore
+        self.progress = progress
+        self.progressSync = progressSync
+        self.lastActivityStore = lastActivityStore
+        self.reviewPromptStore = reviewPromptStore
+        self.scheduler = scheduler
+        self._pendingLessonId = pendingLessonId
         self.initialLesson = initialLesson
+        self.initialUnitTest = initialUnitTest
         self.onGoHome = onGoHome
         self.onConsentWithdrawn = onConsentWithdrawn
-        // The Home screen's CTAs route here: "Chat with Merc" → .chat,
-        // "Start learning" → .curriculum. Fresh @State each entry (the shell
-        // leaves the tree when the user goes Home), so this always applies.
+        // Home's CTAs route here: "Chat with Merc" → .chat, the next stop →
+        // .curriculum. Fresh @State each entry (the shell leaves the tree
+        // when the user goes Home), so this always applies.
         _selectedTab = State(initialValue: initialTab)
         _chatModel = State(
             initialValue: ChatViewModel(
@@ -175,26 +201,30 @@ struct AppShellView: View {
         .tint(BrandColor.accent)
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
+            recordTab(newValue)
         }
-        // Keep the reminder window current (rotating Merc copy + streak
-        // defense): re-plan when the app changes foreground state and after
-        // every chat that touches the streak — chatting today replaces the
-        // pending "streak on the line" alert, and a streak change re-stamps
-        // the number before it could go stale.
-        .onChange(of: scenePhase) { _, _ in refreshReminders() }
-        .onChange(of: streakStore.lastUpdatedAt) { _, _ in refreshReminders() }
-        .onAppear(perform: presentInitialLessonIfNeeded)
-        // (`-NotifPreview` fires from RootView's always-mounted root, since the
-        // app opens on Home and this shell isn't in the tree until a CTA tap.)
+        .onAppear {
+            recordTab(selectedTab)
+            presentInitialStopIfNeeded()
+            presentPendingLesson()
+        }
+        // A reminder tapped while the shell is already up.
+        .onChange(of: pendingLessonId) { _, _ in presentPendingLesson() }
+        // Completion, mastery and merges move `revision`; the sync debounces
+        // them into one PUT (and skips snapshots the server already holds).
+        .onChange(of: progress.revision) { _, _ in progressSync.pushSoon() }
+        .onChange(of: chatModel.phase) { _, phase in
+            if phase == .sending { lastActivityStore.touch() }
+        }
         // A started lesson opens in its OWN full-screen curriculum window — not
         // the chat tab, not a new mode. The starter prompt is sent behind the
         // scenes (see CurriculumLessonView / ChatViewModel.beginLesson).
         // `fullScreenCover` is iOS-only; the app ships for iOS, and macOS is
         // just the SPM test host (where the lesson window isn't presented).
 #if os(iOS)
-        .fullScreenCover(item: $activeLesson) { lesson in
-            let next = MercuriusCurriculum.lesson(after: lesson.id)
-            let parentUnit = MercuriusCurriculum.units.first(where: { $0.lessons.contains(lesson) })
+        .fullScreenCover(item: $activeLesson, onDismiss: lessonWindowDismissed) { lesson in
+            let next = MercuriusCurriculum.nextStop(after: lesson.id)
+            let parentUnit = parentUnit(of: lesson.id)
             CurriculumLessonView(
                 lessonId: lesson.id,
                 unitLabel: unitLabel(for: lesson),
@@ -224,11 +254,10 @@ struct AppShellView: View {
                     handleLessonComplete(lessonId)
                 },
                 onExit: { activeLesson = nil },
-                nextLessonNumber: next?.number,
-                nextLessonTitle: next?.title,
-                onAdvanceToNext: { if let next { activeLesson = next } },
+                onAdvanceToNext: { advance(to: next) },
                 completedInUnit: parentUnit.map { progress.completedCount(in: $0) } ?? 0,
-                totalInUnit: parentUnit?.lessons.count ?? 0
+                totalInUnit: parentUnit?.lessons.count ?? 0,
+                nextStop: next.map(Self.celebrationStop)
             )
             // Swapping `activeLesson` to the next lesson must give a FRESH view
             // (new ChatViewModel + re-run of `beginOrResume`), not reuse this
@@ -239,6 +268,14 @@ struct AppShellView: View {
             // window is up (Explorer, streak milestones) would otherwise
             // auto-clear unseen behind it.
             .achievementToasts(achievementStore)
+        }
+        // On the same host as the lesson window, so the celebration's "Take
+        // the Unit N check" can hand over without switching tabs.
+        .fullScreenCover(item: $activeUnitTest, onDismiss: presentReviewPromptIfDue) { unit in
+            unitTestCover(for: unit)
+                // Same as the lesson cover: Unit Master is awarded while this
+                // cover is up, so its toast needs a presenter in this layer.
+                .achievementToasts(achievementStore)
         }
 #endif
         .sheet(isPresented: $showChatHistory) {
@@ -281,6 +318,7 @@ struct AppShellView: View {
                 reminderStore: reminderStore,
                 scheduler: scheduler,
                 gamificationStore: gamificationStore,
+                nextLessonId: progress.frontierLessonId,
                 onDone: { showProgress = false }
             )
             .tint(BrandColor.accent)
@@ -289,41 +327,61 @@ struct AppShellView: View {
         .achievementToasts(achievementStore)
         // Brief, factual progress nudges (standby; inert unless the feature is on).
         .progressNudge(gamificationStore)
-        // Seed the streak from the server so it shows before the first chat.
+        // The launch hold already pulled progress; this catches up a shell
+        // entered later (the sync skips a pull that ran moments ago).
         .task {
             chatModel.configureGamification(store: gamificationStore, provider: apiClient)
-            await seedStreakOnLaunch()
+            await progressSync.pullOnLaunch()
             await refreshGamificationOnLaunch()
         }
     }
 
-    /// One-shot: open `initialLesson` after the shell is in the hierarchy. Not
-    /// `State(initialValue:)` — a `fullScreenCover(item:)` that is non-nil on
-    /// the very first render can fail to present until its host is mounted.
-    /// The short hop also lets the entry crossfade finish so the learning
-    /// path is visibly underneath when the lesson window slides up.
-    private func presentInitialLessonIfNeeded() {
-        guard let initialLesson, !didPresentInitialLesson else { return }
-        didPresentInitialLesson = true
+    /// One-shot: open `initialLesson` / `initialUnitTest` after the shell is in
+    /// the hierarchy. Not `State(initialValue:)` — a `fullScreenCover(item:)`
+    /// that is non-nil on the very first render can fail to present until its
+    /// host is mounted. The short hop also lets the entry crossfade finish so
+    /// the learning path is visibly underneath when the window slides up.
+    private func presentInitialStopIfNeeded() {
+        guard !didPresentInitialStop else { return }
+        didPresentInitialStop = true
+        guard initialLesson != nil || initialUnitTest != nil else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
-            if activeLesson == nil {
-                activeLesson = initialLesson
+            guard activeLesson == nil, activeUnitTest == nil else { return }
+            if let initialLesson {
+                handleStartLesson(initialLesson)
+            } else if let initialUnitTest {
+                handleStartUnitTest(initialUnitTest)
             }
         }
     }
 
-    /// Fetch the server's authoritative streak once on launch to seed the cache.
-    private func seedStreakOnLaunch() async {
-        guard let sid = try? sessionIdentity.current() else { return }
-        if let snapshot = try? await apiClient.sessionStreak(sessionId: sid) {
-            // `seed`, not `update`: the session row's streak is only recomputed
-            // when the user chats, so a lapsed user's row can be weeks stale —
-            // freshness must come from the row's own `last_session_date`, not
-            // from when we happened to fetch it, or the Home greeting would
-            // claim a dead streak is alive.
-            streakStore.seed(streak: snapshot.streak, lastSessionDate: snapshot.lastSessionDate)
+    /// Open the lesson a tapped reminder named. Unknown or still-locked ids
+    /// land on the learning path instead, where the frontier is highlighted.
+    private func presentPendingLesson() {
+        guard let lessonId = pendingLessonId else { return }
+        pendingLessonId = nil
+        selectedTab = .curriculum
+        guard let unit = MercuriusCurriculum.unit(containingLesson: lessonId),
+              let lesson = unit.lessons.first(where: { $0.id == lessonId }),
+              progress.isLessonUnlocked(lesson, in: unit),
+              activeLesson?.id != lessonId
+        else { return }
+        // Only one presentation can be up on the TabView; clear the way.
+        showChatHistory = false
+        showProgress = false
+        let closingUnitTest = activeUnitTest != nil
+        activeUnitTest = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(closingUnitTest ? 600 : 250))
+            handleStartLesson(lesson)
         }
+    }
+
+    /// Remember the destination tab for the cold-launch resume.
+    private func recordTab(_ tab: Tab) {
+        guard tab.isDestination else { return }
+        lastActivityStore.lastTab = tab.rawValue
     }
 
     /// Refresh the standby gamification cache on launch. A no-op — and no
@@ -372,7 +430,8 @@ struct AppShellView: View {
             sessionIdentity: sessionIdentity,
             achievementStore: achievementStore,
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
-                                  streakStore, achievementStore, progress, onConsentWithdrawn] in
+                                  streakStore, achievementStore, progress, progressSync,
+                                  onConsentWithdrawn] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -386,6 +445,7 @@ struct AppShellView: View {
                         streakStore: streakStore,
                         achievementStore: achievementStore,
                         progress: progress,
+                        progressSync: progressSync,
                         // The server-side erasure behind "Delete my data".
                         sessionDeleter: apiClient,
                         onConsentWithdrawn: onConsentWithdrawn
@@ -419,22 +479,14 @@ struct AppShellView: View {
                 )
             }
         )
-#if os(iOS)
-        .fullScreenCover(item: $activeUnitTest) { unit in
-            unitTestCover(for: unit)
-                // Same as the lesson cover: Unit Master is awarded while this
-                // cover is up, so its toast needs a presenter in this layer.
-                .achievementToasts(achievementStore)
-        }
-#endif
     }
 
     // MARK: - Unit test
 
-    /// Curriculum tapped a unit's test → present it full-screen (separate from
-    /// the lesson cover). All four lessons are already complete — the row is
-    /// locked otherwise.
+    /// Curriculum tapped a unit's test → present it full-screen. All lessons
+    /// in the unit are already complete — the row is locked otherwise.
     private func handleStartUnitTest(_ unit: CurriculumFeature.Unit) {
+        lastActivityStore.touch()
         activeUnitTest = unit
     }
 
@@ -443,6 +495,7 @@ struct AppShellView: View {
     /// stays fully open — mastery is a checkpoint, not a gate.
     private func handleUnitMastered(_ unitId: String) {
         progress.markUnitMastered(unitId)
+        lastActivityStore.touch()
         achievementStore.award(AchievementCatalog.unitMaster)
         // Credit module completion (idempotent per unit). Gated/no-op when off.
         if let sid = try? sessionIdentity.current() {
@@ -522,7 +575,61 @@ struct AppShellView: View {
         // `onStarted` callback records the resume mapping), and only flips to
         // complete when the server reports demonstrated proficiency
         // (`handleLessonComplete`, below).
+        progress.markOpened(lesson.id)
+        lastActivityStore.touch()
         activeLesson = lesson
+    }
+
+    /// The celebration's primary button: the next lesson swaps into this
+    /// window; the unit check waits for the window to close
+    /// (`lessonWindowDismissed`).
+    private func advance(to stop: MercuriusCurriculum.PathStop?) {
+        switch stop {
+        case .lesson(let lesson):
+            handleStartLesson(lesson)
+        case .unitTest(let unit):
+            if progress.isUnitTestUnlocked(unit) {
+                queuedUnitTest = unit
+            }
+            activeLesson = nil
+        case nil:
+            activeLesson = nil
+        }
+    }
+
+    /// The lesson window finished closing (not swapped for the next lesson):
+    /// the session is over, so its Live Activity goes too — unless it's a
+    /// finished unit's win, which lingers by design. Then the queued unit
+    /// check, or the review prompt.
+    private func lessonWindowDismissed() {
+        guard activeLesson == nil else { return }
+#if os(iOS)
+        if !activityShowsWin {
+            LearningActivityController.shared.endSession(immediately: true)
+        }
+#endif
+        activityShowsWin = false
+        if let unit = queuedUnitTest {
+            queuedUnitTest = nil
+            handleStartUnitTest(unit)
+            return
+        }
+        presentReviewPromptIfDue()
+    }
+
+    /// Ask for an App Store review once nothing is covering the shell. The
+    /// system decides whether the sheet actually shows.
+    private func presentReviewPromptIfDue() {
+        guard reviewPromptDue, activeLesson == nil, activeUnitTest == nil, queuedUnitTest == nil else { return }
+        reviewPromptDue = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            requestReview()
+        }
+    }
+
+    private static var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains(AppEnvironment.uiTestArgument)
     }
 
     /// The server signalled demonstrated proficiency (`[LESSON_COMPLETE]`).
@@ -531,7 +638,14 @@ struct AppShellView: View {
     /// NOT auto-dismiss the lesson window — the student reads the final feedback
     /// and taps Done; the curriculum row updates underneath them.
     private func handleLessonComplete(_ lessonId: String) {
+        let isFirstCompletion = !progress.isCompleted(lessonId)
         progress.markCompleted(lessonId)
+        lastActivityStore.touch()
+        // Only a first completion counts toward the review prompt (the 3rd
+        // and 10th); UI tests never ask.
+        if isFirstCompletion, reviewPromptStore.recordCompletion(), !Self.isUITesting {
+            reviewPromptDue = true
+        }
         achievementStore.award(AchievementCatalog.explorer)
         // Push the fresh count into the Live Activity (after markCompleted so
         // it reads the new state). The unit's last lesson completes the
@@ -558,6 +672,7 @@ struct AppShellView: View {
     private func startLearningActivity(for lessonId: String) {
 #if os(iOS)
         guard let unit = parentUnit(of: lessonId) else { return }
+        activityShowsWin = false
         LearningActivityController.shared.startSession(
             title: "Unit \(unit.number) · \(unit.title)",
             state: learningState(in: unit)
@@ -574,6 +689,7 @@ struct AppShellView: View {
         let state = learningState(in: unit)
         if state.lessonsDone >= state.lessonsTotal {
             LearningActivityController.shared.complete(state: state)
+            activityShowsWin = true
         } else {
             LearningActivityController.shared.update(state: state)
         }
@@ -581,13 +697,24 @@ struct AppShellView: View {
     }
 
     private func parentUnit(of lessonId: String) -> CurriculumFeature.Unit? {
-        MercuriusCurriculum.units.first { $0.lessons.contains(where: { $0.id == lessonId }) }
+        MercuriusCurriculum.unit(containingLesson: lessonId)
+    }
+
+    /// The path's next stop in the celebration's plain-value form
+    /// (ChatFeature can't see the curriculum).
+    static func celebrationStop(_ stop: MercuriusCurriculum.PathStop) -> LessonCompleteOverlay.NextStop {
+        switch stop {
+        case .lesson(let lesson):
+            return .lesson(number: lesson.number, title: lesson.title)
+        case .unitTest(let unit):
+            return .unitTest(unitNumber: unit.number, unitTitle: unit.title)
+        }
     }
 
 #if os(iOS)
     /// Snapshot the unit's progress into the activity's content state.
-    /// "Level" is the gamified framing of units: finishing unit N unlocks
-    /// level N+1, so `lessonsToLevel` is simply the lessons left in the unit.
+    /// `level` carries the unit number + 1 (the activity's copy reads it back
+    /// as the unit), so `lessonsToLevel` is simply the lessons left in it.
     private func learningState(in unit: CurriculumFeature.Unit) -> LearningActivityAttributes.ContentState {
         let total = unit.lessons.count
         let done = progress.completedCount(in: unit)

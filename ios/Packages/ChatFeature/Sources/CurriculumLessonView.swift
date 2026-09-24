@@ -3,7 +3,7 @@ import DesignSystem
 import NetworkingKit
 import PersistenceKit
 
-/// A curriculum lesson in its OWN window — distinct from the four chat modes,
+/// A curriculum lesson in its OWN window — distinct from the three chat modes,
 /// and not a tab. It owns a **persisted but non-hydrating** `ChatViewModel`
 /// (built via `ChatViewModel.makeLesson`): the thread is saved under a
 /// curriculum-tagged conversation so the lesson can be **resumed**, but it never
@@ -31,14 +31,21 @@ public struct CurriculumLessonView: View {
     private let onLessonComplete: (String) -> Void
     private let onExit: () -> Void
     /// The next lesson in this unit (drives the celebration's "Next lesson"
-    /// CTA). Nil = this is the unit's last lesson.
+    /// CTA). Nil = this is the unit's last lesson. Superseded by `nextStop`
+    /// when that is set.
     private let nextLessonNumber: Int?
     private let nextLessonTitle: String?
-    /// Advance to the next lesson — the host swaps the presented lesson.
+    /// Where the celebration's primary button leads — the next lesson or the
+    /// unit's check.
+    private let nextStop: LessonCompleteOverlay.NextStop?
+    /// Advance to the next stop — the host swaps the presented lesson or opens
+    /// the unit check.
     private let onAdvanceToNext: () -> Void
     /// Unit progress for the header bar (lessons completed / total in this unit).
     private let completedInUnit: Int
     private let totalInUnit: Int
+    /// Fired once when a real completion's celebration goes away, by any path.
+    private let onCelebrationDismissed: (() -> Void)?
 
     @State private var model: ChatViewModel
     @State private var didBegin = false
@@ -79,7 +86,9 @@ public struct CurriculumLessonView: View {
         nextLessonTitle: String? = nil,
         onAdvanceToNext: @escaping () -> Void = {},
         completedInUnit: Int = 0,
-        totalInUnit: Int = 0
+        totalInUnit: Int = 0,
+        nextStop: LessonCompleteOverlay.NextStop? = nil,
+        onCelebrationDismissed: (() -> Void)? = nil
     ) {
         self.lessonId = lessonId
         self.unitLabel = unitLabel
@@ -96,6 +105,8 @@ public struct CurriculumLessonView: View {
         self.onAdvanceToNext = onAdvanceToNext
         self.completedInUnit = completedInUnit
         self.totalInUnit = totalInUnit
+        self.nextStop = nextStop
+        self.onCelebrationDismissed = onCelebrationDismissed
         // Fresh lessons open on the speech-bubble intro; resumed ones skip it.
         _showIntro = State(initialValue: resumeConversationId == nil)
         // Seed the de-dupe high-water mark, CLAMPED to the current count. This
@@ -175,6 +186,9 @@ public struct CurriculumLessonView: View {
                     lessonTitle: title,
                     nextLessonNumber: nextLessonNumber,
                     nextLessonTitle: nextLessonTitle,
+                    nextStop: nextStop,
+                    unitLabel: unitLabel,
+                    lessonNumber: lessonNumber,
                     reduceMotion: reduceMotion,
                     onNext: { onAdvanceToNext() },
                     onBackToLessons: {
@@ -183,7 +197,10 @@ public struct CurriculumLessonView: View {
                     },
                     onDismiss: {
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showCelebration = false }
-                    }
+                    },
+                    // `didCelebrate` is only set by a real completion, so the
+                    // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
+                    onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
                 )
                 .transition(.opacity)
                 .zIndex(1)

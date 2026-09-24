@@ -711,6 +711,312 @@ struct APIClientEndToEndTests {
         )
     }
 
+    // MARK: - Curriculum progress (APIClient+Progress)
+
+    private static let progressSnapshotJSON = #"""
+    {"curriculumVersion":1,
+     "lessons":[{"id":"u1_l1","status":"completed","updatedAt":1751234567890},
+                {"id":"u1_l2","status":"completed","updatedAt":1751234567891}],
+     "units":[{"id":"unit_1","status":"mastered","updatedAt":1751234567892}]}
+    """#
+
+    @Test("fetchProgress: GET /api/progress/:id with no body decodes the merged snapshot")
+    func fetchProgressHappyPath() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.path == "/api/progress/\(testSessionId)")
+            #expect(request.url?.query == nil)
+            #expect(request.bodyData().isEmpty)
+            #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
+            return .response(
+                status: 200,
+                headers: ["Content-Type": "application/json"],
+                data: Data(Self.progressSnapshotJSON.utf8)
+            )
+        }
+        let client = makeTestAPIClient()
+        let snapshot = try await client.fetchProgress(sessionId: testSessionId)
+        #expect(snapshot.curriculumVersion == 1)
+        #expect(snapshot.lessons.map(\.id) == ["u1_l1", "u1_l2"])
+        #expect(snapshot.units.map(\.id) == ["unit_1"])
+        #expect(snapshot.units.first?.status == "mastered")
+        #expect(snapshot.units.first?.updatedAt == Date(timeIntervalSince1970: 1_751_234_567.892))
+    }
+
+    @Test("fetchProgress: an unknown session's empty snapshot resolves with empty arrays")
+    func fetchProgressUnknownSession() async throws {
+        StubURLProtocol.handler = { _ in
+            .response(status: 200, data: Data(#"{"curriculumVersion":null,"lessons":[],"units":[]}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        let snapshot = try await client.fetchProgress(sessionId: testSessionId)
+        #expect(snapshot == ProgressSnapshotDTO(curriculumVersion: nil))
+    }
+
+    @Test("fetchProgress: 400 invalid_session → APIError.invalidRequest with the server's message")
+    func fetchProgressInvalidSession() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 400, data: Data(#"{"error":"invalid_session","message":"Session ID missing or invalid."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.fetchProgress(sessionId: "short")
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest(let reason) {
+            #expect(reason == "Session ID missing or invalid.")
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+    }
+
+    @Test("fetchProgress: 429 → APIError.rateLimited")
+    func fetchProgressRateLimited() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 429, data: Data(#"{"error":"rate_limited","message":"Too many requests."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.fetchProgress(sessionId: testSessionId)
+            Issue.record("Expected APIError.rateLimited")
+        } catch APIError.rateLimited {
+            // expected
+        } catch {
+            Issue.record("Expected .rateLimited, got \(error)")
+        }
+    }
+
+    @Test("fetchProgress: 5xx → APIError.server(status)", arguments: [500, 502, 504])
+    func fetchProgressServerError(_ status: Int) async {
+        StubURLProtocol.handler = { _ in
+            .response(status: status, data: Data(#"{"error":"server_error"}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.fetchProgress(sessionId: testSessionId)
+            Issue.record("Expected APIError.server")
+        } catch APIError.server(let code) {
+            #expect(code == status)
+        } catch {
+            Issue.record("Expected .server, got \(error)")
+        }
+    }
+
+    @Test("fetchProgress: offline → APIError.offline")
+    func fetchProgressOffline() async {
+        StubURLProtocol.handler = { _ in .urlError(.notConnectedToInternet) }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.fetchProgress(sessionId: testSessionId)
+            Issue.record("Expected APIError.offline")
+        } catch APIError.offline {
+            // expected
+        } catch {
+            Issue.record("Expected .offline, got \(error)")
+        }
+    }
+
+    @Test("putProgress: PUT /api/progress/:id carries exactly {curriculumVersion, items[{id,type,status}]}")
+    func putProgressBodyShape() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            #expect(request.httpMethod == "PUT")
+            #expect(request.url?.path == "/api/progress/\(testSessionId)")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(Self.progressSnapshotJSON.utf8))
+        }
+        let client = makeTestAPIClient()
+        let merged = try await client.putProgress(
+            sessionId: testSessionId,
+            curriculumVersion: 1,
+            items: [
+                ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed),
+                ProgressPutItem(id: "unit_1", type: .unit, status: .mastered),
+            ]
+        )
+        #expect(merged.lessons.count == 2)
+        #expect(merged.units.count == 1)
+
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(Set(json.keys) == ["curriculumVersion", "items"])
+        #expect(json["curriculumVersion"] as? Int == 1)
+
+        let items = try #require(json["items"] as? [[String: Any]])
+        #expect(items.count == 2)
+        for item in items {
+            #expect(Set(item.keys) == ["id", "type", "status"])
+        }
+        #expect(items[0]["id"] as? String == "u1_l1")
+        #expect(items[0]["type"] as? String == "lesson")
+        #expect(items[0]["status"] as? String == "completed")
+        #expect(items[1]["id"] as? String == "unit_1")
+        #expect(items[1]["type"] as? String == "unit")
+        #expect(items[1]["status"] as? String == "mastered")
+    }
+
+    @Test("putProgress: empty items makes no PUT — it reads the current state with a GET")
+    func putProgressEmptyItemsIsAGet() async throws {
+        var methods: [String] = []
+        StubURLProtocol.handler = { request in
+            methods.append(request.httpMethod ?? "?")
+            #expect(request.url?.path == "/api/progress/\(testSessionId)")
+            #expect(request.bodyData().isEmpty)
+            return .response(status: 200, data: Data(Self.progressSnapshotJSON.utf8))
+        }
+        let client = makeTestAPIClient()
+        let snapshot = try await client.putProgress(sessionId: testSessionId, curriculumVersion: 1, items: [])
+        #expect(methods == ["GET"])
+        #expect(snapshot.lessons.map(\.id) == ["u1_l1", "u1_l2"])
+    }
+
+    @Test("putProgress: more than 200 items are clamped to the server cap, first ones kept")
+    func putProgressClampsItems() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(#"{"lessons":[],"units":[]}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        let items = (1...(APIClient.progressItemLimit + 25)).map {
+            ProgressPutItem(id: "u1_l\($0)", type: .lesson, status: .completed)
+        }
+        _ = try await client.putProgress(sessionId: testSessionId, curriculumVersion: 1, items: items)
+
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let sent = try #require(json["items"] as? [[String: Any]])
+        #expect(sent.count == APIClient.progressItemLimit)
+        #expect(sent.first?["id"] as? String == "u1_l1")
+        #expect(sent.last?["id"] as? String == "u1_l\(APIClient.progressItemLimit)")
+    }
+
+    @Test("putProgress: an out-of-range curriculumVersion is refused before any request", arguments: [0, -1, 2_147_483_648])
+    func putProgressRejectsBadVersion(_ version: Int) async {
+        var requests = 0
+        StubURLProtocol.handler = { _ in
+            requests += 1
+            return .response(status: 200, data: Data(#"{"lessons":[],"units":[]}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.putProgress(
+                sessionId: testSessionId,
+                curriculumVersion: version,
+                items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+            )
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest {
+            // expected
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+        #expect(requests == 0)
+    }
+
+    @Test("putProgress: the top of the version range is accepted")
+    func putProgressAcceptsMaxVersion() async throws {
+        var capturedBody: Data?
+        StubURLProtocol.handler = { request in
+            capturedBody = request.bodyData()
+            return .response(status: 200, data: Data(#"{"lessons":[],"units":[]}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        _ = try await client.putProgress(
+            sessionId: testSessionId,
+            curriculumVersion: 2_147_483_647,
+            items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+        )
+        let body = try #require(capturedBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["curriculumVersion"] as? Int == 2_147_483_647)
+    }
+
+    @Test("putProgress: 400 → APIError.invalidRequest with the server's message")
+    func putProgressRejected() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 400, data: Data(#"{"error":"invalid_request","message":"items_too_many"}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.putProgress(
+                sessionId: testSessionId, curriculumVersion: 1,
+                items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+            )
+            Issue.record("Expected APIError.invalidRequest")
+        } catch APIError.invalidRequest(let reason) {
+            #expect(reason == "items_too_many")
+        } catch {
+            Issue.record("Expected .invalidRequest, got \(error)")
+        }
+    }
+
+    @Test("putProgress: 429 → APIError.rateLimited")
+    func putProgressRateLimited() async {
+        StubURLProtocol.handler = { _ in .response(status: 429, data: Data()) }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.putProgress(
+                sessionId: testSessionId, curriculumVersion: 1,
+                items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+            )
+            Issue.record("Expected APIError.rateLimited")
+        } catch APIError.rateLimited {
+            // expected
+        } catch {
+            Issue.record("Expected .rateLimited, got \(error)")
+        }
+    }
+
+    @Test("putProgress: 500 → APIError.server(500)")
+    func putProgressServerError() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 500, data: Data(#"{"error":"server_error","message":"Could not save progress."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.putProgress(
+                sessionId: testSessionId, curriculumVersion: 1,
+                items: [ProgressPutItem(id: "unit_1", type: .unit, status: .mastered)]
+            )
+            Issue.record("Expected APIError.server")
+        } catch APIError.server(let status) {
+            #expect(status == 500)
+        } catch {
+            Issue.record("Expected .server, got \(error)")
+        }
+    }
+
+    @Test("putProgress: offline → APIError.offline")
+    func putProgressOffline() async {
+        StubURLProtocol.handler = { _ in .urlError(.notConnectedToInternet) }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.putProgress(
+                sessionId: testSessionId, curriculumVersion: 1,
+                items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+            )
+            Issue.record("Expected APIError.offline")
+        } catch APIError.offline {
+            // expected
+        } catch {
+            Issue.record("Expected .offline, got \(error)")
+        }
+    }
+
+    @Test("APIClient satisfies ProgressSyncing and syncs through the protocol")
+    func syncsThroughProtocol() async throws {
+        StubURLProtocol.handler = { _ in .response(status: 200, data: Data(Self.progressSnapshotJSON.utf8)) }
+        let syncer: ProgressSyncing = makeTestAPIClient()
+        let fetched = try await syncer.fetchProgress(sessionId: testSessionId)
+        #expect(fetched.curriculumVersion == 1)
+        let merged = try await syncer.putProgress(
+            sessionId: testSessionId, curriculumVersion: 1,
+            items: [ProgressPutItem(id: "u1_l1", type: .lesson, status: .completed)]
+        )
+        #expect(merged == fetched)
+    }
+
     // MARK: - Refusals through the real pipeline (JSON + SSE)
 
     @Test("JSON 429 daily_limit → APIError.quotaExceeded with the server's copy")

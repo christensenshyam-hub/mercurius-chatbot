@@ -27,7 +27,6 @@ public enum AchievementCatalog {
     public static let explorer = "explorer"
     public static let unitMaster = "unit_master"
     public static let deepDiver = "deep_diver"
-    public static let reportCard = "report_card"
     public static let streak3 = "streak_3"
     public static let streak7 = "streak_7"
     public static let streak14 = "streak_14"
@@ -46,8 +45,6 @@ public enum AchievementCatalog {
                     detail: "Passed a cumulative unit test — quiz and written defense.", symbol: "rosette"),
         Achievement(id: deepDiver, title: "Deep Diver",
                     detail: "Sent 20 messages in a single conversation.", symbol: "arrow.down.circle.fill"),
-        Achievement(id: reportCard, title: "Self-Aware",
-                    detail: "Generated a session report card.", symbol: "doc.text.magnifyingglass"),
         Achievement(id: streak3, title: "On a Roll",
                     detail: "Reached a 3-day learning streak.", symbol: "flame.fill"),
         Achievement(id: streak7, title: "Weekly Scholar",

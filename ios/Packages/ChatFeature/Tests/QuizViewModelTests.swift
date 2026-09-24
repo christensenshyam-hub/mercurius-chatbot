@@ -10,30 +10,12 @@ final class FakeToolsClient: ToolsProviding, @unchecked Sendable {
         case success(Quiz)
         case failure(Error)
     }
-    enum ReportOutcome {
-        case success(ReportCard)
-        case failure(Error)
-    }
 
     var quizOutcome: QuizOutcome = .success(
         Quiz(title: "Untitled", questions: [])
     )
-    var reportOutcome: ReportOutcome = .success(
-        ReportCard(
-            overallGrade: "B",
-            summary: "",
-            strengths: [],
-            areasToRevisit: [],
-            conceptsCovered: [],
-            criticalThinkingScore: 0,
-            curiosityScore: 0,
-            misconceptionsAddressed: [],
-            nextSessionSuggestion: ""
-        )
-    )
 
     var quizCallCount = 0
-    var reportCallCount = 0
 
     func generateQuiz(sessionId: String) async throws -> Quiz {
         quizCallCount += 1
@@ -43,12 +25,10 @@ final class FakeToolsClient: ToolsProviding, @unchecked Sendable {
         }
     }
 
+    // `ToolsProviding` still carries the report-card endpoint; no view in
+    // the app calls it, so nothing here exercises it.
     func generateReportCard(sessionId: String) async throws -> ReportCard {
-        reportCallCount += 1
-        switch reportOutcome {
-        case .success(let r): return r
-        case .failure(let e): throw e
-        }
+        throw APIError.offline
     }
 }
 
@@ -72,14 +52,6 @@ private func makeQuiz(
     sid: String = "s"
 ) -> QuizViewModel {
     QuizViewModel(tools: tools, sessionIdProvider: { sid })
-}
-
-@MainActor
-private func makeReport(
-    tools: FakeToolsClient = FakeToolsClient(),
-    sid: String = "s"
-) -> ReportCardViewModel {
-    ReportCardViewModel(tools: tools, sessionIdProvider: { sid })
 }
 
 // MARK: - QuizViewModel tests
@@ -246,50 +218,5 @@ struct QuizSelectionTests {
         #expect(QuizQuestion.letter(forIndex: 3) == "D")
         #expect(QuizQuestion.letter(forIndex: 99) == "D")
         #expect(QuizQuestion.letter(forIndex: -1) == "A")
-    }
-}
-
-// MARK: - ReportCardViewModel tests
-
-@Suite("ReportCardViewModel")
-@MainActor
-struct ReportCardTests {
-    @Test("Successful load transitions to .ready")
-    func loads() async {
-        let tools = FakeToolsClient()
-        let card = ReportCard(
-            overallGrade: "A-",
-            summary: "s",
-            strengths: [],
-            areasToRevisit: [],
-            conceptsCovered: [],
-            criticalThinkingScore: 50,
-            curiosityScore: 50,
-            misconceptionsAddressed: [],
-            nextSessionSuggestion: ""
-        )
-        tools.reportOutcome = .success(card)
-        let vm = makeReport(tools: tools)
-
-        await vm.load()
-
-        if case .ready(let loaded) = vm.phase {
-            #expect(loaded == card)
-        } else {
-            Issue.record("Expected .ready")
-        }
-    }
-
-    @Test("API offline → retryable failure")
-    func offlineFailure() async {
-        let tools = FakeToolsClient()
-        tools.reportOutcome = .failure(APIError.offline)
-        let vm = makeReport(tools: tools)
-        await vm.load()
-        if case .failed(_, let retryable) = vm.phase {
-            #expect(retryable)
-        } else {
-            Issue.record("Expected .failed")
-        }
     }
 }

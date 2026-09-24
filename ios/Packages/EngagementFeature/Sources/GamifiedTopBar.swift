@@ -10,7 +10,8 @@ import PersistenceKit
 /// so `AppShellView` builds this bar and injects it into the path's `topBar`
 /// slot, exactly as it already injects `StreakChip` into the chat header.
 ///
-/// GRACEFUL DEGRADATION. The streak is always live, so it always shows. The XP
+/// GRACEFUL DEGRADATION. The streak is always live, so it always shows (as the
+/// flame plus an invitation to start one, before there's a number). The XP
 /// and level stats render ONLY when `gamificationStore.enabled` (client flag on
 /// AND the server reports the feature live) — when the server feature is off the
 /// bar quietly shows the streak alone rather than a row of zeros.
@@ -88,14 +89,24 @@ public struct GamifiedTopBar: View {
     // MARK: - Stats
 
     private var streakStat: some View {
-        HStack(spacing: BrandSpacing.xs) {
+        let display = StreakDisplay(count: streakStore.current)
+        return HStack(spacing: BrandSpacing.xs) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(streakStore.current > 0 ? BrandColor.streakFlame : BrandColor.textSecondary)
-            Text("\(streakStore.current)")
-                .font(BrandFont.roundedTitle3)
-                .foregroundStyle(BrandColor.text)
-                .monospacedDigit()
+                .foregroundStyle(display.isZero ? BrandColor.textSecondary : BrandColor.streakFlame)
+            if let countText = display.countText {
+                Text(countText)
+                    .font(BrandFont.roundedTitle3)
+                    .foregroundStyle(BrandColor.text)
+                    .monospacedDigit()
+            } else {
+                Text(StreakDisplay.startMessage)
+                    .font(BrandFont.roundedCaption)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.leading)
+            }
         }
     }
 
@@ -143,7 +154,7 @@ public struct GamifiedTopBar: View {
     }
 
     private var accessibilityLabel: String {
-        var parts = ["Your progress.", "Current streak: \(streakStore.current) days."]
+        var parts = ["Your progress.", StreakDisplay(count: streakStore.current).spokenStreak]
         if gamificationStore.enabled {
             parts.append("\(gamificationStore.xp) XP.")
             parts.append("Level \(gamificationStore.level).")
@@ -153,6 +164,19 @@ public struct GamifiedTopBar: View {
 }
 
 #if DEBUG
+#Preview("GamifiedTopBar — no streak yet") {
+    VStack {
+        GamifiedTopBar(
+            streakStore: StreakStore(defaults: UserDefaults(suiteName: "preview.topbar.zero")!),
+            gamificationStore: .preview(enabled: false, xp: 0, level: 1, levelProgress: 0, streak: 0),
+            onOpenProfile: {},
+            onGoHome: {}
+        )
+        Spacer()
+    }
+    .background(BrandColor.background)
+}
+
 #Preview("GamifiedTopBar — enabled") {
     VStack {
         GamifiedTopBar(

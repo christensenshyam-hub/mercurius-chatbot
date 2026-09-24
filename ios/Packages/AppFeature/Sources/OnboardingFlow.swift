@@ -32,6 +32,8 @@ struct OnboardingFlow: View {
     let mode: Mode
     let reminderStore: ReminderStore
     let streakStore: StreakStore
+    /// "Your path" asks about reminders, so Home never repeats the question.
+    let reminderCardStore: ReminderCardStore
     /// Full mode: the two exits from "Your path".
     let onStartLesson1: () -> Void
     let onJustChat: () -> Void
@@ -48,6 +50,7 @@ struct OnboardingFlow: View {
         mode: Mode,
         reminderStore: ReminderStore,
         streakStore: StreakStore,
+        reminderCardStore: ReminderCardStore,
         onStartLesson1: @escaping () -> Void,
         onJustChat: @escaping () -> Void,
         onGateCleared: @escaping () -> Void
@@ -55,6 +58,7 @@ struct OnboardingFlow: View {
         self.mode = mode
         self.reminderStore = reminderStore
         self.streakStore = streakStore
+        self.reminderCardStore = reminderCardStore
         self.onStartLesson1 = onStartLesson1
         self.onJustChat = onJustChat
         self.onGateCleared = onGateCleared
@@ -121,6 +125,7 @@ struct OnboardingFlow: View {
             YourPathStep(
                 reminderStore: reminderStore,
                 streakStore: streakStore,
+                reminderCardStore: reminderCardStore,
                 onStartLesson1: { finish(startingLesson: true) },
                 onJustChat: { finish(startingLesson: false) }
             )

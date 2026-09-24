@@ -13,26 +13,34 @@ import XCTest
 /// 3. Empty chat state — all four starter prompts surface as accessible
 ///    buttons so a VoiceOver user can reach them.
 /// 4. Mode selector — all three modes render and are selectable.
-/// 5. Header affordances — Settings and Tools buttons carry their
-///    accessibility labels and open the right UI.
-/// 6. Curriculum tab — progress bar + unit section header appear, and all
-///    five unit titles render.
+/// 5. Header affordances — Settings and Home buttons carry their
+///    accessibility labels and open the right UI; Settings → About exposes
+///    "Send feedback" and pushes "How Mercurius teaches".
+/// 6. Curriculum tab — the path's navigation title appears, and all eight
+///    unit titles render.
 /// 7. Dynamic Type — at an accessibility text size the main header is still
 ///    readable and the starter prompts remain reachable (no off-screen
 ///    content, no clipped controls).
-/// 8. First-run gate (2.3.0) — Meet Merc → age picker → disclosure →
+/// 8. Home — the primary CTA is the next stop on the path ("Start Lesson 1"
+///    on a fresh path), with "Chat with Merc" still beside it.
+/// 9. First-run gate (2.3.0) — Meet Merc → age picker → disclosure →
 ///    limits → path lands in Lesson 1; under-13 is a dead end; "Not now"
 ///    pauses and "Review" returns; an existing install (`hasSeenOnboarding`
 ///    already true, consent never given) sees the gate once and then Home.
 ///    All of it is client-side: the first network call happens only after
 ///    the shell mounts, which the lesson-intro anchor sits in front of.
 ///
+/// `-UITests` gives lesson progress, last activity and the Home reminder
+/// card their own UserDefaults suites, wiped at every launch (AppFeature's
+/// `AppEnvironment`), so every test starts on Home at Lesson 1 no matter
+/// what an earlier test did.
+///
 /// What is NOT covered here
 /// ========================
 /// - Sending a chat message (requires network; would be a flaky integration
 ///   test without a stubbed server).
 /// - Streaming token rendering (same reason).
-/// - Quiz / Report Card tool flows (same reason).
+/// - The Quiz tool flow (same reason).
 /// Those belong in a separate, network-aware integration layer.
 final class MercuriusUITests: XCTestCase {
 
@@ -140,6 +148,31 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// Any element by accessibility identifier, whatever type SwiftUI exposes
+    /// it as (a `Link` and a `NavigationLink` both surface as buttons today,
+    /// but that is not a contract).
+    @MainActor
+    private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    /// Swipe up until `element` is in the accessibility tree — lazy stacks
+    /// and forms only build rows near the viewport. Slow swipes so a row
+    /// isn't flung past between checks.
+    @MainActor
+    private func scrollUntilExists(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 30
+    ) -> Bool {
+        var swipes = 0
+        while !element.exists && swipes < maxSwipes {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        return element.waitForExistence(timeout: Self.lookupTimeout)
+    }
+
     // MARK: - Tests
 
     @MainActor
@@ -206,7 +239,7 @@ final class MercuriusUITests: XCTestCase {
     }
 
     @MainActor
-    func testCurriculumListsAllFiveUnits() {
+    func testCurriculumListsAllUnits() {
         let app = launchApp()
         waitForBootComplete(app)
 
@@ -218,29 +251,28 @@ final class MercuriusUITests: XCTestCase {
         // These strings come straight from `MercuriusCurriculum.units` —
         // if a unit title is renamed, update here too. Intentional: keeps
         // the test honest about public-facing copy.
-        //
-        // SwiftUI `List` is lazy: rows below the fold aren't in the
-        // accessibility tree until scrolled into view. For each unit we
-        // try `exists` first and fall back to scrolling if needed.
         let expectedUnits = [
             "How AI Actually Works",
             "Bias & Fairness",
             "AI in Society",
             "Prompt Engineering",
             "Ethics & Alignment",
+            "Spotting AI: Deepfakes & Synthetic Media",
+            "Using AI Well",
+            "The Frontier: Agents & What's Next",
         ]
 
+        // Each unit header is one combined accessibility element labelled
+        // "Unit 0N: <title>. …", so match on CONTAINS rather than an exact
+        // static text. The path is a LazyVStack: later units only enter the
+        // tree once scrolled near, and the titles are in path order, so one
+        // downward pass finds them all.
         for title in expectedUnits {
-            let cell = app.staticTexts[title]
-            if !cell.exists {
-                // Swipe up inside the list — up to 4 swipes ought to
-                // reveal anything in a 5-row list on any iPhone screen.
-                for _ in 0..<4 where !cell.exists {
-                    app.swipeUp()
-                }
-            }
+            let header = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label CONTAINS %@", title))
+                .firstMatch
             XCTAssertTrue(
-                cell.waitForExistence(timeout: Self.lookupTimeout),
+                scrollUntilExists(header, in: app),
                 "Unit title '\(title)' not found on Curriculum tab even after scrolling"
             )
         }
@@ -435,11 +467,67 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testSettingsHasFeedbackAndHowItTeaches() {
+        let app = launchApp()
+        waitForBootComplete(app)
+
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(
+            app.navigationBars["Settings"].firstMatch.waitForExistence(timeout: Self.lookupTimeout),
+            "Settings sheet did not present — Settings navigation bar missing"
+        )
+
+        // Both rows sit in the About section at the bottom of the form, which
+        // is lazily built — scroll until each is in the tree. The feedback
+        // Link is only checked, never tapped: it leaves the app for Safari.
+        let feedback = element(app, "settings.sendFeedback")
+        XCTAssertTrue(
+            scrollUntilExists(feedback, in: app),
+            "Settings → About is missing 'Send feedback' (settings.sendFeedback)"
+        )
+        let howItTeaches = element(app, "settings.howItTeaches")
+        XCTAssertTrue(
+            scrollUntilExists(howItTeaches, in: app),
+            "Settings → About is missing 'How Mercurius teaches' (settings.howItTeaches)"
+        )
+
+        howItTeaches.tap()
+        XCTAssertTrue(
+            app.navigationBars["How Mercurius teaches"].firstMatch.waitForExistence(timeout: Self.lookupTimeout),
+            "'How Mercurius teaches' did not push its page"
+        )
+    }
+
+    // MARK: - Home
+
+    @MainActor
+    func testHomeShowsNextStop() {
+        let app = launchApp()
+        waitForBootComplete(app, enterApp: false)
+
+        // `-UITests` starts every launch with no lesson progress, so the next
+        // stop is Lesson 1. The CTA label may go on to name the lesson,
+        // hence BEGINSWITH.
+        let nextStop = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Start Lesson 1"))
+            .firstMatch
+        XCTAssertTrue(
+            nextStop.waitForExistence(timeout: Self.lookupTimeout),
+            "Home's primary CTA should offer the next stop ('Start Lesson 1…') on a fresh path"
+        )
+        XCTAssertTrue(
+            app.buttons["Chat with Merc"].exists,
+            "Home lost its 'Chat with Merc' button next to the next-stop CTA"
+        )
+    }
+
     // MARK: - First-run gate (2.3.0)
 
     /// Launch budget for the first gate screen. Cold launch holds the
-    /// Merc launch screen for 3.5 s before `AppEntryView` renders, and
-    /// CI runners are slower still — same 15 s the Home anchor gets.
+    /// Merc launch screen for at least 1.2 s before `AppEntryView`
+    /// renders, and CI runners are slower still — same 15 s the Home
+    /// anchor gets.
     static let firstScreenTimeout: TimeInterval = 15
 
     /// Launch arguments for a brand-new install: the tutorial flag and
@@ -464,7 +552,7 @@ final class MercuriusUITests: XCTestCase {
     /// `onboarding.*` strings below.
     @MainActor
     private func onboardingElement(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        element(app, identifier)
     }
 
     /// Wait for an onboarding element and tap it. Fails the test with a

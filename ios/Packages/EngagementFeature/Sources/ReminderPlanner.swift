@@ -1,16 +1,17 @@
 import Foundation
 
-/// Plans the next week of daily-reminder notifications: rotating Merc-voiced
-/// copy, with the FIRST upcoming slot upgraded to a streak-defense line when
-/// there's a live streak to protect.
+/// Plans the reminder notifications:
 ///
-/// Why one-off notifications instead of the old repeating trigger: a repeating
-/// `UNCalendarNotificationTrigger` can only ever say the same sentence, and it
-/// can't know about the streak. Planning a rolling window (re-planned on every
-/// launch / foreground / streak change) lets the copy rotate, lets the streak
-/// number stay accurate (any streak change re-plans before the number could go
-/// stale), and means a user who stops opening the app stops being pinged after
-/// the window runs out — deliberate: no infinite nagging in a 9+ app.
+/// - **Daily** — the next two weeks of one-off reminders: rotating Merc-voiced
+///   copy, with the FIRST upcoming slot upgraded to a streak-defense line when
+///   there's a live streak to protect. A repeating trigger can only ever say
+///   the same sentence and can't know about the streak; planning a rolling
+///   window (re-planned on every launch / foreground / streak change) lets the
+///   copy rotate, keeps the streak number accurate, and means a user who stops
+///   opening the app stops getting daily pings once the window runs out.
+/// - **Weekly** — two fixed nudges (Wednesday evening, Sunday evening) on
+///   repeating triggers. They keep going while the user is away — that's their
+///   job — so they're capped at two a week and turned off with one switch.
 ///
 /// Pure — every input is explicit — so rotation and defense selection are
 /// unit-testable without touching `UNUserNotificationCenter`.
@@ -25,18 +26,49 @@ public enum ReminderPlanner {
     }
 
     public struct PlannedReminder: Equatable, Sendable {
-        /// Stable per-day identifier ("mercurius.reminder.2026-07-06") so
-        /// re-planning replaces rather than duplicates.
+        /// Stable identifier ("mercurius.reminder.2026-07-06",
+        /// "mercurius.weekly.wed") so re-planning replaces rather than
+        /// duplicates.
         public let id: String
-        /// Local wall-clock fire time (year/month/day/hour/minute).
+        /// Local wall-clock fire time: year/month/day/hour/minute for a daily
+        /// reminder, weekday/hour/minute for a weekly one.
         public let fireDate: DateComponents
         public let body: String
         public let pose: Pose
     }
 
-    /// Identifier prefix for every planned reminder — the scheduler uses it
-    /// to find and clear previous plans.
+    /// Identifier prefix for every planned daily reminder — the scheduler
+    /// uses it to find and clear previous plans.
     public static let idPrefix = "mercurius.reminder."
+
+    /// Identifier prefix for the weekly nudges. Disjoint from `idPrefix`, so
+    /// clearing one family never touches the other.
+    public static let weeklyIdPrefix = "mercurius.weekly."
+
+    /// The two weekly nudges, fired on repeating calendar triggers. Weekdays
+    /// use Gregorian numbering (1 = Sunday … 7 = Saturday); pass
+    /// `weeklyWeekdays` as `plan(quietWeekdays:)` while they're on.
+    public static func weeklyPlan() -> [PlannedReminder] {
+        [
+            PlannedReminder(
+                id: weeklyIdPrefix + "wed",
+                fireDate: DateComponents(hour: 19, minute: 0, weekday: 4),
+                body: "This week's lesson is waiting — six minutes with Merc?",
+                pose: .wave
+            ),
+            PlannedReminder(
+                id: weeklyIdPrefix + "sun",
+                fireDate: DateComponents(hour: 18, minute: 0, weekday: 1),
+                body: "New week, new lesson.",
+                pose: .happy
+            ),
+        ]
+    }
+
+    /// The weekdays the weekly nudges fire on.
+    public static var weeklyWeekdays: Set<Int> {
+        Set(weeklyPlan().compactMap(\.fireDate.weekday))
+    }
 
     /// The Merc-voiced rotation, each line paired with the pose Merc strikes
     /// on the banner. Warm and inviting — this app's audience is 9+, so no
@@ -57,7 +89,7 @@ public enum ReminderPlanner {
         "Your \(streak)-day streak is on the line! A two-minute chat with Merc saves it."
     }
 
-    /// Build the plan.
+    /// Build the daily plan.
     ///
     /// - Parameters:
     ///   - streak: the live, server-confirmed streak to defend, or `nil` when
@@ -65,6 +97,9 @@ public enum ReminderPlanner {
     ///   - chattedToday: today's slot is dropped when the user already chatted
     ///     (that day is saved — pinging them after the fact reads as noise),
     ///     and the defense line moves to the first future slot.
+    ///   - quietWeekdays: Gregorian weekdays (1 = Sunday) a weekly nudge
+    ///     already covers; their rotation slots are dropped so the day gets
+    ///     one notification, not two. The defense slot is never dropped.
     public static func plan(
         now: Date,
         calendar: Calendar = .current,
@@ -72,7 +107,8 @@ public enum ReminderPlanner {
         minute: Int,
         streak: Int?,
         chattedToday: Bool,
-        horizonDays: Int = 7
+        horizonDays: Int = 14,
+        quietWeekdays: Set<Int> = []
     ) -> [PlannedReminder] {
         var reminders: [PlannedReminder] = []
         var defensePending = streak != nil
@@ -92,6 +128,8 @@ public enum ReminderPlanner {
                 body = defenseLine(streak: streak)
                 pose = .sleep
                 defensePending = false
+            } else if quietWeekdays.contains(calendar.component(.weekday, from: fire)) {
+                continue
             } else {
                 let dayOfYear = calendar.ordinality(of: .day, in: .year, for: fire) ?? offset
                 (body, pose) = dailyLines[dayOfYear % dailyLines.count]
