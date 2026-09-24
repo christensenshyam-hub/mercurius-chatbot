@@ -80,7 +80,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // ---------------------------------------------------------------------------
 const PROD_LIMITS = Object.freeze({
   API_IP_PER_MIN: 400,
-  CHAT_IP_PER_MIN: 150,
+  CHAT_IP_PER_MIN: 300,
   UPLOAD_IP_PER_MIN: 60,
   REPORT_IP_PER_MIN: 60,
   SESSION_PER_MIN: 10,
@@ -484,17 +484,17 @@ async function scenarioClassroom(ctx) {
   notes.push(`${results.length}/${expected} turns served in ${(elapsedMs / 1000).toFixed(1)} s; lessons reaching [LESSON_COMPLETE] on turn ${LESSON_TURNS}: ${lessonsCompleted}/${CLASSROOM_STUDENTS}`);
   if (firstIssue) notes.push(`first non-200: ${firstIssue}`);
 
-  // Headroom: 30 × 5 = 150 is exactly CHAT_IP_PER_MIN. One more /api/chat
-  // from the same NAT inside the limiter window shows what a retry, a sixth
-  // turn, or a quiz call would get. (The window is 60 s, aligned to server
-  // boot, so if the classroom straddled a reset this probe can pass.)
+  // Headroom: 30 × 5 = 150 is half of CHAT_IP_PER_MIN (300). One more
+  // /api/chat from the same NAT inside the limiter window shows what a retry,
+  // a sixth turn, or a quiz call gets — it must be served. (The window is
+  // 60 s, aligned to server boot.)
   const s0 = students[0];
   const probe = await chatRequest({
     base, ip, sessionId: s0.id,
     messages: [...s0.thread, { role: 'user', content: 'One more question before the bell.' }],
     stream: false,
   });
-  notes.push(`CHAT_IP_PER_MIN headroom: request #${expected + 1} from the classroom NAT inside the same minute → ${probe.kind} (limit ${ctx.limits.CHAT_IP_PER_MIN} = ${CLASSROOM_STUDENTS} students × ${LESSON_TURNS} turns exactly)`);
+  notes.push(`CHAT_IP_PER_MIN headroom: request #${expected + 1} from the classroom NAT inside the same minute → ${probe.kind} (limit ${ctx.limits.CHAT_IP_PER_MIN}; the room used ${expected})`);
 
   return { name: `Classroom (${CLASSROOM_STUDENTS} sessions × ${LESSON_TURNS}-turn lesson, one NAT)`, results, verdict, notes, gate: true };
 }

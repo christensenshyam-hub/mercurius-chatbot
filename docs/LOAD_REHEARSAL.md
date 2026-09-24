@@ -55,10 +55,9 @@ Two details of the drain are worth knowing when reading its notes:
 ## Reading a failure
 
 - **Classroom refusals** mean a production default is too tight for one
-  room. Note that 30 students × 5 turns = 150 is *exactly*
-  `CHAT_IP_PER_MIN`; the scenario's headroom note sends request #151 from
-  the same address inside the minute and reports what it got (expected:
-  `429 rate_limited`). A real class streams each turn for 5–15 s, so it
+  room. 30 students × 5 turns = 150 is half of `CHAT_IP_PER_MIN` (300);
+  the scenario's headroom note sends request #151 from the same address
+  inside the minute and reports what it got (expected: served). A real class streams each turn for 5–15 s, so it
   cannot reach 150 chat requests in a minute the way the mock does, but a
   retry storm or the widget's quiz/report-card helper calls share that
   bucket.
