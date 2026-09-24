@@ -106,6 +106,14 @@ jobs:
         #   * `MercuriusTests/ViewSnapshotTests` — pixel references were
         #     recorded on a specific local sim and will not match a
         #     GitHub runner sim 1:1 without pinning.
+        # Retries:
+        #   * The runner's simulator intermittently fails to terminate the
+        #     app between XCUITests ("Failed to terminate
+        #     com.mayoailiteracy.mercurius.native") — a different test
+        #     each run, unrelated to the code under test. Retry failed
+        #     tests up to 3 iterations with a fresh test-runner launch
+        #     between them; a test that passes on retry counts as passed,
+        #     a real failure still fails three times.
         # Pipe:
         #   * `set -o pipefail` so a failing xcodebuild fails the step
         #     even after flowing through xcbeautify.
@@ -117,6 +125,9 @@ jobs:
             -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
             -skip-testing:MercuriusTests/ViewSnapshotTests \
             -skip-testing:MercuriusUITests/PerformanceTests \
+            -retry-tests-on-failure \
+            -test-iterations 3 \
+            -test-repetition-relaunch-enabled YES \
             -resultBundlePath build/TestResults.xcresult \
             | xcbeautify
 
