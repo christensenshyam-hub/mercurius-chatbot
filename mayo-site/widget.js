@@ -25,12 +25,10 @@
   var QUIZ_ENDPOINT = API_ENDPOINT.replace('/chat', '/quiz');
   var REPORT_CARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/report-card');
   var CONCEPT_MAP_ENDPOINT = API_ENDPOINT.replace('/chat', '/concept-map');
-  var LEADERBOARD_ENDPOINT = API_ENDPOINT.replace('/chat', '/leaderboard');
   var FACTCHECK_ENDPOINT = API_ENDPOINT.replace('/chat', '/factcheck');
   var ANALYZE_ENDPOINT = API_ENDPOINT.replace('/chat', '/analyze');
   var CHALLENGE_ENDPOINT = API_ENDPOINT.replace('/chat', '/challenge');
   var PRE_BRIEFING_ENDPOINT = API_ENDPOINT.replace('/chat', '/pre-briefing');
-  var PROFILE_ENDPOINT = API_ENDPOINT.replace('/chat', '/profile');
 
   // =========================================================================
   // 2. Session ID — persist across browser sessions using localStorage
@@ -90,7 +88,7 @@
   var tooltipVisible = false;
   var voiceActive = false;
   var voiceRecognition = null;
-  var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'leaderboard' | 'summary' | null
+  var currentRightPanel = null; // 'quiz' | 'map' | 'report' | 'summary' | null
   var debateRound = 0;
   var currentConversationId = null;
 
@@ -302,12 +300,6 @@
     var bookmarks = getBookmarksLocal().filter(function(b) { return b.id !== id; });
     localStorage.setItem('merc_bookmarks', JSON.stringify(bookmarks));
   }
-  function getDisplayNameLocal() {
-    return localStorage.getItem('merc_display_name') || '';
-  }
-  function setDisplayNameLocal(name) {
-    localStorage.setItem('merc_display_name', name || '');
-  }
 
   function showToast(html, duration) {
     var existing = document.getElementById('merc-toast');
@@ -354,26 +346,10 @@
     if (nextBtn) nextBtn.textContent = step === 2 ? 'Start Exploring' : 'Next \u2192';
   }
   function completeOnboarding() {
-    var nameInput = document.getElementById('merc-onboard-name');
-    if (nameInput && nameInput.value.trim()) {
-      var name = nameInput.value.trim().slice(0, 30);
-      setDisplayNameLocal(name);
-      updateDisplayNameInSidebar(name);
-      fetch(PROFILE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionId, displayName: name })
-      }).catch(function(e) { console.warn('[Mercurius]', e); });
-    }
     safeSetItem('merc_onboarded', '1');
     var overlay = document.getElementById('merc-onboard');
     if (overlay) overlay.classList.remove('merc-onboard-visible');
     checkAndAwardAchievement('first_chat');
-  }
-  function updateDisplayNameInSidebar(name) {
-    var el = document.getElementById('merc-display-name');
-    if (el) el.textContent = name ? name : 'Add your name';
-    el && el.classList.toggle('merc-name-set', !!name);
   }
 
   // =========================================================================
@@ -423,7 +399,6 @@
       '      <button class="merc-tool-btn" id="merc-btn-quiz">Quiz</button>',
       '      <button class="merc-tool-btn" id="merc-btn-map">Concept Map</button>',
       '      <button class="merc-tool-btn" id="merc-btn-report">Report Card</button>',
-      '      <button class="merc-tool-btn" id="merc-btn-lb">Leaderboard</button>',
       '      <button class="merc-tool-btn" id="merc-btn-summary">Summary</button>',
       '      <button class="merc-tool-btn" id="merc-btn-factcheck">Fact Check</button>',
       '      <button class="merc-tool-btn" id="merc-btn-analyze">Analyze Output</button>',
@@ -642,7 +617,6 @@
       quiz: 'merc-btn-quiz',
       map: 'merc-btn-map',
       report: 'merc-btn-report',
-      leaderboard: 'merc-btn-lb',
       summary: 'merc-btn-summary',
       factcheck: 'merc-btn-factcheck',
       analyze: 'merc-btn-analyze',
@@ -659,7 +633,6 @@
       quiz: 'Comprehension Quiz',
       map: 'Concept Map',
       report: 'Report Card',
-      leaderboard: 'Leaderboard',
       summary: 'Summary',
       factcheck: 'Fact Check',
       analyze: 'Analyze Output',
@@ -691,8 +664,6 @@
         loadMapInPanel(body);
       } else if (type === 'report') {
         loadReportInPanel(body);
-      } else if (type === 'leaderboard') {
-        loadLeaderboardInPanel(body);
       } else if (type === 'factcheck') {
         loadFactCheckPanel(body);
       } else if (type === 'analyze') {
@@ -777,15 +748,6 @@
       endpoint: REPORT_CARD_ENDPOINT,
       body: { sessionId: sessionId },
       render: renderReportCard
-    });
-  }
-
-  function loadLeaderboardInPanel(body) {
-    loadPanelWithFetch(body, {
-      loadingMsg: 'Loading\u2026',
-      endpoint: LEADERBOARD_ENDPOINT,
-      method: 'GET',
-      render: renderLeaderboard
     });
   }
 
@@ -1272,9 +1234,6 @@
     var reportBtn = document.getElementById('merc-btn-report');
     if (reportBtn) { reportBtn.addEventListener('click', function () { openRightPanel('report'); }); }
 
-    var lbBtn = document.getElementById('merc-btn-lb');
-    if (lbBtn) { lbBtn.addEventListener('click', function () { openRightPanel('leaderboard'); }); }
-
     var summaryBtn = document.getElementById('merc-btn-summary');
     if (summaryBtn) { summaryBtn.addEventListener('click', function () { openRightPanel('summary'); }); }
 
@@ -1326,80 +1285,6 @@
     if (achievementsBtn) { achievementsBtn.addEventListener('click', function() { openRightPanel('achievements'); }); }
     var bookmarksBtn = document.getElementById('merc-btn-bookmarks');
     if (bookmarksBtn) { bookmarksBtn.addEventListener('click', function() { openRightPanel('bookmarks'); }); }
-
-    // Display name edit button
-    var nameEditBtn = document.getElementById('merc-name-edit-btn');
-    if (nameEditBtn) {
-      nameEditBtn.addEventListener('click', function() {
-        var row = document.getElementById('merc-display-name-row');
-        var existing = getDisplayNameLocal();
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.value = existing;
-        input.maxLength = 30;
-        input.className = 'merc-name-inline-input';
-        input.placeholder = 'Your name';
-        var saveBtn = document.createElement('button');
-        saveBtn.className = 'merc-name-save-btn';
-        saveBtn.textContent = '\u2713';
-        if (row) {
-          row.innerHTML = '';
-          row.appendChild(input);
-          row.appendChild(saveBtn);
-          input.focus();
-        }
-        function saveName() {
-          var name = input.value.trim().slice(0, 30);
-          setDisplayNameLocal(name);
-          fetch(PROFILE_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: sessionId, displayName: name })
-          }).catch(function(e) { console.warn('[Mercurius]', e); });
-          if (row) {
-            row.innerHTML = '<span class="merc-display-name' + (name ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(name || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
-            var newEditBtn = document.getElementById('merc-name-edit-btn');
-            if (newEditBtn) {
-              newEditBtn.addEventListener('click', function() {
-                var newRow = document.getElementById('merc-display-name-row');
-                var curName = getDisplayNameLocal();
-                var newInput = document.createElement('input');
-                newInput.type = 'text';
-                newInput.value = curName;
-                newInput.maxLength = 30;
-                newInput.className = 'merc-name-inline-input';
-                newInput.placeholder = 'Your name';
-                var newSaveBtn = document.createElement('button');
-                newSaveBtn.className = 'merc-name-save-btn';
-                newSaveBtn.textContent = '\u2713';
-                if (newRow) {
-                  newRow.innerHTML = '';
-                  newRow.appendChild(newInput);
-                  newRow.appendChild(newSaveBtn);
-                  newInput.focus();
-                }
-                function saveNewName() {
-                  var newName = newInput.value.trim().slice(0, 30);
-                  setDisplayNameLocal(newName);
-                  fetch(PROFILE_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId: sessionId, displayName: newName })
-                  }).catch(function(e) { console.warn('[Mercurius]', e); });
-                  if (newRow) {
-                    newRow.innerHTML = '<span class="merc-display-name' + (newName ? ' merc-name-set' : '') + '" id="merc-display-name">' + escapeHtml(newName || 'Add your name') + '</span><button class="merc-name-edit-btn" id="merc-name-edit-btn" title="Edit name">Edit</button>';
-                  }
-                }
-                newSaveBtn.addEventListener('click', saveNewName);
-                newInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveNewName(); });
-              });
-            }
-          }
-        }
-        saveBtn.addEventListener('click', saveName);
-        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveName(); });
-      });
-    }
 
     // Onboarding next/skip buttons
     var onboardNext = document.getElementById('merc-onboard-next');
@@ -1456,10 +1341,19 @@
     fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
+      body: JSON.stringify({ messages: messages, sessionId: sessionId, capabilities: ['club_v1'] }),
     })
     .then(function(res) {
-      if (!res.ok) return res.json().then(function(e) { throw new Error(e.reply || 'Server error'); });
+      if (!res.ok) {
+        // Server replied with an error object — surface its friendly copy
+        // (message, falling back to legacy reply) rather than the generic
+        // connection-error text.
+        return res.json().catch(function() { return {}; }).then(function(e) {
+          var serverErr = new Error((e && (e.message || e.reply)) || 'Mercurius hit a snag. Try again in a moment.');
+          serverErr.fromServer = true;
+          throw serverErr;
+        });
+      }
       var contentType = res.headers.get('content-type') || '';
 
       // Non-streaming fallback
@@ -1516,7 +1410,7 @@
                 } else if (parsed.type === 'error') {
                   setLoading(false);
                   removeStreamBubble(streamBubble);
-                  appendBotMessage('Error: ' + (parsed.error || 'Unknown error'));
+                  appendBotMessage(parsed.error || 'Mercurius hit a snag. Try again in a moment.');
                   return;
                 }
               } catch(e) { console.warn('[Mercurius]', e); }
@@ -1531,7 +1425,7 @@
       console.error('[Mercurius] fetch error:', err);
       removeTyping(typingId);
       setLoading(false);
-      appendBotMessage('Connection error — try again in a moment.');
+      appendBotMessage(err && err.fromServer ? err.message : 'Connection error — try again in a moment.');
     });
   }
 
@@ -1612,7 +1506,7 @@
     fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
+      body: JSON.stringify({ messages: messages, sessionId: sessionId, capabilities: ['club_v1'] }),
     })
       .then(function (res) {
         if (!res.ok) throw new Error('Server error: ' + res.status);
@@ -2067,7 +1961,7 @@
     fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages, sessionId: sessionId }),
+      body: JSON.stringify({ messages: messages, sessionId: sessionId, capabilities: ['club_v1'] }),
     })
       .then(function (res) {
         if (!res.ok) throw new Error('Server error: ' + res.status);
@@ -2413,27 +2307,6 @@
     container.insertAdjacentHTML('afterbegin', html);
   }
 
-  function renderLeaderboard(rows, container) {
-    if (!rows || rows.length === 0) {
-      container.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">No data yet \u2014 start chatting!</p>');
-      return;
-    }
-    var myBadge = sessionId.slice(-4).toUpperCase();
-    var html = '<div class="merc-lb-table">';
-    html += '<div class="merc-lb-row merc-lb-header"><span>#</span><span>Student</span><span>Streak</span><span>Msgs</span></div>';
-    rows.forEach(function (r) {
-      var isMe = r.badge === myBadge;
-      html += '<div class="merc-lb-row' + (isMe ? ' merc-lb-me' : '') + '">';
-      html += '<span>' + escapeHtml(String(r.rank)) + '</span>';
-      html += '<span class="merc-lb-badge">' + escapeHtml(r.name || r.badge) + (isMe ? ' <span style="font-size:9px;opacity:0.6">(you)</span>' : '') + '</span>';
-      html += '<span>' + escapeHtml(String(r.streak)) + '</span>';
-      html += '<span>' + escapeHtml(String(r.messages)) + '</span>';
-      html += '</div>';
-    });
-    html += '</div>';
-    container.insertAdjacentHTML('afterbegin', html);
-  }
-
   // =========================================================================
   // 19. Voice input
   // =========================================================================
@@ -2573,10 +2446,6 @@
         }
       }
     }
-
-    // Restore display name
-    var savedName = getDisplayNameLocal();
-    if (savedName) updateDisplayNameInSidebar(savedName);
 
     // Initialize conversation ID for this session
     currentConversationId = 'conv_' + Date.now();

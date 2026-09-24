@@ -29,12 +29,11 @@ describe('db.deleteSession removes every session-keyed row', () => {
     }
   });
 
-  test('deletes messages, memory, images, reports, and the session row', async () => {
+  test('deletes messages, images, reports, and the session row', async () => {
     const s = sid();
     await db.getOrCreateSession(s);
     await db.saveMessage(s, 'user', 'a minor typed this');
     await db.saveMessage(s, 'assistant', 'a reply');
-    await db.saveMemory(s, 'interest', 'AI ethics');
     await db.saveImage({
       id: crypto.randomBytes(12).toString('hex'), sessionId: s,
       contentType: 'image/png', fileName: 'x.png', sizeBytes: 3,
@@ -49,7 +48,8 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.equal(result.sessionExisted, true);
     assert.equal(result.deleted.messages, 2);
     assert.equal(result.deleted.sessions, 1);
-    assert.ok(result.deleted.student_memory >= 1);
+    // student_memory is gone from the schema; the cascade must not depend on it.
+    assert.ok(!('student_memory' in result.deleted), 'no student_memory table in a fresh schema');
     assert.equal(result.deleted.images, 1);
     assert.equal(result.deleted.reports, 1);
 

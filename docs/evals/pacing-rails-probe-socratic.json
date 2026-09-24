@@ -1,0 +1,153 @@
+{
+  "label": "rails-probe-socratic",
+  "baseUrl": "http://localhost:3141",
+  "generatedAt": "2026-09-24T02:38:08.718Z",
+  "runs": 1,
+  "criteria": [
+    {
+      "name": "median sentences ≤ 4 (chat replies)",
+      "value": 3.5,
+      "pass": true
+    },
+    {
+      "name": "p90 sentences ≤ 6 (chat replies)",
+      "value": 5,
+      "pass": true
+    },
+    {
+      "name": "debate replies ≤ 7 lines (contract)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "discussion scoring block ≤ 10 lines, ends with one question",
+      "value": "none",
+      "pass": false
+    },
+    {
+      "name": "socratic: 100% end with exactly one question",
+      "value": "4/4",
+      "pass": true
+    },
+    {
+      "name": "preview hits = 0 (all replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "truncations = 0 (all replies)",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "name": "curriculum beat 1: exactly one [CHECK], no exercise",
+      "value": "checks=0 exercise=false",
+      "pass": false
+    },
+    {
+      "name": "[LESSON_COMPLETE] within 10 assistant turns",
+      "value": "never",
+      "pass": false
+    },
+    {
+      "name": "deep reply ≥ 8 sentences",
+      "value": "missing",
+      "pass": false
+    },
+    {
+      "name": "airy paragraphs: chat p90 ≤ 2 / max ≤ 3; longform p90 ≤ 3 / max ≤ 4",
+      "value": "chat p90=2 max=2; longform p90=0 max=0",
+      "pass": true
+    },
+    {
+      "name": "blocks: every reply well-formed (blocks scenario)",
+      "value": "none",
+      "pass": false
+    },
+    {
+      "name": "blocks: beat 1 has exactly one [Q], zero [CHECK]",
+      "value": "q=0 check=0",
+      "pass": false
+    },
+    {
+      "name": "blocks: ≥2 [Q] checks across the lesson",
+      "value": 0,
+      "pass": false
+    },
+    {
+      "name": "blocks: [LESSON_COMPLETE] within 10 assistant turns",
+      "value": "never",
+      "pass": false
+    },
+    {
+      "name": "blocks: zero marker leak on capability-less replies",
+      "value": 0,
+      "pass": true
+    }
+  ],
+  "results": [
+    {
+      "id": "socratic-1",
+      "mode": "socratic",
+      "sessionId": "eval-pacing-0b40919625aa0053",
+      "replies": [
+        {
+          "user": "How does an LLM actually generate its answers?",
+          "responseMode": "concise",
+          "raw": "It predicts the next token — one word-piece at a time — based on patterns learned from massive amounts of text.\n\nHere's the hinge: it's not retrieving a stored answer. It's calculating which token is most *likely* given everything before it, then repeating that process until the response is complete.\n\nWhat does that imply about whether a fluent, confident-sounding answer is actually *true*?",
+          "metrics": {
+            "sentenceCount": 4,
+            "lineCount": 3,
+            "questionMarks": 1,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        },
+        {
+          "user": "I think it predicts the next word based on patterns it learned?",
+          "responseMode": "concise",
+          "raw": "Exactly right — that's the core mechanism.\n\nNow push on it: if the model is choosing the *most likely* next token based on patterns, what happens when the true answer is *unlikely* in the training data — like a rare fact, a recent event, or something that contradicts common belief?",
+          "metrics": {
+            "sentenceCount": 2,
+            "lineCount": 2,
+            "questionMarks": 1,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 1
+          }
+        },
+        {
+          "user": "So it doesn't really 'know' facts — it just produces likely text?",
+          "responseMode": "concise",
+          "raw": "That's the key insight — and it has a name: **hallucination**.\n\nWhen the true answer is rare or absent in training data, the model still produces *fluent, confident-sounding* text — because fluency and accuracy are two different things.\n\nSo what does that mean for how you should use an LLM's output?",
+          "metrics": {
+            "sentenceCount": 3,
+            "lineCount": 3,
+            "questionMarks": 1,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 1
+          }
+        },
+        {
+          "user": "Then why does it sometimes state wrong things so confidently?",
+          "responseMode": "concise",
+          "raw": "Because confidence is also a pattern it learned.\n\nTraining data is full of authoritative, declarative sentences — textbooks, articles, encyclopedias. The model learned that *that tone* is how answers sound.\n\nIt has no internal signal that says \"I'm uncertain here.\"\n\nWhat would a more trustworthy AI need that current LLMs lack?",
+          "metrics": {
+            "sentenceCount": 5,
+            "lineCount": 4,
+            "questionMarks": 1,
+            "endsWithQuestion": true,
+            "truncated": false,
+            "previewHit": false,
+            "maxParagraphSentences": 2
+          }
+        }
+      ]
+    }
+  ]
+}

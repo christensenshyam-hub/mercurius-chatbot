@@ -59,6 +59,11 @@ before(async () => {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
         ALLOWED_ORIGIN: `http://localhost:${TEST_PORT}`,
         NODE_ENV: 'test',
+        // The production defaults are sized for a classroom on one IP
+        // (150/min chat, 10/min session); pin the small legacy numbers the
+        // limiter tests below were written against so they stay meaningful.
+        CHAT_IP_PER_MIN: '15',
+        SESSION_PER_MIN: '20',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -419,11 +424,17 @@ describe('Health check', () => {
 // ===========================================================================
 
 describe('GET /metrics', () => {
+  // The scrape endpoint is admin-only (it exposes per-route cost).
   async function getText(path) {
-    const res = await fetch(`${BASE_URL}${path}`);
+    const res = await fetch(`${BASE_URL}${path}`, { headers: { 'x-admin-password': ADMIN_PASSWORD } });
     const text = await res.text();
     return { status: res.status, text, contentType: res.headers.get('content-type') };
   }
+
+  test('rejects scrapes without the admin password', async () => {
+    const res = await fetch(`${BASE_URL}/metrics`);
+    assert.equal(res.status, 401);
+  });
 
   test('serves text/plain Prometheus exposition format', async () => {
     const { status, text, contentType } = await getText('/metrics');

@@ -6,10 +6,12 @@ name: Server
 # would not have triggered any CI before this workflow existed.
 #
 # Scope:
-#   * `npm test` via `node --test tests/*.test.js` — 83 tests across
-#     pino redaction, Zod schema units, model-allowlist units,
-#     Prometheus metric unit tests, and the full server-spawning
-#     integration suite.
+#   * `npm test` via `node --test tests/*.test.js` — the whole suite
+#     (pino redaction, Zod schema units, model-allowlist units,
+#     Prometheus metric unit tests, safety-rail units, and the full
+#     server-spawning integration suite). The authoritative count is
+#     whatever `npm test` prints in its `# tests N` summary line —
+#     don't hardcode it here, it drifts.
 #   * Runs on ubuntu-latest. The server does not require macOS —
 #     better-sqlite3 builds from source on Linux just fine, and CI
 #     time is a fraction of the macOS-runner cost.
@@ -43,11 +45,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Match the local dev toolchain (22) + the current LTS (20)
-        # so the test surface catches anything that breaks between
-        # versions. Node 22 is the current "Active LTS"; 20 is
-        # "Maintenance LTS" through April 2026.
-        node-version: ['20', '22']
+        # Node 22 only — it is the pinned runtime everywhere
+        # (.nvmrc, package.json "engines", Railway's nixpacks build).
+        # Node 20 left Maintenance LTS in April 2026 and is no longer
+        # a supported target, so testing against it only adds CI
+        # minutes without protecting a real deployment.
+        node-version: ['22']
 
     steps:
       - uses: actions/checkout@v4

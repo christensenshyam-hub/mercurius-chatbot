@@ -3,7 +3,12 @@
 // Tests for the runtime Claude kill switch (audit finding P0-B).
 //
 //   1. Unit — lib/killSwitch: env boot default, runtime override precedence.
-//   2. Integration — a server booted with CLAUDE_DISABLED=1 refuses /api/chat
+//   2. Unit — persistence: init(db) seeds the override from the settings row
+//      (row beats env, no row → env), set() writes through, a failed write
+//      keeps the in-memory flip and never throws, state().persisted reports
+//      durability. Uses a fake db object against the getSetting/setSetting
+//      contract — db.js is never imported here.
+//   3. Integration — a server booted with CLAUDE_DISABLED=1 refuses /api/chat
 //      with 503 service_disabled (zero Anthropic calls — only the pre-call
 //      gate emits that code); the admin endpoint flips it off and back on at
 //      runtime with no restart, and rejects unauthenticated callers.
@@ -33,7 +38,7 @@ describe('killSwitch flag', () => {
   test('unset env → not killed', () => {
     delete process.env.CLAUDE_DISABLED;
     assert.equal(killSwitch.isKilled(), false);
-    assert.deepEqual(killSwitch.state(), { disabled: false, source: 'env' });
+    assert.deepEqual(killSwitch.state(), { disabled: false, source: 'env', persisted: false });
   });
 
   test('CLAUDE_DISABLED=1 → killed at boot', () => {
@@ -48,6 +53,135 @@ describe('killSwitch flag', () => {
     assert.equal(killSwitch.state().source, 'runtime');
     killSwitch.set(true);                // and kill again
     assert.equal(killSwitch.isKilled(), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unit — persistence via the settings-row contract
+// ---------------------------------------------------------------------------
+describe('killSwitch persistence', () => {
+  const KEY = 'claude_disabled';
+  const saved = process.env.CLAUDE_DISABLED;
+  beforeEach(() => killSwitch.__resetForTest());
+  after(() => {
+    if (saved === undefined) delete process.env.CLAUDE_DISABLED;
+    else process.env.CLAUDE_DISABLED = saved;
+    killSwitch.__resetForTest();
+  });
+
+  // Fake against the db contract the integrator wires up:
+  //   getSetting(key) → Promise<string|null>, setSetting(key, value) → Promise<void>
+  function fakeDb({ row = null, failWrite = false, failRead = false } = {}) {
+    const writes = [];
+    return {
+      writes,
+      async getSetting(key) {
+        assert.equal(key, KEY);
+        if (failRead) throw new Error('sqlite: table missing');
+        return row;
+      },
+      async setSetting(key, value) {
+        assert.equal(key, KEY);
+        if (failWrite) throw new Error('sqlite: disk I/O error');
+        writes.push(value);
+      },
+    };
+  }
+
+  test('init with row "1" overrides the env default (and "0" re-enables despite env)', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    await killSwitch.init(fakeDb({ row: '1' }));
+    assert.equal(killSwitch.isKilled(), true);
+    assert.deepEqual(killSwitch.state(), { disabled: true, source: 'runtime', persisted: true });
+
+    killSwitch.__resetForTest();
+    process.env.CLAUDE_DISABLED = '1';
+    await killSwitch.init(fakeDb({ row: '0' }));
+    assert.equal(killSwitch.isKilled(), false);
+    assert.equal(killSwitch.state().source, 'runtime');
+  });
+
+  test('init without a row falls through to the env default', async () => {
+    process.env.CLAUDE_DISABLED = '1';
+    await killSwitch.init(fakeDb());
+    assert.equal(killSwitch.isKilled(), true);
+    assert.deepEqual(killSwitch.state(), { disabled: true, source: 'env', persisted: false });
+
+    killSwitch.__resetForTest();
+    delete process.env.CLAUDE_DISABLED;
+    await killSwitch.init(fakeDb());
+    assert.equal(killSwitch.isKilled(), false);
+    assert.equal(killSwitch.state().source, 'env');
+  });
+
+  test('init read failure is swallowed and falls through to env', async () => {
+    process.env.CLAUDE_DISABLED = '1';
+    await assert.doesNotReject(killSwitch.init(fakeDb({ failRead: true })));
+    assert.equal(killSwitch.isKilled(), true);
+    assert.deepEqual(killSwitch.state(), { disabled: true, source: 'env', persisted: false });
+  });
+
+  test('set() writes through as "1"/"0" when a db is attached', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    const db = fakeDb();
+    await killSwitch.init(db);
+
+    await killSwitch.set(true);
+    assert.equal(killSwitch.isKilled(), true);
+    assert.deepEqual(db.writes, ['1']);
+    assert.equal(killSwitch.state().persisted, true);
+
+    await killSwitch.set(false);
+    assert.equal(killSwitch.isKilled(), false);
+    assert.deepEqual(db.writes, ['1', '0']);
+    assert.equal(killSwitch.state().persisted, true);
+  });
+
+  test('set() applies to memory synchronously, before the db write settles', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    await killSwitch.init(fakeDb());
+    const p = killSwitch.set(true);   // deliberately not awaited yet
+    assert.equal(killSwitch.isKilled(), true, 'flip must be visible before any await');
+    assert.ok(p && typeof p.then === 'function', 'set() returns a Promise');
+    await p;
+    assert.equal(killSwitch.state().persisted, true);
+  });
+
+  test('write failure keeps the in-memory change and never throws', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    await killSwitch.init(fakeDb({ failWrite: true }));
+
+    await assert.doesNotReject(killSwitch.set(true));
+    assert.equal(killSwitch.isKilled(), true, 'Claude must stay killed even if the db write failed');
+    assert.deepEqual(killSwitch.state(), { disabled: true, source: 'runtime', persisted: false });
+
+    await assert.doesNotReject(killSwitch.set(false));
+    assert.equal(killSwitch.isKilled(), false);
+    assert.equal(killSwitch.state().persisted, false);
+  });
+
+  test('state().persisted is false with no db attached, true after a successful write', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    // No init → memory-only mode (how the old sync callers behave).
+    await killSwitch.set(true);
+    assert.equal(killSwitch.isKilled(), true);
+    assert.deepEqual(killSwitch.state(), { disabled: true, source: 'runtime', persisted: false });
+
+    killSwitch.__resetForTest();
+    await killSwitch.init(fakeDb());
+    await killSwitch.set(true);
+    assert.equal(killSwitch.state().persisted, true);
+    assert.equal(typeof killSwitch.state().persisted, 'boolean');
+  });
+
+  test('__resetForTest() detaches the db', async () => {
+    delete process.env.CLAUDE_DISABLED;
+    const db = fakeDb();
+    await killSwitch.init(db);
+    killSwitch.__resetForTest();
+    await killSwitch.set(true);
+    assert.deepEqual(db.writes, [], 'no write after reset — db reference must be cleared');
+    assert.equal(killSwitch.state().persisted, false);
   });
 });
 

@@ -39,7 +39,9 @@ CI (`.github/workflows/`): `server.yml` runs `npm test` on Node 20/22; `ios.yml`
 ## Architecture
 
 ### Server (`server.js` + `db.js` + `lib/`)
-A single Express app. `server.js` holds the routes and the Claude streaming logic (SSE); `db.js` is a guarded better-sqlite3 layer; `lib/` holds extracted pure modules (prompt assembly in `unifiedPrompt.js`, gamification, image validation/store, unit-test grader, rate limiter). System prompts live in `prompts/mercurius-v2.md` and per-mode instructions in `lib/unifiedPrompt.js`.
+A single Express app. `server.js` holds the routes and the Claude streaming logic (SSE); `db.js` is a guarded better-sqlite3/Postgres layer; `lib/` holds extracted pure modules (prompt assembly in `unifiedPrompt.js`, gamification, image validation/store, unit-test grader, rate limiter). System prompts live in `prompts/mercurius-v2.md` and per-mode instructions in `lib/unifiedPrompt.js`.
+
+**Every model call goes through `lib/claudeCall.js`** (`createMessage` / `streamMessage`) — never the SDK directly. It is the one place that settles usage exactly once per call (including aborted streams), prices it (`lib/pricing.js`), feeds the dollar budget (`lib/spendCap.js`, `DAILY_BUDGET_USD`), the per-session/per-IP daily quotas (`lib/quotas.js`), Prometheus, the `usage` ledger, and Discord alerts (`lib/alerts.js`). Every model route runs `gate(req, res, { kind })` first (draining → kill switch → budget → quotas → in-flight caps). `ANTHROPIC_MOCK=1` swaps in `lib/anthropicMock.js` so the server can be integration-tested with no key (refused when `NODE_ENV=production`). There is no per-student memory profile any more — do not reintroduce one.
 
 **Server↔client contract markers** — the server embeds control tags in the streamed reply which every client must strip and act on: `[LESSON_COMPLETE]` (server judged proficiency; iOS flips lesson state, widget advances) and per-turn `[CURRICULUM]` tagging. If you touch these, update **all three**: `server.js`, iOS `ChatViewModel`/`NetworkingKit`, and the web widget(s).
 
