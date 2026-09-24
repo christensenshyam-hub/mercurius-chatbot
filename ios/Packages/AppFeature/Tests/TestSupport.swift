@@ -21,6 +21,30 @@ func freshDefaults(_ name: String) -> UserDefaults {
     return defaults
 }
 
+/// Polls `condition` about every 10 ms until it holds or `timeout` passes,
+/// and returns whether it held. Use it instead of a fixed sleep whenever an
+/// assertion depends on another task having run: under
+/// `swift test --parallel` every @MainActor test in the process shares the
+/// main thread, and a neighbour can hold it for seconds, so a sleep can end
+/// before that task ever got a turn.
+@MainActor
+func eventually(
+    timeout: Duration = .seconds(10),
+    _ condition: () async -> Bool
+) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while true {
+        if await condition() { return true }
+        if clock.now >= deadline { return false }
+        do {
+            try await Task.sleep(for: .milliseconds(10))
+        } catch {
+            return await condition()
+        }
+    }
+}
+
 struct StubFailure: Error {}
 
 /// Records every call; answers with `remote` or throws the configured error.

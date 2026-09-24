@@ -65,6 +65,10 @@ struct LaunchResumeTests {
     }
 }
 
+/// No tight wall-clock bounds here: under `swift test --parallel` every
+/// @MainActor test shares the main thread, and a neighbour holding it for a
+/// couple of seconds delays both the work and the timer. Ordering is pinned
+/// with a gate instead, and each time bound is loose enough to survive that.
 @Suite("LaunchWork.waitAtMost")
 @MainActor
 struct LaunchWorkTests {
@@ -74,24 +78,34 @@ struct LaunchWorkTests {
         var ran = false
         let clock = ContinuousClock()
         let start = clock.now
-        await LaunchWork.waitAtMost(.seconds(5)) { ran = true }
+        await LaunchWork.waitAtMost(.seconds(60)) { ran = true }
         #expect(ran)
-        #expect(start.duration(to: clock.now) < .seconds(2))
+        // Half the limit: it returned because the work completed, not
+        // because the timer fired.
+        #expect(start.duration(to: clock.now) < .seconds(30))
     }
 
-    @Test("Stops waiting at the limit; the work still finishes afterwards")
-    func slowWork() async throws {
+    @Test("Stops waiting at the limit; the work still finishes afterwards",
+          .timeLimit(.minutes(1)))
+    func slowWork() async {
         var finished = false
+        // The work can't finish until the test opens this gate, which it
+        // does only after `waitAtMost` has returned.
+        let (gate, openGate) = AsyncStream<Void>.makeStream()
         let clock = ContinuousClock()
         let start = clock.now
         await LaunchWork.waitAtMost(.milliseconds(50)) {
-            try? await Task.sleep(for: .milliseconds(400))
+            for await _ in gate { break }
             finished = true
         }
-        #expect(start.duration(to: clock.now) < .milliseconds(350))
-        #expect(!finished)
-        try await Task.sleep(for: .milliseconds(700))
-        #expect(finished)
+        #expect(!finished, "the wait ended at the limit, before the work")
+        // Loose on purpose: it proves only that the wait didn't hang on the
+        // gated work.
+        #expect(start.duration(to: clock.now) < .seconds(10))
+
+        openGate.yield()
+        openGate.finish()
+        #expect(await eventually { finished }, "the work keeps running past the limit")
     }
 }
 

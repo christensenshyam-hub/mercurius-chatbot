@@ -25,9 +25,16 @@ struct CurriculumProgressSyncTests {
         )
     }
 
-    /// Long enough for a 40 ms debounce plus the stub round trip.
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(250))
+    // Waiting for a push: a PUT that must happen is polled for with
+    // `eventually` (a fixed sleep can end before a stalled main actor ran the
+    // debounced task — every @MainActor test shares it under `--parallel`).
+    // A PUT that must NOT happen gets `waitPastDebounce()`: a stall can only
+    // delay a stray PUT past it, never fail the test.
+
+    /// Bounded, and far longer than the default 40 ms debounce plus the stub
+    /// round trip.
+    private func waitPastDebounce() async throws {
+        try await Task.sleep(for: .milliseconds(500))
     }
 
     @Test("Pull merges the server's lessons and units; a device holding nothing extra doesn't PUT")
@@ -68,7 +75,7 @@ struct CurriculumProgressSyncTests {
         // The merge moved `revision`, so the host would schedule a push too —
         // it must not re-send what the pull just sent.
         sync.pushSoon()
-        try await settle()
+        try await waitPastDebounce()
 
         let puts = await remote.puts
         #expect(puts.count == 1)
@@ -88,7 +95,7 @@ struct CurriculumProgressSyncTests {
 
         await sync.pullOnLaunch()
         sync.pushSoon()
-        try await settle()
+        try await waitPastDebounce()
 
         #expect(await remote.fetches.count == 1)
         #expect(await remote.puts.isEmpty)
@@ -98,7 +105,9 @@ struct CurriculumProgressSyncTests {
     func debounceCoalesces() async throws {
         let remote = StubProgressRemote()
         let store = makeStore()
-        let sync = makeSync(store, remote)
+        // Long enough that a main-actor stall between `pushSoon()` and the
+        // immediate check below can't let the push fire in between.
+        let sync = makeSync(store, remote, debounce: .seconds(1))
 
         store.markCompleted("u1_l1")
         sync.pushSoon()
@@ -107,7 +116,9 @@ struct CurriculumProgressSyncTests {
         store.markUnitMastered("unit_1")
         sync.pushSoon()
         #expect(await remote.puts.isEmpty, "nothing is sent before the debounce elapses")
-        try await settle()
+        #expect(await eventually { await remote.puts.count >= 1 })
+        // Any second PUT from the burst would land well inside this.
+        try await Task.sleep(for: .milliseconds(300))
 
         let puts = await remote.puts
         #expect(puts.count == 1)
@@ -122,10 +133,10 @@ struct CurriculumProgressSyncTests {
 
         store.markCompleted("u1_l1")
         sync.pushSoon()
-        try await settle()
+        #expect(await eventually { await remote.puts.count == 1 })
         store.markOpened("u1_l2")
         sync.pushSoon()
-        try await settle()
+        try await waitPastDebounce()
 
         #expect(await remote.puts.count == 1)
     }
@@ -156,7 +167,7 @@ struct CurriculumProgressSyncTests {
         #expect(await remote.puts.count == 1)
 
         sync.pushSoon()
-        try await settle()
+        #expect(await eventually { await remote.puts.count >= 2 })
         #expect(await remote.puts.count == 2, "a failed push isn't recorded as synced")
     }
 
@@ -169,7 +180,7 @@ struct CurriculumProgressSyncTests {
 
         await sync.pullOnLaunch()
         sync.pushSoon()
-        try await settle()
+        try await waitPastDebounce()
 
         #expect(await remote.fetches.isEmpty)
         #expect(await remote.puts.isEmpty)
@@ -185,7 +196,7 @@ struct CurriculumProgressSyncTests {
         store.markCompleted("u1_l1")
         current = "sid-new"
         sync.pushSoon()
-        try await settle()
+        #expect(await eventually { await remote.puts.count >= 1 })
 
         #expect(await remote.puts.map(\.sessionId) == ["sid-new"])
     }
@@ -200,7 +211,7 @@ struct CurriculumProgressSyncTests {
         sync.pushSoon()
         sync.cancelPending()
         store.reset()
-        try await settle()
+        try await waitPastDebounce()
 
         #expect(await remote.puts.isEmpty)
     }
@@ -228,7 +239,7 @@ struct CurriculumProgressSyncTests {
 
         await sync.pullOnLaunch()
         sync.pushSoon()
-        try await settle()
+        try await waitPastDebounce()
 
         #expect(await remote.fetches.isEmpty)
         #expect(await remote.puts.isEmpty)
