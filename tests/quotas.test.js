@@ -57,6 +57,8 @@ describe('limits: env parsing', () => {
       SESSION_DAILY_IMAGES: 20,
       IP_DAILY_USD: 10,
       IP_DAILY_NEW_SESSIONS: 60,
+      IP_DAILY_IMAGES: 200,
+      IP_DAILY_IMAGE_BYTES: 500 * 1024 * 1024,
       IP_MAX_INFLIGHT: 40,
       MAX_INFLIGHT: 80,
     });

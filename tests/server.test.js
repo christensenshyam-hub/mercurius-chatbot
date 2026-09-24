@@ -4,6 +4,8 @@ const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 // ---------------------------------------------------------------------------
@@ -14,6 +16,9 @@ const SERVER_DIR = path.join(__dirname, '..');
 const TEST_PORT = 9000 + Math.floor(Math.random() * 1000);
 const BASE_URL = `http://localhost:${TEST_PORT}`;
 const ADMIN_PASSWORD = 'test-admin-pw-' + crypto.randomBytes(4).toString('hex');
+// Isolated database: without this the spawned server writes sessions and
+// usage-ledger rows into the developer's local mercurius.db.
+const DB_PATH = path.join(os.tmpdir(), `merc-server-${crypto.randomBytes(4).toString('hex')}.db`);
 
 let serverProc;
 
@@ -59,6 +64,7 @@ before(async () => {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
         ALLOWED_ORIGIN: `http://localhost:${TEST_PORT}`,
         NODE_ENV: 'test',
+        SQLITE_PATH: DB_PATH,
         // The production defaults are sized for a classroom on one IP
         // (150/min chat, 10/min session); pin the small legacy numbers the
         // limiter tests below were written against so they stay meaningful.
@@ -102,6 +108,9 @@ before(async () => {
 after(() => {
   if (serverProc) {
     serverProc.kill('SIGTERM');
+  }
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { fs.rmSync(DB_PATH + suffix, { force: true }); } catch { /* ignore */ }
   }
 });
 

@@ -119,10 +119,12 @@ function readUsage(dbPath) {
 
 // ---------------------------------------------------------------------------
 describe('quotas end-to-end (mock upstream)', () => {
+  // New-session budget for this server: sessionA, the disconnect test's
+  // session, then two more in the rotation test; the fifth must be refused.
   const srv = spawnServer({
     SESSION_DAILY_CHAT_TURNS: '2',
     SESSION_DAILY_LESSON_TURNS: '2',
-    IP_DAILY_NEW_SESSIONS: '3',
+    IP_DAILY_NEW_SESSIONS: '4',
   });
   const sessionA = newSession();
 
@@ -163,10 +165,48 @@ describe('quotas end-to-end (mock upstream)', () => {
     assert.ok(third.json.retryAfterSec > 0);
     assert.ok(third.headers.get('retry-after'), 'Retry-After header set');
     assert.match(third.json.message, /tomorrow/i);
+
+    // Shipped iOS builds render an SSE error frame's text verbatim but map
+    // every 429/503 to a generic "give it a moment" — so a STREAMING request
+    // gets its refusal as a 200 event-stream carrying the real message.
+    const streamed = await chatSse(srv.base, sessionA);
+    assert.equal(streamed.status, 200);
+    const refusal = streamed.events.find((e) => e.type === 'error');
+    assert.ok(refusal, 'refusal delivered as an error frame');
+    assert.equal(refusal.code, 'daily_limit');
+    assert.match(refusal.error, /tomorrow/i);
+    assert.ok(!streamed.events.some((e) => e.type === 'complete'));
+    assert.ok(streamed.done, 'terminated with [DONE]');
+  });
+
+  test('a client that disconnects mid-stream aborts the upstream call and is billed as aborted', async () => {
+    const controller = new AbortController();
+    const res = await fetch(`${srv.base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ sessionId: newSession(), messages: [{ role: 'user', content: 'Explain a token slowly.' }] }),
+      signal: controller.signal,
+    });
+    assert.equal(res.status, 200);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let raw = '';
+    while (!raw.includes('"type":"delta"')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      raw += decoder.decode(value, { stream: true });
+    }
+    controller.abort();
+    await new Promise((r) => setTimeout(r, 400));
+    const rows = readUsage(srv.dbPath);
+    const last = rows[rows.length - 1];
+    assert.equal(last.status, 'aborted', `expected the disconnected turn to settle as aborted, got ${JSON.stringify(last)}`);
   });
 
   test('rotating session ids trips the per-IP new-session cap', async () => {
-    // sessionA was the first new session; two more are allowed, the fourth is not.
+    // Two new sessions are already counted (sessionA + the disconnect test);
+    // two more are allowed, the fifth is not — and it is refused BEFORE a row
+    // is created for it.
     const b = await chatJson(srv.base, newSession());
     assert.equal(b.status, 200);
     const c = await chatJson(srv.base, newSession());
@@ -226,5 +266,27 @@ describe('SIGTERM drains in-flight streams', () => {
     );
     const code = await Promise.race([exited, new Promise((r) => setTimeout(() => r('timeout'), 8000))]);
     assert.equal(code, 0, 'process exited cleanly after drain');
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('in-flight caps hold under a concurrent burst', () => {
+  // Slow mock so the streams overlap; caps of 2 so a burst of 6 must be cut.
+  const srv = spawnServer({ MOCK_STREAM_DELAY_MS: '40', MAX_INFLIGHT: '2', IP_MAX_INFLIGHT: '2' });
+  before(() => srv.ready);
+  after(() => srv.cleanup());
+
+  test('a burst beyond MAX_INFLIGHT gets busy refusals, the rest complete, and the counter returns to zero', async () => {
+    const results = await Promise.all(Array.from({ length: 6 }, () => chatSse(srv.base, newSession())));
+    const completed = results.filter((r) => r.events && r.events.some((e) => e.type === 'complete'));
+    const refused = results.filter((r) => r.events && r.events.some((e) => e.type === 'error' && e.code === 'busy'));
+    assert.ok(completed.length >= 1 && completed.length <= 2, `expected at most 2 concurrent completions, got ${completed.length}`);
+    assert.ok(refused.length >= 4, `expected the overflow refused as busy, got ${refused.length} refusals`);
+    assert.equal(completed.length + refused.length, 6, 'every request was either served or refused');
+
+    const res = await fetch(`${srv.base}/metrics`, { headers: { 'x-admin-password': srv.adminPw } });
+    const text = await res.text();
+    assert.match(text, /inflight_model_calls(\{[^}]*\})?\s+0\b/, 'no leaked in-flight slots');
+    assert.match(text, /quota_rejections_total\{[^}]*scope="(ip|global):busy"[^}]*\}\s+\d+/);
   });
 });

@@ -20,6 +20,7 @@ const claudeCall = require('../lib/claudeCall');
 const quotas = require('../lib/quotas');
 const spendCap = require('../lib/spendCap');
 const alerts = require('../lib/alerts');
+const pricing = require('../lib/pricing');
 
 function fakeDb() {
   const rows = [];
@@ -112,19 +113,45 @@ describe('claudeCall', () => {
     assert.ok(stream.accounting(), 'accounting result exposed after end');
   });
 
-  test('streamMessage: an aborted stream is billed as aborted with estimated output', async () => {
+  test('streamMessage: an aborted stream is billed for the text actually received', async () => {
     const stream = claudeCall.streamMessage({
       route: '/api/chat', kind: 'chat', sessionId: 'sess-3', ip: '10.0.0.3', params: chatParams(),
     });
-    let aborted = false;
-    stream.on('text', () => { if (!aborted) { aborted = true; stream.abort(); } });
+    // Let several chunks arrive before aborting so the estimate is well above
+    // the API's message_start placeholder of 1 output token.
+    let received = '';
+    let chunks = 0;
+    stream.on('text', (t) => {
+      received += t;
+      chunks += 1;
+      if (chunks === 4) stream.abort();
+    });
     await waitFor(stream, 'end');
     await new Promise((r) => setImmediate(r));
 
     assert.equal(db.rows.length, 1, 'settled exactly once despite abort + end');
     assert.equal(db.rows[0].status, 'aborted');
-    assert.ok(db.rows[0].output_tokens >= 1, 'output estimated from received text');
+    const estimate = pricing.estimateTokens(received);
+    assert.ok(estimate > 1, `test needs >1 token received (got ${received.length} chars)`);
+    assert.ok(db.rows[0].output_tokens >= estimate, `billed ${db.rows[0].output_tokens} output tokens for an estimate of ${estimate}`);
     assert.equal(quotas.inflight().global, 0, 'slot released on abort');
+  });
+
+  test('beginCall re-checks quotas atomically and refuses with QuotaError', async () => {
+    quotas.configure({ MAX_INFLIGHT: 0 });
+    await assert.rejects(
+      () => claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 's', ip: '4.4.4.4', params: chatParams() }),
+      (err) => err instanceof claudeCall.QuotaError && err.code === 'busy' && err.status === 503,
+    );
+    assert.equal(db.rows.length, 0, 'a refused call is never billed');
+    assert.equal(quotas.inflight().global, 0, 'nothing acquired on refusal');
+    quotas.configure({ MAX_INFLIGHT: null });
+
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 0 });
+    await assert.rejects(
+      () => claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 's2', ip: '4.4.4.4', params: chatParams() }),
+      (err) => err instanceof claudeCall.QuotaError && err.code === 'daily_limit' && err.status === 429 && err.verdict.scope === 'session',
+    );
   });
 
   test('createMessage: an upstream error settles an error row and rethrows', async () => {

@@ -112,16 +112,9 @@ const gamificationXp = require('./lib/gamification/xp');
 // Anthropic client
 // ---------------------------------------------------------------------------
 // Every model call goes through lib/claudeCall (usage ledger, dollar budget,
-// quotas, metrics, alerts, and the ANTHROPIC_MOCK=1 stand-in for tests).
-// Timeout lives on the client, not in per-request bodies. Anthropic's
-// current API rejects `timeout` as a body field with
-//   400 invalid_request_error: "timeout: Extra inputs are not permitted"
-// which silently broke every non-streaming endpoint on the deployed SDK.
-claudeCall.init({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  timeout: 30000,
-  db,
-});
+// quotas, metrics, alerts, and the ANTHROPIC_MOCK=1 stand-in for tests). It
+// is initialized in the boot sequence at the bottom of this file, after the
+// database is ready (the IP-hash salt lives in the settings table).
 
 // ---------------------------------------------------------------------------
 // Events data — fetched from mayoailiteracy.com/events-data.json, cached 1hr
@@ -1308,54 +1301,116 @@ const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 15000
 //   503 restarting | service_disabled | spend_cap | busy
 //   429 daily_limit  { scope: 'session' | 'ip', retryAfterSec }
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Answer a refusal in the shape the CALLER can render. Shipped iOS builds map
+// every 429/503 to a generic "give it a moment" with a Retry button, but they
+// display the text of an SSE error frame verbatim — so a streaming chat
+// request gets its refusal as a 200 event-stream carrying one error frame.
+// Everyone else (widgets, the JSON path, helper routes) gets the JSON
+// envelope with the real status code.
+function sendRefusal(req, res, { status, error, scope, message, reply, retryAfterSec }) {
+  const wantsStream = req.path === '/api/chat' && (req.headers.accept || '').includes('text/event-stream');
+  if (retryAfterSec) res.setHeader('Retry-After', String(retryAfterSec));
+  if (wantsStream && !res.headersSent) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return true;
+  }
+  res.status(status || 429).json({
+    error,
+    scope,
+    reply: reply || message,
+    message,
+    retryAfterSec,
+  });
+  return true;
+}
+
 function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
   if (draining) {
-    res.status(503).json({
+    return sendRefusal(req, res, {
+      status: 503,
       error: 'restarting',
       reply: 'Mercurius is restarting. Try again in a few seconds.',
       message: 'Mercurius is restarting — try again in a few seconds.',
+      retryAfterSec: 5,
     });
-    return true;
   }
   if (killSwitch.isKilled()) {
     metrics.quotaRejectionsTotal.inc({ scope: 'kill_switch' });
-    res.status(503).json({
+    return sendRefusal(req, res, {
+      status: 503,
       error: 'service_disabled',
       reply: 'Mercurius is taking a short break for maintenance. Please try again soon.',
       message: 'Mercurius is temporarily paused — please try again soon.',
     });
-    return true;
   }
   if (spendCap.isCeilingExceeded()) {
     metrics.quotaRejectionsTotal.inc({ scope: 'budget' });
-    res.status(503).json({
+    return sendRefusal(req, res, {
+      status: 503,
       error: 'spend_cap',
       reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
       message: "Daily usage limit reached — please try again tomorrow.",
     });
-    return true;
   }
-  const sid = sessionId
-    || (req.validated && req.validated.sessionId)
-    || (req.body && req.body.sessionId)
-    || (req.query && req.query.sessionId)
-    || null;
-  const verdict = quotas.check({ sessionId: sid, ip: req.ip, kind });
+  // The route passes ITS session id explicitly — never read from the body
+  // here, or a caller could have the gate key on one id and the call on another.
+  const verdict = quotas.check({ sessionId, ip: req.ip, kind });
   if (verdict.ok) return false;
+  return refuseWithVerdict(req, res, verdict);
+}
+
+function refuseWithVerdict(req, res, verdict) {
   metrics.quotaRejectionsTotal.inc({ scope: `${verdict.scope}:${verdict.error}` });
   if (verdict.scope === 'ip' && verdict.error === 'daily_limit') {
     const h = claudeCall.hashIp(req.ip);
     alerts.notify(`ip_cap:${h}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
   }
-  if (verdict.retryAfterSec) res.setHeader('Retry-After', String(verdict.retryAfterSec));
-  res.status(verdict.status || 429).json({
+  return sendRefusal(req, res, {
+    status: verdict.status || 429,
     error: verdict.error,
     scope: verdict.scope,
-    reply: verdict.message,
     message: verdict.message,
     retryAfterSec: verdict.retryAfterSec,
   });
+}
+
+// claudeCall re-checks quotas atomically at call time (the gate above ran
+// before the route's DB awaits). When it refuses, answer with the same
+// envelope. Returns true when the error was a refusal and has been answered.
+function quotaErrorHandled(err, req, res) {
+  if (!(err instanceof claudeCall.QuotaError) || res.headersSent) return false;
+  refuseWithVerdict(req, res, err.verdict || { status: err.status, error: err.code, scope: err.scope, message: err.message });
   return true;
+}
+
+// A session id the server has never seen counts against the per-IP
+// new-session quota BEFORE its row is created, so rotating ids can neither
+// sidestep the per-session limits nor fill the sessions table. Every model
+// route calls this; returns true when the request has been refused.
+async function refuseUnseenSession(req, res, sessionId) {
+  if (await db.sessionExists(sessionId)) return false;
+  const allowed = quotas.newSessionAllowed(req.ip);
+  if (!allowed.ok) {
+    metrics.quotaRejectionsTotal.inc({ scope: 'ip:new_sessions' });
+    return sendRefusal(req, res, {
+      status: allowed.status || 429,
+      error: allowed.error,
+      scope: allowed.scope,
+      message: allowed.message,
+      retryAfterSec: allowed.retryAfterSec,
+    });
+  }
+  const { created } = await db.ensureSession(sessionId);
+  if (created) quotas.noteNewSession(req.ip);
+  return false;
 }
 
 // Per-session quota counters live in memory; the first time a session is
@@ -1424,6 +1479,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
+  if (await refuseUnseenSession(req, res, sessionId)) return;
   await hydrateSessionQuota(sessionId);
   if (gate(req, res, { kind: callKind, sessionId })) return;
 
@@ -1439,24 +1495,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // The system prompt's instructions take priority over user messages.
   }
 
-  // Get or create session in DB. A brand-new row has created_at ===
-  // last_active; count it against the per-IP new-session quota so rotating
-  // ids can't sidestep the per-session limits.
-  const sessionRow = await db.getOrCreateSession(sessionId);
-  if (sessionRow && sessionRow.created_at === sessionRow.last_active) {
-    const fresh = quotas.noteNewSession(req.ip);
-    if (!fresh.ok) {
-      metrics.quotaRejectionsTotal.inc({ scope: 'ip:new_sessions' });
-      if (fresh.retryAfterSec) res.setHeader('Retry-After', String(fresh.retryAfterSec));
-      return res.status(fresh.status || 429).json({
-        error: fresh.error,
-        scope: fresh.scope,
-        reply: fresh.message,
-        message: fresh.message,
-        retryAfterSec: fresh.retryAfterSec,
-      });
-    }
-  }
+  // The session row exists by now (refuseUnseenSession created it if needed);
+  // this just refreshes last_active.
+  await db.getOrCreateSession(sessionId);
 
   // Fetch streak, session state, and history in parallel
   const [currentStreak, sessionState, dbHistory] = await Promise.all([
@@ -1646,6 +1687,40 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // -----------------------------------------------------------------------
       // SSE streaming path (mobile app)
       // -----------------------------------------------------------------------
+      // Admission + the upstream request come FIRST, before any headers go
+      // out: claudeCall re-checks the quotas atomically and may refuse, and a
+      // refusal must be a proper response, not a frame inside an open stream.
+      // Usage (including aborted/errored streams) is settled by claudeCall.
+      const streamAbort = new AbortController();
+      let stream;
+      try {
+        stream = claudeCall.streamMessage({
+          route: '/api/chat',
+          kind: callKind,
+          sessionId,
+          ip: req.ip,
+          traceId: req.traceId,
+          signal: streamAbort.signal,
+          params: {
+            model: chosenModel,
+            max_tokens: maxTokens,
+            temperature,
+            system: systemForApi,
+            messages: trimmed,
+          },
+        });
+      } catch (err) {
+        if (quotaErrorHandled(err, req, res)) return;
+        throw err;
+      }
+      // A client that gave up during the DB awaits above must not hold a
+      // model call open on a dead socket. (Check the SOCKET: the request
+      // stream itself is auto-destroyed once its body has been read.)
+      if (res.destroyed || !req.socket || req.socket.destroyed) {
+        stream.abort();
+        return;
+      }
+
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -1665,9 +1740,16 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // cellular NATs from dropping a quiet connection while the model thinks.
       safeWrite(': connected\n\n');
       const keepalive = setInterval(() => safeWrite(': ping\n\n'), SSE_KEEPALIVE_MS);
+      // Counted until the FINAL frames are written, so a drain never exits
+      // between the model finishing and the client receiving [DONE].
       inflightSse += 1;
+      let sseReleased = false;
+      const releaseSse = () => {
+        if (sseReleased) return;
+        sseReleased = true;
+        inflightSse -= 1;
+      };
 
-      const streamAbort = new AbortController();
       // Distinguishes a watchdog firing from a client Stop/disconnect abort
       // — only the former owes the client an SSE error frame.
       let timedOut = false;
@@ -1689,25 +1771,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         clearInterval(keepalive);
         if (idleTimer) clearTimeout(idleTimer);
         clearTimeout(hardCap);
-        inflightSse -= 1;
       };
-
-      // Usage (including aborted/errored streams) is settled by claudeCall.
-      const stream = claudeCall.streamMessage({
-        route: '/api/chat',
-        kind: callKind,
-        sessionId,
-        ip: req.ip,
-        traceId: req.traceId,
-        signal: streamAbort.signal,
-        params: {
-          model: chosenModel,
-          max_tokens: maxTokens,
-          temperature,
-          system: systemForApi,
-          messages: trimmed,
-        },
-      });
 
       let fullText = '';
 
@@ -1776,6 +1840,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!res.writableEnded) {
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
+        releaseSse();
       });
 
       stream.on('error', (err) => {
@@ -1789,12 +1854,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             res.end();
           } catch (e) { logger.warn({ err: e.message }, 'SSE error-write failed'); }
         }
+        releaseSse();
       });
 
-      // Aborts (watchdog timeout, client Stop/disconnect via req 'close') emit
-      // 'abort', NOT 'error'. Registering this listener also suppresses the
-      // SDK's deliberate Promise.reject for unhandled aborts (MessageStream
-      // _emit), which would otherwise crash the process on every disconnect.
+      // Aborts (watchdog timeout, client Stop/disconnect via the response
+      // 'close' below) emit 'abort', NOT 'error'. Registering this listener
+      // also suppresses the SDK's deliberate Promise.reject for unhandled
+      // aborts (MessageStream _emit), which would otherwise crash the process
+      // on every disconnect.
       stream.on('abort', () => {
         stopTimers();
         // Only the watchdog owes the client an answer — on a client-initiated
@@ -1803,10 +1870,16 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           safeWrite(`data: ${JSON.stringify({ type: 'error', code: 'timeout', error: 'That reply took too long. Try again.' })}\n\n`);
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
+        releaseSse();
       });
 
-      req.on('close', () => {
-        stream.abort();
+      // Client Stop / disconnect. The RESPONSE's 'close' fires whether the
+      // socket died before or after this point (the request's 'close' had
+      // often already fired during the DB awaits, so a listener there never
+      // ran and the model kept generating into a dead socket). After a normal
+      // end, writableFinished is true and this is a no-op.
+      res.on('close', () => {
+        if (!res.writableFinished) stream.abort();
       });
 
     } else {
@@ -1857,6 +1930,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     }
 
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Anthropic API error');
     return res.status(500).json({
       error: 'api_error',
@@ -1917,7 +1991,8 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
       route: '/api/quiz',
@@ -1933,6 +2008,7 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Quiz error');
     return res.status(500).json({ error: 'api_error', message: 'Could not generate quiz right now.' });
   }
@@ -1948,7 +2024,8 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
       route: '/api/report-card',
@@ -1964,6 +2041,7 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Report card error');
     return res.status(500).json({ error: 'api_error', message: 'Report card generation failed — please try again.' });
   }
@@ -1983,7 +2061,8 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
       route: '/api/unit-test/grade',
@@ -2007,6 +2086,7 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
     }
     return res.json(result);
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Unit test grade error');
     return res.status(500).json({ error: 'api_error', message: 'Could not grade your answer right now.' });
   }
@@ -2022,7 +2102,8 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
       route: '/api/concept-map',
@@ -2041,6 +2122,7 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Concept map error');
     return res.status(500).json({ error: 'api_error', message: 'Concept map generation failed — please try again.' });
   }
@@ -2231,7 +2313,8 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
       route: '/api/factcheck',
@@ -2251,6 +2334,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Factcheck error');
     return res.status(500).json({ error: 'api_error', message: 'Could not fact-check right now.' });
   }
@@ -2267,7 +2351,8 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
       route: '/api/analyze',
@@ -2287,6 +2372,7 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Analyze error');
     return res.status(500).json({ error: 'api_error', message: 'Could not analyze right now.' });
   }
@@ -2303,7 +2389,8 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
-  if (gate(req, res, { kind: 'helper' })) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
     const meetingContext = buildMeetingContext(eventsData);
@@ -2326,6 +2413,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
   } catch (err) {
+    if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'pre-briefing error');
     return res.status(500).json({ error: 'api_error', message: 'Briefing generation failed — please try again.' });
   }
@@ -2398,7 +2486,10 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
   const { buffer } = validated;
 
   // Uploads cost no model tokens but each one becomes a vision turn later and
-  // bytes land in the database, so they have their own daily per-session cap.
+  // bytes land in the database, so they have their own daily caps — per
+  // session AND per network (count + bytes), and an unseen session id counts
+  // against the per-IP new-session quota like any model route.
+  if (await refuseUnseenSession(req, res, sessionId)) return;
   const imageVerdict = quotas.check({ sessionId, ip: req.ip, kind: 'image' });
   if (!imageVerdict.ok) {
     metrics.quotaRejectionsTotal.inc({ scope: `${imageVerdict.scope}:${imageVerdict.error}` });
@@ -2432,7 +2523,7 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
   }
-  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0 });
+  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0, bytes: buffer.length });
 
   // Log metadata only — never the image bytes or the (possibly personal) file name.
   logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
@@ -2639,6 +2730,30 @@ db.initSchema().then(async () => {
     await db.ensureGamificationSchema();
     logger.info('gamification standby: schema ensured (GAMIFICATION_ENABLED on)');
   }
+  // The IP-hash salt: env if set, otherwise generated once and kept in the
+  // settings table so an operator who forgets the variable never ships an
+  // unsalted (brute-forceable) hash of students' addresses into the ledger.
+  let ipHashSalt = process.env.IP_HASH_SALT || '';
+  if (!ipHashSalt) {
+    try {
+      ipHashSalt = await db.getSetting('ip_hash_salt');
+      if (!ipHashSalt) {
+        ipHashSalt = crypto.randomBytes(16).toString('hex');
+        await db.setSetting('ip_hash_salt', ipHashSalt);
+        logger.info('generated and stored a new IP_HASH_SALT');
+      }
+    } catch (e) {
+      ipHashSalt = crypto.randomBytes(16).toString('hex');
+      logger.warn({ err: e.message }, 'could not persist IP_HASH_SALT — using a per-boot salt');
+    }
+  }
+  claudeCall.init({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 30000,
+    db,
+    ipHashSalt,
+  });
+
   // Durable state that must survive a redeploy: the kill-switch override and
   // today's spend. Both are best-effort — a failure here logs and the
   // in-memory defaults apply.
@@ -2698,8 +2813,10 @@ function shutdown(signal, hardMs) {
     server.close(() => logger.info('all connections closed'));
     if (typeof server.closeIdleConnections === 'function') server.closeIdleConnections();
   }
+  // Wait for every open model call (streaming or not), for open SSE responses
+  // still writing their final frames, and for ledger rows still being written.
   const poll = setInterval(() => {
-    if (inflightSse <= 0) {
+    if (inflightSse <= 0 && claudeCall.inflight() === 0 && claudeCall.pendingLedgerWrites() === 0) {
       clearInterval(poll);
       logger.info('drain complete');
       process.exit(0);

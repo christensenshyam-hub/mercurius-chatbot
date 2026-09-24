@@ -24,6 +24,13 @@ if (USE_PG) {
     query_timeout: 10000,
     connectionTimeoutMillis: 5000,
   });
+  // pg-pool emits 'error' for a failure on an IDLE client (Postgres restart,
+  // proxy reset). With no listener that is an uncaught exception that takes
+  // the whole process — and every open lesson stream — down. The pool drops
+  // the dead client itself; we only need to log it.
+  pool.on('error', (err) => {
+    logger.error({ err: err.message }, 'pg pool idle client error');
+  });
   logger.info({ driver: 'pg' }, 'db driver: PostgreSQL (persistent)');
 } else {
   const Database = require('better-sqlite3');
@@ -342,6 +349,19 @@ module.exports = {
     // without it the loser throws duplicate-key — an unhandled rejection.
     await query('INSERT INTO sessions (session_id, created_at, last_active) VALUES (?, ?, ?) ON CONFLICT (session_id) DO NOTHING', [sessionId, now, now]);
     return await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
+  },
+
+  async sessionExists(sessionId) {
+    return Boolean(await queryOne('SELECT 1 AS one FROM sessions WHERE session_id = ?', [sessionId]));
+  },
+
+  // getOrCreateSession + "did this call create it": the per-IP new-session
+  // quota keys off `created`, which the timestamp-equality heuristic it
+  // replaces got wrong whenever a first turn errored before any write.
+  async ensureSession(sessionId) {
+    const existed = await this.sessionExists(sessionId);
+    const row = await this.getOrCreateSession(sessionId);
+    return { row, created: !existed };
   },
 
   async saveMessage(sessionId, role, content) {

@@ -23,6 +23,10 @@
  *                    the server's 15 req/min/IP chat limiter)
  *   --only <prefix>  run only conversations whose id starts with <prefix>
  *
+ * The full gate opens ~27 sessions per run from one IP, so start the local
+ * server it targets with the per-IP new-session cap raised, e.g.
+ *   IP_DAILY_NEW_SESSIONS=1000 IP_DAILY_USD=100 PORT=3141 node server.js
+ *
  * No LLM judge, no new dependencies (global fetch, Node 18+). Exits
  * nonzero when any pass criterion fails so it can gate in CI.
  *
@@ -337,7 +341,11 @@ async function streamChat(baseUrl, body, { retries = 2 } = {}) {
           let parsed;
           try { parsed = JSON.parse(payload); } catch { continue; }
           if (parsed.type === 'delta' && typeof parsed.text === 'string') text += parsed.text;
-          if (parsed.type === 'error') throw new Error(`SSE error frame: ${parsed.error}`);
+          if (parsed.type === 'error') {
+            const e = new Error(`SSE error frame: ${parsed.error}`);
+            e.code = parsed.code;
+            throw e;
+          }
         }
       }
       if (done) break;
@@ -376,14 +384,19 @@ async function runScenario(baseUrl, scenario, delayMs) {
     if (responseMode) body.responseMode = responseMode;
     if (scenario.capabilities) body.capabilities = scenario.capabilities;
 
-    // One retry on transient server errors (the 45s generation watchdog
-    // occasionally fires on a slow curriculum turn) — a multi-run gate
-    // shouldn't die 100 calls in on a single hiccup.
+    // One retry on transient server errors (a generation watchdog firing on a
+    // slow curriculum turn, an upstream overload, a busy/restarting server) —
+    // a multi-run gate shouldn't die 100 calls in on a single hiccup. The
+    // server's error frames carry a `code`; the text patterns cover the
+    // friendly copy and HTTP-level refusals.
+    const isTransient = (e) =>
+      ['timeout', 'upstream_error', 'busy', 'restarting'].includes(e?.code)
+      || /timed out|took too long|overloaded|rate.?limit|hit a snag|helping a lot|restarting/i.test(String(e?.message));
     let reply;
     try {
       reply = await streamChat(baseUrl, body);
     } catch (err) {
-      if (!/timed out|overloaded|rate.?limit/i.test(String(err?.message))) throw err;
+      if (!isTransient(err)) throw err;
       // Slow-upstream weather (watchdog timeouts, overload) comes in waves —
       // retry up to 3 times with growing pauses before giving up on the run.
       let recovered = false;
@@ -394,7 +407,7 @@ async function runScenario(baseUrl, scenario, delayMs) {
           reply = await streamChat(baseUrl, body);
           recovered = true;
         } catch (err2) {
-          if (!/timed out|overloaded|rate.?limit/i.test(String(err2?.message)) || attempt === 3) throw err2;
+          if (!isTransient(err2) || attempt === 3) throw err2;
           err = err2;
         }
       }
