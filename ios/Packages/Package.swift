@@ -17,7 +17,6 @@ let package = Package(
         .library(name: "EngagementFeature", targets: ["EngagementFeature"]),
         .library(name: "MercuriusActivity", targets: ["MercuriusActivity"]),
         .library(name: "AppFeature", targets: ["AppFeature"]),
-        .library(name: "MercFlowFeature", targets: ["MercFlowFeature"]),
     ],
     dependencies: [
         // Third-party markdown renderer. Chosen over Apple's
@@ -125,6 +124,11 @@ let package = Package(
             dependencies: ["DesignSystem"],
             path: "MercuriusActivity/Sources"
         ),
+        .testTarget(
+            name: "MercuriusActivityTests",
+            dependencies: ["MercuriusActivity"],
+            path: "MercuriusActivity/Tests"
+        ),
 
         // MARK: AppFeature
         .target(
@@ -138,32 +142,14 @@ let package = Package(
                 "SettingsFeature",
                 "EngagementFeature",
                 "MercuriusActivity",
-                "MercFlowFeature",
             ],
             path: "AppFeature/Sources"
         ),
         .testTarget(
             name: "AppFeatureTests",
-            dependencies: ["AppFeature", "PersistenceKit"],
+            dependencies: ["AppFeature", "ChatFeature", "CurriculumFeature", "EngagementFeature",
+                           "NetworkingKit", "PersistenceKit", "SettingsFeature"],
             path: "AppFeature/Tests"
-        ),
-
-        // MARK: MercFlowFeature
-        //
-        // The self-contained "Merc lesson flow" build from MERC_HANDOFF.md
-        // (Part B). It still ships its own `Brand` tokens, `Font.nunito`, and
-        // `LessonViewModel`, but the mascot itself is now the SHARED
-        // `DesignSystem.Merc` / `MercState` (one source of truth) rather than a
-        // duplicated copy — so the demo flow and the app never drift.
-        .target(
-            name: "MercFlowFeature",
-            dependencies: ["DesignSystem"],
-            path: "MercFlowFeature/Sources"
-        ),
-        .testTarget(
-            name: "MercFlowFeatureTests",
-            dependencies: ["MercFlowFeature"],
-            path: "MercFlowFeature/Tests"
         ),
 
         // MARK: ArchitectureTests

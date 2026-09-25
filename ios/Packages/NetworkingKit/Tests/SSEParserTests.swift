@@ -76,10 +76,29 @@ struct SSEParserDecodeTests {
             return
         }
         #expect(resp.reply == "Hello!")
-        #expect(resp.sessionId == "s1")
         #expect(resp.mode == "socratic")
-        #expect(resp.unlocked == false)
         #expect(resp.streak == 3)
+    }
+
+    @Test("`complete` with only reply + mode (no sessionId or legacy flags) still decodes")
+    func completeMinimalShape() throws {
+        let event = try parseChatEvent(from: #"{"type":"complete","reply":"Hello!","mode":"socratic"}"#)
+        #expect(event == .complete(ChatResponse(reply: "Hello!", mode: "socratic")))
+    }
+
+    @Test("`complete` missing mode throws invalidModelOutput even when sessionId is present")
+    func completeMissingMode() {
+        do {
+            _ = try parseChatEvent(from: #"{"type":"complete","reply":"x","sessionId":"s1"}"#)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            guard case .invalidModelOutput = error else {
+                Issue.record("Wrong APIError case: \(error)")
+                return
+            }
+        } catch {
+            Issue.record("Wrong error type")
+        }
     }
 
     @Test("`complete` carries lessonComplete=true when the server reports proficiency")

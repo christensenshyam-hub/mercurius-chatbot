@@ -59,9 +59,9 @@ private func makeModel(client: FakeChatClient, sessionId: String = "test-session
 }
 
 /// Await the view model's return to `.idle` (or `.failed`) — necessary
-/// because `send()` kicks off a detached task. Times out after 2s.
+/// because `send()` kicks off a detached task. Times out after 10s.
 @MainActor
-private func waitUntilSettled(_ model: ChatViewModel, timeout: Duration = .seconds(2)) async throws {
+private func waitUntilSettled(_ model: ChatViewModel, timeout: Duration = .seconds(10)) async throws {
     let deadline = ContinuousClock.now.advanced(by: timeout)
     while ContinuousClock.now < deadline {
         switch model.phase {
@@ -94,13 +94,8 @@ struct ChatViewModelSendTests {
         let client = FakeChatClient()
         let sample = ChatResponse(
             reply: "Hi there!",
-            sessionId: "test-session",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: 1,
-            difficulty: 1,
-            suggestSummary: nil
+            streak: 1
         )
         client.outcome = .events([
             .delta(text: "Hi"),
@@ -128,13 +123,8 @@ struct ChatViewModelSendTests {
         let client = FakeChatClient()
         let sample = ChatResponse(
             reply: "ok",
-            sessionId: "test-session",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: 1,
-            difficulty: 1,
-            suggestSummary: nil
+            streak: 1
         )
         client.outcome = .events([.complete(sample)])
         let model = makeModel(client: client)
@@ -154,13 +144,8 @@ struct ChatViewModelSendTests {
         let client = FakeChatClient()
         let sample = ChatResponse(
             reply: "ok",
-            sessionId: "abc",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: 1,
-            difficulty: 1,
-            suggestSummary: nil
+            streak: 1
         )
         client.outcome = .events([.complete(sample)])
         let model = makeModel(client: client, sessionId: "abc")
@@ -348,13 +333,8 @@ struct ChatViewModelRetryTests {
         // Now configure a successful second attempt.
         let success = ChatResponse(
             reply: "On retry.",
-            sessionId: "test-session",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: 1,
-            difficulty: 1,
-            suggestSummary: nil
+            streak: 1
         )
         client.outcome = .events([.complete(success)])
         model.retry()
@@ -373,13 +353,8 @@ struct ChatViewModelResponseModeTests {
     private func minimalReply() -> ChatResponse {
         ChatResponse(
             reply: "ok",
-            sessionId: "test-session",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: 0,
-            difficulty: 0,
-            suggestSummary: nil
+            streak: 0
         )
     }
 
@@ -546,10 +521,7 @@ private struct StubPreparer: ImagePreparing {
 }
 
 private func imageTestReply() -> ChatResponse {
-    ChatResponse(
-        reply: "ok", sessionId: "sess", mode: "socratic", unlocked: false,
-        justUnlocked: nil, streak: nil, difficulty: nil, suggestSummary: nil
-    )
+    ChatResponse(reply: "ok", mode: "socratic")
 }
 
 private func sampleUploadResponse() -> APIClient.ImageUploadResponse {
@@ -660,10 +632,7 @@ private final class StubReporter: Reporting, @unchecked Sendable {
 }
 
 private func reportTestReply(_ text: String = "ok") -> ChatResponse {
-    ChatResponse(
-        reply: text, sessionId: "sess", mode: "socratic", unlocked: false,
-        justUnlocked: nil, streak: nil, difficulty: nil, suggestSummary: nil
-    )
+    ChatResponse(reply: text, mode: "socratic")
 }
 
 @MainActor

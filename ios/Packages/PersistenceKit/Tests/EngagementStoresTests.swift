@@ -76,6 +76,78 @@ struct StreakStoreTests {
         store.seed(streak: 5, lastSessionDate: "2020-01-01")
         #expect(store.isCurrentFresh)
     }
+
+    private func calendar(_ zone: String) -> Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: zone)!
+        return c
+    }
+
+    @Test("A seed's UTC-midnight stamp is the server's day, even west of UTC")
+    func seedStampIsItsUTCDay() throws {
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-21")
+        let stamp = try #require(store.lastUpdatedAt)
+        // Read locally in New York this is 20:00 on the 20th.
+        let newYork = calendar("America/New_York")
+        let day = StreakStore.confirmedDay(for: stamp, calendar: newYork)
+        #expect(newYork.dateComponents([.year, .month, .day, .hour], from: day)
+                == DateComponents(year: 2026, month: 9, day: 21, hour: 0))
+        let tokyo = calendar("Asia/Tokyo")
+        #expect(tokyo.dateComponents([.day], from: StreakStore.confirmedDay(for: stamp, calendar: tokyo)).day == 21)
+    }
+
+    @Test("A seed stamp reads as the same day in Buddhist and Japanese device calendars",
+          arguments: [(Calendar.Identifier.buddhist, "Asia/Bangkok"), (.japanese, "Asia/Tokyo")])
+    func seedStampInNonGregorianCalendars(identifier: Calendar.Identifier, zone: String) throws {
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-21")
+        let stamp = try #require(store.lastUpdatedAt)
+        var deviceCalendar = Calendar(identifier: identifier)
+        deviceCalendar.timeZone = TimeZone(identifier: zone)!
+        let expected = calendar(zone).date(from: DateComponents(year: 2026, month: 9, day: 21))!
+        #expect(StreakStore.confirmedDay(for: stamp, calendar: deviceCalendar) == expected)
+        #expect(StreakStore.confirmedDay(for: stamp, calendar: calendar(zone)) == expected)
+    }
+
+    @Test("A seed for today counts as confirmed today, even west of UTC")
+    func seedTodayIsConfirmedToday() throws {
+        let chicago = calendar("America/Chicago")
+        let now = chicago.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 10))!
+        let store = StreakStore(defaults: freshDefaults("streak"))
+        store.seed(streak: 3, lastSessionDate: "2026-09-24")
+        let stamp = try #require(store.lastUpdatedAt)
+        // The raw stamp is 19:00 on the 23rd in Chicago…
+        #expect(!chicago.isDate(stamp, inSameDayAs: now))
+        // …but it confirms the 24th, the day the server counted.
+        #expect(StreakStore.isConfirmed(on: now, stamp: stamp, calendar: chicago))
+        #expect(!StreakStore.isConfirmed(on: now.addingTimeInterval(86_400), stamp: stamp, calendar: chicago))
+        #expect(!StreakStore.isConfirmed(on: now, stamp: nil, calendar: chicago))
+
+        // The store's own reading, with today's date in the host's zone.
+        var hostGregorian = Calendar(identifier: .gregorian)
+        hostGregorian.timeZone = .current
+        let host = hostGregorian.dateComponents([.year, .month, .day], from: Date())
+        let today = String(format: "%04d-%02d-%02d", host.year!, host.month!, host.day!)
+        let seeded = StreakStore(defaults: freshDefaults("streak"))
+        seeded.seed(streak: 2, lastSessionDate: today)
+        #expect(seeded.confirmedToday)
+    }
+
+    @Test("An in-app confirmation is the local day of the chat")
+    func updateStampIsItsLocalDay() {
+        let newYork = calendar("America/New_York")
+        // 21:30 on Monday the 21st in New York is already the 22nd in UTC.
+        let lateChat = newYork.date(from: DateComponents(year: 2026, month: 9, day: 21, hour: 21, minute: 30))!
+        let day = StreakStore.confirmedDay(for: lateChat, calendar: newYork)
+        #expect(newYork.dateComponents([.month, .day, .hour], from: day)
+                == DateComponents(month: 9, day: 21, hour: 0))
+    }
+
+    @Test("No confirmation, no confirmed day")
+    func noConfirmedDay() {
+        #expect(StreakStore(defaults: freshDefaults("streak")).lastConfirmedDay == nil)
+    }
 }
 
 @MainActor
@@ -150,18 +222,51 @@ struct AchievementStoreTests {
         for achievement in AchievementCatalog.all {
             #expect(AchievementCatalog.achievement(id: achievement.id) != nil)
         }
+        #expect(Set(AchievementCatalog.all.map(\.id)).count == AchievementCatalog.all.count)
+    }
+
+    @Test("the retired report-card badge is gone from the catalog")
+    func reportCardRetired() {
+        #expect(AchievementCatalog.achievement(id: "report_card") == nil)
+        #expect(!AchievementCatalog.all.contains { $0.title == "Self-Aware" })
+    }
+
+    @Test("earned ids no longer in the catalog are dropped on load")
+    func orphanIdsFiltered() {
+        let d = freshDefaults("ach")
+        d.set(["report_card", AchievementCatalog.debater, "not_a_real_badge"],
+              forKey: "engagement.achievements.earned")
+        let store = AchievementStore(defaults: d)
+        #expect(store.earned == [AchievementCatalog.debater])
+        #expect(store.earnedCount == 1)
+        #expect(!store.has("report_card"))
+        #expect(store.earnedCount <= AchievementCatalog.all.count)
     }
 }
 
 @MainActor
 @Suite("ReminderStore")
 struct ReminderStoreTests {
-    @Test("defaults: disabled, 6:00 PM")
+    @Test("defaults: every reminder off, daily time 6:00 PM")
     func defaults() {
         let store = ReminderStore(defaults: freshDefaults("rem"))
         #expect(store.enabled == false)
+        #expect(store.weeklyEnabled == false)
         #expect(store.hour == 18)
         #expect(store.minute == 0)
+    }
+
+    @Test("An upgraded install (no weekly key) reads weekly off, whatever its daily choice")
+    func upgradeReadsWeeklyOff() {
+        for daily in [true, false] {
+            let d = freshDefaults("rem")
+            d.set(daily, forKey: "engagement.reminder.enabled")
+            let store = ReminderStore(defaults: d)
+            #expect(store.enabled == daily)
+            #expect(store.weeklyEnabled == false)
+            // Nothing is written until the student chooses.
+            #expect(d.object(forKey: "engagement.reminder.weeklyEnabled") == nil)
+        }
     }
 
     @Test("persists changes across instances")
@@ -169,11 +274,131 @@ struct ReminderStoreTests {
         let d = freshDefaults("rem")
         let store = ReminderStore(defaults: d)
         store.enabled = true
+        store.weeklyEnabled = false
         store.hour = 9
         store.minute = 30
         let reloaded = ReminderStore(defaults: d)
         #expect(reloaded.enabled == true)
+        #expect(reloaded.weeklyEnabled == false)
         #expect(reloaded.hour == 9)
         #expect(reloaded.minute == 30)
+    }
+
+    @Test("weekly nudges read the stored key; an explicit off survives")
+    func weeklyKey() {
+        let d = freshDefaults("rem")
+        d.set(false, forKey: "engagement.reminder.weeklyEnabled")
+        #expect(ReminderStore(defaults: d).weeklyEnabled == false)
+        let store = ReminderStore(defaults: d)
+        store.weeklyEnabled = true
+        #expect(ReminderStore(defaults: d).weeklyEnabled == true)
+    }
+}
+
+@MainActor
+@Suite("LastActivityStore")
+struct LastActivityStoreTests {
+    private let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+
+    @Test("a fresh store has no activity and is never within any window")
+    func empty() {
+        let store = LastActivityStore(defaults: freshDefaults("act"))
+        #expect(store.lastActivityAt == nil)
+        #expect(store.lastTab == nil)
+        #expect(!store.isWithin(30 * 60, now: t0))
+    }
+
+    @Test("touch stamps the time; isWithin is a half-open window")
+    func touchAndWindow() {
+        let store = LastActivityStore(defaults: freshDefaults("act"))
+        store.touch(now: t0)
+        #expect(store.lastActivityAt == t0)
+        #expect(store.isWithin(30 * 60, now: t0))
+        #expect(store.isWithin(30 * 60, now: t0.addingTimeInterval(29 * 60)))
+        #expect(!store.isWithin(30 * 60, now: t0.addingTimeInterval(30 * 60)))
+        #expect(!store.isWithin(30 * 60, now: t0.addingTimeInterval(2 * 60 * 60)))
+    }
+
+    @Test("a stamp in the future (clock moved back) is not recent")
+    func futureStampIsNotRecent() {
+        let store = LastActivityStore(defaults: freshDefaults("act"))
+        store.touch(now: t0)
+        #expect(!store.isWithin(30 * 60, now: t0.addingTimeInterval(-60)))
+    }
+
+    @Test("stamp and last tab persist across instances; nil clears the tab")
+    func persists() {
+        let d = freshDefaults("act")
+        let store = LastActivityStore(defaults: d)
+        store.touch(now: t0)
+        store.lastTab = "curriculum"
+        let reloaded = LastActivityStore(defaults: d)
+        #expect(reloaded.lastActivityAt == t0)
+        #expect(reloaded.lastTab == "curriculum")
+        reloaded.lastTab = nil
+        #expect(LastActivityStore(defaults: d).lastTab == nil)
+    }
+
+    @Test("a later touch moves the stamp")
+    func retouch() {
+        let store = LastActivityStore(defaults: freshDefaults("act"))
+        store.touch(now: t0)
+        store.touch(now: t0.addingTimeInterval(3600))
+        #expect(store.lastActivityAt == t0.addingTimeInterval(3600))
+        #expect(store.isWithin(60, now: t0.addingTimeInterval(3630)))
+    }
+}
+
+@MainActor
+@Suite("ReviewPromptStore")
+struct ReviewPromptStoreTests {
+    @Test("prompts exactly on the 3rd and 10th completion")
+    func thresholds() {
+        let store = ReviewPromptStore(defaults: freshDefaults("review"))
+        #expect(store.completedLessons == 0)
+        var promptedAt: [Int] = []
+        for _ in 1...15 {
+            if store.recordCompletion() { promptedAt.append(store.completedLessons) }
+        }
+        #expect(promptedAt == [3, 10])
+        #expect(store.completedLessons == 15)
+    }
+
+    @Test("the count and the used thresholds survive a new instance")
+    func persistsAcrossInstances() {
+        let d = freshDefaults("review")
+        let first = ReviewPromptStore(defaults: d)
+        #expect(!first.recordCompletion())
+        #expect(!first.recordCompletion())
+        #expect(first.recordCompletion())            // 3rd
+        let second = ReviewPromptStore(defaults: d)
+        #expect(second.completedLessons == 3)
+        let prompts = (4...10).map { _ in second.recordCompletion() }
+        #expect(prompts == [false, false, false, false, false, false, true])   // 10th
+        let third = ReviewPromptStore(defaults: d)
+        #expect(third.completedLessons == 10)
+        #expect(!third.recordCompletion())
+    }
+
+    @Test("a stale instance can't claim a threshold another instance already used")
+    func staleInstanceIsIdempotent() {
+        let d = freshDefaults("review")
+        let a = ReviewPromptStore(defaults: d)
+        let b = ReviewPromptStore(defaults: d)       // created before a records anything
+        a.recordCompletion()
+        a.recordCompletion()
+        #expect(a.recordCompletion())                // count 3, prompted
+        #expect(!b.recordCompletion())               // count 4 — no second prompt
+        #expect(b.completedLessons == 4)
+    }
+
+    @Test("a threshold already marked as prompted is not prompted again")
+    func alreadyPromptedThreshold() {
+        let d = freshDefaults("review")
+        d.set(2, forKey: "review.completedLessons")
+        d.set([3], forKey: "review.promptedCounts")
+        let store = ReviewPromptStore(defaults: d)
+        #expect(!store.recordCompletion())
+        #expect(store.completedLessons == 3)
     }
 }

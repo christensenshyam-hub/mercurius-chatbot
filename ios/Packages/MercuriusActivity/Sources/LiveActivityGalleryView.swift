@@ -18,6 +18,9 @@ public struct LiveActivityGalleryView: View {
                 section("Active — lock card") {
                     LockCardView(state: .demoActive, isStale: false)
                 }
+                section("Active, no streak yet — lock card") {
+                    LockCardView(state: .demoActiveNoStreak, isStale: false)
+                }
                 section("Completed — lock card") {
                     LockCardView(state: .demoCompleted, isStale: false)
                 }
@@ -69,13 +72,24 @@ public struct LiveActivityGalleryView: View {
 }
 
 extension LearningActivityAttributes.ContentState {
-    /// The handoff's sample data: streak 24, Lesson 3 of 5, 2 to Level 7.
+    /// The handoff's sample data: streak 24, 3 of 5 done, 2 lessons left in
+    /// Unit 6 (`level` 7 = unit + 1).
     static var demoActive: Self {
         .init(
             phase: .active, lessonsDone: 3, lessonsTotal: 5, progress: 0.6,
             streakCount: 24, level: 7, lessonsToLevel: 2,
             deadline: Date().addingTimeInterval(2 * 3600 + 40 * 60),
             lastUpdated: Date().addingTimeInterval(-6 * 60)
+        )
+    }
+
+    /// First lesson of a unit with no streak yet: the chip drops the count.
+    static var demoActiveNoStreak: Self {
+        .init(
+            phase: .active, lessonsDone: 0, lessonsTotal: 5, progress: 0,
+            streakCount: 0, level: 7, lessonsToLevel: 5,
+            deadline: Date().addingTimeInterval(5 * 3600),
+            lastUpdated: Date()
         )
     }
 

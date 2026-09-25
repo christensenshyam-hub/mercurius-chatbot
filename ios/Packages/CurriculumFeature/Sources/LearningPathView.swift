@@ -284,21 +284,13 @@ struct LearningPathView: View {
         }
     }
 
-    /// The first actionable stop in path order — the learner's frontier. Lessons
-    /// are checked before their unit's test; units are checked in order.
+    /// The row id of the learner's frontier (`CurriculumProgressStore.frontier()`).
     private var currentStopId: String? {
-        for unit in MercuriusCurriculum.units {
-            for lesson in unit.lessons {
-                if progress.state(of: lesson.id) != .completed,
-                   progress.isLessonUnlocked(lesson, in: unit) {
-                    return PathElement.lessonId(lesson)
-                }
-            }
-            if !progress.isUnitMastered(unit.id), progress.isUnitTestUnlocked(unit) {
-                return PathElement.unitTestId(unit)
-            }
+        switch progress.frontier() {
+        case .lesson(let lesson): return PathElement.lessonId(lesson)
+        case .unitTest(let unit): return PathElement.unitTestId(unit)
+        case nil:                 return nil
         }
-        return nil
     }
 
     // MARK: - Element model

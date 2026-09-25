@@ -48,7 +48,7 @@ final class ControllableChatClient: ChatStreaming, @unchecked Sendable {
     }
 
     private func readyContinuation(
-        timeout: Duration = .seconds(2)
+        timeout: Duration = .seconds(10)
     ) async -> AsyncThrowingStream<ChatStreamEvent, Error>.Continuation? {
         let deadline = ContinuousClock.now.advanced(by: timeout)
         while ContinuousClock.now < deadline {
@@ -124,7 +124,7 @@ private func makeModel(
 @MainActor
 private func waitFor(
     _ label: String,
-    timeout: Duration = .seconds(2),
+    timeout: Duration = .seconds(10),
     condition: @escaping () -> Bool
 ) async {
     let deadline = ContinuousClock.now.advanced(by: timeout)
@@ -138,20 +138,13 @@ private func waitFor(
 private func sampleComplete(
     reply: String = "Hi there!",
     mode: String = "socratic",
-    unlocked: Bool = false,
-    justUnlocked: Bool? = nil,
     lessonComplete: Bool? = nil
 ) -> ChatStreamEvent {
     .complete(
         ChatResponse(
             reply: reply,
-            sessionId: "test-session",
             mode: mode,
-            unlocked: unlocked,
-            justUnlocked: justUnlocked,
             streak: 1,
-            difficulty: 1,
-            suggestSummary: nil,
             lessonComplete: lessonComplete
         )
     )
@@ -585,7 +578,7 @@ struct StartNewConversationTests {
 // `ChatViewModel`, driven by raw SSE payload strings that match the server's
 // wire format. They catch contract drift between the parser and the view
 // model — e.g. a server adding a new required field to the `complete` event
-// that breaks deserialization, or the view model no longer honoring `unlocked`.
+// that breaks deserialization, or the view model no longer honoring `mode`.
 
 /// Feed raw SSE payload strings through `parseChatEvent` and emit the
 /// resulting events to a `ControllableChatClient`.

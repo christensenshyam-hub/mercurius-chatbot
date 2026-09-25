@@ -37,6 +37,13 @@
            respond about it. Used only for app functionality. Not
            linked to a real-world identity and not used for tracking.
 
+        4. Product Interaction — which lessons the student has finished
+           or mastered, synced to the Mercurius backend under the session
+           identifier so progress survives a reinstall (app
+           functionality), and lesson start/finish events used to see
+           whether the lessons work (analytics). Not linked to a
+           real-world identity and not used for tracking.
+
         Not collected: the age the student picks on first run is used
         once to gate the flow and is never persisted or logged.
     -->
@@ -78,6 +85,19 @@
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeProductInteraction</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+            </array>
+        </dict>
     </array>
 
     <!--
@@ -85,9 +105,11 @@
         called directly by app code. Only one applies to us today:
 
         UserDefaults (NSPrivacyAccessedAPICategoryUserDefaults):
-            Used by SettingsFeature/ThemePreferenceStore and
-            CurriculumFeature/ProgressStore to persist small
-            on-device preferences (theme choice, completed lessons).
+            Used by SettingsFeature/ThemePreferenceStore,
+            CurriculumFeature/ProgressStore and the PersistenceKit stores
+            (streak, reminders, last activity, review-prompt counter) to
+            persist small on-device state (theme choice, completed
+            lessons, reminder times, counters) read only by this app.
             Reason code CA92.1 — "Access info from same app".
 
         Keychain (Security framework) — not on Apple's required-reason

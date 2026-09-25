@@ -11,7 +11,7 @@ import UIKit
 /// - Appearance — theme preference
 /// - Session — full, copyable session id + "Delete my data & start over"
 /// - Privacy — pushes `PrivacyChoicesView` (disclosure + withdraw consent)
-/// - About — version, policy / support links
+/// - About — version, "How Mercurius teaches", feedback / policy / support links
 public struct SettingsView: View {
     @State private var model: SettingsViewModel
     @State private var showDeleteConfirm = false
@@ -209,9 +209,21 @@ public struct SettingsView: View {
         Section("About") {
             LabeledRow(title: "Version", value: "\(model.appVersion) (\(model.buildNumber))")
 
+            NavigationLink {
+                HowMercuriusTeachesView()
+            } label: {
+                Text("How Mercurius teaches")
+            }
+            .accessibilityIdentifier("settings.howItTeaches")
+
             if let faq = URL(string: "https://trymercurius.com/support") {
                 Link("Help & FAQ", destination: faq)
                     .foregroundStyle(BrandColor.accent)
+            }
+            if let feedback = URL(string: "https://trymercurius.com/feedback") {
+                Link("Send feedback", destination: feedback)
+                    .foregroundStyle(BrandColor.accent)
+                    .accessibilityIdentifier("settings.sendFeedback")
             }
             if let support = URL(string: "mailto:support@trymercurius.com") {
                 Link("Contact support", destination: support)

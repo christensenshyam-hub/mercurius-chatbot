@@ -7,10 +7,10 @@ import XCTest
 /// images. Each screen is saved as a named `keepAlways` attachment; the driver
 /// pulls them out of the `.xcresult` with `xcresulttool export attachments`.
 ///
-/// Covers the screens reachable without network: the seeded chat (hero),
-/// Settings, Curriculum, and Chat History. The photo-in-chat and quiz/report
-/// screens need live backend/media and look best captured by hand on-device —
-/// see APP_STORE_LISTING.md.
+/// Covers the screens reachable without network: Home (next stop on a fresh
+/// path), the seeded chat (hero), Settings, Curriculum, and Chat History.
+/// The photo-in-chat and quiz screens need live backend/media and look best
+/// captured by hand on-device — see APP_STORE_LISTING.md.
 final class AppStoreScreenshots: XCTestCase {
 
     /// Per-query existence budget. This is the slowest UI test (~169s): it
@@ -81,6 +81,12 @@ final class AppStoreScreenshots: XCTestCase {
         // (unaffected by the slimmed-down header that dropped the brand caption).
         let chatCTA = app.buttons["Chat with Merc"]
         XCTAssertTrue(chatCTA.waitForExistence(timeout: Self.timeout), "Never reached Home")
+
+        // 0 — Home. Merc's entrance and the typed greeting run ~2 s after the
+        // screen appears; capture once they have finished.
+        Thread.sleep(forTimeInterval: 2.5)
+        snapshot("00-home")
+
         chatCTA.tap()
         // Entering the seeded 50-message chat is the heaviest transition of the
         // run, so gate on the pill through the settle-first poll helper rather

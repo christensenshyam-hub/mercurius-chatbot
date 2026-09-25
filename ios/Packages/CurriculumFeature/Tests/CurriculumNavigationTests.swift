@@ -75,3 +75,63 @@ struct CurriculumNavigationTests {
         #expect(allIds.count == Set(allIds).count, "Duplicate lesson id across units")
     }
 }
+
+/// `nextStop` is the path-order successor the celebration CTA and the weekly
+/// plan walk: unlike `lesson(after:)`, a unit's last lesson leads to its test.
+@Suite("Curriculum path stops")
+struct CurriculumPathStopTests {
+
+    @Test("nextStop(after:) is the next lesson within a unit")
+    func nextLessonWithinUnit() {
+        let unit = MercuriusCurriculum.units[0]
+        #expect(MercuriusCurriculum.nextStop(after: unit.lessons[0].id) == .lesson(unit.lessons[1]))
+    }
+
+    @Test("nextStop(after:) the last lesson of every unit is that unit's test")
+    func lastLessonLeadsToUnitTest() {
+        for unit in MercuriusCurriculum.units {
+            #expect(MercuriusCurriculum.nextStop(after: unit.lessons.last!.id) == .unitTest(unit))
+        }
+    }
+
+    @Test("nextStop(after:) is nil for an unknown lesson id")
+    func unknownLesson() {
+        #expect(MercuriusCurriculum.nextStop(after: "no_such_lesson") == nil)
+        #expect(MercuriusCurriculum.nextStop(after: "unit_1") == nil)
+    }
+
+    @Test("nextStop(afterUnitTest:) is the next unit's first lesson")
+    func unitTestLeadsToNextUnit() {
+        let units = MercuriusCurriculum.units
+        for i in 0..<(units.count - 1) {
+            #expect(MercuriusCurriculum.nextStop(afterUnitTest: units[i].id) == .lesson(units[i + 1].lessons[0]))
+        }
+    }
+
+    @Test("nextStop(afterUnitTest:) is nil after the final unit and for an unknown id")
+    func endOfPath() {
+        #expect(MercuriusCurriculum.nextStop(afterUnitTest: MercuriusCurriculum.units.last!.id) == nil)
+        #expect(MercuriusCurriculum.nextStop(afterUnitTest: "unit_nope") == nil)
+    }
+
+    @Test("Walking nextStop from the first lesson visits every lesson and unit test once, in path order")
+    func walkCoversWholePath() {
+        var expected: [MercuriusCurriculum.PathStop] = []
+        for unit in MercuriusCurriculum.units {
+            expected += unit.lessons.map { .lesson($0) }
+            expected.append(.unitTest(unit))
+        }
+
+        var walked: [MercuriusCurriculum.PathStop] = []
+        var cursor: MercuriusCurriculum.PathStop? = .lesson(MercuriusCurriculum.units[0].lessons[0])
+        while let stop = cursor, walked.count <= expected.count {
+            walked.append(stop)
+            switch stop {
+            case .lesson(let lesson): cursor = MercuriusCurriculum.nextStop(after: lesson.id)
+            case .unitTest(let unit): cursor = MercuriusCurriculum.nextStop(afterUnitTest: unit.id)
+            }
+        }
+        #expect(walked == expected)
+        #expect(walked.count == MercuriusCurriculum.allLessons.count + MercuriusCurriculum.units.count)
+    }
+}

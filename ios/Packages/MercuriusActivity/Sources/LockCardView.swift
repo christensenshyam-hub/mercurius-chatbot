@@ -66,18 +66,18 @@ struct LockCardView: View {
                 Spacer(minLength: 0)
                 statusGlyph
             }
-            Text(headline)
+            Text(state.headline(for: effectivePhase))
                 .font(.system(size: 20, weight: .heavy))
                 .tracking(-0.4)
                 .lineSpacing(-2)
                 .foregroundStyle(theme.text.resolved(scheme))
                 .lineLimit(1)
-            Text(line2)
+            Text(state.progressLine(for: effectivePhase))
                 .font(.system(size: 13.5, weight: .semibold))
                 .tracking(-0.1)
                 .foregroundStyle(theme.sub.resolved(scheme))
                 .lineLimit(1)
-            metaLine
+            state.metaLine(for: effectivePhase, compact: true)
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(-0.1)
                 .foregroundStyle(theme.sub.resolved(scheme).opacity(0.85))
@@ -98,45 +98,6 @@ struct LockCardView: View {
                 .foregroundStyle(ActivityTheme.amber)
         default:
             EmptyView()
-        }
-    }
-
-    // MARK: - Copy (exact strings from the handoff)
-
-    private var headline: String {
-        switch effectivePhase {
-        case .active:    return "On a roll"
-        case .completed: return "Streak banked"
-        case .stale:     return "Still there?"
-        case .error:     return "Can't sync"
-        }
-    }
-
-    private var line2: String {
-        switch effectivePhase {
-        case .active:    return "Lesson \(state.lessonsDone) of \(state.lessonsTotal)"
-        case .completed: return "\(state.lessonsDone) of \(state.lessonsTotal) lessons"
-        case .stale:     return "Paused on Lesson \(state.lessonsDone)"
-        case .error:     return "We'll retry automatically"
-        }
-    }
-
-    /// The `2h 40m left` fragment is the ONLY live value — a system timer
-    /// from `deadline`, never a pre-formatted string. Hidden when stale.
-    @ViewBuilder private var metaLine: some View {
-        switch effectivePhase {
-        case .active:
-            (Text("\(state.lessonsToLevel) to Level \(state.level) · ")
-             + Text(timerInterval: state.countdownRange, countsDown: true)
-             + Text(" left"))
-        case .completed:
-            Text("Level \(state.level) unlocked")
-        case .stale:
-            (Text("Updated ")
-             + Text(state.lastUpdated, style: .relative)
-             + Text(" ago"))
-        case .error:
-            Text("Check your connection")
         }
     }
 

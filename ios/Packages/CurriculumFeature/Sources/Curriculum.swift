@@ -37,10 +37,10 @@ public struct Unit: Identifiable, Sendable, Equatable, Hashable {
 }
 
 /// A cumulative end-of-unit assessment: an objective multiple-choice quiz
-/// spanning the unit's four lessons, plus one open-ended "defense" question
+/// spanning the unit's lessons, plus one open-ended "defense" question
 /// that Mercurius grades. Authored as fixed content (not generated) so it's
-/// reliable, testable, and works offline. Unlocks once all four lessons in the
-/// unit are complete; passing marks the unit "mastered."
+/// reliable, testable, and works offline. Unlocks once every lesson in the
+/// unit is complete; passing marks the unit "mastered."
 public struct UnitTest: Sendable, Equatable {
     public let unitId: String
     public let questions: [UnitTestQuestion]
@@ -250,7 +250,7 @@ public enum MercuriusCurriculum {
                     id: "u5_l4", number: 4,
                     title: "Build your AI ethics framework",
                     objective: "Build a personal ethical framework for AI.",
-                    starter: "[CURRICULUM: Unit 5, Lesson 4 - Final Review] Have me build my own AI ethics framework from everything I have learned across all 5 units. Ask me hard questions, challenge my reasoning, and grade the result."
+                    starter: "[CURRICULUM: Unit 5, Lesson 4 - Final Review] Have me build my own AI ethics framework from everything I have learned across Units 1–5. Ask me hard questions, challenge my reasoning, and grade the result."
                 ),
             ]
         ),
@@ -397,6 +397,33 @@ public enum MercuriusCurriculum {
         return nil
     }
 
+    /// One stop on the learning path, in path order: a unit's lessons, then
+    /// that unit's test, then the next unit.
+    public enum PathStop: Equatable, Hashable, Sendable {
+        case lesson(Lesson)
+        case unitTest(Unit)
+    }
+
+    /// The stop that follows `lessonId` on the path: the next lesson in the same
+    /// unit, or that unit's test after its last lesson. Nil for an unknown id.
+    /// Unlike `lesson(after:)`, the last lesson of a unit still has somewhere
+    /// to go.
+    public static func nextStop(after lessonId: String) -> PathStop? {
+        if let next = lesson(after: lessonId) { return .lesson(next) }
+        guard let unit = unit(containingLesson: lessonId) else { return nil }
+        return .unitTest(unit)
+    }
+
+    /// The stop after a unit's test: the next unit's first lesson. Nil after
+    /// the final unit or for an unknown id.
+    public static func nextStop(afterUnitTest unitId: String) -> PathStop? {
+        guard let index = units.firstIndex(where: { $0.id == unitId }),
+              index + 1 < units.count,
+              let first = units[index + 1].lessons.first
+        else { return nil }
+        return .lesson(first)
+    }
+
     // MARK: - Versioning + migrations
     //
     // The curriculum is hand-authored static data; any time we rename or
@@ -439,7 +466,7 @@ extension MercuriusCurriculum {
         unitTests.first { $0.unitId == unitId }
     }
 
-    /// One authored `UnitTest` per unit. Questions span all four lessons; the
+    /// One authored `UnitTest` per unit. Questions span the unit's lessons; the
     /// `defensePrompt` is graded A–D by the server (pass = A/B). Carried under
     /// the same `version` stamp as the lessons.
     static let unitTests: [UnitTest] = [

@@ -84,20 +84,14 @@ func parseChatEvent(from payload: String) throws -> ChatStreamEvent? {
 
     case "complete":
         guard let reply = decoded.reply,
-              let sessionId = decoded.sessionId,
               let mode = decoded.mode
         else {
             throw APIError.invalidModelOutput(reason: "complete event missing required fields")
         }
         let response = ChatResponse(
             reply: reply,
-            sessionId: sessionId,
             mode: mode,
-            unlocked: decoded.unlocked ?? false,
-            justUnlocked: decoded.justUnlocked,
             streak: decoded.streak,
-            difficulty: decoded.difficulty,
-            suggestSummary: decoded.suggestSummary,
             lessonComplete: decoded.lessonComplete
         )
         return .complete(response)

@@ -26,7 +26,10 @@ public struct LearningActivityAttributes: ActivityAttributes {
         // Momentum
         public var streakCount: Int
 
-        // Milestone (the NEXT level being worked toward)
+        // Unit milestone: `level` is the tracked unit's number + 1 and
+        // `lessonsToLevel` the lessons left in it. The names predate the
+        // unit copy (see `unitNumber`) but are Codable keys ActivityKit
+        // persists for running activities, so they stay.
         public var level: Int
         public var lessonsToLevel: Int
 
@@ -60,7 +63,7 @@ public struct LearningActivityAttributes: ActivityAttributes {
     }
 
     /// Static, per-activity (doesn't change over the session),
-    /// e.g. "Unit 4 · Foundations".
+    /// e.g. "Unit 06 · Spotting AI: Deepfakes & Synthetic Media".
     public var sessionTitle: String
 
     public init(sessionTitle: String) {

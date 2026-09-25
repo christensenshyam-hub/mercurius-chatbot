@@ -76,17 +76,17 @@ struct ExpandedBody: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(headline)
+                Text(state.headline(for: effectivePhase))
                     .font(.system(size: 19, weight: .heavy))
                     .tracking(-0.4)
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text(sub)
+                Text(state.progressLine(for: effectivePhase))
                     .font(.system(size: 13, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(.white.opacity(0.78))
                     .lineLimit(1)
-                meta
+                state.metaLine(for: effectivePhase)
                     .font(.system(size: 12, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(metaColor)
@@ -111,39 +111,6 @@ struct ExpandedBody: View {
         effectivePhase == .error
             ? ActivityTheme.amber
             : theme.accent.resolved(.dark)
-    }
-
-    private var headline: String {
-        switch effectivePhase {
-        case .active:    return "On a roll"
-        case .completed: return "Streak banked"
-        case .stale:     return "Still there?"
-        case .error:     return "Can't sync"
-        }
-    }
-
-    private var sub: String {
-        switch effectivePhase {
-        case .active:    return "Lesson \(state.lessonsDone) of \(state.lessonsTotal)"
-        case .completed: return "\(state.lessonsDone) of \(state.lessonsTotal) lessons"
-        case .stale:     return "Paused on Lesson \(state.lessonsDone)"
-        case .error:     return "We'll retry automatically"
-        }
-    }
-
-    @ViewBuilder private var meta: some View {
-        switch effectivePhase {
-        case .active:
-            (Text("\(state.lessonsToLevel) to Level \(state.level) · ")
-             + Text(timerInterval: state.countdownRange, countsDown: true)
-             + Text(" left"))
-        case .completed:
-            Text("Level \(state.level) unlocked")
-        case .stale:
-            (Text("Updated ") + Text(state.lastUpdated, style: .relative) + Text(" ago"))
-        case .error:
-            Text("Check your connection")
-        }
     }
 }
 #endif

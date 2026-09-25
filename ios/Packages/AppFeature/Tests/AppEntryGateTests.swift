@@ -37,3 +37,24 @@ struct AppEntryGateTests {
         #expect(AppEntryView.showsGate(consentVersion: 0, hasSeenOnboarding: true, clearedThisLaunch: false))
     }
 }
+
+@Suite("AppEntryView reminder consent guard")
+struct ReminderConsentGuardTests {
+
+    @Test("Consent current: re-plan from the preferences")
+    func consentCurrentPlans() {
+        // Also "Your path", where consent is recorded while the gate still
+        // shows: the reminders chosen there must stand.
+        #expect(AppEntryView.reminderReplan(consentVersion: ConsentGate.currentVersion, clearedThisLaunch: false) == .plan)
+        // Cleared this launch under a pinned stale flag (the UI tests).
+        #expect(AppEntryView.reminderReplan(consentVersion: 0, clearedThisLaunch: true) == .plan)
+    }
+
+    @Test("Consent missing, stale, or withdrawn: cancel everything, schedule nothing")
+    func consentMissingCancels() {
+        // A 2.2 upgrader on the gate, a first run, the under-13 and paused
+        // screens, and a withdrawal all read consent version 0.
+        #expect(AppEntryView.reminderReplan(consentVersion: 0, clearedThisLaunch: false) == .cancel)
+        #expect(AppEntryView.reminderReplan(consentVersion: ConsentGate.currentVersion - 1, clearedThisLaunch: false) == .cancel)
+    }
+}

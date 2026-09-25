@@ -142,6 +142,8 @@ final class ViewSnapshotTests: XCTestCase {
                 lessonTitle: "The alignment problem",
                 nextLessonNumber: next?.0,
                 nextLessonTitle: next?.1,
+                unitLabel: "UNIT 05",
+                lessonNumber: 1,
                 reduceMotion: true,
                 onNext: {}, onBackToLessons: {}, onDismiss: {}
             )
@@ -417,12 +419,11 @@ private func bubbleFrame<V: View>(_ content: V) -> some View {
         .background(BrandColor.background)
 }
 
-// MARK: - Tool snapshots (QuizView / ReportCardView)
+// MARK: - Tool snapshots (QuizView)
 //
-// QuizView.swift (548 lines) and ReportCardView.swift (708 lines)
-// were each at 0% coverage on both pathways — SPM can't render
-// SwiftUI, and no UI test exercised the Tools menu through a full
-// tool sheet. Snapshots drive each visual phase of both views.
+// QuizView was at 0% coverage on both pathways — SPM can't render
+// SwiftUI, and no UI test exercises a full tool sheet. Snapshots drive
+// each visual phase of the view.
 
 extension ViewSnapshotTests {
 
@@ -528,83 +529,6 @@ extension ViewSnapshotTests {
             )
         )
     }
-
-    // MARK: - ReportCardView
-
-    func testReportCardViewLoading() {
-        let model = ReportCardViewModel(
-            tools: NeverFiringToolsClient(),
-            sessionIdProvider: { "snap" }
-        )
-        let view = ReportCardView(model: model, dismissAction: {})
-        assertSnapshot(
-            of: view,
-            as: .image(
-                precision: 0.98,
-                layout: .device(config: .iPhone13),
-                traits: .init(userInterfaceStyle: .light)
-            )
-        )
-    }
-
-    func testReportCardViewLoaded() async {
-        let card = ReportCard(
-            overallGrade: "A-",
-            summary: "You engaged carefully with tradeoffs around alignment and cited specific examples from our discussion.",
-            strengths: [
-                "Asked clarifying questions before taking positions",
-                "Weighed multiple perspectives on AI governance",
-            ],
-            areasToRevisit: [
-                "Concrete mechanisms behind RLHF",
-            ],
-            conceptsCovered: [
-                "alignment",
-                "next-token prediction",
-                "hallucination",
-                "RLHF",
-            ],
-            criticalThinkingScore: 82,
-            curiosityScore: 88,
-            misconceptionsAddressed: [
-                "LLMs \"understand\" in the way humans do",
-            ],
-            nextSessionSuggestion: "Dive into Unit 4 on prompt engineering — you're ready for it."
-        )
-        let tools = LoadedToolsClient(report: card)
-        let model = ReportCardViewModel(
-            tools: tools,
-            sessionIdProvider: { "snap" }
-        )
-        await model.load()
-        let view = ReportCardView(model: model, dismissAction: {})
-        assertSnapshot(
-            of: view,
-            as: .image(
-                precision: 0.98,
-                layout: .device(config: .iPhone13),
-                traits: .init(userInterfaceStyle: .light)
-            )
-        )
-    }
-
-    func testReportCardViewFailed() async {
-        let tools = LoadedToolsClient(reportError: APIError.offline)
-        let model = ReportCardViewModel(
-            tools: tools,
-            sessionIdProvider: { "snap" }
-        )
-        await model.load()
-        let view = ReportCardView(model: model, dismissAction: {})
-        assertSnapshot(
-            of: view,
-            as: .image(
-                precision: 0.98,
-                layout: .device(config: .iPhone13),
-                traits: .init(userInterfaceStyle: .light)
-            )
-        )
-    }
 }
 
 // MARK: - Tools stubs (for tool-view snapshots)
@@ -626,29 +550,18 @@ private final class NeverFiringToolsClient: ToolsProviding, @unchecked Sendable 
 
 /// A ToolsProviding stub that returns canned responses — used to
 /// snapshot `.ready` and `.failed` phases without network.
+/// `generateReportCard` stays only because `ToolsProviding` requires it;
+/// no view presents a report card any more.
 private final class LoadedToolsClient: ToolsProviding, @unchecked Sendable {
     private let quizOutcome: Result<Quiz, Error>
-    private let reportOutcome: Result<ReportCard, Error>
 
-    init(
-        quiz: Quiz? = nil,
-        report: ReportCard? = nil,
-        quizError: Error? = nil,
-        reportError: Error? = nil
-    ) {
+    init(quiz: Quiz? = nil, quizError: Error? = nil) {
         if let quiz {
             quizOutcome = .success(quiz)
         } else if let quizError {
             quizOutcome = .failure(quizError)
         } else {
             quizOutcome = .failure(APIError.unknown(underlying: "no outcome"))
-        }
-        if let report {
-            reportOutcome = .success(report)
-        } else if let reportError {
-            reportOutcome = .failure(reportError)
-        } else {
-            reportOutcome = .failure(APIError.unknown(underlying: "no outcome"))
         }
     }
 
@@ -657,7 +570,7 @@ private final class LoadedToolsClient: ToolsProviding, @unchecked Sendable {
     }
 
     func generateReportCard(sessionId: String) async throws -> ReportCard {
-        try reportOutcome.get()
+        throw APIError.unknown(underlying: "report card is not snapshotted")
     }
 }
 

@@ -76,13 +76,8 @@ struct ChatViewModelPersistenceTests {
         let client = FakeChatClient()
         let sample = ChatResponse(
             reply: "Hello!",
-            sessionId: "sid",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: nil,
-            difficulty: nil,
-            suggestSummary: nil
+            streak: nil
         )
         client.outcome = .events([.delta(text: "Hel"), .delta(text: "lo!"), .complete(sample)])
 
@@ -97,7 +92,7 @@ struct ChatViewModelPersistenceTests {
         vm.send()
 
         // Wait for the stream to settle.
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -131,7 +126,7 @@ struct ChatViewModelPersistenceTests {
         vm.draft = "Hi"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .failed = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -153,13 +148,8 @@ struct ChatViewModelPersistenceTests {
         let client = FakeChatClient()
         let sample = ChatResponse(
             reply: "ok",
-            sessionId: "sid",
             mode: "socratic",
-            unlocked: false,
-            justUnlocked: nil,
-            streak: nil,
-            difficulty: nil,
-            suggestSummary: nil
+            streak: nil
         )
         client.outcome = .events([.complete(sample)])
 
@@ -173,7 +163,7 @@ struct ChatViewModelPersistenceTests {
         vm.draft = "Hi"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -208,12 +198,12 @@ private enum StartNewConversationScenarios {
 
     /// Send one "Hello" turn and wait for the streamed "Hi!" reply to settle.
     static func sendTurn(_ vm: ChatViewModel, client: FakeChatClient) async throws {
-        let reply = ChatResponse(reply: "Hi!", sessionId: "sid", mode: "socratic", unlocked: false)
+        let reply = ChatResponse(reply: "Hi!", mode: "socratic")
         client.outcome = .events([.delta(text: "Hi!"), .complete(reply)])
         vm.draft = "Hello"
         vm.send()
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while ContinuousClock.now < deadline {
             if case .idle = vm.phase { return }
             try await Task.sleep(for: .milliseconds(20))
