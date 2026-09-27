@@ -55,12 +55,12 @@
 
     // ── First-run gate ──────────────────────────────────────────────────────
     // meet → age → disclosure → limits → done, with two dead ends:
-    // underThirteen (terminal; the browser keeps only a "not passed" flag,
-    // never the age) and paused ("Not now"; nothing is sent until agreed).
-    // Deliberate web-only divergence: iOS persists nothing on under-13 and
-    // offers "I picked the wrong age"; a browser is often a shared school
-    // machine, so here the flag persists and there is no retry control
-    // (the FTC's age-screen guidance: don't let a child back up and re-pick).
+    // underThirteen (terminal, no retry control) and paused ("Not now";
+    // nothing is sent until agreed). The same policy as iOS 2.3.0
+    // (ConsentGate.swift AgeBlock): an under-13 answer keeps this browser on
+    // the stop screen for AGE_BLOCK_DAYS, and all it stores is when that
+    // happened — never the age, and it is never logged (the FTC's age-screen
+    // guidance: don't let a child back up and re-pick).
     // `stored`: { consentVersion, ageBlocked, returning }.
     function gateStart(stored) {
       if (stored.ageBlocked) return 'underThirteen';
@@ -98,6 +98,25 @@
 
     function consentGranted(stored) {
       return !stored.ageBlocked && stored.consentVersion >= CONSENT_VERSION;
+    }
+
+    // ── Under-13 block ──────────────────────────────────────────────────────
+    // The stored value is the time of the under-13 answer (ms since the
+    // epoch) and nothing else.
+    var AGE_BLOCK_DAYS = 7;
+    var AGE_BLOCK_MS = AGE_BLOCK_DAYS * 24 * 60 * 60 * 1000;
+
+    function ageBlockValue(now) {
+      return String(Math.floor(now));
+    }
+
+    // Is a stored block (the raw storage string, or null) in force at `now`?
+    // A clock set back to before the block keeps it in force (iOS
+    // AgeBlock.isActive); anything unreadable is no block.
+    function ageBlockActive(raw, now) {
+      if (raw === null || raw === undefined || !/^\d+$/.test(String(raw))) return false;
+      var at = parseInt(raw, 10);
+      return at > 0 && now - at < AGE_BLOCK_MS;
     }
 
     // ── Session id ──────────────────────────────────────────────────────────
@@ -490,6 +509,10 @@
       gateStart: gateStart,
       gateNext: gateNext,
       consentGranted: consentGranted,
+      AGE_BLOCK_DAYS: AGE_BLOCK_DAYS,
+      AGE_BLOCK_MS: AGE_BLOCK_MS,
+      ageBlockValue: ageBlockValue,
+      ageBlockActive: ageBlockActive,
       newSessionId: newSessionId,
       isValidSessionId: isValidSessionId,
       erasureOutcome: erasureOutcome,
@@ -555,7 +578,7 @@
   // =========================================================================
   var SESSION_KEY = 'merc_session_id';
   var CONSENT_KEY = 'merc_consent_version';
-  var AGE_CHECK_KEY = 'merc_age_check';
+  var AGE_BLOCK_KEY = 'merc_age_blocked_at';
   var PENDING_ERASE_KEY = 'merc_erase_pending';
   // What "Delete my data" clears from this browser at once, even when the
   // server copy can't be erased yet.
@@ -587,13 +610,27 @@
   var storageOK = (function() {
     try { localStorage.setItem('merc_probe', '1'); localStorage.removeItem('merc_probe'); return true; } catch(e) { return false; }
   })();
-  var memoryGate = { consentVersion: 0, ageBlocked: false };
+  var memoryGate = { consentVersion: 0, ageBlockedAt: null };
+
+  // An under-13 block past its AGE_BLOCK_DAYS (or unreadable) is forgotten
+  // here, so the age check shows again. The in-memory copy also holds the
+  // block for this page view if the storage write failed.
+  function readAgeBlock() {
+    var now = Date.now();
+    if (Core.ageBlockActive(memoryGate.ageBlockedAt, now)) return true;
+    if (!storageOK) return false;
+    var raw = safeGetItem(AGE_BLOCK_KEY);
+    if (raw === null) return false;
+    if (Core.ageBlockActive(raw, now)) return true;
+    safeRemoveItem(AGE_BLOCK_KEY);
+    return false;
+  }
 
   function readGateStore() {
-    if (!storageOK) return { consentVersion: memoryGate.consentVersion, ageBlocked: memoryGate.ageBlocked, returning: false };
+    if (!storageOK) return { consentVersion: memoryGate.consentVersion, ageBlocked: readAgeBlock(), returning: false };
     return {
       consentVersion: parseInt(safeGetItem(CONSENT_KEY), 10) || 0,
-      ageBlocked: safeGetItem(AGE_CHECK_KEY) === 'not_passed',
+      ageBlocked: readAgeBlock(),
       returning: !!(safeGetItem(SESSION_KEY) || safeGetItem('merc_onboarded'))
     };
   }
@@ -1052,13 +1089,14 @@
         '<p>Checked in this browser only \u2014 your age isn\'t saved or sent anywhere.</p>' +
         '<label class="merc-sr-only" for="merc-age-select">Your age</label>' +
         '<select class="merc-gate-select" id="merc-age-select">' +
-        '<option value="" selected disabled>Choose your age</option>' +
+        '<option value="" selected disabled>Select your age</option>' +
         Core.AGE_CHOICES.map(function(a) { return '<option value="' + a + '">' + escapeHtml(Core.ageLabel(a)) + '</option>'; }).join('') +
         '</select>' +
         '<div class="merc-gate-actions"><button type="button" class="merc-gate-primary" data-gate="age" disabled>Continue</button></div>';
     } else if (step === 'underThirteen') {
       h += '<h2 tabindex="-1">Mercurius is for ages 13 and up</h2>' +
-        '<p>Come back when you\'re 13. Your age wasn\'t saved \u2014 this browser only remembers that the age check didn\'t pass.</p>';
+        '<p>Come back when you\'re 13. This browser stays blocked for ' + Core.AGE_BLOCK_DAYS +
+        ' days \u2014 your age itself isn\'t saved. If it\'s a mistake, ask a teacher or parent.</p>';
     } else if (step === 'disclosure') {
       h += '<h2 tabindex="-1">Before you start</h2>' +
         '<p>Here\'s exactly what happens with what you type.</p>' +
@@ -1123,7 +1161,12 @@
 
   function applyGateEffects(effects) {
     effects.forEach(function(effect) {
-      if (effect === 'blockAge') { safeSetItem(AGE_CHECK_KEY, 'not_passed'); memoryGate.ageBlocked = true; }
+      if (effect === 'blockAge') {
+        // When, never the age: the answer itself is dropped with this step.
+        var value = Core.ageBlockValue(Date.now());
+        safeSetItem(AGE_BLOCK_KEY, value);
+        memoryGate.ageBlockedAt = value;
+      }
       else if (effect === 'dropConsent') { safeRemoveItem(CONSENT_KEY); memoryGate.consentVersion = 0; }
       else if (effect === 'grantConsent') { safeSetItem(CONSENT_KEY, String(Core.CONSENT_VERSION)); memoryGate.consentVersion = Core.CONSENT_VERSION; }
     });
@@ -2154,7 +2197,7 @@
         clearAllLocalData();
         memoryPending = [];
         memoryGate.consentVersion = 0;
-        memoryGate.ageBlocked = false;
+        memoryGate.ageBlockedAt = null;
         sessionId = null;
         resetThreadState();
         closeRightPanel();
@@ -2186,7 +2229,7 @@
     try { if (e.storageArea && e.storageArea !== window.localStorage) return; } catch (err) { return; }
     var k = e.key;
     var erased = k === null || ((k === 'merc_convos' || k === SESSION_KEY) && e.newValue === null);
-    if (!erased && k !== CONSENT_KEY && k !== AGE_CHECK_KEY) return;
+    if (!erased && k !== CONSENT_KEY && k !== AGE_BLOCK_KEY) return;
     if (erased) {
       abortActiveRequest();
       sessionId = null;

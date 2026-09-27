@@ -254,6 +254,82 @@ describe('first-run gate', () => {
   });
 });
 
+describe('under-13 block (same policy as iOS AgeBlock)', () => {
+  const now = Date.UTC(2026, 8, 27, 15, 0, 0);
+  const day = 24 * 60 * 60 * 1000;
+
+  test('lasts 7 days, like iOS coolOffDays', () => {
+    assert.equal(Core.AGE_BLOCK_DAYS, 7);
+    assert.equal(Core.AGE_BLOCK_MS, 7 * day);
+  });
+
+  test('a fresh block is in force; it expires after 7 days', () => {
+    const stored = Core.ageBlockValue(now);
+    assert.equal(Core.ageBlockActive(stored, now), true);
+    assert.equal(Core.ageBlockActive(stored, now + 6 * day), true);
+    assert.equal(Core.ageBlockActive(stored, now + 7 * day - 1), true);
+    assert.equal(Core.ageBlockActive(stored, now + 7 * day), false);
+    assert.equal(Core.ageBlockActive(stored, now + 30 * day), false);
+  });
+
+  test('a clock set back to before the block keeps it in force', () => {
+    assert.equal(Core.ageBlockActive(Core.ageBlockValue(now), now - 3 * day), true);
+  });
+
+  test('no marker, or an unreadable one, is no block', () => {
+    for (const raw of [null, undefined, '', '0', '-5', 'abc', '12abc', '1.5e12', 'not_passed', 'true']) {
+      assert.equal(Core.ageBlockActive(raw, now), false, String(raw));
+    }
+  });
+
+  test('a blocked browser opens on the stop screen and never has consent', () => {
+    const blocked = { consentVersion: Core.CONSENT_VERSION, ageBlocked: Core.ageBlockActive(Core.ageBlockValue(now), now), returning: true };
+    assert.equal(Core.gateStart(blocked), 'underThirteen');
+    assert.equal(Core.consentGranted(blocked), false);
+    const expired = { ...blocked, ageBlocked: Core.ageBlockActive(Core.ageBlockValue(now), now + 7 * day) };
+    assert.equal(Core.gateStart(expired), 'done');
+  });
+
+  test('what is stored is the time only, never the age', () => {
+    // Every under-13 answer stores the same thing at the same moment.
+    const values = Core.AGE_CHOICES.filter((a) => a < Core.MIN_AGE).map((age) => {
+      const next = Core.gateNext('age', { type: 'submitAge', age: String(age) });
+      assert.deepEqual(next.effects, ['dropConsent', 'blockAge']);
+      return Core.ageBlockValue(now);
+    });
+    assert.ok(values.length > 0);
+    for (const v of values) assert.equal(v, String(now));
+    assert.equal(Core.ageBlockValue(now + 0.9), String(now));
+  });
+
+  test('source: the marker is written once, with the timestamp; the age is never stored or logged', () => {
+    const src = fs.readFileSync(path.join(root, 'public/widget.js'), 'utf8');
+    assert.match(src, /var AGE_BLOCK_KEY = 'merc_age_blocked_at';/);
+    assert.deepEqual(src.match(/safeSetItem\(AGE_BLOCK_KEY[^;]*;/g), ['safeSetItem(AGE_BLOCK_KEY, value);']);
+    assert.match(src, /var value = Core\.ageBlockValue\(Date\.now\(\)\);/);
+    // The picked age exists only in action.age / the select's value; neither
+    // reaches storage, the console or a request.
+    for (const line of src.split('\n')) {
+      if (/action\.age|select\.value|merc-age-select'\)\.value/.test(line)) {
+        assert.doesNotMatch(line, /setItem|console\.|fetch\(|JSON\.stringify/, line.trim());
+      }
+    }
+    assert.doesNotMatch(src, /merc_age_check|not_passed/);
+    // No "I picked the wrong age" retry on the stop screen.
+    assert.doesNotMatch(src, /wrong age|ageRetry/i);
+  });
+
+  test('the stop screen says what iOS says', () => {
+    const src = fs.readFileSync(path.join(root, 'public/widget.js'), 'utf8');
+    const start = src.indexOf("step === 'underThirteen'");
+    const html = src.slice(start, src.indexOf("step === 'disclosure'", start));
+    assert.match(html, /Mercurius is for ages 13 and up/);
+    assert.match(html, /Come back when you\\'re 13\. This browser stays blocked for ' \+ Core\.AGE_BLOCK_DAYS/);
+    assert.match(html, /your age itself isn\\'t saved\. If it\\'s a mistake, ask a teacher or parent\./);
+    assert.doesNotMatch(html, /data-gate=/, 'the stop screen has no control that moves the flow');
+  });
+});
+
 describe('session id', () => {
   test('matches the server rules, including DELETE\'s 16-char minimum', () => {
     let n = 0;
