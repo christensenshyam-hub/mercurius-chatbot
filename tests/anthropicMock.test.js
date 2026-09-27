@@ -6,7 +6,8 @@
 //      [LESSON_COMPLETE] after 5 user turns), and every JSON route's shape as
 //      server.js's parsers consume it.
 //   2. Usage — chars/3.8 estimates and prompt-cache creation-vs-read
-//      accounting across the module-level Set.
+//      accounting across the module-level Set, with the API's prefix
+//      semantics (message-level breakpoints, 20-block lookback).
 //   3. stream() — SDK event ordering + usage placement (message_start carries
 //      input/cache tokens, message_delta carries output_tokens), abort
 //      mid-stream (direct and via options.signal), async iteration.
@@ -295,6 +296,27 @@ describe('create(): JSON routes', () => {
     assert.ok(Array.isArray(q.questions) && q.questions.length === 4);
   });
 
+  test('with the SAFETY CORE and a crisis disclosure, a JSON route gets the prose hand-off', async () => {
+    const { SAFETY_CORE } = require('../lib/safetyCore');
+    const graded = (system, answer) => client.messages.create({
+      model: 'm', max_tokens: 400, system,
+      messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle: 'Unit 8', defensePrompt: 'Pick a tool.', answer }) }],
+    });
+    const withCore = `${UNIT_TEST_GRADER_PROMPT}\n\n${SAFETY_CORE}`;
+    for (const answer of ['honestly i want to die', "I've been saving up my pills and wrote goodbye notes"]) {
+      const text = (await graded(withCore, answer)).content[0].text;
+      assert.equal(parseUnitTestGrade(text), null, 'not a grade');
+      assert.match(text, /Call or text 988/);
+      assert.match(text, /741741/);
+    }
+    // Without the safety block the mock keeps to the JSON contract, which is
+    // how a test proves a route actually sent it.
+    assert.ok(parseUnitTestGrade((await graded(UNIT_TEST_GRADER_PROMPT, 'honestly i want to die')).content[0].text));
+    // A third-person answer about AI harms is graded as usual.
+    const risk = "A chatbot failed to point a teen who died by suicide to 988, so I wouldn't trust it with anything emotional.";
+    assert.ok(parseUnitTestGrade((await graded(withCore, risk)).content[0].text));
+  });
+
   test('a system prompt without "JSON" never yields JSON', async () => {
     const msg = await client.messages.create(chat('Give me json please'));
     assert.throws(() => JSON.parse(msg.content[0].text));
@@ -358,6 +380,59 @@ describe('usage accounting', () => {
     __resetForTest();
     const again = await client.messages.create(params());
     assert.equal(again.usage.cache_creation_input_tokens, staticTokens, 'reset forgets the block');
+  });
+
+  test('message-level breakpoint: the next turn reads the previous prefix back (prefix semantics)', async () => {
+    const STATIC = 'STATIC PREFIX '.repeat(200);
+    const system = [{ type: 'text', text: STATIC, cache_control: { type: 'ephemeral' } }];
+    const mark = (text) => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+    const t = (chars) => Math.round(chars / 3.8);
+    const turn2 = await client.messages.create({
+      model: 'm', max_tokens: 50, system,
+      messages: [{ role: 'user', content: 'u1' }, { role: 'assistant', content: mark('a1') }, { role: 'user', content: 'u2' }],
+    });
+    assert.equal(turn2.usage.cache_creation_input_tokens, t(STATIC.length + 4), 'static + u1 + a1 written');
+    assert.equal(turn2.usage.cache_read_input_tokens, 0);
+    assert.equal(turn2.usage.input_tokens, t(2), 'only the new user turn is uncached');
+
+    // Same thread one turn later, breakpoint moved forward; a1 is a plain
+    // string now — the cache key never depends on where the marker sits.
+    const turn3 = await client.messages.create({
+      model: 'm', max_tokens: 50, system,
+      messages: [
+        { role: 'user', content: 'u1' }, { role: 'assistant', content: 'a1' },
+        { role: 'user', content: 'u2' }, { role: 'assistant', content: mark('a2') },
+        { role: 'user', content: 'u3' },
+      ],
+    });
+    assert.equal(turn3.usage.cache_read_input_tokens, t(STATIC.length + 4), 'reads what turn 2 wrote');
+    assert.equal(turn3.usage.cache_creation_input_tokens, t(4), 'writes only u2 + a2');
+    assert.equal(turn3.usage.input_tokens, t(2));
+
+    // One byte of drift before the breakpoint falls back to the system prefix.
+    const drifted = await client.messages.create({
+      model: 'm', max_tokens: 50, system,
+      messages: [
+        { role: 'user', content: 'u1 ' }, { role: 'assistant', content: 'a1' },
+        { role: 'user', content: 'u2' }, { role: 'assistant', content: mark('a2') },
+        { role: 'user', content: 'u3' },
+      ],
+    });
+    assert.equal(drifted.usage.cache_read_input_tokens, t(STATIC.length));
+  });
+
+  test('the lookback reaches 20 blocks before a breakpoint, not further', async () => {
+    const STATIC = 'STATIC PREFIX '.repeat(200);
+    const system = [{ type: 'text', text: STATIC, cache_control: { type: 'ephemeral' } }];
+    const thread = (n) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `m${i}` }));
+    const withMark = (messages, i) => messages.map((m, j) => (j === i ? { role: m.role, content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }] } : m));
+    await client.messages.create({ model: 'm', max_tokens: 10, system, messages: withMark(thread(3), 1) });
+    const near = await client.messages.create({ model: 'm', max_tokens: 10, system, messages: withMark(thread(23), 21) });
+    assert.ok(near.usage.cache_read_input_tokens > Math.round(STATIC.length / 3.8), 'm0..m1 is 20 blocks back');
+    __resetForTest();
+    await client.messages.create({ model: 'm', max_tokens: 10, system, messages: withMark(thread(3), 1) });
+    const far = await client.messages.create({ model: 'm', max_tokens: 10, system, messages: withMark(thread(25), 23) });
+    assert.equal(far.usage.cache_read_input_tokens, Math.round(STATIC.length / 3.8), 'm0..m1 is 22 blocks back: only the system prefix');
   });
 
   test('image blocks count a fixed 1200 tokens, not their base64 length', async () => {

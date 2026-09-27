@@ -62,7 +62,8 @@ const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
-const { SAFETY_CORE, SAFETY_CORE_TAGGED } = require('./lib/safetyCore');
+const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = require('./lib/safetyCore');
+const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const { notifyReport } = require('./lib/reportWebhook');
 const { createScheduler } = require('./lib/scheduler');
 const {
@@ -1126,6 +1127,19 @@ function curriculumStatic(wantsBlocks) {
   }
   return staticPrefixCache.get(key);
 }
+// Helper routes answer in JSON, so a rule-1 hand-off has a JSON form
+// (HELPER_CRISIS_RULE) and the safety block still goes LAST. These prompts are
+// under the cache minimum, so they go out as plain strings.
+const helperSystem = (prompt) => systemBlocks.composeStatic([prompt, HELPER_CRISIS_RULE, SAFETY_CORE]);
+const QUIZ_SYSTEM = helperSystem(QUIZ_PROMPT);
+const REPORT_CARD_SYSTEM = helperSystem(REPORT_CARD_PROMPT);
+const CONCEPT_MAP_SYSTEM = helperSystem(CONCEPT_MAP_PROMPT);
+const UNIT_TEST_GRADER_SYSTEM = helperSystem(UNIT_TEST_GRADER_PROMPT);
+const FACTCHECK_SYSTEM = helperSystem(FACTCHECK_PROMPT);
+const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
+// What a widget helper route answers when the student's text is a crisis:
+// the widgets show `message` for any body carrying `error`.
+const CRISIS_RESULT = Object.freeze({ error: 'crisis', message: CRISIS_COPY, crisis: true });
 
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
@@ -1159,6 +1173,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     },
   });
   const raw = response.content[0]?.text || '';
+  if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -1785,7 +1800,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
     ].filter(Boolean).join('\n\n');
   }
-  const systemForApi = systemBlocks.buildSystem({ staticText, dynamicText });
+  // The meeting + blog material is only fetched for widget free chat, and is
+  // the same bytes on every such request until the feeds change: give it its
+  // own breakpoint instead of re-billing ~3k tokens at full price each turn.
+  const systemForApi = systemBlocks.buildSystem({
+    staticText,
+    dynamicText,
+    cacheDynamic: Boolean(meetingContext || blogContext),
+  });
 
   // v3 vision: if the student attached an image (uploaded earlier via
   // POST /api/images), fetch it and make THIS user turn multimodal so Claude
@@ -1837,6 +1859,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // The slice can land on an assistant turn depending on window parity, so
   // drop leading assistant messages — the newest user turn is always last.
   while (trimmed.length > 1 && trimmed[0].role !== 'user') trimmed.shift();
+  // Second breakpoint on the last replayed message, so next turn reads this
+  // thread back from cache. The window is the one that slides first: the
+  // server's own (40 lesson / 20 chat) or the widgets' 20-message cap.
+  const messagesForApi = systemBlocks.withHistoryBreakpoint(trimmed, {
+    clientMessages,
+    window: isCurriculumMsg && !isWidget ? 40 : 20,
+  });
 
   try {
     // Token + temperature now come from the response-mode budget —
@@ -1889,7 +1918,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             max_tokens: maxTokens,
             temperature,
             system: systemForApi,
-            messages: trimmed,
+            messages: messagesForApi,
           },
         });
       } catch (err) {
@@ -2092,7 +2121,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           max_tokens: maxTokens,
           temperature,
           system: systemForApi,
-          messages: trimmed,
+          messages: messagesForApi,
         },
       });
 
@@ -2199,12 +2228,13 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
       req,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
-      systemPrompt: QUIZ_PROMPT,
+      systemPrompt: QUIZ_SYSTEM,
       userMessage: 'Generate a comprehension quiz based on our conversation.',
       maxTokens: 900,
       errorLabel: 'quiz',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error === 'crisis') return res.json(result);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
@@ -2232,12 +2262,13 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
       req,
       historyLimit: HISTORY_LIMITS.REPORT,
       minMessages: 4,
-      systemPrompt: REPORT_CARD_PROMPT,
+      systemPrompt: REPORT_CARD_SYSTEM,
       userMessage: 'Generate my session report card.',
       maxTokens: 600,
       errorLabel: 'report card',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error === 'crisis') return res.json(result);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
@@ -2254,8 +2285,14 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
 // (no conversation history). The multiple-choice half of the unit test is
 // scored entirely on-device; only this open-ended answer needs the model.
 // ---------------------------------------------------------------------------
+// A crisis answer gets the resources in the grade shape the shipped apps
+// decode ({grade,pass,feedback}; `crisis` is ignored by them): a non-2xx is
+// shown as a connection error, and a letter grade would bury the resources.
+const CRISIS_GRADE = Object.freeze({ grade: '—', pass: false, feedback: CRISIS_COPY, crisis: true });
+
 app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { endpoint: '/api/unit-test/grade' }), asyncRoute(async (req, res) => {
   const { sessionId, unitTitle, defensePrompt, answer } = req.validated;
+  if (crisisSignal(answer)) return res.json({ ...CRISIS_GRADE });
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
   if (await isRateLimited(sessionId)) {
@@ -2275,11 +2312,12 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
         max_tokens: 400,
         // Low temperature for grading consistency across retries.
         temperature: 0.2,
-        system: UNIT_TEST_GRADER_PROMPT,
+        system: UNIT_TEST_GRADER_SYSTEM,
         messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
       },
     });
     const raw = response.content[0]?.text || '';
+    if (isCrisisReply(raw)) return res.json({ ...CRISIS_GRADE });
     const result = parseUnitTestGrade(raw);
     if (!result) {
       return res.status(500).json({ error: 'parse_error', message: 'Could not grade your answer — please try again.' });
@@ -2310,7 +2348,7 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
       req,
       historyLimit: HISTORY_LIMITS.MAP,
       minMessages: 4,
-      systemPrompt: CONCEPT_MAP_PROMPT,
+      systemPrompt: CONCEPT_MAP_SYSTEM,
       userMessage: 'Generate a concept map from our conversation.',
       // Concept-map JSON (nodes + links) is the largest of the three
       // history-derived payloads; 600 truncated it mid-object and tripped
@@ -2319,6 +2357,7 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
       errorLabel: 'concept map',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
+    if (result.error === 'crisis') return res.json(result);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
@@ -2607,6 +2646,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   if (!isValidSessionId(sessionId) || !claim || typeof claim !== 'string' || claim.length > 1000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
   }
+  if (crisisSignal(claim)) return res.json({ ...CRISIS_RESULT });
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
@@ -2622,11 +2662,12 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
       params: {
         model: MODEL,
         max_tokens: 700,
-        system: FACTCHECK_PROMPT,
+        system: FACTCHECK_SYSTEM,
         messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
       },
     });
     const raw = response.content[0]?.text || '';
+    if (isCrisisReply(raw)) return res.json({ ...CRISIS_RESULT });
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
@@ -2660,11 +2701,12 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
       params: {
         model: MODEL,
         max_tokens: 700,
-        system: ANALYZE_PROMPT,
+        system: ANALYZE_SYSTEM,
         messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
       },
     });
     const raw = response.content[0]?.text || '';
+    if (isCrisisReply(raw)) return res.json({ ...CRISIS_RESULT });
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
@@ -2701,7 +2743,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
       params: {
         model: HELPER_MODEL,
         max_tokens: 800,
-        system: PRE_BRIEFING_PROMPT + meetingContext + blogContext,
+        system: systemBlocks.composeStatic([PRE_BRIEFING_PROMPT + meetingContext + blogContext, SAFETY_CORE]),
         messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
       },
     });

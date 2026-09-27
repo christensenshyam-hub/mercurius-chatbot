@@ -18,6 +18,10 @@
 //   5. Round-trip through lib/anthropicMock: the array buildSystem produces is
 //      what the mock (and the real API) bills as a cache write on the first
 //      call and a cache read on the next, with the dynamic block left uncached.
+//   6. withHistoryBreakpoint: one message-level breakpoint, on the last
+//      replayed message and never the new user turn, skipped whenever the
+//      thread will slide before the next turn; and, through the mock, each
+//      turn of a growing thread reads back what the previous turn wrote.
 
 const { describe: suite, test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -29,8 +33,10 @@ const {
   staticSize,
   isCacheable,
   describe,
+  withHistoryBreakpoint,
   MIN_CACHEABLE_TOKENS,
   CHARS_PER_TOKEN,
+  HISTORY_CACHE_MAX_BYTES,
 } = sb;
 
 // Smallest char count that rounds up to MIN_CACHEABLE_TOKENS:
@@ -49,6 +55,20 @@ suite('buildSystem', () => {
       { type: 'text', text: 'DYNAMIC' },
     ]);
     assert.equal(Object.hasOwn(system[1], 'cache_control'), false, 'dynamic block must not carry a breakpoint');
+  });
+
+  test('cacheDynamic: true gives the dynamic block its own breakpoint; anything else does not', () => {
+    const cached = buildSystem({ staticText: 'STATIC', dynamicText: 'CLUB FEEDS', cacheDynamic: true });
+    assert.deepEqual(cached, [
+      { type: 'text', text: 'STATIC', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'CLUB FEEDS', cache_control: { type: 'ephemeral' } },
+    ]);
+    for (const cacheDynamic of [false, undefined, 1, 'yes']) {
+      const system = buildSystem({ staticText: 'STATIC', dynamicText: 'D', cacheDynamic });
+      assert.equal(Object.hasOwn(system[1], 'cache_control'), false, `cacheDynamic=${cacheDynamic}`);
+    }
+    // No dynamic text → no second block, whatever the flag says.
+    assert.equal(buildSystem({ staticText: 'STATIC', dynamicText: ' ', cacheDynamic: true }).length, 1);
   });
 
   test('the static block is always index 0 (the cached prefix comes first)', () => {
@@ -356,5 +376,138 @@ suite('buildSystem output round-trips through lib/anthropicMock', () => {
     assert.ok(hit.usage.cache_read_input_tokens > 0);
     assert.equal(miss.usage.cache_read_input_tokens, 0, 'one trailing space → a different prefix → a miss');
     assert.ok(miss.usage.cache_creation_input_tokens > 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// withHistoryBreakpoint
+// ---------------------------------------------------------------------------
+suite('withHistoryBreakpoint', () => {
+  const thread = (n) => Array.from({ length: n }, (_, i) => ({
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: `${i % 2 === 0 ? 'student' : 'merc'} turn ${i}`,
+  }));
+  const breakpoints = (messages) => messages
+    .map((m, i) => (Array.isArray(m.content) && m.content.some((b) => b.cache_control) ? i : -1))
+    .filter((i) => i >= 0);
+
+  test('exactly one breakpoint, on the last replayed message, never the new user turn', () => {
+    const messages = thread(5);
+    const out = withHistoryBreakpoint(messages, { window: 40 });
+    assert.deepEqual(breakpoints(out), [3]);
+    assert.deepEqual(out[3], {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'merc turn 3', cache_control: { type: 'ephemeral' } }],
+    });
+    assert.equal(typeof out[4].content, 'string', 'the latest user turn stays plain');
+    assert.deepEqual(out.slice(0, 3), messages.slice(0, 3));
+  });
+
+  test('the target may be a user turn (a thread whose last reply failed)', () => {
+    const messages = [...thread(3), { role: 'user', content: 'retrying' }];
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(messages, { window: 40 })), [2]);
+  });
+
+  test('never mutates its input and returns a new array', () => {
+    const messages = thread(5);
+    const before = JSON.stringify(messages);
+    const out = withHistoryBreakpoint(messages, { window: 40 });
+    assert.equal(JSON.stringify(messages), before);
+    assert.notEqual(out, messages);
+  });
+
+  test('skipped for a single message, a missing or bad window, or an empty target', () => {
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(1), { window: 40 })), []);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(3), {})), []);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(3), { window: '40' })), []);
+    const blank = thread(3);
+    blank[1] = { role: 'assistant', content: '   ' };
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(blank, { window: 40 })), []);
+    assert.deepEqual(withHistoryBreakpoint(null, { window: 40 }), []);
+  });
+
+  test('skipped once the next turn would slide the window (client thread + 2 > window)', () => {
+    // 18 client messages + the next reply and user turn = 20: still fits.
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(19).slice(-19), { clientMessages: thread(18), window: 20 })).length, 1);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(19), { window: 20 })), []);
+    // The client's own thread decides, not the server-trimmed one.
+    const trimmedToWindow = thread(21).slice(-20);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(trimmedToWindow, { clientMessages: thread(21), window: 40 })).length, 1);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(39), { window: 40 })), []);
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(thread(38), { window: 40 })).length, 1);
+  });
+
+  test('skipped once the thread is near the iOS 24,000-byte cap', () => {
+    assert.equal(HISTORY_CACHE_MAX_BYTES, 20_000);
+    const big = thread(5);
+    big[0] = { role: 'user', content: 'x'.repeat(HISTORY_CACHE_MAX_BYTES) };
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(big, { window: 40 })), []);
+    // Bytes, not chars: 7,000 three-byte characters is 21,000 bytes.
+    const wide = thread(5);
+    wide[0] = { role: 'user', content: '—'.repeat(7000) };
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(wide, { window: 40 })), []);
+    const under = thread(5);
+    under[0] = { role: 'user', content: 'x'.repeat(HISTORY_CACHE_MAX_BYTES - 200) };
+    assert.deepEqual(breakpoints(withHistoryBreakpoint(under, { window: 40 })).length, 1);
+  });
+});
+
+suite('history breakpoint round-trips through lib/anthropicMock', () => {
+  const mock = require('../lib/anthropicMock');
+  beforeEach(() => mock.__resetForTest());
+
+  test('each turn reads back the previous turn\'s prefix: read(t) = read(t-1) + write(t-1)', async () => {
+    const client = mock.createMockClient({ delayMs: 1 });
+    const system = buildSystem({ staticText: BIG_STATIC });
+    const convo = [];
+    const usage = [];
+    for (let t = 1; t <= 5; t++) {
+      convo.push({ role: 'user', content: `student turn ${t}: ${'why '.repeat(20 * t)}` });
+      const messages = withHistoryBreakpoint(convo, { window: 40 });
+      const msg = await client.messages.create({ model: 'm', max_tokens: 100, system, messages });
+      usage.push(msg.usage);
+      convo.push({ role: 'assistant', content: msg.content[0].text });
+    }
+    for (let t = 3; t <= 5; t++) {
+      const [prev, cur] = [usage[t - 2], usage[t - 1]];
+      assert.equal(cur.cache_read_input_tokens, prev.cache_read_input_tokens + prev.cache_creation_input_tokens, `turn ${t}`);
+      assert.ok(cur.cache_read_input_tokens > prev.cache_read_input_tokens, `turn ${t} reads more than turn ${t - 1}`);
+    }
+    // Only the new user turn is billed at the full input price.
+    for (let t = 2; t <= 5; t++) {
+      assert.equal(usage[t - 1].input_tokens, Math.round(convo[2 * (t - 1)].content.length / CHARS_PER_TOKEN), `turn ${t}`);
+    }
+  });
+
+  test('a breakpoint on the re-tagged latest turn would never be read back', async () => {
+    const client = mock.createMockClient({ delayMs: 1 });
+    const system = buildSystem({ staticText: BIG_STATIC });
+    const mark = (m) => ({ role: m.role, content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }] });
+    // iOS re-tags the LAST user turn on the wire only; the next request
+    // replays it untagged, so a prefix ending at it never repeats.
+    const first = [{ role: 'user', content: '[CURRICULUM: Unit 1, Lesson 1] u1' }];
+    await client.messages.create({ model: 'm', max_tokens: 50, system, messages: [mark(first[0])] });
+    const second = [
+      { role: 'user', content: '[CURRICULUM: Unit 1, Lesson 1] u1' },
+      { role: 'assistant', content: 'a1' },
+      { role: 'user', content: '[CURRICULUM: Unit 1, Lesson 1] u2' },
+    ];
+    const wrote = await client.messages.create({ model: 'm', max_tokens: 50, system, messages: [...second.slice(0, 2), mark(second[2])] });
+    const third = [
+      ...second.slice(0, 2),
+      { role: 'user', content: 'u2' },
+      { role: 'assistant', content: 'a2' },
+      { role: 'user', content: '[CURRICULUM: Unit 1, Lesson 1] u3' },
+    ];
+    const misses = await client.messages.create({ model: 'm', max_tokens: 50, system, messages: [...third.slice(0, 4), mark(third[4])] });
+    assert.ok(
+      misses.usage.cache_read_input_tokens < wrote.usage.cache_read_input_tokens + wrote.usage.cache_creation_input_tokens,
+      'the previous turn wrote a prefix ending at the tagged u2, which this turn replays untagged',
+    );
+    // What it does read is the older opener-only prefix from the first call.
+    assert.equal(
+      misses.usage.cache_read_input_tokens,
+      Math.round((BIG_STATIC.length + first[0].content.length) / CHARS_PER_TOKEN),
+    );
   });
 });

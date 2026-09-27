@@ -12,7 +12,7 @@ const path = require('node:path');
 
 const MODULE_PATH = path.join(__dirname, '..', 'lib', 'safetyCore.js');
 const safetyCore = require(MODULE_PATH);
-const { SAFETY_CORE, SAFETY_CORE_TAGGED } = safetyCore;
+const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = safetyCore;
 
 // The only markers the clients strip and act on. Anything else in brackets
 // would leak into the stream verbatim (or be mis-parsed by lib/blockMarkup).
@@ -57,7 +57,7 @@ describe('SAFETY_CORE shape', () => {
 
   test('exports are frozen', () => {
     assert.ok(Object.isFrozen(safetyCore));
-    assert.deepEqual(Object.keys(safetyCore).sort(), ['SAFETY_CORE', 'SAFETY_CORE_TAGGED']);
+    assert.deepEqual(Object.keys(safetyCore).sort(), ['CRISIS_COPY', 'HELPER_CRISIS_RULE', 'SAFETY_CORE', 'SAFETY_CORE_TAGGED']);
   });
 });
 
@@ -78,6 +78,40 @@ describe('crisis resources', () => {
   test('points to a trusted adult and says it is an AI', () => {
     assert.match(SAFETY_CORE, /trusted adult such as a parent or school counselor/);
     assert.match(SAFETY_CORE, /you're an AI and can't be their support person/);
+  });
+});
+
+describe('helper routes: HELPER_CRISIS_RULE and CRISIS_COPY', () => {
+  test('CRISIS_COPY carries both hotline lines exactly as rule 1 words them', () => {
+    const lines = [
+      'Call or text 988 — the Suicide & Crisis Lifeline (US, 24/7)',
+      'Text HOME to 741741 — Crisis Text Line',
+    ];
+    for (const line of lines) {
+      assert.ok(SAFETY_CORE.includes(`"${line}"`), `rule 1 wording drifted: ${line}`);
+      assert.ok(CRISIS_COPY.includes(line), `CRISIS_COPY is missing: ${line}`);
+    }
+  });
+
+  test('CRISIS_COPY follows the rest of rule 1: glad you told me, an AI, 911, a trusted adult', () => {
+    assert.match(CRISIS_COPY, /glad you told me/);
+    assert.match(CRISIS_COPY, /I'm an AI, so I can't be your support person/);
+    assert.match(CRISIS_COPY, /immediate danger, call 911/);
+    assert.match(CRISIS_COPY, /trusted adult too, like a parent or school counselor/);
+  });
+
+  test('CRISIS_COPY has no markers, no brackets and no lesson content', () => {
+    assert.doesNotMatch(CRISIS_COPY, /[[\]]/);
+    assert.doesNotMatch(CRISIS_COPY, /grade|lesson|quiz/i);
+    assert.equal(CRISIS_COPY, CRISIS_COPY.trim());
+  });
+
+  test('HELPER_CRISIS_RULE points at rule 1 and names a JSON shape the routes detect', () => {
+    assert.match(HELPER_CRISIS_RULE, /rule 1 of the SAFETY CORE below/);
+    const json = HELPER_CRISIS_RULE.slice(HELPER_CRISIS_RULE.indexOf('{'));
+    assert.deepEqual(Object.keys(JSON.parse(json)), ['crisis', 'message']);
+    assert.equal(JSON.parse(json).crisis, true);
+    assert.doesNotMatch(HELPER_CRISIS_RULE, /[[\]]/);
   });
 });
 
