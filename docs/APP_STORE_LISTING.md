@@ -288,7 +288,7 @@ Do these in order. Tick each one.
 
 **Web**
 - [ ] `https://trymercurius.com/privacy`, `/terms` and `/support` return 200, and `/get` (and `/Get`) return a 302 to TestFlight (not a redirect loop, not the 404 page). `/support` must show `support@trymercurius.com`.
-- [ ] The privacy page names Anthropic as the processor, describes photos, the synced lesson checklist and the in-app deletion path, and the production server is on the 2.3.0 deploy (`GET /api/admin/kill-switch` returns 200, not 404) — the page's retention and deletion promises are only true on that server. Once it is, the interim wording is reverted (the commit "Say what the running server does until the update is live"), so `/privacy` has no "Right now: our server update is still rolling out" section. The site mentions no Direct mode.
+- [ ] The privacy page names Anthropic as the processor, describes photos, the synced lesson checklist and the in-app deletion path, and the production server is on the 2.3.0 deploy (`GET /api/admin/kill-switch` returns 200, not 404) — the page's retention and deletion promises are only true on that server. The site mentions no Direct mode.
 
 **App Store Connect → 2.3.0**
 - [ ] Name, subtitle, promotional text, keywords, description, What's New from §1 (paste exactly; the counts above assume no edits).
