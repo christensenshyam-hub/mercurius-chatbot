@@ -268,18 +268,59 @@ describe('session id', () => {
   });
 });
 
+describe('erasure', () => {
+  test('only {ok:true} on a 2xx counts as erased', () => {
+    assert.equal(Core.erasureOutcome(200, { ok: true, deleted: {} }), 'ok');
+    assert.equal(Core.erasureOutcome(200, {}), 'failed');
+    assert.equal(Core.erasureOutcome(200, null), 'failed');
+    assert.equal(Core.erasureOutcome(404, { error: 'not_found' }), 'failed'); // a build without the route
+    assert.equal(Core.erasureOutcome(500, { ok: true }), 'failed');
+    assert.equal(Core.erasureOutcome(429, { error: 'rate_limited' }), 'rate_limited');
+  });
+
+  test('pending ids are valid, deduped, oldest first and capped', () => {
+    const a = 'merc_' + 'a'.repeat(48);
+    const b = 'merc_' + 'b'.repeat(48);
+    assert.deepEqual(Core.mergeErasureIds([a], [b, a, 'short', null]), [a, b]);
+    assert.deepEqual(Core.mergeErasureIds('garbage', [a]), [a]);
+    const many = Array.from({ length: 12 }, (_, i) => 'merc_' + String(i).padStart(2, '0') + 'x'.repeat(46));
+    assert.deepEqual(Core.mergeErasureIds(many, []), many.slice(-10));
+  });
+
+  test('retries honour Retry-After, else back off from a minute to ten', () => {
+    assert.equal(Core.erasureRetryDelayMs(0, '42'), 42000);
+    assert.equal(Core.erasureRetryDelayMs(0, '99999'), 600000);
+    assert.equal(Core.erasureRetryDelayMs(0, null), 60000);
+    assert.equal(Core.erasureRetryDelayMs(1, 'soon'), 120000);
+    assert.equal(Core.erasureRetryDelayMs(8, null), 600000);
+  });
+});
+
 describe('history', () => {
   const opener = { role: 'user', content: '[CURRICULUM: Unit 2, Lesson 3] Explain the bias problems…', hidden: true };
 
-  test('caps at 40 messages, keeps the lesson opener, never starts on an assistant turn', () => {
+  test('caps at 40 messages and keeps the lesson opener', () => {
     const history = [opener];
     for (let i = 0; i < 60; i++) history.push({ role: i % 2 ? 'user' : 'assistant', content: `m${i}` });
     const out = Core.capHistory(history);
     assert.equal(out.length, 40);
     assert.deepEqual(out[0], { role: 'user', content: opener.content });
-    assert.equal(out[1].role, 'user');
+    assert.deepEqual(out.slice(1).map((m) => m.content), history.slice(-39).map((m) => m.content));
     assert.equal(out[out.length - 1].content, 'm59');
     assert.ok(out.every((m) => !('hidden' in m)));
+  });
+
+  test('a lesson keeps the reply that set the exercise, on every turn', () => {
+    const a1 = { role: 'assistant', content: 'Tokens explained. Exercise: split "unbelievable" into tokens.' };
+    const turn2 = [opener, a1, { role: 'user', content: 'un / believ / able', hidden: false }];
+    assert.deepEqual(Core.capHistory(turn2), turn2.map(({ role, content }) => ({ role, content })));
+    const turn3 = turn2.concat([{ role: 'assistant', content: 'Close. Why?' }, { role: 'user', content: 'Common chunks', hidden: false }]);
+    assert.deepEqual(Core.capHistory(turn3).map((m) => m.content), turn3.map((m) => m.content));
+  });
+
+  test('without an opener the thread never starts on an assistant turn', () => {
+    const out = Core.capHistory([{ role: 'assistant', content: 'hi' }, { role: 'user', content: 'q' }]);
+    assert.deepEqual(out, [{ role: 'user', content: 'q' }]);
   });
 
   test('caps by bytes, dropping oldest turns first', () => {
@@ -310,6 +351,15 @@ describe('history', () => {
     assert.equal(Core.isHiddenTurn({ role: 'user', content: 'This is my first time using Mercurius. Introduce yourself…' }), true);
     assert.equal(Core.isHiddenTurn({ role: 'user', content: 'Is AI biased?' }), false);
     assert.equal(Core.isHiddenTurn({ role: 'assistant', content: Core.PROMPTS.debate }), false);
+  });
+
+  test('a turn the student typed is never mistaken for a legacy hidden prompt', () => {
+    const typed = { role: 'user', content: 'Can we explore "deepfakes" more? I saw one at school.', hidden: false };
+    assert.equal(Core.isHiddenTurn(typed), false);
+    assert.equal(Core.isHiddenTurn({ ...typed, hidden: undefined }), true); // saved before the flag existed
+    const h = [typed, { role: 'assistant', content: 'Sure.' }];
+    assert.equal(Core.conversationTitle(h), typed.content);
+    assert.equal(Core.precedingVisibleUser(h, 1), typed.content);
   });
 
   test('titles skip hidden prompts', () => {
@@ -378,13 +428,25 @@ describe('report body', () => {
 });
 
 describe('numbers shown to students', () => {
-  test('confidence only when the reply states it', () => {
+  test('confidence only when the reply states its own', () => {
     assert.equal(Core.parseStatedConfidence("I'm about 70% confident in this."), 70);
+    assert.equal(Core.parseStatedConfidence('Honestly, I’d say I’m 60% sure.'), 60);
+    assert.equal(Core.parseStatedConfidence('My confidence level is 55%'), 55);
     assert.equal(Core.parseStatedConfidence('Confidence: 80%'), 80);
-    assert.equal(Core.parseStatedConfidence('confidence level of 55%'), 55);
+    assert.equal(Core.parseStatedConfidence('Answer first.\n**Confidence:** 65%'), 65);
     assert.equal(Core.parseStatedConfidence('COMPAS flagged 45% vs 23%'), null);
     assert.equal(Core.parseStatedConfidence('What might happen next?'), null);
     assert.equal(Core.parseStatedConfidence('I am 150% sure'), null);
+  });
+
+  test('a percentage about someone else is lesson content, not the reply\'s confidence', () => {
+    for (const s of [
+      'A chatbot might tell you it is 95% sure and still be wrong.',
+      'Climate scientists are 95% certain that warming is human-caused.',
+      'When a model reports a confidence of 80%, check it anyway.',
+      'A chatbot might say "I\'m 95% sure" and still be wrong.',
+      'It could answer “I’m 90% confident” about a made-up court case.',
+    ]) assert.equal(Core.parseStatedConfidence(s), null, s);
   });
 
   test('report-card scores are clamped numbers', () => {

@@ -57,6 +57,10 @@
     // meet → age → disclosure → limits → done, with two dead ends:
     // underThirteen (terminal; the browser keeps only a "not passed" flag,
     // never the age) and paused ("Not now"; nothing is sent until agreed).
+    // Deliberate web-only divergence: iOS persists nothing on under-13 and
+    // offers "I picked the wrong age"; a browser is often a shared school
+    // machine, so here the flag persists and there is no retry control
+    // (the FTC's age-screen guidance: don't let a child back up and re-pick).
     // `stored`: { consentVersion, ageBlocked, returning }.
     function gateStart(stored) {
       if (stored.ageBlocked) return 'underThirteen';
@@ -109,6 +113,32 @@
 
     function isValidSessionId(id) {
       return typeof id === 'string' && id.length >= 16 && id.length <= 64 && /^[A-Za-z0-9_-]+$/.test(id);
+    }
+
+    // ── Erasure (DELETE /api/session/:id) ───────────────────────────────────
+    // The server answers {ok:true} even for an unknown id, so anything else
+    // (429, 5xx, a build without the route) means the data may still be there.
+    function erasureOutcome(status, body) {
+      if (status >= 200 && status < 300 && body && body.ok === true) return 'ok';
+      return status === 429 ? 'rate_limited' : 'failed';
+    }
+
+    // Ids whose server copy still has to be erased, oldest first, deduped.
+    var MAX_PENDING_ERASURES = 10;
+    function mergeErasureIds(list, add) {
+      var out = [];
+      (Array.isArray(list) ? list : []).concat(add || []).forEach(function (id) {
+        if (isValidSessionId(id) && out.indexOf(id) === -1) out.push(id);
+      });
+      return out.slice(-MAX_PENDING_ERASURES);
+    }
+
+    // Retry-After when the server sent one (seconds), else 60s doubling per
+    // attempt, capped at 10 minutes.
+    function erasureRetryDelayMs(attempt, retryAfter) {
+      var s = parseInt(retryAfter, 10);
+      if (isFinite(s) && s > 0) return Math.min(s, 600) * 1000;
+      return Math.min(60 * Math.pow(2, Math.max(0, attempt || 0)), 600) * 1000;
     }
 
     // ── SSE ─────────────────────────────────────────────────────────────────
@@ -198,8 +228,9 @@
         return 'Can we explore "' + label + '" more? Tell me about this concept and how it connects to what we\'ve been discussing.';
       }
     };
-    // Threads saved before the `hidden` flag existed: recognise their
-    // hidden prompts by text.
+    // Threads saved before the `hidden` flag existed (no `hidden` key on the
+    // turn): recognise their hidden prompts by text. Turns saved since carry
+    // hidden: true | false, so a student who types one of these is shown.
     var LEGACY_HIDDEN_PREFIXES = [
       'This is my first time using Mercurius.',
       PROMPTS.debate, PROMPTS.discussion, PROMPTS.unpack, PROMPTS.flagBias, PROMPTS.whyQuestion,
@@ -215,7 +246,8 @@
 
     function isHiddenTurn(msg) {
       if (!msg || msg.role !== 'user') return false;
-      if (msg.hidden === true || isLessonOpener(msg)) return true;
+      if (typeof msg.hidden === 'boolean') return msg.hidden;
+      if (isLessonOpener(msg)) return true;
       var content = String(msg.content || '');
       for (var i = 0; i < LEGACY_HIDDEN_PREFIXES.length; i++) {
         if (content.indexOf(LEGACY_HIDDEN_PREFIXES[i]) === 0) return true;
@@ -249,7 +281,9 @@
     // most 40 messages and ~24 KB (under express's 32kb body cap), oldest
     // dropped first, never starting on an assistant turn — plus a lesson's
     // [CURRICULUM: …] opener pinned at index 0 so a long lesson never falls
-    // out of curriculum mode. Returns new {role, content} objects only.
+    // out of curriculum mode. Behind a pinned opener an assistant turn is
+    // kept: it is the lesson's explanation and exercise the student answers.
+    // Returns new {role, content} objects only.
     function capHistory(history, maxMessages, maxBytes) {
       maxMessages = maxMessages || WIRE_MAX_MESSAGES;
       maxBytes = maxBytes || WIRE_MAX_BYTES;
@@ -265,7 +299,7 @@
       var bytes = 0;
       for (var j = 0; j < trimmed.length; j++) bytes += utf8Length(trimmed[j].content);
       while (bytes > budget && trimmed.length > 1) bytes -= utf8Length(trimmed.shift().content);
-      while (trimmed.length > 1 && trimmed[0].role === 'assistant') trimmed.shift();
+      while (!opener && trimmed.length > 1 && trimmed[0].role === 'assistant') trimmed.shift();
       return opener ? [opener].concat(trimmed) : trimmed;
     }
 
@@ -323,16 +357,26 @@
     }
 
     // ── Numbers shown to students ───────────────────────────────────────────
-    // Only a confidence the reply itself states as a percentage ("I'm about
-    // 70% confident", "Confidence: 80%"). Any other number in the reply is
-    // content (a statistic), not the model's certainty.
+    // Only a percentage the reply states about itself: first person ("I'm
+    // about 70% confident", "my confidence is 60%") or a line that starts
+    // "Confidence: 80%". A number about someone else ("a chatbot might say
+    // it's 95% sure", a quoted "I'm 95% sure") is lesson content, not the
+    // reply's certainty. The character before a match is captured instead of
+    // using lookbehind (see the note at the top of Core).
+    var STATED_CONFIDENCE = [
+      /(^|[^\w"“'‘])I(?:'m|’m|\s+am)\s+(?:about|around|roughly|~)?\s*(\d{1,3})\s*%\s*(?:confident|sure|certain)\b/i,
+      /(^|[^\w"“'‘])my\s+(?:confidence|certainty)(?:\s+level)?\s*(?:is|of|at|:|=)\s*(?:about|around|roughly|~)?\s*(\d{1,3})\s*%/i,
+      /(^|\n)[ \t]*(?:[-*•][ \t]+)?(?:\*\*|__)?(?:confidence|certainty)(?:[ \t]+level)?(?:\*\*|__)?[ \t]*(?::|=|—|-)[ \t]*(?:\*\*|__)?[ \t]*(?:about|around|roughly|~)?[ \t]*(\d{1,3})[ \t]*%/i
+    ];
     function parseStatedConfidence(text) {
       var s = String(text || '');
-      var m = /\b(?:confidence|certainty)(?:\s+level)?\s*(?:is|of|at|:|—|-|=)?\s*(?:about|around|roughly|~)?\s*(\d{1,3})\s*%/i.exec(s) ||
-        /\b(\d{1,3})\s*%\s*(?:confident|sure|certain)\b/i.exec(s);
-      if (!m) return null;
-      var n = parseInt(m[1], 10);
-      return n >= 0 && n <= 100 ? n : null;
+      for (var i = 0; i < STATED_CONFIDENCE.length; i++) {
+        var m = STATED_CONFIDENCE[i].exec(s);
+        if (!m) continue;
+        var n = parseInt(m[2], 10);
+        return n >= 0 && n <= 100 ? n : null;
+      }
+      return null;
     }
 
     function clampScore(v) {
@@ -448,6 +492,9 @@
       consentGranted: consentGranted,
       newSessionId: newSessionId,
       isValidSessionId: isValidSessionId,
+      erasureOutcome: erasureOutcome,
+      mergeErasureIds: mergeErasureIds,
+      erasureRetryDelayMs: erasureRetryDelayMs,
       escapeHtml: escapeHtml,
       escapeAttr: escapeAttr,
       createSseParser: createSseParser,
@@ -509,6 +556,10 @@
   var SESSION_KEY = 'merc_session_id';
   var CONSENT_KEY = 'merc_consent_version';
   var AGE_CHECK_KEY = 'merc_age_check';
+  var PENDING_ERASE_KEY = 'merc_erase_pending';
+  // What "Delete my data" clears from this browser at once, even when the
+  // server copy can't be erased yet.
+  var TRANSCRIPT_KEYS = ['merc_convos', 'merc_bookmarks', 'merc_lessons', 'merc_curriculum', 'merc_achievements', 'merc_mode'];
   function safeGetItem(key) { try { return localStorage.getItem(key); } catch(e) { console.warn('[Mercurius]', e); return null; } }
   function safeSetItem(key, val) { try { localStorage.setItem(key, val); } catch(e) { console.warn('[Mercurius]', e); } }
   function safeRemoveItem(key) { try { localStorage.removeItem(key); } catch(e) { console.warn('[Mercurius]', e); } }
@@ -549,6 +600,23 @@
 
   function hasConsent() {
     return Core.consentGranted(readGateStore());
+  }
+
+  // Chats, bookmarks and progress are written only while consent stands, so
+  // a tab still holding a thread after "Delete my data" can't write it back.
+  function saveLocal(key, value) {
+    if (hasConsent()) safeSetItem(key, value);
+  }
+
+  var memoryPending = [];
+  function getPendingErasures() {
+    if (storageOK) memoryPending = Core.mergeErasureIds(readJSON(PENDING_ERASE_KEY, []), []);
+    return memoryPending.slice();
+  }
+  function setPendingErasures(ids) {
+    memoryPending = Core.mergeErasureIds(ids, []);
+    if (memoryPending.length) safeSetItem(PENDING_ERASE_KEY, JSON.stringify(memoryPending));
+    else safeRemoveItem(PENDING_ERASE_KEY);
   }
 
   function fillRandom(bytes) {
@@ -651,6 +719,7 @@
   // active request and bump the generation so a stale stream can never touch
   // the new conversation's history or loading state.
   var activeController = null;
+  var activeCleanup = null;
   var requestGeneration = 0;
 
   function abortActiveRequest() {
@@ -658,6 +727,13 @@
     if (activeController) {
       activeController.abort();
       activeController = null;
+    }
+    // The aborted request's handlers now return early (stale generation),
+    // so its typing dots, partial bubble and unanswered turn go here.
+    if (activeCleanup) {
+      var cleanup = activeCleanup;
+      activeCleanup = null;
+      cleanup();
     }
     setLoading(false);
   }
@@ -687,6 +763,7 @@
   }
   function saveCurrentConversation() {
     if (conversationHistory.length < 2) return; // don't save empty chats
+    if (!hasConsent()) return;
     var list = getConversationList();
     var entry = {
       id: currentConversationId || ('conv_' + Date.now()),
@@ -705,7 +782,7 @@
     if (!found) list.unshift(entry);
     // Keep max 20 conversations
     if (list.length > 20) list = list.slice(0, 20);
-    safeSetItem('merc_convos', JSON.stringify(list));
+    saveLocal('merc_convos', JSON.stringify(list));
     currentConversationId = entry.id;
   }
   function loadConversation(convo) {
@@ -721,7 +798,7 @@
     // must switch it back.
     if (convo.mode && ['socratic', 'debate', 'discussion'].indexOf(convo.mode) !== -1 && convo.mode !== currentMode) {
       currentMode = convo.mode;
-      safeSetItem('merc_mode', currentMode);
+      saveLocal('merc_mode', currentMode);
       updateModeBar();
       postMode(currentMode);
     }
@@ -760,6 +837,24 @@
     userMessageCount = 0;
     summaryFetched = false;
     resetMessagesArea();
+  }
+  // After this browser's data is erased (here or in another tab): forget
+  // the thread without saving it, and clear everything on screen from it.
+  function resetThreadState() {
+    conversationHistory = [];
+    currentConversationId = 'conv_' + Date.now();
+    currentLessonId = null;
+    userMessageCount = 0;
+    summaryFetched = false;
+    debateRound = 0;
+    currentMode = 'socratic';
+    updateModeBar();
+    resetMessagesArea();
+    renderHistoryList();
+    var summary = document.getElementById('merc-summary-content');
+    if (summary) summary.innerHTML = '';
+    var badge = document.getElementById('merc-header-streak');
+    if (badge) badge.classList.add('merc-hidden');
   }
   var CURRICULUM_UNITS = [
     { id: 'unit_1', number: '01', title: 'How AI Actually Works', description: 'LLMs, training data, next-token prediction, and why AI sounds confident but can be wrong.',
@@ -872,10 +967,11 @@
     return Array.isArray(list) ? list : [];
   }
   function awardAchievement(id) {
+    if (!hasConsent()) return false;
     var existing = getAchievementsLocal();
     if (existing.indexOf(id) !== -1) return false; // already have it
     existing.push(id);
-    safeSetItem('merc_achievements', JSON.stringify(existing));
+    saveLocal('merc_achievements', JSON.stringify(existing));
     return true; // newly earned
   }
   function checkAndAwardAchievement(id) {
@@ -891,23 +987,24 @@
   function setCurriculumUnit(unitId, status) {
     var progress = getCurriculumProgress();
     progress[unitId] = status;
-    safeSetItem('merc_curriculum', JSON.stringify(progress));
+    saveLocal('merc_curriculum', JSON.stringify(progress));
   }
   function getBookmarksLocal() {
     var list = readJSON('merc_bookmarks', []);
     return Array.isArray(list) ? list : [];
   }
   function addBookmarkLocal(text, role) {
+    if (!hasConsent()) return null;
     var bookmarks = getBookmarksLocal();
     var entry = { id: Date.now().toString(), text: text, role: role || 'assistant', savedAt: new Date().toISOString() };
     bookmarks.unshift(entry);
     if (bookmarks.length > 50) bookmarks = bookmarks.slice(0, 50);
-    safeSetItem('merc_bookmarks', JSON.stringify(bookmarks));
+    saveLocal('merc_bookmarks', JSON.stringify(bookmarks));
     return entry;
   }
   function removeBookmarkLocal(id) {
     var bookmarks = getBookmarksLocal().filter(function(b) { return b.id !== id; });
-    safeSetItem('merc_bookmarks', JSON.stringify(bookmarks));
+    saveLocal('merc_bookmarks', JSON.stringify(bookmarks));
   }
 
   function showToast(html, duration) {
@@ -943,7 +1040,8 @@
   // =========================================================================
   function gateStepHTML(step) {
     var h = isStandalonePWA() ? '' : '<button type="button" class="merc-gate-close" data-gate="close" aria-label="Close">&#10005;</button>';
-    if (gateNotice) h += '<p class="merc-gate-notice" role="status">' + escapeHtml(gateNotice) + '</p>';
+    // No role=status here: showGate announces the notice through #merc-live.
+    if (gateNotice) h += '<p class="merc-gate-notice">' + escapeHtml(gateNotice) + '</p>';
     if (step === 'meet') {
       h += '<div class="merc-onboard-icon" aria-hidden="true">M&#8544;</div>' +
         '<h2 tabindex="-1">Welcome to Mercurius &#8544;</h2>' +
@@ -1056,6 +1154,18 @@
       renderGate(isOpen);
     }
     return true;
+  }
+
+  // Re-enter the gate at whatever step storage now calls for, with an
+  // optional notice above it.
+  function showGate(notice) {
+    gateStep = Core.gateStart(readGateStore());
+    var shown = gateStep === 'done' ? '' : (notice || '');
+    var changed = !!shown && shown !== gateNotice;
+    gateNotice = shown;
+    renderGate(isOpen);
+    if (gateStep === 'done') onGateCleared();
+    else if (changed) announce(shown);
   }
 
   function attachGateEvents() {
@@ -1178,7 +1288,6 @@
       '      <button class="merc-close-btn" id="merc-close-btn" aria-label="Close">&#10005;</button>',
       '    </div>',
 
-      '    <div class="merc-sr-only" id="merc-live" aria-live="polite"></div>',
       '    <div class="merc-messages" id="merc-messages">',
       '      <div class="merc-topic-tags" id="merc-topic-tags">',
       '        <div class="merc-topic-tags-label">Start with a topic</div>',
@@ -1221,6 +1330,10 @@
       '<div class="merc-onboard" id="merc-onboard">',
       '  <div class="merc-onboard-card" id="merc-gate-card"></div>',
       '</div>',
+
+      // Panel level, outside everything setPanelContentInert hides, so a
+      // notice shown with the gate is still read out.
+      '<div class="merc-sr-only" id="merc-live" aria-live="polite"></div>',
 
     ].join('');
 
@@ -1692,7 +1805,7 @@
     var p = getLessonProgress();
     if (p[lessonId] === 'complete') return;
     p[lessonId] = status;
-    safeSetItem('merc_lessons', JSON.stringify(p));
+    saveLocal('merc_lessons', JSON.stringify(p));
   }
   function markLessonComplete(lessonId) {
     var found = findLesson(lessonId);
@@ -1889,9 +2002,10 @@
       (id ? '<button type="button" class="merc-bookmark-copy" id="merc-data-copy">Copy</button>' : '') + '</div>' +
       '<p class="merc-data-hint">It\'s the only thing that links this browser to your data. To ask us to delete it, email ' +
       '<a href="mailto:' + PRIVACY_EMAIL + '">' + PRIVACY_EMAIL + '</a> with this ID.</p>' +
+      '<div id="merc-data-pending"></div>' +
       '<button type="button" class="merc-data-delete" id="merc-data-delete" aria-expanded="false" aria-controls="merc-data-confirm">Delete my data &amp; start over</button>' +
       '<div class="merc-data-confirm merc-hidden" id="merc-data-confirm">' +
-      '<p>This erases your chats, lessons and progress in this browser and on our server. This browser gets a new anonymous ID, and you\'ll see the age check and agreement again. This can\'t be undone.</p>' +
+      '<p>This erases your chats, lessons and progress in this browser and asks our server to delete its copy. This browser gets a new anonymous ID. Once our server confirms, you\'ll see the age check and agreement again. This can\'t be undone.</p>' +
       '<div class="merc-data-confirm-actions">' +
       '<button type="button" class="merc-data-delete merc-data-delete-confirm" id="merc-data-delete-confirm">Delete</button>' +
       '<button type="button" class="merc-bookmark-copy" id="merc-data-cancel">Cancel</button>' +
@@ -1901,12 +2015,14 @@
       '<p class="merc-data-hint">' + escapeHtml(CRISIS_LINE) + '</p>' +
       '</div>';
     body.insertAdjacentHTML('afterbegin', html);
+    renderPendingErasures();
 
     var copyBtn = document.getElementById('merc-data-copy');
     if (copyBtn) {
       copyBtn.addEventListener('click', function() {
-        if (!navigator.clipboard) return;
-        navigator.clipboard.writeText(id).then(function() {
+        var shown = document.getElementById('merc-data-id');
+        if (!navigator.clipboard || !shown) return;
+        navigator.clipboard.writeText(shown.textContent).then(function() {
           copyBtn.textContent = 'Copied!';
           setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
         }).catch(function(e) { console.warn('[Mercurius]', e); });
@@ -1916,6 +2032,10 @@
     var confirmBox = document.getElementById('merc-data-confirm');
     var confirmBtn = document.getElementById('merc-data-delete-confirm');
     var cancelBtn = document.getElementById('merc-data-cancel');
+    var closeConfirm = function() {
+      confirmBox.classList.add('merc-hidden');
+      deleteBtn.setAttribute('aria-expanded', 'false');
+    };
     if (deleteBtn && confirmBox) {
       deleteBtn.addEventListener('click', function() {
         confirmBox.classList.remove('merc-hidden');
@@ -1925,68 +2045,169 @@
     }
     if (cancelBtn && confirmBox) {
       cancelBtn.addEventListener('click', function() {
-        confirmBox.classList.add('merc-hidden');
-        deleteBtn.setAttribute('aria-expanded', 'false');
+        closeConfirm();
         deleteBtn.focus();
       });
     }
-    if (confirmBtn) confirmBtn.addEventListener('click', function() { deleteMyData(confirmBtn, cancelBtn); });
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function() {
+        confirmBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+        deleteMyData(function() {
+          confirmBtn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          closeConfirm();
+          deleteBtn.focus();
+        });
+      });
+    }
   }
 
-  // DELETE /api/session/:id first; local data is cleared and the id rotated
-  // only once the server confirms. On any failure nothing is cleared, so the
-  // id whose server data still exists is never thrown away.
-  function deleteMyData(confirmBtn, cancelBtn) {
+  // Ids this browser asked to erase that the server hasn't confirmed yet.
+  function renderPendingErasures() {
+    var el = document.getElementById('merc-data-pending');
+    if (!el) return;
+    var ids = getPendingErasures();
+    if (!ids.length) { el.innerHTML = ''; return; }
+    var one = ids.length === 1;
+    el.innerHTML = '<div class="merc-data-label">Still to delete from our server</div>' +
+      ids.map(function(id) { return '<div class="merc-data-id-row"><code class="merc-data-id">' + escapeHtml(id) + '</code></div>'; }).join('') +
+      '<p class="merc-data-hint">The chats under ' + (one ? 'this old ID are' : 'these old IDs are') +
+      ' already gone from this browser, which keeps asking our server to delete its copy too. To follow up, email ' +
+      '<a href="mailto:' + PRIVACY_EMAIL + '">' + PRIVACY_EMAIL + '</a> with ' + (one ? 'this ID' : 'these IDs') + '.</p>';
+  }
+
+  function setDataStatus(text) {
     var status = document.getElementById('merc-data-status');
-    var id = safeGetItem(SESSION_KEY) || sessionId;
-    var failMsg = function(connection) {
-      return (connection ? 'Couldn’t reach the server to delete your data.' : 'Couldn’t delete your data right now.') +
-        ' Nothing was deleted. Try again, or email ' + PRIVACY_EMAIL + ' with your ID above.';
-    };
-    if (confirmBtn) confirmBtn.disabled = true;
-    if (cancelBtn) cancelBtn.disabled = true;
-    if (status) status.textContent = 'Deleting…';
+    if (status) status.textContent = text;
+  }
+
+  // One DELETE per id. The erasure is the one request that skips apiFetch's
+  // consent guard: it only ever removes what this browser already sent.
+  function eraseOnServer(id) {
+    return fetch(SESSION_ENDPOINT + encodeURIComponent(id), { method: 'DELETE' }).then(function(res) {
+      return res.json().catch(function() { return null; }).then(function(body) {
+        return { outcome: Core.erasureOutcome(res.status, body), retryAfter: res.headers.get('Retry-After') };
+      });
+    }, function() { return { outcome: 'network', retryAfter: null }; });
+  }
+
+  // Resolves { left: ids the server still holds, outcome, retryAfter }.
+  function eraseAll(ids) {
+    return Promise.all(ids.map(eraseOnServer)).then(function(results) {
+      var r = { left: [], outcome: 'ok', retryAfter: null };
+      results.forEach(function(res, i) {
+        if (res.outcome === 'ok') return;
+        r.left.push(ids[i]);
+        if (r.outcome === 'ok') r.outcome = res.outcome;
+        if (res.retryAfter) r.retryAfter = res.retryAfter;
+      });
+      return r;
+    });
+  }
+
+  // `tried` is what one attempt sent; another tab may have queued more since.
+  function settlePendingErasures(tried, left) {
+    var keep = getPendingErasures().filter(function(id) { return tried.indexOf(id) === -1; });
+    setPendingErasures(keep.concat(left));
+    renderPendingErasures();
+  }
+
+  var erasureTimer = null;
+  var erasureAttempts = 0;
+  var MAX_ERASURE_RETRIES = 6; // per page view; every widget load tries again
+
+  function scheduleErasureRetry(retryAfter) {
+    if (erasureTimer || erasureAttempts >= MAX_ERASURE_RETRIES || !getPendingErasures().length) return;
+    erasureTimer = setTimeout(function() {
+      erasureTimer = null;
+      erasureAttempts++;
+      retryPendingErasures();
+    }, Core.erasureRetryDelayMs(erasureAttempts, retryAfter));
+  }
+
+  function retryPendingErasures() {
+    var ids = getPendingErasures();
+    if (!ids.length) return;
+    eraseAll(ids).then(function(r) {
+      settlePendingErasures(ids, r.left);
+      if (r.left.length) scheduleErasureRetry(r.retryAfter);
+      else setDataStatus('Your old data was deleted from our server too.');
+    });
+  }
+
+  // Erase this browser's id (and any older one still waiting) on the server.
+  // Confirmed: every merc_* key goes, the id rotates, the gate shows again.
+  // Not confirmed: the transcripts still leave this browser now, so the next
+  // person on a shared computer can't open them, and the id rotates so new
+  // chats (and Quiz or Report Card, which read the server's copy) aren't
+  // filed under it; the old id is kept, shown, and retried until confirmed.
+  function deleteMyData(done) {
+    var current = safeGetItem(SESSION_KEY) || sessionId;
+    var ids = Core.mergeErasureIds(getPendingErasures(), [current]);
+    setDataStatus('Deleting…');
     // A reply still streaming under this id could re-create it after erasure.
     abortActiveRequest();
 
-    var erase = Core.isValidSessionId(id)
-      ? fetch(SESSION_ENDPOINT + encodeURIComponent(id), { method: 'DELETE' })
-          .then(function(res) {
-            return res.json().catch(function() { return {}; }).then(function(body) {
-              return res.ok && body && body.ok === true ? 'ok' : 'refused';
-            });
-          }, function() { return 'network'; })
-      : Promise.resolve('ok'); // never minted, so nothing on the server
-
-    erase.then(function(outcome) {
-      if (outcome !== 'ok') {
-        if (status) status.textContent = failMsg(outcome === 'network');
-        if (confirmBtn) confirmBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+    eraseAll(ids).then(function(r) {
+      if (!r.left.length) {
+        clearAllLocalData();
+        memoryPending = [];
+        memoryGate.consentVersion = 0;
+        memoryGate.ageBlocked = false;
+        sessionId = null;
+        resetThreadState();
+        closeRightPanel();
+        showGate('Your data was deleted from this browser and our server.');
         return;
       }
-      clearAllLocalData();
-      memoryGate.consentVersion = 0;
-      memoryGate.ageBlocked = false;
+      TRANSCRIPT_KEYS.forEach(safeRemoveItem);
+      settlePendingErasures(ids, r.left);
+      safeRemoveItem(SESSION_KEY);
       sessionId = null;
-      conversationHistory = [];
-      currentConversationId = 'conv_' + Date.now();
-      currentLessonId = null;
-      userMessageCount = 0;
-      summaryFetched = false;
-      debateRound = 0;
-      currentMode = 'socratic';
-      updateModeBar();
-      resetMessagesArea();
-      renderHistoryList();
-      var badge = document.getElementById('merc-header-streak');
-      if (badge) badge.classList.add('merc-hidden');
-      closeRightPanel();
-      gateNotice = 'Your data was deleted from this browser and our server.';
-      gateStep = Core.gateStart(readGateStore());
-      renderGate(true);
-      announce(gateNotice);
+      var fresh = ensureSessionId();
+      resetThreadState();
+      var shown = document.getElementById('merc-data-id');
+      if (shown) shown.textContent = fresh;
+      var why = r.outcome === 'network' ? 'We couldn’t reach our server, so its copy isn’t deleted yet. This browser will try again when it’s back online.'
+        : r.outcome === 'rate_limited' ? 'Our server is busy, so its copy isn’t deleted yet. This browser will try again in a minute or two.'
+        : 'Our server couldn’t delete its copy yet. This browser will try again.';
+      setDataStatus('Your chats, lessons and bookmarks were cleared from this browser, and it has a new ID. ' + why +
+        ' The old ID is listed above if you want to email us.');
+      scheduleErasureRetry(r.retryAfter);
+      if (done) done();
     });
+  }
+
+  // Another tab or window of this widget (a second tab, the installed PWA)
+  // shares this storage. When it erases this browser's data, drop the thread
+  // held here as well, or the next save here would write it back.
+  function onStorageChange(e) {
+    try { if (e.storageArea && e.storageArea !== window.localStorage) return; } catch (err) { return; }
+    var k = e.key;
+    var erased = k === null || ((k === 'merc_convos' || k === SESSION_KEY) && e.newValue === null);
+    if (!erased && k !== CONSENT_KEY && k !== AGE_CHECK_KEY) return;
+    if (erased) {
+      abortActiveRequest();
+      sessionId = null;
+      resetThreadState();
+      closeRightPanel();
+      hideTooltip();
+    }
+    if (Core.gateStart(readGateStore()) !== 'done') {
+      showGate(erased ? 'Your data was cleared from this browser in another tab or window.' : '');
+      return;
+    }
+    if (gateStep !== 'done') showGate('');
+    if (erased) {
+      var container = document.getElementById('merc-messages');
+      if (container) {
+        var note = document.createElement('div');
+        note.className = 'merc-msg merc-msg-notice';
+        note.textContent = 'Your chats were cleared from this browser in another tab or window.';
+        container.insertBefore(note, container.firstChild);
+      }
+    }
   }
 
   // =========================================================================
@@ -2264,8 +2485,7 @@
       appendUserMessage(text);
     }
 
-    var turn = { role: 'user', content: text };
-    if (isHidden) turn.hidden = true;
+    var turn = { role: 'user', content: text, hidden: isHidden };
     conversationHistory.push(turn);
 
     setLoading(true);
@@ -2277,15 +2497,21 @@
     var streamBubble = null;
     var fullText = '';
 
+    // The turn got no reply: drop it so a retry (or the next message)
+    // doesn't send it twice. Also run by abortActiveRequest.
+    function dropUnanswered() {
+      removeTyping(typingId);
+      if (streamBubble) markStreamCutOff(streamBubble, fullText);
+      if (conversationHistory[conversationHistory.length - 1] === turn) conversationHistory.pop();
+    }
+    activeCleanup = dropUnanswered;
+
     function fail(problem) {
       if (gen !== requestGeneration) return;
       activeController = null;
-      removeTyping(typingId);
+      activeCleanup = null;
       setLoading(false);
-      if (streamBubble) markStreamCutOff(streamBubble, fullText);
-      // The turn got no reply: drop it so a retry (or the next message)
-      // doesn't send it twice.
-      if (conversationHistory[conversationHistory.length - 1] === turn) conversationHistory.pop();
+      dropUnanswered();
       appendErrorNotice(problem.message, Core.isRetryable(problem.code) ? function () {
         sendMessage(text, isHidden, { retry: true });
       } : null);
@@ -2294,6 +2520,7 @@
     function finish(data) {
       if (gen !== requestGeneration) return;
       activeController = null;
+      activeCleanup = null;
       removeTyping(typingId);
       setLoading(false);
       if (streamBubble) {
@@ -2554,7 +2781,7 @@
     bookmarkBtn.innerHTML = 'Save';
     (function(capturedText) {
       bookmarkBtn.addEventListener('click', function() {
-        addBookmarkLocal(capturedText, 'assistant');
+        if (!addBookmarkLocal(capturedText, 'assistant')) { showGateIfNeeded(); return; }
         bookmarkBtn.innerHTML = '\u2713';
         bookmarkBtn.style.color = '#4ade80';
         checkAndAwardAchievement('bookmarker');
@@ -2800,7 +3027,7 @@
     el.className = 'merc-confidence';
 
     if (confidence === null) {
-      el.innerHTML = '<div class="merc-confidence-unverified" title="Ask how sure it is — and remember that sounding sure isn’t the same as being right.">Confidence: not stated — ask how sure it is</div>';
+      el.innerHTML = '<div class="merc-confidence-unverified" title="Ask how sure it is — and remember that sounding sure isn’t the same as being right.">No confidence number given — ask how sure it is</div>';
     } else {
       var colorClass =
         confidence >= 70 ? 'merc-conf-green' :
@@ -3022,7 +3249,7 @@
 
     // Update state
     currentMode = newMode;
-    safeSetItem('merc_mode', currentMode);
+    saveLocal('merc_mode', currentMode);
     updateModeBar();
 
     var container = document.getElementById('merc-messages');
@@ -3347,6 +3574,11 @@
 
     // Initialize conversation ID for this session
     currentConversationId = 'conv_' + Date.now();
+
+    window.addEventListener('storage', onStorageChange);
+    // An erasure the server didn't confirm last time is asked for again.
+    retryPendingErasures();
+    window.addEventListener('online', retryPendingErasures);
 
     // Offline banner retry button
     var retryBtn = document.querySelector('.merc-offline-retry');
