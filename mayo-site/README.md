@@ -15,7 +15,7 @@ mayo-site/
 ├── events.html       # Meeting schedule + upcoming + past (from JSON)
 ├── blog.html         # Post listing (from JSON)
 ├── blog-post.html    # Single-post renderer (?id=<post-id>)
-├── mercurius.html    # Mercurius Ⅰ showcase — iOS app + browser widget
+├── mercurius.html    # Mercurius AI showcase — the iOS app (no web widget)
 ├── join.html         # Join box + Netlify contact form
 ├── 404.html          # Branded not-found page
 ├── _redirects        # Netlify redirects (old URLs → new homes)
@@ -23,11 +23,14 @@ mayo-site/
 ├── script.js         # Nav toggle, fade-ins, shared JSON fetch
 ├── blog-content.json # ★ THE blog — site renders it, the app reads it
 ├── events-data.json  # ★ THE schedule — site renders it, the app reads it
-├── logo.png          # Club logo (512px, also the favicon/og image)
+├── logo.png          # Club logo (512px), the og:image for link previews
+├── robots.txt, sitemap.xml
 ├── widget.{js,css}, manifest.json, sw.js, icons/
-│                     # Mercurius web widget + PWA (carried over as-is)
+│                     # Old web widget + PWA files — not live, see below
 ├── blog-anthropic-pentagon.html  # Bespoke article page (self-contained)
-└── assets/           # Board photos (optimized), sponsor logo
+└── assets/           # club-logo-128.png (header logo + favicon), board
+                      # photos (312px), sponsor logo, Mercurius logo,
+                      # app-store-badge.svg (Apple's badge, self-hosted)
 ```
 
 ## ★ The two JSON files are load-bearing
@@ -55,7 +58,7 @@ one place to edit:
 | Member quotes (ticker) | `index.html` → `QUOTES` array |
 | Board members + photos | `about.html` + `assets/board-*.jpg` |
 | Topics / resources | `topics.html` |
-| App Store badge (launch day!) | `mercurius.html` → "LAUNCH DAY" comment |
+| App Store badge | `assets/app-store-badge.svg`, used by `index.html` and `mercurius.html` |
 | Sponsor | `index.html` → "SUPPORTERS" section |
 | Brand colors / fonts | `styles.css` → `:root` tokens |
 
@@ -70,26 +73,29 @@ URLs (`/about`) are a Netlify behavior.
 
 ## Deploy
 
-Netlify site with **publish directory `mayo-site`**, no build command,
-auto-deploys on push to `main` (a second Netlify site on this same repo,
-alongside the one publishing `marketing/`). After the FIRST deploy:
+mayoailiteracy.com is **not** deployed from this folder. It is served by
+Netlify from the separate `mayo-ai-literacy-club` repo, whose site lives in
+its own `mayo-site/` folder and whose root `netlify.toml` carries the
+security headers and the CSP (`img-src 'self' data:`, `connect-src
+'self'`). This folder is the working copy: edit here, then copy the
+changed files over, commit and push there.
 
-1. **Forms**: enable form detection (Site configuration → Forms) and add
-   a notification email — the Join form is a Netlify Form named
-   `contact`; without this, submissions land in the dashboard unnoticed.
-2. **Domain cutover**: move `mayoailiteracy.com` from the old Netlify
-   site to this one, then immediately verify:
-   `curl -s https://mayoailiteracy.com/blog-content.json | head` and
-   `curl -s https://mayoailiteracy.com/events-data.json | head`
-   (the app's backend depends on both).
+Copy only the site pages and assets. **Do not copy** `widget.js`,
+`widget.css`, `manifest.json` or `sw.js`: the live site removed the web
+widget in June 2026, and its `sw.js` is a self-unregistering kill switch
+that must stay. Nothing on these pages loads a third-party image or calls
+another origin, so the live CSP needs no change.
+
+After a copy, check:
+`curl -s https://mayoailiteracy.com/blog-content.json | head` and
+`curl -s https://mayoailiteracy.com/events-data.json | head`
+(the app's backend depends on both).
 
 ## Carried over from the old site, on purpose
 
-- The Mercurius **web widget + PWA** (`widget.js`, `sw.js`,
-  `manifest.json`, `/icons`) — Chromebook/Android users use this. The
-  service worker caches `/mercurius.html`, `/widget.js`, `/widget.css`,
-  `/manifest.json`; all four paths still exist here.
 - `blog-anthropic-pentagon.html` — a bespoke, self-contained article
-  page; the blog listing links to it via the `CUSTOM_URLS` map.
+  page; the blog listing links to it via the `CUSTOM_URLS` map. Keep its
+  images as files under `assets/`, never pasted in as `data:` URIs (an
+  editor export once made it 2.7 MB).
 - The old `/board`, `/groups`, `/resources` URLs 301 to their new homes
   (see `_redirects`).

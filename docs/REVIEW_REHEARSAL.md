@@ -48,14 +48,17 @@ Tick each line only when you saw the expected result yourself.
 ### First launch and the age gate
 
 1. **Fresh install → open the app.**
-   Expected: the age check is the first screen. No tutor content, no chat
-   input, no network spinner before it.
+   Expected: "Meet Merc" (the mascot intro), then after Continue the age
+   check. No tutor content, no chat input, no network spinner before it.
 
 2. **Enter age 12.**
-   Expected: a short "not available under 13" message and nothing else — no
-   way past it, no link into the app. Force-quit and relaunch: the age check
-   appears again (nothing was persisted). Nothing should have hit the server
-   (you will confirm this in step 7).
+   Expected: "Mercurius is for ages 13 and up" and nothing that leads into
+   the app. Force-quit and relaunch: the first-run flow starts again
+   (nothing was persisted). Nothing should have hit the server (you will
+   confirm this in step 7). Build 15 also shows "I picked the wrong age",
+   which reopens the age picker; FTC guidance for neutral age screens
+   discourages a way back, so decide whether that button stays before you
+   submit.
 
 3. **Delete the app, reinstall from TestFlight, enter age 15.**
    Expected: the **disclosure** screen: messages and attached photos go
@@ -74,10 +77,11 @@ Tick each line only when you saw the expected result yourself.
    is shown. Continue.
 
 6. **"Your path" → Lesson 1.**
-   Expected: Lesson 1 ("What happens when you type a prompt") is offered with
-   a daily-reminder toggle, off by default. Leave the toggle off for now. Tap
-   **Start**: the lesson streams in beats and at least one **KEY IDEA** or
-   **CHECK** card appears and expands when tapped.
+   Expected: Unit 1's lessons are listed, with a Reminders section holding
+   two switches, both off: "Weekly nudges (Wed & Sun)" and "Daily streak
+   reminder". Leave them off for now. Tap **Start Lesson 1**: the lesson
+   streams in beats and at least one **KEY IDEA** or **CHECK** card appears
+   and expands when tapped.
 
 7. **Confirm nothing reached the server before Agree.** Pick one:
 
@@ -159,6 +163,9 @@ Tick each line only when you saw the expected result yourself.
     export OLD_ID='<paste the id>'
     curl -s "$BASE/api/session/$OLD_ID"
     # expect: {"stats":{"session":{"streak":...,"message_count":N,...}}}  with N > 0
+    curl -s "$BASE/api/progress/$OLD_ID"
+    # expect: "lessons":[{"id":"u1_l1","status":"completed",...}] once Lesson 1 is finished
+    #         (an empty "lessons":[] if you have not finished it yet)
     ```
 
 14. **Delete my data & start over.** Settings → **Delete my data & start
@@ -169,6 +176,8 @@ Tick each line only when you saw the expected result yourself.
     ```bash
     curl -s "$BASE/api/session/$OLD_ID"
     # expect: {"stats":{"session":null}}   — the old session is gone
+    curl -s "$BASE/api/progress/$OLD_ID"
+    # expect: "lessons":[] and "units":[]   — the synced checklist went with it
     ```
 
     (The server's `DELETE /api/session/:id` is idempotent, so the app calling
@@ -220,28 +229,34 @@ Tick each line only when you saw the expected result yourself.
 22. **Every marketing link resolves.** On the Mac:
 
     ```bash
-    for p in privacy terms support get; do
+    for p in privacy terms support feedback get Get GET; do
       printf '%-8s ' "$p"; curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://trymercurius.com/$p"
     done
     # expect: 200 for each (a 301/302 is fine only if the target then returns 200)
     ```
 
     Also load each on the phone in Safari. `/support` must show
-    `support@trymercurius.com`. `/get` must land on the App Store page for
-    id 6773192313 (or the site's download page).
+    `support@trymercurius.com`. `/get` must land on the TestFlight join page
+    while 2.3.0 is in review, and on the App Store page for id 6773192313
+    once it is approved (flip all three `/get` lines in
+    `marketing/_redirects` together).
 
 23. **What's New matches the build.** Read the 2.3.0 What's New text in
     `APP_STORE_LISTING.md` §1 line by line against what you just rehearsed:
     first-launch flow, delete & start over, copyable session id, Privacy
-    choices / Help & FAQ / Contact support, report with a reason, daily-limit
-    and pause copy, https-only links and no remote images. Every bullet must
+    choices / Help & FAQ / Contact support, Home's next lesson and weekly
+    goal, lessons saved across a reinstall, the two opt-in reminders, report
+    with a reason, daily-limit and pause copy, https-only links and no remote
+    images. Every bullet must
     describe something you saw in **this** build. Remove any bullet you could
     not verify before pasting it into App Store Connect.
 
-24. **Reminder toggle (optional feature).** Home → turn the daily reminder on.
+24. **Reminder switches (optional feature).** Tap the flame in the chat
+    header → Progress → Reminders → turn on "Weekly nudges (Wed & Sun)".
     Expected: the iOS notification permission prompt appears now (not at
-    launch); allowing it schedules a local reminder; denying it shows the
+    launch); allowing it schedules the local reminders; denying it shows the
     "Notifications are off for Mercurius…" hint instead of failing silently.
+    Turning on one switch never turns on the other.
 
 ## When everything passes
 
