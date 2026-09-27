@@ -52,13 +52,19 @@ Tick each line only when you saw the expected result yourself.
    check. No tutor content, no chat input, no network spinner before it.
 
 2. **Enter age 12.**
-   Expected: "Mercurius is for ages 13 and up" and nothing that leads into
-   the app. Force-quit and relaunch: the first-run flow starts again
-   (nothing was persisted). Nothing should have hit the server (you will
-   confirm this in step 7). Build 15 also shows "I picked the wrong age",
-   which reopens the age picker; FTC guidance for neutral age screens
-   discourages a way back, so decide whether that button stays before you
-   submit.
+   Expected, build 15: "Mercurius is for ages 13 and up" and nothing that
+   leads into the app, plus an "I picked the wrong age" button that reopens
+   the age picker. Force-quit and relaunch: the first-run flow starts again
+   at "Meet Merc" (nothing was persisted).
+   Expected, a build with the age-gate hardening (fix/ios-hardening): the
+   wheel opens on "Select your age" and Continue stays off until you pick;
+   after 12 the same stop screen shows with no button at all. Force-quit
+   and relaunch: the app opens straight on the stop screen, and stays there
+   for 7 days (only the time of the block is kept on the device, not the
+   age). Deleting the app clears it, which step 3 relies on.
+   Either build: nothing should have hit the server (you will confirm this
+   in step 7), and App Review note 1 (APP_STORE_LISTING.md §4) must describe
+   the build you saw.
 
 3. **Delete the app, reinstall from TestFlight, enter age 15.**
    Expected: the **disclosure** screen: messages and attached photos go

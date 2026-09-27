@@ -515,6 +515,12 @@ line only when I have seen the result myself.
 - [ ] Variables set: `ANTHROPIC_API_KEY`, `DATABASE_URL` (Postgres, not
       SQLite), `ADMIN_PASSWORD` (32+ random chars), `IP_HASH_SALT` (32+,
       never rotated), `ALLOWED_ORIGIN`, `USE_UNIFIED_PROMPT=1`.
+- [ ] Drain window: Railway must let the old server run at least 35 s
+      after a deploy starts, or open lessons are cut off mid-reply. If
+      `railway.toml` on main has a `drainingSeconds` line, that sets it:
+      delete `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from Variables if it is
+      there (DEPLOY.md). If it has no such line, set
+      `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=35`.
 - [ ] `DISCORD_WEBHOOK_URL` set and **tested**: flip the kill switch on
       and off (REVIEW_REHEARSAL steps 10–11) and see both messages in the
       alerts channel. Alerts channel notifications on, on my phone.
@@ -535,9 +541,14 @@ line only when I have seen the result myself.
       `CHAT_IP_PER_MIN=300`): the whole club installs behind one school
       address on Thursday. Do not set the eval-server value of 1000 in
       production.
-- [ ] Migration 002 ran on its own when the deploy booted (no laptop
-      step). Check it: in the Railway Postgres Data tab,
-      `SELECT to_regclass('student_memory');` returns NULL.
+- [ ] The old student-notes table is gone: in the Railway Postgres Data
+      tab, `SELECT to_regclass('student_memory');` returns NULL. A build
+      that has `DROP TABLE IF EXISTS student_memory` in `db.js` drops it at
+      every boot. If the query returns the table, press **Redeploy** on the
+      current main build and check again; if it is still there, run
+      migration 002 from inside the service with
+      `railway ssh -- npm run migrate` (a laptop's `railway run` cannot
+      reach the private Postgres host) and check again.
 - [ ] The Anthropic org's rate limits cover a room of 25. Peak is about
       40 requests/min (25 students, one turn each every 40–60 s); a lesson
       turn is ~9k cached + ~0.6k uncached input tokens (up to ~3k) and
