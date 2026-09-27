@@ -451,7 +451,7 @@
     container.innerHTML = pastMeetings.map(function(m, i) {
       return '<div class="past-item">' +
         '<div class="past-item-info">' +
-          '<div class="past-item-date">' + (m.date || '') + '</div>' +
+          '<div class="past-item-date">' + escHtml(m.date || '') + '</div>' +
           '<div class="past-item-title">' + escHtml(m.title || '') + '</div>' +
           '<div class="past-item-desc">' + escHtml((m.description || '').slice(0, 100)) + (m.description && m.description.length > 100 ? '…' : '') + '</div>' +
         '</div>' +

@@ -78,6 +78,10 @@ jobs:
           node --version
           npm --version
 
+      - name: Check web widget copies are in sync
+        # mayo-site/widget.{js,css} are generated from public/.
+        run: node scripts/sync-widget.mjs --check
+
       - name: Install dependencies
         # `npm ci` fails fast if package-lock.json is out of sync
         # with package.json — better than `npm install` in CI.

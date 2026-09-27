@@ -1,5 +1,7 @@
 // Mercurius Ⅰ Service Worker — enables PWA install + basic caching
-var CACHE_NAME = 'mercurius-v3';
+// Bump CACHE_NAME whenever the cached files change; activate deletes every
+// other cache.
+var CACHE_NAME = 'mercurius-v4';
 var STATIC_ASSETS = [
   '/mercurius.html',
   '/widget.js',
@@ -56,12 +58,11 @@ self.addEventListener('fetch', function(event) {
       }
       return response;
     }).catch(function() {
-      return caches.match(event.request).then(function(cached) {
-        // Return cached version, or let browser show its own error
-        return cached || new Response('Offline — please check your connection.', {
-          status: 503,
-          headers: { 'Content-Type': 'text/plain' }
-        });
+      // The page requests /widget.js?v=N; the precached copy has no query.
+      return caches.match(event.request, { ignoreSearch: true }).then(function(cached) {
+        // Return cached version, or let browser show its own error (a text
+        // body served as JavaScript would be a SyntaxError).
+        return cached || Response.error();
       });
     })
   );

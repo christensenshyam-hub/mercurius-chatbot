@@ -1,0 +1,397 @@
+'use strict';
+
+// Tests for the web widget's pure core (public/widget.js → Core). Under Node
+// the widget file exports Core and stops before any DOM work.
+//
+//   1. escaping + markdown: no raw HTML ever reaches innerHTML, bullets and
+//      numbered lists render as one list each, identifiers keep underscores.
+//   2. source rules: no regex lookbehind (WebKit < 16.4 rejects the script),
+//      and the mayo-site copies are byte-identical to public/.
+//   3. SSE parsing: split chunks, CRLF, keepalive comments, [DONE], and the
+//      refusal/error frames that carry a `code`.
+//   4. the first-run gate state machine.
+//   5. history capping, hidden turns, titles, and the report body (checked
+//      against the server's own ReportRequest schema).
+
+const { describe, test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const Core = require('../public/widget.js');
+const { ReportRequest, SessionId } = require('../lib/schemas');
+const { lessonIdFromMessages } = require('../lib/curriculumTag');
+
+const root = path.join(__dirname, '..');
+
+describe('escapeHtml', () => {
+  test('escapes every HTML-significant character', () => {
+    assert.equal(Core.escapeHtml(`<img src=x onerror="a('b')">&`),
+      '&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;');
+  });
+  test('stringifies non-strings', () => {
+    assert.equal(Core.escapeHtml(42), '42');
+    assert.equal(Core.escapeAttr('"x"'), '&quot;x&quot;');
+  });
+});
+
+describe('renderMarkdown', () => {
+  const md = Core.renderMarkdown;
+
+  test('a bulleted list is one <ul>', () => {
+    assert.equal(md('- one\n- two\n- three'), '<ul><li>one</li><li>two</li><li>three</li></ul>');
+  });
+
+  test('a numbered list is one <ol>', () => {
+    assert.equal(md('1. a\n2. b'), '<ol><li>a</li><li>b</li></ol>');
+  });
+
+  test('a list after an intro line is not nested inside the paragraph', () => {
+    assert.equal(md('Intro line\n- one\n- two'), '<p>Intro line</p><ul><li>one</li><li>two</li></ul>');
+  });
+
+  test('bullets then numbers become two lists', () => {
+    assert.equal(md('- a\n1. b'), '<ul><li>a</li></ul><ol><li>b</li></ol>');
+  });
+
+  test('a numbered list resumed after a paragraph keeps its number', () => {
+    assert.equal(md('1. a\n\nNote\n\n2. b'), '<ol><li>a</li></ol><p>Note</p><ol start="2"><li>b</li></ol>');
+  });
+
+  test('paragraphs, line breaks, headings and rules', () => {
+    assert.equal(md('## Title\nline one\nline two\n\nnext\n---'),
+      '<h3>Title</h3><p>line one<br>line two</p><p>next</p><hr>');
+  });
+
+  test('bold, italics, code and source chips', () => {
+    assert.equal(md('**bold** and *it* and _it2_ and `x < y` [SOURCE: NIST 2024]'),
+      '<p><strong>bold</strong> and <em>it</em> and <em>it2</em> and <code>x &lt; y</code> <span class="merc-source">NIST 2024</span></p>');
+  });
+
+  test('underscores inside identifiers stay literal', () => {
+    assert.equal(md('use merc_session_id here'), '<p>use merc_session_id here</p>');
+    assert.equal(md('2*3*4'), '<p>2*3*4</p>');
+  });
+
+  test('model text never becomes markup', () => {
+    const attacks = [
+      '<script>alert(1)</script>',
+      '<img src=x onerror=alert(1)>',
+      '**<b onmouseover=alert(1)>x</b>**',
+      '- <svg onload=alert(1)>',
+      '`<iframe>`',
+      '[SOURCE: <a href="javascript:alert(1)">x</a>]',
+      '[click](javascript:alert(1))',
+      '## <style>body{}</style>',
+    ];
+    for (const a of attacks) {
+      const html = md(a);
+      assert.doesNotMatch(html, /<(script|img|svg|iframe|style|a|b)\b/i, `${a} → ${html}`);
+      // No attribute other than the renderer's own class inside any tag.
+      for (const tag of html.match(/<[^>]*>/g) || []) {
+        assert.match(tag, /^<\/?[a-z0-9]+(?: class="merc-source")?>$/, `${a} → ${tag}`);
+      }
+    }
+  });
+
+  test('only the fixed tag set is ever emitted', () => {
+    const html = md('# h\n- *a* **b**\n1. `c`\n---\n[SOURCE: s] _d_');
+    const tags = new Set((html.match(/<\/?([a-z0-9]+)/g) || []).map((t) => t.replace(/[</]/g, '')));
+    for (const t of tags) assert.ok(['h3', 'p', 'br', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'span', 'hr'].includes(t), t);
+  });
+
+  test('lesson control markers never render', () => {
+    assert.equal(md('Nice work. [LESSON_COMPLETE]'), '<p>Nice work.</p>');
+    assert.equal(md('[CHECK]What is a token?[/CHECK]'), '<p>What is a token?</p>');
+    assert.equal(Core.trimPartialMarker('Great [LESSON_COMP'), 'Great ');
+    assert.equal(Core.trimPartialMarker('see [1'), 'see [1');
+  });
+
+  test('empty input', () => {
+    assert.equal(md(''), '');
+    assert.equal(md(null), '');
+  });
+});
+
+describe('widget source rules', () => {
+  const files = ['public/widget.js', 'mayo-site/widget.js'];
+
+  test('no regex lookbehind (iOS < 16.4 fails to parse the whole script)', () => {
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(root, f), 'utf8');
+      assert.doesNotMatch(src, /\(\?<[=!]/, f);
+    }
+  });
+
+  test('mayo-site copies are generated from public/', () => {
+    for (const name of ['widget.js', 'widget.css']) {
+      const a = fs.readFileSync(path.join(root, 'public', name));
+      const b = fs.readFileSync(path.join(root, 'mayo-site', name));
+      assert.ok(a.equals(b), `mayo-site/${name} differs — run node scripts/sync-widget.mjs`);
+    }
+  });
+
+  test('no name collection or leaderboard in the widget', () => {
+    const src = fs.readFileSync(path.join(root, 'public/widget.js'), 'utf8');
+    assert.doesNotMatch(src, /leaderboard|displayName|\/api\/profile|Add your name/i);
+    assert.doesNotMatch(src, /stays private/i);
+  });
+});
+
+describe('SSE parser', () => {
+  test('parses frames split across chunks', () => {
+    const p = Core.createSseParser();
+    assert.deepEqual(p.push('data: {"type":"del'), []);
+    assert.deepEqual(p.push('ta","text":"Hi"}\n\ndata: {"type":"delta","text":" there"}\n'), [
+      { type: 'delta', text: 'Hi' },
+      { type: 'delta', text: ' there' },
+    ]);
+  });
+
+  test('skips keepalive comments and malformed JSON; maps [DONE]', () => {
+    const p = Core.createSseParser();
+    assert.deepEqual(p.push(': connected\n\n: ping\n\ndata: {oops\n\ndata: [DONE]\n\n'), [{ type: 'done' }]);
+  });
+
+  test('handles CRLF and data: without a space', () => {
+    const p = Core.createSseParser();
+    assert.deepEqual(p.push('data:{"type":"complete","reply":"ok"}\r\n\r\n'), [{ type: 'complete', reply: 'ok' }]);
+  });
+
+  test('flush parses a final line with no trailing newline', () => {
+    const p = Core.createSseParser();
+    assert.deepEqual(p.push('data: {"type":"complete","reply":"x"}'), []);
+    assert.deepEqual(p.flush(), [{ type: 'complete', reply: 'x' }]);
+    assert.deepEqual(p.flush(), []);
+  });
+
+  test('a refusal frame keeps its code and student-facing text', () => {
+    const p = Core.createSseParser();
+    const frames = p.push('data: {"type":"error","code":"daily_limit","error":"You\'ve hit today\'s limit.","retryAfterSec":3600}\n\ndata: [DONE]\n\n');
+    assert.equal(frames.length, 2);
+    const d = Core.describeErrorFrame(frames[0]);
+    assert.deepEqual(d, { code: 'daily_limit', message: "You've hit today's limit." });
+    assert.equal(Core.isRetryable(d.code), false);
+  });
+
+  test('stream errors are retryable; legacy frames without a code still show their text', () => {
+    assert.equal(Core.isRetryable(Core.describeErrorFrame({ type: 'error', code: 'timeout', error: 'That reply took too long. Try again.' }).code), true);
+    assert.deepEqual(Core.describeErrorFrame({ type: 'error', error: 'response timed out' }), { code: 'stream_error', message: 'response timed out' });
+    assert.equal(Core.describeErrorFrame({ type: 'error' }).message, 'Mercurius hit a snag. Try again in a moment.');
+  });
+
+  test('JSON error envelopes', () => {
+    assert.deepEqual(Core.describeErrorBody({ error: 'restarting', message: 'Mercurius is restarting.' }, 503),
+      { code: 'restarting', message: 'Mercurius is restarting.' });
+    assert.deepEqual(Core.describeErrorBody({ error: 'api_error', reply: 'Hmm, something went wrong.' }, 500),
+      { code: 'api_error', message: 'Hmm, something went wrong.' });
+    const tooBig = Core.describeErrorBody({}, 413);
+    assert.equal(tooBig.code, 'http_413');
+    assert.equal(Core.isRetryable(tooBig.code), false);
+  });
+});
+
+describe('first-run gate', () => {
+  const fresh = { consentVersion: 0, ageBlocked: false, returning: false };
+
+  test('start step', () => {
+    assert.equal(Core.gateStart(fresh), 'meet');
+    assert.equal(Core.gateStart({ ...fresh, returning: true }), 'age');
+    assert.equal(Core.gateStart({ ...fresh, consentVersion: Core.CONSENT_VERSION }), 'done');
+    assert.equal(Core.gateStart({ ...fresh, consentVersion: Core.CONSENT_VERSION, ageBlocked: true }), 'underThirteen');
+  });
+
+  test('the full happy path records consent only at the end', () => {
+    let s = Core.gateNext('meet', { type: 'continue' });
+    assert.deepEqual(s, { step: 'age', effects: [] });
+    s = Core.gateNext('age', { type: 'submitAge', age: '15' });
+    assert.deepEqual(s, { step: 'disclosure', effects: [] });
+    s = Core.gateNext('disclosure', { type: 'agree', checked: true });
+    assert.deepEqual(s, { step: 'limits', effects: [] });
+    s = Core.gateNext('limits', { type: 'ack' });
+    assert.deepEqual(s, { step: 'done', effects: ['grantConsent'] });
+  });
+
+  test('13 passes, 12-or-younger blocks and persists only the flag', () => {
+    assert.equal(Core.gateNext('age', { type: 'submitAge', age: 13 }).step, 'disclosure');
+    assert.deepEqual(Core.gateNext('age', { type: 'submitAge', age: '12' }), { step: 'underThirteen', effects: ['dropConsent', 'blockAge'] });
+  });
+
+  test('no age picked, or an age outside the picker, goes nowhere', () => {
+    for (const age of ['', undefined, 'abc', '11', '99']) {
+      assert.deepEqual(Core.gateNext('age', { type: 'submitAge', age }), { step: 'age', effects: [] });
+    }
+  });
+
+  test('under 13 is terminal', () => {
+    for (const type of ['continue', 'submitAge', 'agree', 'review', 'ack', 'notNow']) {
+      assert.deepEqual(Core.gateNext('underThirteen', { type, age: 16, checked: true }), { step: 'underThirteen', effects: [] });
+    }
+  });
+
+  test('agreeing needs the checkbox; Not now pauses and drops consent', () => {
+    assert.deepEqual(Core.gateNext('disclosure', { type: 'agree', checked: false }), { step: 'disclosure', effects: [] });
+    assert.deepEqual(Core.gateNext('disclosure', { type: 'agree' }), { step: 'disclosure', effects: [] });
+    assert.deepEqual(Core.gateNext('disclosure', { type: 'notNow' }), { step: 'paused', effects: ['dropConsent'] });
+    assert.deepEqual(Core.gateNext('paused', { type: 'review' }), { step: 'disclosure', effects: [] });
+    assert.deepEqual(Core.gateNext('paused', { type: 'ack' }), { step: 'paused', effects: [] });
+  });
+
+  test('no skipping ahead', () => {
+    assert.equal(Core.gateNext('meet', { type: 'ack' }).step, 'meet');
+    assert.equal(Core.gateNext('age', { type: 'agree', checked: true }).step, 'age');
+    assert.equal(Core.gateNext('disclosure', { type: 'ack' }).step, 'disclosure');
+  });
+
+  test('consent', () => {
+    assert.equal(Core.consentGranted({ consentVersion: Core.CONSENT_VERSION, ageBlocked: false }), true);
+    assert.equal(Core.consentGranted({ consentVersion: Core.CONSENT_VERSION - 1, ageBlocked: false }), false);
+    assert.equal(Core.consentGranted({ consentVersion: Core.CONSENT_VERSION, ageBlocked: true }), false);
+  });
+
+  test('the age picker is neutral and open-ended at both ends', () => {
+    assert.deepEqual(Core.AGE_CHOICES.map(Core.ageLabel), ['12 or younger', '13', '14', '15', '16', '17', '18 or older']);
+  });
+});
+
+describe('session id', () => {
+  test('matches the server rules, including DELETE\'s 16-char minimum', () => {
+    let n = 0;
+    const id = Core.newSessionId((bytes) => { for (let i = 0; i < bytes.length; i++) bytes[i] = (n++ * 37) & 255; });
+    assert.match(id, /^merc_[0-9a-f]{48}$/);
+    assert.ok(SessionId.safeParse(id).success);
+    assert.ok(Core.isValidSessionId(id));
+    assert.equal(Core.isValidSessionId('short'), false);
+    assert.equal(Core.isValidSessionId('x'.repeat(65)), false);
+    assert.equal(Core.isValidSessionId('merc_<script>aaaaaaaaaaaa'), false);
+    assert.equal(Core.isValidSessionId(null), false);
+  });
+});
+
+describe('history', () => {
+  const opener = { role: 'user', content: '[CURRICULUM: Unit 2, Lesson 3] Explain the bias problems…', hidden: true };
+
+  test('caps at 40 messages, keeps the lesson opener, never starts on an assistant turn', () => {
+    const history = [opener];
+    for (let i = 0; i < 60; i++) history.push({ role: i % 2 ? 'user' : 'assistant', content: `m${i}` });
+    const out = Core.capHistory(history);
+    assert.equal(out.length, 40);
+    assert.deepEqual(out[0], { role: 'user', content: opener.content });
+    assert.equal(out[1].role, 'user');
+    assert.equal(out[out.length - 1].content, 'm59');
+    assert.ok(out.every((m) => !('hidden' in m)));
+  });
+
+  test('caps by bytes, dropping oldest turns first', () => {
+    const big = 'x'.repeat(5000);
+    const history = [];
+    for (let i = 0; i < 12; i++) history.push({ role: i % 2 ? 'assistant' : 'user', content: big + i });
+    const out = Core.capHistory(history);
+    const bytes = out.reduce((n, m) => n + Core.utf8Length(m.content), 0);
+    assert.ok(bytes <= 24000, String(bytes));
+    assert.equal(out[out.length - 1].content, big + 11);
+    assert.equal(out[0].role, 'user');
+  });
+
+  test('keeps the latest turn even when it alone is over budget, and clips content to the schema cap', () => {
+    const out = Core.capHistory([{ role: 'user', content: 'y'.repeat(30000) }]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].content.length, 10000);
+  });
+
+  test('utf8Length counts multi-byte text', () => {
+    assert.equal(Core.utf8Length('aé€😀'), 1 + 2 + 3 + 4);
+  });
+
+  test('hidden turns: flagged, lesson openers, and legacy prompts', () => {
+    assert.equal(Core.isHiddenTurn(opener), true);
+    assert.equal(Core.isHiddenTurn({ role: 'user', content: 'Hi', hidden: true }), true);
+    assert.equal(Core.isHiddenTurn({ role: 'user', content: Core.PROMPTS.debate }), true);
+    assert.equal(Core.isHiddenTurn({ role: 'user', content: 'This is my first time using Mercurius. Introduce yourself…' }), true);
+    assert.equal(Core.isHiddenTurn({ role: 'user', content: 'Is AI biased?' }), false);
+    assert.equal(Core.isHiddenTurn({ role: 'assistant', content: Core.PROMPTS.debate }), false);
+  });
+
+  test('titles skip hidden prompts', () => {
+    const h = [opener, { role: 'assistant', content: 'Welcome' }, { role: 'user', content: 'Is AI biased?' }];
+    assert.equal(Core.conversationTitle(h, 'Untitled'), 'Is AI biased?');
+    assert.equal(Core.conversationTitle([opener], 'Lesson'), 'Lesson');
+    assert.equal(Core.conversationTitle([{ role: 'user', content: 'a'.repeat(80) }]), 'a'.repeat(60) + '...');
+  });
+
+  test('stored threads keep the opener and the newest turns', () => {
+    const h = [opener];
+    for (let i = 0; i < 250; i++) h.push({ role: i % 2 ? 'user' : 'assistant', content: `m${i}` });
+    const out = Core.capStored(h);
+    assert.equal(out.length, 200);
+    assert.equal(out[0], opener);
+    assert.equal(out[out.length - 1].content, 'm249');
+  });
+
+  test('the report\'s user message is the nearest visible user turn', () => {
+    const h = [
+      { role: 'user', content: 'What is RLHF?' },
+      { role: 'assistant', content: 'A…' },
+      { role: 'user', content: Core.PROMPTS.unpack, hidden: true },
+      { role: 'assistant', content: 'B…' },
+    ];
+    assert.equal(Core.precedingVisibleUser(h, 3), 'What is RLHF?');
+    assert.equal(Core.precedingVisibleUser([opener, { role: 'assistant', content: 'x' }], 1), null);
+  });
+
+  test('lesson ids from openers agree with the server', () => {
+    for (const content of ['[CURRICULUM: Unit 1, Lesson 1] Teach me', '[CURRICULUM: Unit 6, Lesson 5 - Review] Give me', '[CURRICULUM: Unit 5, Lesson 4 - Final Review] Have me']) {
+      assert.equal(Core.lessonIdFromOpener(content), lessonIdFromMessages([{ role: 'user', content }]));
+    }
+    assert.equal(Core.lessonIdFromOpener('hello'), null);
+  });
+});
+
+describe('report body', () => {
+  const sessionId = 'merc_' + 'a'.repeat(48);
+
+  test('chat reply: reason, preceding turn and context pass the server schema', () => {
+    const body = Core.buildReportBody({ sessionId, content: 'Bad reply [LESSON_COMPLETE]', reason: 'wrong', userMessage: 'Q?', mode: 'debate', lessonId: null });
+    assert.deepEqual(body, {
+      sessionId,
+      content: 'Bad reply',
+      reason: 'wrong',
+      userMessage: 'Q?',
+      context: { surface: 'chat', mode: 'debate', appVersion: 'web' },
+    });
+    assert.ok(ReportRequest.safeParse(body).success);
+  });
+
+  test('lesson reply', () => {
+    const body = Core.buildReportBody({ sessionId, content: 'x', reason: 'harmful', userMessage: null, mode: 'socratic', lessonId: 'u2_l3' });
+    assert.deepEqual(body.context, { surface: 'lesson', mode: 'curriculum', lessonId: 'u2_l3', appVersion: 'web' });
+    assert.equal('userMessage' in body, false);
+    assert.ok(ReportRequest.safeParse(body).success);
+  });
+
+  test('every reason is one the server accepts, and long text is clipped to the caps', () => {
+    for (const r of Core.REPORT_REASONS) {
+      const body = Core.buildReportBody({ sessionId, content: 'z'.repeat(20000), reason: r.id, userMessage: 'u'.repeat(9000), mode: 'socratic' });
+      assert.ok(ReportRequest.safeParse(body).success, r.id);
+    }
+  });
+});
+
+describe('numbers shown to students', () => {
+  test('confidence only when the reply states it', () => {
+    assert.equal(Core.parseStatedConfidence("I'm about 70% confident in this."), 70);
+    assert.equal(Core.parseStatedConfidence('Confidence: 80%'), 80);
+    assert.equal(Core.parseStatedConfidence('confidence level of 55%'), 55);
+    assert.equal(Core.parseStatedConfidence('COMPAS flagged 45% vs 23%'), null);
+    assert.equal(Core.parseStatedConfidence('What might happen next?'), null);
+    assert.equal(Core.parseStatedConfidence('I am 150% sure'), null);
+  });
+
+  test('report-card scores are clamped numbers', () => {
+    assert.equal(Core.clampScore('<img src=x onerror=alert(1)>'), 0);
+    assert.equal(Core.clampScore(72.4), 72);
+    assert.equal(Core.clampScore(-5), 0);
+    assert.equal(Core.clampScore('250'), 100);
+    assert.equal(Core.clampScore(undefined), 0);
+  });
+});
