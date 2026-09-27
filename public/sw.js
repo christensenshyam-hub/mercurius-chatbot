@@ -1,5 +1,7 @@
-// Mercurius Ⅰ Service Worker — enables PWA install + basic caching
-var CACHE_NAME = 'mercurius-v1';
+// Mercurius Ⅰ Service Worker — enables PWA install + an offline app shell.
+// Bump CACHE_NAME whenever the cached files change shape; activate deletes
+// every other cache.
+var CACHE_NAME = 'mercurius-v2';
 var STATIC_ASSETS = [
   '/',
   '/widget.js',
@@ -9,11 +11,24 @@ var STATIC_ASSETS = [
   '/icons/icon-512.png'
 ];
 
-// Install — cache static assets
+// Only the app shell is handled; the API, admin.html and every other origin
+// go straight to the network.
+function isAppShell(url) {
+  return url.pathname === '/' ||
+    url.pathname === '/index.html' ||
+    url.pathname === '/widget.js' ||
+    url.pathname === '/widget.css' ||
+    url.pathname === '/manifest.json' ||
+    url.pathname.indexOf('/icons/') === 0;
+}
+
+// Install — cache static assets. One missing file must not fail the install.
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(STATIC_ASSETS);
+      return Promise.all(STATIC_ASSETS.map(function(asset) {
+        return cache.add(asset).catch(function() {});
+      }));
     })
   );
   self.skipWaiting();
@@ -32,28 +47,27 @@ self.addEventListener('activate', function(event) {
   self.clients.claim();
 });
 
-// Fetch — network-first for API calls, cache-first for static assets
+// Fetch — network-first for the app shell, cache only as the offline fallback
 self.addEventListener('fetch', function(event) {
-  var url = new URL(event.request.url);
-
-  // Always go to network for API calls
-  if (url.pathname.startsWith('/api/')) {
-    return;
-  }
+  var req = event.request;
+  if (req.method !== 'GET') return;
+  var url = new URL(req.url);
+  if (url.origin !== self.location.origin || !isAppShell(url)) return;
 
   event.respondWith(
-    fetch(event.request).then(function(response) {
-      // Cache successful responses
-      if (response.ok) {
+    fetch(req).then(function(response) {
+      if (response && response.ok) {
         var clone = response.clone();
         caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(event.request, clone);
+          cache.put(req, clone);
         });
       }
       return response;
     }).catch(function() {
-      // Fallback to cache if offline
-      return caches.match(event.request);
+      // `?v=` cache-busters must still find the precached copy.
+      return caches.match(req, { ignoreSearch: true }).then(function(cached) {
+        return cached || Response.error();
+      });
     })
   );
 });
