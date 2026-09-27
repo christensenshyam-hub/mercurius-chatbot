@@ -33,7 +33,8 @@
  *      the real routes: health, /metrics auth, a streamed 5-turn lesson to
  *      [LESSON_COMPLETE], image upload + fetch, report + admin queue,
  *      progress sync, admin stats, the scheduler's first retention sweep,
- *      erasure, and a graceful SIGTERM drain.
+ *      erasure, and a graceful SIGTERM drain; then asserts the server logged
+ *      no error-level line (the helpers that swallow failures log them).
  */
 
 import assert from 'node:assert/strict';
@@ -881,6 +882,21 @@ if (bootOk) {
     while (!serverExit && Date.now() < deadline) await sleep(100);
     assert.ok(serverExit, 'server exited after SIGTERM');
     assert.equal(serverExit.code, 0, `exit ${JSON.stringify(serverExit)}`);
+  });
+}
+
+if (bootOk) {
+  // Many db.js helpers swallow their own failures by design (recordUsage,
+  // recordLessonEvent, the purges, the fire-and-forget progress write), and
+  // the server logs them instead. A Postgres-only error on such a path would
+  // not fail any route above, so the log itself is the last check.
+  await step('D10 server.js logged no error-level lines', async () => {
+    const lines = serverLog.split('\n').filter((l) => l.trim().startsWith('{'));
+    const parsed = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    const errors = parsed.filter((e) => Number(e.level) >= 50);
+    const warns = parsed.filter((e) => Number(e.level) === 40);
+    if (warns.length) console.log(`      (server warnings: ${[...new Set(warns.map((w) => w.msg))].join(' | ')})`);
+    assert.deepEqual(errors.map((e) => `${e.msg} ${e.err ? JSON.stringify(e.err) : ''}`.trim()), [], 'error-level log lines');
   });
 }
 
