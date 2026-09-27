@@ -25,11 +25,13 @@ public struct ChatHistoryView: View {
     /// nothing; the list re-fetches from the provider after the call.
     private let onDelete: @MainActor (UUID) -> Void
 
-    /// Pull function for the underlying conversation list. Closure
-    /// rather than a held reference so SwiftUI re-fetches every time
-    /// the view's `body` runs (which is fine — the call is cheap and
-    /// avoids stale snapshots after a delete).
+    /// Pull function for the underlying conversation list. It faults every
+    /// message of every thread, so it runs once on appear and after a
+    /// delete — not on each body pass (every search keystroke is one).
     private let load: @MainActor () -> [ConversationSummary]
+
+    /// The last `load()`; nil until the first one.
+    @State private var loaded: [ConversationSummary]?
 
     /// Filter pill state. `nil` = "All".
     @State private var filter: ChatMode? = nil
@@ -54,12 +56,15 @@ public struct ChatHistoryView: View {
     public var body: some View {
         let conversations = filteredConversations
         Group {
-            if conversations.isEmpty {
+            if loaded == nil {
+                Color.clear
+            } else if conversations.isEmpty {
                 emptyState
             } else {
                 list(conversations: conversations)
             }
         }
+        .onAppear { if loaded == nil { loaded = load() } }
         .navigationTitle("Chat History")
 #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -82,6 +87,7 @@ public struct ChatHistoryView: View {
         ) { convo in
             Button("Delete", role: .destructive) {
                 onDelete(convo.id)
+                loaded = load()
                 pendingDelete = nil
             }
             Button("Cancel", role: .cancel) { pendingDelete = nil }
@@ -96,7 +102,7 @@ public struct ChatHistoryView: View {
     /// only with modes that currently have at least one saved
     /// conversation so the filter doesn't surface useless rows.
     private var filterMenu: some View {
-        let availableModes = Set(load().compactMap { ChatMode(rawValue: $0.mode) })
+        let availableModes = Set((loaded ?? []).compactMap { ChatMode(rawValue: $0.mode) })
 
         return Menu {
             Button("All modes", action: { filter = nil })
@@ -121,7 +127,7 @@ public struct ChatHistoryView: View {
     }
 
     private var filteredConversations: [ConversationSummary] {
-        var result = load()
+        var result = loaded ?? []
         if let filter {
             result = result.filter { $0.mode == filter.rawValue }
         }

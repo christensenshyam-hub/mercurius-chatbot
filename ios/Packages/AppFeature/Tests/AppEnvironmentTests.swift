@@ -43,7 +43,23 @@ struct AppEnvironmentTests {
             AppEnvironment.uiTestLastActivitySuite,
             AppEnvironment.uiTestReviewPromptSuite,
             AppEnvironment.uiTestReminderCardSuite,
-        ]).count == 4)
+            AppEnvironment.uiTestAgeBlockSuite,
+        ]).count == 5)
+    }
+
+    @Test("-KeepAgeBlock keeps the age-block suite across a relaunch; without it the suite starts empty")
+    func keepAgeBlockSurvivesRelaunch() {
+        let suite = AppEnvironment.uiTestAgeBlockSuite
+        let args = [AppEnvironment.uiTestArgument, "YES"]
+        let first = AgeBlockStore(defaults: AppEnvironment.makeDefaults(suite: suite, arguments: args))
+        first.record()
+
+        let kept = AgeBlockStore(defaults: AppEnvironment.makeDefaults(
+            suite: suite, arguments: args + [AppEnvironment.keepAgeBlockArgument], wipe: false))
+        #expect(kept.isActive())
+
+        let wiped = AgeBlockStore(defaults: AppEnvironment.makeDefaults(suite: suite, arguments: args))
+        #expect(!wiped.isActive())
     }
 
     @Test("Outside UI tests the stores use the standard defaults")

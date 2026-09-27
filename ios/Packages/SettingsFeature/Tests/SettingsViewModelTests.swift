@@ -291,6 +291,7 @@ struct SettingsViewModelDeleteTests {
             (.unknown(underlying: "Non-HTTP response"), SettingsViewModel.serverDeleteFailedMessage),
             // A dropped socket surfaces as a URLError, not the reachability verdict.
             (APIClient.mapURLError(URLError(.networkConnectionLost)), SettingsViewModel.serverDeleteFailedMessage),
+            (.unreachableOnThisNetwork, SettingsViewModel.serverDeleteFailedMessage),
             (.rateLimited, APIError.rateLimited.userFacingMessage),
             (.server(status: 500), APIError.server(status: 500).userFacingMessage),
             (.invalidRequest(reason: "bad id"), APIError.invalidRequest(reason: "bad id").userFacingMessage),

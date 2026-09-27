@@ -28,9 +28,18 @@ public final class ChatViewModel {
     public var draft: String = ""
     public private(set) var phase: Phase = .idle
 
-    /// A photo the user attached to the next message. Drives the composer's
-    /// thumbnail; compressed + uploaded when the message is sent. Nil = none.
-    public private(set) var pendingImageData: Data?
+    /// A photo the user attached to the next message, already prepared
+    /// (`attachImage`). Drives the composer's thumbnail; uploaded when the
+    /// message is sent. Nil = none.
+    public private(set) var pendingImage: ChatImage?
+
+    /// A picked photo is still being downsampled and encoded. Send waits
+    /// for it.
+    public private(set) var isPreparingAttachment = false
+
+    /// Why the last picked photo couldn't be attached; safe to show. Cleared
+    /// by the next pick or removal.
+    public private(set) var attachmentError: String?
 
     /// Active teaching mode. Defaults to Socratic on first launch;
     /// updated from the server on each `complete` event and on
@@ -118,9 +127,27 @@ public final class ChatViewModel {
     /// keeps the whole lesson — including graded follow-ups — in curriculum mode.
     @ObservationIgnored private var lessonWirePrefix: ChatMessageDTO?
 
+    /// Set by `makeLesson` until `beginLessonConversation` / `resumeLesson`
+    /// anchors the lesson. A send before then (the composer behind the intro)
+    /// would open an ordinary chat thread with no curriculum opener.
+    @ObservationIgnored var awaitsLessonStart = false
+
     // MARK: - Private
 
     private var streamingTask: Task<Void, Never>?
+    @ObservationIgnored private var attachmentTask: Task<Void, Never>?
+    @ObservationIgnored private var attachmentGeneration = 0
+
+    /// Streamed text not yet applied to the reply. Every `messages` mutation
+    /// re-renders the thread, so deltas after a turn's first are applied at
+    /// most once per `deltaFlushInterval`.
+    @ObservationIgnored private var pendingDelta = ""
+    @ObservationIgnored private var deltaFlushTask: Task<Void, Never>?
+    @ObservationIgnored private var appliedFirstDeltaThisTurn = false
+    /// The raw stream since its last newline, so a pass marker is detected on
+    /// its own line without rescanning the whole reply on every delta.
+    @ObservationIgnored private var rawStreamLineTail = ""
+    static let deltaFlushInterval: Duration = .milliseconds(70)
     /// The active conversation id. Public read so the curriculum lesson view can
     /// record it for resume; only the view model mutates it.
     public private(set) var conversationId: UUID?
@@ -197,6 +224,7 @@ public final class ChatViewModel {
             conversationId = existingId
             currentMode = parsed
             messages = convo.messages.compactMap(Self.hydratedMessage)
+            markInterruptedIfTrailingUserTurn()
         } else {
             // Fresh install, cleared store — or the latest record carries a
             // mode this build no longer knows (e.g. the retired "direct"
@@ -206,6 +234,15 @@ public final class ChatViewModel {
             // mode-locked invariant. The legacy thread stays in History.
             conversationId = store.createConversation(mode: currentMode)
         }
+    }
+
+    /// A loaded thread that ends on the student's turn lost its reply — the
+    /// app was killed or left mid-stream, or the send failed in an earlier
+    /// model. Only the user turn is ever persisted before the reply, so offer
+    /// Retry instead of an unanswered question with no way forward.
+    private func markInterruptedIfTrailingUserTurn() {
+        guard messages.last?.role == .user else { return }
+        phase = .failed(reason: "Merc's reply was interrupted.", isRetryable: true)
     }
 
     /// Rebuild one persisted record as a renderable message. Unknown roles
@@ -265,20 +302,47 @@ public final class ChatViewModel {
     /// is `.concise` — the mobile-native short answer. The "Explain
     /// more" affordance flips this to `.deep` for one round; see
     /// `explainMore()`.
-    /// Attach a photo to the next message. Shown as a thumbnail in the
-    /// composer; compressed + uploaded when the message is sent.
+    /// Attach a photo to the next message. It is downsampled and encoded for
+    /// upload once, off the main actor; the original bytes are not kept.
     public func attachImage(data: Data) {
-        pendingImageData = data
+        attachmentTask?.cancel()
+        attachmentGeneration += 1
+        let generation = attachmentGeneration
+        pendingImage = nil
+        attachmentError = nil
+        isPreparingAttachment = true
+        let preparer = self.preparer
+        attachmentTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try ChatImage.prepare(data, preparer: preparer) }
+            }.value
+            guard let self, generation == self.attachmentGeneration else { return }
+            self.isPreparingAttachment = false
+            self.attachmentTask = nil
+            switch result {
+            case .success(let image):
+                self.pendingImage = image
+            case .failure(let error):
+                self.attachmentError = (error as? ImagePreparationError)?.userMessage
+                    ?? "Couldn't attach that photo. Try again."
+            }
+        }
     }
 
-    /// Remove the pending photo attachment.
+    /// Remove the pending photo attachment (or abandon one still preparing).
     public func clearAttachment() {
-        pendingImageData = nil
+        attachmentTask?.cancel()
+        attachmentTask = nil
+        attachmentGeneration += 1
+        isPreparingAttachment = false
+        pendingImage = nil
+        attachmentError = nil
     }
 
     public func send(responseMode: ResponseMode = .concise) {
+        guard !awaitsLessonStart, !isPreparingAttachment else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachedImage = pendingImageData
+        let attachedImage = pendingImage
         // Allow sending text, a photo, or both — but not nothing.
         guard !text.isEmpty || attachedImage != nil else { return }
 
@@ -302,13 +366,13 @@ public final class ChatViewModel {
         // turn hydrates as an invisible message after relaunch. Mirror the
         // server's own dbHistory substitution.
         let content = text.isEmpty && attachedImage != nil ? "[Shared an image]" : text
-        let userMessage = ChatMessage(role: .user, content: content, imageData: attachedImage)
+        let userMessage = ChatMessage(role: .user, content: content, image: attachedImage)
         messages.append(userMessage)
         persistMessage(userMessage)
         awardSendAchievements()
         recordReasoningMove(from: text)
         draft = ""
-        pendingImageData = nil
+        pendingImage = nil
 
         let assistantPlaceholder = ChatMessage(
             role: .assistant,
@@ -322,10 +386,10 @@ public final class ChatViewModel {
         lastResponseMode = responseMode
         lastRequest = LastRequest(responseMode: responseMode,
                                   injectedUserTurn: nil,
-                                  imageData: attachedImage)
+                                  image: attachedImage)
 
-        streamingTask = Task { [weak self] in
-            await self?.runSend(assistantId: assistantId, responseMode: responseMode, imageData: attachedImage)
+        streamingTask = Self.replyTask { [weak self] in
+            await self?.runSend(assistantId: assistantId, responseMode: responseMode, image: attachedImage)
         }
     }
 
@@ -351,6 +415,16 @@ public final class ChatViewModel {
         self.progressionProvider = provider
     }
 
+    /// The Task every reply streams in. It holds a background task (iOS), so
+    /// a short app switch doesn't kill the stream before the reply is saved.
+    private static func replyTask(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        Task { @MainActor in
+            let endBackgroundTask = ReplyBackgroundTask.begin()
+            defer { endBackgroundTask() }
+            await operation()
+        }
+    }
+
     /// Detect a reasoning move in the user's turn and request a gated XP
     /// evaluation (the server decides, validates, and caps). Fire-and-forget;
     /// never blocks the send. No-op unless gamification is configured + on.
@@ -364,17 +438,12 @@ public final class ChatViewModel {
     /// Upload the attached photo (if any), then open the chat stream with its
     /// id so the server can show it to Claude. Upload failures mark the turn
     /// failed (retryable) without ever opening the stream.
-    private func runSend(assistantId: UUID, responseMode: ResponseMode, imageData: Data?) async {
+    private func runSend(assistantId: UUID, responseMode: ResponseMode, image: ChatImage?) async {
         var imageId: String?
-        if let imageData, let uploader = imageUploader {
+        if let image, let uploader = imageUploader {
             do {
                 let sessionId = try sessionIdProvider()
-                let preparer = self.preparer
-                let input = try await Task.detached(priority: .userInitiated) {
-                    try preparer.prepare(imageData: imageData, fileName: nil)
-                }.value
-                if Task.isCancelled { return }
-                let response = try await uploader.uploadImage(input, sessionId: sessionId)
+                let response = try await uploader.uploadImage(image.upload, sessionId: sessionId)
                 imageId = response.id
             } catch is CancellationError {
                 return
@@ -428,8 +497,8 @@ public final class ChatViewModel {
         let instruction = "Explain more — go deeper on the same topic. Don't repeat what you already said."
         lastRequest = LastRequest(responseMode: .deep,
                                   injectedUserTurn: instruction,
-                                  imageData: nil)
-        streamingTask = Task { [weak self] in
+                                  image: nil)
+        streamingTask = Self.replyTask { [weak self] in
             await self?.runStream(
                 assistantId: assistantId,
                 responseMode: .deep,
@@ -450,7 +519,7 @@ public final class ChatViewModel {
         streakStore: StreakStore? = nil,
         achievementStore: AchievementStore? = nil
     ) -> ChatViewModel {
-        ChatViewModel(
+        let model = ChatViewModel(
             chatClient: apiClient,
             modeClient: apiClient,
             sessionIdProvider: { try sessionIdentity.current() },
@@ -461,6 +530,8 @@ public final class ChatViewModel {
             achievementStore: achievementStore,
             hydrateOnInit: false
         )
+        model.awaitsLessonStart = true
+        return model
     }
 
     /// Start a NEW lesson: create a curriculum-tagged conversation, anchor the
@@ -471,6 +542,7 @@ public final class ChatViewModel {
     @discardableResult
     public func beginLessonConversation(starter: String, lessonId: String? = nil) -> UUID? {
         guard messages.isEmpty else { return conversationId }
+        awaitsLessonStart = false
         currentLessonId = lessonId
         lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
         let convoId = store?.createCurriculumConversation()
@@ -482,8 +554,8 @@ public final class ChatViewModel {
         lastResponseMode = .balanced
         lastRequest = LastRequest(responseMode: .balanced,
                                   injectedUserTurn: nil,
-                                  imageData: nil)
-        streamingTask = Task { [weak self] in
+                                  image: nil)
+        streamingTask = Self.replyTask { [weak self] in
             await self?.runStream(assistantId: placeholder.id, responseMode: .balanced)
         }
         return convoId
@@ -499,6 +571,7 @@ public final class ChatViewModel {
     /// lesson that never teaches.
     @discardableResult
     public func resumeLesson(conversationId: UUID, starter: String, lessonId: String? = nil) async -> Bool {
+        awaitsLessonStart = false
         currentLessonId = lessonId
         lessonWirePrefix = ChatMessageDTO(role: "user", content: Self.withCompletionContract(starter))
         let opened = await openConversation(id: conversationId)
@@ -525,7 +598,7 @@ public final class ChatViewModel {
     private struct LastRequest {
         var responseMode: ResponseMode
         var injectedUserTurn: String?
-        var imageData: Data?
+        var image: ChatImage?
     }
     private var lastRequest: LastRequest?
 
@@ -548,12 +621,12 @@ public final class ChatViewModel {
         lastResponseMode = request.responseMode
 
         let assistantId = placeholder.id
-        streamingTask = Task { [weak self] in
-            if let imageData = request.imageData {
+        streamingTask = Self.replyTask { [weak self] in
+            if let image = request.image {
                 // Re-send the last user turn, re-uploading its photo.
                 await self?.runSend(assistantId: assistantId,
                                     responseMode: request.responseMode,
-                                    imageData: imageData)
+                                    image: image)
             } else {
                 await self?.runStream(assistantId: assistantId,
                                       responseMode: request.responseMode,
@@ -569,12 +642,12 @@ public final class ChatViewModel {
     private func fallbackRequestFromVisibleThread() -> LastRequest? {
         guard let lastUser = messages.last(where: { $0.role == .user }) else {
             return lessonWirePrefix != nil
-                ? LastRequest(responseMode: .balanced, injectedUserTurn: nil, imageData: nil)
+                ? LastRequest(responseMode: .balanced, injectedUserTurn: nil, image: nil)
                 : nil
         }
         return LastRequest(responseMode: lastResponseMode,
                            injectedUserTurn: nil,
-                           imageData: lastUser.imageData)
+                           image: lastUser.image)
     }
 
     /// Cancel any in-flight request. The assistant bubble is marked
@@ -703,6 +776,7 @@ public final class ChatViewModel {
     public func startNewConversation() {
         streamingTask?.cancel()
         streamingTask = nil
+        discardPendingDelta()
         let hadMessages = !messages.isEmpty
         messages = []
         draft = ""
@@ -723,6 +797,15 @@ public final class ChatViewModel {
                 conversationId = store.createConversation(mode: currentMode)
             }
         }
+    }
+
+    /// Start over under a freshly minted session id (Settings' delete /
+    /// reset / withdraw paths). The server opens a new session in Socratic,
+    /// so the pill and the new thread's tag return there too — keeping the
+    /// old mode would get Socratic replies in a thread filed under it.
+    public func startOverForNewSession() {
+        currentMode = .socratic
+        startNewConversation()
     }
 
     /// Reopen an archived conversation by id. Loads its messages,
@@ -749,6 +832,7 @@ public final class ChatViewModel {
 
         streamingTask?.cancel()
         streamingTask = nil
+        discardPendingDelta()
         phase = .idle
         draft = ""
         lastRequest = nil   // a failed request must not replay into this thread
@@ -810,6 +894,7 @@ public final class ChatViewModel {
             // back to the old mode.
             streamingTask?.cancel()
             streamingTask = nil
+            discardPendingDelta()
             phase = .idle
             // Mode-switch (via the pill) feels like switching
             // workspaces — the chat thread changes too, not just a
@@ -890,6 +975,7 @@ public final class ChatViewModel {
     private func applyLoadedConversation(_ convo: StoredConversation) {
         conversationId = convo.id
         messages = convo.messages.compactMap(Self.hydratedMessage)
+        markInterruptedIfTrailingUserTurn()
     }
 
     /// Dismiss the current mode-switch error from the UI.
@@ -905,22 +991,73 @@ public final class ChatViewModel {
         return String(content[...close])
     }
 
+    // MARK: - Message length
+
+    // Both limits count UTF-16 units — a JS string's `length`, which is what
+    // the server measures — not `String.count`.
+
+    /// The server reads only this much of the request's LAST message
+    /// (server.js slices it).
+    static let latestTurnCharacterLimit = 2_000
+
+    /// The server's per-message cap on everything else it is sent.
+    static let replayedTurnCharacterLimit = 10_000
+
+    /// The most the composer should hold: what the server will read of it.
+    /// A lesson turn goes out behind its `[CURRICULUM: …]` tag, which the
+    /// server's cut counts too.
+    public var draftCharacterLimit: Int {
+        let tagOverhead = curriculumTurnTag.map { $0.utf16.count + 1 } ?? 0
+        return Self.latestTurnCharacterLimit - tagOverhead
+    }
+
+    /// `text` cut to at most `limit` UTF-16 units, on a Character boundary
+    /// so an emoji or a surrogate pair is never split.
+    public static func clamped(_ text: String, toUTF16 limit: Int) -> String {
+        guard text.utf16.count > limit else { return text }
+        var out = ""
+        var units = 0
+        for character in text {
+            let width = character.utf16.count
+            if units + width > limit { break }
+            out.append(character)
+            units += width
+        }
+        return out
+    }
+
+    /// Every turn clamped to what the server accepts, the last one to what
+    /// it reads. Turns saved before the composer had a cap can be far longer,
+    /// and one over the server's limit fails every later request in its
+    /// thread.
+    static func clampedForServer(_ history: [ChatMessageDTO]) -> [ChatMessageDTO] {
+        history.indices.map { index in
+            let message = history[index]
+            let limit = index == history.count - 1 ? latestTurnCharacterLimit : replayedTurnCharacterLimit
+            guard message.content.utf16.count > limit else { return message }
+            return ChatMessageDTO(role: message.role, content: clamped(message.content, toUTF16: limit))
+        }
+    }
+
     /// Bound the outbound history to what the server will actually use:
     /// at most `maxMessages` (matching the server's own trim) and roughly
     /// `maxBytes` of content (safely under the 32kb JSON body limit),
-    /// dropping oldest turns first. Never drops the latest turn, and never
+    /// dropping oldest turns first. Never drops the latest turn. Unless a
+    /// caller puts its own user turn in front (`leadingUserTurn`), never
     /// leaves an assistant turn first — Anthropic requires the replayed
     /// thread to start with a user message.
     static func cappedHistory(
         _ history: [ChatMessageDTO],
         maxMessages: Int = 40,
-        maxBytes: Int = 24_000
+        maxBytes: Int = 24_000,
+        leadingUserTurn: Bool = false
     ) -> [ChatMessageDTO] {
         var trimmed = Array(history.suffix(maxMessages))
         var bytes = trimmed.reduce(0) { $0 + $1.content.utf8.count }
         while bytes > maxBytes, trimmed.count > 1 {
             bytes -= trimmed.removeFirst().content.utf8.count
         }
+        guard !leadingUserTurn else { return trimmed }
         while let first = trimmed.first, first.role == "assistant", trimmed.count > 1 {
             trimmed.removeFirst()
         }
@@ -952,14 +1089,23 @@ public final class ChatViewModel {
             return
         }
 
-        var history = messages
+        var history = Self.clampedForServer(messages
             .filter { $0.id != assistantId }
-            .map(\.dto)
-        // Cap the outbound thread. The server rebuilds ordinary-chat context
-        // from its own DB and trims curriculum replays to its last 40 anyway,
-        // while express's 32kb JSON body cap 413s an unbounded payload long
-        // before that — permanently, since Retry would re-send the same bytes.
-        history = Self.cappedHistory(history)
+            .map(\.dto))
+        // Cap the outbound thread. The server trims curriculum replays to
+        // their last 40 messages and chat to its last 20, while express's
+        // 32kb JSON body cap 413s an unbounded payload long before that —
+        // permanently, since Retry would re-send the same bytes. A lesson's
+        // hidden opener and an injected turn count toward the server's 40:
+        // past it, the opener (and the completion contract) would be cut.
+        // The opener is the thread's leading user turn, so the first reply
+        // stays in.
+        let wireOnlyTurns = (lessonWirePrefix != nil ? 1 : 0) + (injectedUserTurn != nil ? 1 : 0)
+        history = Self.cappedHistory(
+            history,
+            maxMessages: 40 - wireOnlyTurns,
+            leadingUserTurn: lessonWirePrefix != nil
+        )
         // Lesson turns carry the [CURRICULUM: …] opener as a hidden first wire
         // message so the server keeps the whole lesson in curriculum mode —
         // including the graded follow-ups where [LESSON_COMPLETE] is emitted.
@@ -982,6 +1128,7 @@ public final class ChatViewModel {
         if let injectedUserTurn {
             history.append(ChatMessageDTO(role: "user", content: injectedUserTurn))
         }
+        history = Self.clampedForServer(history)
 
         do {
             let stream = chatClient.streamChat(
@@ -992,6 +1139,9 @@ public final class ChatViewModel {
             )
             var sawAnyDelta = false
             sawPassMarkerThisTurn = false
+            discardPendingDelta()
+            appliedFirstDeltaThisTurn = false
+            rawStreamLineTail = ""
 
             for try await event in stream {
                 if Task.isCancelled { return }
@@ -1000,14 +1150,16 @@ public final class ChatViewModel {
                 case .delta(let text):
                     sawAnyDelta = true
                     if phase == .sending { phase = .streaming }
-                    appendDelta(text, to: assistantId)
+                    receiveDelta(text, to: assistantId)
 
                 case .complete(let response):
                     finalize(assistantId: assistantId, fullReply: response.reply)
-                    // Server is the source of truth for mode.
-                    if let serverMode = ChatMode(rawValue: response.mode) {
-                        currentMode = serverMode
-                    }
+                    // The reply carries the session's mode. A thread is locked
+                    // to its own, so a mismatch — a session minted by a reset,
+                    // or a reinstall that kept the Keychain id but not the
+                    // threads — moves the server back, not the pill.
+                    let sessionDrifted = !isLessonConversation
+                        && ChatMode(rawValue: response.mode).map { $0 != currentMode } == true
                     recordSessionSignals(response)
                     // Lesson completion: the current backend sets `lessonComplete`;
                     // the legacy backend only emits a pass marker inline. Either
@@ -1020,6 +1172,7 @@ public final class ChatViewModel {
                     }
                     awardModeAchievementsIfNeeded()
                     phase = .idle
+                    if sessionDrifted { await realignServerMode() }
                     return
 
                 case .refusal(let code, let message, _):
@@ -1096,26 +1249,65 @@ public final class ChatViewModel {
         }
     }
 
+    /// Move the server's session back to this thread's mode. Quiet: a
+    /// failure leaves the next reply in the session's mode, as before.
+    private func realignServerMode() async {
+        guard modeSwitchInFlight == nil, let sessionId = try? sessionIdProvider() else { return }
+        _ = try? await modeClient.changeMode(to: currentMode, sessionId: sessionId)
+    }
+
     // MARK: - State mutations
 
-    private func appendDelta(_ text: String, to id: UUID) {
-        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
-        let combined = messages[idx].content + text
-        if isLessonConversation {
+    /// A turn's first delta renders at once, so time-to-first-text is
+    /// unchanged; later ones batch into one mutation per flush interval.
+    private func receiveDelta(_ text: String, to id: UUID) {
+        if isLessonConversation, !sawPassMarkerThisTurn {
             // Note any pass marker in the RAW stream before scrubbing, so a
             // truncated stream (no `.complete`) still registers completion.
-            if !sawPassMarkerThisTurn, LessonMarker.indicatesCompletion(combined) {
-                sawPassMarkerThisTurn = true
+            let window = rawStreamLineTail + text
+            if LessonMarker.indicatesCompletion(window) { sawPassMarkerThisTurn = true }
+            if let newline = window.lastIndex(where: \.isNewline) {
+                rawStreamLineTail = String(window[window.index(after: newline)...])
+            } else {
+                rawStreamLineTail = window
             }
-            // Scrub control markers as they stream so a legacy `[TEST_PASSED]`
-            // never flashes in the transcript.
-            messages[idx].content = LessonMarker.removingMarkers(combined)
-        } else {
-            messages[idx].content = combined
+        }
+        pendingDelta += text
+        guard appliedFirstDeltaThisTurn else {
+            appliedFirstDeltaThisTurn = true
+            flushPendingDelta(to: id)
+            return
+        }
+        guard deltaFlushTask == nil else { return }
+        deltaFlushTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.deltaFlushInterval)
+            guard !Task.isCancelled else { return }
+            self?.flushPendingDelta(to: id)
         }
     }
 
+    private func flushPendingDelta(to id: UUID) {
+        deltaFlushTask?.cancel()
+        deltaFlushTask = nil
+        guard !pendingDelta.isEmpty else { return }
+        let text = pendingDelta
+        pendingDelta = ""
+        // The streaming reply is always the last message.
+        guard let idx = messages.indices.last, messages[idx].id == id else { return }
+        let combined = messages[idx].content + text
+        // Scrub control markers as they stream so a legacy `[TEST_PASSED]`
+        // never flashes in the transcript.
+        messages[idx].content = isLessonConversation ? LessonMarker.removingMarkers(combined) : combined
+    }
+
+    private func discardPendingDelta() {
+        deltaFlushTask?.cancel()
+        deltaFlushTask = nil
+        pendingDelta = ""
+    }
+
     private func finalize(assistantId: UUID, fullReply: String) {
+        discardPendingDelta()
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
         // Prefer the server's full reply over concatenated deltas in case any
         // deltas were dropped.
@@ -1136,6 +1328,7 @@ public final class ChatViewModel {
     }
 
     private func finalizeFromDeltas(assistantId: UUID) {
+        flushPendingDelta(to: assistantId)
         guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { return }
         if isLessonConversation {
             // Mirror `finalize()`: deltas were marker-scrubbed as they
@@ -1206,6 +1399,8 @@ public final class ChatViewModel {
     }
 
     private func markCurrentFailed(reason: String, isRetryable: Bool, assistantId: UUID?) {
+        // Keep whatever had streamed: the failed bubble shows it.
+        if let id = assistantId { flushPendingDelta(to: id) }
         if let id = assistantId, let idx = messages.firstIndex(where: { $0.id == id }) {
             messages[idx].status = .failed(reason: reason)
         }

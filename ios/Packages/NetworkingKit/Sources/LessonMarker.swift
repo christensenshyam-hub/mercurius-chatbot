@@ -18,7 +18,7 @@ public enum LessonMarker {
     static let passTokens = ["[LESSON_COMPLETE]", "[TEST_PASSED]"]
 
     /// Every control token to scrub from displayed / persisted text.
-    static let allTokens = ["[LESSON_COMPLETE]", "[TEST_PASSED]", "[TEST_FAILED]"]
+    public static let allTokens = ["[LESSON_COMPLETE]", "[TEST_PASSED]", "[TEST_FAILED]"]
 
     /// True if a pass token appears **on a line by itself** — matching the
     /// server's contract that the marker is emitted on its own line (see

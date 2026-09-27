@@ -1,13 +1,16 @@
 import Foundation
 import Observation
 
-/// Thrown by the injected `gradeDefense` closure when defense grading is not
-/// available on the server this build is talking to (e.g. the deployed backend
-/// predates the grading endpoint and returns 404). Distinguished from
-/// transport failures so the student isn't told to "check your connection"
-/// for an error no retry can fix.
+/// Thrown by the injected `gradeDefense` closure so the student isn't told to
+/// "check your connection" for an error that isn't one.
 public enum DefenseGradingError: Error, Equatable, Sendable {
+    /// Grading isn't available on the server this build is talking to (the
+    /// deployed backend predates the endpoint and returns 404). No retry
+    /// can fix it.
     case unavailable
+    /// The server or network refused the request — a daily limit, the spend
+    /// cap, a busy server. `message` is safe to show.
+    case refused(message: String, isRetryable: Bool)
 }
 
 /// Drives a cumulative unit test: an objective multiple-choice quiz scored
@@ -60,22 +63,55 @@ public final class UnitTestViewModel {
     public private(set) var isGrading = false
     public private(set) var defenseResult: DefenseResult?
     public private(set) var defenseError: String?
+    /// The answer a non-retryable refusal turned away: sending it again
+    /// would only hit the same wall.
+    private var refusedAnswer: String?
+
+    /// This attempt's questions, each with its options in a fresh order and
+    /// `answer` re-lettered to match. The authored keys lean heavily on "B";
+    /// in authored order, answering B throughout would pass most units.
+    public private(set) var questions: [UnitTestQuestion]
+    private var rng: SeededGenerator
 
     public init(
         unit: Unit,
         test: UnitTest,
         mcqPassFraction: Double = 0.8,
+        shuffleSeed: UInt64 = .random(in: .min ... .max),
         gradeDefense: @escaping (String) async throws -> DefenseResult
     ) {
         self.unit = unit
         self.test = test
         self.mcqPassFraction = mcqPassFraction
         self.gradeDefense = gradeDefense
+        var rng = SeededGenerator(seed: shuffleSeed)
+        self.questions = Self.shuffledOptions(test.questions, using: &rng)
+        self.rng = rng
     }
 
     // MARK: - Quiz
 
-    public var questions: [UnitTestQuestion] { test.questions }
+    /// `questions` with each one's options permuted and its answer letter
+    /// following the correct option. A question whose answer letter doesn't
+    /// name an option is left as authored.
+    static func shuffledOptions(
+        _ questions: [UnitTestQuestion],
+        using rng: inout SeededGenerator
+    ) -> [UnitTestQuestion] {
+        questions.map { question in
+            let answerIndex = question.answerIndex
+            guard question.options.indices.contains(answerIndex) else { return question }
+            let order = Array(question.options.indices).shuffled(using: &rng)
+            guard let newAnswerIndex = order.firstIndex(of: answerIndex) else { return question }
+            return UnitTestQuestion(
+                id: question.id,
+                q: question.q,
+                options: order.map { question.options[$0] },
+                answer: optionLetter(newAnswerIndex),
+                explanation: question.explanation
+            )
+        }
+    }
 
     public func select(_ letter: String, for questionId: String) {
         guard !quizSubmitted else { return }   // locked once submitted
@@ -87,7 +123,7 @@ public final class UnitTestViewModel {
     }
 
     public var allAnswered: Bool {
-        test.questions.allSatisfy { selections[$0.id] != nil }
+        questions.allSatisfy { selections[$0.id] != nil }
     }
 
     /// nil until the quiz is submitted; then whether this question was right.
@@ -99,10 +135,10 @@ public final class UnitTestViewModel {
     public var mcqScore: Int {
         // Normalize case so an authored lowercase answer (e.g. "b") still scores
         // correctly and stays consistent with the view's highlight logic.
-        test.questions.reduce(0) { $0 + (selections[$1.id]?.uppercased() == $1.answer.uppercased() ? 1 : 0) }
+        questions.reduce(0) { $0 + (selections[$1.id]?.uppercased() == $1.answer.uppercased() ? 1 : 0) }
     }
 
-    public var mcqTotal: Int { test.questions.count }
+    public var mcqTotal: Int { questions.count }
 
     public var mcqPassed: Bool {
         guard mcqTotal > 0 else { return false }
@@ -131,14 +167,16 @@ public final class UnitTestViewModel {
     // MARK: - Defense
 
     public var canSubmitDefense: Bool {
-        !defenseAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isGrading
+        let answer = defenseAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !answer.isEmpty && !isGrading && answer != refusedAnswer
     }
 
     public func submitDefense() async {
         let answer = defenseAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !answer.isEmpty, !isGrading else { return }
+        guard canSubmitDefense else { return }
         isGrading = true
         defenseError = nil
+        refusedAnswer = nil
         do {
             let result = try await gradeDefense(answer)
             defenseResult = result
@@ -149,6 +187,10 @@ public final class UnitTestViewModel {
             // blaming the student's connection would send them into a
             // retry loop that can never succeed.
             defenseError = "Grading isn't available yet. It's not your connection — please try again after the next app update."
+            isGrading = false
+        } catch DefenseGradingError.refused(let message, let isRetryable) {
+            defenseError = message
+            if !isRetryable { refusedAnswer = answer }
             isGrading = false
         } catch {
             defenseError = "Couldn't grade your answer. Check your connection and try again."
@@ -169,7 +211,9 @@ public final class UnitTestViewModel {
         defenseAnswer = ""
         defenseResult = nil
         defenseError = nil
+        refusedAnswer = nil
         isGrading = false
+        questions = Self.shuffledOptions(test.questions, using: &rng)
         phase = .quiz
     }
 
@@ -179,5 +223,21 @@ public final class UnitTestViewModel {
     public static func optionLetter(_ index: Int) -> String {
         guard index >= 0, index < 26 else { return "?" }
         return String(UnicodeScalar(65 + index)!)
+    }
+}
+
+/// SplitMix64: a small seedable generator, so a test can pin an attempt's
+/// option order.
+struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) { state = seed }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }

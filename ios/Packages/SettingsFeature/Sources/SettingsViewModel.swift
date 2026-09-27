@@ -114,7 +114,7 @@ public final class SettingsViewModel {
     /// this device only" is still the right escape hatch.
     static func deleteFailureMessage(for error: APIError) -> String {
         switch error {
-        case .offline, .timeout, .unknown:
+        case .offline, .connectionLost, .unreachableOnThisNetwork, .timeout, .unknown:
             return serverDeleteFailedMessage
         default:
             return error.userFacingMessage

@@ -1,4 +1,5 @@
 import Foundation
+import NetworkingKit
 
 /// blocks_v1 (Presentation P4): tokenize a tutor reply into renderable
 /// blocks. Generalizes `MessageBubbleView.splitCheck`'s single-[CHECK] split
@@ -53,8 +54,10 @@ enum BlockParser {
         .init(open: "[Q]", close: "[/Q]", build: { body, complete in .quiz(Self.parseQuiz(body, isComplete: complete)) }),
     ]
 
-    /// All literal marker strings, for the partial-suffix hold-back.
-    private static let allMarkers: [String] = tokens.flatMap { [$0.open, $0.close] }
+    /// All literal marker strings, for the partial-suffix hold-back. The
+    /// lesson control tokens are scrubbed only once complete, so a split one
+    /// ("…[LESSON" then "_COMPLETE]") is held back here meanwhile.
+    private static let allMarkers: [String] = tokens.flatMap { [$0.open, $0.close] } + LessonMarker.allTokens
 
     /// Tokenize a (possibly still-streaming) reply.
     static func parse(_ text: String) -> [MessageBlock] {

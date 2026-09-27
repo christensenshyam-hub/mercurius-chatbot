@@ -66,6 +66,14 @@ public struct CurriculumLessonView: View {
     @State private var reactionClearTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // Dynamic Type: the design sizes at the default setting, scaled with it.
+    @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 11
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 15
+    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 22
+    @ScaledMetric(relativeTo: .caption) private var progressLabelSize: CGFloat = 12
+    @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = 17
+    @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = 13.5
+
     public init(
         lessonId: String,
         unitLabel: String,
@@ -119,7 +127,8 @@ public struct CurriculumLessonView: View {
         let progressKey = "merc.coach.progress." + unit
         let storedProgress = UserDefaults.standard.object(forKey: progressKey) as? Int
         let baseline = min(storedProgress ?? completedInUnit, completedInUnit)
-        UserDefaults.standard.set(baseline, forKey: progressKey)
+        // The host re-inits this view on every one of its re-renders.
+        if storedProgress != baseline { UserDefaults.standard.set(baseline, forKey: progressKey) }
         _lastReactedProgress = State(initialValue: baseline)
         // Persisted (for resume) but non-hydrating + invisible to chat history.
         _model = State(initialValue: ChatViewModel.makeLesson(
@@ -170,7 +179,10 @@ public struct CurriculumLessonView: View {
                 ChatInputBar(
                     text: Binding(get: { model.draft }, set: { model.draft = $0 }),
                     isSending: isSending,
-                    attachedImageData: model.pendingImageData,
+                    attachment: model.pendingImage,
+                    isPreparingAttachment: model.isPreparingAttachment,
+                    attachmentError: model.attachmentError,
+                    characterLimit: model.draftCharacterLimit,
                     onSend: { model.send() },
                     onCancel: { model.cancel() },
                     onAttachImage: { model.attachImage(data: $0) },
@@ -180,6 +192,10 @@ public struct CurriculumLessonView: View {
                     focusTrigger: inputFocusTrigger
                 )
             }
+            // The intro and the celebration cover the lesson: VoiceOver and a
+            // keyboard must not reach (or send from) what's underneath.
+            .accessibilityHidden(showIntro || showCelebration)
+            .disabled(showIntro)
 
             if showCelebration {
                 LessonCompleteOverlay(
@@ -202,12 +218,14 @@ public struct CurriculumLessonView: View {
                     // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
                     onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
                 )
+                .accessibilityAddTraits(.isModal)
                 .transition(.opacity)
                 .zIndex(1)
             }
 
             if showIntro {
                 lessonIntro
+                    .accessibilityAddTraits(.isModal)
                     .transition(.opacity)
                     .zIndex(2)
             }
@@ -233,6 +251,7 @@ public struct CurriculumLessonView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                 showCelebration = true
             }
+            AccessibilityNotification.Announcement("Lesson complete").post()
         }
         // INTERMEDIATE progress reacts cleanly on lesson ENTRY (when the learner
         // opens the next lesson) — never buried under the completion overlay. Only
@@ -282,7 +301,7 @@ public struct CurriculumLessonView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(unitLabel) · Lesson \(lessonNumber)".uppercased())
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
                     .tracking(0.4)
                     .foregroundStyle(BrandColor.accent)
                 Spacer(minLength: BrandSpacing.sm)
@@ -290,12 +309,12 @@ public struct CurriculumLessonView: View {
                     model.cancel()
                     onExit()
                 }
-                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(BrandColor.accent)
                 .accessibilityLabel("Done. Exit lesson.")
             }
             Text(title)
-                .font(.system(size: 22, weight: .black, design: .rounded))
+                .font(.system(size: titleSize, weight: .black, design: .rounded))
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
             if totalInUnit > 0 { progressBar.padding(.top, 2) }
@@ -317,7 +336,7 @@ public struct CurriculumLessonView: View {
             }
             .frame(height: 8)
             Text("\(completedInUnit)/\(totalInUnit)")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(.system(size: progressLabelSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(BrandColor.accent)
                 .monospacedDigit()
         }
@@ -337,7 +356,7 @@ public struct CurriculumLessonView: View {
             BrandColor.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
                 Text("\(unitLabel) · Lesson \(lessonNumber)".uppercased())
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
                     .tracking(0.4)
                     .foregroundStyle(BrandColor.accent)
                     .padding(.horizontal, 24)
@@ -356,7 +375,7 @@ public struct CurriculumLessonView: View {
                     }
                     Button(action: startFromIntro) {
                         Text("Continue")
-                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                             .padding(.vertical, 14)
                             .padding(.horizontal, 28)
@@ -375,11 +394,11 @@ public struct CurriculumLessonView: View {
     private var introSpeechBubble: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 17, weight: .black, design: .rounded))
+                .font(.system(size: introTitleSize, weight: .black, design: .rounded))
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Ready to dig in? I'll walk you through it — then check what landed.")
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(.system(size: introBodySize, weight: .bold, design: .rounded))
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -437,7 +456,7 @@ public struct CurriculumLessonView: View {
     private func presentReaction(completed: Int, total: Int) {
         let resolved = MercMascotState.lessonProgress(completed: completed, total: total)
         let next = CoachReaction(
-            copy: progressCopy(completed: completed, total: total),
+            copy: Self.progressCopy(completed: completed, total: total),
             mood: resolved.mood,
             activity: resolved.activity
         )
@@ -452,18 +471,16 @@ public struct CurriculumLessonView: View {
         }
     }
 
-    /// Short reaction copy keyed to the step reached (completion gets its own line).
-    private func progressCopy(completed: Int, total: Int) -> String {
-        if total > 0 && completed >= total {
-            return "Lesson complete. You can explain this now."
-        }
-        switch completed {
-        case 1:  return "Nice start. You've got the core idea."
-        case 2:  return "Good — now connect it to a real-world example."
-        case 3:  return "Halfway there. Watch for the safety angle."
-        case 4:  return "Almost done. One more concept to lock in."
-        default: return "Nice progress — keep it going."
-        }
+    /// Short reaction copy for the unit's progress (units have 4 or 5
+    /// lessons, so it follows the share done, not the count).
+    static func progressCopy(completed: Int, total: Int) -> String {
+        guard total > 0 else { return "Nice progress — keep it going." }
+        if completed >= total { return "Unit complete — you can explain all of this now." }
+        if completed == 1 { return "Nice start. You've got the core idea." }
+        let left = total - completed
+        if left == 1 { return "Almost done — one lesson to go." }
+        if completed * 2 == total { return "Halfway there — keep it going." }
+        return "\(completed) down, \(left) to go."
     }
 
     private var isSending: Bool {

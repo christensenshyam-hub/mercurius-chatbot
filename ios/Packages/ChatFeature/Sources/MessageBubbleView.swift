@@ -3,12 +3,6 @@ import DesignSystem
 import MarkdownUI
 import NetworkingKit
 
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
-
 /// Shared metrics for the free-chat assistant avatar, so the follow-up
 /// footers in `MessageListView` can align with the assistant bubble's
 /// leading edge (avatar footprint + row spacing).
@@ -39,6 +33,10 @@ struct MessageBubbleView: View {
     /// latest assistant message, neutral/idle on older ones.
     var avatarMood: MercMood = .neutral
     var avatarActivity: MercActivity = .idle
+    /// Merc's ambient motion (breathing, wing flaps, blinks). Only the live
+    /// avatar gets it; a screen of older replies would otherwise animate
+    /// without end.
+    var avatarIdleLife: Bool = true
     /// Invoked when the user taps the lesson check-question callout — the host
     /// focuses the input bar so "tap the question, keyboard opens". Nil (the
     /// default) renders the callout as a plain card, exactly as before.
@@ -86,8 +84,8 @@ struct MessageBubbleView: View {
             if shouldShowAvatar { avatarView }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: BrandSpacing.xs) {
-                if message.role == .user, let data = message.imageData, let image = Self.image(from: data) {
-                    image
+                if message.role == .user, let preview = message.image?.preview {
+                    Image(preview, scale: 1, label: Text("Attached photo"))
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: 220, maxHeight: 280)
@@ -134,7 +132,8 @@ struct MessageBubbleView: View {
         // at avatar size — the full body reads as an unreadable speck at 32pt.
         MercMascot(avatarExpression, size: ChatAvatarMetrics.size,
                    presentation: .bust, emphasis: .badge,
-                   mood: avatarMood, activity: avatarActivity)
+                   mood: avatarMood, activity: avatarActivity,
+                   idleLife: avatarIdleLife)
             .padding(.top, 2)
             .accessibilityHidden(true)
     }
@@ -423,17 +422,6 @@ struct MessageBubbleView: View {
             .padding(.horizontal, BrandSpacing.sm)
     }
 
-    /// Decode raw image bytes into a SwiftUI `Image` for an attached photo.
-    private static func image(from data: Data) -> Image? {
-        #if canImport(UIKit)
-        return UIImage(data: data).map { Image(uiImage: $0) }
-        #elseif canImport(AppKit)
-        return NSImage(data: data).map { Image(nsImage: $0) }
-        #else
-        return nil
-        #endif
-    }
-
     // MARK: - Shapes
 
     private var userShape: some Shape {
@@ -458,13 +446,35 @@ struct MessageBubbleView: View {
 
     private var accessibilityLabel: Text {
         let roleLabel = message.role == .user ? "You said" : "Mercurius replied"
-        if message.content.isEmpty, case .streaming = message.status {
+        // A label growing with every delta is noise to VoiceOver, and parsing
+        // the whole reply for it on every render is the costliest part of a
+        // stream.
+        if case .streaming = message.status {
             return Text("Mercurius is replying")
         }
         // Speak the reply with questions flagged and never a raw marker — and
         // never the [Q] answer key (plainText drops ANS lines).
         let spoken = BlockParser.plainText(message.content)
         return Text("\(roleLabel): \(spoken)")
+    }
+}
+
+extension MessageBubbleView: Equatable {
+    /// The closures are left out: the hosts build them from stable
+    /// references (the model, @State storage, this same message), so equal
+    /// inputs draw the same bubble — and whether a host passes `onCheckTap`
+    /// never changes for a bubble. Lets a streaming delta or a keystroke skip
+    /// every bubble that didn't change.
+    nonisolated static func == (lhs: MessageBubbleView, rhs: MessageBubbleView) -> Bool {
+        lhs.message == rhs.message
+            && lhs.lessonStyle == rhs.lessonStyle
+            && lhs.showAvatar == rhs.showAvatar
+            && lhs.avatarMood == rhs.avatarMood
+            && lhs.avatarActivity == rhs.avatarActivity
+            && lhs.avatarIdleLife == rhs.avatarIdleLife
+            && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
+            && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
+            && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex
     }
 }
 

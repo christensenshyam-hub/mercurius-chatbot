@@ -194,7 +194,7 @@ echo "   → resource id: $WIDGET_BUNDLE_RID"
 # ---------------------------------------------------------------------------
 KEYCHAIN_NAME="mercurius-codesign.keychain-db"
 KEYCHAIN="${HOME}/Library/Keychains/${KEYCHAIN_NAME}"
-KEYCHAIN_PASSWORD="mercurius-ci"
+KEYCHAIN_PASSWORD="${MERCURIUS_KEYCHAIN_PASSWORD:-mercurius-ci}"
 
 echo "🔐 Preparing dedicated codesigning keychain..."
 if [ ! -f "$KEYCHAIN" ]; then

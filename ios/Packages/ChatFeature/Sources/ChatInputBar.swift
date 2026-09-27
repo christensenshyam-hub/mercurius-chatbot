@@ -2,19 +2,19 @@ import SwiftUI
 import PhotosUI
 import DesignSystem
 
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
-
 /// Message composer. Grows with content up to 5 lines, then scrolls. Supports
 /// attaching one photo (shown as a thumbnail above the field). Disables the
-/// send button while a request is in flight.
+/// send button while a request is in flight or a photo is still preparing.
+/// Holds at most `characterLimit` characters — what the server reads — and
+/// says so when a paste is cut.
 struct ChatInputBar: View {
     @Binding var text: String
     let isSending: Bool
-    let attachedImageData: Data?
+    let attachment: ChatImage?
+    let isPreparingAttachment: Bool
+    /// Why the last picked photo couldn't be attached.
+    let attachmentError: String?
+    let characterLimit: Int
     let onSend: () -> Void
     let onCancel: () -> Void
     let onAttachImage: (Data) -> Void
@@ -36,24 +36,30 @@ struct ChatInputBar: View {
     /// offline, or a corrupt asset). Without this the picker dismisses and
     /// nothing appears — which reads as "the attach button is broken."
     @State private var attachLoadFailed = false
+    /// The last edit (a paste) went over `characterLimit` and was cut.
+    @State private var wasCut = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
-            if let data = attachedImageData, let image = Self.thumbnail(from: data) {
-                attachmentPreview(image)
+            if isPreparingAttachment {
+                preparingPreview
+            } else if let attachment {
+                attachmentPreview(attachment)
             }
 
             if attachLoadFailed {
-                Text("Couldn't load that photo. Try again.")
+                attachmentFailure("Couldn't load that photo. Try again.") { attachLoadFailed = false }
+            } else if let attachmentError {
+                attachmentFailure(attachmentError, clear: onRemoveAttachment)
+            }
+
+            if let note = ComposerLimit.note(count: text.utf16.count, limit: characterLimit, wasCut: wasCut) {
+                Text(note)
                     .font(BrandFont.caption)
-                    .foregroundStyle(BrandColor.error)
-                    .padding(.leading, 44)  // align past the photo button
-                    .task {
-                        // Transient: auto-clear after a few seconds (a new
-                        // picker interaction also clears it immediately).
-                        try? await Task.sleep(for: .seconds(3))
-                        attachLoadFailed = false
-                    }
+                    .foregroundStyle(wasCut ? BrandColor.error : BrandColor.textSecondary)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("composer.limit")
             }
 
             HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
@@ -87,6 +93,29 @@ struct ChatInputBar: View {
         .onChange(of: pickerItem) { _, newItem in
             loadPickedImage(newItem)
         }
+        .onChange(of: text) { _, newText in
+            let kept = ChatViewModel.clamped(newText, toUTF16: characterLimit)
+            if kept.utf16.count < newText.utf16.count {
+                wasCut = true
+                text = kept
+            } else if newText.utf16.count < characterLimit {
+                wasCut = false
+            }
+        }
+    }
+
+    /// Transient: clears itself after a few seconds (a new pick clears it
+    /// at once).
+    private func attachmentFailure(_ message: String, clear: @escaping () -> Void) -> some View {
+        Text(message)
+            .font(BrandFont.caption)
+            .foregroundStyle(BrandColor.error)
+            .padding(.leading, 44)  // align past the photo button
+            .task(id: message) {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                clear()
+            }
     }
 
     @ViewBuilder private var composerBackground: some View {
@@ -114,17 +143,42 @@ struct ChatInputBar: View {
         .accessibilityLabel("Attach photo")
     }
 
-    private func attachmentPreview(_ image: Image) -> some View {
+    private var preparingPreview: some View {
+        RoundedRectangle(cornerRadius: BrandRadius.md)
+            .fill(BrandColor.surfaceElevated)
+            .frame(width: 64, height: 64)
+            .overlay(ProgressView())
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandRadius.md)
+                    .stroke(BrandColor.border, lineWidth: 1)
+            )
+            .padding(.leading, 44)  // align past the photo button
+            .accessibilityElement()
+            .accessibilityLabel("Attaching photo")
+    }
+
+    private func attachmentPreview(_ attachment: ChatImage) -> some View {
         ZStack(alignment: .topTrailing) {
-            image
-                .resizable()
-                .scaledToFill()
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BrandRadius.md)
-                        .stroke(BrandColor.border, lineWidth: 1)
-                )
+            Group {
+                if let preview = attachment.preview {
+                    Image(preview, scale: 1, label: Text("Attached photo"))
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 24))
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(BrandColor.surfaceElevated)
+                        .accessibilityLabel("Attached photo")
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandRadius.md)
+                    .stroke(BrandColor.border, lineWidth: 1)
+            )
 
             Button(action: onRemoveAttachment) {
                 Image(systemName: "xmark.circle.fill")
@@ -180,7 +234,7 @@ struct ChatInputBar: View {
 
     private var canSend: Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return (hasText || attachedImageData != nil) && !isSending
+        return (hasText || attachment != nil) && !isSending && !isPreparingAttachment
     }
 
     private func triggerSend() {
@@ -207,15 +261,19 @@ struct ChatInputBar: View {
             }
         }
     }
+}
 
-    /// Decode raw image bytes into a SwiftUI `Image` for the thumbnail.
-    private static func thumbnail(from data: Data) -> Image? {
-        #if canImport(UIKit)
-        return UIImage(data: data).map { Image(uiImage: $0) }
-        #elseif canImport(AppKit)
-        return NSImage(data: data).map { Image(nsImage: $0) }
-        #else
-        return nil
-        #endif
+/// The composer's length note (pure; covered by ComposerLimitTests).
+enum ComposerLimit {
+    /// How close to the limit the counter appears.
+    static let counterLead = 200
+
+    /// Nil while the draft is comfortably short.
+    static func note(count: Int, limit: Int, wasCut: Bool) -> String? {
+        if wasCut {
+            return "Only the first \(limit.formatted()) characters will be sent."
+        }
+        guard count >= limit - counterLead else { return nil }
+        return "\(count.formatted()) / \(limit.formatted())"
     }
 }

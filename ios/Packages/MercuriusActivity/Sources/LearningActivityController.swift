@@ -15,6 +15,9 @@ public final class LearningActivityController {
     private init() {}
 
     private var activity: Activity<LearningActivityAttributes>?
+    /// Bumped by every start, end and completion, so a start whose request
+    /// lands after the session already ended knows to take its card down.
+    private var generation = 0
 
     /// The in-memory reference dies with the process, but the Lock Screen
     /// card doesn't — after a relaunch (killed mid-lesson, then resumed),
@@ -37,6 +40,8 @@ public final class LearningActivityController {
         guard isEnabled else { return }
         let content = ActivityContent(state: state, staleDate: state.deadline, relevanceScore: 100)
         activity = nil
+        generation += 1
+        let startGeneration = generation
         Task {
             // End EVERY existing activity for these attributes — the tracked
             // one and any orphans from a previous process run — and await the
@@ -46,10 +51,16 @@ public final class LearningActivityController {
                 await stale.end(stale.content, dismissalPolicy: .immediate)
             }
             do {
-                activity = try Activity.request(
+                let started = try Activity.request(
                     attributes: LearningActivityAttributes(sessionTitle: title),
                     content: content
                 )
+                // The lesson closed while the old cards were ending.
+                guard startGeneration == generation else {
+                    await started.end(started.content, dismissalPolicy: .immediate)
+                    return
+                }
+                activity = started
             } catch {
                 // Denied/limited — the session just runs without a banner.
                 #if DEBUG
@@ -78,11 +89,13 @@ public final class LearningActivityController {
         s.lastUpdated = Date()
         let content = ActivityContent(state: s, staleDate: nil, relevanceScore: 100)
         self.activity = nil
+        generation += 1
         Task { await activity.end(content, dismissalPolicy: .default) }
     }
 
     /// End the activity (user abandoned the session / app cleanup).
     public func endSession(immediately: Bool = false) {
+        generation += 1
         guard let activity = tracked else { return }
         let policy: ActivityUIDismissalPolicy = immediately ? .immediate : .default
         self.activity = nil

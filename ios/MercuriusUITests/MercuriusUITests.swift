@@ -616,36 +616,55 @@ final class MercuriusUITests: XCTestCase {
         let app = launchApp(extraArgs: Self.freshInstallArgs)
 
         tapOnboarding(app, "onboarding.continue", timeout: Self.firstScreenTimeout)
-        chooseAge(app, "12 or younger")
 
-        // Terminal screen: the title is the anchor, and none of the
-        // controls that would move the flow forward may remain.
+        // The wheel opens on a placeholder, so Continue waits for a pick.
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.agePicker").waitForExistence(timeout: Self.lookupTimeout),
+            "Age picker (onboarding.agePicker) did not appear"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.ageContinue").isEnabled,
+            "Continue must stay disabled until an age is picked"
+        )
+        chooseAge(app, "12 or younger")
+        assertUnderThirteenDeadEnd(app)
+
+        // Relaunching doesn't undo it: the device remembers the block.
+        app.terminate()
+        let relaunched = launchApp(extraArgs: Self.freshInstallArgs + [Self.keepAgeBlockArgument])
+        XCTAssertTrue(
+            onboardingElement(relaunched, "onboarding.underThirteen").waitForExistence(timeout: Self.firstScreenTimeout),
+            "A relaunch after an under-13 answer must open on the under-13 screen"
+        )
+        XCTAssertFalse(
+            onboardingElement(relaunched, "onboarding.continue").exists,
+            "A relaunch after an under-13 answer must not offer Meet Merc again"
+        )
+        assertUnderThirteenDeadEnd(relaunched)
+    }
+
+    /// Lets a relaunch keep the age block the previous launch recorded
+    /// (`-UITests` otherwise wipes it at every launch).
+    static let keepAgeBlockArgument = "-KeepAgeBlock"
+
+    /// The under-13 screen is showing and nothing on it moves the flow:
+    /// no forward control, and no way back to the age picker.
+    @MainActor
+    private func assertUnderThirteenDeadEnd(_ app: XCUIApplication) {
         XCTAssertTrue(
             onboardingElement(app, "onboarding.underThirteen").waitForExistence(timeout: Self.lookupTimeout),
             "Choosing '12 or younger' must land on the under-13 screen (onboarding.underThirteen missing)"
         )
-        for identifier in ["onboarding.ageContinue", "onboarding.consentToggle", "onboarding.agree"] {
+        for identifier in ["onboarding.ageContinue", "onboarding.agePicker", "onboarding.ageRetry",
+                           "onboarding.consentToggle", "onboarding.agree"] {
             XCTAssertFalse(
                 onboardingElement(app, identifier).waitForExistence(timeout: 1),
                 "Under-13 screen must be a dead end — '\(identifier)' is still reachable"
             )
         }
-
-        // The wheel opens on "12 or younger", so the one way out is back to
-        // it: a 13+ student who tapped Continue too fast must not be stuck.
-        let retry = onboardingElement(app, "onboarding.ageRetry")
-        XCTAssertTrue(
-            retry.exists,
-            "Under-13 screen must offer 'I picked the wrong age' (onboarding.ageRetry missing)"
-        )
-        retry.tap()
-        XCTAssertTrue(
-            onboardingElement(app, "onboarding.agePicker").waitForExistence(timeout: Self.lookupTimeout),
-            "'I picked the wrong age' did not return to the age picker (onboarding.agePicker missing)"
-        )
-        XCTAssertFalse(
-            onboardingElement(app, "onboarding.underThirteen").exists,
-            "Under-13 title still present after returning to the age picker"
+        XCTAssertEqual(
+            app.buttons.count, 0,
+            "Under-13 screen must have no controls at all, found: \(app.buttons.allElementsBoundByIndex.map(\.label))"
         )
     }
 

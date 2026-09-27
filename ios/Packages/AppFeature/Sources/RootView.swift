@@ -45,15 +45,17 @@ public struct RootView: View {
     }
 
     #if DEBUG
-    /// `-ResetConsent`: forget the persisted consent + first-run flags once
-    /// per process, before `AppEntryView` reads them, so the gate can be
-    /// exercised on a simulator that already agreed. Unlike the argument
-    /// domain (`-consentVersion 0`), this leaves later writes observable.
+    /// `-ResetConsent`: forget the persisted consent, first-run and age-block
+    /// flags once per process, before `AppEntryView` reads them, so the gate
+    /// can be exercised on a simulator that already agreed. Unlike the
+    /// argument domain (`-consentVersion 0`), this leaves later writes
+    /// observable.
     private static let debugResetConsent: Void = {
         guard ProcessInfo.processInfo.arguments.contains("-ResetConsent") else { return }
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: ConsentGate.storageKey)
         defaults.removeObject(forKey: OnboardingFlow.storageKey)
+        defaults.removeObject(forKey: AgeBlock.storageKey)
     }()
     #endif
 
@@ -235,13 +237,17 @@ public struct RootView: View {
             result = .failed(reason: "Could not create a session on this device. Please restart the app.")
         }
         // Failures skip the hold — an error should surface immediately, and
-        // the beat only pads the happy-path cold open.
+        // the beat only pads the happy-path cold open. So does a resume: the
+        // student was here moments ago (iOS evicted the app), and the welcome
+        // beat would only stand between them and the tab they left. The shell
+        // runs its own streak seed and progress pull.
         if case .ready = result {
-            await holdLaunchScreen(since: start)
-            resumeTab = LaunchResume.tab(
+            let resume = LaunchResume.tab(
                 store: env.lastActivityStore,
                 gateShows: AppEntryView.gateShowsAtLaunch()
             )
+            if resume == nil { await holdLaunchScreen(since: start) }
+            resumeTab = resume
         }
         bootstrapState = result
     }

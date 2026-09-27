@@ -429,21 +429,39 @@ struct EdgeCaseTests {
 @MainActor
 struct ServerDrivenStateTests {
 
-    @Test("complete event with a different mode updates currentMode")
-    func modeChangedByServer() async {
-        // Curriculum lessons can make the server switch modes on the client's
-        // behalf (e.g. lesson starter kicks debate mode). The client reflects
-        // that by reading the mode out of the complete event.
+    @Test("A reply in another mode than the thread's keeps the thread's mode and moves the server back")
+    func sessionModeDriftRealigns() async {
+        // A session minted by a Settings reset starts in Socratic, and a
+        // reinstall keeps the Keychain id (and its server mode) but not the
+        // threads — either way the reply's mode can disagree with the thread.
         let client = ControllableChatClient()
-        let model = makeModel(chat: client)
+        let mode = FakeModeClient()
+        let model = makeModel(chat: client, mode: mode)
         #expect(model.currentMode == .socratic)
 
-        model.draft = "Start debate"
+        model.draft = "Is homework good?"
         model.send()
-        await client.emit(sampleComplete(reply: "Debate opened.", mode: "debate"))
+        await client.emit(sampleComplete(reply: "Resolved: homework should be banned.", mode: "debate"))
+
+        await waitFor("server realigned") { mode.calls.count == 1 }
+        #expect(model.phase == .idle)
+        #expect(model.currentMode == .socratic, "the pill stays on the thread's mode")
+        #expect(mode.calls.first?.mode == .socratic)
+        #expect(mode.calls.first?.sessionId == "test-session")
+    }
+
+    @Test("A reply in the thread's own mode makes no mode call")
+    func matchingModeNoRealign() async {
+        let client = ControllableChatClient()
+        let mode = FakeModeClient()
+        let model = makeModel(chat: client, mode: mode)
+
+        model.draft = "Hi"
+        model.send()
+        await client.emit(sampleComplete(reply: "Hello.", mode: "socratic"))
 
         await waitFor("phase idle") { model.phase == .idle }
-        #expect(model.currentMode == .debate)
+        #expect(mode.calls.isEmpty)
     }
 
     @Test("Unknown mode string from server is ignored (no crash, no change)")
@@ -490,18 +508,35 @@ struct StartNewConversationTests {
     @Test("Mode is preserved")
     func preservesPreferences() async {
         let client = ControllableChatClient()
-        let model = makeModel(chat: client)
+        let mode = FakeModeClient()
+        mode.outcome = .success(.init(mode: "debate", unlocked: false))
+        let model = makeModel(chat: client, mode: mode)
 
-        // Switch mode via a server reply.
-        model.draft = "Hi"
-        model.send()
-        await client.emit(sampleComplete(reply: "ok", mode: "debate"))
-        await waitFor("first exchange done") { model.phase == .idle }
+        await model.switchMode(to: .debate)
         #expect(model.currentMode == .debate)
 
         model.startNewConversation()
 
         #expect(model.currentMode == .debate, "Mode should survive startNewConversation()")
+    }
+
+    @Test("Starting over under a new session id returns to Socratic, the new session's mode")
+    func startOverResetsMode() async {
+        let mode = FakeModeClient()
+        mode.outcome = .success(.init(mode: "debate", unlocked: false))
+        let store = InMemoryChatStore()
+        let model = ChatViewModel(chatClient: ControllableChatClient(), modeClient: mode,
+                                  sessionIdProvider: { "s" }, store: store)
+        await model.switchMode(to: .debate)
+        #expect(model.currentMode == .debate)
+
+        store.deleteAll()
+        model.startOverForNewSession()
+
+        #expect(model.currentMode == .socratic)
+        let id = try? #require(model.conversationId)
+        #expect(id.flatMap { store.loadConversation(conversationId: $0)?.mode } == "socratic",
+                "the fresh thread is filed under the mode its replies will come in")
     }
 
     @Test("Cancels an in-flight stream silently (no failure bubble)")

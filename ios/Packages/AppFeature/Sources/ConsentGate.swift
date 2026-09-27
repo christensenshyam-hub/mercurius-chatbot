@@ -35,3 +35,33 @@ public enum AgeGate {
         }
     }
 }
+
+/// An under-13 answer, remembered on this device so the block can't be undone
+/// by going back or relaunching. Only when it happened is kept — never the
+/// age. In `UserDefaults`, so deleting the app clears it.
+public enum AgeBlock {
+    public static let storageKey = "ageBlockedAt"
+
+    /// How long a block holds.
+    public static let coolOffDays = 7
+    static var coolOff: TimeInterval { TimeInterval(coolOffDays) * 24 * 60 * 60 }
+
+    /// A clock set back to before the block keeps it in force.
+    public static func isActive(blockedAt: TimeInterval?, now: Date) -> Bool {
+        guard let blockedAt, blockedAt > 0 else { return false }
+        return now.timeIntervalSince1970 - blockedAt < coolOff
+    }
+}
+
+/// Reads and writes the `AgeBlock` marker.
+struct AgeBlockStore {
+    let defaults: UserDefaults
+
+    func isActive(now: Date = Date()) -> Bool {
+        AgeBlock.isActive(blockedAt: defaults.object(forKey: AgeBlock.storageKey) as? TimeInterval, now: now)
+    }
+
+    func record(now: Date = Date()) {
+        defaults.set(now.timeIntervalSince1970, forKey: AgeBlock.storageKey)
+    }
+}

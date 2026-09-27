@@ -16,8 +16,25 @@ import AppKit
 enum MercNotificationArt {
 
     /// PNG data for a pose tile. `size` is the tile's point size; rendered
-    /// at 3x for banner crispness.
+    /// at 3x for banner crispness. The art is deterministic, so each tile is
+    /// rendered once per process: reminders are re-planned on every app
+    /// switch and after every reply.
     static func pngData(for pose: ReminderPlanner.Pose, size: CGFloat = 220) -> Data? {
+        let key = TileKey(pose: pose, size: size)
+        if let cached = renderedTiles[key] { return cached }
+        let data = render(pose, size: size)
+        if let data { renderedTiles[key] = data }
+        return data
+    }
+
+    private struct TileKey: Hashable {
+        let pose: ReminderPlanner.Pose
+        let size: CGFloat
+    }
+
+    private static var renderedTiles: [TileKey: Data] = [:]
+
+    private static func render(_ pose: ReminderPlanner.Pose, size: CGFloat) -> Data? {
         let renderer = ImageRenderer(content: tile(for: pose, size: size))
         renderer.scale = 3
         #if os(iOS)

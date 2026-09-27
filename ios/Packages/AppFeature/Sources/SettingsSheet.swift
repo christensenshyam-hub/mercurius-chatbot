@@ -54,8 +54,9 @@ struct SettingsSheet: View {
                 // on screen until app relaunch, which reads as a
                 // bug ("I just hit Start Over, why are they still
                 // here?"). Also resets `draft`, cancels any in-
-                // flight stream, and flips phase back to `.idle`.
-                chatModel.startNewConversation()
+                // flight stream, flips phase back to `.idle`, and
+                // returns to Socratic — the new session's mode.
+                chatModel.startOverForNewSession()
                 // The on-device engagement + curriculum caches describe
                 // the OLD identity: a fresh session must not inherit its
                 // streak, badges, or lesson progress — and the curriculum

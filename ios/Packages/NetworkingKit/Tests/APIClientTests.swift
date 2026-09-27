@@ -25,16 +25,73 @@ struct APIClientValidationTests {
         }
     }
 
-    @Test("401 and 403 both map to unauthorized")
+    @Test("413 maps to messageTooLong, with copy the student can act on")
+    func messageTooLong() {
+        let bodies = [
+            Data(#"{"error":"payload_too_large","reply":"That message is too long. Try a shorter prompt."}"#.utf8),
+            Data(),
+        ]
+        for body in bodies {
+            do {
+                try APIClient.validate(statusCode: 413, data: body)
+                Issue.record("Expected throw")
+            } catch let error as APIError {
+                #expect(error == .messageTooLong)
+                #expect(!error.isRetryable)
+                #expect(error.userFacingMessage.contains("too long"))
+            } catch {
+                Issue.record("Wrong error type")
+            }
+        }
+    }
+
+    @Test("A 400 keeps the generic invalidRequest copy, never the server's technical reason")
+    func badRequestStaysGeneric() {
+        // What validate() in lib/schemas.js sends for any messages.* issue.
+        let body = Data(#"{"error":"invalid_messages","message":"No messages provided."}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 400, data: body)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            #expect(error == .invalidRequest(reason: "No messages provided."))
+            #expect(!error.userFacingMessage.contains("No messages"))
+        } catch {
+            Issue.record("Wrong error type")
+        }
+    }
+
+    @Test("401 and 403 with the server's error envelope map to unauthorized")
     func authErrors() {
         for code in [401, 403] {
             do {
-                try APIClient.validate(statusCode: code, data: Data())
+                try APIClient.validate(statusCode: code, data: Data(#"{"error":"unauthorized"}"#.utf8))
                 Issue.record("Expected throw for \(code)")
             } catch let error as APIError {
                 #expect(error == .unauthorized)
             } catch {
                 Issue.record("Wrong error type")
+            }
+        }
+    }
+
+    @Test("A bare or HTML 401/403 is a filter's block page, not a sign-in problem")
+    func proxyBlockPages() {
+        let bodies = [
+            Data(),
+            Data("<html><body>Blocked by your network administrator</body></html>".utf8),
+            Data(#"{"message":"Forbidden"}"#.utf8),
+        ]
+        for code in [401, 403] {
+            for body in bodies {
+                do {
+                    try APIClient.validate(statusCode: code, data: body)
+                    Issue.record("Expected throw for \(code)")
+                } catch let error as APIError {
+                    #expect(error == .unreachableOnThisNetwork)
+                    #expect(error.isRetryable)
+                } catch {
+                    Issue.record("Wrong error type")
+                }
             }
         }
     }
@@ -228,14 +285,54 @@ struct APIClientURLErrorTests {
     }
 
     @Test("The shapes a dead connection actually produces map to offline", arguments: [
-        URLError.Code.networkConnectionLost,
-        .cannotConnectToHost,
+        URLError.Code.cannotConnectToHost,
         .cannotFindHost,
         .dnsLookupFailed,
         .internationalRoamingOff,
     ])
     func connectionFailuresAreOffline(_ code: URLError.Code) {
         #expect(APIClient.mapURLError(URLError(code)) == .offline)
+        #expect(APIClient.mapURLError(URLError(code), pathSatisfied: false) == .offline)
+    }
+
+    @Test("A dropped connection is its own retryable case, not 'offline'")
+    func connectionLost() {
+        let error = APIClient.mapURLError(URLError(.networkConnectionLost))
+        #expect(error == .connectionLost)
+        #expect(error.isRetryable)
+        #expect(error.userFacingMessage != APIError.offline.userFacingMessage)
+        #expect(APIClient.mapURLError(URLError(.networkConnectionLost), pathSatisfied: true) == .connectionLost)
+    }
+
+    @Test("Online but blocked: host, DNS and TLS failures on a satisfied path name the network", arguments: [
+        URLError.Code.cannotConnectToHost,
+        .cannotFindHost,
+        .dnsLookupFailed,
+        .secureConnectionFailed,
+        .serverCertificateUntrusted,
+        .serverCertificateHasBadDate,
+        .serverCertificateHasUnknownRoot,
+        .serverCertificateNotYetValid,
+    ])
+    func blockedOnThisNetwork(_ code: URLError.Code) {
+        let error = APIClient.mapURLError(URLError(code), pathSatisfied: true)
+        #expect(error == .unreachableOnThisNetwork)
+        #expect(error.isRetryable)
+        #expect(error.userFacingMessage.contains("network"))
+    }
+
+    @Test("No connection stays offline even when the path claims to be up")
+    func notConnectedIsAlwaysOffline() {
+        #expect(APIClient.mapURLError(URLError(.notConnectedToInternet), pathSatisfied: true) == .offline)
+    }
+
+    @Test("TLS failures with no known path fall through to unknown")
+    func tlsWithoutPathIsUnknown() {
+        if case .unknown = APIClient.mapURLError(URLError(.secureConnectionFailed)) {
+            // expected
+        } else {
+            Issue.record("secureConnectionFailed without a satisfied path should stay unknown")
+        }
     }
 
     @Test("Other URLErrors still fall through to unknown")
@@ -266,7 +363,8 @@ struct APIErrorTests {
     @Test("All errors have non-empty user-facing messages")
     func allErrorsHaveMessages() {
         let errors: [APIError] = [
-            .offline, .timeout, .invalidRequest(reason: nil), .unauthorized,
+            .offline, .connectionLost, .unreachableOnThisNetwork, .messageTooLong,
+            .timeout, .invalidRequest(reason: nil), .unauthorized,
             .rateLimited, .server(status: 500),
             .quotaExceeded(message: "q", retryAfter: nil),
             .serviceUnavailable(code: "busy", message: "b", retryAfter: 60),
@@ -329,6 +427,7 @@ struct APIErrorTests {
         #expect(APIError.serviceUnavailable(code: "spend_cap", message: "m", retryAfter: nil).isRetryable)
 
         #expect(!APIError.invalidRequest(reason: nil).isRetryable)
+        #expect(!APIError.messageTooLong.isRetryable)
         #expect(!APIError.unauthorized.isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: 3600).isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: nil).isRetryable)

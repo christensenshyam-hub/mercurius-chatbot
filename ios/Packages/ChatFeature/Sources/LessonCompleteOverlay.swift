@@ -30,6 +30,8 @@ public struct LessonCompleteOverlay: View {
     @State private var mercScale: CGFloat = 0.6
     @State private var share: ShareState = .rendering
     @State private var dismissalReported = false
+    @ScaledMetric(relativeTo: .title) private var headlineSize: CGFloat = 27
+    @ScaledMetric(relativeTo: .subheadline) private var subtitleSize: CGFloat = 13.5
 
     private enum ShareState {
         case rendering
@@ -112,11 +114,11 @@ public struct LessonCompleteOverlay: View {
 
                 VStack(spacing: BrandSpacing.xs) {
                     Text("Nailed it!")
-                        .font(.system(size: 27, weight: .black, design: .rounded))
+                        .font(.system(size: headlineSize, weight: .black, design: .rounded))
                         .foregroundStyle(BrandColor.success)
                         .multilineTextAlignment(.center)
                     Text("Lesson complete · \(lessonTitle)")
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(.system(size: subtitleSize, weight: .bold, design: .rounded))
                         .foregroundStyle(BrandColor.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)

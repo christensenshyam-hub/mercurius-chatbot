@@ -220,6 +220,7 @@ struct AppEntryView: View {
         if showsGate {
             OnboardingFlow(
                 mode: hasSeenOnboarding ? .gateOnly : .full,
+                ageBlockStore: env.ageBlockStore,
                 reminderStore: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
