@@ -9,7 +9,7 @@ part of the supported runtime surface.
 
 | What | Value | Where it is pinned |
 |---|---|---|
-| Node | **22** (`>=22`) | `.nvmrc`, `package.json` → `engines.node`, CI matrix in `.github/workflows/server.yml`, Railway's nixpacks build (reads `engines`) |
+| Node | **22** (`22.x`) | `package.json` → `engines.node` (what Railway builds with, see below), `.nvmrc`, CI in `.github/workflows/server.yml` |
 | npm | the one bundled with Node 22 | `package-lock.json` is lockfile v3 — always `npm ci`, never `npm install`, in CI and on Railway |
 
 Local setup:
@@ -25,6 +25,39 @@ npm run dev
 Node 20 is no longer a supported target: it left Maintenance LTS in
 April 2026 and CI tests against 22 only.
 
+### How Railway picks the Node version
+
+Railway builds with Nixpacks (`builder = "nixpacks"` in `railway.toml`).
+Nixpacks resolves the Node version in this order, first match wins:
+
+1. a `NODE_VERSION` (or `NIXPACKS_NODE_VERSION`) service variable,
+2. `package.json` → `engines.node`,
+3. `.nvmrc`, then `.node-version`.
+
+So **`engines.node` wins over `.nvmrc`**, and a `.nvmrc` edit alone changes
+nothing on Railway. Keep `engines` a pinned major (`"22.x"`): an open
+range such as `">=22"` makes Nixpacks pick the newest major it ships
+(24 in Nixpacks 1.41), a runtime no CI job tests. Keep the service
+variables above unset so `engines` stays the single source of truth.
+
+### Native modules must ship prebuilt binaries
+
+The Nixpacks build image has **no python3 and no C/C++ compiler**. A
+native dependency whose install falls back to `node-gyp` (no prebuilt
+binary for linux-x64 + Node 22) fails `npm ci`, and the whole build dies
+~15 s in, before any healthcheck. That is what blocked every deploy from
+2026-09-24 (PR #21 added `engines ">=22"`; better-sqlite3 9.6.0 has no
+Node 22/24 prebuild). better-sqlite3 is therefore on `^12.11.1`, which
+ships linux-x64 prebuilds for Node 22 and 24. Do not move it to 13.x yet:
+under npm 10 its install still runs `node-gyp` and fails the same way.
+Production never loads better-sqlite3 (Postgres only), but `npm ci`
+still installs it.
+
+The GitHub runner that runs `npm test` HAS a compiler, so it cannot catch
+this. The `postgres` job in `server.yml` runs `npm ci` inside
+`node:22-bookworm-slim` (no python, no compiler) and fails if any native
+module would have to build from source.
+
 ## Environment variables
 
 `.env.example` carries one comment per variable and the value the code
@@ -37,7 +70,7 @@ view: what to set in production and why.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Upstream key used by `@anthropic-ai/sdk` | Never log this. See `lib/logger.js` redact list. Not needed when `ANTHROPIC_MOCK=1`. |
 | `ALLOWED_ORIGIN` | Comma-separated CORS allowlist | E.g. `https://mayoailiteracy.com,https://www.mayoailiteracy.com`. Unset means "any origin" — acceptable only in development. |
-| `DATABASE_URL` | Postgres connection string | Railway-provided. If unset the server falls back to a local SQLite file, which is fine for dev and wrong for production (ephemeral filesystem). |
+| `DATABASE_URL` | Postgres connection string | Railway-provided. Unset outside production = a local SQLite file (dev, tests). With `NODE_ENV=production` an empty value **refuses to boot** (`db.js` throws) instead of silently running on an ephemeral SQLite file; the failed healthcheck keeps the previous deployment live. |
 
 ### Recommended
 
@@ -61,7 +94,7 @@ applies) — unlike the quotas below, where `0` means refuse.
 | `STREAM_MAX_MS` | Hard cap on one stream's total wall time (runaway reply). A healthy long lesson turn trips neither watchdog. | `150000` |
 | `STREAM_WATCHDOG_MS` | Legacy name for `STREAM_MAX_MS` (eval/CI overrides); when set it wins | unset |
 | `SSE_KEEPALIVE_MS` | Interval between SSE `: ping` keepalive comments so school proxies and cellular NATs keep a quiet stream open | `15000` |
-| `DRAIN_TIMEOUT_MS` | On SIGTERM stop accepting model work at once but let in-flight streams finish for up to this long before exiting | `30000` — set Railway's `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` to at least this many seconds |
+| `DRAIN_TIMEOUT_MS` | On SIGTERM stop accepting model work at once but let in-flight streams finish for up to this long before exiting | `30000` — Railway's kill window is `drainingSeconds = 35` in `railway.toml`; raise both together |
 | `ANTHROPIC_MOCK` | Exactly `1` swaps the SDK for the in-process mock (`lib/anthropicMock.js`) — no key, no network, no spend. Integration tests and offline UI work; the server logs a boot warning. | off |
 | `MOCK_SCENARIO` | `ok`, `error`, `overloaded`, `slow`, `hang` or `credit` — forces 5xx, 529, a stalled stream or credit exhaustion on demand | `ok`; only read when `ANTHROPIC_MOCK=1` |
 | `MOCK_STREAM_DELAY_MS` | Delay between streamed text deltas from the mock (`slow` multiplies it by 20) | `5`; only read when `ANTHROPIC_MOCK=1` |
@@ -153,8 +186,19 @@ live configuration.
 
 `railway.toml` is the source of truth for the service definition:
 nixpacks build, `node server.js` start command, health check on
-`/api/health` with a 120 s first-response timeout, restart on failure
-up to 10 times.
+`/api/health` with a 120 s first-response timeout (boot + Postgres
+connect; the build is not on that clock), a 35 s drain window
+(`drainingSeconds`), restart on failure up to 10 times, and
+`watchPatterns`.
+
+`watchPatterns` limits which merges deploy: only a change under
+`server.js`, `db.js`, `lib/`, `prompts/`, `public/`, `migrations/`,
+`scripts/`, `package*.json`, `railway.toml` or the Node/npm/Nixpacks
+config files starts a production build. Docs-, iOS-, marketing- and
+mayo-site-only merges are skipped and do not restart the server. Two
+consequences: a new runtime directory must be added to the list, and a
+docs-only merge no longer retries a failed deploy — after changing
+Railway variables, press **Redeploy** in the dashboard.
 
 ### Running one replica (current, default)
 
@@ -171,13 +215,17 @@ DAILY_BUDGET_USD=15
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 IP_HASH_SALT=<random 32 chars>
 STREAK_TZ=America/New_York
-RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30
 ```
 
-`RAILWAY_DEPLOYMENT_DRAINING_SECONDS` is read by Railway, not the
-server: it is how long the old replica keeps running after SIGTERM.
-Keep it at or above `DRAIN_TIMEOUT_MS / 1000`, otherwise Railway
-hard-kills the old replica while lessons are still streaming.
+Do **not** set `NODE_VERSION` or `NIXPACKS_NODE_VERSION`: they override
+`engines.node` (see Toolchain).
+
+The drain window is not a variable any more. `drainingSeconds = 35` in
+`railway.toml` is how long Railway lets the old replica run after
+SIGTERM before it SIGKILLs it: `DRAIN_TIMEOUT_MS / 1000` (30) plus 5 s,
+so the server's own drain always finishes first. If
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS` is still set on the service,
+**delete it**: Railway does not document which of the two wins.
 
 The per-minute limits and daily quotas can stay unset unless you are
 tuning them; the defaults above apply.
@@ -185,26 +233,56 @@ tuning them; the defaults above apply.
 ### Database migrations
 
 The base schema is code-owned (`db.initSchema`, `CREATE IF NOT EXISTS`
-at server boot). Deltas on top of it ship as `migrations/NNN_name.sql`
+plus `ADD COLUMN IF NOT EXISTS` at every server boot, inside Railway's
+network). **Nothing has to be run by hand for the current build:**
+
+- `002_drop_student_memory` is now automatic. `initSchema` runs
+  `DROP TABLE IF EXISTS student_memory` on every boot, so the first
+  successful deploy removes the table (and a later boot removes it again
+  if a rollback to a pre-removal build ever recreates it). The file stays
+  for bookkeeping.
+- `001_gamification` only creates the flag-gated gamification tables
+  (`GAMIFICATION_ENABLED` creates them at boot anyway). Leave it until
+  the flag is turned on.
+
+Deltas that cannot live in `initSchema` ship as `migrations/NNN_name.sql`
 and are applied with the `migrate` npm script (`scripts/migrate.mjs`):
 
 ```
-npm run migrate                 # local (SQLite, or DATABASE_URL from .env)
-railway run npm run migrate     # production, with the service's Variables injected
+SQLITE_PATH=./mercurius.db npm run migrate   # local SQLite (or: npm run migrate -- --sqlite)
+DATABASE_URL=postgres://… npm run migrate    # a Postgres you can reach
 ```
 
-What the script does: picks the driver exactly as `db.js` does
-(`DATABASE_URL` → Postgres, else SQLite at `SQLITE_PATH`), bootstraps
-the base schema on a fresh database, creates `schema_migrations` if
-missing, then applies each not-yet-recorded file in filename order —
-file and bookkeeping row in one atomic statement, so a failure is
-neither half-applied nor recorded. Exit 0 when everything is applied or
-already recorded, 1 on the first failure. It is safe to re-run.
+`railway run npm run migrate` from a laptop does **not** work against
+Railway Postgres: `DATABASE_URL` is the private
+`postgres.railway.internal` host, which does not resolve outside
+Railway (`getaddrinfo ENOTFOUND`). Use one of:
 
-Run it against production **before** deploying a build that depends on
-the new schema (the `railway run` form injects the service's
-Variables, so it hits the real Postgres). Migration files must not
-contain their own `BEGIN`/`COMMIT`.
+- `railway ssh -- npm run migrate` — runs inside the live service
+  (needs a build that contains `scripts/migrate.mjs`, i.e. anything after
+  2026-09-24 once it is deployed);
+- from the repo checkout, with Public Access enabled on the Postgres
+  service: `railway run --service Postgres sh -c 'DATABASE_URL="$DATABASE_PUBLIC_URL" npm run migrate'`
+  (the single quotes matter: the variable belongs to the Postgres
+  service and only exists inside that shell).
+
+What the script does: prints its target (`migrate: target postgres @
+host:port/db` or `sqlite <path>`; never the password) and refuses an
+empty `DATABASE_URL` unless SQLite is explicit (`SQLITE_PATH` or
+`--sqlite`), and SQLite outright under `NODE_ENV=production`; a mistyped
+URL can no longer "succeed" against a throwaway local file. It
+bootstraps the base schema only when the `sessions` table is genuinely
+missing (a connection error is a failure, not "fresh database"), creates
+`schema_migrations` if missing, then applies each not-yet-recorded file
+in filename order — file and bookkeeping row in one atomic statement, so
+a failure is neither half-applied nor recorded. Exit 0 when everything
+is applied or already recorded, 1 otherwise. It is safe to re-run.
+Migration files must not contain their own `BEGIN`/`COMMIT`.
+
+`railway.toml` deliberately has no `preDeployCommand` yet: a failing
+pre-deploy blocks the deploy with no retry, which is the wrong risk
+while the first deploy since July is still pending. Prefer idempotent
+DDL in `initSchema` for anything a build needs at boot.
 
 ### Scaling to N replicas
 
@@ -222,13 +300,15 @@ and scale vertically.
 | Route | Notes |
 |---|---|
 | `GET /api/health` | Returns `{ status, uptime, db, memory }`. Railway's health check points here (`railway.toml`). Returns 503 (not 200) when DB connectivity fails, so a deploy with a bad `DATABASE_URL` never takes traffic. |
-| `GET /metrics` | Prometheus text exposition format. No auth. Scrape from any Prometheus-compatible agent. |
+| `GET /metrics` | Prometheus text exposition format. Admin-only (`x-admin-password`, like `/api/admin/*`): it exposes per-route cost and token counts. Answers 401 without the header. |
 
 ## Failure modes to know about
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| Deploy stalls, then Railway marks it failed after ~2 min | `/api/health` never returned 2xx inside `healthcheckTimeout` — usually DB connectivity or a startup crash | Read the deploy log; check `DATABASE_URL`; run `railway run npm run migrate` if the log shows a missing table |
+| **Build fails within seconds (~15 s), before any healthcheck**; the old deployment keeps serving (`/api/health` uptime keeps growing) | `npm ci` could not install a native module: no prebuilt binary for this Node ABI, and the Nixpacks image has no python3/g++ to compile it | Read the **build** log (not the deploy log) for `prebuild-install warn … No prebuilt binaries found` or `gyp ERR! find Python`, and check which Node version Nixpacks chose (`engines.node`; no `NODE_VERSION`/`NIXPACKS_NODE_VERSION` variable). Fix the dependency or the pin; CI's `postgres` job reproduces it. |
+| Deploy stalls, then Railway marks it failed after ~2 min | `/api/health` never returned 2xx inside `healthcheckTimeout` — usually DB connectivity or a startup crash | Read the deploy log; check `DATABASE_URL`. `initSchema` creates or upgrades every table at boot, so a missing table points at a failed boot DDL (see "Startup crashes" below), not at a skipped migration |
+| Boot fails at once with `NODE_ENV=production but DATABASE_URL is empty` | The service lost its `DATABASE_URL` (variable deleted or the Postgres reference renamed) | Re-add `DATABASE_URL=${{Postgres.DATABASE_URL}}` in Variables and redeploy. The guard is deliberate: it stops a silent run on ephemeral SQLite |
 | `/api/health` returns 503 with `db: "error: ..."` | Postgres connection down / connection pool exhausted | Check `DATABASE_URL` validity; check Railway Postgres service health |
 | Every Claude-backed route returns 503 and Discord got a `budget_100` alert | `DAILY_BUDGET_USD` reached | Decide whether the spend is legitimate. Raise the var (restart) or wait for UTC midnight. Look at `/api/admin/events` for who spent it. |
 | Claude-backed routes return `503 restarting` for a few seconds | A deploy is draining the old replica (`DRAIN_TIMEOUT_MS`) | Expected; clients retry. If it outlasts the drain window the new replica failed its health check — read the deploy log. |
@@ -237,8 +317,38 @@ and scale vertically.
 | One student gets `429 daily_limit` for the rest of the day | A `SESSION_DAILY_*` or `IP_DAILY_*` quota tripped (`lib/quotas.js`) | Confirm in the Discord `ip_cap` alert / admin events; raise the specific var if the usage was legitimate (restart to apply) |
 | Clients get `503 busy` during a class | `IP_MAX_INFLIGHT` (whole school behind one NAT) or `MAX_INFLIGHT` reached | Transient by design — it clears as streams finish. Raise the cap only if `/metrics` shows the process was not actually saturated. |
 | Client sees `{"error":"invalid_model"}` | Client is passing a `model` that isn't in `MODEL_ALLOWLIST` | Either remove the client's override or add the model to the env allowlist. |
-| Startup crashes: `Failed to initialize database` | Postgres schema creation failed. Check logs for the underlying SQL error. | `railway run npm run migrate`; verify schema drift. |
+| Startup crashes: `failed to initialize database` | Postgres schema creation (`initSchema`) failed. Check the deploy log for the underlying SQL error. | Reproduce with `node scripts/pg-smoke.mjs` against a scratch Postgres (CI's `postgres` job runs exactly this); fix the DDL in `db.js`. Do not hand-edit prod first. |
 | Prompt content appears in Railway logs | Regression in `lib/logger.js` redact list | Open a red-PR issue — this is a correctness bug in the redaction layer. Review `tests/logger.test.js` for which paths are covered. |
+
+## Post-deploy checklist
+
+Run after any deploy that changes the server, and in full after the
+first deploy since July (it turns on PRs #21–#31 at once).
+`$HOST` is `https://mercurius-chatbot-production.up.railway.app`.
+
+1. **Deployment succeeded.** Railway shows the deployment Active, or:
+   `gh api repos/christensenshyam-hub/mercurius-chatbot/deployments --jq '.[0] | {id, sha}'`
+   then `gh api repos/christensenshyam-hub/mercurius-chatbot/deployments/<id>/statuses --jq '.[0].state'`
+   → `success`. In the build log, confirm Node **22** was used, no
+   `gyp ERR!` appears, and no `NODE_VERSION` / `NIXPACKS_NODE_VERSION`
+   variable is set on the service.
+2. **The new process is serving.** `curl -s $HOST/api/health` →
+   `"status":"ok"`, `"db":"connected"`, and `uptime` has **reset** to
+   seconds or minutes (the July build reported millions of seconds).
+3. **student_memory is gone.** In the Postgres service's Data tab (or
+   any SQL console on it): `SELECT to_regclass('student_memory');` →
+   `NULL`.
+4. **/metrics is locked.** `curl -s -o /dev/null -w '%{http_code}\n' $HOST/metrics`
+   → `401`.
+5. **The erasure route is live.** `curl -s -o /dev/null -w '%{http_code}\n' -X DELETE $HOST/api/session/abc`
+   → `400` (a short id is refused). The July build answered `404`
+   because the route did not exist.
+6. **Drain window.** Delete `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from
+   Variables if it is set; `railway.toml` now sets `drainingSeconds`.
+7. Set any still-pending variables from "Running one replica" above
+   (`ADMIN_PASSWORD`, `DISCORD_WEBHOOK_URL`, `IP_HASH_SALT`,
+   `DAILY_BUDGET_USD`, `STREAK_TZ`), then Redeploy once, and confirm
+   the Discord `boot` alert arrives.
 
 ## Secrets hygiene
 

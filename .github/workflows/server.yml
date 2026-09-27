@@ -12,9 +12,17 @@ name: Server
 #     server-spawning integration suite). The authoritative count is
 #     whatever `npm test` prints in its `# tests N` summary line —
 #     don't hardcode it here, it drifts.
-#   * Runs on ubuntu-latest. The server does not require macOS —
-#     better-sqlite3 builds from source on Linux just fine, and CI
-#     time is a fraction of the macOS-runner cost.
+#   * Runs on ubuntu-latest. The server does not require macOS, and CI
+#     time is a fraction of the macOS-runner cost. NOTE: this runner
+#     has python3 + g++, so it would happily compile a native module
+#     from source; Railway's Nixpacks image has neither. That is how
+#     better-sqlite3 9.6.0 (no Node 22 prebuild) passed CI for weeks
+#     while every deploy died in `npm ci`. The `postgres` job below
+#     installs in a compiler-free container to catch that class.
+#   * `postgres` job: scripts/pg-smoke.mjs against a real postgres:16
+#     (the July 2026 prod schema → today's initSchema twice, migrate,
+#     every db.js function, then server.js booted on it with the
+#     Anthropic mock). The unit suite only ever runs SQLite.
 #
 # Explicitly NOT in scope:
 #   * Node side of coverage reporting — future follow-up.
@@ -45,11 +53,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 22 only — it is the pinned runtime everywhere
-        # (.nvmrc, package.json "engines", Railway's nixpacks build).
-        # Node 20 left Maintenance LTS in April 2026 and is no longer
-        # a supported target, so testing against it only adds CI
-        # minutes without protecting a real deployment.
+        # Node 22 only — it is the pinned runtime everywhere: .nvmrc,
+        # and package.json "engines": "22.x", which is what Railway's
+        # Nixpacks build actually reads (engines wins over .nvmrc; an
+        # open range like ">=22" would select the newest major Nixpacks
+        # ships, i.e. 24). Node 20 left Maintenance LTS in April 2026
+        # and is no longer a supported target.
         node-version: ['22']
 
     steps:
@@ -81,3 +90,63 @@ jobs:
         run: npm test
         env:
           NODE_ENV: test
+
+  postgres:
+    # Production runs Postgres; everything else in CI runs SQLite. This
+    # job is where the Postgres half of db.js runs before production does.
+    #
+    # It runs inside node:22-bookworm-slim, which (like Railway's Nixpacks
+    # image) has no python3 and no C/C++ compiler: `npm ci` here only
+    # passes if every native dependency ships a prebuilt binary for
+    # linux-x64 + Node 22. A dependency that would fall back to node-gyp
+    # fails this job the same way it would fail the Railway build.
+    name: Postgres smoke (Node 22, no compiler)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: node:22-bookworm-slim
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: merc
+        options: >-
+          --health-cmd "pg_isready -U postgres -d merc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Service containers are reached by their label from a container job.
+      # sslmode=disable: the service has no TLS, and db.js only turns SSL
+      # off by itself for a "localhost" URL (pg lets the URL override it).
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/merc?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert no Python or C/C++ compiler (matches the Railway build image)
+        run: |
+          node --version
+          npm --version
+          for tool in python3 python gcc g++ cc c++; do
+            if command -v "$tool" >/dev/null 2>&1; then
+              echo "::error::$tool is present in this image; the no-compiler install check would prove nothing"
+              exit 1
+            fi
+          done
+          echo "no python / compiler on PATH"
+
+      - name: Install dependencies (prebuilt binaries only)
+        run: npm ci
+
+      - name: Assert better-sqlite3 came from a prebuild, not a source build
+        run: |
+          test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
+          test ! -d node_modules/better-sqlite3/build/Release/obj.target
+          node -e "const D = require('better-sqlite3'); console.log('better-sqlite3 loads; sqlite', new D(':memory:').prepare('select sqlite_version() v').get().v)"
+
+      - name: Postgres smoke (schema upgrade, migrate, db.js, server.js)
+        run: node scripts/pg-smoke.mjs

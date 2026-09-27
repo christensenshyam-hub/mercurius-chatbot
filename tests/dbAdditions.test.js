@@ -1,8 +1,9 @@
 'use strict';
 
 // Tests for the ops-safety-rails db.js additions: settings key/value, the
-// usage ledger + its aggregates, ping(), scrubLegacyNames(), and the usage
-// cascade in deleteSession().
+// usage ledger + its aggregates, ping(), scrubLegacyNames(), the usage
+// cascade in deleteSession(), the boot-time student_memory drop, and the
+// production refusal to boot on SQLite.
 //
 // Runs directly against a temp SQLite db (the local driver), like
 // tests/deleteSession.test.js, so it needs no live Postgres.
@@ -13,6 +14,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 const dbPath = path.join(os.tmpdir(), `merc-additions-${crypto.randomBytes(4).toString('hex')}.db`);
 process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
@@ -158,5 +160,74 @@ describe('deleteSession cascade', () => {
     assert.equal(result.deleted.usage, 2);
     assert.deepEqual(await db.sessionUsageSince(drop, t0), []);
     assert.equal((await db.sessionUsageSince(keep, t0))[0].count, 1, 'other session untouched');
+  });
+});
+
+describe('initSchema drops the legacy student_memory table', () => {
+  // Replaces the operator-run migrations/002 step: production drops it at
+  // boot inside Railway's network, and a rollback that recreated it is
+  // cleaned up again by the next boot.
+  const exists = async () => (await db.queryRaw("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'student_memory'")).length === 1;
+
+  test('a pre-removal table (with rows) is dropped, and a second boot is a no-op', async () => {
+    await db.runRaw(`CREATE TABLE IF NOT EXISTS student_memory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      memory_type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_memory_session ON student_memory(session_id, memory_type);
+    INSERT INTO student_memory (session_id, memory_type, content, created_at) VALUES ('x', 'interest', 'likes chess', 1);`);
+    assert.equal(await exists(), true, 'precondition');
+    await db.initSchema();
+    assert.equal(await exists(), false, 'dropped at boot');
+    const idx = await db.queryRaw("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_memory_session'");
+    assert.equal(idx.length, 0, 'its index went with it');
+    await db.initSchema();
+    assert.equal(await exists(), false, 'idempotent');
+  });
+});
+
+describe('production refuses to boot without DATABASE_URL', () => {
+  const ROOT = path.join(__dirname, '..');
+  function load(env) {
+    const file = path.join(os.tmpdir(), `merc-guard-${crypto.randomBytes(4).toString('hex')}.db`);
+    const r = spawnSync(process.execPath, ['-e', "require('./db'); console.log('loaded')"], {
+      cwd: ROOT,
+      env: { ...process.env, SQLITE_PATH: file, ...env },
+      encoding: 'utf8',
+    });
+    for (const suffix of ['', '-wal', '-shm']) {
+      try { fs.rmSync(file + suffix, { force: true }); } catch { /* ignore */ }
+    }
+    return r;
+  }
+
+  test('NODE_ENV=production + empty DATABASE_URL throws at require time with a clear message', () => {
+    const r = load({ NODE_ENV: 'production', DATABASE_URL: '' });
+    assert.notEqual(r.status, 0, 'non-zero exit');
+    assert.match(r.stderr, /NODE_ENV=production but DATABASE_URL is empty/);
+    assert.doesNotMatch(r.stdout, /loaded/);
+  });
+
+  test('the whole server exits instead of listening on ephemeral SQLite', () => {
+    const r = spawnSync(process.execPath, ['server.js'], {
+      cwd: ROOT,
+      env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '', PORT: String(9990 + Math.floor(Math.random() * 9)), ANTHROPIC_API_KEY: '' },
+      encoding: 'utf8',
+      timeout: 15000,
+    });
+    assert.notEqual(r.status, 0, `server must not boot (status ${r.status}, signal ${r.signal})`);
+    assert.equal(r.signal, null, 'exited on its own, not killed by the timeout');
+    assert.match(r.stderr, /DATABASE_URL is empty/);
+  });
+
+  test('outside production an empty DATABASE_URL still selects SQLite (dev + tests)', () => {
+    for (const NODE_ENV of ['test', 'development', '']) {
+      const r = load({ NODE_ENV, DATABASE_URL: '' });
+      assert.equal(r.status, 0, `NODE_ENV=${NODE_ENV || '(unset)'}: ${r.stderr}`);
+      assert.match(r.stdout, /loaded/);
+    }
   });
 });

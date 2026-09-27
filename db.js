@@ -7,6 +7,19 @@ const { PROGRESS_STATUS_RANK, INT4_MAX } = require('./lib/schemas');
 const DATABASE_URL = process.env.DATABASE_URL;
 const USE_PG = !!DATABASE_URL;
 
+// Production never runs on SQLite. Without this guard a production boot that
+// lost its DATABASE_URL (variable deleted, reference renamed, service
+// re-linked) would come up "healthy" on a throwaway SQLite file inside the
+// container: every session, report and ledger row written until the next
+// deploy silently vanishes with it, and the spend cap starts from $0. Fail the
+// boot instead, so Railway's healthcheck keeps the previous deployment live.
+if (!USE_PG && process.env.NODE_ENV === 'production') {
+  throw new Error(
+    'db: NODE_ENV=production but DATABASE_URL is empty. Refusing to fall back to '
+    + 'ephemeral SQLite. Set DATABASE_URL (the Railway Postgres reference) on this service.',
+  );
+}
+
 let pool, sqliteDb;
 
 if (USE_PG) {
@@ -120,7 +133,14 @@ async function initSchema() {
       );
 
       -- student_memory (the LLM-extracted profile of each student) is gone:
-      -- never created here again, dropped in prod by migrations/002.
+      -- never created here again, and dropped on EVERY boot. That makes the
+      -- drop automatic inside Railway's network (the operator-run
+      -- migrations/002 cannot reach the private Postgres from a laptop), and
+      -- it re-cleans after a rollback to a pre-removal build, whose own
+      -- initSchema would recreate the table. IF EXISTS keeps it idempotent.
+      -- A pre-removal replica still draining during the deploy overlap wraps
+      -- its memory reads/writes in try/catch, so the drop cannot break it.
+      DROP TABLE IF EXISTS student_memory;
 
       -- v3 image uploads. The DB-backed image store (lib/imageStore.js)
       -- persists bytes here; swapping to object storage (S3/R2) later means
@@ -263,6 +283,8 @@ async function initSchema() {
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      -- student_memory: dropped on every boot (see the pg block above).
+      DROP TABLE IF EXISTS student_memory;
       CREATE TABLE IF NOT EXISTS images (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -1153,7 +1175,8 @@ module.exports = {
   // rather than by hand-run SQL. Children are removed before the sessions row
   // to satisfy the FK constraints. Gamification tables (progression, xp_ledger)
   // exist only when GAMIFICATION_ENABLED has run, and student_memory only
-  // until migrations/002 drops it — probe for those first so a DELETE against
+  // between a rollback to a pre-removal build and the next boot of this one
+  // (initSchema drops it) — probe for those first so a DELETE against
   // a missing table never aborts the transaction. The usage ledger and the
   // lesson_events funnel are session-keyed too, so they are part of the
   // cascade. Returns the per-table row counts for an auditable receipt.
