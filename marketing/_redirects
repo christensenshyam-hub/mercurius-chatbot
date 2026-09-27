@@ -17,16 +17,24 @@
 
 # "Get the app" shortcut for posters, bios and the club site.
 # Points at TestFlight while app 2.3.0 is in review. Once 2.3.0 is approved
-# on the App Store, flip the target to https://apps.apple.com/app/id6773192313
-# (keep the 302 — same caching reasoning as /beta above).
+# on the App Store, flip all three targets to
+# https://apps.apple.com/app/id6773192313 (keep the 302 — same caching
+# reasoning as /beta above; same capitalization reasoning too).
 /get    https://testflight.apple.com/join/3ujBtDsa   302
+/Get    https://testflight.apple.com/join/3ujBtDsa   302
+/GET    https://testflight.apple.com/join/3ujBtDsa   302
 
-# Clean URLs for the support and policy pages. 200 = rewrite, so the
-# address bar keeps the short form and the existing .html links keep
-# working too.
-/support   /support.html   200
-/privacy   /privacy.html   200
-/terms     /terms.html     200
+# Clean URLs for every page (the canonical URLs are the short form).
+# 200 = rewrite, so the address bar keeps the short form and the existing
+# .html links keep working too.
+/features       /features.html       200
+/modes          /modes.html          200
+/how-it-works   /how-it-works.html   200
+/audience       /audience.html       200
+/trust          /trust.html          200
+/support        /support.html        200
+/privacy        /privacy.html        200
+/terms          /terms.html          200
 
 # In-app "Send feedback" (Settings → About) points here. Until the pilot's
 # Google Form exists this lands on the support page (which carries the

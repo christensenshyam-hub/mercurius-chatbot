@@ -1,21 +1,34 @@
 # Mercurius AI — marketing site
 
-Standalone single-page promotional site for [Mercurius AI](https://trymercurius.com).
-Plain HTML, CSS, and a few lines of vanilla JS — no framework, no
-build step, no dependencies.
+The promotional site for [Mercurius AI](https://trymercurius.com), deployed
+by Netlify from this folder. Plain HTML, CSS, and a few lines of vanilla
+JS — no framework, no build step, no dependencies.
 
 ## Structure
 
 ```
 marketing/
-├── index.html          # All sections in one semantic document
+├── index.html          # Home: hero + links to the five short reads
+├── features.html, modes.html, how-it-works.html, audience.html, trust.html
+├── privacy.html, terms.html, support.html   # linked from the app and App Store
+├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites
+├── robots.txt, sitemap.xml
 ├── styles.css          # Single stylesheet; brand tokens at top
-├── script.js           # 30 lines for mode-pill tabs + dynamic year
+├── script.js           # Mode-pill tabs + dynamic year
 ├── assets/
-│   ├── mercurius-logo.png   # Full logo + wordmark (1024×1024)
-│   └── mercurius-icon.png   # Cropped icon, transparent (1024×563)
+│   ├── mercurius-logo.png / .webp  # Full logo + wordmark (1024×1024); hero
+│   ├── og-card.png          # 1200×630 link-preview image (og:image)
+│   ├── favicon-48.png, apple-touch-icon.png
+│   ├── app-store-badge.svg  # Apple's official US badge, self-hosted
+│   └── mercurius-icon.png   # Old cropped icon (470×415), no longer referenced
 └── README.md
 ```
+
+Canonical URLs are the extensionless form (`https://trymercurius.com/privacy`).
+Netlify rewrites the `.html` links in the pages to that form on deploy, and
+`_redirects` maps each short path back to its file. The privacy page states
+what the production server keeps and for how long — change it in the same
+PR as any retention or data-flow change on the server.
 
 ## Local preview
 
@@ -46,10 +59,6 @@ The site is fully static — pick whichever host you already use.
   Reachable at `/site` then. Keep the API path separate from the
   marketing path so a marketing redeploy never touches the chat
   surface.
-
-The CTAs currently link to `#` placeholders. Wire them to the
-TestFlight invite link (or a beta-signup form) once the iOS build is
-on TestFlight.
 
 ## Brand tokens
 
@@ -91,14 +100,13 @@ uses system fonts and the web font swaps in without layout shift.
 
 ## Performance
 
-- One HTML, one CSS, one JS file. Total transfer < 50KB before
-  fonts.
-- Logo PNG is the largest asset (210KB). If you ever need to shave
-  it, swap for WebP/AVIF via `<picture>` — same dimensions.
+- One HTML, one CSS, one JS file per page. Total transfer < 50KB
+  before fonts and the hero image.
+- The hero is served as WebP (≈50KB) through `<picture>`, with the
+  210KB PNG as the fallback. Every `<img>` carries width and height
+  so nothing shifts while it loads.
 - `loading="eager"` + `fetchpriority="high"` on the hero image so
   it doesn't lose the LCP race.
-- All other images would be `loading="lazy"` (currently only one
-  hero image; the icon at 22px doesn't need it).
 - No third-party scripts. No analytics by default — add a single
   `<script>` tag when you're ready.
 

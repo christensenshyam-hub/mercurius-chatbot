@@ -244,9 +244,8 @@ p:last-child { margin-bottom: 0; }
 }
 
 /* .brand-mark img was retired — wordmark-only brand reads cleaner
-   in the header / footer at the scale we needed. The cropped icon
-   PNG still lives in `assets/mercurius-icon.png` for the favicon /
-   apple-touch-icon and for future use, but no UI references it. */
+   in the header / footer at the scale we needed. The favicon and
+   apple-touch-icon are `assets/favicon-48.png` / `apple-touch-icon.png`. */
 
 .brand-name {
   font-family: var(--font-display);
@@ -404,6 +403,9 @@ p:last-child { margin-bottom: 0; }
   justify-content: center;
   align-items: center;
 }
+/* The <picture> wrapper (WebP with a PNG fallback) must not become the flex
+   item, or the img's width: 100% resolves against a shrink-wrapped box. */
+.hero-art picture { display: contents; }
 
 .hero-logo {
   width: 100%;
