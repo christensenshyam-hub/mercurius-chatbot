@@ -578,6 +578,11 @@ line only when I have seen the result myself.
       2.3.0 submitted with phased release (APP_STORE_LISTING.md §6).
 - [ ] `https://trymercurius.com/privacy`, `/terms`, `/support` return 200
       on a phone; `/support` shows `support@trymercurius.com`.
+- [ ] Once the server checks above pass, the interim wording is gone:
+      revert the commit "Say what the running server does until the update
+      is live" and deploy the site. `/privacy` no longer has the "Right
+      now: our server update is still rolling out" section, and no page
+      says "once our server update is live".
 - [ ] `support@trymercurius.com` forwards to an inbox I read daily; a test
       email from my phone arrived.
 - [ ] Prewarm works from my Mac (the command under Thursday morning) and
