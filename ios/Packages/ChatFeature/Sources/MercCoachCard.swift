@@ -29,6 +29,8 @@ struct MercCoachCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mercState: MercState = .idle
+    @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 10
+    @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 15
 
     var body: some View {
         HStack(alignment: .center, spacing: BrandSpacing.md) {
@@ -48,11 +50,11 @@ struct MercCoachCard: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(eyebrow)
-                    .font(.system(size: 10, weight: .heavy, design: .rounded))
+                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
                     .tracking(1.2)
                     .foregroundStyle(eyebrowColor)
                 Text(displayLine)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: lineSize, weight: .bold, design: .rounded))
                     .foregroundStyle(BrandColor.text)
                     .fixedSize(horizontal: false, vertical: true)
             }

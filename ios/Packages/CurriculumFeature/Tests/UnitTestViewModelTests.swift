@@ -63,8 +63,9 @@ struct UnitTestViewModelTests {
         #expect(m.mcqScore == 5)
         #expect(m.mcqPassed)
         // Selecting after submit is a no-op (the quiz is locked).
-        m.select("B", for: "q1")
-        #expect(m.selectedLetter(for: "q1") == "A")
+        let picked = m.questions[0].answer
+        m.select(picked == "B" ? "C" : "B", for: "q1")
+        #expect(m.selectedLetter(for: "q1") == picked)
     }
 
     @Test("4 of 5 passes the MCQ half; 3 of 5 fails")
@@ -171,9 +172,63 @@ struct UnitTestViewModelTests {
         )
         let m = UnitTestViewModel(unit: makeUnit(), test: test,
                                   gradeDefense: { _ in .init(grade: "A", pass: true, feedback: "") })
-        m.select("B", for: "q")
+        let shown = m.questions[0]
+        #expect(shown.options[shown.answerIndex] == "b")
+        m.select(shown.answer, for: "q")
         m.submitQuiz()
         #expect(m.mcqScore == 1)
-        #expect(m.isCorrect(test.questions[0]) == true)
+        #expect(m.isCorrect(shown) == true)
+    }
+
+    @Test("Each attempt shuffles the options and the answer follows the right option")
+    func optionsShuffledPerAttempt() {
+        let m = UnitTestViewModel(unit: makeUnit(), test: makeTest(), shuffleSeed: 42,
+                                  gradeDefense: { _ in .init(grade: "A", pass: true, feedback: "") })
+        for (authored, shown) in zip(makeTest().questions, m.questions) {
+            #expect(shown.id == authored.id)
+            #expect(Set(shown.options) == Set(authored.options))
+            #expect(shown.options[shown.answerIndex] == authored.options[authored.answerIndex])
+        }
+        let firstOrder = m.questions.map(\.options)
+        m.retake()
+        #expect(m.questions.map(\.options) != firstOrder, "a retake gets a fresh order")
+    }
+
+    @Test("Answering B to everything no longer passes the multiple-choice half")
+    func allBDoesNotPass() throws {
+        let unit = try #require(MercuriusCurriculum.units.first { $0.id == "unit_3" })
+        let test = try #require(MercuriusCurriculum.unitTest(for: unit.id))
+        #expect(test.questions.allSatisfy { $0.answer == "B" }, "unit_3's authored key is all B")
+        var passes = 0
+        for seed in UInt64(0)..<200 {
+            let m = UnitTestViewModel(unit: unit, test: test, shuffleSeed: seed,
+                                      gradeDefense: { _ in .init(grade: "A", pass: true, feedback: "") })
+            for question in m.questions { m.select("B", for: question.id) }
+            m.submitQuiz()
+            if m.mcqPassed { passes += 1 }
+        }
+        #expect(passes < 20, "all-B passed \(passes) of 200 shuffled attempts")
+    }
+
+    @Test("A refusal shows the server's copy, and a non-retryable one isn't re-sent unchanged")
+    func refusalShowsServerCopy() async {
+        let copy = "You've used today's grading. Try again tomorrow."
+        let m = model(gradeDefense: { _ in throw DefenseGradingError.refused(message: copy, isRetryable: false) })
+        m.defenseAnswer = "Because the data was skewed."
+        await m.submitDefense()
+        #expect(m.defenseError == copy)
+        #expect(!m.canSubmitDefense)
+
+        m.defenseAnswer = "Because the training data was skewed."
+        #expect(m.canSubmitDefense)
+    }
+
+    @Test("A retryable refusal can be sent again as is")
+    func retryableRefusal() async {
+        let m = model(gradeDefense: { _ in throw DefenseGradingError.refused(message: "Busy.", isRetryable: true) })
+        m.defenseAnswer = "An answer."
+        await m.submitDefense()
+        #expect(m.defenseError == "Busy.")
+        #expect(m.canSubmitDefense)
     }
 }

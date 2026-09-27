@@ -4,7 +4,7 @@ import SwiftUI
 /// expressed through SUBTLE NATIVE MOTION ONLY (a slight lean, head-cock, or
 /// pop); it never changes the procedural artwork or the explicit `state`
 /// expression. Mapping mood → richer expression is a deliberate later step.
-public enum MercMood: Equatable {
+public enum MercMood: Equatable, Sendable {
     case neutral
     case happy
     case thinking
@@ -17,7 +17,7 @@ public enum MercMood: Equatable {
 
 /// What the mascot is *doing* right now — the temporal/animation axis. Drives a
 /// subtle motion overlay and takes precedence over `mood` when active.
-public enum MercActivity: Equatable {
+public enum MercActivity: Equatable, Sendable {
     case idle
     case userTyping
     case aiThinking

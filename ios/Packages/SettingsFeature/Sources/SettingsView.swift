@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import DesignSystem
 import NetworkingKit
 #if canImport(UIKit)
@@ -109,7 +110,12 @@ public struct SettingsView: View {
     private func copySessionId() {
         guard model.canCopySessionId else { return }
 #if canImport(UIKit)
-        UIPasteboard.general.string = model.sessionId
+        // The id is the only key to this student's server data: keep it off
+        // Universal Clipboard, and out of the pasteboard after two minutes.
+        UIPasteboard.general.setItems(
+            [[UTType.plainText.identifier: model.sessionId]],
+            options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(120)]
+        )
 #endif
         showCopied = true
         Task {

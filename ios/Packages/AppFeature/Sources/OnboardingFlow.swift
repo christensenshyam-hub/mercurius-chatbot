@@ -9,13 +9,15 @@ import PersistenceKit
 /// Nothing here touches the network, and nothing is persisted until the
 /// user acts: `consentVersion` is written when "Got it" is tapped on the
 /// limits screen (and cleared on the under-13 and paused dead ends),
-/// `hasSeenOnboarding` when the full flow finishes. The
-/// self-declared age is compared on-device and dropped.
+/// `hasSeenOnboarding` when the full flow finishes, and the `AgeBlock`
+/// marker when the age check blocks. The self-declared age is compared
+/// on-device and dropped.
 ///
 /// - `.full` (first run): Meet Merc → age → disclosure → limits → Your path.
 /// - `.gateOnly` (an install whose stored consent is older than
 ///   `ConsentGate.currentVersion`, or that withdrew consent in Settings):
 ///   age → disclosure → limits, then the flow unmounts and Home shows.
+/// - Either mode opens on the under-13 screen while a block is in force.
 struct OnboardingFlow: View {
     enum Mode {
         case full
@@ -32,6 +34,7 @@ struct OnboardingFlow: View {
     static let storageKey = "hasSeenOnboarding"
 
     let mode: Mode
+    let ageBlockStore: AgeBlockStore
     let reminderStore: ReminderStore
     /// The entry view's scheduler, so "Your path"'s switches queue behind its
     /// re-plans instead of racing them.
@@ -53,6 +56,7 @@ struct OnboardingFlow: View {
 
     init(
         mode: Mode,
+        ageBlockStore: AgeBlockStore,
         reminderStore: ReminderStore,
         scheduler: NotificationScheduler,
         streakStore: StreakStore,
@@ -62,6 +66,7 @@ struct OnboardingFlow: View {
         onGateCleared: @escaping () -> Void
     ) {
         self.mode = mode
+        self.ageBlockStore = ageBlockStore
         self.reminderStore = reminderStore
         self.scheduler = scheduler
         self.streakStore = streakStore
@@ -71,7 +76,7 @@ struct OnboardingFlow: View {
         self.onGateCleared = onGateCleared
         _step = State(initialValue:
             Self.debugStartStep(arguments: ProcessInfo.processInfo.arguments)
-            ?? Self.initialStep(for: mode))
+            ?? Self.initialStep(for: mode, ageBlocked: ageBlockStore.isActive()))
     }
 
     var body: some View {
@@ -110,9 +115,7 @@ struct OnboardingFlow: View {
                 show(Self.step(afterAgeEligible: eligible))
             })
         case .underThirteen:
-            // `.id(step)` re-mounts the age step fresh (wheel back on the
-            // youngest row). Nothing is persisted or logged for the retry.
-            UnderThirteenView(onWrongAge: { step = .age })
+            UnderThirteenView()
         case .disclosure:
             DisclosureStep(
                 onAgree: {
@@ -148,6 +151,7 @@ struct OnboardingFlow: View {
     /// behind the under-13 or paused screen.
     private func show(_ next: Step) {
         if Self.dropsConsent(next) { consentVersion = 0 }
+        if next == .underThirteen { ageBlockStore.record() }
         step = next
     }
 
@@ -177,8 +181,9 @@ struct OnboardingFlow: View {
 
     // MARK: - Routing (pure; covered by OnboardingFlowRoutingTests)
 
-    static func initialStep(for mode: Mode) -> Step {
-        mode == .full ? .meet : .age
+    static func initialStep(for mode: Mode, ageBlocked: Bool = false) -> Step {
+        if ageBlocked { return .underThirteen }
+        return mode == .full ? .meet : .age
     }
 
     static func step(afterAgeEligible eligible: Bool) -> Step {

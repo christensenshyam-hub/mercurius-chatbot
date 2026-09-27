@@ -173,7 +173,10 @@ public struct ChatView: View {
                         set: { model.draft = $0 }
                     ),
                     isSending: isSending,
-                    attachedImageData: model.pendingImageData,
+                    attachment: model.pendingImage,
+                    isPreparingAttachment: model.isPreparingAttachment,
+                    attachmentError: model.attachmentError,
+                    characterLimit: model.draftCharacterLimit,
                     onSend: { model.send() },
                     onCancel: { model.cancel() },
                     onAttachImage: { model.attachImage(data: $0) },
@@ -275,11 +278,10 @@ public struct ChatView: View {
             // of iOS toolbars.
             if let onGoHome {
                 Button {
-                    // Leaving the shell destroys this view model — an
-                    // in-flight reply would stream into the void and leave
-                    // the persisted thread permanently unanswered. Cancel
-                    // first so the bubble is marked and state is coherent
-                    // when the user comes back.
+                    // Leaving the shell destroys this view model, so stop
+                    // the reply rather than let it stream into the void. The
+                    // thread then ends on the student's turn, and the model
+                    // built on return offers Retry for it.
                     if isSending { model.cancel() }
                     onGoHome()
                 } label: {
@@ -408,9 +410,11 @@ struct MessageListView: View {
                             showAvatar: !lessonStyle,
                             avatarMood: isLive ? mercMood : .neutral,
                             avatarActivity: isLive ? mercActivity : .idle,
+                            avatarIdleLife: isLive,
                             onCheckTap: onCheckTap,
                             quizInteraction: quizInteraction(for: message)
                         )
+                        .equatable()
                         .id(message.id)
                     }
 

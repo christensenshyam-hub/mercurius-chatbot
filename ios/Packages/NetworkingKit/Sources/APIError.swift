@@ -8,8 +8,21 @@ public enum APIError: Error, Equatable, Sendable {
     /// not reach the server.
     case offline
 
+    /// An established connection dropped mid-request (`networkConnectionLost`
+    /// — typically the app was backgrounded or the Wi-Fi flapped).
+    case connectionLost
+
+    /// The device has a working network path, but this network would not
+    /// let the request reach the server: DNS or connect refused, TLS
+    /// intercepted, or a proxy's own 401/403 page — what a school content
+    /// filter produces.
+    case unreachableOnThisNetwork
+
     /// The request took longer than the configured timeout.
     case timeout
+
+    /// The request body is over the server's cap (413).
+    case messageTooLong
 
     /// The server rejected the input (400). `reason` is optional context
     /// from the server. Never surface this directly to users — it may be
@@ -55,6 +68,12 @@ public enum APIError: Error, Equatable, Sendable {
         switch self {
         case .offline:
             return "You're offline. Reconnect and try again."
+        case .connectionLost:
+            return "The connection dropped. Try again."
+        case .unreachableOnThisNetwork:
+            return "Can't reach Mercurius on this network. Try cellular data or a different Wi-Fi."
+        case .messageTooLong:
+            return "That message is too long — try a shorter one."
         case .timeout:
             return "That took too long. The server may be busy — try again."
         case .invalidRequest:
@@ -81,9 +100,11 @@ public enum APIError: Error, Equatable, Sendable {
     /// Whether the error is likely transient and a retry could succeed.
     public var isRetryable: Bool {
         switch self {
-        case .offline, .timeout, .server, .rateLimited, .serviceUnavailable, .unknown:
+        case .offline, .connectionLost, .unreachableOnThisNetwork, .timeout, .server,
+             .rateLimited, .serviceUnavailable, .unknown:
             return true
-        case .invalidRequest, .unauthorized, .quotaExceeded, .decoding, .invalidModelOutput, .cancelled:
+        case .messageTooLong, .invalidRequest, .unauthorized, .quotaExceeded, .decoding,
+             .invalidModelOutput, .cancelled:
             return false
         }
     }

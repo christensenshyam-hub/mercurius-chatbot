@@ -73,7 +73,8 @@ final class SSEDataDelegate: NSObject, URLSessionDataDelegate {
         }
 
         if let urlError = error as? URLError {
-            continuation.finish(throwing: APIClient.mapURLError(urlError))
+            continuation.finish(throwing: APIClient.mapURLError(
+                urlError, pathSatisfied: NetworkPathMonitor.shared.isSatisfied))
             return
         }
         if let error {

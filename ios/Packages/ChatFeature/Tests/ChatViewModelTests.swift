@@ -524,6 +524,17 @@ private func imageTestReply() -> ChatResponse {
     ChatResponse(reply: "ok", mode: "socratic")
 }
 
+/// `attachImage` prepares the photo off the main actor; poll (10 s deadline)
+/// until it lands or fails.
+@MainActor
+private func waitForAttachment(_ model: ChatViewModel) async {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while model.isPreparingAttachment, ContinuousClock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(!model.isPreparingAttachment, "attachment never finished preparing")
+}
+
 private func sampleUploadResponse() -> APIClient.ImageUploadResponse {
     APIClient.ImageUploadResponse(
         id: "img_abc", url: "/api/images/img_abc", contentType: "image/jpeg",
@@ -550,17 +561,18 @@ struct ChatViewModelImageTests {
         )
 
         model.attachImage(data: Data([0x01, 0x02, 0x03]))
-        #expect(model.pendingImageData != nil)
+        await waitForAttachment(model)
+        #expect(model.pendingImage != nil)
         model.draft = "What is this?"
         model.send()
         // Cleared on send — the photo moves into the user bubble.
-        #expect(model.pendingImageData == nil)
+        #expect(model.pendingImage == nil)
 
         try await waitUntilSettled(model)
 
         #expect(uploader.callCount == 1)
         #expect(client.receivedImageIds.last == "img_abc")
-        #expect(model.messages.first?.imageData != nil, "user bubble keeps the photo for display")
+        #expect(model.messages.first?.image != nil, "user bubble keeps the photo for display")
     }
 
     @Test("A photo-only message (no text) is allowed")
@@ -574,6 +586,7 @@ struct ChatViewModelImageTests {
         )
 
         model.attachImage(data: Data([0x09]))
+        await waitForAttachment(model)
         model.send()   // no draft text
         try await waitUntilSettled(model)
 
@@ -594,12 +607,14 @@ struct ChatViewModelImageTests {
     }
 
     @Test("clearAttachment removes the pending photo")
-    func clearAttachmentClears() {
-        let model = ChatViewModel(chatClient: FakeChatClient(), modeClient: FakeModeClient(), sessionIdProvider: { "s" })
+    func clearAttachmentClears() async {
+        let model = ChatViewModel(chatClient: FakeChatClient(), modeClient: FakeModeClient(),
+                                  sessionIdProvider: { "s" }, preparer: StubPreparer())
         model.attachImage(data: Data([0x01]))
-        #expect(model.pendingImageData != nil)
+        await waitForAttachment(model)
+        #expect(model.pendingImage != nil)
         model.clearAttachment()
-        #expect(model.pendingImageData == nil)
+        #expect(model.pendingImage == nil)
     }
 }
 
@@ -716,6 +731,7 @@ struct ChatViewModelReportTests {
         )
 
         model.attachImage(data: Data([0x01]))
+        await waitForAttachment(model)
         model.send()   // no text
         try await waitUntilSettled(model)
 

@@ -68,7 +68,7 @@ struct AppShellView: View {
     // MARK: - Shared state
 
     @State private var selectedTab: Tab
-    @State private var chatModel: ChatViewModel
+    @State private var chatModelHolder = LazyChatModel()
     @State private var didPresentInitialStop = false
 
     /// Drives presentation of the Chat History sheet. Set to true by
@@ -164,15 +164,23 @@ struct AppShellView: View {
         // .curriculum. Fresh @State each entry (the shell leaves the tree
         // when the user goes Home), so this always applies.
         _selectedTab = State(initialValue: initialTab)
-        _chatModel = State(
-            initialValue: ChatViewModel(
+    }
+
+    /// Built on first use and kept for the shell's lifetime. Not
+    /// `State(initialValue:)`: that evaluates its argument on every init, and
+    /// the entry view re-inits the shell on each of its re-renders (a reply's
+    /// streak stamp, a progress revision, every scene-phase change) — each
+    /// would hydrate a thread from SwiftData and throw it away.
+    private var chatModel: ChatViewModel {
+        chatModelHolder.resolve {
+            ChatViewModel(
                 apiClient: apiClient,
                 sessionIdentity: sessionIdentity,
                 store: chatStore,
                 streakStore: streakStore,
                 achievementStore: achievementStore
             )
-        )
+        }
     }
 
     // MARK: - Body
@@ -556,6 +564,13 @@ struct AppShellView: View {
                         // the student sees an honest message instead of a
                         // connection error that no amount of retrying can fix.
                         throw DefenseGradingError.unavailable
+                    } catch let error as APIError {
+                        // A daily limit, spend cap or busy server carries its
+                        // own copy; "check your connection" would be wrong.
+                        throw DefenseGradingError.refused(
+                            message: error.userFacingMessage,
+                            isRetryable: error.isRetryable
+                        )
                     }
                     // Derive pass from the letter grade on-device too, so a
                     // malformed server `pass` flag can't mark a C/D as passed.
@@ -800,6 +815,19 @@ struct AppShellView: View {
             return "UNIT \(unit.number)"
         }
         return "CURRICULUM"
+    }
+}
+
+/// Holds the shell's one `ChatViewModel`, made on first access.
+@MainActor
+final class LazyChatModel {
+    private var model: ChatViewModel?
+
+    func resolve(_ make: () -> ChatViewModel) -> ChatViewModel {
+        if let model { return model }
+        let made = make()
+        model = made
+        return made
     }
 }
 

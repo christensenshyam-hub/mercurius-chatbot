@@ -192,12 +192,13 @@ struct MeetMercStep: View {
 
 // MARK: - Age
 
-/// A neutral wheel: it opens on the youngest row and the caller decides
-/// eligibility. The selection lives only in this view's `@State`.
+/// A neutral wheel: it opens on a placeholder, not on any age, and Continue
+/// waits for a pick — so a fast tap can't answer for the student. The caller
+/// decides eligibility. The selection lives only in this view's `@State`.
 struct AgeStep: View {
     let onContinue: (Int) -> Void
 
-    @State private var selectedAge: Int = AgeGate.choices.first ?? AgeGate.minimumAge
+    @State private var selectedAge: Int?
 
     var body: some View {
         GateStepContainer(
@@ -205,8 +206,9 @@ struct AgeStep: View {
             subtitle: "Checked on this device only — your age isn't saved or sent anywhere."
         ) {
             Picker("Age", selection: $selectedAge) {
+                Text("Select your age").tag(Int?.none)
                 ForEach(AgeGate.choices, id: \.self) { age in
-                    Text(AgeGate.label(for: age)).tag(age)
+                    Text(AgeGate.label(for: age)).tag(Int?.some(age))
                 }
             }
 #if os(iOS)
@@ -215,33 +217,27 @@ struct AgeStep: View {
             .labelsHidden()
             .accessibilityIdentifier("onboarding.agePicker")
         } cta: {
-            DuoButton("Continue", style: .primary) { onContinue(selectedAge) }
-                .accessibilityIdentifier("onboarding.ageContinue")
+            DuoButton("Continue", style: .primary, isEnabled: selectedAge != nil) {
+                if let selectedAge { onContinue(selectedAge) }
+            }
+            .accessibilityIdentifier("onboarding.ageContinue")
         }
     }
 }
 
-/// Terminal: no way forward, and nothing was written. The one control goes
-/// back to the wheel — it opens on "12 or younger", so a 13+ student who
-/// tapped Continue too fast must not be stuck here for the session.
+/// Terminal: no control moves the flow, and the device remembers the block
+/// (`AgeBlock`) so going back or relaunching can't undo it.
 struct UnderThirteenView: View {
-    let onWrongAge: () -> Void
-
     var body: some View {
         GateRestScreen(
             mercState: .idle,
             title: "Mercurius is for ages 13 and up",
             titleIdentifier: "onboarding.underThirteen",
-            message: "Come back when you're 13 — nothing you entered was saved."
+            message: "Come back when you're 13. This device stays blocked for "
+                + "\(AgeBlock.coolOffDays) days — your age itself isn't saved. If it's a "
+                + "mistake, ask a teacher or parent."
         ) {
-            Button(action: onWrongAge) {
-                Text("I picked the wrong age")
-                    .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("onboarding.ageRetry")
+            EmptyView()
         }
     }
 }

@@ -50,6 +50,8 @@ public final class AppEnvironment: ObservableObject {
     public let reviewPromptStore: ReviewPromptStore
     /// Whether the Home card offering weekly nudges has been answered.
     let reminderCardStore: ReminderCardStore
+    /// Whether this device answered under 13 recently.
+    let ageBlockStore: AgeBlockStore
 
     /// A lesson a tapped reminder (or a `mercurius://lesson/<id>` link) asked
     /// to open. The shell presents it and clears it.
@@ -136,6 +138,10 @@ public final class AppEnvironment: ObservableObject {
             defaults: Self.makeDefaults(suite: Self.uiTestReviewPromptSuite, arguments: arguments))
         self.reminderCardStore = ReminderCardStore(
             defaults: Self.makeDefaults(suite: Self.uiTestReminderCardSuite, arguments: arguments))
+        // `-KeepAgeBlock` lets a UI test relaunch into the block it just made.
+        self.ageBlockStore = AgeBlockStore(
+            defaults: Self.makeDefaults(suite: Self.uiTestAgeBlockSuite, arguments: arguments,
+                                        wipe: !arguments.contains(Self.keepAgeBlockArgument)))
         if isUITesting {
             // Every UI test anchors on Home's CTAs; the card would push them
             // down. Its logic is covered by the AppFeature unit tests.
@@ -212,6 +218,8 @@ public final class AppEnvironment: ObservableObject {
     static let uiTestLastActivitySuite = "com.mayoailiteracy.mercurius.uitests.lastActivity"
     static let uiTestReviewPromptSuite = "com.mayoailiteracy.mercurius.uitests.reviewPrompt"
     static let uiTestReminderCardSuite = "com.mayoailiteracy.mercurius.uitests.reminderCard"
+    static let uiTestAgeBlockSuite = "com.mayoailiteracy.mercurius.uitests.ageBlock"
+    static let keepAgeBlockArgument = "-KeepAgeBlock"
 
     static func makeCurriculumProgressPreferences(arguments: [String]) -> PreferenceStore {
         guard arguments.contains(uiTestArgument) else { return UserDefaultsPreferenceStore() }
@@ -221,12 +229,12 @@ public final class AppEnvironment: ObservableObject {
     /// `.standard`, or under `-UITests` the named private suite, emptied —
     /// so what one UI test leaves behind (a recent-activity stamp that would
     /// skip Home, a dismissed card) never reaches the next launch.
-    static func makeDefaults(suite: String, arguments: [String]) -> UserDefaults {
+    static func makeDefaults(suite: String, arguments: [String], wipe: Bool = true) -> UserDefaults {
         guard arguments.contains(uiTestArgument),
               let defaults = UserDefaults(suiteName: suite) else {
             return .standard
         }
-        defaults.removePersistentDomain(forName: suite)
+        if wipe { defaults.removePersistentDomain(forName: suite) }
         return defaults
     }
 

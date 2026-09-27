@@ -27,6 +27,9 @@ public final class APIClient: Sendable {
         config.timeoutIntervalForResource = environment.requestTimeout * 2
         config.waitsForConnectivity = false
         self.urlSession = URLSession(configuration: config)
+        // Start watching the path now, so the first failure already knows
+        // whether the device is online.
+        NetworkPathMonitor.shared.start()
     }
 
     // Convenience accessors used by `APIClient+Chat`.
@@ -101,7 +104,7 @@ public final class APIClient: Sendable {
         do {
             (data, response) = try await urlSession.data(for: request)
         } catch let urlError as URLError {
-            throw Self.mapURLError(urlError)
+            throw Self.mapURLError(urlError, pathSatisfied: NetworkPathMonitor.shared.isSatisfied)
         } catch is CancellationError {
             throw APIError.cancelled
         } catch {
@@ -136,14 +139,17 @@ public final class APIClient: Sendable {
         case 400:
             throw APIError.invalidRequest(reason: errorBody(from: data)?.message)
         case 401, 403:
+            // No student-facing route answers 401/403, and ours always carry
+            // a machine code. A bare one is a school filter or proxy page.
+            let body = errorBody(from: data)
+            guard body?.error != nil || body?.code != nil else {
+                throw APIError.unreachableOnThisNetwork
+            }
             throw APIError.unauthorized
         case 413:
             // express's JSON body cap. Non-retryable — a retry re-sends the
-            // same oversized payload — and actionable, unlike `.unknown`.
-            throw APIError.invalidRequest(
-                reason: errorBody(from: data)?.message
-                    ?? "That message is too long. Try a shorter one, or start a new chat."
-            )
+            // same oversized payload.
+            throw APIError.messageTooLong
         case 429:
             // `daily_limit` is the day's allowance, not the per-minute limiter:
             // it carries copy the student should read and must not be retried.
@@ -189,13 +195,23 @@ public final class APIClient: Sendable {
     private static let unavailableFallbackMessage =
         "Mercurius is temporarily unavailable. Please try again soon."
 
-    public static func mapURLError(_ error: URLError) -> APIError {
+    /// `pathSatisfied` is the device's network path when the error arrived
+    /// (`NetworkPathMonitor`); nil when unknown. A satisfied path turns the
+    /// "can't reach the host" family into `.unreachableOnThisNetwork`: the
+    /// phone is online, so "You're offline" would be wrong — the likely
+    /// cause is a network (a school filter) that blocks or intercepts us.
+    public static func mapURLError(_ error: URLError, pathSatisfied: Bool? = nil) -> APIError {
+        if pathSatisfied == true, blockedOnNetworkCodes.contains(error.code) {
+            return .unreachableOnThisNetwork
+        }
         switch error.code {
-        // The shapes a dead or flaky connection actually produces — a
-        // dropped socket, no route, DNS down, roaming off — not only the
-        // reachability verdict. Anything here reads as "check your
-        // connection" to the student, and is worth a retry.
-        case .notConnectedToInternet, .dataNotAllowed, .networkConnectionLost,
+        case .networkConnectionLost:
+            return .connectionLost
+        // The shapes a dead connection actually produces — no route, DNS
+        // down, roaming off — not only the reachability verdict. Anything
+        // here reads as "check your connection" to the student, and is
+        // worth a retry.
+        case .notConnectedToInternet, .dataNotAllowed,
              .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .internationalRoamingOff:
             return .offline
         case .timedOut:
@@ -206,6 +222,14 @@ public final class APIClient: Sendable {
             return .unknown(underlying: error.localizedDescription)
         }
     }
+
+    /// Host, DNS and TLS failures: on a working path, the network is
+    /// refusing or intercepting the connection to us.
+    private static let blockedOnNetworkCodes: Set<URLError.Code> = [
+        .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+        .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+        .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+    ]
 }
 
 // MARK: - Supporting types
