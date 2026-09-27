@@ -63,8 +63,8 @@ Two details of the drain are worth knowing when reading its notes:
   bucket.
 - **Drain losing streams** or exiting non-zero is a defect in the SIGTERM
   path (`shutdown()` in `server.js`, `inflightSse`, `claudeCall.inflight()`).
-  Raise `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` only if the exit time in the
-  note is genuinely close to `DRAIN_TIMEOUT_MS`.
+  Raise `DRAIN_TIMEOUT_MS` (and `drainingSeconds` in `railway.toml` with it)
+  only if the exit time in the note is genuinely close to `DRAIN_TIMEOUT_MS`.
 - **`Other` non-zero anywhere** is the server answering something outside
   its documented envelopes; the server log path is printed and kept.
 

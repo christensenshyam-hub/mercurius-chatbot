@@ -1,5 +1,35 @@
 [build]
 builder = "nixpacks"
+# Only a change to something the server needs at build or run time triggers a
+# production deploy; docs-, iOS-, marketing- and mayo-site-only merges are
+# skipped (they used to rebuild and restart prod, cutting open lesson
+# streams). The list is deliberately generous; leaving a path out would
+# silently skip a needed deploy. Runtime reads: server.js + db.js + lib/**
+# (all requires), prompts/** (lib/unifiedPrompt.js reads mercurius-v2.md),
+# public/** (express.static). Build inputs: package.json, package-lock.json,
+# .nvmrc, railway.toml, plus nixpacks.toml / .npmrc / .node-version / Procfile
+# should one ever be added. migrations/** and scripts/** are operator tooling
+# that ships in the image (`railway ssh -- npm run migrate`).
+#
+# Consequence: a docs-only merge no longer retries a failed deploy. After
+# changing Railway variables, use Redeploy in the dashboard.
+watchPatterns = [
+  "/server.js",
+  "/db.js",
+  "/lib/**",
+  "/prompts/**",
+  "/public/**",
+  "/migrations/**",
+  "/scripts/**",
+  "/package.json",
+  "/package-lock.json",
+  "/railway.toml",
+  "/.nvmrc",
+  "/.node-version",
+  "/.npmrc",
+  "/nixpacks.toml",
+  "/Procfile",
+]
 
 [deploy]
 startCommand = "node server.js"
@@ -7,9 +37,19 @@ startCommand = "node server.js"
 # returns 2xx. /api/health returns 503 when the DB is unreachable, so a bad
 # DATABASE_URL never takes traffic (see docs/DEPLOY.md → Health checks).
 healthcheckPath = "/api/health"
-# Seconds Railway waits for the first healthy response before marking the
-# deploy failed. 120 covers a cold better-sqlite3 build + Postgres connect.
+# Seconds Railway waits, AFTER the build has finished and the container has
+# started, for the first healthy response before marking the deploy failed.
+# It covers boot (initSchema DDL + Postgres connect + settings reads) only.
+# The npm ci / native-module install happens in the BUILD phase, before this
+# clock starts, and production never loads better-sqlite3 (Postgres only).
 healthcheckTimeout = 120
+# SIGTERM → SIGKILL window for the OLD deployment when a new one goes live.
+# server.js drains for up to DRAIN_TIMEOUT_MS (30 000 ms by default) after
+# SIGTERM: open lesson streams finish and usage-ledger rows are written. 35 =
+# 30 s + 5 s margin so the server's own deadline and exit always run before
+# Railway's SIGKILL. Raise both together. This replaces the old
+# RAILWAY_DEPLOYMENT_DRAINING_SECONDS service variable (delete it if set).
+drainingSeconds = 35
 restartPolicyType = "on_failure"
 # Crash-loop budget. 10 keeps the service self-healing across a transient
 # upstream/DB blip without letting a hard startup failure restart forever.

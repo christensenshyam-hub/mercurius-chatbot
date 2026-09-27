@@ -3112,8 +3112,8 @@ process.on('unhandledRejection', (err) => {
 // Graceful drain. Railway sends SIGTERM on every deploy: stop taking model
 // work (gate → 503 restarting, health → 503 so traffic shifts), stop
 // accepting new connections, let the streams already open finish, then
-// exit. The hard deadline is DRAIN_TIMEOUT_MS; set Railway's
-// RAILWAY_DEPLOYMENT_DRAINING_SECONDS at least that high.
+// exit. The hard deadline is DRAIN_TIMEOUT_MS; Railway's SIGTERM→SIGKILL
+// window (`drainingSeconds` in railway.toml) must stay above it.
 function shutdown(signal, hardMs) {
   if (draining) return;
   draining = true;

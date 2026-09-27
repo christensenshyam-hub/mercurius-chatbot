@@ -2,7 +2,7 @@
 -- Retire the cross-session "student memory" store.
 --
 -- Applied by `node scripts/migrate.mjs`, which records it in schema_migrations
--- so it runs exactly once per database. Safe to re-run by hand: IF EXISTS
+-- so it runs at most once per database. Safe to re-run by hand: IF EXISTS
 -- makes a second pass a no-op. The table's index (idx_memory_session) is
 -- dropped with it on both drivers.
 --
@@ -11,8 +11,14 @@
 -- being removed; its rows are personal data with no remaining reader, so the
 -- table goes rather than lingering.
 --
--- ⚠️ db.initSchema must stop CREATE-ing this table in the same change that
--- removes the memory helpers — otherwise the next boot silently recreates it
--- (empty) and this migration, already recorded as applied, never runs again.
+-- Bookkeeping only since 2026-09: db.initSchema runs the same
+-- `DROP TABLE IF EXISTS student_memory` on EVERY server boot (both drivers),
+-- inside Railway's network, so production no longer depends on anyone running
+-- this file (a laptop `railway run` cannot reach the private Postgres
+-- anyway). The boot-time drop also cleans up after a rollback to a
+-- pre-removal build (whose initSchema recreates the table even though this
+-- migration is already recorded) as soon as a current build boots again.
+-- Running this file is still harmless: against a database a current server
+-- has booted on, it is a no-op that just gets recorded.
 
 DROP TABLE IF EXISTS student_memory;
