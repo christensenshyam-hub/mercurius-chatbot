@@ -82,12 +82,18 @@ The Install captain walks the room. Common snags: Safari asks to open
 TestFlight (say yes); TestFlight not installed (App Store → TestFlight →
 back to the link); "Accept" then "Install"; iOS 16 or older will not
 install (the app needs iOS 17). Anyone without an iPhone pairs up with a
-neighbor today and is not on the hook this week.
+neighbor today and is not on the hook this week. A student who mis-taps an
+age under 13 gets the stop screen, and that phone stays on it for 7 days
+(the app keeps only when it happened, never the age). There is no retry
+button. The screen tells them to ask a teacher or parent, so they come to
+me: for a club member (all 13+), deleting the app and reinstalling it from
+the link clears the stop.
 
 While they install, say what they are about to see so nobody is
 surprised: "Four screens before the first lesson. Meet Merc — that's
 just the mascot. Then 'How old are you?' — the app is 13 and up; your
-age is checked on your phone and isn't saved or sent anywhere. Then a
+age is checked on your phone and isn't saved or sent anywhere. Pick
+carefully: an age under 13 stops the app on that phone for a week. Then a
 screen called 'Before you start': it tells you exactly what happens with
 what you type — your messages, and any photo you attach, are sent to
 Anthropic's Claude to generate the reply. There's a switch that says
@@ -249,7 +255,7 @@ Questions, exactly:
 4. *(optional, paragraph)* **Anything else?**
 
 The link goes on the poster as a second QR and gets pinned in the group
-chat. Build 15 already has Settings → "Send feedback", which opens
+chat. The 2.3.0 app already has Settings → "Send feedback", which opens
 `trymercurius.com/feedback`. That redirect lands on the support page until
 the form exists; once it does, point `/feedback` and `/Feedback` in
 `marketing/_redirects` at the form URL and deploy the marketing site. No
@@ -515,12 +521,11 @@ line only when I have seen the result myself.
 - [ ] Variables set: `ANTHROPIC_API_KEY`, `DATABASE_URL` (Postgres, not
       SQLite), `ADMIN_PASSWORD` (32+ random chars), `IP_HASH_SALT` (32+,
       never rotated), `ALLOWED_ORIGIN`, `USE_UNIFIED_PROMPT=1`.
-- [ ] Drain window: Railway must let the old server run at least 35 s
-      after a deploy starts, or open lessons are cut off mid-reply. If
-      `railway.toml` on main has a `drainingSeconds` line, that sets it:
-      delete `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from Variables if it is
-      there (DEPLOY.md). If it has no such line, set
-      `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=35`.
+- [ ] Drain window: `railway.toml` on main sets `drainingSeconds = 35`
+      (PR #32), so Railway lets the old server finish open lessons for
+      35 s after a deploy starts. Delete
+      `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from Variables if it is set
+      (DEPLOY.md).
 - [ ] `DISCORD_WEBHOOK_URL` set and **tested**: flip the kill switch on
       and off (REVIEW_REHEARSAL steps 10–11) and see both messages in the
       alerts channel. Alerts channel notifications on, on my phone.
@@ -542,13 +547,12 @@ line only when I have seen the result myself.
       address on Thursday. Do not set the eval-server value of 1000 in
       production.
 - [ ] The old student-notes table is gone: in the Railway Postgres Data
-      tab, `SELECT to_regclass('student_memory');` returns NULL. A build
-      that has `DROP TABLE IF EXISTS student_memory` in `db.js` drops it at
-      every boot. If the query returns the table, press **Redeploy** on the
-      current main build and check again; if it is still there, run
-      migration 002 from inside the service with
-      `railway ssh -- npm run migrate` (a laptop's `railway run` cannot
-      reach the private Postgres host) and check again.
+      tab, `SELECT to_regclass('student_memory');` returns NULL. Nothing
+      is run by hand: migration 002 runs automatically at boot (PR #32;
+      `initSchema` drops the table on every boot, DEPLOY.md → Database
+      migrations). If the query returns the table, the Active deployment
+      is not main: check its commit in Railway and press **Redeploy** on
+      main.
 - [ ] The Anthropic org's rate limits cover a room of 25. Peak is about
       40 requests/min (25 students, one turn each every 40–60 s); a lesson
       turn is ~9k cached + ~0.6k uncached input tokens (up to ~3k) and
@@ -566,7 +570,7 @@ line only when I have seen the result myself.
 - [ ] No deploys after Wednesday night until Friday.
 
 **By Wednesday — the link and the app**
-- [ ] 2.3.0 build in the TestFlight external group with the **public link
+- [ ] 2.3.0 (16) in the TestFlight external group with the **public link
       enabled**; installed from that link on a phone that has never had
       the app, walked through the four first-run screens.
 - [ ] `/get` added to `marketing/_redirects` (with `/Get` and `/GET`,
@@ -591,8 +595,8 @@ line only when I have seen the result myself.
       captain; form QR on the poster; link pinned in the chat.
 - [ ] `/feedback` and `/Feedback` in `marketing/_redirects` point at the
       form URL and the marketing site is deployed:
-      `curl -sI https://trymercurius.com/feedback` shows the form. (Build
-      15's Settings → "Send feedback" opens that link.)
+      `curl -sI https://trymercurius.com/feedback` shows the form. (The
+      app's Settings → "Send feedback" opens that link.)
 - [ ] School Wi-Fi reaches the server. In the club room, on the student
       Wi-Fi with cellular data off, a personal phone loads
       `https://mercurius-chatbot-production.up.railway.app/api/health`

@@ -1,10 +1,11 @@
 # 2.3.0 review rehearsal (on-device, before you submit)
 
 Run this on a real iPhone with the **exact TestFlight build you intend to
-submit** (same build number). It walks the app the way App Review will, and
-checks the server side of each promise the listing makes. Budget about
-45 minutes. If any step fails, fix it and start again from step 1 on a new
-build — do not submit a build you have only partly rehearsed.
+submit**: 2.3.0 (16), main plus fix/ios-hardening (same build number). It
+walks the app the way App Review will, and checks the server side of each
+promise the listing makes. Budget about 45 minutes. If any step fails, fix
+it and start again from step 1 on a new build — do not submit a build you
+have only partly rehearsed.
 
 Companion: [`APP_STORE_LISTING.md`](APP_STORE_LISTING.md) (what you are
 promising) and `ios/docs/APP_STORE.md` (the shipping gates).
@@ -52,19 +53,16 @@ Tick each line only when you saw the expected result yourself.
    check. No tutor content, no chat input, no network spinner before it.
 
 2. **Enter age 12.**
-   Expected, build 15: "Mercurius is for ages 13 and up" and nothing that
-   leads into the app, plus an "I picked the wrong age" button that reopens
-   the age picker. Force-quit and relaunch: the first-run flow starts again
-   at "Meet Merc" (nothing was persisted).
-   Expected, a build with the age-gate hardening (fix/ios-hardening): the
-   wheel opens on "Select your age" and Continue stays off until you pick;
-   after 12 the same stop screen shows with no button at all. Force-quit
-   and relaunch: the app opens straight on the stop screen, and stays there
-   for 7 days (only the time of the block is kept on the device, not the
-   age). Deleting the app clears it, which step 3 relies on.
-   Either build: nothing should have hit the server (you will confirm this
-   in step 7), and App Review note 1 (APP_STORE_LISTING.md §4) must describe
-   the build you saw.
+   Expected: the wheel opens on "Select your age" and Continue stays off
+   until you pick. After 12: "Mercurius is for ages 13 and up", with no
+   button at all (no "I picked the wrong age") and nothing that leads into
+   the app. Force-quit and relaunch: the app opens straight on the stop
+   screen. This device remembers the stop for 7 days, keeping only the time
+   of the stop, never the age. Deleting the app clears it, which step 3
+   relies on. Nothing should have hit the server (you will confirm this in
+   step 7). If you see a retry button, or the relaunch starts at "Meet
+   Merc", you are on build 15. Stop and install build 16: App Review note 1
+   (APP_STORE_LISTING.md §4) describes build 16.
 
 3. **Delete the app, reinstall from TestFlight, enter age 15.**
    Expected: the **disclosure** screen: messages and attached photos go
