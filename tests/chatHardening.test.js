@@ -75,13 +75,17 @@ async function stream(sessionId, messages, extra = {}) {
   };
 }
 
-// Uncached input tokens the mock billed: a pure function of the messages the
-// model received (the cached system prefix is billed separately).
-async function inputTokens(messages) {
+// Every prompt token the mock billed (uncached + cache write + cache read):
+// with one system prompt, a function of the messages the model received,
+// whichever blocks the prompt caches. Each bucket is rounded on its own, so
+// two identical requests can differ by a token or two.
+const promptTokensOf = (u) => u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;
+const SAME = 3;
+async function promptTokens(messages) {
   const out = await stream(sid(), messages);
   assert.equal(out.status, 200, out.text.slice(0, 300));
   assert.ok(out.complete, `complete frame (${out.text.slice(0, 300)})`);
-  return out.complete.usage.input_tokens;
+  return promptTokensOf(out.complete.usage);
 }
 
 function storedUserTurns(sessionId) {
@@ -110,19 +114,19 @@ describe('per-turn budgets', () => {
 
   test('a replayed user turn reaches the model cut to 2,000 chars, exactly as when it was first sent', async () => {
     const tail = [{ role: 'assistant', content: 'Go on.' }, { role: 'user', content: 'And then?' }];
-    const long = await inputTokens([{ role: 'user', content: 'y'.repeat(9000) }, ...tail]);
-    const cut = await inputTokens([{ role: 'user', content: 'y'.repeat(2000) }, ...tail]);
-    const shorter = await inputTokens([{ role: 'user', content: 'y'.repeat(1000) }, ...tail]);
-    assert.equal(long, cut, 'the 9,000-char turn was replayed as its first 2,000');
-    assert.ok(shorter < cut, 'the measure is sensitive to turn length');
+    const long = await promptTokens([{ role: 'user', content: 'y'.repeat(9000) }, ...tail]);
+    const cut = await promptTokens([{ role: 'user', content: 'y'.repeat(2000) }, ...tail]);
+    const shorter = await promptTokens([{ role: 'user', content: 'y'.repeat(1000) }, ...tail]);
+    assert.ok(Math.abs(long - cut) <= SAME, `the 9,000-char turn was replayed as its first 2,000 (${long} vs ${cut})`);
+    assert.ok(shorter < cut - 100, `the measure is sensitive to turn length (${shorter} vs ${cut})`);
   });
 
   test('the latest turn is cut to 2,000 chars for the model and in the stored transcript', async () => {
     const s = sid();
     const long = await stream(s, [{ role: 'user', content: 'z'.repeat(5000) }]);
     assert.equal(long.status, 200);
-    const cut = await inputTokens([{ role: 'user', content: 'z'.repeat(2000) }]);
-    assert.equal(long.complete.usage.input_tokens, cut);
+    const cut = await promptTokens([{ role: 'user', content: 'z'.repeat(2000) }]);
+    assert.ok(Math.abs(promptTokensOf(long.complete.usage) - cut) <= SAME, `${promptTokensOf(long.complete.usage)} vs ${cut}`);
     assert.deepEqual(storedUserTurns(s).map((c) => c.length), [2000]);
   });
 
@@ -185,8 +189,9 @@ describe('attached images', () => {
     const other = await stream(sid(), messages, { imageId });
     const textOnly = await stream(sid(), messages);
     assert.ok(own.complete && other.complete && textOnly.complete);
-    assert.ok(own.complete.usage.input_tokens > textOnly.complete.usage.input_tokens, 'the owner sees the image');
-    assert.equal(other.complete.usage.input_tokens, textOnly.complete.usage.input_tokens, 'another session gets a text-only turn');
+    const [ownT, otherT, textT] = [own, other, textOnly].map((o) => promptTokensOf(o.complete.usage));
+    assert.ok(ownT > textT + 1000, `the owner sees the image (${ownT} vs ${textT})`);
+    assert.ok(Math.abs(otherT - textT) <= SAME, `another session gets a text-only turn (${otherT} vs ${textT})`);
   });
 
   test('an image-only turn whose image is gone still gets an answer (not an upstream 400)', async () => {
@@ -198,11 +203,16 @@ describe('attached images', () => {
 
 describe('crisis replies', () => {
   test('a reply carrying the crisis resources is counted (no text) in /metrics', async () => {
-    const out = await stream(sid(), [{ role: 'user', content: 'sometimes I want to hurt myself' }]);
-    assert.match(out.complete.reply, /988/);
-    const metrics = await (await fetch(`${BASE}/metrics`, { headers: { 'x-admin-password': ADMIN_PASSWORD } })).text();
-    assert.match(metrics, /crisis_resource_replies_total\{[^}]*kind="chat"[^}]*\} 1\b/);
-    assert.doesNotMatch(metrics, /hurt myself/);
+    const scrape = async () => (await fetch(`${BASE}/metrics`, { headers: { 'x-admin-password': ADMIN_PASSWORD } })).text();
+    const countOf = (text) => Number((text.match(/crisis_resource_replies_total\{[^}]*kind="chat"[^}]*\} (\d+)/) || [])[1] || 0);
+    const before = countOf(await scrape());
+    // The mock quotes the student's words back, so this reply names 988.
+    const out = await stream(sid(), [{ role: 'user', content: 'Is 988 the number to call when someone is in crisis' }]);
+    assert.match(out.complete.reply, /\b988\b/);
+    await stream(sid(), [{ role: 'user', content: 'What is a token?' }]);
+    const after = await scrape();
+    assert.equal(countOf(after) - before, 1, 'one reply named the resources');
+    assert.doesNotMatch(after, /number to call/);
   });
 });
 
