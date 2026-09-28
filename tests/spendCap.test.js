@@ -17,7 +17,7 @@
 
 const { describe, test, before, after, beforeEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -283,41 +283,17 @@ describe('spendCap USD accumulator', () => {
 // Integration — the chat handler 503s and makes zero Anthropic calls
 // ---------------------------------------------------------------------------
 describe('spend cap closes the chat handler', () => {
-  const PORT = 9200 + Math.floor(Math.random() * 700);
-  const BASE = `http://localhost:${PORT}`;
+  let BASE;
   const dbPath = path.join(os.tmpdir(), `merc-spendcap-${crypto.randomBytes(4).toString('hex')}.db`);
   let proc;
 
   before(async () => {
-    await new Promise((resolve, reject) => {
-      proc = spawn(process.execPath, ['server.js'], {
-        cwd: path.join(__dirname, '..'),
-        env: {
-          ...process.env,
-          PORT: String(PORT),
-          DAILY_BUDGET_USD: '0', // budget closed → the first call is refused
-          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-          ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-          SQLITE_PATH: dbPath, // throwaway db — never touch the real mercurius.db
-          NODE_ENV: 'test',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let started = false;
-      proc.stdout.on('data', (c) => {
-        if (!started && c.toString().includes('Mercurius')) {
-          started = true;
-          setTimeout(resolve, 300);
-        }
-      });
-      proc.stderr.on('data', (c) => {
-        const t = c.toString();
-        if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-      });
-      proc.on('error', reject);
-      proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-      setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
+    const server = spawnServer({
+      DAILY_BUDGET_USD: '0', // budget closed → the first call is refused
+      SQLITE_PATH: dbPath, // throwaway db — never touch the real mercurius.db
     });
+    proc = server.proc;
+    ({ base: BASE } = await server.ready);
   });
 
   after(() => {

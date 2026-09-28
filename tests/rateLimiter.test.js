@@ -118,6 +118,28 @@ describe('ipLimiter — Express middleware', () => {
     assert.match(other.message, /Too many requests/);
   });
 
+  test('an app-level limiter labels rejections with a constant, never the URL', async () => {
+    const metrics = require('../lib/metrics');
+    const app = express();
+    app.use('/api/', rateLimiter.ipLimiter('flood', { windowMs: 60_000, max: 1 }));
+    app.get('/api/progress/:sessionId', (_req, res) => res.json({ ok: true }));
+    await listen(app);
+
+    const secret = 'secretSession' + Date.now();
+    for (let i = 0; i < 20; i++) {
+      const p = i % 2 ? `/api/progress/${secret}${i}?x=${i}` : `/api/nope/${Math.random().toString(36).slice(2)}?sessionId=${secret}`;
+      await fetch(`${base}${p}`);
+    }
+    const values = (await metrics.rateLimitRejectionsTotal.get()).values.filter((v) => v.labels.scope === 'ip:flood');
+    assert.equal(values.length, 1, `one series, got ${JSON.stringify(values.map((v) => v.labels))}`);
+    assert.equal(values[0].labels.endpoint, 'unrouted');
+    assert.ok(values[0].value >= 19);
+    for (const v of (await metrics.rateLimitRejectionsTotal.get()).values) {
+      assert.ok(!String(v.labels.endpoint).includes('?'), `no query string in ${v.labels.endpoint}`);
+      assert.ok(!String(v.labels.endpoint).includes(secret), `no session id in ${v.labels.endpoint}`);
+    }
+  });
+
   test('sends standard RateLimit headers, not the legacy X- ones', async () => {
     const app = express();
     app.get('/x', rateLimiter.ipLimiter('global', { windowMs: 60_000, max: 5 }), (_req, res) => res.json({ ok: true }));

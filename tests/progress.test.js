@@ -20,12 +20,10 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
+const { waitFor } = require('./support/waitFor');
 
-// 11500–11599: disjoint from every other suite's range (files run concurrently;
-// images.test.js tops out at 11499, server.test.js at 9999).
-const PORT = 11500 + Math.floor(Math.random() * 100);
-const BASE = `http://localhost:${PORT}`;
+let BASE;
 const dbPath = path.join(os.tmpdir(), `merc-progress-${crypto.randomBytes(4).toString('hex')}.db`);
 process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
 delete process.env.DATABASE_URL;          // force the SQLite driver
@@ -307,34 +305,9 @@ describe('GET / PUT /api/progress/:sessionId', () => {
   }
 
   before(async () => {
-    await new Promise((resolve, reject) => {
-      proc = spawn(process.execPath, ['server.js'], {
-        cwd: path.join(__dirname, '..'),
-        env: {
-          ...process.env,
-          PORT: String(PORT),
-          DATABASE_URL: '',
-          SQLITE_PATH: dbPath,
-          ANTHROPIC_MOCK: '1',
-          ANTHROPIC_API_KEY: '',
-          ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-          NODE_ENV: 'test',
-          DISCORD_WEBHOOK_URL: '',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let started = false;
-      proc.stdout.on('data', (c) => {
-        if (!started && c.toString().includes('Mercurius')) { started = true; setTimeout(resolve, 300); }
-      });
-      proc.stderr.on('data', (c) => {
-        const t = c.toString();
-        if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-      });
-      proc.on('error', reject);
-      proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-      setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
-    });
+    const server = spawnServer({ SQLITE_PATH: dbPath });
+    proc = server.proc;
+    ({ base: BASE } = await server.ready);
   });
 
   after(() => { if (proc) proc.kill('SIGKILL'); });
@@ -374,8 +347,9 @@ describe('GET / PUT /api/progress/:sessionId', () => {
     res = await call('POST', '/api/chat', { sessionId: s, messages: thread(1, 2) });
     assert.equal(res.status, 200, JSON.stringify(res.json));
     assert.equal(res.json.lessonComplete, true);
-    await sleep(200); // the write is fire-and-forget
-    res = await call('GET', `/api/progress/${s}`);
+    // The write is fire-and-forget.
+    const progressOf = (id, n) => waitFor(() => call('GET', `/api/progress/${id}`), (r) => r.json.lessons.length >= n);
+    res = await progressOf(s, 2);
     assert.equal(res.json.curriculumVersion, 3);
     assert.deepEqual(res.json.lessons.map((l) => [l.id, l.status]), [['u1_l1', 'completed'], ['u1_l2', 'completed']]);
 
@@ -384,8 +358,7 @@ describe('GET / PUT /api/progress/:sessionId', () => {
     assert.equal(sse.status, 200);
     assert.ok(sse.complete, 'a complete frame arrived');
     assert.equal(sse.complete.lessonComplete, true);
-    await sleep(200);
-    res = await call('GET', `/api/progress/${s}`);
+    res = await progressOf(s, 3);
     assert.deepEqual(res.json.lessons.map((l) => l.id), ['u1_l1', 'u1_l2', 'u1_l3']);
 
     // A thread that is NOT complete yet (2 turns) writes nothing.
@@ -409,8 +382,7 @@ describe('GET / PUT /api/progress/:sessionId', () => {
     const res = await call('POST', '/api/chat', { sessionId: s, messages: thread(1, 1) });
     assert.equal(res.status, 200, JSON.stringify(res.json));
     assert.equal(res.json.lessonComplete, true);
-    await sleep(200);
-    const got = await call('GET', `/api/progress/${s}`);
+    const got = await waitFor(() => call('GET', `/api/progress/${s}`), (r) => r.json.lessons.length >= 1);
     assert.equal(got.status, 200);
     assert.equal(got.json.curriculumVersion, 1);
     assert.deepEqual(got.json.lessons.map((l) => [l.id, l.status]), [['u1_l1', 'completed']]);

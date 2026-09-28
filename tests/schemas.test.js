@@ -74,8 +74,11 @@ describe('ChatMessage', () => {
     assert.ok(!ChatMessage.safeParse({ role: 'user', content: null }).success);
   });
 
-  test('rejects content over 10_000 chars', () => {
-    assert.ok(!ChatMessage.safeParse({ role: 'user', content: 'x'.repeat(10_001) }).success);
+  test('truncates content over 10_000 chars instead of rejecting it', () => {
+    const out = ChatMessage.safeParse({ role: 'user', content: 'x'.repeat(10_001) });
+    assert.ok(out.success, 'an oversized replayed turn must not fail the whole thread');
+    assert.equal(out.data.content.length, 10_000);
+    assert.equal(ChatMessage.parse({ role: 'assistant', content: 'short' }).content, 'short');
   });
 });
 

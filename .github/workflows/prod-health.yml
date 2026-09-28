@@ -1,0 +1,86 @@
+name: Prod health
+
+# Uptime check from outside the server process. Railway runs its own
+# healthcheck only during a deploy, so an overnight crash loop that used up
+# its restart budget, a hang, or a database outage (health answers 503) would
+# otherwise page nobody: the in-process Discord alerts die with the process.
+#
+# Every 30 minutes: GET /api/health. Two failed probes in a row, a minute
+# apart (a deploy's drain answers 503 for up to ~35 s), open an issue
+# labelled "prod-down", or comment on the one already open. A healthy probe
+# closes it. GitHub emails the repo owner about the issue (the body
+# @-mentions them); no secret is needed. Read-only against production.
+#
+# Scheduled workflows run from the default branch only, and GitHub disables
+# them after 60 days without repository activity (re-enable in the Actions tab).
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: prod-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HEALTH_URL: https://mercurius-chatbot-production.up.railway.app/api/health
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      LABEL: prod-down
+    steps:
+      - name: Probe /api/health (twice, a minute apart, before calling it down)
+        id: probe
+        run: |
+          probe() {
+            rm -f body.json curl.err
+            code=$(curl -sS -o body.json -w '%{http_code}' --max-time 20 "$HEALTH_URL" 2>curl.err) || code=000
+            status=$(jq -r '.status // empty' body.json 2>/dev/null || true)
+            echo "HTTP $code status=${status:-?} $(head -c 300 body.json 2>/dev/null) $(cat curl.err 2>/dev/null)"
+            [ "$code" = 200 ] && [ "$status" = ok ]
+          }
+          healthy=false
+          if probe; then healthy=true; else sleep 60; if probe; then healthy=true; fi; fi
+          echo "healthy=$healthy" >> "$GITHUB_OUTPUT"
+          {
+            echo 'detail<<PROBE_EOF'
+            echo "HTTP $code"
+            head -c 500 body.json 2>/dev/null || true
+            echo
+            cat curl.err 2>/dev/null || true
+            echo 'PROBE_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the prod-down issue
+        if: steps.probe.outputs.healthy == 'false'
+        env:
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        run: |
+          gh label create "$LABEL" --color B60205 --description "Production health probe is failing" 2>/dev/null || true
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body=$(printf '%s\n\n```\n%s\n```\n\nProbe run: %s\n\ncc @%s' \
+            "Production health check failed twice in a row at $(date -u +%Y-%m-%dT%H:%MZ) ($HEALTH_URL)." \
+            "$DETAIL" "$run_url" "${{ github.repository_owner }}")
+          num=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body"
+          else
+            gh issue create --title "Production is down: /api/health is failing" --label "$LABEL" --body "$body"
+          fi
+
+      - name: Close the prod-down issue once healthy
+        if: steps.probe.outputs.healthy == 'true'
+        run: |
+          num=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$num" ]; then
+            commit=$(jq -r '.commit // "unknown"' body.json 2>/dev/null || echo unknown)
+            gh issue close "$num" --comment "Healthy again at $(date -u +%Y-%m-%dT%H:%MZ) (serving commit $commit)."
+          fi

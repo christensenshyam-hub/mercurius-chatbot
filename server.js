@@ -9,6 +9,19 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
+// crashExit's handler is only installed at the end of this file, so a throw
+// while the modules load (db.js refusing to boot without DATABASE_URL) would
+// exit on Node's default handler without paging. This pages on the way out.
+function bootFailed(err) {
+  const message = err && err.message ? err.message : String(err);
+  process.stderr.write(`${(err && err.stack) || message}\n`);
+  if (process.env.NODE_ENV !== 'production') process.exit(1);
+  const commit = (process.env.RAILWAY_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+  require('./lib/alerts').notify('crash:startup', `🛑 Mercurius server failed to start (${commit}): ${message.slice(0, 200)}`)
+    .finally(() => process.exit(1));
+}
+process.on('uncaughtException', bootFailed);
+
 const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
@@ -29,6 +42,7 @@ const {
   ReportRequest,
   ProgressionEventRequest,
   ProgressSyncRequest,
+  truncateUnits,
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
@@ -131,13 +145,43 @@ const gamificationXp = require('./lib/gamification/xp');
 // ---------------------------------------------------------------------------
 // Events data — fetched from mayoailiteracy.com/events-data.json, cached 1hr
 // ---------------------------------------------------------------------------
-const EVENTS_URL = 'https://mayoailiteracy.com/events-data.json';
+const EVENTS_URL = process.env.CLUB_EVENTS_URL || 'https://mayoailiteracy.com/events-data.json';
 let eventsCache = null;
 let eventsCacheTime = 0;
 
-const BLOG_URL = 'https://mayoailiteracy.com/blog-content.json';
+const BLOG_URL = process.env.CLUB_BLOG_URL || 'https://mayoailiteracy.com/blog-content.json';
 let blogCache = null;
 let blogCacheTime = 0;
+
+// The feeds sit in front of the model call on widget turns. A copy older
+// than FEED_TTL_MS is still served at once while ONE background refresh runs;
+// a fetch is bounded by a timeout, and a failed one is not retried for
+// FEED_RETRY_MS — a slow or dead club site must not stall every turn.
+const FEED_TTL_MS = 3600000;
+const FEED_RETRY_MS = 5 * 60_000;
+const FEED_TIMEOUT_MS = Number(process.env.CLUB_FEED_TIMEOUT_MS) > 0 ? Number(process.env.CLUB_FEED_TIMEOUT_MS) : 2000;
+const feedFetches = { events: { inflight: null, failedAt: 0 }, blog: { inflight: null, failedAt: 0 } };
+
+// Resolves the parsed JSON, or null on any failure (never rejects).
+function fetchFeed(key, url) {
+  const st = feedFetches[key];
+  if (st.inflight) return st.inflight;
+  if (Date.now() - st.failedAt < FEED_RETRY_MS) return Promise.resolve(null);
+  const p = (async () => {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(FEED_TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      st.failedAt = Date.now();
+      logger.warn({ err: e.message, feed: key }, 'club feed fetch failed');
+      return null;
+    }
+  })();
+  st.inflight = p;
+  p.finally(() => { if (st.inflight === p) st.inflight = null; });
+  return p;
+}
 
 // The admin-set events row used to be read from the database on EVERY chat
 // turn; it changes weekly at most. One read per minute is plenty.
@@ -159,33 +203,23 @@ async function getEventsData() {
     return eventsCache;
   }
 
-  // 2. Fall back to cached Netlify fetch (refresh every hour)
-  if (eventsCache && now - eventsCacheTime < 3600000) return eventsCache;
-  try {
-    const res = await fetch(EVENTS_URL);
-    if (res.ok) {
-      eventsCache = await res.json();
-      eventsCacheTime = now;
-    }
-  } catch (e) {
-    logger.warn({ err: e.message }, 'could not fetch events-data.json');
-  }
-  return eventsCache;
+  // 2. Fall back to the club site's feed (see fetchFeed)
+  if (eventsCache && now - eventsCacheTime < FEED_TTL_MS) return eventsCache;
+  const refresh = fetchFeed('events', EVENTS_URL).then((data) => {
+    if (data) { eventsCache = data; eventsCacheTime = Date.now(); }
+    return eventsCache;
+  });
+  return eventsCache || refresh;
 }
 
 async function getBlogContent() {
   const now = Date.now();
-  if (blogCache && now - blogCacheTime < 3600000) return blogCache;
-  try {
-    const res = await fetch(BLOG_URL);
-    if (res.ok) {
-      blogCache = await res.json();
-      blogCacheTime = now;
-    }
-  } catch (e) {
-    logger.warn({ err: e.message }, 'could not fetch blog-content.json');
-  }
-  return blogCache;
+  if (blogCache && now - blogCacheTime < FEED_TTL_MS) return blogCache;
+  const refresh = fetchFeed('blog', BLOG_URL).then((data) => {
+    if (data) { blogCache = data; blogCacheTime = Date.now(); }
+    return blogCache;
+  });
+  return blogCache || refresh;
 }
 
 function buildBlogContext(posts) {
@@ -1186,10 +1220,10 @@ const adminLimiter = ipLimiter('admin', { windowMs: 60 * 1000, max: 10 });
 // an operator curls it in bursts — it gets its own, looser bucket so scrapes
 // never eat the credential-stuffing budget above.
 const metricsLimiter = ipLimiter('metrics', { windowMs: 60 * 1000, max: 60 });
-// Right-to-erasure is cheap to request and destructive to guess at: a tight
-// dedicated bucket keeps the unguessable-id assumption honest against a
-// scripted sweep without touching the global limiter students share.
-const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, max: 5 });
+// Right-to-erasure gets its own bucket, off the global limiter students
+// share. The 192-bit id is what makes guessing futile; the bucket is sized,
+// like the others, for a classroom behind one school NAT erasing at once.
+const sessionDeleteLimiter = ipLimiter('session-delete', { windowMs: 60 * 1000, max: envInt('SESSION_DELETE_IP_PER_MIN', 60) });
 // Image uploads are heavier than chat turns (multi-MB bodies, a DB write per
 // call), so they get a dedicated IP bucket rather than sharing the chat one.
 // 60/min/IP covers a classroom each attaching a couple of photos while
@@ -1238,13 +1272,32 @@ function adminAuthOk(headerValue) {
 /// missing/wrong password without revealing which it was.
 function requireAdmin(req, res, next) {
   if (adminAuthOk(req.headers['x-admin-password'])) return next();
+  if (typeof req.headers['x-admin-password'] === 'string') noteAdminAuthFailure();
   return res.status(401).json({ error: 'unauthorized' });
+}
+
+// Wrong admin passwords, counted process-wide per hour: the per-IP limiters
+// do not bound a guesser that rotates addresses, so pile-ups page the founder.
+const ADMIN_FAIL_WINDOW_MS = 60 * 60 * 1000;
+const ADMIN_FAIL_ALERT_AT = envInt('ADMIN_AUTH_FAIL_ALERT_AT', 20);
+let adminFailures = { windowStart: 0, count: 0 };
+function noteAdminAuthFailure() {
+  const now = Date.now();
+  if (now - adminFailures.windowStart >= ADMIN_FAIL_WINDOW_MS) adminFailures = { windowStart: now, count: 0 };
+  adminFailures.count += 1;
+  if (adminFailures.count === ADMIN_FAIL_ALERT_AT) {
+    logger.warn({ count: adminFailures.count }, 'admin auth failures piling up');
+    alerts.notify('admin_auth_fail', `⚠️ ${adminFailures.count} wrong admin passwords within the hour (/api/admin/*, /metrics). If that was not you, rotate ADMIN_PASSWORD.`, { throttleMs: ADMIN_FAIL_WINDOW_MS }).catch(() => {});
+  }
 }
 
 // `isRateLimited(sessionId)` is async (the limiter interface is). Callers
 // `await` it. 10/min is above any human typing rate — a lesson turn takes
 // 5–15 s to stream — and below what a script needs to be worth running.
 const isRateLimited = sessionLimiter(60 * 1000, envInt('SESSION_PER_MIN', 10));
+
+// Per-turn budget for every user message the model sees in /api/chat.
+const MAX_USER_TURN_CHARS = 2000;
 
 // ---------------------------------------------------------------------------
 // Async route wrapper — Express 4 does NOT forward rejections from async
@@ -1305,7 +1358,10 @@ const corsOptions = {
     if (allowed.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`CORS: origin ${origin} not allowed`), false);
+    // No CORS headers, so the browser withholds the response from a foreign
+    // page. Not an error: same-origin POSTs (index.html, admin.html) carry an
+    // Origin header too and need none, and an error here was a 500.
+    return callback(null, false);
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-password', 'x-trace-id'],
@@ -1313,15 +1369,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// The image-upload route carries base64 image payloads far larger than the
-// 32kb global JSON cap. Mount a dedicated, larger JSON parser scoped to that
-// path *before* the global parser: body-parser sets `req._body` once a body is
-// read, so the global 32kb parser below sees it already parsed and skips it.
-// The 12mb ceiling sits just above MAX_IMAGE_BYTES (8MB) after base64's ~4/3
-// inflation, so genuinely oversized images get our clean `image_too_large`
-// envelope from the handler, and only truly abusive bodies hit the raw 413.
-app.use('/api/images', express.json({ limit: '12mb' }));
-app.use(express.json({ limit: '32kb' }));
 
 // Request tracing — assign correlation ID to every request
 app.use((req, res, next) => {
@@ -1342,8 +1389,15 @@ metrics.mount(app, '/metrics', metricsLimiter, requireAdmin);
 // Serve static files from the public directory
 app.use(express.static(require('path').join(__dirname, 'public')));
 
-// Apply global rate limiter to all API routes
+// Apply global rate limiter to all API routes — BEFORE any body is read, so a
+// malformed or oversized body still counts against it.
 app.use('/api/', globalLimiter);
+
+// JSON bodies. inflate: false — no client sends Content-Encoding, and a
+// gzip body is a ~1000x memory amplifier (415 instead). The image upload
+// route reads its own larger body after its limiter (see POST /api/images).
+const json32k = express.json({ limit: '32kb', inflate: false });
+app.use((req, res, next) => (req.method === 'POST' && req.path === '/api/images' ? next() : json32k(req, res, next)));
 
 // ---------------------------------------------------------------------------
 // POST /api/chat
@@ -1447,7 +1501,7 @@ function refuseWithVerdict(req, res, verdict) {
   metrics.quotaRejectionsTotal.inc({ scope: `${verdict.scope}:${verdict.error}` });
   if (verdict.scope === 'ip' && verdict.error === 'daily_limit') {
     const h = claudeCall.hashIp(req.ip);
-    alerts.notify(`ip_cap:${h}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+    alerts.notify(`ip_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
   }
   return sendRefusal(req, res, {
     status: verdict.status || 429,
@@ -1473,7 +1527,10 @@ function quotaErrorHandled(err, req, res) {
 // route calls this; returns true when the request has been refused.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
-  const allowed = quotas.newSessionAllowed(req.ip);
+  // Count it in the same tick as the check (released below if this request
+  // did not create the row): a burst of first contacts must not all pass the
+  // check during the INSERT awaits before any of them is counted.
+  const allowed = quotas.noteNewSession(req.ip);
   if (!allowed.ok) {
     metrics.quotaRejectionsTotal.inc({ scope: 'ip:new_sessions' });
     return sendRefusal(req, res, {
@@ -1484,8 +1541,12 @@ async function refuseUnseenSession(req, res, sessionId) {
       retryAfterSec: allowed.retryAfterSec,
     });
   }
-  const { created } = await db.ensureSession(sessionId);
-  if (created) quotas.noteNewSession(req.ip);
+  let created = false;
+  try {
+    ({ created } = await db.ensureSession(sessionId));
+  } finally {
+    if (!created) quotas.forgetNewSession(req.ip);
+  }
   return false;
 }
 
@@ -1521,6 +1582,11 @@ function recordLessonEvent(sessionId, meta, event) {
     // Counted on the write, not the call: a deduped 'complete' is not an event.
     if (written) metrics.lessonEventsTotal.inc({ event });
   }).catch(() => {});
+}
+
+const CRISIS_RESOURCE_RE = /\b988\b|\b741741\b/;
+function noteCrisisReply(reply, kind) {
+  if (typeof reply === 'string' && CRISIS_RESOURCE_RE.test(reply)) metrics.crisisResourceRepliesTotal.inc({ kind });
 }
 
 // Server-synced progress (Phase 3A), belt and braces: the server just judged
@@ -1582,11 +1648,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   }
   const chosenModel = picked.model;
 
-  // Rate limit
+  // Rate limit (an SSE error frame for streaming clients, like every refusal)
   if (await isRateLimited(sessionId)) {
-    return res.status(429).json({
+    return sendRefusal(req, res, {
+      status: 429,
       error: 'rate_limited',
-      reply: "You're moving fast! Take 60 seconds to think about what we've discussed so far, then come back."
+      message: "You're moving fast! Take 60 seconds to think about what we've discussed so far, then come back.",
     });
   }
 
@@ -1612,21 +1679,26 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   await hydrateSessionQuota(sessionId);
   if (gate(req, res, { kind: callKind, sessionId })) return;
 
-  // Sanitize user input
-  const lastMsg = clientMessages[clientMessages.length - 1];
-  if (lastMsg && lastMsg.content && typeof lastMsg.content === 'string') {
-    lastMsg.content = lastMsg.content.slice(0, 2000);
+  // Every user turn gets the same budget, the latest AND the replayed ones,
+  // so a turn cut when it was first sent is never replayed in full later.
+  for (const m of clientMessages) {
+    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > MAX_USER_TURN_CHARS) {
+      m.content = truncateUnits(m.content, MAX_USER_TURN_CHARS);
+    }
   }
+  const lastMsg = clientMessages[clientMessages.length - 1];
 
   if (containsInjectionAttempt(lastMsg.content)) {
-    logger.forRequest(req).warn({ sessionId }, 'prompt injection attempt detected');
+    logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId) }, 'prompt injection attempt detected');
     // Don't block — log and let the system prompt handle it. But add a defense note.
     // The system prompt's instructions take priority over user messages.
   }
 
-  // The session row exists by now (refuseUnseenSession created it if needed);
-  // this just refreshes last_active.
-  await db.getOrCreateSession(sessionId);
+  // The session row exists by now (refuseUnseenSession created it if
+  // needed); saving the user turn below refreshes last_active. The attached
+  // image is fetched alongside the session reads, not after them.
+  const imageFetch = imageId ? imageStore.get(imageId) : null;
+  if (imageFetch) imageFetch.catch(() => {}); // observed below; never unhandled
 
   // Fetch streak and session state in parallel. The conversation itself comes
   // from the client's thread (every shipped client sends it) — the server no
@@ -1642,6 +1714,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const latestUserMessage = clientMessages[clientMessages.length - 1];
   if (!latestUserMessage || latestUserMessage.role !== 'user') {
     return res.status(400).json({ error: 'invalid_messages', reply: 'Last message must be from user.' });
+  }
+  if (!imageId && !(latestUserMessage.content || '').trim()) {
+    return res.status(400).json({ error: 'invalid_messages', message: 'No message text.', reply: 'No message text.' });
   }
 
   // Save the new user message to DB. If the student attached an image with no
@@ -1720,17 +1795,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   let attachedImage = null;
   if (imageId) {
     try {
-      const img = await imageStore.get(imageId);
-      if (img) {
+      const img = await imageFetch;
+      // Only the uploader's own session may attach an image.
+      if (img && img.sessionId === sessionId) {
         attachedImage = { contentType: img.contentType, dataBase64: img.data.toString('base64') };
       } else {
-        logger.forRequest(req).warn({ imageId }, 'chat: attached image not found — proceeding text-only');
+        logger.forRequest(req).warn('chat: attached image not found — proceeding text-only');
       }
     } catch (err) {
       logger.forRequest(req).warn({ err: err.message }, 'chat: attached image fetch failed — proceeding text-only');
     }
   }
-  const latestContent = buildUserContent(latestUserMessage.content, attachedImage);
+  let latestContent = buildUserContent(latestUserMessage.content, attachedImage);
+  // The Messages API rejects an empty text turn: an image-only turn whose
+  // image is gone (purged, or a retry after 24 h) says so instead.
+  if (latestContent === '') latestContent = '[The student shared an image that is no longer available.]';
 
   // Build messages array for API from the CLIENT's thread — every shipped
   // client (iOS, both widgets, the eval) sends it. The old per-session DB
@@ -1745,7 +1824,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // byte-identical from turn to turn — a prerequisite for caching it later.
   const priorHistory = curriculumTag.normalizeReplayedHistory(clientMessages)
     .slice(0, -1)
-    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ role: m.role, content: m.content }));
   const apiMessages = priorHistory.length > 0
     ? [...priorHistory, { role: 'user', content: latestContent }]
@@ -1921,6 +2000,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
+        noteCrisisReply(reply, callKind);
         if (lessonMeta) {
           recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
           if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
@@ -2026,6 +2106,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
+      noteCrisisReply(reply, callKind);
       if (lessonMeta) {
         recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
         if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
@@ -2070,8 +2151,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
   try {
     // Only what the client reads (the streak + its date, for the header
     // chip). This route used to hand the whole session row plus the last 10
-    // messages to anyone holding the id, and ran a COUNT(DISTINCT) over all
-    // sessions on every app launch.
+    // messages to anyone holding the id.
     const { session } = await db.getSessionStats(sessionId);
     const summary = session
       ? {
@@ -2093,7 +2173,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/mode', validate(ModeRequest, { endpoint: '/api/mode' }), asyncRoute(async (req, res) => {
   const { sessionId, mode } = req.validated;
-  await db.getOrCreateSession(sessionId);
+  if (await refuseUnseenSession(req, res, sessionId)) return;
   const state = await db.getSessionState(sessionId);
   if (!state) return res.status(404).json({ error: 'session_not_found' });
 
@@ -2269,12 +2349,8 @@ app.get('/api/progression/me', async (req, res) => {
     return res.status(400).json({ error: 'invalid_session', message: 'Session ID missing or invalid.' });
   }
   try {
-    // Lazily anchor the session row first — `progression.session_id` is a
-    // foreign key into `sessions`, and a fresh client may probe /me before its
-    // first chat. Mirrors POST /event (and /api/profile). getOrCreateSession is
-    // idempotent.
-    await db.getOrCreateSession(sessionId);
-    await db.ensureProgression(sessionId);
+    // A read never creates rows: an id with no progression row yet (a fresh
+    // client probing /me before its first event) reads as level 1, 0 XP.
     const snap = await gamificationXp.snapshot(db, sessionId);
     const recent = await db.getRecentXpEvents(sessionId, 10);
     // Quiet by design: /me is a plain snapshot. `recentXpEvents` is the factual
@@ -2301,7 +2377,7 @@ app.post('/api/progression/event', validate(ProgressionEventRequest, { endpoint:
   if (!GAMIFICATION_ENABLED) return res.json({ enabled: false });
   const { sessionId, reason, sourceType, sourceId, sessionRef, metadata } = req.validated;
   try {
-    await db.getOrCreateSession(sessionId);
+    if (await refuseUnseenSession(req, res, sessionId)) return;
     // Progression streak (current_streak / longest_streak / last_active_date)
     // is maintained here — any XP event counts as that day's activity. The
     // row must exist first (awardXp's own ensureProgression runs later).
@@ -2503,6 +2579,8 @@ app.get('/api/admin/stats', adminLimiter, requireAdmin, asyncRoute(async (req, r
     inflight: quotas.inflight(),
     draining,
     scheduler: scheduler ? scheduler.state() : null,
+    dbDriver: db.driver,
+    commit: BUILD_COMMIT,
   });
 }));
 
@@ -2694,7 +2772,65 @@ app.post('/api/profile', asyncRoute(async (req, res) => {
 // through the imageStore abstraction — DB-backed by default, swappable to
 // object storage (S3/R2) via IMAGE_STORAGE_DRIVER with no route changes.
 // ---------------------------------------------------------------------------
-app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: '/api/images' }), async (req, res) => {
+// The body is read only after the limiter, and a process-wide budget bounds
+// the image bodies being buffered at once: per-IP limits do not bound a
+// multi-IP burst, and each body costs ~4x its size in heap while parsed.
+// The budget holds the bytes that have actually arrived (a request is only
+// admitted if its declared size fits), so a connection that declares a big
+// body and then stalls holds next to nothing; a body still unread after
+// IMAGE_BODY_READ_MS is refused and gives its bytes back. iOS abandons the
+// whole upload at 60 s anyway.
+// The 12mb ceiling sits just above MAX_IMAGE_BYTES (8MB) after base64's ~4/3
+// inflation, so genuinely oversized images get the clean `image_too_large`
+// envelope from the handler, and only truly abusive bodies hit the raw 413.
+const IMAGE_BODY_LIMIT_BYTES = 12 * 1024 * 1024;
+const IMAGE_INFLIGHT_BYTES = envInt('IMAGE_UPLOAD_INFLIGHT_BYTES', 64 * 1024 * 1024);
+const IMAGE_BODY_READ_MS = envInt('IMAGE_BODY_READ_MS', 60 * 1000);
+const parseImageBody = express.json({ limit: IMAGE_BODY_LIMIT_BYTES, inflate: false });
+let imageBodyBytesInFlight = 0;
+function refuseImageBusy(res) {
+  metrics.quotaRejectionsTotal.inc({ scope: 'image_upload_busy' });
+  res.setHeader('Retry-After', '5');
+  return res.status(503).json({ error: 'busy', message: 'Mercurius is busy. Try the photo again in a moment.', retryAfterSec: 5 });
+}
+function imageBodyBudget(req, res, next) {
+  const declared = Number(req.headers['content-length']);
+  const expected = Number.isFinite(declared) && declared > 0 ? Math.min(declared, IMAGE_BODY_LIMIT_BYTES) : IMAGE_BODY_LIMIT_BYTES;
+  if (imageBodyBytesInFlight + expected > IMAGE_INFLIGHT_BYTES) return refuseImageBusy(res);
+  let held = 0;
+  let stopped = false;
+  // Answers mid-body: the rest of the body is never read (Node drops the
+  // connection once the answer is out) and the route never runs.
+  const stop = (answer) => {
+    if (stopped || res.headersSent) return;
+    stopped = true;
+    req.off('data', onData);
+    res.setHeader('Connection', 'close');
+    answer();
+  };
+  const onData = (chunk) => {
+    const add = Math.min(chunk.length, IMAGE_BODY_LIMIT_BYTES - held);
+    held += add;
+    imageBodyBytesInFlight += add;
+    if (imageBodyBytesInFlight > IMAGE_INFLIGHT_BYTES) stop(() => refuseImageBusy(res));
+  };
+  const timer = setTimeout(() => stop(() => {
+    metrics.quotaRejectionsTotal.inc({ scope: 'image_upload_timeout' });
+    res.status(408).json({ error: 'timeout', message: 'The photo took too long to upload. Try again.' });
+  }), IMAGE_BODY_READ_MS);
+  req.on('data', onData);
+  res.once('close', () => {
+    clearTimeout(timer);
+    req.off('data', onData);
+    imageBodyBytesInFlight -= held;
+  });
+  return parseImageBody(req, res, (err) => {
+    clearTimeout(timer);
+    if (!stopped) next(err);
+  });
+}
+
+app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
   const { sessionId, contentType, data, fileName } = req.validated;
 
   const validated = decodeAndValidateImage({ data, contentType });
@@ -2728,7 +2864,6 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
   const createdAt = Date.now();
 
   try {
-    await db.getOrCreateSession(sessionId);
     await imageStore.put({
       id,
       sessionId,
@@ -2757,7 +2892,7 @@ app.post('/api/images', uploadLimiter, validate(ImageUploadRequest, { endpoint: 
     size: buffer.length,
     createdAt: new Date(createdAt).toISOString(),
   });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/images/:id — retrieve a stored image (v3)
@@ -2807,6 +2942,18 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
     // per-IP new-session quota on a request that carries no model call.
     if (!(await db.sessionExists(sessionId))) {
       logger.forRequest(req).debug({ reason: reason || null }, 'content report for an unknown session dropped');
+      return res.json({ ok: true });
+    }
+    // Past its daily allowance a session's (or a network's) reports are
+    // acknowledged the same way and dropped, so one client cannot bury the
+    // review queue.
+    const reportVerdict = quotas.noteReport(sessionId, req.ip);
+    if (!reportVerdict.ok) {
+      metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
+      if (reportVerdict.scope === 'ip') {
+        const h = claudeCall.hashIp(req.ip);
+        alerts.notify(`report_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+      }
       return res.json({ ok: true });
     }
     const createdAt = Date.now();
@@ -2898,11 +3045,16 @@ app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (re
 // ---------------------------------------------------------------------------
 // GET /api/health
 // ---------------------------------------------------------------------------
+// Which build is serving (the repo is public, so the short SHA discloses
+// nothing): what an operator or the prod-health workflow checks after a deploy.
+const BUILD_COMMIT = (process.env.RAILWAY_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+const BOOTED_AT = new Date().toISOString();
+
 app.get('/api/health', async (_req, res) => {
   // While draining for a deploy, report unhealthy so the platform shifts
   // traffic to the new instance while this one finishes its open streams.
   if (draining) {
-    return res.status(503).json({ status: 'draining', uptime: Math.floor(process.uptime()), inflight: inflightSse });
+    return res.status(503).json({ status: 'draining', uptime: Math.floor(process.uptime()), inflight: inflightSse, commit: BUILD_COMMIT, bootedAt: BOOTED_AT });
   }
   const health = {
     status: 'ok',
@@ -2910,6 +3062,8 @@ app.get('/api/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
     db: 'unknown',
     memory: Math.floor(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+    commit: BUILD_COMMIT,
+    bootedAt: BOOTED_AT,
   };
   try {
     // SELECT 1 with a 2s timeout — the probe used to run a COUNT(DISTINCT)
@@ -2960,10 +3114,16 @@ app.use((err, req, res, _next) => {
     ? err.status
     : 500;
 
-  logger.forRequest(req).error(
-    { err: err.message, stack: err.stack, status: knownStatus, type: err.type },
-    'unhandled error'
-  );
+  // A client's bad body (malformed, oversized, compressed) is not a server
+  // error: warn, so error-level lines stay a real signal.
+  if (knownStatus < 500) {
+    logger.forRequest(req).warn({ err: err.message, status: knownStatus, type: err.type }, 'request rejected by middleware');
+  } else {
+    logger.forRequest(req).error(
+      { err: err.message, stack: err.stack, status: knownStatus, type: err.type },
+      'unhandled error'
+    );
+  }
 
   // SSE streams may have already written headers and started a body;
   // calling res.status() / res.json() at that point is a no-op or a
@@ -2976,6 +3136,9 @@ app.use((err, req, res, _next) => {
   switch (knownStatus) {
     case 413:
       envelope = { error: 'payload_too_large', reply: 'That message is too long. Try a shorter prompt.' };
+      break;
+    case 415:
+      envelope = { error: 'unsupported_encoding', reply: 'Send the request body uncompressed.' };
       break;
     case 400:
       envelope = { error: 'invalid_request', reply: 'Bad request.' };
@@ -3010,6 +3173,9 @@ db.initSchema().then(async () => {
   // unsalted (brute-forceable) hash of students' addresses into the ledger.
   let ipHashSalt = process.env.IP_HASH_SALT || '';
   if (!ipHashSalt) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn('IP_HASH_SALT is unset: the IP-hash salt is kept in the same database as the hashes. Set IP_HASH_SALT on the service.');
+    }
     try {
       ipHashSalt = await db.getSetting('ip_hash_salt');
       if (!ipHashSalt) {
@@ -3078,7 +3244,7 @@ db.initSchema().then(async () => {
     // A boot alert makes a crash loop visible from the phone (Railway
     // restarts up to 10 times before giving up).
     if (process.env.NODE_ENV === 'production') {
-      alerts.notify('boot', `🚀 Mercurius server booted (budget today: $${spendCap.state().usd.toFixed(2)} of $${spendCap.budgetUsd()}${killSwitch.isKilled() ? ' — KILL SWITCH ON' : ''}).`).catch(() => {});
+      alerts.notify('boot', `🚀 Mercurius server booted (${BUILD_COMMIT}, db: ${db.driver}; budget today: $${spendCap.state().usd.toFixed(2)} of $${spendCap.budgetUsd()}${killSwitch.isKilled() ? ' — KILL SWITCH ON' : ''}).`).catch(() => {});
       // The ephemeral cache lives ~5 minutes, so a boot-time prewarm only
       // helps when traffic follows a deploy immediately; it is opt-in. The
       // admin endpoint right before a session is the real use.
@@ -3092,13 +3258,31 @@ db.initSchema().then(async () => {
     // for — the test expects the literal word "Mercurius" to know the
     // server is ready. Structured logs with level INFO also match.
     if (process.env.NODE_ENV !== 'production') {
-      process.stdout.write(`Mercurius ready on http://localhost:${PORT}\n`);
+      process.stdout.write(`Mercurius ready on http://localhost:${server.address().port}\n`);
     }
   });
-}).catch(err => {
-  logger.error({ err: err.message }, 'failed to initialize database');
+  server.on('error', (err) => crashExit('listen', err));
+}).catch((err) => crashExit('startup', err));
+
+// A process that dies before (or instead of) listening never sends the boot
+// alert, so startup failures and uncaught exceptions page on their own way
+// out. alerts.notify has a 5 s timeout and never rejects, so the exit is
+// never held up for long. Always exit: the process state is unknown.
+let crashing = false;
+async function crashExit(stage, err) {
+  if (crashing) return;
+  crashing = true;
+  const message = err && err.message ? err.message : String(err);
+  logger.error({ stage, err: message, stack: err && err.stack }, stage === 'startup' ? 'server startup failed' : 'server crashed');
+  // The handler replaces Node's own stderr report; keep it when logs are off.
+  if (logger.level === 'silent') process.stderr.write(`${(err && err.stack) || message}\n`);
+  if (process.env.NODE_ENV === 'production') {
+    await alerts.notify(`crash:${stage}`, `🛑 Mercurius server ${stage === 'startup' ? 'failed to start' : `crashed (${stage})`} (${BUILD_COMMIT}): ${message.slice(0, 200)}`);
+  }
   process.exit(1);
-});
+}
+process.off('uncaughtException', bootFailed);
+process.on('uncaughtException', (err) => { void crashExit('uncaught_exception', err); });
 
 // Backstop: any rejection path the asyncRoute wrapper / handler try-catches
 // miss degrades to a logged error instead of the Node default (process exit),

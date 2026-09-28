@@ -35,7 +35,8 @@ watchPatterns = [
 startCommand = "node server.js"
 # Railway polls this route after each deploy and only routes traffic once it
 # returns 2xx. /api/health returns 503 when the DB is unreachable, so a bad
-# DATABASE_URL never takes traffic (see docs/DEPLOY.md → Health checks).
+# DATABASE_URL never takes traffic, and db.js refuses to boot on Railway with
+# an empty one (see docs/DEPLOY.md → Health checks).
 healthcheckPath = "/api/health"
 # Seconds Railway waits, AFTER the build has finished and the container has
 # started, for the first healthy response before marking the deploy failed.

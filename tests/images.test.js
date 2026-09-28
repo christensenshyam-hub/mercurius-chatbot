@@ -13,7 +13,7 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
@@ -117,11 +117,7 @@ describe('imageValidation.decodeAndValidateImage', () => {
 // 2. HTTP end-to-end
 // ===========================================================================
 
-const SERVER_DIR = path.join(__dirname, '..');
-// Distinct port range from server.test.js (9000–9999) so the two spawned
-// servers never collide when node:test runs files in parallel.
-const TEST_PORT = 10500 + Math.floor(Math.random() * 1000);
-const BASE_URL = `http://localhost:${TEST_PORT}`;
+let BASE_URL;
 
 let serverProc;
 
@@ -151,41 +147,10 @@ async function getRaw(p) {
 }
 
 before(async () => {
-  await new Promise((resolve, reject) => {
-    serverProc = spawn(process.execPath, ['server.js'], {
-      cwd: SERVER_DIR,
-      env: {
-        ...process.env,
-        PORT: String(TEST_PORT),
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-        ALLOWED_ORIGIN: `http://localhost:${TEST_PORT}`,
-        NODE_ENV: 'test',
-        // Force the default DB-backed image store on ephemeral SQLite.
-        DATABASE_URL: '',
-        IMAGE_STORAGE_DRIVER: 'db',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let started = false;
-    serverProc.stdout.on('data', (chunk) => {
-      if (!started && chunk.toString().includes('Mercurius')) {
-        started = true;
-        setTimeout(resolve, 300);
-      }
-    });
-    serverProc.stderr.on('data', (chunk) => {
-      const text = chunk.toString();
-      if ((text.includes('Error') || text.includes('EADDRINUSE')) && !started) reject(new Error(text));
-    });
-    serverProc.on('error', reject);
-    serverProc.on('exit', (code) => {
-      if (!started) reject(new Error(`Server exited prematurely with code ${code}`));
-    });
-    setTimeout(() => {
-      if (!started) reject(new Error('Server did not start within 10 seconds'));
-    }, 10000);
-  });
+  // Force the default DB-backed image store on ephemeral SQLite.
+  const server = spawnServer({ IMAGE_STORAGE_DRIVER: 'db' });
+  serverProc = server.proc;
+  ({ base: BASE_URL } = await server.ready);
 });
 
 after(() => {
@@ -299,5 +264,63 @@ describe('GET /api/images/:id — not found + malformed', () => {
   test('malformed id (too short) → 404 without a storage hit', async () => {
     const got = await getRaw('/api/images/short');
     assert.equal(got.status, 404);
+  });
+});
+
+// ===========================================================================
+// 3. Body parsing order — limiters before any bytes are buffered
+// ===========================================================================
+
+describe('image bodies are read only after the limiters', () => {
+  test('a gzip-encoded body is refused with 415 before it is inflated (image route and global parser)', async () => {
+    const gz = require('node:zlib').gzipSync(JSON.stringify({ sessionId: makeSessionId(), contentType: 'image/png', data: TINY_PNG_B64 }));
+    for (const p of ['/api/images', '/api/mode']) {
+      const res = await fetch(`${BASE_URL}${p}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+        body: gz,
+      });
+      assert.equal(res.status, 415, p);
+      assert.equal((await res.json()).error, 'unsupported_encoding', p);
+    }
+  });
+
+  test('an upload far above the 32kb global JSON cap still succeeds (201)', async () => {
+    const big = Buffer.concat([PNG_BYTES, crypto.randomBytes(60_000)]).toString('base64');
+    const { status, json } = await postJson('/api/images', { sessionId: makeSessionId(), contentType: 'image/png', data: big });
+    assert.equal(status, 201, JSON.stringify(json));
+  });
+
+  describe('against a server with tight upload limits', () => {
+    let base;
+    let proc;
+    before(async () => {
+      const server = spawnServer({ IMAGE_STORAGE_DRIVER: 'db', UPLOAD_IP_PER_MIN: '3', IMAGE_UPLOAD_INFLIGHT_BYTES: '4096' });
+      proc = server.proc;
+      ({ base } = await server.ready);
+    });
+    after(() => { if (proc) proc.kill('SIGTERM'); });
+
+    const send = (body) => fetch(`${base}/api/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    }).then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+    test('in-flight byte budget → 503 busy; a malformed body is parsed only after the limiter; then 429 unparsed', async () => {
+      const ok = await send(JSON.stringify({ sessionId: makeSessionId(), contentType: 'image/png', data: TINY_PNG_B64 }));
+      assert.equal(ok.status, 201, 'small upload fits the budget');
+
+      const tooBig = await send(JSON.stringify({ sessionId: makeSessionId(), contentType: 'image/png', data: 'A'.repeat(8000) }));
+      assert.equal(tooBig.status, 503);
+      assert.equal(tooBig.json.error, 'busy');
+
+      const malformed = await send('{"sessionId": not json');
+      assert.equal(malformed.status, 400, 'parsed (and rejected) only after the limiter let it through');
+
+      const limited = await send('{"this body": is never parsed');
+      assert.equal(limited.status, 429, 'the 4th request in the minute is refused before its body is read');
+      assert.equal(limited.json.error, 'rate_limited');
+    });
   });
 });

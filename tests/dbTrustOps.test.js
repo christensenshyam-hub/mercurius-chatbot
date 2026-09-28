@@ -208,7 +208,8 @@ describe('lesson events', () => {
     await db.runRaw('ALTER TABLE lesson_events RENAME TO lesson_events_hidden');
     try {
       assert.equal(await db.recordLessonEvent({ sessionId: s, event: 'start' }), false);
-      assert.equal(await db.purgeLessonEventsBefore(Date.now()), 0, 'purge helper swallows the error too');
+      await assert.rejects(db.purgeLessonEventsBefore(Date.now()), (err) => err.deletedSoFar === 0,
+        'a purge failure reaches the scheduler (it used to look like a clean 0-row sweep)');
     } finally {
       await db.runRaw('ALTER TABLE lesson_events_hidden RENAME TO lesson_events');
     }
@@ -406,6 +407,25 @@ describe('getAdminStats', () => {
     assert.equal((await db.getAdminStats({ days: 'nope' })).windowDays, 7);
     assert.equal((await db.getAdminStats({ days: 1000, now: NOW })).windowDays, 366);
   });
+
+  test("a student's Stop (client_abort) is billed but is not an error; a watchdog timeout is", async () => {
+    const before = await db.getAdminStats({ days: 7, now: NOW });
+    await db.recordUsage({ ts: at(-2, 1), sessionId: S.A, route: '/api/chat', kind: 'chat', status: 'aborted', costUsd: 0.03, errorKind: 'client_abort' });
+    await db.recordUsage({ ts: at(-2, 2), sessionId: S.A, route: '/api/chat', kind: 'chat', status: 'aborted', costUsd: 0.01, errorKind: 'timeout' });
+    try {
+      const after = await db.getAdminStats({ days: 7, now: NOW });
+      const day = after.perDay.find((d) => d.day === isoDay(T - 2));
+      assert.equal(day.errors, 1, 'only the timeout');
+      close(day.costUsd, 0.04, 'both billed');
+      assert.deepEqual(
+        after.topErrors.map((e) => [e.route, e.error_kind, e.count]),
+        [['/api/chat', 'kill_switch', 1], ['/api/chat', 'timeout', 1], ['/api/chat', 'upstream_500', 1]],
+      );
+      assert.equal(before.topErrors.length, 2);
+    } finally {
+      await db.runRaw("DELETE FROM usage WHERE error_kind IN ('client_abort', 'timeout')");
+    }
+  });
 });
 
 describe('retention purge helpers', () => {
@@ -496,16 +516,16 @@ describe('retention purge helpers', () => {
     assert.deepEqual(await db.inactiveSessionIds(OLD + 50), []);
   });
 
-  test('purge helpers never throw on a broken table', async () => {
+  test('purge helpers reject on a broken table, so the scheduler can report it', async () => {
     await db.runRaw('ALTER TABLE usage RENAME TO usage_hidden');
     try {
-      assert.equal(await db.purgeUsageBefore(Date.now()), 0);
+      await assert.rejects(db.purgeUsageBefore(Date.now()), (err) => err.deletedSoFar === 0);
     } finally {
       await db.runRaw('ALTER TABLE usage_hidden RENAME TO usage');
     }
     await db.runRaw('ALTER TABLE sessions RENAME TO sessions_hidden');
     try {
-      assert.deepEqual(await db.inactiveSessionIds(Date.now()), []);
+      await assert.rejects(db.inactiveSessionIds(Date.now()));
     } finally {
       await db.runRaw('ALTER TABLE sessions_hidden RENAME TO sessions');
     }

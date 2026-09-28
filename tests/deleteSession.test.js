@@ -12,7 +12,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 
 const dbPath = path.join(os.tmpdir(), `merc-delete-${crypto.randomBytes(4).toString('hex')}.db`);
 process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
@@ -75,41 +75,38 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.equal((await db.getMessages(keep, 50)).length, 1, 'other session untouched');
     assert.equal((await db.getMessages(drop, 50)).length, 0, 'target session cleared');
   });
+
+  test('a usage row or lesson event settling after the erasure no longer carries the erased id', async () => {
+    const s = sid();
+    const other = sid();
+    await db.getOrCreateSession(s);
+    await db.deleteSession(s);
+    // What an in-flight model call writes when it settles a moment later.
+    assert.equal(await db.recordUsage({ ts: Date.now(), sessionId: s, route: '/api/chat', kind: 'chat', status: 'aborted', costUsd: 0.01, traceId: 'late-trace' }), true);
+    assert.equal(await db.recordLessonEvent({ sessionId: s, lessonId: 'u1_l1', event: 'turn', turnIndex: 2 }), false);
+    await db.recordUsage({ ts: Date.now(), sessionId: other, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.01 });
+    const Database = require('better-sqlite3');
+    const sqlite = new Database(dbPath, { readonly: true });
+    try {
+      assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM usage WHERE session_id = ?').get(s).n, 0, 'no usage row under the erased id');
+      assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM usage WHERE session_id IS NULL AND trace_id = 'late-trace'").get().n, 1, 'still billed');
+      assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM lesson_events WHERE session_id = ?').get(s).n, 0);
+      assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM usage WHERE session_id = ?').get(other).n, 1, 'other sessions unaffected');
+    } finally {
+      sqlite.close();
+    }
+  });
 });
 
 describe('DELETE /api/session/:sessionId', () => {
-  const PORT = 9200 + Math.floor(Math.random() * 700);
-  const BASE = `http://localhost:${PORT}`;
+  let BASE;
   const serverDb = path.join(os.tmpdir(), `merc-delete-http-${crypto.randomBytes(4).toString('hex')}.db`);
   let proc;
 
   before(async () => {
-    await new Promise((resolve, reject) => {
-      proc = spawn(process.execPath, ['server.js'], {
-        cwd: path.join(__dirname, '..'),
-        env: {
-          ...process.env,
-          PORT: String(PORT),
-          DATABASE_URL: '',
-          SQLITE_PATH: serverDb,
-          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-          ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-          NODE_ENV: 'test',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let started = false;
-      proc.stdout.on('data', (c) => {
-        if (!started && c.toString().includes('Mercurius')) { started = true; setTimeout(resolve, 300); }
-      });
-      proc.stderr.on('data', (c) => {
-        const t = c.toString();
-        if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-      });
-      proc.on('error', reject);
-      proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-      setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
-    });
+    const server = spawnServer({ SQLITE_PATH: serverDb, SESSION_DELETE_IP_PER_MIN: '5' });
+    proc = server.proc;
+    ({ base: BASE } = await server.ready);
   });
 
   after(() => {
@@ -147,7 +144,7 @@ describe('DELETE /api/session/:sessionId', () => {
     assert.equal(res.status, 400);
   });
 
-  test('a scripted sweep trips the dedicated 5/min delete limiter', async () => {
+  test('a scripted sweep trips the dedicated delete limiter (SESSION_DELETE_IP_PER_MIN, 5 here)', async () => {
     const statuses = [];
     for (let i = 0; i < 8; i++) {
       const res = await fetch(`${BASE}/api/session/${sid()}`, { method: 'DELETE' });

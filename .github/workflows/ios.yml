@@ -72,7 +72,10 @@ jobs:
   xcode:
     name: Xcode scheme tests
     runs-on: macos-14
-    timeout-minutes: 45
+    # Above the test step's own 50-minute cap, so a slow or hung test step
+    # FAILS (and its xcresult is uploaded) instead of the whole job being
+    # cancelled with no diagnostics.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -93,8 +96,30 @@ jobs:
         # breaks on an image update. Keeps the cause visible in logs.
         run: xcrun simctl list devices available | head -40
 
+      - name: Boot the test simulator
+        # The App Store screenshot test used to be the cold-simulator
+        # warm-up (it ran first and retried its first launch). It no longer
+        # runs in CI, so boot the device the test step resolves (iPhone 16 on
+        # the newest iOS runtime) before it starts. Best effort: the test
+        # step boots it anyway if this does not.
+        # Capped so setup + boot + the 50-minute test step stay inside the
+        # job's 60 minutes and the xcresult upload still runs.
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          udid=$(xcrun simctl list devices available -j | jq -r '
+            [.devices | to_entries[] | select(.key | test("iOS-[0-9]+-[0-9]+$")) | .key as $rt
+             | .value[] | select(.name == "iPhone 16")
+             | { udid, v: ($rt | capture("iOS-(?<a>[0-9]+)-(?<b>[0-9]+)$") | [(.a | tonumber), (.b | tonumber)]) }]
+            | sort_by(.v) | last | .udid // empty')
+          if [ -z "$udid" ]; then echo "no iPhone 16 simulator found; skipping"; exit 0; fi
+          echo "booting $udid"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+
       - name: Run Xcode tests
         working-directory: ios
+        timeout-minutes: 50
         # Destination:
         #   * `OS=latest` picks the newest installed runtime (macos-14
         #     runners at the time of writing ship iOS 18.x).
@@ -107,6 +132,9 @@ jobs:
         #   * `MercuriusTests/ViewSnapshotTests` — pixel references were
         #     recorded on a specific local sim and will not match a
         #     GitHub runner sim 1:1 without pinning.
+        #   * `MercuriusUITests/AppStoreScreenshots` — the App Store
+        #     screenshot generator (48-370 s per pass, retries included);
+        #     ios/scripts/screenshots.sh runs it on its own.
         # Retries:
         #   * The runner's simulator intermittently fails to terminate the
         #     app between XCUITests ("Failed to terminate
@@ -126,6 +154,7 @@ jobs:
             -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
             -skip-testing:MercuriusTests/ViewSnapshotTests \
             -skip-testing:MercuriusUITests/PerformanceTests \
+            -skip-testing:MercuriusUITests/AppStoreScreenshots \
             -retry-tests-on-failure \
             -test-iterations 3 \
             -test-repetition-relaunch-enabled YES \
@@ -133,6 +162,8 @@ jobs:
             | xcbeautify
 
       - name: Upload xcresult bundle on failure
+        # A step timeout counts as a failure (the job cap above leaves room
+        # for this upload); a superseded run's cancel uploads nothing.
         if: failure()
         uses: actions/upload-artifact@v4
         with:

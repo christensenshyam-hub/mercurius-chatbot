@@ -177,6 +177,7 @@ const EXPECTED_INDEXES = [
   'idx_messages_session', 'idx_messages_session_kind', 'idx_sessions_leaderboard', 'idx_images_session',
   'idx_reports_created', 'idx_lesson_events_ts', 'idx_lesson_events_session', 'idx_usage_ts', 'idx_usage_session',
   'idx_sessions_last_active', 'idx_reports_session', 'idx_messages_timestamp', 'idx_curriculum_progress_session',
+  'idx_images_created',
 ];
 
 async function assertCurrentSchema() {
@@ -296,6 +297,12 @@ await step('C1 sessions: getOrCreateSession / ensureSession / sessionExists / ge
   assert.equal(e1.row.session_id, S);
   const e2 = await db.ensureSession(S);
   assert.equal(e2.created, false);
+  // `created` comes from the INSERT: two concurrent first contacts for one id
+  // are ONE new session against the per-IP new-session quota, not two.
+  const twin = newSid('twin');
+  const both = await Promise.all([db.ensureSession(twin), db.ensureSession(twin)]);
+  assert.deepEqual(both.map((r) => r.created).sort(), [false, true]);
+  for (const r of both) assert.equal(r.row.session_id, twin);
   assert.equal(await db.sessionExists(S), true);
   const row = await db.getOrCreateSession(S);
   assert.equal(row.session_id, S);
@@ -307,8 +314,9 @@ await step('C1 sessions: getOrCreateSession / ensureSession / sessionExists / ge
   assert.equal(b.session_id, racer);
   assert.equal(await count('sessions', 'session_id = ?', [racer]), 1);
   const stats = await db.getSessionStats(S);
-  assert.equal(stats.session.session_id, S);
-  assert.ok(Number(stats.totalSessions) >= 3, `totalSessions ${stats.totalSessions}`);
+  assert.deepEqual(Object.keys(stats.session).sort(), ['last_session_date', 'message_count', 'mode', 'streak']);
+  assertNum(stats.session.message_count, 'getSessionStats.message_count');
+  assert.equal(await db.getSessionStats(newSid('nobody')).then((r) => r.session), null);
   const st = await db.getSessionState(S);
   assert.equal(st.mode, 'socratic');
   await db.setMode(S, 'debate');
@@ -425,7 +433,9 @@ await step('C7 events blob: setEventsInDB upsert / getEventsFromDB / getEventsUp
   await db.setEventsInDB({ meetings: [1] });
   await db.setEventsInDB({ meetings: [1, 2] });
   assert.deepEqual(await db.getEventsFromDB(), { meetings: [1, 2] });
-  assert.ok(Number(await db.getEventsUpdatedAt()) > 0);
+  const updatedAt = await db.getEventsUpdatedAt();
+  assertNum(updatedAt, 'getEventsUpdatedAt (admin.html does new Date(updatedAt))');
+  assert.ok(updatedAt > 0);
 });
 
 await step('C8 lesson_events: start / turn / complete, complete deduped per attempt, retake completes again', async () => {
@@ -489,6 +499,12 @@ await step('C9 getAdminStats({ days: 7 }): day buckets, retention cohorts, aband
   assert.ok(s.topRoutesByCost.some((r) => r.route === '/api/chat' && isNum(r.calls) && isNum(r.costUsd)));
   const s1 = await db.getAdminStats({ days: 1 });
   assert.equal(s1.perDay.length, 1);
+  // A student's Stop (client_abort) is billed but is not an error.
+  await db.recordUsage({ ts: now, sessionId: R, route: '/api/chat', kind: 'chat', status: 'aborted', costUsd: 0.5, errorKind: 'client_abort' });
+  const s2 = await db.getAdminStats({ days: 1 });
+  assert.equal(s2.perDay[0].errors, s1.perDay[0].errors, 'client_abort is not counted as an error');
+  assert.ok(!s2.topErrors.some((e) => e.error_kind === 'client_abort'), JSON.stringify(s2.topErrors));
+  assert.ok(s2.perDay[0].costUsd >= s1.perDay[0].costUsd + 0.5 - 1e-9, 'but it is billed');
   await db.deleteSession(R);
 });
 
@@ -557,7 +573,9 @@ await step('C11 gamification (flag path): ensureGamificationSchema / progression
   assert.equal(await db.countXpEvents(S, 'asked_why'), 2);
   assert.equal(await db.countXpEvents(S, 'asked_why', { sinceTs: now + 1 }), 1);
   assert.equal(await db.sumXp(S), 16);
-  assert.equal((await db.getRecentXpEvents(S, 10)).length, 3);
+  const recentXp = await db.getRecentXpEvents(S, 10);
+  assert.equal(recentXp.length, 3);
+  for (const e of recentXp) { assertNum(e.created_at, 'xp_ledger.created_at (/api/progression/me `at`)'); assertNum(e.amount, 'xp_ledger.amount'); }
   await db.updateProgression(S, { xp: 16, level: 1, updatedAt: now });
   await db.touchProgressionStreak(S, now);
   const p2 = await db.getProgression(S);
@@ -630,9 +648,60 @@ await step('C15 retention purges (batched past 1000 rows) + inactiveSessionIds',
   assert.equal(receipt.deleted.sessions, 1);
 });
 
+await step('C16 a failing purge rejects with deletedSoFar (the scheduler reports it instead of a clean sweep)', async () => {
+  // db.js logs the (expected) failure with its stack; keep it out of the run log.
+  const logger = require('../lib/logger');
+  const level = logger.level;
+  logger.level = 'silent';
+  await db.runRaw('ALTER TABLE lesson_events RENAME TO lesson_events_hidden');
+  try {
+    await assert.rejects(db.purgeLessonEventsBefore(10000), (err) => err.deletedSoFar === 0);
+  } finally {
+    logger.level = level;
+    await db.runRaw('ALTER TABLE lesson_events_hidden RENAME TO lesson_events');
+  }
+  assert.equal(await db.purgeLessonEventsBefore(10000), 0, 'healthy again');
+});
+
+if (PG) {
+  await step('C17 erasure racing an in-flight message INSERT: the erasure waits on the row lock and succeeds', async () => {
+    const { Client } = require('pg');
+    const E = newSid('erase');
+    await db.ensureSession(E);
+    await db.saveMessage(E, 'user', 'before');
+    const other = new Client({ connectionString: process.env.DATABASE_URL });
+    await other.connect();
+    try {
+      // A chat turn's INSERT still open when the erasure starts (its FK check
+      // holds FOR KEY SHARE on the sessions row). Without deleteSession's
+      // SELECT … FOR UPDATE, the erasure's final DELETE FROM sessions waits
+      // for this commit and then fails its FK check: a 500 on "Delete my data".
+      await other.query('BEGIN');
+      await other.query("INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES ($1, 'user', 'in flight', $2, 'chat')", [E, Date.now()]);
+      const erasure = db.deleteSession(E);
+      const deadline = Date.now() + 5000;
+      for (;;) {
+        const r = await other.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'");
+        if (Number(r.rows[0].n) >= 1) break;
+        assert.ok(Date.now() < deadline, 'the erasure never blocked on the row lock');
+        await sleep(25);
+      }
+      await other.query('COMMIT');
+      const receipt = await erasure;
+      assert.equal(receipt.deleted.sessions, 1);
+      assert.equal(receipt.deleted.messages, 2, 'the in-flight message committed first, so it is erased too');
+      assert.equal(await count('messages', 'session_id = ?', [E]), 0, 'no orphan');
+      // A write that arrives after the erasure fails its own FK check.
+      await assert.rejects(other.query("INSERT INTO messages (session_id, role, content, timestamp, kind) VALUES ($1, 'user', 'late', $2, 'chat')", [E, Date.now()]), (err) => err.code === '23503');
+    } finally {
+      await other.end();
+    }
+  });
+}
+
 // ─── D. server.js on the same database ─────────────────────────────────────
-const PORT = 9300 + Math.floor(Math.random() * 500);
-const BASE = `http://127.0.0.1:${PORT}`;
+// PORT=0: the OS picks a free port; BASE comes from the server's ready line.
+let BASE = null;
 const ADMIN_PASSWORD = 'smoke-admin-' + hex(6);
 const admin = { 'x-admin-password': ADMIN_PASSWORD };
 let serverProc = null;
@@ -682,7 +751,7 @@ const bootOk = await (async () => {
       env: {
         ...process.env,
         ...dbEnv,
-        PORT: String(PORT),
+        PORT: '0',
         // development, not test: the scheduler runs (its first tick does the
         // retention sweep + digest at once with the hours pinned to 0).
         NODE_ENV: 'development',
@@ -690,10 +759,11 @@ const bootOk = await (async () => {
         ANTHROPIC_MOCK: '1',
         ANTHROPIC_API_KEY: '',
         ADMIN_PASSWORD,
-        ALLOWED_ORIGIN: BASE,
+        ALLOWED_ORIGIN: 'https://club.example',
         DISCORD_WEBHOOK_URL: '',
         USE_UNIFIED_PROMPT: '1',
-        IP_DAILY_NEW_SESSIONS: '1000',
+        // D3 creates one session; D3b's burst must find exactly 5 slots left.
+        IP_DAILY_NEW_SESSIONS: '6',
         RETENTION_UTC_HOUR: '0',
         DIGEST_UTC_HOUR: '0',
         PREWARM_ON_BOOT: '0',
@@ -708,6 +778,11 @@ const bootOk = await (async () => {
     let last = null;
     while (Date.now() < deadline) {
       if (serverExit) throw new Error(`server exited during boot (${JSON.stringify(serverExit)})`);
+      if (!BASE) {
+        const m = serverLog.match(/Mercurius ready on http:\/\/localhost:(\d+)/);
+        if (!m) { await sleep(100); continue; }
+        BASE = `http://127.0.0.1:${m[1]}`;
+      }
       try {
         last = await http('GET', '/api/health');
         if (last.status === 200) break;
@@ -718,6 +793,7 @@ const bootOk = await (async () => {
     assert.equal(last.json.status, 'ok');
     assert.equal(last.json.db, 'connected');
     assertNum(last.json.uptime, 'uptime');
+    assert.match(last.json.commit, /^[0-9a-f]{7}$|^dev$/, 'health names the build');
     ok = true;
   });
   return ok;
@@ -782,6 +858,19 @@ if (bootOk) {
     assert.ok(usage.some((u) => u.kind === 'lesson' && u.count >= 2), `usage ledger rows for the turns (${JSON.stringify(usage)})`);
     const msgs = await db.getMessages(U, 50, { kind: 'lesson' });
     assert.ok(msgs.length >= 4, `lesson turns persisted as kind=lesson (${msgs.length})`);
+  });
+
+  await step('D3b a burst of first contacts cannot overshoot the per-IP new-session quota', async () => {
+    // With real I/O every request passes the existence check before any row
+    // exists; the quota must be counted in the same tick as that check.
+    const ids = Array.from({ length: 10 }, () => newSid('burst'));
+    const statuses = await Promise.all(ids.map((id) => http('POST', '/api/mode', { body: { sessionId: id, mode: 'socratic' } }).then((r) => r.status)));
+    assert.equal(statuses.filter((s) => s === 200).length, 5, JSON.stringify(statuses));
+    assert.equal(statuses.filter((s) => s === 429).length, 5, JSON.stringify(statuses));
+    let created = 0;
+    for (const id of ids) if (await db.sessionExists(id)) created += 1;
+    assert.equal(created, 5, 'a refused id leaves no sessions row');
+    for (const id of ids) await db.deleteSession(id);
   });
 
   await step('D4 image upload + fetch round-trip (BYTEA through the routes)', async () => {
@@ -851,6 +940,7 @@ if (bootOk) {
     assert.ok(j.scheduler, 'scheduler running (NODE_ENV=development)');
     assert.equal(j.scheduler.lastError, null, `scheduler error: ${JSON.stringify(j.scheduler.lastError)}`);
     assert.equal(j.scheduler.lastRetentionDay, new Date().toISOString().slice(0, 10));
+    assert.equal(j.dbDriver, DRIVER, 'the admin view names the database driver');
   });
 
   await step('D8 DELETE /api/session: 400 for a short id, cascade receipt, idempotent, progress gone', async () => {
