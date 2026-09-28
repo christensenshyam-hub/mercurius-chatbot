@@ -60,6 +60,7 @@ describe('limits: env parsing', () => {
       IP_DAILY_NEW_SESSIONS: 60,
       IP_DAILY_IMAGES: 200,
       IP_DAILY_IMAGE_BYTES: 500 * 1024 * 1024,
+      IP_DAILY_REPORTS: 200,
       IP_MAX_INFLIGHT: 40,
       MAX_INFLIGHT: 80,
     });
@@ -319,19 +320,35 @@ describe('noteNewSession() per-ip cap', () => {
   });
 });
 
-describe('noteReport() per-session cap', () => {
+describe('noteReport() per-session and per-IP caps', () => {
   test('counts up to SESSION_DAILY_REPORTS per session per UTC day', () => {
     quotas.configure({ SESSION_DAILY_REPORTS: 2 });
-    assert.equal(quotas.noteReport(SID), true);
-    assert.equal(quotas.noteReport(SID), true);
-    assert.equal(quotas.noteReport(SID), false);
-    assert.equal(quotas.noteReport('sess_b'), true, 'another session is independent');
-    assert.equal(quotas.noteReport(''), true, 'nothing to key on');
+    assert.deepEqual(quotas.noteReport(SID, IP), { ok: true });
+    assert.deepEqual(quotas.noteReport(SID, IP), { ok: true });
+    assert.deepEqual(quotas.noteReport(SID, IP), { ok: false, scope: 'session' });
+    assert.deepEqual(quotas.noteReport('sess_b', IP), { ok: true }, 'another session is independent');
+    assert.deepEqual(quotas.noteReport('', ''), { ok: true }, 'nothing to key on');
   });
 
   test('defaults to 20', () => {
-    for (let i = 0; i < 20; i += 1) assert.equal(quotas.noteReport(SID), true);
-    assert.equal(quotas.noteReport(SID), false);
+    for (let i = 0; i < 20; i += 1) assert.equal(quotas.noteReport(SID, IP).ok, true);
+    assert.deepEqual(quotas.noteReport(SID, IP), { ok: false, scope: 'session' });
+  });
+
+  test('rotating session ids stops at IP_DAILY_REPORTS; a refusal counts against neither scope', () => {
+    quotas.configure({ IP_DAILY_REPORTS: 3, SESSION_DAILY_REPORTS: 2 });
+    assert.equal(quotas.noteReport('sess_1', IP).ok, true);
+    assert.equal(quotas.noteReport('sess_1', IP).ok, true);
+    assert.deepEqual(quotas.noteReport('sess_1', IP), { ok: false, scope: 'session' });
+    assert.equal(quotas.noteReport('sess_2', IP).ok, true, 'the session refusal did not use the network allowance');
+    assert.deepEqual(quotas.noteReport('sess_3', IP), { ok: false, scope: 'ip' });
+    assert.equal(quotas.noteReport('sess_3', '10.0.0.2').ok, true, 'the ip refusal did not count against sess_3');
+    assert.equal(quotas.noteReport('sess_4', '10.0.0.2').ok, true, 'another network is independent');
+  });
+
+  test('IP_DAILY_REPORTS defaults to 200', () => {
+    for (let i = 0; i < 200; i += 1) assert.equal(quotas.noteReport(`sess_${i}`, IP).ok, true);
+    assert.deepEqual(quotas.noteReport('sess_new', IP), { ok: false, scope: 'ip' });
   });
 });
 

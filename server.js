@@ -9,6 +9,19 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
+// crashExit's handler is only installed at the end of this file, so a throw
+// while the modules load (db.js refusing to boot without DATABASE_URL) would
+// exit on Node's default handler without paging. This pages on the way out.
+function bootFailed(err) {
+  const message = err && err.message ? err.message : String(err);
+  process.stderr.write(`${(err && err.stack) || message}\n`);
+  if (process.env.NODE_ENV !== 'production') process.exit(1);
+  const commit = (process.env.RAILWAY_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+  require('./lib/alerts').notify('crash:startup', `🛑 Mercurius server failed to start (${commit}): ${message.slice(0, 200)}`)
+    .finally(() => process.exit(1));
+}
+process.on('uncaughtException', bootFailed);
+
 const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
@@ -29,6 +42,7 @@ const {
   ReportRequest,
   ProgressionEventRequest,
   ProgressSyncRequest,
+  truncateUnits,
 } = require('./lib/schemas');
 const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
@@ -1669,7 +1683,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // so a turn cut when it was first sent is never replayed in full later.
   for (const m of clientMessages) {
     if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > MAX_USER_TURN_CHARS) {
-      m.content = m.content.slice(0, MAX_USER_TURN_CHARS);
+      m.content = truncateUnits(m.content, MAX_USER_TURN_CHARS);
     }
   }
   const lastMsg = clientMessages[clientMessages.length - 1];
@@ -2761,26 +2775,62 @@ app.post('/api/profile', asyncRoute(async (req, res) => {
 // The body is read only after the limiter, and a process-wide budget bounds
 // the image bodies being buffered at once: per-IP limits do not bound a
 // multi-IP burst, and each body costs ~4x its size in heap while parsed.
+// The budget holds the bytes that have actually arrived (a request is only
+// admitted if its declared size fits), so a connection that declares a big
+// body and then stalls holds next to nothing; a body still unread after
+// IMAGE_BODY_READ_MS is refused and gives its bytes back. iOS abandons the
+// whole upload at 60 s anyway.
 // The 12mb ceiling sits just above MAX_IMAGE_BYTES (8MB) after base64's ~4/3
 // inflation, so genuinely oversized images get the clean `image_too_large`
 // envelope from the handler, and only truly abusive bodies hit the raw 413.
 const IMAGE_BODY_LIMIT_BYTES = 12 * 1024 * 1024;
 const IMAGE_INFLIGHT_BYTES = envInt('IMAGE_UPLOAD_INFLIGHT_BYTES', 64 * 1024 * 1024);
+const IMAGE_BODY_READ_MS = envInt('IMAGE_BODY_READ_MS', 60 * 1000);
+const parseImageBody = express.json({ limit: IMAGE_BODY_LIMIT_BYTES, inflate: false });
 let imageBodyBytesInFlight = 0;
+function refuseImageBusy(res) {
+  metrics.quotaRejectionsTotal.inc({ scope: 'image_upload_busy' });
+  res.setHeader('Retry-After', '5');
+  return res.status(503).json({ error: 'busy', message: 'Mercurius is busy. Try the photo again in a moment.', retryAfterSec: 5 });
+}
 function imageBodyBudget(req, res, next) {
   const declared = Number(req.headers['content-length']);
-  const cost = Number.isFinite(declared) && declared > 0 ? Math.min(declared, IMAGE_BODY_LIMIT_BYTES) : IMAGE_BODY_LIMIT_BYTES;
-  if (imageBodyBytesInFlight + cost > IMAGE_INFLIGHT_BYTES) {
-    metrics.quotaRejectionsTotal.inc({ scope: 'image_upload_busy' });
-    res.setHeader('Retry-After', '5');
-    return res.status(503).json({ error: 'busy', message: 'Mercurius is busy. Try the photo again in a moment.', retryAfterSec: 5 });
-  }
-  imageBodyBytesInFlight += cost;
-  res.once('close', () => { imageBodyBytesInFlight -= cost; });
-  return next();
+  const expected = Number.isFinite(declared) && declared > 0 ? Math.min(declared, IMAGE_BODY_LIMIT_BYTES) : IMAGE_BODY_LIMIT_BYTES;
+  if (imageBodyBytesInFlight + expected > IMAGE_INFLIGHT_BYTES) return refuseImageBusy(res);
+  let held = 0;
+  let stopped = false;
+  // Answers mid-body: the rest of the body is never read (Node drops the
+  // connection once the answer is out) and the route never runs.
+  const stop = (answer) => {
+    if (stopped || res.headersSent) return;
+    stopped = true;
+    req.off('data', onData);
+    res.setHeader('Connection', 'close');
+    answer();
+  };
+  const onData = (chunk) => {
+    const add = Math.min(chunk.length, IMAGE_BODY_LIMIT_BYTES - held);
+    held += add;
+    imageBodyBytesInFlight += add;
+    if (imageBodyBytesInFlight > IMAGE_INFLIGHT_BYTES) stop(() => refuseImageBusy(res));
+  };
+  const timer = setTimeout(() => stop(() => {
+    metrics.quotaRejectionsTotal.inc({ scope: 'image_upload_timeout' });
+    res.status(408).json({ error: 'timeout', message: 'The photo took too long to upload. Try again.' });
+  }), IMAGE_BODY_READ_MS);
+  req.on('data', onData);
+  res.once('close', () => {
+    clearTimeout(timer);
+    req.off('data', onData);
+    imageBodyBytesInFlight -= held;
+  });
+  return parseImageBody(req, res, (err) => {
+    clearTimeout(timer);
+    if (!stopped) next(err);
+  });
 }
 
-app.post('/api/images', uploadLimiter, imageBodyBudget, express.json({ limit: IMAGE_BODY_LIMIT_BYTES, inflate: false }), validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
+app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
   const { sessionId, contentType, data, fileName } = req.validated;
 
   const validated = decodeAndValidateImage({ data, contentType });
@@ -2894,10 +2944,16 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       logger.forRequest(req).debug({ reason: reason || null }, 'content report for an unknown session dropped');
       return res.json({ ok: true });
     }
-    // Past its daily allowance a session's reports are acknowledged the same
-    // way and dropped, so one session cannot bury the review queue.
-    if (!quotas.noteReport(sessionId)) {
-      metrics.quotaRejectionsTotal.inc({ scope: 'session:reports' });
+    // Past its daily allowance a session's (or a network's) reports are
+    // acknowledged the same way and dropped, so one client cannot bury the
+    // review queue.
+    const reportVerdict = quotas.noteReport(sessionId, req.ip);
+    if (!reportVerdict.ok) {
+      metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
+      if (reportVerdict.scope === 'ip') {
+        const h = claudeCall.hashIp(req.ip);
+        alerts.notify(`report_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+      }
       return res.json({ ok: true });
     }
     const createdAt = Date.now();
@@ -3225,6 +3281,7 @@ async function crashExit(stage, err) {
   }
   process.exit(1);
 }
+process.off('uncaughtException', bootFailed);
 process.on('uncaughtException', (err) => { void crashExit('uncaught_exception', err); });
 
 // Backstop: any rejection path the asyncRoute wrapper / handler try-catches

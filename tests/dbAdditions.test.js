@@ -14,7 +14,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const dbPath = path.join(os.tmpdir(), `merc-additions-${crypto.randomBytes(4).toString('hex')}.db`);
 process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
@@ -224,16 +224,41 @@ describe('production refuses to boot without DATABASE_URL', () => {
     assert.match(r.stdout, /loaded/);
   });
 
-  test('the whole server exits instead of listening on ephemeral SQLite', () => {
-    const r = spawnSync(process.execPath, ['server.js'], {
-      cwd: ROOT,
-      env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '', PORT: '0', ANTHROPIC_API_KEY: '' },
-      encoding: 'utf8',
-      timeout: 15000,
+  test('the whole server exits instead of listening on ephemeral SQLite, and pages on its way out', async () => {
+    const http = require('node:http');
+    const posts = [];
+    const hook = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => { posts.push(JSON.parse(body)); res.writeHead(204).end(); });
     });
-    assert.notEqual(r.status, 0, `server must not boot (status ${r.status}, signal ${r.signal})`);
-    assert.equal(r.signal, null, 'exited on its own, not killed by the timeout');
-    assert.match(r.stderr, /DATABASE_URL is empty/);
+    await new Promise((resolve) => hook.listen(0, '127.0.0.1', resolve));
+    try {
+      const proc = spawn(process.execPath, ['server.js'], {
+        cwd: ROOT,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          DATABASE_URL: '',
+          PORT: '0',
+          ANTHROPIC_API_KEY: '',
+          DISCORD_WEBHOOK_URL: `http://127.0.0.1:${hook.address().port}/hook`,
+        },
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let stderr = '';
+      proc.stderr.on('data', (c) => { stderr += c; });
+      const killer = setTimeout(() => proc.kill('SIGKILL'), 15000);
+      const [status, signal] = await new Promise((resolve) => proc.on('exit', (code, sig) => resolve([code, sig])));
+      clearTimeout(killer);
+      assert.notEqual(status, 0, `server must not boot (status ${status}, signal ${signal})`);
+      assert.equal(signal, null, 'exited on its own, not killed by the timeout');
+      assert.match(stderr, /DATABASE_URL is empty/);
+      assert.equal(posts.length, 1, 'the require-time failure paged Discord');
+      assert.match(posts[0].content, /failed to start .*DATABASE_URL is empty/);
+    } finally {
+      hook.close();
+    }
   });
 
   test('outside production an empty DATABASE_URL still selects SQLite (dev + tests)', () => {
