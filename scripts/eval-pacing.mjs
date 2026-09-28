@@ -501,8 +501,8 @@ async function setMode(baseUrl, sessionId, mode) {
 
 /**
  * POST /api/chat with Accept: text/event-stream; accumulate `delta`
- * frames until the `[DONE]` sentinel. Retries once on a 429 (the
- * server rate-limits 15 chat req/min/IP + 20/min/session).
+ * frames until the `[DONE]` sentinel. Retries on a 429 (the per-IP chat
+ * limiter) or a `rate_limited` error frame (the per-session limiter).
  *
  * Resolves `{ text, usage }` — `usage` is the Anthropic usage object the
  * server attaches to its 'complete' frame under EVAL_EXPOSE_USAGE=1
@@ -528,28 +528,39 @@ async function streamChat(baseUrl, body, { retries = 2 } = {}) {
     let text = '';
     let usage = null;
     let done = false;
-    for await (const chunk of res.body) {
-      buffer += decoder.decode(chunk, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const frame = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-        for (const line of frame.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6);
-          if (payload === '[DONE]') { done = true; continue; }
-          let parsed;
-          try { parsed = JSON.parse(payload); } catch { continue; }
-          if (parsed.type === 'delta' && typeof parsed.text === 'string') text += parsed.text;
-          if (parsed.type === 'complete') usage = parsed.usage || null;
-          if (parsed.type === 'error') {
-            const e = new Error(`SSE error frame: ${parsed.error}`);
-            e.code = parsed.code;
-            throw e;
+    try {
+      for await (const chunk of res.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          for (const line of frame.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6);
+            if (payload === '[DONE]') { done = true; continue; }
+            let parsed;
+            try { parsed = JSON.parse(payload); } catch { continue; }
+            if (parsed.type === 'delta' && typeof parsed.text === 'string') text += parsed.text;
+            if (parsed.type === 'complete') usage = parsed.usage || null;
+            if (parsed.type === 'error') {
+              const e = new Error(`SSE error frame: ${parsed.error}`);
+              e.code = parsed.code;
+              throw e;
+            }
           }
         }
+        if (done) break;
       }
-      if (done) break;
+    } catch (err) {
+      // The per-session limiter answers a streaming request with an SSE
+      // error frame, not an HTTP 429: same back-off.
+      if (err.code === 'rate_limited' && attempt < retries) {
+        process.stderr.write('    rate-limited (SSE) — sleeping 61s and retrying\n');
+        await sleep(61_000);
+        continue;
+      }
+      throw err;
     }
     if (!done) throw new Error('SSE stream ended without [DONE]');
     return { text, usage };
