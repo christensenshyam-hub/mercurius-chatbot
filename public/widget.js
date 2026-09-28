@@ -1570,6 +1570,14 @@
     closeDrawer();
   }
 
+  // A tool's error body as the note shown in its panel. A crisis hand-off
+  // (error "crisis") keeps its line breaks and reads as plain text, not as a
+  // muted italic hint.
+  function errorNoteHtml(data) {
+    var cls = data.error === 'crisis' ? 'merc-quiz-empty merc-crisis-note' : 'merc-quiz-empty';
+    return '<p class="' + cls + '">' + escapeHtml(data.message || 'Error') + '</p>';
+  }
+
   function removeLoadingFromPanel(body) {
     var el = body.querySelector('.merc-quiz-loading');
     if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -1588,7 +1596,7 @@
       .then(function(data) {
         removeLoadingFromPanel(body);
         if (data.error) {
-          body.insertAdjacentHTML('afterbegin', '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>');
+          body.insertAdjacentHTML('afterbegin', errorNoteHtml(data));
           return;
         }
         opts.render(data, body);
@@ -1659,7 +1667,7 @@
         .then(function(data) {
           submitBtn.disabled = false;
           if (data.error) {
-            if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>';
+            if (resultEl) resultEl.innerHTML = errorNoteHtml(data);
             return;
           }
           checkAndAwardAchievement('fact_checker');
@@ -1721,7 +1729,7 @@
         .then(function(data) {
           submitBtn.disabled = false;
           if (data.error) {
-            if (resultEl) resultEl.innerHTML = '<p class="merc-quiz-empty">' + escapeHtml(data.message || 'Error') + '</p>';
+            if (resultEl) resultEl.innerHTML = errorNoteHtml(data);
             return;
           }
           checkAndAwardAchievement('analyst');

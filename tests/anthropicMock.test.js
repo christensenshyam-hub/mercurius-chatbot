@@ -703,6 +703,23 @@ describe('request validation (real-API 400s)', () => {
     );
   });
 
+  test('more than 4 cache_control breakpoints → 400, like the real API; 4 are fine', async () => {
+    const cc = { type: 'ephemeral' };
+    const system = [{ type: 'text', text: 'a', cache_control: cc }, { type: 'text', text: 'b', cache_control: cc }];
+    const messages = [
+      { role: 'user', content: [{ type: 'text', text: 'one', cache_control: cc }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'two', cache_control: cc }] },
+      { role: 'user', content: [{ type: 'text', text: 'three', cache_control: cc }] },
+    ];
+    await assert.rejects(
+      client.messages.create({ model: 'm', max_tokens: 10, system, messages }),
+      (err) => err.status === 400 && /maximum of 4 blocks with cache_control.*Found 5/.test(err.error.error.message),
+    );
+    const four = messages.map((m, i) => (i === 2 ? { role: 'user', content: 'three' } : m));
+    const ok = await client.messages.create({ model: 'm', max_tokens: 10, system, messages: four });
+    assert.equal(ok.type, 'message');
+  });
+
   test('empty messages → 400 on stream() too, as an error event', async () => {
     const stream = client.messages.stream({ model: 'm', max_tokens: 10, messages: [] });
     const rec = record(stream);

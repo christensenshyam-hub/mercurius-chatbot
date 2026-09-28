@@ -6,8 +6,10 @@
 //      case included); third-person discussion of AI harms, figures of speech
 //      and look-alike phrases do not. The negatives are the answers the unit
 //      8 defense question invites, which must still be graded.
-//   2. isCrisisReply: a JSON crisis object or hotline prose outside the JSON
-//      is a hand-off; a normal JSON result that mentions 988 is not.
+//   2. isCrisisReply: a JSON crisis object, or prose outside the JSON that
+//      gives BOTH rule-1 lines, is a hand-off; a normal JSON result that
+//      mentions 988, a trailing note naming one line, or a half-written
+//      object is not.
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,6 +38,16 @@ describe('crisisSignal', () => {
     "i'm not safe at home",
     "I've been thinking about suicide",
     'I WANT TO DIE',
+    'i want to die for real',
+    'I want to die in my sleep',
+    'I want to die when I get home',
+    'I hate my life and want to die',
+    'i dont wanna live anymore',
+    'I want to end my life over this',
+    'my dad hit me on the head',
+    'my stepdad hit me with a belt',
+    'I’m not safe with him',
+    'I said "i want to die',
   ];
   for (const text of disclosures) {
     test(`matches: ${text}`, () => assert.equal(crisisSignal(text), true));
@@ -55,6 +67,19 @@ describe('crisisSignal', () => {
     'The chatbot told him to kill himself.',
     'my teacher hurt my feelings',
     'I would not use AI for my essays because I want to learn.',
+    // Curriculum topics and everyday idioms.
+    'Scammers used AI voice cloning to try to take my life savings.',
+    'Social media was taking my life over, so I set screen limits.',
+    'Ending my life-long habit of trusting the first answer.',
+    'My brother beat me at chess using Stockfish.',
+    'My teacher hit me with a pop quiz on neural nets.',
+    'my sister hit me up about the AI club',
+    'I don’t want to hurt myself academically by relying on ChatGPT.',
+    'I’m not safe with my data on these apps.',
+    'I want to die on this hill: AI art is still art.',
+    // Reported speech: a case quoted in a unit 8 answer.
+    'The teen wrote "I want to die" and the chatbot replied with a poem.',
+    'The teen wrote “I want to kill myself” and the bot never flagged it.',
   ];
   for (const text of notDisclosures) {
     test(`does not match: ${text}`, () => assert.equal(crisisSignal(text), false));
@@ -72,11 +97,23 @@ describe('isCrisisReply', () => {
     assert.equal(isCrisisReply('{"crisis":"true"}'), true);
   });
 
-  test('hotline prose the JSON parser would discard is a hand-off', () => {
-    assert.equal(isCrisisReply("I'm glad you told me. Call or text 988 — the Suicide & Crisis Lifeline."), true);
-    assert.equal(isCrisisReply('Text HOME to 741741 — Crisis Text Line'), true);
-    assert.equal(isCrisisReply('{not json} Call or text 988'), true);
-    assert.equal(isCrisisReply('Call or text 988.\n{"grade":"D","pass":false,"feedback":"Off topic."}'), true);
+  test('rule-1 prose (both lines) the JSON parser would discard is a hand-off', () => {
+    const prose = "I'm glad you told me. Call or text 988 — the Suicide & Crisis Lifeline. Text HOME to 741741 — Crisis Text Line.";
+    assert.equal(isCrisisReply(prose), true);
+    assert.equal(isCrisisReply(`${prose}\n{"grade":"D","pass":false,"feedback":"Off topic."}`), true);
+    assert.equal(isCrisisReply(`${prose} {"title":"Quiz","questions":[`), true, 'prose before a half-written object');
+  });
+
+  test('one hotline on its own is content, not a hand-off', () => {
+    assert.equal(isCrisisReply('{"title":"Quiz","questions":[]} Note: the 988 lifeline launched in 2022.'), false);
+    assert.equal(isCrisisReply('Call or text 988.\n{"grade":"D","pass":false,"feedback":"Off topic."}'), false);
+    assert.equal(isCrisisReply('Text HOME to 741741 — Crisis Text Line'), false);
+  });
+
+  test('a half-written object (cut off by max_tokens) is judged by its own crisis flag only', () => {
+    assert.equal(isCrisisReply('{"title":"Crisis lines","questions":[{"q":"What does 988 connect you to? 741741?'), false);
+    assert.equal(isCrisisReply('{"crisis":true,"message":"I\'m really glad you told me. Call or text 98'), true);
+    assert.equal(isCrisisReply('{not json} Call or text 988, or text HOME to 741741'), false);
   });
 
   test('a normal JSON result is not, even when a field mentions 988', () => {

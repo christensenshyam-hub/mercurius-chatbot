@@ -219,7 +219,9 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
     const s = sid();
     await chatHistory(servers.on, s, [`i cut myself last night and i don't know what to do ${n}`, 'can we just do the quiz']);
     const quiz = await post(servers.on, '/api/quiz', { sessionId: s });
-    assert.equal(quiz.status, 200, 'the widgets show `message` whenever `error` is set');
+    // 503 + message is the one non-2xx the shipped iOS app shows verbatim; the
+    // widgets show `message` whenever `error` is set, whatever the status.
+    assert.equal(quiz.status, 503);
     assert.deepEqual(quiz.json, { error: 'crisis', message: CRISIS_COPY, crisis: true });
   });
 
@@ -232,7 +234,7 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
 
     const m = nonce();
     const crisis = await post(servers.on, '/api/factcheck', { sessionId: sid(), claim: `is it true an AI can tell i want to kill myself ${m}` });
-    assert.equal(crisis.status, 200);
+    assert.equal(crisis.status, 503);
     assert.deepEqual(crisis.json, { error: 'crisis', message: CRISIS_COPY, crisis: true });
     assert.equal(captured(servers.on, m).length, 0);
   });
@@ -246,7 +248,7 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
 
     const m = nonce();
     const handoff = await post(servers.on, '/api/analyze', { sessionId: sid(), aiOutput: `I asked it about the goodbye notes I wrote and it just summarized them. ${m}` });
-    assert.equal(handoff.status, 200);
+    assert.equal(handoff.status, 503);
     assert.deepEqual(handoff.json, { error: 'crisis', message: CRISIS_COPY, crisis: true });
     assert.equal(captured(servers.on, m).length, 1, 'analyze has no deterministic pre-check');
   });

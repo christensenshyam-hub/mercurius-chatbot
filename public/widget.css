@@ -1000,6 +1000,16 @@
   margin: 0;
 }
 
+.merc-quiz-empty.merc-crisis-note {
+  color: #f1f5f9;
+  font-size: 13px;
+  font-style: normal;
+  text-align: left;
+  line-height: 1.5;
+  white-space: pre-line;
+  padding: 16px 4px;
+}
+
 .merc-quiz-q {
   margin-bottom: 18px;
   padding-bottom: 16px;

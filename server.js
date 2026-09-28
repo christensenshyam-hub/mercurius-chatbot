@@ -1137,9 +1137,14 @@ const CONCEPT_MAP_SYSTEM = helperSystem(CONCEPT_MAP_PROMPT);
 const UNIT_TEST_GRADER_SYSTEM = helperSystem(UNIT_TEST_GRADER_PROMPT);
 const FACTCHECK_SYSTEM = helperSystem(FACTCHECK_PROMPT);
 const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
-// What a widget helper route answers when the student's text is a crisis:
-// the widgets show `message` for any body carrying `error`.
+// What a JSON helper route (quiz, report card, concept map, fact-check,
+// analyze) answers when the student's text is a crisis. The status is 503
+// because that is the one non-2xx the shipped iOS app shows verbatim (any 503
+// with a `message` → serviceUnavailable → the copy itself); a 200 would fail
+// its strict Quiz decode and show "unexpected response". The widgets show
+// `message` for any body carrying `error`, whatever the status.
 const CRISIS_RESULT = Object.freeze({ error: 'crisis', message: CRISIS_COPY, crisis: true });
+const sendCrisisResult = (res) => res.status(503).json({ ...CRISIS_RESULT });
 
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
@@ -2234,7 +2239,7 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
       errorLabel: 'quiz',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
-    if (result.error === 'crisis') return res.json(result);
+    if (result.error === 'crisis') return sendCrisisResult(res);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch (err) {
@@ -2268,7 +2273,7 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
       errorLabel: 'report card',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
-    if (result.error === 'crisis') return res.json(result);
+    if (result.error === 'crisis') return sendCrisisResult(res);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
@@ -2357,7 +2362,7 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
       errorLabel: 'concept map',
     });
     if (result.error === 'insufficient_history') return res.status(400).json(result);
-    if (result.error === 'crisis') return res.json(result);
+    if (result.error === 'crisis') return sendCrisisResult(res);
     if (result.error) return res.status(500).json(result);
     return res.json(result);
   } catch(err) {
@@ -2646,7 +2651,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
   if (!isValidSessionId(sessionId) || !claim || typeof claim !== 'string' || claim.length > 1000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
   }
-  if (crisisSignal(claim)) return res.json({ ...CRISIS_RESULT });
+  if (crisisSignal(claim)) return sendCrisisResult(res);
   if (await isRateLimited(sessionId)) {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
@@ -2667,7 +2672,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
       },
     });
     const raw = response.content[0]?.text || '';
-    if (isCrisisReply(raw)) return res.json({ ...CRISIS_RESULT });
+    if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
     return res.json(JSON.parse(match[0]));
@@ -2706,7 +2711,7 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
       },
     });
     const raw = response.content[0]?.text || '';
-    if (isCrisisReply(raw)) return res.json({ ...CRISIS_RESULT });
+    if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
     return res.json(JSON.parse(match[0]));
