@@ -23,10 +23,10 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
+const { waitFor } = require('./support/waitFor');
 
-const PORT = 9700 + Math.floor(Math.random() * 200);
-const BASE = `http://localhost:${PORT}`;
+let BASE;
 const ADMIN_PASSWORD = 'test-admin-pw-' + crypto.randomBytes(4).toString('hex');
 const dbPath = path.join(os.tmpdir(), `merc-admin-trust-${crypto.randomBytes(4).toString('hex')}.db`);
 process.env.SQLITE_PATH = dbPath;         // must be set BEFORE db.js is required
@@ -54,38 +54,15 @@ async function createSession(s) {
 }
 
 before(async () => {
-  await new Promise((resolve, reject) => {
-    proc = spawn(process.execPath, ['server.js'], {
-      cwd: path.join(__dirname, '..'),
-      env: {
-        ...process.env,
-        PORT: String(PORT),
-        DATABASE_URL: '',
-        SQLITE_PATH: dbPath,
-        ANTHROPIC_MOCK: '1',
-        ANTHROPIC_API_KEY: '',
-        ADMIN_PASSWORD,
-        ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-        NODE_ENV: 'test',
-        DISCORD_WEBHOOK_URL: '',
-        // Low enough for the flood test to trip it quickly; the default (60)
-        // would not, which is what proves the env knob is honored.
-        REPORT_IP_PER_MIN: '12',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let started = false;
-    proc.stdout.on('data', (c) => {
-      if (!started && c.toString().includes('Mercurius')) { started = true; setTimeout(resolve, 300); }
-    });
-    proc.stderr.on('data', (c) => {
-      const t = c.toString();
-      if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-    });
-    proc.on('error', reject);
-    proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-    setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
+  const server = spawnServer({
+    SQLITE_PATH: dbPath,
+    ADMIN_PASSWORD,
+    // Low enough for the flood test to trip it quickly; the default (60)
+    // would not, which is what proves the env knob is honored.
+    REPORT_IP_PER_MIN: '12',
   });
+  proc = server.proc;
+  ({ base: BASE } = await server.ready);
 });
 
 after(() => {
@@ -169,17 +146,20 @@ describe('lesson events + admin stats', () => {
   test('one lesson_events row per answered turn: the opener is the start, the pass adds turn + complete, complete once per attempt', async () => {
     const s = sid();
     const opener = '[CURRICULUM: Unit 1, Lesson 1] Teach me what a token is.';
-    // The funnel rows are written after the reply, fire-and-forget: give them a beat.
-    const events = async () => {
-      await sleep(200);
-      return (await db.lessonEventsSince(0)).filter((r) => r.session_id === s);
+    // The funnel rows are written after the reply, fire-and-forget: wait for
+    // the expected count, then a beat more so a stray extra row shows too.
+    const read = async () => (await db.lessonEventsSince(0)).filter((r) => r.session_id === s);
+    const events = async (n) => {
+      await waitFor(read, (rows) => rows.length >= n);
+      await sleep(100);
+      return read();
     };
 
     // Turn 1: exactly one user message on the wire → exactly one row, the start.
     const t1 = await call('POST', '/api/chat', { sessionId: s, messages: [{ role: 'user', content: opener }] });
     assert.equal(t1.status, 200, JSON.stringify(t1.json));
     assert.equal(typeof t1.json.reply, 'string');
-    let rows = await events();
+    let rows = await events(1);
     assert.deepEqual(rows.map((r) => [r.event, r.turn_index, r.lesson_id]), [['start', 1, 'u1_l1']]);
 
     // Turn 5: the mock appends [LESSON_COMPLETE] from the 5th user turn on.
@@ -192,7 +172,7 @@ describe('lesson events + admin stats', () => {
     assert.equal(t5.status, 200, JSON.stringify(t5.json));
     assert.equal(t5.json.lessonComplete, true, 'server judged the lesson complete');
     assert.ok(!String(t5.json.reply).includes('[LESSON_COMPLETE]'), 'marker stripped from the reply');
-    rows = await events();
+    rows = await events(3);
     assert.deepEqual(rows.map((r) => [r.event, r.turn_index]), [['start', 1], ['turn', 5], ['complete', 5]]);
 
     // The iOS client keeps a passed lesson's thread open: the same request
@@ -200,7 +180,7 @@ describe('lesson events + admin stats', () => {
     const again = await call('POST', '/api/chat', { sessionId: s, messages: thread });
     assert.equal(again.status, 200, JSON.stringify(again.json));
     assert.equal(again.json.lessonComplete, true, 'the client is still told it passed');
-    rows = await events();
+    rows = await events(4);
     assert.deepEqual(rows.map((r) => r.event), ['start', 'turn', 'complete', 'turn']);
 
     const stats = await call('GET', '/api/admin/stats?days=7', undefined, admin);
@@ -236,8 +216,10 @@ describe('lesson events + admin stats', () => {
       ],
     });
     assert.equal(res.status, 200, JSON.stringify(res.json));
-    await sleep(200);
-    const rows = (await db.lessonEventsSince(0)).filter((r) => r.session_id === s);
+    const rows = await waitFor(
+      async () => (await db.lessonEventsSince(0)).filter((r) => r.session_id === s),
+      (r) => r.length >= 1,
+    );
     assert.deepEqual(rows.map((r) => [r.event, r.turn_index, r.lesson_id]), [['start', 2, 'u1_l2']]);
   });
 

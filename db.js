@@ -13,10 +13,14 @@ const USE_PG = !!DATABASE_URL;
 // container: every session, report and ledger row written until the next
 // deploy silently vanishes with it, and the spend cap starts from $0. Fail the
 // boot instead, so Railway's healthcheck keeps the previous deployment live.
-if (!USE_PG && process.env.NODE_ENV === 'production') {
+// Railway injects RAILWAY_ENVIRONMENT_NAME, so the guard holds even on a
+// service whose NODE_ENV was never set. ALLOW_SQLITE_IN_PROD=1 is the
+// deliberate escape hatch.
+const DEPLOYED = process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_ENVIRONMENT_NAME);
+if (!USE_PG && DEPLOYED && process.env.ALLOW_SQLITE_IN_PROD !== '1') {
   throw new Error(
-    'db: NODE_ENV=production but DATABASE_URL is empty. Refusing to fall back to '
-    + 'ephemeral SQLite. Set DATABASE_URL (the Railway Postgres reference) on this service.',
+    `db: ${process.env.NODE_ENV === 'production' ? 'NODE_ENV=production' : 'running on Railway'} but DATABASE_URL is empty. `
+    + 'Refusing to fall back to ephemeral SQLite. Set DATABASE_URL (the Railway Postgres reference) on this service.',
   );
 }
 
@@ -156,6 +160,7 @@ async function initSchema() {
         created_at BIGINT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_images_created ON images(created_at);
 
       -- User reports of objectionable AI responses (App Store Guideline 1.2).
       -- user_message = the student's turn that preceded the reported reply,
@@ -295,6 +300,7 @@ async function initSchema() {
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_images_created ON images(created_at);
       CREATE TABLE IF NOT EXISTS reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
@@ -475,10 +481,11 @@ async function insertReturningId(sql, params = []) {
 
 // Delete every row of `table` matching `whereSql` in batches of PURGE_BATCH
 // (so a first-ever purge of a year of messages never holds one giant
-// transaction / lock), returning the total deleted. Never throws: a failure
-// mid-way is logged with the count so far, which is what the scheduler
-// reports. `idCol IN (SELECT idCol … LIMIT n)` is the one batching idiom both
-// drivers accept (SQLite has no DELETE … LIMIT without a compile flag).
+// transaction / lock), returning the total deleted. A failure mid-way is
+// logged and RETHROWN with `err.deletedSoFar` set, so the scheduler records
+// it (lastError + the Discord summary) instead of reporting a clean sweep.
+// `idCol IN (SELECT idCol … LIMIT n)` is the one batching idiom both drivers
+// accept (SQLite has no DELETE … LIMIT without a compile flag).
 const PURGE_BATCH = 1000;
 async function purgeBatched(label, table, idCol, whereSql, params) {
   let total = 0;
@@ -493,6 +500,8 @@ async function purgeBatched(label, table, idCol, whereSql, params) {
     }
   } catch (e) {
     logger.error({ err: e, table, deletedSoFar: total }, `${label} failed`);
+    if (e && typeof e === 'object') e.deletedSoFar = total;
+    throw e;
   }
   return total;
 }
@@ -524,8 +533,26 @@ function streakDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.STREAK_TZ || 'America/New_York' }).format(now);
 }
 
+// ─── Recently erased ids ───
+// A model call still in flight when its session is erased settles its usage
+// row and lesson event afterwards, and neither table has a foreign key to
+// refuse the write: for a while after an erasure those rows drop the id.
+const ERASED_TTL_MS = 10 * 60_000;
+const recentlyErased = new Map(); // session id → erasedAt
+function noteErased(sessionId) {
+  const now = Date.now();
+  for (const [id, at] of recentlyErased) if (now - at >= ERASED_TTL_MS) recentlyErased.delete(id);
+  recentlyErased.set(sessionId, now);
+}
+function wasErased(sessionId) {
+  const at = sessionId == null ? undefined : recentlyErased.get(String(sessionId));
+  return at !== undefined && Date.now() - at < ERASED_TTL_MS;
+}
+
 // ─── Exported async API (same interface as before, but now async) ───
 module.exports = {
+  // 'pg' | 'sqlite' — reported by /api/health and the boot alert.
+  driver: USE_PG ? 'pg' : 'sqlite',
   initSchema,
   scrubLegacyNames,
   runRaw,
@@ -554,9 +581,16 @@ module.exports = {
   // quota keys off `created`, which the timestamp-equality heuristic it
   // replaces got wrong whenever a first turn errored before any write.
   async ensureSession(sessionId) {
-    const existed = await this.sessionExists(sessionId);
-    const row = await this.getOrCreateSession(sessionId);
-    return { row, created: !existed };
+    // `created` comes from the INSERT itself, so two concurrent first
+    // contacts for one id count as one new session, not two.
+    const now = Date.now();
+    const inserted = await execCount(
+      'INSERT INTO sessions (session_id, created_at, last_active) VALUES (?, ?, ?) ON CONFLICT (session_id) DO NOTHING',
+      [sessionId, now, now],
+    );
+    if (!inserted) await query('UPDATE sessions SET last_active = ? WHERE session_id = ?', [now, sessionId]);
+    const row = await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
+    return { row, created: inserted > 0 };
   },
 
   // ─── Messages ───
@@ -701,6 +735,7 @@ module.exports = {
         logger.warn({ event }, 'recordLessonEvent: missing sessionId (row dropped)');
         return false;
       }
+      if (wasErased(sessionId)) return false;
       const optInt = (v) => { const n = Number(v); return v != null && v !== '' && Number.isFinite(n) ? Math.round(n) : null; };
       let unit = optInt(row.unit);
       let lesson = optInt(row.lesson);
@@ -881,7 +916,7 @@ module.exports = {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ts,
-          str(pick('sessionId', 'session_id')),
+          wasErased(pick('sessionId', 'session_id')) ? null : str(pick('sessionId', 'session_id')),
           str(pick('ipHash', 'ip_hash')),
           str(row.route, 'unknown'),
           str(row.kind, 'unknown'),
@@ -956,6 +991,9 @@ module.exports = {
   // Definitions:
   //   DAU / WAU        distinct session_id with a messages.role='user' row that
   //                    day / anywhere in the window.
+  //   errors/topErrors usage rows with status <> 'ok', except error_kind
+  //                    'client_abort' (a student's Stop or a closed app: billed,
+  //                    not a failure).
   //   lessonsAbandoned 'start' rows whose 24 h judgement window has closed
   //                    (start.ts + 24 h <= now) with NO 'turn' or 'complete'
   //                    for the same session + lesson_id in [start, start+24 h].
@@ -1007,7 +1045,7 @@ module.exports = {
 
     const usageDays = await query(
       `SELECT u.ts / 86400000 AS day, COALESCE(SUM(u.cost_usd), 0) AS usd,
-              SUM(CASE WHEN u.status <> 'ok' THEN 1 ELSE 0 END) AS errors
+              SUM(CASE WHEN u.status <> 'ok' AND COALESCE(u.error_kind, '') <> 'client_abort' THEN 1 ELSE 0 END) AS errors
          FROM usage u WHERE u.ts >= ? AND u.ts < ? GROUP BY 1`,
       [startMs, endMs],
     );
@@ -1061,7 +1099,7 @@ module.exports = {
 
     const topErrors = await query(
       `SELECT u.route, u.error_kind, COUNT(*) AS count FROM usage u
-        WHERE u.ts >= ? AND u.ts < ? AND u.status <> 'ok'
+        WHERE u.ts >= ? AND u.ts < ? AND u.status <> 'ok' AND COALESCE(u.error_kind, '') <> 'client_abort'
         GROUP BY u.route, u.error_kind ORDER BY count DESC, u.route, u.error_kind LIMIT 10`,
       [startMs, endMs],
     );
@@ -1093,8 +1131,8 @@ module.exports = {
 
   // ─── Data retention (minors' data is not kept forever) ───
   // Batched deletes for the retention scheduler. Each purge* helper deletes
-  // rows OLDER than `tsMs` (strict <) in batches of 1000, returns the number
-  // deleted, and never throws (a failure logs and returns the count so far).
+  // rows OLDER than `tsMs` (strict <) in batches of 1000 and returns the
+  // number deleted; a failure logs and rejects, carrying `deletedSoFar`.
   // Counters on sessions (message_count) are deliberately left alone: they
   // are lifetime tallies, not a mirror of surviving rows.
   //   purgeMessagesBefore(tsMs)      messages.timestamp < tsMs
@@ -1110,7 +1148,7 @@ module.exports = {
   //                                  → session ids with last_active < before,
   //                                    least-recent first, so the scheduler
   //                                    can deleteSession() them in batches.
-  //                                    Never throws (→ [] on error).
+  //                                    Rejects on a query failure.
   async purgeMessagesBefore(tsMs) {
     return purgeBatched('purgeMessagesBefore', 'messages', 'id', 'timestamp < ?', [num(tsMs)]);
   },
@@ -1142,7 +1180,7 @@ module.exports = {
       return rows.map((r) => r.session_id);
     } catch (e) {
       logger.error({ err: e }, 'inactiveSessionIds failed');
-      return [];
+      throw e;
     }
   },
 
@@ -1184,11 +1222,18 @@ module.exports = {
     // Child tables first (FK order), then the parent `sessions` row.
     const base = ['messages', 'images', 'reports', 'usage', 'lesson_events', 'curriculum_progress'];
     const optional = ['xp_ledger', 'progression', 'student_memory'];
+    noteErased(sessionId);
 
     if (USE_PG) {
       const client = await pool.connect();
+      let releaseErr;
       try {
         await client.query('BEGIN');
+        // Lock the parent row first. Without it a child INSERT (a message, a
+        // progress upsert) committed between the child DELETEs and the final
+        // sessions DELETE fails that DELETE's FK check and the erasure 500s;
+        // with it the child INSERT waits, then fails its own FK check.
+        await client.query('SELECT 1 FROM sessions WHERE session_id = $1 FOR UPDATE', [sessionId]);
         const present = [];
         for (const t of optional) {
           const r = await client.query('SELECT to_regclass($1) AS reg', [t]);
@@ -1202,10 +1247,13 @@ module.exports = {
         await client.query('COMMIT');
         return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
       } catch (e) {
-        await client.query('ROLLBACK');
+        // A failed ROLLBACK means the connection is broken: discard it
+        // rather than hand it back to the pool.
+        await client.query('ROLLBACK').catch((rbErr) => { releaseErr = rbErr; });
+        recentlyErased.delete(sessionId);
         throw e;
       } finally {
-        client.release();
+        client.release(releaseErr);
       }
     }
 
@@ -1222,7 +1270,12 @@ module.exports = {
         deleted[t] = info.changes;
       }
     });
-    txn();
+    try {
+      txn();
+    } catch (e) {
+      recentlyErased.delete(sessionId);
+      throw e;
+    }
     return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
   },
 
@@ -1246,10 +1299,11 @@ module.exports = {
   // getPastSessions() queried OTHER users' sessions as a "memory" fallback and
   // leaked one student's conversation into another's context.
 
+  // One indexed row, the columns GET /api/session reads. (It used to add a
+  // COUNT(DISTINCT) over every session, on every app launch, that nothing read.)
   async getSessionStats(sessionId) {
-    const session = await queryOne('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
-    const totalSessions = await queryOne('SELECT COUNT(DISTINCT session_id) as count FROM sessions');
-    return { session, totalSessions: totalSessions?.count || 0 };
+    const session = await queryOne('SELECT streak, last_session_date, message_count, mode FROM sessions WHERE session_id = ?', [sessionId]);
+    return { session };
   },
 
   async getAllSessionIds() {
@@ -1317,7 +1371,8 @@ module.exports = {
 
   async getEventsUpdatedAt() {
     const row = await queryOne('SELECT updated_at FROM events WHERE id = 1');
-    return row ? row.updated_at : null;
+    // pg returns BIGINT as a string; admin.html does new Date(updatedAt).
+    return row ? num(row.updated_at) : null;
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1491,9 +1546,11 @@ module.exports = {
   },
 
   async getRecentXpEvents(sessionId, limit = 10) {
-    return await query(
+    const rows = await query(
       'SELECT amount, reason, source_type, source_id, created_at FROM xp_ledger WHERE session_id = ? ORDER BY created_at DESC LIMIT ?',
       [sessionId, limit],
     );
+    // pg returns BIGINT as a string; /api/progression/me hands it out as `at`.
+    return rows.map((r) => ({ ...r, amount: num(r.amount), created_at: num(r.created_at) }));
   },
 };

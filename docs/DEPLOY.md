@@ -70,7 +70,7 @@ view: what to set in production and why.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Upstream key used by `@anthropic-ai/sdk` | Never log this. See `lib/logger.js` redact list. Not needed when `ANTHROPIC_MOCK=1`. |
 | `ALLOWED_ORIGIN` | Comma-separated CORS allowlist | E.g. `https://mayoailiteracy.com,https://www.mayoailiteracy.com`. Unset means "any origin" — acceptable only in development. |
-| `DATABASE_URL` | Postgres connection string | Railway-provided. Unset outside production = a local SQLite file (dev, tests). With `NODE_ENV=production` an empty value **refuses to boot** (`db.js` throws) instead of silently running on an ephemeral SQLite file; the failed healthcheck keeps the previous deployment live. |
+| `DATABASE_URL` | Postgres connection string | Railway-provided. Unset outside production = a local SQLite file (dev, tests). With `NODE_ENV=production`, or on any Railway service (`RAILWAY_ENVIRONMENT_NAME` is set), an empty value **refuses to boot** (`db.js` throws) instead of silently running on an ephemeral SQLite file; the failed healthcheck keeps the previous deployment live. `ALLOW_SQLITE_IN_PROD=1` is the deliberate escape hatch. |
 
 ### Recommended
 
@@ -78,7 +78,7 @@ view: what to set in production and why.
 |---|---|---|
 | `PORT` | HTTP bind port | `3000` (Railway injects its own) |
 | `NODE_ENV` | `production` switches log level to INFO and disables dev niceties | `development` |
-| `ADMIN_PASSWORD` | Gates every `/api/admin/*` route via the `x-admin-password` header (events, kill switch) | Unset = admin endpoints always 401. Use a random 32+ char string. |
+| `ADMIN_PASSWORD` | Gates every `/api/admin/*` route via the `x-admin-password` header (events, kill switch) | Unset = admin endpoints always 401. Use a random 32+ char string. `ADMIN_AUTH_FAIL_ALERT_AT` (default `20`) wrong passwords within an hour, process-wide, page Discord (`admin_auth_fail`, at most hourly). |
 | `USE_UNIFIED_PROMPT` | `1`/`true` serves every mode from the single unified system prompt (`lib/unifiedPrompt.js`) | Off. **Railway prod runs with it ON** — verify prompt work under both states. |
 | `STREAK_TZ` | IANA zone that decides when a streak "day" rolls over | `America/New_York` |
 
@@ -89,10 +89,11 @@ applies) — unlike the quotas below, where `0` means refuse.
 
 | Var | Purpose | Default |
 |---|---|---|
-| `MODEL_ALLOWLIST` | Comma-separated model ids the server accepts when a client supplies `model` on `/api/chat`; anything else is rejected with `invalid_model` | `claude-sonnet-4-6,claude-3-5-haiku-latest` |
+| `MODEL_ALLOWLIST` | Comma-separated model ids the server accepts when a client supplies `model` on `/api/chat`; anything else is rejected with `invalid_model` | `claude-sonnet-4-6,claude-haiku-4-5` |
 | `STREAM_IDLE_MS` | Abort a Claude stream that has produced no delta for this long (wedged upstream) | `30000` |
 | `STREAM_MAX_MS` | Hard cap on one stream's total wall time (runaway reply). A healthy long lesson turn trips neither watchdog. | `150000` |
 | `STREAM_WATCHDOG_MS` | Legacy name for `STREAM_MAX_MS` (eval/CI overrides); when set it wins | unset |
+| `CLUB_FEED_TIMEOUT_MS` | Timeout for each fetch of the club site's `events-data.json` / `blog-content.json` (widget turns). A stale copy is served while one refresh runs; a failed fetch is retried after 5 min. `CLUB_EVENTS_URL` / `CLUB_BLOG_URL` override the feed URLs (tests) | `2000` |
 | `SSE_KEEPALIVE_MS` | Interval between SSE `: ping` keepalive comments so school proxies and cellular NATs keep a quiet stream open | `15000` |
 | `DRAIN_TIMEOUT_MS` | On SIGTERM stop accepting model work at once but let in-flight streams finish for up to this long before exiting | `30000` — Railway's kill window is `drainingSeconds = 35` in `railway.toml`; raise both together |
 | `ANTHROPIC_MOCK` | Exactly `1` swaps the SDK for the in-process mock (`lib/anthropicMock.js`) — no key, no network, no spend. Integration tests and offline UI work; the server logs a boot warning. | off |
@@ -106,7 +107,7 @@ applies) — unlike the quotas below, where `0` means refuse.
 |---|---|---|
 | `LOG_LEVEL` | `trace`, `debug`, `info`, `warn`, `error`, `silent` | `info` in prod, `debug` elsewhere, `silent` when `NODE_ENV=test` |
 | `DISCORD_WEBHOOK_URL` | Channel webhook that receives operator alerts: spend cap at 80 %/100 %, kill-switch flips, per-IP cap trips, boot, Anthropic error bursts (`lib/alerts.js`) | Unset = alerts are a silent no-op. Treat as a secret — the URL embeds a token. |
-| `IP_HASH_SALT` | Salt appended to the client IP before it is sha256-hashed for the `usage` ledger, per-IP alerts and logs (`lib/claudeCall.js` `hashIp`) | Empty = unsalted hash. Set a long random string in production and keep it stable across deploys — rotating it breaks continuity of every hashed id in the ledger. Read once at boot. |
+| `IP_HASH_SALT` | Salt appended to the client IP before it is sha256-hashed for the `usage` ledger, per-IP alerts and logs (`lib/claudeCall.js` `hashIp`) | Empty = a salt generated once and stored in the `settings` table, i.e. in the same database as the hashes (the server logs a warning at boot in production). Set a long random string in production and keep it stable across deploys — rotating it breaks continuity of every hashed id in the ledger. Read once at boot. |
 
 ### Storage
 
@@ -136,7 +137,9 @@ of students never looks like one abusive client.
 |---|---|---|
 | `API_IP_PER_MIN` | all `/api/*` requests, per client IP | `400` |
 | `CHAT_IP_PER_MIN` | `/api/chat`, per client IP (300 = a 30-student room at 5 turns each with 2× headroom; see docs/LOAD_REHEARSAL.md) | `300` |
-| `UPLOAD_IP_PER_MIN` | `/api/images` uploads, per client IP | `60` |
+| `UPLOAD_IP_PER_MIN` | `/api/images` uploads, per client IP (checked before the body is read) | `60` |
+| `IMAGE_UPLOAD_INFLIGHT_BYTES` | image upload bodies being read at once, whole process (over it → `503 busy`) | `67108864` (64 MB) |
+| `SESSION_DELETE_IP_PER_MIN` | `DELETE /api/session/:id` erasures, per client IP | `60` |
 | `REPORT_IP_PER_MIN` | `/api/report` content reports, per client IP (a classroom behind one NAT; the client shows "reported" even on a 429) | `60` |
 | `SESSION_PER_MIN` | `/api/chat` turns, per session id | `10` |
 
@@ -155,6 +158,7 @@ default; `0` refuses everything.
 | `SESSION_DAILY_CHAT_TURNS` | free-chat turns (incl. helper calls) per session | `60` |
 | `SESSION_DAILY_USD` | Anthropic spend per session | `0.75` |
 | `SESSION_DAILY_IMAGES` | image uploads per session | `20` |
+| `SESSION_DAILY_REPORTS` | content reports per session (past it a report is acknowledged and dropped, like one for an unknown session) | `20` |
 | `IP_DAILY_USD` | Anthropic spend per client IP, summed over its sessions | `10` |
 | `IP_DAILY_NEW_SESSIONS` | new session ids per client IP (curbs id rotation) | `60` |
 | `IP_DAILY_IMAGES` | image uploads per client IP per day, summed over sessions | `200` |
@@ -167,7 +171,7 @@ default; `0` refuses everything.
 | `DIGEST_UTC_HOUR` | UTC hour after which the daily Discord digest posts once | `13` |
 | `RETENTION_UTC_HOUR` | UTC hour after which the daily retention sweep runs once | `8` |
 | `MESSAGE_RETENTION_DAYS` | chat/lesson transcripts older than this are deleted (`0`/`off` disables) | `90` |
-| `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer) | `24` |
+| `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer). The image purge also runs every 5 minutes, whatever the hour, and an older image is never served or attached | `24` |
 | `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved. A report quotes a student's turn verbatim, so it is not kept indefinitely; it outlives the 90-day transcript because it is the review record for a flagged reply | `180` |
 | `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
 | `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |
@@ -299,7 +303,7 @@ and scale vertically.
 
 | Route | Notes |
 |---|---|
-| `GET /api/health` | Returns `{ status, uptime, db, memory }`. Railway's health check points here (`railway.toml`). Returns 503 (not 200) when DB connectivity fails, so a deploy with a bad `DATABASE_URL` never takes traffic. |
+| `GET /api/health` | Returns `{ status, uptime, db, memory, commit, bootedAt }` (`commit` = the short SHA Railway built, `dev` locally). Railway's health check points here (`railway.toml`), and so does the `Prod health` GitHub Actions workflow (every 30 min; two failed probes open a `prod-down` issue). Returns 503 (not 200) when DB connectivity fails, so a deploy with a bad `DATABASE_URL` never takes traffic. |
 | `GET /metrics` | Prometheus text exposition format. Admin-only (`x-admin-password`, like `/api/admin/*`): it exposes per-route cost and token counts. Answers 401 without the header. |
 
 ## Failure modes to know about
@@ -308,7 +312,7 @@ and scale vertically.
 |---|---|---|
 | **Build fails within seconds (~15 s), before any healthcheck**; the old deployment keeps serving (`/api/health` uptime keeps growing) | `npm ci` could not install a native module: no prebuilt binary for this Node ABI, and the Nixpacks image has no python3/g++ to compile it | Read the **build** log (not the deploy log) for `prebuild-install warn … No prebuilt binaries found` or `gyp ERR! find Python`, and check which Node version Nixpacks chose (`engines.node`; no `NODE_VERSION`/`NIXPACKS_NODE_VERSION` variable). Fix the dependency or the pin; CI's `postgres` job reproduces it. |
 | Deploy stalls, then Railway marks it failed after ~2 min | `/api/health` never returned 2xx inside `healthcheckTimeout` — usually DB connectivity or a startup crash | Read the deploy log; check `DATABASE_URL`. `initSchema` creates or upgrades every table at boot, so a missing table points at a failed boot DDL (see "Startup crashes" below), not at a skipped migration |
-| Boot fails at once with `NODE_ENV=production but DATABASE_URL is empty` | The service lost its `DATABASE_URL` (variable deleted or the Postgres reference renamed) | Re-add `DATABASE_URL=${{Postgres.DATABASE_URL}}` in Variables and redeploy. The guard is deliberate: it stops a silent run on ephemeral SQLite |
+| Boot fails at once with `… but DATABASE_URL is empty` | The service lost its `DATABASE_URL` (variable deleted or the Postgres reference renamed) | Re-add `DATABASE_URL=${{Postgres.DATABASE_URL}}` in Variables and redeploy. The guard is deliberate: it stops a silent run on ephemeral SQLite |
 | `/api/health` returns 503 with `db: "error: ..."` | Postgres connection down / connection pool exhausted | Check `DATABASE_URL` validity; check Railway Postgres service health |
 | Every Claude-backed route returns 503 and Discord got a `budget_100` alert | `DAILY_BUDGET_USD` reached | Decide whether the spend is legitimate. Raise the var (restart) or wait for UTC midnight. Look at `/api/admin/events` for who spent it. |
 | Claude-backed routes return `503 restarting` for a few seconds | A deploy is draining the old replica (`DRAIN_TIMEOUT_MS`) | Expected; clients retry. If it outlasts the drain window the new replica failed its health check — read the deploy log. |

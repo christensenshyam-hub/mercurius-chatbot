@@ -211,10 +211,23 @@ describe('production refuses to boot without DATABASE_URL', () => {
     assert.doesNotMatch(r.stdout, /loaded/);
   });
 
+  test('on Railway (RAILWAY_ENVIRONMENT_NAME set) the guard holds even with NODE_ENV unset', () => {
+    const r = load({ NODE_ENV: '', RAILWAY_ENVIRONMENT_NAME: 'production', DATABASE_URL: '' });
+    assert.notEqual(r.status, 0, 'non-zero exit');
+    assert.match(r.stderr, /running on Railway but DATABASE_URL is empty/);
+    assert.doesNotMatch(r.stdout, /loaded/);
+  });
+
+  test('ALLOW_SQLITE_IN_PROD=1 is the explicit escape hatch', () => {
+    const r = load({ NODE_ENV: 'production', DATABASE_URL: '', ALLOW_SQLITE_IN_PROD: '1' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /loaded/);
+  });
+
   test('the whole server exits instead of listening on ephemeral SQLite', () => {
     const r = spawnSync(process.execPath, ['server.js'], {
       cwd: ROOT,
-      env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '', PORT: String(9990 + Math.floor(Math.random() * 9)), ANTHROPIC_API_KEY: '' },
+      env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '', PORT: '0', ANTHROPIC_API_KEY: '' },
       encoding: 'utf8',
       timeout: 15000,
     });

@@ -14,13 +14,12 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-const SERVER_DIR = path.join(__dirname, '..');
 
 const reasons = require('../lib/gamification/reasons');
 const level = require('../lib/gamification/level');
@@ -42,33 +41,13 @@ function cleanupDb(p) {
   }
 }
 
-function startServer({ port, gamification, sqlitePath }) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, ['server.js'], {
-      cwd: SERVER_DIR,
-      env: {
-        ...process.env,
-        PORT: String(port),
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-        ALLOWED_ORIGIN: `http://localhost:${port}`,
-        NODE_ENV: 'test',
-        DATABASE_URL: '', // force the SQLite driver regardless of the parent env
-        SQLITE_PATH: sqlitePath,
-        ...(gamification ? { GAMIFICATION_ENABLED: '1' } : {}),
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let started = false;
-    proc.stdout.on('data', (chunk) => {
-      if (!started && chunk.toString().includes('Mercurius')) {
-        started = true;
-        resolve(proc);
-      }
-    });
-    proc.stderr.on('data', () => { /* swallow */ });
-    proc.on('error', reject);
-    setTimeout(() => { if (!started) reject(new Error('server start timeout')); }, 15000);
+async function startServer({ gamification, sqlitePath }) {
+  const server = spawnServer({
+    SQLITE_PATH: sqlitePath,
+    ...(gamification ? { GAMIFICATION_ENABLED: '1' } : {}),
   });
+  const { base } = await server.ready;
+  return { proc: server.proc, base };
 }
 
 function stopServer(proc) {
@@ -80,8 +59,7 @@ function stopServer(proc) {
   });
 }
 
-function makeClient(port) {
-  const base = `http://localhost:${port}`;
+function makeClient(base) {
   return {
     async get(p) {
       const r = await fetch(base + p);
@@ -229,13 +207,13 @@ describe('gamification — XP service (fake db)', () => {
 // ──────────────── 3a. integration — routes, flag ON ────────────────
 
 describe('gamification — routes, flag ON', () => {
-  const PORT = 9300 + Math.floor(Math.random() * 300);
   const dbPath = tmpDbPath();
   let proc, client;
 
   before(async () => {
-    proc = await startServer({ port: PORT, gamification: true, sqlitePath: dbPath });
-    client = makeClient(PORT);
+    let base;
+    ({ proc, base } = await startServer({ gamification: true, sqlitePath: dbPath }));
+    client = makeClient(base);
   });
   after(async () => { await stopServer(proc); cleanupDb(dbPath); });
 
@@ -292,13 +270,13 @@ describe('gamification — routes, flag ON', () => {
 // ──────────────── 3b. integration — routes, flag OFF ───────────────
 
 describe('gamification — routes, flag OFF (default)', () => {
-  const PORT = 9650 + Math.floor(Math.random() * 300);
   const dbPath = tmpDbPath();
   let proc, client;
 
   before(async () => {
-    proc = await startServer({ port: PORT, gamification: false, sqlitePath: dbPath });
-    client = makeClient(PORT);
+    let base;
+    ({ proc, base } = await startServer({ gamification: false, sqlitePath: dbPath }));
+    client = makeClient(base);
   });
   after(async () => { await stopServer(proc); cleanupDb(dbPath); });
 

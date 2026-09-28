@@ -16,50 +16,23 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
+const { waitFor } = require('./support/waitFor');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-const ROOT = path.join(__dirname, '..');
 
-function spawnServer(extraEnv = {}) {
-  const PORT = 9300 + Math.floor(Math.random() * 600);
+// `srv.base` is set once `srv.ready` resolves (the server binds port 0).
+function spawnQuotaServer(extraEnv = {}) {
   const dbPath = path.join(os.tmpdir(), `merc-quotas-${crypto.randomBytes(4).toString('hex')}.db`);
   const ADMIN_PW = 'test-admin-' + crypto.randomBytes(4).toString('hex');
-  const proc = spawn(process.execPath, ['server.js'], {
-    cwd: ROOT,
-    env: {
-      ...process.env,
-      PORT: String(PORT),
-      ADMIN_PASSWORD: ADMIN_PW,
-      ANTHROPIC_MOCK: '1',
-      MOCK_STREAM_DELAY_MS: '1',
-      ANTHROPIC_API_KEY: 'sk-ant-test-placeholder',
-      ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-      SQLITE_PATH: dbPath,
-      NODE_ENV: 'test',
-      DISCORD_WEBHOOK_URL: '',
-      ...extraEnv,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const ready = new Promise((resolve, reject) => {
-    let started = false;
-    proc.stdout.on('data', (c) => {
-      if (!started && c.toString().includes('Mercurius')) {
-        started = true;
-        setTimeout(resolve, 300);
-      }
-    });
-    proc.stderr.on('data', (c) => {
-      const t = c.toString();
-      if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-    });
-    proc.on('error', reject);
-    proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-    setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
+  const { proc, ready } = spawnServer({
+    ADMIN_PASSWORD: ADMIN_PW,
+    MOCK_STREAM_DELAY_MS: '1',
+    SQLITE_PATH: dbPath,
+    ...extraEnv,
   });
   const cleanup = () => {
     if (proc.exitCode === null) proc.kill('SIGKILL');
@@ -67,7 +40,9 @@ function spawnServer(extraEnv = {}) {
       try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* ignore */ }
     }
   };
-  return { proc, ready, cleanup, base: `http://localhost:${PORT}`, adminPw: ADMIN_PW, dbPath };
+  const srv = { proc, cleanup, base: null, adminPw: ADMIN_PW, dbPath };
+  srv.ready = ready.then(({ base }) => { srv.base = base; });
+  return srv;
 }
 
 const newSession = () => 'sess_' + crypto.randomBytes(6).toString('hex');
@@ -107,11 +82,22 @@ async function chatSse(base, sessionId, { onFirstDelta } = {}) {
   return { status: 200, raw, events, done: frames.includes('[DONE]') };
 }
 
+function countSessions(dbPath, sessionId) {
+  const Database = require('better-sqlite3');
+  const sqlite = new Database(dbPath, { readonly: true });
+  try {
+    const sql = sessionId ? 'SELECT COUNT(*) AS n FROM sessions WHERE session_id = ?' : 'SELECT COUNT(*) AS n FROM sessions';
+    return sqlite.prepare(sql).get(...(sessionId ? [sessionId] : [])).n;
+  } finally {
+    sqlite.close();
+  }
+}
+
 function readUsage(dbPath) {
   const Database = require('better-sqlite3');
   const sqlite = new Database(dbPath, { readonly: true });
   try {
-    return sqlite.prepare('SELECT status, route, kind, cost_usd, output_tokens FROM usage ORDER BY ts').all();
+    return sqlite.prepare('SELECT status, error_kind, route, kind, cost_usd, output_tokens FROM usage ORDER BY ts').all();
   } finally {
     sqlite.close();
   }
@@ -121,7 +107,7 @@ function readUsage(dbPath) {
 describe('quotas end-to-end (mock upstream)', () => {
   // New-session budget for this server: sessionA, the disconnect test's
   // session, then two more in the rotation test; the fifth must be refused.
-  const srv = spawnServer({
+  const srv = spawnQuotaServer({
     SESSION_DAILY_CHAT_TURNS: '2',
     SESSION_DAILY_LESSON_TURNS: '2',
     IP_DAILY_NEW_SESSIONS: '4',
@@ -142,8 +128,7 @@ describe('quotas end-to-end (mock upstream)', () => {
     assert.ok(!('difficulty' in complete), 'dead personalization field is gone');
     assert.ok(out.done, '[DONE] terminator');
 
-    await new Promise((r) => setTimeout(r, 200));
-    const rows = readUsage(srv.dbPath);
+    const rows = await waitFor(() => readUsage(srv.dbPath), (r) => r.length >= 1);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, 'ok');
     assert.equal(rows[0].route, '/api/chat');
@@ -180,6 +165,7 @@ describe('quotas end-to-end (mock upstream)', () => {
   });
 
   test('a client that disconnects mid-stream aborts the upstream call and is billed as aborted', async () => {
+    const settledBefore = readUsage(srv.dbPath).length;
     const controller = new AbortController();
     const res = await fetch(`${srv.base}/api/chat`, {
       method: 'POST',
@@ -197,10 +183,10 @@ describe('quotas end-to-end (mock upstream)', () => {
       raw += decoder.decode(value, { stream: true });
     }
     controller.abort();
-    await new Promise((r) => setTimeout(r, 400));
-    const rows = readUsage(srv.dbPath);
+    const rows = await waitFor(() => readUsage(srv.dbPath), (r) => r.length > settledBefore);
     const last = rows[rows.length - 1];
     assert.equal(last.status, 'aborted', `expected the disconnected turn to settle as aborted, got ${JSON.stringify(last)}`);
+    assert.equal(last.error_kind, 'client_abort', 'billed, but not counted as an error in the admin stats');
   });
 
   test('rotating session ids trips the per-IP new-session cap', async () => {
@@ -215,6 +201,29 @@ describe('quotas end-to-end (mock upstream)', () => {
     assert.equal(d.status, 429);
     assert.equal(d.json.error, 'daily_limit');
     assert.equal(d.json.scope, 'ip');
+  });
+
+  test('POST /api/mode spends the same new-session quota (it used to create rows past the cap)', async () => {
+    const fresh = newSession();
+    const res = await fetch(`${srv.base}/api/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: fresh, mode: 'debate' }),
+    });
+    const json = await res.json();
+    assert.equal(res.status, 429);
+    assert.equal(json.error, 'daily_limit');
+    assert.equal(json.scope, 'ip');
+    assert.ok(Number(res.headers.get('retry-after')) > 0, 'Retry-After set');
+    assert.equal(countSessions(srv.dbPath, fresh), 0, 'no sessions row written');
+    // A session the server already knows still switches mode.
+    const known = await fetch(`${srv.base}/api/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionA, mode: 'discussion' }),
+    });
+    assert.equal(known.status, 200);
+    assert.deepEqual(await known.json(), { mode: 'discussion' });
   });
 
   test('/metrics is admin-only and carries cost + in-flight series', async () => {
@@ -240,8 +249,48 @@ describe('quotas end-to-end (mock upstream)', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('the new-session quota holds under a concurrent burst of first contacts', () => {
+  const srv = spawnQuotaServer({ IP_DAILY_NEW_SESSIONS: '3' });
+  before(() => srv.ready);
+  after(() => srv.cleanup());
+
+  test('10 unseen ids at once: exactly 3 sessions are created, the rest are refused', async () => {
+    // The invariant. SQLite answers synchronously, so these requests never
+    // interleave here; on Postgres they do (every request passed the
+    // existence check before any row existed), which scripts/pg-smoke.mjs
+    // exercises against a real Postgres.
+    const results = await Promise.all(Array.from({ length: 10 }, () => fetch(`${srv.base}/api/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: newSession(), mode: 'socratic' }),
+    }).then((r) => r.status)));
+    assert.equal(results.filter((s) => s === 200).length, 3, JSON.stringify(results));
+    assert.equal(results.filter((s) => s === 429).length, 7, JSON.stringify(results));
+    assert.equal(countSessions(srv.dbPath), 3);
+  });
+
+  test('two first contacts for the SAME id count once', async () => {
+    const srv2 = spawnQuotaServer({ IP_DAILY_NEW_SESSIONS: '2' });
+    try {
+      await srv2.ready;
+      const twin = newSession();
+      const post = (sessionId) => fetch(`${srv2.base}/api/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, mode: 'socratic' }),
+      }).then((r) => r.status);
+      assert.deepEqual(await Promise.all([post(twin), post(twin)]), [200, 200]);
+      assert.equal(await post(newSession()), 200, 'the second slot is still free');
+      assert.equal(await post(newSession()), 429);
+    } finally {
+      srv2.cleanup();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe('SIGTERM drains in-flight streams', () => {
-  const srv = spawnServer({ MOCK_STREAM_DELAY_MS: '40' });
+  const srv = spawnQuotaServer({ MOCK_STREAM_DELAY_MS: '40' });
   before(() => srv.ready);
   after(() => srv.cleanup());
 
@@ -272,7 +321,7 @@ describe('SIGTERM drains in-flight streams', () => {
 // ---------------------------------------------------------------------------
 describe('in-flight caps hold under a concurrent burst', () => {
   // Slow mock so the streams overlap; caps of 2 so a burst of 6 must be cut.
-  const srv = spawnServer({ MOCK_STREAM_DELAY_MS: '40', MAX_INFLIGHT: '2', IP_MAX_INFLIGHT: '2' });
+  const srv = spawnQuotaServer({ MOCK_STREAM_DELAY_MS: '40', MAX_INFLIGHT: '2', IP_MAX_INFLIGHT: '2' });
   before(() => srv.ready);
   after(() => srv.cleanup());
 

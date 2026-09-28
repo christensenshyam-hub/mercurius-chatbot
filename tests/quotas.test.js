@@ -55,6 +55,7 @@ describe('limits: env parsing', () => {
       SESSION_DAILY_CHAT_TURNS: 60,
       SESSION_DAILY_USD: 0.75,
       SESSION_DAILY_IMAGES: 20,
+      SESSION_DAILY_REPORTS: 20,
       IP_DAILY_USD: 10,
       IP_DAILY_NEW_SESSIONS: 60,
       IP_DAILY_IMAGES: 200,
@@ -304,6 +305,33 @@ describe('noteNewSession() per-ip cap', () => {
     quotas.configure({ IP_DAILY_NEW_SESSIONS: 0 });
     assert.deepEqual(quotas.noteNewSession(undefined), { ok: true });
     assert.deepEqual(quotas.noteNewSession(''), { ok: true });
+  });
+
+  test('forgetNewSession() gives back one slot, never below zero', () => {
+    quotas.configure({ IP_DAILY_NEW_SESSIONS: 1 });
+    assert.equal(quotas.noteNewSession(IP).ok, true);
+    assert.equal(quotas.noteNewSession(IP).ok, false);
+    quotas.forgetNewSession(IP);
+    assert.equal(quotas.snapshot().ips.newSessions, 0);
+    quotas.forgetNewSession(IP);
+    assert.equal(quotas.snapshot().ips.newSessions, 0);
+    assert.equal(quotas.noteNewSession(IP).ok, true);
+  });
+});
+
+describe('noteReport() per-session cap', () => {
+  test('counts up to SESSION_DAILY_REPORTS per session per UTC day', () => {
+    quotas.configure({ SESSION_DAILY_REPORTS: 2 });
+    assert.equal(quotas.noteReport(SID), true);
+    assert.equal(quotas.noteReport(SID), true);
+    assert.equal(quotas.noteReport(SID), false);
+    assert.equal(quotas.noteReport('sess_b'), true, 'another session is independent');
+    assert.equal(quotas.noteReport(''), true, 'nothing to key on');
+  });
+
+  test('defaults to 20', () => {
+    for (let i = 0; i < 20; i += 1) assert.equal(quotas.noteReport(SID), true);
+    assert.equal(quotas.noteReport(SID), false);
   });
 });
 

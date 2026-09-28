@@ -15,7 +15,8 @@
 //   2. Retention — once per day at/after RETENTION_UTC_HOUR with the EXACT
 //      cutoff ts for each purge given now(); env windows; 0 / 'off' disable;
 //      a throwing purge doesn't stop the others; the 200-session batch cap;
-//      notify only when something was deleted.
+//      notify when something was deleted or a purge failed; the image purge's
+//      own 5-minute cadence.
 //   3. formatDigest — required fields, top-3 errors, ≤ 1,900 chars, tolerant
 //      of missing/odd stats.
 //   4. Lifecycle — tick() never rejects, overlapping ticks coalesce,
@@ -30,6 +31,11 @@ const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
+// The real-db tests below break a table on purpose, and db.js logs the
+// failure with its stack. A large log line on this file's stdout can corrupt
+// node:test's reporter stream ("Unable to deserialize cloned data").
+if (!process.env.LOG_LEVEL) process.env.LOG_LEVEL = 'silent';
+
 const {
   createScheduler,
   digestStatsFromAdminStats,
@@ -37,6 +43,8 @@ const {
   formatRetentionSummary,
   SESSION_BATCH,
   MAX_CHARS,
+  IMAGE_PURGE_EVERY_MS,
+  DIGEST_RETRY_MS,
 } = require('../lib/scheduler');
 
 const DAY = 86_400_000;
@@ -149,6 +157,8 @@ function makeDeps({ inactiveIds = [], env = {}, stats = ADMIN_STATS, purge: purg
 }
 
 const purgeCalls = (calls, name) => calls.purges.filter((c) => c[0] === name);
+// The daily sweep's calls: the image purge also runs on its own cadence.
+const dailyPurges = (calls) => calls.purges.filter((c) => c[0] !== 'imagesBefore');
 const notifies = (calls, key) => calls.notify.filter((n) => n.key === key);
 
 // ---------------------------------------------------------------------------
@@ -260,9 +270,34 @@ describe('digest', () => {
 
     now.advance(60_000);
     await s.tick();
+    assert.equal(calls.stats.length, 1, 'backs off: the heavy stats query is not re-run every minute');
+
+    now.advance(DIGEST_RETRY_MS);
+    await s.tick();
     assert.equal(calls.stats.length, 2);
     assert.equal(notifies(calls, 'digest').length, 1, 'retried and posted');
     assert.equal(s.state().lastDigestDay, '2026-09-24');
+  });
+
+  test('three getAdminStats failures in a day page once and stop retrying until tomorrow', async () => {
+    const { deps, now, calls, settings } = makeDeps({
+      getAdminStats: async (opts) => { calls.stats.push(opts); throw new Error('statement timeout'); },
+    });
+    settings.set('last_retention_day', '2026-09-24'); // isolate the digest
+    const s = createScheduler(deps);
+    for (let i = 0; i < 3; i++) {
+      await s.tick();
+      now.advance(DIGEST_RETRY_MS);
+    }
+    assert.equal(calls.stats.length, 3);
+    const failed = notifies(calls, 'digest_failed');
+    assert.equal(failed.length, 1);
+    assert.match(failed[0].text, /failed 3 times today \(2026-09-24 UTC\): statement timeout/);
+    assert.equal(settings.get('last_digest_day'), '2026-09-24');
+    now.advance(DIGEST_RETRY_MS);
+    await s.tick();
+    assert.equal(calls.stats.length, 3, 'done for the day');
+    assert.equal(notifies(calls, 'digest').length, 0);
   });
 
   test('notify resolving false (no webhook) still marks the day done', async () => {
@@ -296,7 +331,7 @@ describe('digest', () => {
     const s = createScheduler(deps);
     await assert.doesNotReject(() => s.tick());
     assert.equal(calls.notify.length, 0);
-    assert.equal(calls.purges.length, 0);
+    assert.equal(dailyPurges(calls).length, 0);
     assert.equal(s.state().lastError.message, 'read failed');
   });
 });
@@ -310,7 +345,7 @@ describe('retention', () => {
     now.set(Date.UTC(2026, 8, 24, 7, 59, 59));
     const s = createScheduler(deps);
     await s.tick();
-    assert.equal(calls.purges.length, 0);
+    assert.equal(dailyPurges(calls).length, 0);
     assert.equal(s.state().lastRetentionDay, null);
   });
 
@@ -348,14 +383,15 @@ describe('retention', () => {
 
     now.advance(60_000);
     await s.tick();
+    assert.equal(calls.purges.length, 6, 'the sweep tick counted as the image purge too');
     now.set(Date.UTC(2026, 8, 24, 23, 0, 0));
     await s.tick();
-    assert.equal(calls.purges.length, 6, 'no second sweep the same day');
+    assert.equal(dailyPurges(calls).length, 5, 'no second sweep the same day');
 
     const t2 = Date.UTC(2026, 8, 25, 8, 0, 0);
     now.set(t2);
     await s.tick();
-    assert.equal(calls.purges.length, 12, 'runs again the next day');
+    assert.equal(dailyPurges(calls).length, 10, 'runs again the next day');
     assert.deepEqual(purgeCalls(calls, 'messagesBefore')[1], ['messagesBefore', t2 - 90 * DAY]);
   });
 
@@ -530,7 +566,7 @@ describe('retention', () => {
     settings.set('last_retention_day', '2026-09-24');
     const s = createScheduler(deps);
     await s.tick();
-    assert.equal(calls.purges.length, 0);
+    assert.equal(dailyPurges(calls).length, 0);
     assert.equal(s.state().lastRetentionDay, '2026-09-24');
   });
 
@@ -540,6 +576,75 @@ describe('retention', () => {
     await s.tick();
     assert.deepEqual(calls.notify.map((n) => n.key), ['digest', 'retention']);
     assert.deepEqual(calls.setSetting.map(([k, v]) => `${k}=${v}`), ['last_digest_day=2026-09-24', 'last_retention_day=2026-09-24']);
+  });
+
+  test('a failed purge that deleted nothing still posts the summary with its Errors line', async () => {
+    const zero = async () => 0;
+    const { deps, calls, settings } = makeDeps({
+      purge: { messagesBefore: zero, imagesBefore: async () => { throw new Error('no such table: images'); }, reportsBefore: zero },
+    });
+    settings.set('last_digest_day', '2026-09-24');
+    const s = createScheduler(deps);
+    await s.tick();
+    const r = notifies(calls, 'retention');
+    assert.equal(r.length, 1, 'a failing sweep is never silent');
+    assert.match(r[0].text, /0 rows removed/);
+    assert.match(r[0].text, /Errors: images — no such table: images/);
+    assert.equal(s.state().lastError.stage, 'retention:images');
+  });
+
+  test('a purge that fails part-way reports the rows it deleted (deletedSoFar)', async () => {
+    const partial = Object.assign(new Error('statement timeout'), { deletedSoFar: 1000 });
+    const { deps, calls, logger } = makeDeps({ purge: { messagesBefore: async () => { throw partial; } } });
+    const s = createScheduler(deps);
+    await s.tick();
+    const sweep = logger.entries.find((e) => /retention sweep/.test(e.msg));
+    assert.equal(sweep.fields.counts.messages, 1000);
+    assert.deepEqual(sweep.fields.errors, ['messages']);
+    assert.match(notifies(calls, 'retention')[0].text, /messages 1,000/);
+  });
+
+  test('the image purge also runs every IMAGE_PURGE_EVERY_MS, at any hour, without a summary', async () => {
+    const { deps, now, calls, settings } = makeDeps();
+    settings.set('last_digest_day', '2026-09-24');
+    settings.set('last_retention_day', '2026-09-24');
+    const t = Date.UTC(2026, 8, 24, 20, 0, 0);
+    now.set(t);
+    const s = createScheduler(deps);
+    await s.tick();
+    assert.deepEqual(purgeCalls(calls, 'imagesBefore'), [['imagesBefore', t - 24 * HOUR]]);
+    now.advance(60_000);
+    await s.tick();
+    assert.equal(purgeCalls(calls, 'imagesBefore').length, 1, 'not every minute');
+    now.advance(IMAGE_PURGE_EVERY_MS);
+    await s.tick();
+    assert.deepEqual(purgeCalls(calls, 'imagesBefore')[1], ['imagesBefore', t + 60_000 + IMAGE_PURGE_EVERY_MS - 24 * HOUR]);
+    assert.equal(dailyPurges(calls).length, 0);
+    assert.equal(calls.notify.length, 0, 'deletions between sweeps are not posted');
+  });
+
+  test('a failing image purge between sweeps sets lastError and pages (throttled)', async () => {
+    const { deps, now, calls, settings } = makeDeps({ purge: { imagesBefore: async () => { throw new Error('images gone'); } } });
+    settings.set('last_digest_day', '2026-09-24');
+    settings.set('last_retention_day', '2026-09-24');
+    const s = createScheduler(deps);
+    await s.tick();
+    assert.equal(s.state().lastError.stage, 'retention:images');
+    const pages = notifies(calls, 'retention_failed:images');
+    assert.equal(pages.length, 1);
+    assert.match(pages[0].text, /images gone/);
+    assert.equal(pages[0].opts.throttleMs, 6 * HOUR);
+    assert.equal(purgeCalls(calls, 'imagesBefore').length, 0);
+    now.advance(IMAGE_PURGE_EVERY_MS);
+    await s.tick();
+    assert.equal(notifies(calls, 'retention_failed:images').length, 2, 'lib/alerts owns the throttle');
+  });
+
+  test("IMAGE_RETENTION_HOURS=off disables the frequent image purge too", async () => {
+    const { deps, calls } = makeDeps({ env: { IMAGE_RETENTION_HOURS: 'off' } });
+    const s = createScheduler(deps);
+    await s.tick();
+    assert.equal(purgeCalls(calls, 'imagesBefore').length, 0);
   });
 
   test('retention summary text is capped at 1,900 chars', () => {
@@ -738,6 +843,36 @@ describe('digestStatsFromAdminStats', () => {
       assert.match(text, /^Open reports: 1$/m);
       assert.match(text, /^Top errors: overloaded 1$/m);
       assert.ok(!text.includes('n/a'), text);
+    });
+
+    test('a real purge failure (images table gone) reaches lastError and the Discord summary', async () => {
+      const posted = [];
+      const settings = new Map();
+      const s = createScheduler({
+        now: () => Date.UTC(2026, 8, 24, 14, 0, 0),
+        getSetting: async (k) => (settings.has(k) ? settings.get(k) : null),
+        setSetting: async (k, v) => { settings.set(k, String(v)); },
+        getAdminStats: (o) => db.getAdminStats(o),
+        notify: async (key, text) => { posted.push({ key, text }); return true; },
+        // Wired exactly as server.js wires it.
+        purge: {
+          messagesBefore: (ts) => db.purgeMessagesBefore(ts),
+          imagesBefore: (ts) => db.purgeImagesBefore(ts),
+          reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
+          usageBefore: (ts) => db.purgeUsageBefore(ts),
+          lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
+          inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
+          deleteSession: (id) => db.deleteSession(id),
+        },
+        logger: fakeLogger(),
+      });
+      settings.set('last_digest_day', '2026-09-24');
+      await db.runRaw('DROP TABLE images');
+      await s.tick();
+      assert.equal(s.state().lastError.stage, 'retention:images');
+      const summary = posted.find((p) => p.key === 'retention');
+      assert.ok(summary, `retention summary posted (got ${JSON.stringify(posted.map((p) => p.key))})`);
+      assert.match(summary.text, /Errors: images — /);
     });
   });
 });

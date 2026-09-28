@@ -15,7 +15,7 @@
 
 const { describe, test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -189,8 +189,7 @@ describe('killSwitch persistence', () => {
 // Integration — 503 when killed; admin endpoint toggles at runtime
 // ---------------------------------------------------------------------------
 describe('kill switch closes the chat handler and toggles via admin', () => {
-  const PORT = 9200 + Math.floor(Math.random() * 700);
-  const BASE = `http://localhost:${PORT}`;
+  let BASE;
   const ADMIN_PW = 'test-admin-' + crypto.randomBytes(4).toString('hex');
   const dbPath = path.join(os.tmpdir(), `merc-killswitch-${crypto.randomBytes(4).toString('hex')}.db`);
   let proc;
@@ -201,36 +200,13 @@ describe('kill switch closes the chat handler and toggles via admin', () => {
   });
 
   before(async () => {
-    await new Promise((resolve, reject) => {
-      proc = spawn(process.execPath, ['server.js'], {
-        cwd: path.join(__dirname, '..'),
-        env: {
-          ...process.env,
-          PORT: String(PORT),
-          CLAUDE_DISABLED: '1',            // boot dark
-          ADMIN_PASSWORD: ADMIN_PW,
-          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-          ALLOWED_ORIGIN: `http://localhost:${PORT}`,
-          SQLITE_PATH: dbPath,
-          NODE_ENV: 'test',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let started = false;
-      proc.stdout.on('data', (c) => {
-        if (!started && c.toString().includes('Mercurius')) {
-          started = true;
-          setTimeout(resolve, 300);
-        }
-      });
-      proc.stderr.on('data', (c) => {
-        const t = c.toString();
-        if (!started && (t.includes('Error') || t.includes('EADDRINUSE'))) reject(new Error(t));
-      });
-      proc.on('error', reject);
-      proc.on('exit', (code) => { if (!started) reject(new Error(`server exited ${code}`)); });
-      setTimeout(() => { if (!started) reject(new Error('server did not start within 10s')); }, 10000);
+    const server = spawnServer({
+      CLAUDE_DISABLED: '1',            // boot dark
+      ADMIN_PASSWORD: ADMIN_PW,
+      SQLITE_PATH: dbPath,
     });
+    proc = server.proc;
+    ({ base: BASE } = await server.ready);
   });
 
   after(() => {

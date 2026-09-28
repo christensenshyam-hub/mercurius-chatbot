@@ -135,6 +135,21 @@ describe('claudeCall', () => {
     assert.ok(estimate > 1, `test needs >1 token received (got ${received.length} chars)`);
     assert.ok(db.rows[0].output_tokens >= estimate, `billed ${db.rows[0].output_tokens} output tokens for an estimate of ${estimate}`);
     assert.equal(quotas.inflight().global, 0, 'slot released on abort');
+    assert.equal(db.rows[0].error_kind, 'client_abort', 'a Stop / disconnect is the client going away');
+  });
+
+  test("streamMessage: an abort through the route's own signal (its watchdog) is a timeout", async () => {
+    const watchdog = new AbortController();
+    const stream = claudeCall.streamMessage({
+      route: '/api/chat', kind: 'chat', sessionId: 'sess-4', ip: '10.0.0.4', params: chatParams(), signal: watchdog.signal,
+    });
+    let chunks = 0;
+    stream.on('text', () => { chunks += 1; if (chunks === 2) watchdog.abort(); });
+    await waitFor(stream, 'end');
+    await new Promise((r) => setImmediate(r));
+    assert.equal(db.rows.length, 1);
+    assert.equal(db.rows[0].status, 'aborted');
+    assert.equal(db.rows[0].error_kind, 'timeout');
   });
 
   test('beginCall re-checks quotas atomically and refuses with QuotaError', async () => {
@@ -203,5 +218,37 @@ describe('claudeCall', () => {
     assert.equal(claudeCall.hashIp(''), null);
     claudeCall.init({ apiKey: 'unused', db, ipHashSalt: 'other-salt' });
     assert.notEqual(a, claudeCall.hashIp('203.0.113.9'), 'salt changes the hash');
+  });
+
+  test('a credit-balance error pages on its first occurrence (not after a 5-error burst)', async () => {
+    const posts = [];
+    alerts.configure({ webhookUrl: 'https://discord.invalid/hook', fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true }; } });
+    process.env.MOCK_SCENARIO = 'credit';
+    claudeCall.__resetForTest();
+    claudeCall.init({ apiKey: 'unused', db });
+    await assert.rejects(claudeCall.createMessage({ route: '/api/quiz', kind: 'helper', sessionId: 'c1', ip: '10.0.0.3', params: chatParams() }));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(db.rows[0].error_kind, 'credit');
+    assert.equal(posts.length, 1, JSON.stringify(posts));
+    assert.match(posts[0], /credit balance is too low.*\/api\/quiz/);
+  });
+
+  test('the budget-spent page fires again on the next UTC day, even < 24 h later', async (t) => {
+    const saved = process.env.DAILY_BUDGET_USD;
+    process.env.DAILY_BUDGET_USD = '0.000001';
+    t.after(() => { if (saved === undefined) delete process.env.DAILY_BUDGET_USD; else process.env.DAILY_BUDGET_USD = saved; });
+    t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 28, 23, 0, 0) });
+    const posts = [];
+    alerts.configure({ webhookUrl: 'https://discord.invalid/hook', fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true }; } });
+    spendCap.__resetForTest();
+
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() });
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() }).catch(() => {});
+    t.mock.timers.setTime(Date.UTC(2026, 8, 29, 20, 0, 0)); // 21 h later, a new budget day
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b2', ip: '10.0.0.9', params: chatParams() });
+    await new Promise((r) => setImmediate(r));
+
+    const spent = posts.filter((p) => /Daily model budget spent/.test(p));
+    assert.equal(spent.length, 2, `one page per budget day, repeats inside a day throttled (posts: ${JSON.stringify(posts)})`);
   });
 });

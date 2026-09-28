@@ -2,7 +2,7 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawnServer } = require('./support/spawnServer');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -12,9 +12,9 @@ const crypto = require('node:crypto');
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SERVER_DIR = path.join(__dirname, '..');
-const TEST_PORT = 9000 + Math.floor(Math.random() * 1000);
-const BASE_URL = `http://localhost:${TEST_PORT}`;
+let BASE_URL;
+// The one browser origin this server grants CORS to (see the CORS tests).
+const CLUB_ORIGIN = 'https://club.example';
 const ADMIN_PASSWORD = 'test-admin-pw-' + crypto.randomBytes(4).toString('hex');
 // Isolated database: without this the spawned server writes sessions and
 // usage-ledger rows into the developer's local mercurius.db.
@@ -54,55 +54,18 @@ function isValidSessionId(id) {
 // ---------------------------------------------------------------------------
 
 before(async () => {
-  await new Promise((resolve, reject) => {
-    serverProc = spawn(process.execPath, ['server.js'], {
-      cwd: SERVER_DIR,
-      env: {
-        ...process.env,
-        PORT: String(TEST_PORT),
-        ADMIN_PASSWORD,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'sk-ant-test-placeholder',
-        ALLOWED_ORIGIN: `http://localhost:${TEST_PORT}`,
-        NODE_ENV: 'test',
-        SQLITE_PATH: DB_PATH,
-        // The production defaults are sized for a classroom on one IP
-        // (150/min chat, 10/min session); pin the small legacy numbers the
-        // limiter tests below were written against so they stay meaningful.
-        CHAT_IP_PER_MIN: '15',
-        SESSION_PER_MIN: '20',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let started = false;
-
-    serverProc.stdout.on('data', (chunk) => {
-      const text = chunk.toString();
-      if (!started && text.includes('Mercurius')) {
-        started = true;
-        // Give the server a moment to fully bind
-        setTimeout(resolve, 300);
-      }
-    });
-
-    serverProc.stderr.on('data', (chunk) => {
-      // Suppress stderr noise in tests, but log real errors
-      const text = chunk.toString();
-      if (text.includes('Error') || text.includes('EADDRINUSE')) {
-        if (!started) reject(new Error(text));
-      }
-    });
-
-    serverProc.on('error', reject);
-    serverProc.on('exit', (code) => {
-      if (!started) reject(new Error(`Server exited prematurely with code ${code}`));
-    });
-
-    // Timeout safety
-    setTimeout(() => {
-      if (!started) reject(new Error('Server did not start within 10 seconds'));
-    }, 10000);
+  const server = spawnServer({
+    ADMIN_PASSWORD,
+    ALLOWED_ORIGIN: CLUB_ORIGIN,
+    SQLITE_PATH: DB_PATH,
+    // The production defaults are sized for a classroom on one IP
+    // (150/min chat, 10/min session); pin the small legacy numbers the
+    // limiter tests below were written against so they stay meaningful.
+    CHAT_IP_PER_MIN: '15',
+    SESSION_PER_MIN: '20',
   });
+  serverProc = server.proc;
+  ({ base: BASE_URL } = await server.ready);
 });
 
 after(() => {
