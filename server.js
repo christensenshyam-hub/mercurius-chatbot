@@ -3058,10 +3058,16 @@ app.use((err, req, res, _next) => {
     ? err.status
     : 500;
 
-  logger.forRequest(req).error(
-    { err: err.message, stack: err.stack, status: knownStatus, type: err.type },
-    'unhandled error'
-  );
+  // A client's bad body (malformed, oversized, compressed) is not a server
+  // error: warn, so error-level lines stay a real signal.
+  if (knownStatus < 500) {
+    logger.forRequest(req).warn({ err: err.message, status: knownStatus, type: err.type }, 'request rejected by middleware');
+  } else {
+    logger.forRequest(req).error(
+      { err: err.message, stack: err.stack, status: knownStatus, type: err.type },
+      'unhandled error'
+    );
+  }
 
   // SSE streams may have already written headers and started a body;
   // calling res.status() / res.json() at that point is a no-op or a
