@@ -550,7 +550,9 @@ const CLUB_FACT_CHECKS = {
     turn: 3,
     summary: 'not affiliated with Mayo Clinic',
     checks: [
-      ['not affiliated', (raw) => /(?:\bnot\b|n['’]t\b|\bneither\b|\bno\b)[^.?!]{0,60}affiliat|unaffiliated|(?:\bnot\b|n['’]t)\s+(?:a\s+)?part of Mayo Clinic/i.test(raw)],
+      // "No affiliation", "isn't part of", "completely separate from Mayo
+      // Clinic", "no connection": any clear denial; a claimed tie fails.
+      ['not affiliated', (raw) => /(?:\bnot\b|n['’]t\b|\bneither\b|\bno\b)[^.?!]{0,60}(?:affiliat|connect|part of|related)|\bunaffiliated\b|\bunrelated\b|\b(?:separate|independent)\s+(?:from|of)\s+Mayo Clinic/i.test(raw)],
     ],
   },
   chapters: {

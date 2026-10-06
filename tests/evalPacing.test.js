@@ -553,6 +553,22 @@ describe('eval-pacing club facts (widget-club-facts)', () => {
     assert.equal(chapters.value, 'failed: chapter, where to start one');
   });
 
+  test('any clear Mayo Clinic denial passes; a claimed tie fails', async () => {
+    const { clubFactsCriteria } = await modP;
+    const verdict = (answer) => {
+      const answers = GOOD_ANSWERS.slice();
+      answers[3] = answer;
+      return clubFactsCriteria(run(answers))[3].pass;
+    };
+    // Real replies from the 2026-10-06 A/B.
+    assert.equal(verdict('No — Mayo High School is a Rochester public high school, completely separate from Mayo Clinic.'), true);
+    assert.equal(verdict('No — it is a student club at Mayo High School. No connection to Mayo Clinic, just a shared city.'), true);
+    assert.equal(verdict('It has no affiliation with Mayo Clinic.'), true);
+    assert.equal(verdict("The club isn't part of Mayo Clinic."), true);
+    assert.equal(verdict('Yes, it is a Mayo Clinic outreach program.'), false);
+    assert.equal(verdict('The club is part of the Mayo community and works with Mayo Clinic.'), false);
+  });
+
   test('"4 board members" is a fact, not a member count', async () => {
     const { clubFactsCriteria } = await modP;
     const answers = GOOD_ANSWERS.slice();
