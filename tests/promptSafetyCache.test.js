@@ -29,7 +29,8 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
-const { SAFETY_CORE, HELPER_CRISIS_RULE, CRISIS_COPY } = require('../lib/safetyCore');
+const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = require('../lib/safetyCore');
+const { CLUB_KNOWLEDGE } = require('../lib/clubKnowledge');
 
 const ROOT = path.join(__dirname, '..');
 const STUB = path.join(__dirname, 'fixtures', 'stubClubFeeds.js');
@@ -342,6 +343,7 @@ for (const flag of ['on', 'off']) {
       const calls = captured(server(), n);
       for (const call of calls) {
         assert.equal(call.system.filter((b) => b.cache_control).length, 1, 'only the static block is cached for the app');
+        assert.ok(!call.system[0].text.includes(CLUB_KNOWLEDGE.trim()), 'the app never carries the club facts');
       }
       for (const call of calls.slice(1)) assert.deepEqual(messageBreakpoints(call.messages), [call.messages.length - 2]);
       assertByteStable(calls);
@@ -374,12 +376,22 @@ for (const flag of ['on', 'off']) {
         await chatSse(server(), { sessionId: sid(), messages: thread, capabilities: ['club_v1'] });
         calls.push(...captured(server(), n));
       }
+      const clubBlock = `<club_knowledge>\n${CLUB_KNOWLEDGE.trim()}\n</club_knowledge>`;
       for (const call of calls) {
         assert.equal(call.system.length, 2);
+        // The club facts sit in the cached prefix, ahead of the safety block,
+        // which stays last.
+        assert.ok(call.system[0].cache_control);
+        assert.ok(call.system[0].text.includes(clubBlock), 'club facts in the cached prefix');
+        assert.ok(call.system[0].text.endsWith(flag === 'on' ? SAFETY_CORE_TAGGED : SAFETY_CORE), 'safety block last');
+        assert.ok(call.system[0].text.indexOf(clubBlock) < call.system[0].text.lastIndexOf('SAFETY CORE'));
         assert.ok(call.system[1].cache_control, 'club block is a breakpoint');
         assert.match(call.system[1].text, /LIVE MEETING SCHEDULE/);
+        // The schedule is read from the site's events feed (fixture copy).
+        assert.match(call.system[1].text, /Regular meetings: Every Thursday at 8:20 AM, MHS Library Classroom\. Open to: All MHS Students\./);
         assert.match(call.system[1].text, /BLOG LIBRARY/);
       }
+      assert.equal(calls[2].system[0].text, calls[0].system[0].text, 'the cached prefix is byte-identical across students');
       assert.equal(calls[2].system[1].text, calls[0].system[1].text, 'a second student gets the same bytes');
       // Breakpoints in play: static, club block, history. Under the API's 4.
       const total = calls[1].system.filter((b) => b.cache_control).length + messageBreakpoints(calls[1].messages).length;

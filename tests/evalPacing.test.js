@@ -511,6 +511,74 @@ describe('eval-pacing helper routes', () => {
   });
 });
 
+describe('eval-pacing club facts (widget-club-facts)', () => {
+  const GOOD_ANSWERS = [
+    'Shyam Christensen and Nathan Dozois are the co-founders and co-presidents, Adam Keegan is vice president, and Niko Lazaridis is secretary. Want to know what each one wrote?',
+    "The club doesn't publish member or meeting counts, so I can't give you a number. The four board members run it. Want the meeting time instead?",
+    'No, it was a poster, not a talk: "Teaching the Pause: A Student-Led Model for Critical AI Literacy." Want to know what it argued?',
+    "No. Mayo High School is a public school, and neither it nor the club is affiliated with Mayo Clinic. What made you wonder?",
+    'Yes. They can start a chapter at their school; the sign-up is the Google Form on mayoailiteracy.com/chapters. Do they have a teacher who could advise?',
+  ];
+  // What the pre-2026-10 hard-coded block led the tutor to say.
+  const OLD_ANSWERS = [
+    'Shyam Christensen and Nathan Dozois are President & Co-Founder, Adam Keegan is Vice President, Niko Lazaridis is Secretary.',
+    'The club has 25+ members and has held 15+ meetings.',
+    'Yes, the board gave a talk about AI literacy.',
+    'The club is part of the Mayo community in Rochester.',
+    'Your cousin could join our Thursday meetings.',
+  ];
+  const run = (answers) => [convo('widget-club-facts', 'socratic', answers)];
+
+  test('the scenario is a club_v1 widget conversation with one question per criterion', async () => {
+    const { SCENARIOS, clubFactsCriteria } = await modP;
+    const s = SCENARIOS.find((x) => x.id === 'widget-club-facts');
+    assert.deepEqual(s.capabilities, ['club_v1']);
+    const criteria = clubFactsCriteria([]);
+    assert.equal(criteria.length, s.turns.length);
+    for (const c of criteria) { assert.equal(c.value, 'missing'); assert.equal(c.pass, false); }
+  });
+
+  test('answers that match the club site pass', async () => {
+    const { clubFactsCriteria } = await modP;
+    for (const c of clubFactsCriteria(run(GOOD_ANSWERS))) assert.equal(c.pass, true, `${c.name}: ${c.value}`);
+  });
+
+  test('the old block\'s answers fail, and each names the slip', async () => {
+    const { clubFactsCriteria } = await modP;
+    const [board, size, aaca, mayoClinic, chapters] = clubFactsCriteria(run(OLD_ANSWERS));
+    assert.equal(board.value, 'failed: co-presidents');
+    assert.equal(size.value, 'failed: no "25+" / "15+", no count');
+    assert.equal(aaca.value, 'failed: poster, Teaching the Pause');
+    assert.equal(mayoClinic.value, 'failed: not affiliated');
+    assert.equal(chapters.value, 'failed: chapter, where to start one');
+  });
+
+  test('"4 board members" is a fact, not a member count', async () => {
+    const { clubFactsCriteria } = await modP;
+    const answers = GOOD_ANSWERS.slice();
+    answers[1] = 'I only know the 4 board members; the site lists no member count. About 30 members? I would be guessing.';
+    const size = clubFactsCriteria(run(answers))[1];
+    assert.equal(size.value, 'failed: no count', 'a two-digit count still fails');
+    answers[1] = 'The site names the 4 board members but no member count.';
+    assert.equal(clubFactsCriteria(run(answers))[1].pass, true);
+  });
+
+  test('its replies stay out of the pacing pools', async () => {
+    const { evaluateCriteria, computeMetrics } = await modP;
+    const withMetrics = (r) => ({ ...r, replies: r.replies.map((x) => ({ ...x, metrics: computeMetrics(x.raw) })) });
+    const wall = 'There are three things to do. One. Two. Three. Four. Five. Six. Seven. Eight. Nine. Ten.';
+    const criteria = evaluateCriteria([
+      withMetrics(convo('socratic-1', 'socratic', ['Close — it predicts tokens. What do you think happens next?'])),
+      withMetrics(convo('widget-club-facts', 'socratic', [wall, ...GOOD_ANSWERS.slice(1)])),
+    ]);
+    const byPrefix = (p) => criteria.find((c) => c.name.startsWith(p));
+    assert.equal(byPrefix('median sentences').value, 2);
+    assert.equal(byPrefix('preview hits').value, 0);
+    assert.equal(byPrefix('club facts: board').pass, false);
+    assert.equal(byPrefix('club facts: size').pass, true);
+  });
+});
+
 describe('eval-pacing history-cache evidence', () => {
   // A thread whose turn t reads what turn t-1 wrote: read grows by the
   // previous write every turn; the system prefix is 8,000 tokens.
