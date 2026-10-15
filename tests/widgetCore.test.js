@@ -6,7 +6,7 @@
 //   1. escaping + markdown: no raw HTML ever reaches innerHTML, bullets and
 //      numbered lists render as one list each, identifiers keep underscores.
 //   2. source rules: no regex lookbehind (WebKit < 16.4 rejects the script),
-//      and the mayo-site copies are byte-identical to public/.
+//      and public/ stays the only copy (scripts/sync-widget.mjs --check).
 //   3. SSE parsing: split chunks, CRLF, keepalive comments, [DONE], and the
 //      refusal/error frames that carry a `code`.
 //   4. the first-run gate state machine.
@@ -16,7 +16,9 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const Core = require('../public/widget.js');
 const { ReportRequest, SessionId } = require('../lib/schemas');
@@ -114,20 +116,34 @@ describe('renderMarkdown', () => {
 });
 
 describe('widget source rules', () => {
-  const files = ['public/widget.js', 'mayo-site/widget.js'];
-
   test('no regex lookbehind (iOS < 16.4 fails to parse the whole script)', () => {
-    for (const f of files) {
-      const src = fs.readFileSync(path.join(root, f), 'utf8');
-      assert.doesNotMatch(src, /\(\?<[=!]/, f);
-    }
+    const src = fs.readFileSync(path.join(root, 'public/widget.js'), 'utf8');
+    assert.doesNotMatch(src, /\(\?<[=!]/);
   });
 
-  test('mayo-site copies are generated from public/', () => {
-    for (const name of ['widget.js', 'widget.css']) {
-      const a = fs.readFileSync(path.join(root, 'public', name));
-      const b = fs.readFileSync(path.join(root, 'mayo-site', name));
-      assert.ok(a.equals(b), `mayo-site/${name} differs — run node scripts/sync-widget.mjs`);
+  const syncCheck = (repoRoot) => spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'sync-widget.mjs'), '--check'], { encoding: 'utf8' });
+
+  test('public/ is the only copy: sync-widget --check passes', () => {
+    const r = syncCheck(root);
+    assert.equal(r.status, 0, r.stderr);
+  });
+
+  test('sync-widget --check fails on an unlisted copy of the widget', () => {
+    // A throwaway repo shape: the script resolves its root from its own path.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'merc-sync-widget-'));
+    try {
+      fs.mkdirSync(path.join(tmp, 'scripts'));
+      fs.mkdirSync(path.join(tmp, 'public'));
+      fs.mkdirSync(path.join(tmp, 'site'));
+      fs.copyFileSync(path.join(root, 'scripts', 'sync-widget.mjs'), path.join(tmp, 'scripts', 'sync-widget.mjs'));
+      for (const name of ['widget.js', 'widget.css']) fs.writeFileSync(path.join(tmp, 'public', name), name);
+      assert.equal(syncCheck(tmp).status, 0, 'sources alone pass');
+      fs.writeFileSync(path.join(tmp, 'site', 'widget.js'), 'a hand-edited fork');
+      const r = syncCheck(tmp);
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /Unlisted copy of the web widget: site\/widget\.js/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 

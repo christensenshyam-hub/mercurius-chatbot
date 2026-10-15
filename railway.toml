@@ -1,10 +1,10 @@
 [build]
 builder = "nixpacks"
 # Only a change to something the server needs at build or run time triggers a
-# production deploy; docs-, iOS-, marketing- and mayo-site-only merges are
-# skipped (they used to rebuild and restart prod, cutting open lesson
-# streams). The list is deliberately generous; leaving a path out would
-# silently skip a needed deploy. Runtime reads: server.js + db.js + lib/**
+# production deploy; docs-, iOS- and marketing-only merges are skipped (they
+# used to rebuild and restart prod, cutting open lesson streams). The list is
+# deliberately generous; leaving a path out would silently skip a needed
+# deploy. Runtime reads: server.js + db.js + lib/**
 # (all requires), prompts/** (lib/unifiedPrompt.js reads mercurius-v2.md),
 # public/** (express.static). Build inputs: package.json, package-lock.json,
 # .nvmrc, railway.toml, plus nixpacks.toml / .npmrc / .node-version / Procfile

@@ -198,8 +198,8 @@ connect; the build is not on that clock), a 35 s drain window
 `watchPatterns` limits which merges deploy: only a change under
 `server.js`, `db.js`, `lib/`, `prompts/`, `public/`, `migrations/`,
 `scripts/`, `package*.json`, `railway.toml` or the Node/npm/Nixpacks
-config files starts a production build. Docs-, iOS-, marketing- and
-mayo-site-only merges are skipped and do not restart the server. Two
+config files starts a production build. Docs-, iOS- and marketing-only
+merges are skipped and do not restart the server. Two
 consequences: a new runtime directory must be added to the list, and a
 docs-only merge no longer retries a failed deploy — after changing
 Railway variables, press **Redeploy** in the dashboard.
