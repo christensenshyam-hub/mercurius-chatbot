@@ -25,12 +25,12 @@ struct AccessibilityLayoutTests {
 
     @Test("The lesson composer shortens its placeholder at accessibility sizes only")
     func composerPlaceholder() {
-        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .large)
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Answer…", at: .large)
                 == "Type your answer…")
-        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .xxxLarge)
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Answer…", at: .xxxLarge)
                 == "Type your answer…")
-        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .accessibility1)
-                == "Your answer…")
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Answer…", at: .accessibility1)
+                == "Answer…")
         #expect(ChatInputBar.placeholder("Ask Mercurius…", compact: nil, at: .accessibility5)
                 == "Ask Mercurius…")
     }

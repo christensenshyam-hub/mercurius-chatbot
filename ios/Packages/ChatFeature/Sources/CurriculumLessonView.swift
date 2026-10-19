@@ -204,7 +204,7 @@ public struct CurriculumLessonView: View {
                     focusTrigger: inputFocusTrigger,
                     // Merc asks; the student answers (AUD-44).
                     placeholder: "Type your answer…",
-                    compactPlaceholder: "Your answer…",
+                    compactPlaceholder: "Answer…",
                     // A long answer must not swallow the reading area.
                     maxLines: 3,
                     onFocusChange: { composerFocused = $0 }

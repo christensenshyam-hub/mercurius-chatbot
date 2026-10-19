@@ -54,11 +54,12 @@ enum LearningPathLayout: Equatable {
 /// lesson of a unit the banner sits right above the node), leaving
 /// "UNIT 01" and the start of the unit's name hidden.
 enum PathOpeningScroll: Equatable {
-    /// At the top: nothing to show, or the frontier is the path's first stop,
-    /// which the top already shows under "Your learning path".
+    /// At the top: the whole path is done (Merc celebrates in its header).
     case top
     /// The frontier opens its unit: that unit's banner at the top, the node
-    /// right below it.
+    /// right below it. Also for the path's very first stop: at AX5 the top
+    /// of the path is "Your learning path" and the progress line alone, with
+    /// the banner and the node below the fold.
     case unitBanner(id: String)
     /// The frontier node in the middle of the screen.
     case centered(id: String)
@@ -69,7 +70,7 @@ enum PathOpeningScroll: Equatable {
     static func target(frontierID: String?, rows: [(id: String, isBanner: Bool)]) -> PathOpeningScroll {
         guard let frontierID, let index = rows.firstIndex(where: { $0.id == frontierID }) else { return .top }
         guard index > 0, rows[index - 1].isBanner else { return .centered(id: frontierID) }
-        return index - 1 == 0 ? .top : .unitBanner(id: rows[index - 1].id)
+        return .unitBanner(id: rows[index - 1].id)
     }
 }
 

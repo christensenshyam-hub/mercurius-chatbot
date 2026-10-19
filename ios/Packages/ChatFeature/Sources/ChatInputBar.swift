@@ -35,7 +35,8 @@ struct ChatInputBar: View {
     /// asking (AUD-44).
     var placeholder: String = "Ask Mercurius…"
     /// A shorter placeholder for accessibility sizes, where the field fits
-    /// only a few characters ("Type yo…" at AX5 on an SE). Nil keeps
+    /// only a few characters ("Type yo…", even "Your an…", at AX5 on an
+    /// SE). Nil keeps
     /// `placeholder` at every size.
     var compactPlaceholder: String? = nil
     /// The most lines the field grows to before it scrolls. A lesson caps it

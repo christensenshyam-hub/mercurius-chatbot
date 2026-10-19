@@ -514,9 +514,12 @@ struct MessageListView: View {
                     ThreadStack(lazy: !lessonStyle) {
                         if let threadTitle {
                             Text(threadTitle)
-                                .font(BrandFont.roundedTitle)
+                                .font(BrandFont.roundedTitle3)
                                 .foregroundStyle(BrandColor.text)
                                 .fixedSize(horizontal: false, vertical: true)
+                                // Capped like the header it stands in for:
+                                // at AX5 it would fill an SE's reading area.
+                                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, BrandSpacing.lg)
                                 .padding(.bottom, BrandSpacing.sm)

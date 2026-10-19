@@ -16,14 +16,14 @@ struct LearningPathLayoutTests {
         for size in list { #expect(LearningPathLayout.forSize(size) == .list, "\(size)") }
     }
 
-    @Test("The path opens at the top on its first stop, at the unit's banner on a unit's first lesson, centred otherwise")
+    @Test("The path opens with the unit's banner on a unit's first lesson, centred otherwise, at the top when done")
     func openingScroll() {
         let rows: [(id: String, isBanner: Bool)] = [
             ("H_u1", true), ("L_1", false), ("L_2", false), ("T_u1", false),
             ("H_u2", true), ("L_5", false), ("L_6", false), ("T_u2", false),
         ]
-        #expect(PathOpeningScroll.target(frontierID: "L_1", rows: rows) == .top,
-                "the top shows the title, Unit 1's banner and its first node")
+        #expect(PathOpeningScroll.target(frontierID: "L_1", rows: rows) == .unitBanner(id: "H_u1"),
+                "at AX5 the top of the path is its title alone; the banner and the node come first")
         #expect(PathOpeningScroll.target(frontierID: "L_5", rows: rows) == .unitBanner(id: "H_u2"),
                 "Unit 2's banner whole, its first node below")
         #expect(PathOpeningScroll.target(frontierID: "L_2", rows: rows) == .centered(id: "L_2"))
