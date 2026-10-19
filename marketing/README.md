@@ -20,7 +20,7 @@ marketing/
 │   ├── mercurius-logo.png / .webp  # Full logo + wordmark (1024×1024); hero
 │   ├── og-card.png          # 1200×630 link-preview image (og:image)
 │   ├── favicon-48.png, apple-touch-icon.png
-│   ├── app-store-badge.svg  # Apple's official US badge, self-hosted
+│   ├── app-store-badge.svg  # Apple's official US badge, self-hosted (unused while the CTAs point at /get: docs/STORE_CTA_SWITCHBACK.md)
 │   └── mercurius-icon.png   # Old cropped icon (470×415), no longer referenced
 └── README.md
 ```
