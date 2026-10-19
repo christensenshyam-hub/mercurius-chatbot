@@ -351,10 +351,21 @@ describe('AUD-26 (removable): rule 1 means the student\'s own situation', () => 
   test('treats news and research as content, but a word about themselves is still rule 1', () => {
     const l = lines[i];
     assert.match(l, /Rule 1 is about the student's own situation or someone they know\./);
-    assert.match(l, /and say nothing about themselves, answer briefly, carefully and factually, even mid-lesson, with no method details/);
-    assert.match(l, /don't ask how they're doing or hold the answer back/);
-    assert.match(l, /988 and the Crisis Text Line are there if the topic hits close to home/);
+    assert.match(l, /and say nothing about themselves, answer carefully and factually in two or three short paragraphs \(under 120 words in all, no headings or lists, even if they ask for details\), even mid-lesson, with no method details/);
+    assert.match(l, /Don't hold the answer back, and don't ask how they're doing\./);
     assert.match(l, /If they say anything about themselves, rule 1 applies in full\./);
+  });
+
+  test('review 2026-10-19: one exact 988 / 741741 line to copy (the server floor keeps it from being cut off)', () => {
+    const l = lines[i];
+    assert.match(l, /include this line exactly: "If this topic hits close to home, you can call or text 988 or text HOME to 741741 \(Crisis Text Line\)\."/);
+  });
+
+  test('review 2026-10-19: asking how someone died gets no method, a gentle check-in and no quiz', () => {
+    assert.match(lines[i], /The one exception is a question about how someone died or what method was used: don't say, give that line, and end the reply by asking, in your own words, how they themselves are doing\. That is the reply's only question: no question about their research or the case, and no quiz question\./);
+    // No sentence to copy: a quoted example check-in leaked into plain news
+    // answers (5 of 6 lesson news replies ended on it in a 2026-10-19 smoke run).
+    assert.doesNotMatch(lines[i], /How are you doing with all this/);
   });
 
   test('removing it leaves a valid block: rules 1–9 in order, markers once, no new numbers', () => {

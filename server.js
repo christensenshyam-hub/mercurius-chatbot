@@ -69,6 +69,7 @@ const { createScheduler } = require('./lib/scheduler');
 const {
   RESPONSE_MODE_BUDGETS,
   EXPAND_MODE_NOTE,
+  needsSafetyBudget,
   resolveResponseMode,
   qualityPrefix,
 } = require('./lib/responseQuality');
@@ -1959,14 +1960,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // 4-7 line Claim/Warrant/Impact/Rebuttal block with [SOURCE] citations
     // fits comfortably in 400 — giving it the full 600 lets it ramble past
     // its own line contract instead.
+    // A safety-topic turn (suicide news, sextortion, eating-disorder
+    // behaviour: lib/responseQuality.needsSafetyBudget) gets the balanced
+    // budget too, so its closing 988 / 741741 line is never cut off.
     const DEBATE_MIN_TOKENS = 400;
+    const safetyFloor = needsSafetyBudget(latestUserMessage.content) ? RESPONSE_MODE_BUDGETS.balanced.maxTokens : 0;
     const maxTokens = isCurriculumMsg
       ? 2048
-      : mode === 'discussion'
+      : Math.max(safetyFloor, mode === 'discussion'
         ? Math.max(responseBudget.maxTokens, RESPONSE_MODE_BUDGETS.balanced.maxTokens)
         : mode === 'debate'
           ? Math.max(responseBudget.maxTokens, DEBATE_MIN_TOKENS)
-          : responseBudget.maxTokens;
+          : responseBudget.maxTokens);
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
