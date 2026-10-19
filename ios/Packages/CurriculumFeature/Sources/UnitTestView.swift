@@ -71,12 +71,20 @@ public struct UnitTestView: View {
                         .font(BrandFont.subheading)
                         .foregroundStyle(BrandColor.text)
                 }
+                // One heading for VoiceOver's rotor (AUD-49).
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
             }
             Spacer(minLength: BrandSpacing.sm)
-            Button("Done") { onExit() }
-                .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(BrandColor.accentText)
-                .accessibilityLabel("Done. Exit unit test.")
+            Button { onExit() } label: {
+                Text("Done")
+                    .font(BrandFont.bodyEmphasized)
+                    .foregroundStyle(BrandColor.accentText)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Done. Exit unit test.")
         }
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.top, BrandSpacing.md)
@@ -105,7 +113,7 @@ public struct UnitTestView: View {
     private var quizPhase: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.lg) {
             Text("Answer all \(model.mcqTotal) questions, then submit. You need \(model.mcqCorrectNeeded) of \(model.mcqTotal) correct to move on.")
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -123,17 +131,20 @@ public struct UnitTestView: View {
                     }
                 }
             } else {
-                primaryButton("Submit answers", enabled: model.allAnswered) {
+                primaryButton(model.submitTitle, enabled: model.allAnswered) {
                     model.submitQuiz()
                 }
             }
+        }
+        .onChange(of: model.quizSubmitted) { _, submitted in
+            if submitted, let line = model.scoreAnnouncement { announce(line) }
         }
     }
 
     private func questionCard(index: Int, question: UnitTestQuestion) -> some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
             Text("Question \(index + 1)")
-                .font(.caption2)
+                .font(BrandFont.caption)
                 .tracking(1.1)
                 .foregroundStyle(BrandColor.textSecondary)
             Text(question.q)
@@ -141,13 +152,15 @@ public struct UnitTestView: View {
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(Array(question.options.enumerated()), id: \.offset) { i, option in
-                optionRow(question: question, index: i, option: option)
+            ForEach(question.options.indices, id: \.self) { i in
+                UnitTestOptionRow(state: model.optionState(for: question, index: i)) {
+                    model.select(UnitTestViewModel.optionLetter(i), for: question.id)
+                }
             }
 
             if model.quizSubmitted {
                 Text(question.explanation)
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -157,66 +170,6 @@ public struct UnitTestView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
-    }
-
-    private func optionRow(question: UnitTestQuestion, index: Int, option: String) -> some View {
-        let letter = UnitTestViewModel.optionLetter(index)
-        let isSelected = model.selectedLetter(for: question.id) == letter
-        let submitted = model.quizSubmitted
-        let isAnswer = question.answer.uppercased() == letter
-
-        let bg: Color
-        let stroke: Color
-        let fg: Color
-        if submitted {
-            if isAnswer {
-                bg = BrandColor.success.opacity(0.15); stroke = BrandColor.success; fg = BrandColor.text
-            } else if isSelected {
-                bg = BrandColor.error.opacity(0.15); stroke = BrandColor.error; fg = BrandColor.text
-            } else {
-                bg = BrandColor.surfaceElevated; stroke = BrandColor.border; fg = BrandColor.textSecondary
-            }
-        } else if isSelected {
-            bg = BrandColor.accent.opacity(0.15); stroke = BrandColor.accent; fg = BrandColor.text
-        } else {
-            bg = BrandColor.surfaceElevated; stroke = BrandColor.border; fg = BrandColor.text
-        }
-
-        return Button {
-            model.select(letter, for: question.id)
-        } label: {
-            HStack(alignment: .top, spacing: BrandSpacing.sm) {
-                Text(letter)
-                    .font(BrandFont.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(stroke)
-                Text(option)
-                    .font(BrandFont.caption)
-                    .foregroundStyle(fg)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                if submitted && isAnswer {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(BrandColor.successText)
-                } else if submitted && isSelected {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(BrandColor.error)
-                }
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, BrandSpacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(bg)
-            .clipShape(RoundedRectangle(cornerRadius: BrandRadius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: BrandRadius.sm)
-                    .stroke(stroke, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(submitted)
     }
 
     // MARK: - Defense phase
@@ -246,6 +199,20 @@ public struct UnitTestView: View {
                 .foregroundStyle(BrandColor.text)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 160)
+                // An empty editor says what goes in it; VoiceOver hears a
+                // name instead of "text view" (AUD-22).
+                .overlay(alignment: .topLeading) {
+                    if model.defenseAnswer.isEmpty {
+                        Text("Type your answer here…")
+                            .font(BrandFont.body)
+                            .foregroundStyle(BrandColor.textSecondary)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityLabel("Your written answer")
                 .padding(BrandSpacing.sm)
                 .background(BrandColor.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
@@ -284,14 +251,23 @@ public struct UnitTestView: View {
     private var resultPhase: some View {
         let passed = model.overallPassed
         return VStack(spacing: BrandSpacing.lg) {
-            Image(systemName: passed ? "checkmark.seal.fill" : "arrow.counterclockwise.circle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(passed ? BrandColor.successText : BrandColor.accentText)
-                .padding(.top, BrandSpacing.md)
+            if passed {
+                // Mastery gets its Merc moment (AUD-22).
+                MercMascot(.celebrate, size: 120)
+                    .padding(.top, BrandSpacing.md)
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "arrow.counterclockwise.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(BrandColor.accentText)
+                    .padding(.top, BrandSpacing.md)
+                    .accessibilityHidden(true)
+            }
 
             Text(passed ? "Unit mastered" : "Almost there")
                 .font(BrandFont.title)
                 .foregroundStyle(BrandColor.text)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: BrandSpacing.sm) {
                 resultRow(label: "Quiz", detail: "\(model.mcqScore)/\(model.mcqTotal)", ok: model.mcqPassed)
@@ -332,9 +308,14 @@ public struct UnitTestView: View {
                 if model.offersRetake {
                     primaryButton("Retake test") { model.retake() }
                 }
-                Button("Done") { onExit() }
-                    .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accentText)
+                Button { onExit() } label: {
+                    Text("Done")
+                        .font(BrandFont.bodyEmphasized)
+                        .foregroundStyle(BrandColor.accentText)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
@@ -344,6 +325,7 @@ public struct UnitTestView: View {
                 reportedMastery = true
                 onMastered(model.unit.id)
             }
+            if let line = model.resultAnnouncement { announce(line) }
         }
     }
 
@@ -356,24 +338,39 @@ public struct UnitTestView: View {
                 .foregroundStyle(BrandColor.text)
             Spacer()
             Text(detail)
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
         }
+        // "Quiz, 4/5, passed": the mark's meaning in words, not colour.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label), \(detail), \(ok ? "passed" : "not passed")")
     }
 
     // MARK: - Shared
 
+    /// Enabled: white on indigo. Not yet enabled: readable secondary text
+    /// on a quiet card, not the whole button faded to half (AUD-22).
     private func primaryButton(_ title: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(.white)
+                .foregroundStyle(enabled ? Color.white : BrandColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, BrandSpacing.md)
+                .padding(.vertical, BrandSpacing.sm)
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(BrandColor.accent)
+                .background(enabled ? BrandColor.accent : BrandColor.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BrandRadius.md)
+                        .stroke(enabled ? Color.clear : BrandColor.border, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
-        .opacity(enabled ? 1 : 0.5)
         .disabled(!enabled)
+    }
+
+    private func announce(_ line: String) {
+        AccessibilityNotification.Announcement(line).post()
     }
 }

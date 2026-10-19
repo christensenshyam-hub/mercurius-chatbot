@@ -73,6 +73,8 @@ public struct RootView: View {
             ReplyFontGalleryView()
         } else if ProcessInfo.processInfo.arguments.contains("-UnitTestCrisisPreview") {
             unitTestCrisisPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") {
+            unitTestPreview
         } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
             QuizView(
                 model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
@@ -119,6 +121,19 @@ public struct RootView: View {
                 nextStop: next.map(AppShellView.celebrationStop)
             )
             .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else {
+            mainBody
+        }
+    }
+
+    /// DEBUG-only: Unit 1's test at a stage (`-UnitTestStage`), for
+    /// screenshots (see `UnitTestPreviewHost`).
+    @ViewBuilder private var unitTestPreview: some View {
+        if let unit = MercuriusCurriculum.units.first,
+           let test = MercuriusCurriculum.unitTest(for: unit.id) {
+            UnitTestPreviewHost(unit: unit, test: test,
+                                stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
+                .preferredColorScheme(env.themeStore.theme.colorScheme)
         } else {
             mainBody
         }
@@ -338,6 +353,51 @@ private struct ChatPreviewHost: View {
             model.draft = "What is a token in an LLM?"
             model.send()
         }
+    }
+}
+
+/// DEBUG host for `-UnitTestPreview`: Unit 1's test, driven to a stage for
+/// screenshots with no network call. `-UnitTestStage partial` picks three
+/// answers (the submit button's "Answer all 5 · 3/5"); `review` answers
+/// every question, the first one wrong, and submits; `mastered` and
+/// `almost` reach the result screen through a canned grade. With no stage
+/// it opens untouched.
+private struct UnitTestPreviewHost: View {
+    @State private var model: UnitTestViewModel
+    private let stage: String?
+
+    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?) {
+        let pass = stage == "mastered"
+        _model = State(initialValue: UnitTestViewModel(unit: unit, test: test, shuffleSeed: 42) { _ in
+            .init(grade: pass ? "A" : "C", pass: pass,
+                  feedback: pass ? "Clear, specific and well reasoned." : "Name a concrete example of where it goes wrong.")
+        })
+        self.stage = stage
+    }
+
+    var body: some View {
+        UnitTestView(model: model, onMastered: { _ in }, onExit: {})
+            .task {
+                guard model.phase == .quiz, !model.quizSubmitted, let stage else { return }
+                switch stage {
+                case "partial":
+                    for question in model.questions.prefix(3) { model.select(question.answer, for: question.id) }
+                case "review":
+                    for (i, question) in model.questions.enumerated() {
+                        let wrong = question.answer == "A" ? "B" : "A"
+                        model.select(i == 0 ? wrong : question.answer, for: question.id)
+                    }
+                    model.submitQuiz()
+                case "mastered", "almost":
+                    for question in model.questions { model.select(question.answer, for: question.id) }
+                    model.submitQuiz()
+                    model.continueAfterQuiz()
+                    model.defenseAnswer = "DEBUG preview answer."
+                    await model.submitDefense()
+                default:
+                    break
+                }
+            }
     }
 }
 
