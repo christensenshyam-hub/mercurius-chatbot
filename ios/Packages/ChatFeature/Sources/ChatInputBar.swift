@@ -2,7 +2,8 @@ import SwiftUI
 import PhotosUI
 import DesignSystem
 
-/// Message composer. Grows with content up to 5 lines, then scrolls. Supports
+/// Message composer. Grows with content up to `maxLines` lines (5 by
+/// default), then scrolls. Supports
 /// attaching one photo (shown as a thumbnail above the field). Disables the
 /// send button while a request is in flight or a photo is still preparing.
 /// Holds at most `characterLimit` characters — what the server reads — and
@@ -29,6 +30,15 @@ struct ChatInputBar: View {
     /// lesson check-question callout). A counter rather than a Bool so every
     /// tap re-focuses even if the field was focused-then-dismissed.
     var focusTrigger: Int = 0
+    /// What the empty field says. Free chat invites a question; a lesson
+    /// passes its own ("Type your answer…"), since there Merc is the one
+    /// asking (AUD-44).
+    var placeholder: String = "Ask Mercurius…"
+    /// The most lines the field grows to before it scrolls. A lesson caps it
+    /// lower so a long answer can't swallow the reading area above.
+    var maxLines: Int = 5
+    /// Told when the field gains or loses focus (the keyboard rises or falls).
+    var onFocusChange: ((Bool) -> Void)? = nil
 
     @FocusState private var focused: Bool
     @State private var pickerItem: PhotosPickerItem?
@@ -65,8 +75,8 @@ struct ChatInputBar: View {
             HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
                 photoButton
 
-                TextField("Ask Mercurius…", text: $text, axis: .vertical)
-                    .lineLimit(1...5)
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...max(1, maxLines))
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)
                     .tint(BrandColor.accent)
@@ -83,6 +93,7 @@ struct ChatInputBar: View {
                     .onSubmit(triggerSend)
                     .accessibilityLabel("Message")
                     .onChange(of: focusTrigger) { _, _ in focused = true }
+                    .onChange(of: focused) { _, isFocused in onFocusChange?(isFocused) }
 
                 actionButton
             }

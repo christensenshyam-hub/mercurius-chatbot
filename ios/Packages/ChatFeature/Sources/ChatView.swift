@@ -334,8 +334,77 @@ public struct ChatView: View {
     }
 }
 
-/// Scrollable list that auto-scrolls to the bottom when a new message
-/// appears or when the last message's content grows (streaming).
+/// The message list's coordinate space: 0 is the top of the visible reading
+/// area. A plain constant, so the geometry closures (which run off the main
+/// actor) can read it.
+private let messageListSpace = "messageList"
+
+/// The lesson coach card's content, drawn as the first row of the lesson's
+/// message list so it scrolls away with the lesson (AUD-08).
+struct LessonCoach: Equatable {
+    let line: String
+    let reaction: CoachReaction?
+    let activity: MercActivity
+}
+
+/// The thread's stack. Eager in lessons: a few very tall rows, whose heights
+/// a lazy stack only estimates until they render — its offset and height
+/// then jump as it corrects them, which breaks following and holding a
+/// reply. Lazy in free chat, where threads are long and replies short.
+private struct ThreadStack<Content: View>: View {
+    let lazy: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
+        } else {
+            VStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
+        }
+    }
+}
+
+/// Reports when the student starts and stops dragging or flinging the list
+/// (iOS 18+), so the scroll policy needn't guess it from offset changes.
+private struct StudentScrollTracking: ViewModifier {
+    let onChange: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            content.onScrollPhaseChange { old, new in
+                let was = old == .interacting || old == .decelerating
+                let isNow = new == .interacting || new == .decelerating
+                if was != isNow { onChange(isNow) }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Scroll bookkeeping for `MessageListView`. A class held in `@State`, so
+/// every layout can update it without re-rendering the list; only what
+/// changes the picture (the pill, the coach card) goes through `@State`.
+@MainActor
+final class MessageListScrollState {
+    var policy: MessageScrollPolicy = {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            return MessageScrollPolicy(knowsStudentScrolling: true)   // StudentScrollTracking reports it
+        }
+        return MessageScrollPolicy()
+    }()
+    var coach = CoachCardPresence()
+    /// The coach card's full height. Its position comes from the content
+    /// offset instead: a lazy row that a jump scrolls away stops reporting
+    /// its frame, so a remembered frame can claim it is still on screen.
+    var coachHeight: CGFloat = 0
+}
+
+/// The scrollable thread. How it moves as messages arrive and stream is
+/// decided by `MessageScrollPolicy` (AUD-09): a new turn goes to the bottom,
+/// a streaming reply is followed only while the student is at the bottom and
+/// is held at its first line once it fills the reading area, and a "Jump to
+/// latest" pill shows whenever the end is out of view.
 struct MessageListView: View {
     let messages: [ChatMessage]
     let phase: ChatViewModel.Phase
@@ -357,9 +426,38 @@ struct MessageListView: View {
     /// avatar (older avatars stay neutral). Avatars render only in free chat.
     var mercMood: MercMood = .neutral
     var mercActivity: MercActivity = .idle
+    /// Lessons only: Merc's coach card, as the list's first row. Hidden at
+    /// accessibility text sizes, and while the student types if it's on
+    /// screen (see `CoachCardPresence`).
+    var coach: LessonCoach? = nil
+    /// Whether the composer under the list has focus (the keyboard is up).
+    var composerFocused: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @State private var scroll = MessageListScrollState()
+    @State private var showsJumpPill = false
+    @State private var coachHiddenForTyping = false
+
+    private static let bottomID = "message-list-bottom"
+    private static let coachID = "lesson-coach"
+
+    /// Which footer follows the thread; when it changes the end of the list
+    /// moves.
+    private enum Footer: Equatable { case none, retry, explainMore }
+
+    private var footer: Footer {
+        if case .failed(_, let isRetryable) = phase, isRetryable { return .retry }
+        return shouldShowExplainMore ? .explainMore : .none
+    }
+
+    /// The coach row exists (it collapses rather than leaves while the
+    /// student types — taking the first row out of a lazy stack scrolled far
+    /// down can leave it laid out blank).
+    private var hasCoachRow: Bool {
+        coach != nil && !dynamicTypeSize.isAccessibilitySize
+    }
 
     /// The latest assistant message — the one whose avatar reflects the live
     /// thinking / speaking / listening state.
@@ -388,7 +486,23 @@ struct MessageListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) {
+                ThreadStack(lazy: !lessonStyle) {
+                    if let coach, hasCoachRow {
+                        MercCoachCard(line: coach.line, reaction: coach.reaction,
+                                      liveActivity: coach.activity)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .onGeometryChange(for: CGFloat.self) { geo in
+                                geo.size.height
+                            } action: { height in
+                                scroll.coachHeight = height
+                            }
+                            .frame(height: coachHiddenForTyping ? 0 : nil, alignment: .top)
+                            .clipped()
+                            .opacity(coachHiddenForTyping ? 0 : 1)
+                            .accessibilityHidden(coachHiddenForTyping)
+                            .id(Self.coachID)
+                    }
+
                     if showsCoachIntro {
                         coachIntro
                             .transition(reduceMotion
@@ -416,6 +530,11 @@ struct MessageListView: View {
                         )
                         .equatable()
                         .id(message.id)
+                        .onGeometryChange(for: CGFloat.self) { geo in
+                            geo.frame(in: .named(messageListSpace)).minY
+                        } action: { minY in
+                            if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
+                        }
                     }
 
                     if case .failed(_, let isRetryable) = phase, isRetryable {
@@ -430,6 +549,13 @@ struct MessageListView: View {
                         explainMoreFooter
                             .id("explain-more-footer")
                     }
+
+                    // The end of the thread, below every footer: what
+                    // "scroll to the bottom" aims at.
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.bottomID)
+                        .accessibilityHidden(true)
                 }
                 .padding(.vertical, BrandSpacing.md)
                 // Gated like every other explicit animation in the app: under
@@ -437,20 +563,125 @@ struct MessageListView: View {
                 // already opacity-only) instead of sliding the thread up.
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.25),
                            value: showsCoachIntro)
-            }
-            .onChange(of: messages.last?.id) { _, newValue in
-                guard let newValue else { return }
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(newValue, anchor: .bottom)
+                .onGeometryChange(for: CGRect.self) { geo in
+                    geo.frame(in: .named(messageListSpace))
+                } action: { frame in
+                    var geometry = scroll.policy.geometry
+                    geometry.contentMinY = frame.minY
+                    geometry.contentHeight = frame.height
+                    layoutChanged(geometry, proxy: proxy)
                 }
             }
-            .onChange(of: messages.last?.content) { _, _ in
-                // During streaming, keep the bottom anchored so new
-                // content is visible without yanking the user around.
-                guard let id = messages.last?.id else { return }
-                proxy.scrollTo(id, anchor: .bottom)
+            .coordinateSpace(.named(messageListSpace))
+            .modifier(StudentScrollTracking { scrolling in
+                scroll.policy.studentScrolling(scrolling)
+            })
+            .onGeometryChange(for: CGFloat.self) { geo in
+                geo.size.height
+            } action: { height in
+                var geometry = scroll.policy.geometry
+                geometry.viewportHeight = height
+                layoutChanged(geometry, proxy: proxy)
+            }
+            .overlay(alignment: .bottom) {
+                if showsJumpPill {
+                    jumpToLatestPill(proxy: proxy)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+            .onChange(of: messages.last?.id) { _, newValue in
+                guard newValue != nil, let last = messages.last else { return }
+                // Merc's empty placeholder means a reply is on its way (a
+                // send, Retry, Explain more, a lesson opener): glide down to
+                // it. Anything else is a thread that just loaded: jump.
+                let isNewReply = last.role == .assistant && last.content.isEmpty
+                    && last.status == .streaming
+                perform(scroll.policy.latestMessageChanged(isNewReply: isNewReply), proxy: proxy)
+            }
+            .onChange(of: messages.last?.content) { _, content in
+                // An empty placeholder is a new reply, handled just above.
+                guard let content, !content.isEmpty else { return }
+                perform(scroll.policy.latestMessageGrew(), proxy: proxy)
+            }
+            .onChange(of: footer) { _, _ in
+                perform(scroll.policy.footerChanged(), proxy: proxy)
+            }
+            .onChange(of: composerFocused) { _, focused in
+                let geometry = scroll.policy.geometry
+                let coachOnScreen = hasCoachRow && !coachHiddenForTyping
+                    && CoachCardPresence.isOnScreen(coachHeight: scroll.coachHeight,
+                                                    topInset: BrandSpacing.md, geometry: geometry)
+                let toBottom = scroll.coach.composerFocusChanged(
+                    focused: focused, coachOnScreen: coachOnScreen, geometry: geometry)
+                syncCoachPresence()
+                if toBottom { perform(.scrollToBottom(animated: false), proxy: proxy) }
             }
         }
+    }
+
+    /// A new layout of the list (content or reading area) arrived.
+    private func layoutChanged(_ geometry: MessageListGeometry, proxy: ScrollViewProxy) {
+        perform(scroll.policy.geometryChanged(geometry), proxy: proxy)
+        if coach != nil,
+           scroll.coach.geometryChanged(composerFocused: composerFocused, geometry: geometry) {
+            perform(.scrollToBottom(animated: false), proxy: proxy)
+        }
+        syncCoachPresence()
+        let shows = !messages.isEmpty && scroll.policy.showsJumpPill
+        if shows != showsJumpPill {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showsJumpPill = shows }
+        }
+    }
+
+    private func syncCoachPresence() {
+        let hidden = scroll.coach.isHiddenForTyping
+        if hidden != coachHiddenForTyping {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { coachHiddenForTyping = hidden }
+        }
+    }
+
+    private func perform(_ action: MessageScrollPolicy.Action, proxy: ScrollViewProxy) {
+        switch action {
+        case .none:
+            break
+        case .scrollToBottom(let animated):
+            if animated, !reduceMotion {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(Self.bottomID, anchor: .bottom)
+                }
+            } else {
+                proxy.scrollTo(Self.bottomID, anchor: .bottom)
+            }
+        case .showLatestMessageTop:
+            if let id = messages.last?.id { proxy.scrollTo(id, anchor: .top) }
+        }
+    }
+
+    /// Floats over the bottom of the list whenever the end of the thread is
+    /// out of view — after a long reply was held at its top, or when the
+    /// student scrolled up to re-read.
+    private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
+        Button {
+            perform(scroll.policy.jumpToLatest(), proxy: proxy)
+        } label: {
+            Label("Jump to latest", systemImage: "arrow.down")
+                .font(BrandFont.caption.weight(.semibold))
+                .foregroundStyle(BrandColor.accent)
+                .padding(.vertical, BrandSpacing.sm)
+                .padding(.horizontal, BrandSpacing.md)
+                .background(BrandColor.surfaceElevated, in: Capsule())
+                .overlay(Capsule().strokeBorder(BrandColor.accent.opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .padding(.bottom, BrandSpacing.xs)
+        // Chrome over the reading text: it stops growing at xxxLarge so at
+        // accessibility sizes it doesn't cover the lines it floats over
+        // (long-press shows it large).
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityShowsLargeContentViewer()
+        .accessibilityHint("Scrolls to the newest message")
     }
 
     /// The larger Merc coach moment above a brand-new thread — the handoff
