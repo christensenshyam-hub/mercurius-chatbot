@@ -124,6 +124,18 @@ describe('refusals, like the real API', () => {
     assert.equal(out.stop, 'refusal');
   });
 
+  test('MOCK_HISTORY_REFUSES: that turn is answered, every later call that still holds it is refused', async () => {
+    const thread = (...turns) => ({ model: 'm', max_tokens: 50, system: 'You are Mercurius.', messages: turns });
+    const crisis = { role: 'user', content: 'how many tylenol MOCK_HISTORY_REFUSES' };
+    assert.equal((await client.messages.create(thread(crisis))).stop_reason, 'end_turn');
+    const later = thread(crisis, { role: 'assistant', content: 'Call or text 988.' }, { role: 'user', content: 'what is a token?' });
+    const refused = await client.messages.create(later);
+    assert.equal(refused.stop_reason, 'refusal');
+    assert.deepEqual(refused.content, []);
+    const withheld = thread({ role: 'user', content: '[withheld]' }, later.messages[1], later.messages[2]);
+    assert.equal((await client.messages.create(withheld)).stop_reason, 'end_turn');
+  });
+
   test("the 'refusal' scenario refuses every call; ordinary text is untouched by default", async () => {
     const refusing = createMockClient({ scenario: 'refusal', delayMs: 1 });
     assert.equal((await refusing.messages.create(ask('what is a token?'))).stop_reason, 'refusal');

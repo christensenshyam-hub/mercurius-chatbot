@@ -67,6 +67,7 @@ const curriculumTag = require('./lib/curriculumTag');
 const photoReattach = require('./lib/photoReattach');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
+const crisisHistory = require('./lib/crisisHistory');
 const { notifyReport } = require('./lib/reportWebhook');
 const { createScheduler } = require('./lib/scheduler');
 const {
@@ -2031,8 +2032,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     imageStore.link(imageId, sessionId, { ...photoLinkKeys, replyKey: photoReattach.replyKey(replyText) })
       .catch((err) => logger.forRequest(req).warn({ err: err.message }, 'chat: photo link failed'));
   };
-  const apiMessages = priorHistory.length > 0
-    ? [...priorHistory, { role: 'user', content: latestContent }]
+  // A historical user turn that was answered with crisis resources goes to
+  // the model as a placeholder (lib/crisisHistory): with its words still in
+  // the thread, Claude's classifier refused every later turn of that chat or
+  // lesson. The hand-off stays, and the new turn is never touched.
+  const { messages: safeHistory, withheld: withheldTurns } = crisisHistory.withholdCrisisTurns(priorHistory);
+  if (withheldTurns > 0) {
+    metrics.crisisTurnsWithheldTotal.inc({ kind: callKind }, withheldTurns);
+    logger.forRequest(req).info({ withheld: withheldTurns }, 'chat: earlier crisis turn(s) sent as a placeholder');
+  }
+  const apiMessages = safeHistory.length > 0
+    ? [...safeHistory, { role: 'user', content: latestContent }]
     : [{ role: 'user', content: latestContent }];
 
   // Lessons are ~9 turns and need the whole thread; free chat is bounded to
