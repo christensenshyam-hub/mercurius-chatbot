@@ -28,13 +28,14 @@ describe('APP_FACTS shape', () => {
     assert.ok(APP_FACTS.startsWith('## APP FACTS ('));
   });
 
-  test('stays about 180 tokens (measured 194 real Sonnet tokens at 708 chars)', () => {
+  test('stays about 230 tokens (measured 194 real Sonnet tokens at 708 chars)', () => {
     // 13 of those tokens are the pre-2.3 email fallback, which can go once
-    // 2.3 is the App Store build. 720 chars leaves room for a word or two,
-    // not for a new paragraph.
-    assert.ok(APP_FACTS.length <= 720, `too long: ${APP_FACTS.length} chars`);
+    // 2.3 is the App Store build. The 2026-10-19 review added the no-training
+    // fact and the 180-day report retention (885 chars). 900 chars
+    // leaves room for a word or two, not for a new paragraph.
+    assert.ok(APP_FACTS.length <= 900, `too long: ${APP_FACTS.length} chars`);
     assert.ok(APP_FACTS.length >= 400, `suspiciously short: ${APP_FACTS.length} chars`);
-    assert.ok(sb.staticSize(APP_FACTS).approxTokens <= 190);
+    assert.ok(sb.staticSize(APP_FACTS).approxTokens <= 235);
   });
 
   test('APP_FACTS_TAGGED wraps it in <app_facts> tags and nothing else', () => {
@@ -81,8 +82,15 @@ describe('the facts', () => {
   });
 
   test('AUD-03: what is stored, for how long, and how to delete it', () => {
-    assert.match(APP_FACTS, /Messages and photos go through the Mercurius server to Anthropic; the server keeps chats up to 90 days and photos 24 hours under a random ID, no name\./);
+    assert.match(APP_FACTS, /Messages and photos go through the Mercurius server to Anthropic; the server keeps chats up to 90 days, photos 24 hours and reported replies \(with the message before\) 180 days, under a random ID, no name\./);
     assert.match(APP_FACTS, /"Delete my data & start over" \(app: Settings; web: Privacy & your data\) erases it all \(before app 2\.3: email privacy@trymercurius\.com\)\./);
+  });
+
+  test('review 2026-10-19: Anthropic does not train on these chats by default', () => {
+    // In production (flag on) the tutor told students 5/5 times that
+    // "Anthropic may use conversations to improve its models", contradicting
+    // the privacy page.
+    assert.match(APP_FACTS, /Anthropic does not train its models on these chats by default; its own retention is in its terms at anthropic\.com\/legal\./);
   });
 
   test('AUD-03: no accounts and no school or teacher dashboards', () => {
@@ -103,10 +111,22 @@ describe('the facts', () => {
 });
 
 describe('the facts still match the server, the privacy page and the apps', () => {
-  test('retention: lib/scheduler.js defaults are 90 days (messages) and 24 hours (photos)', () => {
+  test('retention: lib/scheduler.js defaults are 90 days (messages), 24 hours (photos) and 180 days (reports)', () => {
     const src = read('lib', 'scheduler.js');
     assert.match(src, /env: 'MESSAGE_RETENTION_DAYS', def: 90,/);
     assert.match(src, /env: 'IMAGE_RETENTION_HOURS', def: 24,/);
+    assert.match(src, /env: 'REPORT_RETENTION_DAYS', def: 180,/);
+  });
+
+  test('reports and training: marketing/privacy.html says the same as APP_FACTS', () => {
+    const html = read('marketing', 'privacy.html').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    // A reported reply plus the message before it, kept 180 days.
+    assert.match(html, /that reply and the message you sent just before it are saved as a report on our server/);
+    assert.match(html, /Content reports 180 days, whether or not we have reviewed them\./);
+    // No training by default, and the page gives no Anthropic retention period
+    // of its own (APP_FACTS points to Anthropic's terms, as the page does).
+    assert.match(html, /Anthropic does not train future models on API requests by default\./);
+    assert.match(html, /Their terms are at anthropic\.com\/legal/);
   });
 
   test('retention + Anthropic + no accounts: marketing/privacy.html says the same', () => {
