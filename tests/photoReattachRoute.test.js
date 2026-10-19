@@ -19,6 +19,7 @@ const crypto = require('node:crypto');
 const Database = require('better-sqlite3');
 const { spawnServer } = require('./support/spawnServer');
 const { waitFor } = require('./support/waitFor');
+const { replyKey } = require('../lib/photoReattach');
 
 const SHARED = '[Shared an image]';
 const BLOCKS = ['blocks_v1'];
@@ -154,7 +155,16 @@ function sqlite(server) {
 function imageRow(server, id) {
   const db = sqlite(server);
   try {
-    return db.prepare('SELECT id, session_id, turn_key, turn_anchor, created_at FROM images WHERE id = ?').get(id);
+    return db.prepare('SELECT id, session_id, turn_key, turn_anchor, turn_reply, created_at FROM images WHERE id = ?').get(id);
+  } finally {
+    db.close();
+  }
+}
+
+function setImageReply(server, id, key) {
+  const db = sqlite(server);
+  try {
+    db.prepare('UPDATE images SET turn_reply = ? WHERE id = ?').run(key, id);
   } finally {
     db.close();
   }
@@ -219,6 +229,7 @@ describe('the photo lands on the turn it came with (AUD-10)', () => {
     assert.equal(imgs[0].index, 2, 'on the photo turn (hi, reply, PHOTO, reply, new)');
     assert.equal(imgs[0].data, p.b64, 'the bytes the student uploaded');
     assert.equal(imgs[0].text, SHARED);
+    assert.equal(imageRow(S, p.id).turn_reply, replyKey(p.reply.reply), 'the link records the reply iOS keeps');
     assert.equal(call.messages.length, 5);
     const last = call.messages[4];
     assert.equal(typeof last.content, 'string', 'the new turn carries no image');
@@ -289,6 +300,25 @@ describe('the photo lands on the turn it came with (AUD-10)', () => {
     const imgs = imagesIn(call);
     assert.deepEqual(imgs.map((i) => [i.index, i.data]), [[0, A.b64], [2, b2.toString('base64')]]);
     assert.ok(!imgs.some((i) => i.data === b1.toString('base64')), 'the cut-off upload is never shown');
+  });
+
+  test('two chats that each open with a photo: going back to the older one shows its own photo', async () => {
+    const S = servers.on;
+    const s = sid();
+    // Chat 1 opens with photo A, chat 2 (a New chat, same session) with B.
+    const c1 = thread();
+    const A = await sendPhotoTurn(S, s, c1, SHARED);
+    const c2 = thread();
+    const B = await sendPhotoTurn(S, s, c2, SHARED);
+    // The mock answers both alike; a real model describes each photo. Give
+    // chat 1 the reply a real model would have written for photo A.
+    const replyA = 'That worksheet asks you to solve 3(x - 4) + 5 = 2x + 9. Where do you start?';
+    c1.visible[1] = { role: 'assistant', content: replyA };
+    setImageReply(S, A.id, replyKey(replyA));
+    const back = await followUp(S, s, c1, 'ok what was number 7 again');
+    assert.deepEqual(imagesIn(back.call).map((i) => [i.index, i.data]), [[0, A.b64]], 'chat 1 gets A, not the newer B');
+    const on = await followUp(S, s, c2, 'and number 8?');
+    assert.deepEqual(imagesIn(on.call).map((i) => [i.index, i.data]), [[0, B.b64]]);
   });
 
   test('the JSON path re-attaches too', async () => {

@@ -1945,13 +1945,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   });
   // This turn's own photo is linked to this turn once the model has answered
   // it (streamed any text that was not a refusal): a photo the API rejected,
-  // or one that only drew a refusal, is never shown again.
+  // or one that only drew a refusal, is never shown again. The reply's start
+  // is recorded too, to tell apart two chats that each open with a photo.
   const photoLinkKeys = attachedImage ? photoReattach.keysForTurn(photoThread, photoThread.length - 1) : null;
   let photoLinked = false;
-  const linkPhoto = () => {
+  const linkPhoto = (replyText) => {
     if (!photoLinkKeys || photoLinked) return;
     photoLinked = true;
-    imageStore.link(imageId, sessionId, photoLinkKeys)
+    imageStore.link(imageId, sessionId, { ...photoLinkKeys, replyKey: photoReattach.replyKey(replyText) })
       .catch((err) => logger.forRequest(req).warn({ err: err.message }, 'chat: photo link failed'));
   };
   const apiMessages = priorHistory.length > 0
@@ -2126,7 +2127,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (stream.errored || stream.aborted) {
           // The API took the photo and began answering: a Stop or a dropped
           // stream mid-reply still leaves that turn in the student's thread.
-          if (modelSpoke) linkPhoto();
+          if (modelSpoke) linkPhoto(fullText);
           return;
         }
         // Drain the pipeline's hold-back so the tail reaches the client too.
@@ -2146,7 +2147,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const received = Array.isArray(stream.receivedMessages) ? stream.receivedMessages : [];
         const stopReason = received.length ? received[received.length - 1].stop_reason : null;
         const refused = isRefusedReply(stopReason, fullText);
-        if (!refused) linkPhoto();
         if (refused) {
           noteRefusal(req, callKind, stopReason);
           // Stream the safe text as well, for any client (and the eval) that
@@ -2162,6 +2162,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
+        if (!refused) linkPhoto(reply);
         noteCrisisReply(reply, callKind);
         if (lessonMeta) {
           recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
@@ -2261,7 +2262,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const replyText = (response.content && response.content[0] && response.content[0].text) || '';
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
-      else linkPhoto();
       // REFUSAL_COPY keeps its own line breaks; only a model reply goes
       // through the same transforms as the stream (lib/replyPipeline).
       const reflowed = refused
@@ -2277,6 +2277,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
+      if (!refused) linkPhoto(reply);
       noteCrisisReply(reply, callKind);
       if (lessonMeta) {
         recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');

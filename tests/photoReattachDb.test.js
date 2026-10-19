@@ -55,9 +55,12 @@ describe('db.linkImageTurn', () => {
     assert.equal(row.id, id);
     assert.equal(row.turnKey, KEYS.turnKey);
     assert.equal(row.anchorKey, KEYS.anchorKey);
+    assert.equal(row.replyKey, null);
     // A later link (the same id sent with another turn) replaces the keys.
-    assert.equal(await db.linkImageTurn(id, owner, { turnKey: 'c'.repeat(40), anchorKey: 'd'.repeat(40) }), true);
-    assert.equal((await db.linkedImages(owner, { sinceMs: 0 }))[0].turnKey, 'c'.repeat(40));
+    assert.equal(await db.linkImageTurn(id, owner, { turnKey: 'c'.repeat(40), anchorKey: 'd'.repeat(40), replyKey: 'e'.repeat(40) }), true);
+    const [again] = await db.linkedImages(owner, { sinceMs: 0 });
+    assert.equal(again.turnKey, 'c'.repeat(40));
+    assert.equal(again.replyKey, 'e'.repeat(40));
   });
 });
 
@@ -75,7 +78,8 @@ describe('db.linkedImages', () => {
     const rows = await db.linkedImages(s, { sinceMs: 0 });
     assert.deepEqual(rows.map((r) => r.id), [mid, old]);
     assert.ok(!rows.some((r) => r.id === unlinked));
-    assert.deepEqual(Object.keys(rows[0]).sort(), ['anchorKey', 'createdAt', 'id', 'sizeBytes', 'turnKey']);
+    assert.deepEqual(Object.keys(rows[0]).sort(), ['anchorKey', 'createdAt', 'id', 'replyKey', 'sizeBytes', 'turnKey']);
+    assert.equal(rows[0].replyKey, null, 'replyKey is optional');
     assert.equal(rows[0].sizeBytes, 20);
     assert.equal(typeof rows[0].createdAt, 'number');
     assert.deepEqual((await db.linkedImages(s, { sinceMs: now - 2500 })).map((r) => r.id), [mid], 'sinceMs bounds the age');
@@ -121,7 +125,7 @@ describe('imageStore re-attach window', () => {
 });
 
 describe('boot migration of an images table from before the columns', () => {
-  test('initSchema adds turn_key / turn_anchor once; old rows read back unlinked', () => {
+  test('initSchema adds turn_key / turn_anchor / turn_reply once; old rows read back unlinked', () => {
     const oldPath = path.join(os.tmpdir(), `merc-photo-old-${crypto.randomBytes(4).toString('hex')}.db`);
     const resultPath = `${oldPath}.json`;
     const Database = require('better-sqlite3');
@@ -168,7 +172,7 @@ describe('boot migration of an images table from before the columns', () => {
         try { fs.rmSync(f, { force: true }); } catch { /* ignore */ }
       }
     }
-    for (const c of ['turn_key', 'turn_anchor']) {
+    for (const c of ['turn_key', 'turn_anchor', 'turn_reply']) {
       assert.equal(r.cols.filter((n) => n === c).length, 1, `exactly one ${c} column`);
     }
     assert.deepEqual(r.before, [], 'a pre-upgrade photo is unlinked');

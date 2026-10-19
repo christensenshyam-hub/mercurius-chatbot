@@ -191,7 +191,7 @@ async function assertCurrentSchema() {
   const rep = await columns('reports');
   for (const c of ['user_message', 'context', 'resolved_at']) assert.ok(rep.has(c), `reports.${c} added`);
   const img = await columns('images');
-  for (const c of ['turn_key', 'turn_anchor']) assert.ok(img.has(c), `images.${c} added`);
+  for (const c of ['turn_key', 'turn_anchor', 'turn_reply']) assert.ok(img.has(c), `images.${c} added`);
   const ses = await columns('sessions');
   for (const c of ['difficulty_level', 'struggled_topics', 'streak', 'last_session_date', 'total_session_count', 'display_name']) {
     assert.ok(ses.has(c), `sessions.${c} present`);
@@ -372,13 +372,14 @@ await step('C3b photo re-attach: linkImageTurn (session-scoped) / linkedImages (
   const L = 'smoke-link-' + hex(8);
   const id = 'imglink' + hex(10);
   await db.saveImage({ id, sessionId: L, contentType: 'image/png', sizeBytes: 5, data: Buffer.from([1, 2, 3, 4, 5]), createdAt: now });
-  const keys = { turnKey: 'k'.repeat(40), anchorKey: 'a'.repeat(40) };
+  const keys = { turnKey: 'k'.repeat(40), anchorKey: 'a'.repeat(40), replyKey: 'r'.repeat(40) };
   assert.equal(await db.linkImageTurn(id, S, keys), false, 'another session cannot link it');
   assert.equal(await db.linkImageTurn(id, L, keys), true);
   const rows = await db.linkedImages(L, { sinceMs: now - 1000 });
   const row = rows.find((r) => r.id === id);
   assert.ok(row, 'listed');
-  assert.deepEqual(Object.keys(row).sort(), ['anchorKey', 'createdAt', 'id', 'sizeBytes', 'turnKey']);
+  assert.deepEqual(Object.keys(row).sort(), ['anchorKey', 'createdAt', 'id', 'replyKey', 'sizeBytes', 'turnKey']);
+  assert.equal(row.replyKey, keys.replyKey);
   assertNum(row.sizeBytes, 'linkedImages.sizeBytes');
   assertNum(row.createdAt, 'linkedImages.createdAt');
   assert.equal(row.sizeBytes, 5);

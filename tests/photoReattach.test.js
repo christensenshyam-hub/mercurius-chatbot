@@ -9,12 +9,14 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   canonicalText,
+  replyKey,
   keysForTurn,
   plan,
   apply,
   DEFAULT_MAX_TURNS,
   MAX_IMAGES,
   CANON_CHARS,
+  REPLY_CHARS,
 } = require('../lib/photoReattach');
 const { normalizeReplayedHistory } = require('../lib/curriculumTag');
 const { truncateUnits } = require('../lib/schemas');
@@ -24,10 +26,13 @@ const SHARED = '[Shared an image]';
 const u = (content) => ({ role: 'user', content });
 const a = (content) => ({ role: 'assistant', content });
 
-// A link as db.linkedImages returns it, for the turn at `i` of `thread`.
+// A link as db.linkedImages returns it, for the turn at `i` of `thread`
+// (with the reply that followed it, when the thread has one).
 function linkFor(id, thread, i, extra = {}) {
   const k = keysForTurn(thread, i);
-  return { id, turnKey: k.turnKey, anchorKey: k.anchorKey, sizeBytes: 1000, createdAt: 0, ...extra };
+  const next = thread[i + 1];
+  const rk = next && next.role === 'assistant' ? replyKey(next.content) : null;
+  return { id, turnKey: k.turnKey, anchorKey: k.anchorKey, replyKey: rk, sizeBytes: 1000, createdAt: 0, ...extra };
 }
 
 describe('canonicalText', () => {
@@ -36,6 +41,16 @@ describe('canonicalText', () => {
     assert.equal(canonicalText('x'.repeat(CANON_CHARS + 50)).length, CANON_CHARS);
     assert.equal(canonicalText(null), '');
     assert.equal(canonicalText(42), '');
+  });
+});
+
+describe('replyKey', () => {
+  test('the start of the reply: a cut-off copy of a long reply still matches', () => {
+    const full = 'That worksheet has two problems. ' + 'Number 7 asks you to solve for x. '.repeat(20);
+    assert.equal(replyKey(full), replyKey(full.slice(0, REPLY_CHARS + 5)));
+    assert.notEqual(replyKey(full), replyKey('A different reply.'));
+    assert.equal(replyKey('   '), null);
+    assert.equal(replyKey(undefined), null);
   });
 });
 
@@ -117,6 +132,19 @@ describe('plan', () => {
       linkFor('page1', thread, 0),
     ];
     assert.deepEqual(plan({ thread, links }), [{ index: 2, id: 'retry2' }, { index: 0, id: 'page1' }]);
+  });
+
+  test('two chats that each open with a photo-only turn: the reply that followed picks the photo', () => {
+    // Same text, nothing before it: the two turns share an anchor.
+    const chat1 = [u(SHARED), a('That worksheet is about solving for x.'), u('what is #8?')];
+    const chat2 = [u(SHARED), a('That is a graph of phone plan costs.'), u('what is #8?')];
+    assert.equal(keysForTurn(chat1, 0).anchorKey, keysForTurn(chat2, 0).anchorKey);
+    const links = [linkFor('newer', chat2, 0), linkFor('older', chat1, 0)]; // newest first
+    assert.deepEqual(plan({ thread: chat2, links }), [{ index: 0, id: 'newer' }]);
+    assert.deepEqual(plan({ thread: chat1, links }), [{ index: 0, id: 'older' }], 'not the newer chat\'s photo');
+    // No reply to go on (a link from before the reply was recorded): newest.
+    const bare = links.map((l) => ({ ...l, replyKey: null }));
+    assert.deepEqual(plan({ thread: chat1, links: bare }), [{ index: 0, id: 'newer' }]);
   });
 
   test('re-attached while at most maxTurns user turns follow the photo turn', () => {
