@@ -165,6 +165,11 @@ struct AppEntryView: View {
             }
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
             .onAppear {
+                // Every re-plan reads this week's lessons, so the weekly
+                // nudges skip a week whose goal is met (AUD-36).
+                scheduler.weekProgress = { [progress = env.progressStore] in
+                    Self.weekProgress(WeeklyPlan.compute(progress: progress))
+                }
                 #if os(iOS)
                 // Before this, a reminder tapped at cold launch is held by
                 // the router; setting the handler delivers it.
@@ -347,6 +352,11 @@ struct AppEntryView: View {
     }
 
     // MARK: - Reminders + routing
+
+    /// The weekly plan in the reminder planner's terms.
+    static func weekProgress(_ plan: WeeklyPlan) -> ReminderPlanner.WeekProgress {
+        ReminderPlanner.WeekProgress(weekStart: plan.weekStart, done: plan.done, goal: plan.goal)
+    }
 
     private func refreshNotificationPermission() async {
         notificationPermission = await ReminderCardStore.notificationPermission()
