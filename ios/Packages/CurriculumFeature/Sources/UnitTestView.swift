@@ -181,7 +181,7 @@ public struct UnitTestView: View {
                 .tracking(1.2)
                 .foregroundStyle(BrandColor.accentText)
             Text("Nice — \(model.mcqScore)/\(model.mcqTotal) on the quiz. One written question left, graded by Mercurius.")
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -224,7 +224,7 @@ public struct UnitTestView: View {
 
             if let error = model.defenseError {
                 Text(error)
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.errorText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -284,7 +284,7 @@ public struct UnitTestView: View {
 
             if let defense = model.defenseResult {
                 Text(defense.feedback)
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -292,7 +292,7 @@ public struct UnitTestView: View {
 
             if passed {
                 Text("You've shown real command of \(model.unit.title). This unit is now marked mastered.")
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -301,7 +301,7 @@ public struct UnitTestView: View {
                 Text(model.mcqPassed
                      ? "Your written answer needs more depth. Revisit the unit and try the test again."
                      : "Review the unit's lessons, then retake the test when you're ready.")
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
