@@ -626,6 +626,29 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// AUD-35: consent is recorded at "Got it", one screen before the flow
+    /// ends. An app closed on Your path reopens there, not on Meet Merc.
+    @MainActor
+    func testInterruptedFirstRunResumesOnYourPath() {
+        let app = launchApp(extraArgs: [
+            "-hasSeenOnboarding", "NO",
+            "-consentVersion", "1",   // ConsentGate.currentVersion: agreed at "Got it"
+        ])
+
+        XCTAssertTrue(
+            onboardingElement(app, "onboarding.startLesson1").waitForExistence(timeout: Self.firstScreenTimeout),
+            "An interrupted first run with consent on record should reopen on Your path"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.continue").exists,
+            "An interrupted first run must not replay Meet Merc"
+        )
+        XCTAssertFalse(
+            onboardingElement(app, "onboarding.agePicker").exists,
+            "An interrupted first run must not ask for the age again"
+        )
+    }
+
     @MainActor
     func testUnderThirteenIsBlocked() {
         let app = launchApp(extraArgs: Self.freshInstallArgs)

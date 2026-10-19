@@ -18,6 +18,9 @@ import PersistenceKit
 ///   `ConsentGate.currentVersion`, or that withdrew consent in Settings):
 ///   age → disclosure → limits, then the flow unmounts and Home shows.
 /// - Either mode opens on the under-13 screen while a block is in force.
+/// - A full run that already recorded consent (the app was closed on Your
+///   path) reopens on Your path rather than replaying Meet Merc, the age
+///   check and the agreement (AUD-35).
 struct OnboardingFlow: View {
     enum Mode {
         case full
@@ -76,7 +79,17 @@ struct OnboardingFlow: View {
         self.onGateCleared = onGateCleared
         _step = State(initialValue:
             Self.debugStartStep(arguments: ProcessInfo.processInfo.arguments)
-            ?? Self.initialStep(for: mode, ageBlocked: ageBlockStore.isActive()))
+            ?? Self.initialStep(
+                for: mode,
+                ageBlocked: ageBlockStore.isActive(),
+                consentCurrent: Self.consentIsCurrent(defaults: .standard)
+            ))
+    }
+
+    /// Whether the agreement on record is the current one, read from the
+    /// same defaults `@AppStorage` reads (argument domain included).
+    static func consentIsCurrent(defaults: UserDefaults) -> Bool {
+        !ConsentGate.needsGate(storedVersion: defaults.integer(forKey: ConsentGate.storageKey))
     }
 
     var body: some View {
@@ -181,9 +194,17 @@ struct OnboardingFlow: View {
 
     // MARK: - Routing (pure; covered by OnboardingFlowRoutingTests)
 
-    static func initialStep(for mode: Mode, ageBlocked: Bool = false) -> Step {
+    /// Where the flow opens. Consent is recorded at "Got it", one screen
+    /// before the full flow ends, so a full run that finds it current was
+    /// interrupted on Your path and resumes there (AUD-35). A block always
+    /// wins: the under-13 screen also drops consent, so both can't hold
+    /// unless a clock was set back.
+    static func initialStep(for mode: Mode, ageBlocked: Bool = false, consentCurrent: Bool = false) -> Step {
         if ageBlocked { return .underThirteen }
-        return mode == .full ? .meet : .age
+        switch mode {
+        case .full: return consentCurrent ? .path : .meet
+        case .gateOnly: return .age
+        }
     }
 
     static func step(afterAgeEligible eligible: Bool) -> Step {

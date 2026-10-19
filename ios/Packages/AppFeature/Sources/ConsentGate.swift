@@ -18,10 +18,14 @@ public enum ConsentGate {
 public enum AgeGate {
     public static let minimumAge = 13
 
-    /// Every row the age wheel offers, youngest first. The ends are open
+    /// Every row the age wheel offers, in wheel order: oldest first, so the
+    /// row right under the resting "Select your age" placeholder is "18 or
+    /// older" and the one blocked answer, "12 or younger", sits at the far
+    /// end. A student who nudges the wheel one row and taps Continue can't
+    /// land on the under-13 screen by accident (AUD-28). The ends are open
     /// buckets so the picker never asks for more precision than the check
     /// needs.
-    public static let choices: [Int] = Array(12...18)
+    public static let choices: [Int] = Array((12...18).reversed())
 
     public static func isEligible(age: Int) -> Bool {
         age >= minimumAge
