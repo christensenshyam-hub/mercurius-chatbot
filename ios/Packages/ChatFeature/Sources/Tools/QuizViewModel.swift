@@ -7,6 +7,7 @@ import PersistenceKit
 ///
 ///   .loading → .ready → (.answered per question) → .finished
 ///           ↘ .failed(reason, retryable)
+///           ↘ .support (the server read the conversation as a crisis)
 ///
 /// The view model is `@MainActor` + `@Observable`; all mutation happens
 /// on the main thread so SwiftUI bindings observe changes cleanly.
@@ -18,6 +19,10 @@ public final class QuizViewModel {
         case loading
         case ready(Quiz)
         case failed(reason: String, isRetryable: Bool)
+        /// The server answered the quiz request with crisis support (its 503
+        /// `{error:"crisis", …}`): show the hotlines, never an error with
+        /// "Try again" — the same conversation gets the same answer.
+        case support
     }
 
     public private(set) var phase: Phase = .loading
@@ -62,6 +67,8 @@ public final class QuizViewModel {
             phase = .ready(quiz)
             selections = [:]
             isSubmitted = false
+        } catch APIError.crisisSupport {
+            phase = .support
         } catch let error as APIError {
             phase = .failed(
                 reason: error.userFacingMessage,

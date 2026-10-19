@@ -73,6 +73,12 @@ public struct RootView: View {
             ReplyFontGalleryView()
         } else if ProcessInfo.processInfo.arguments.contains("-UnitTestCrisisPreview") {
             unitTestCrisisPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
+            QuizView(
+                model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
+                dismissAction: {}
+            )
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
         } else {
             mainBody
         }
@@ -371,6 +377,20 @@ private struct UnitTestCrisisPreviewHost: View {
                 model.defenseAnswer = "DEBUG crisis preview answer."
                 await model.submitDefense()
             }
+    }
+}
+
+/// DEBUG `-QuizCrisisPreview`: `/api/quiz`'s crisis answer (server.js
+/// CRISIS_RESULT, a 503) through the real `APIClient.validate`, so the quiz
+/// sheet's support state can be screenshotted. No network call is made.
+private struct CrisisPreviewTools: ToolsProviding {
+    func generateQuiz(sessionId: String) async throws -> Quiz {
+        try APIClient.validate(statusCode: 503, data: Data(UnitTestCrisisPreviewHost.helper503.utf8))
+        throw APIError.unknown(underlying: "unreachable")
+    }
+
+    func generateReportCard(sessionId: String) async throws -> ReportCard {
+        throw APIError.unknown(underlying: "unused")
     }
 }
 #endif

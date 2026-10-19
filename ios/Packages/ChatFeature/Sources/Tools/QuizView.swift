@@ -27,6 +27,12 @@ public struct QuizView: View {
                     content(for: quiz)
                 case .failed(let reason, let retryable):
                     failureView(reason: reason, retryable: retryable)
+                case .support:
+                    ScrollView {
+                        CrisisSupportView(closeTitle: "Close", onClose: dismissAction)
+                            .padding(.horizontal, BrandSpacing.lg)
+                            .padding(.vertical, BrandSpacing.lg)
+                    }
                 }
             }
             .background(BrandColor.background)
