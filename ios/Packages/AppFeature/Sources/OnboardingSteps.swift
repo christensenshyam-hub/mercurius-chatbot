@@ -13,6 +13,10 @@ import DesignSystem
 struct GateStepContainer<Content: View, CTA: View>: View {
     let title: String
     let subtitle: String?
+    /// The heading scrolls with the content at every size, not only at
+    /// accessibility sizes. For a screen whose pinned controls are tall
+    /// (the disclosure's consent switch), so its rows get the room.
+    let headingAlwaysScrolls: Bool
     let content: () -> Content
     let cta: () -> CTA
 
@@ -21,23 +25,26 @@ struct GateStepContainer<Content: View, CTA: View>: View {
     init(
         title: String,
         subtitle: String? = nil,
+        headingAlwaysScrolls: Bool = false,
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder cta: @escaping () -> CTA
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.headingAlwaysScrolls = headingAlwaysScrolls
         self.content = content
         self.cta = cta
     }
 
     /// Whether the heading scrolls with the content rather than sitting
-    /// above it.
-    static func headingScrolls(at size: DynamicTypeSize) -> Bool {
-        size.isAccessibilitySize
+    /// above it. It starts in the same place either way; it only differs
+    /// once the student scrolls.
+    static func headingScrolls(at size: DynamicTypeSize, always: Bool = false) -> Bool {
+        always || size.isAccessibilitySize
     }
 
     var body: some View {
-        let headingScrolls = Self.headingScrolls(at: dynamicTypeSize)
+        let headingScrolls = Self.headingScrolls(at: dynamicTypeSize, always: headingAlwaysScrolls)
         VStack(spacing: BrandSpacing.xl) {
             if !headingScrolls {
                 heading
@@ -345,7 +352,10 @@ struct DisclosureStep: View {
         let pinsToggle = Self.pinsConsentToggle(at: dynamicTypeSize)
         GateStepContainer(
             title: "Before you start",
-            subtitle: "Here's exactly what happens with what you type."
+            subtitle: "Here's exactly what happens with what you type.",
+            // With the switch pinned, the heading scrolls away so the rows
+            // get its room: on an SE at xxxLarge the rows had a ~75 pt window.
+            headingAlwaysScrolls: pinsToggle
         ) {
             VStack(alignment: .leading, spacing: BrandSpacing.lg) {
                 ForEach(Self.rows, id: \.symbol) { row in
@@ -384,15 +394,30 @@ struct DisclosureStep: View {
         }
     }
 
+    /// The agreement row. The sentence is part of the tap target, as a
+    /// checkbox label is: a SwiftUI `Toggle` only flips on its switch, and a
+    /// student who taps the sentence they just read got nothing. VoiceOver
+    /// meets one switch, labelled with the sentence (the visible copy is
+    /// hidden from it so it isn't read twice).
     private var consentToggle: some View {
-        Toggle(isOn: $agreed) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: BrandSpacing.sm))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: BrandSpacing.md))
+        return layout {
             Text(Self.toggleText)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { agreed.toggle() }
+                .accessibilityHidden(true)
+
+            Toggle(Self.toggleText, isOn: $agreed)
+                .labelsHidden()
+                .tint(BrandColor.accent)
+                .accessibilityIdentifier("onboarding.consentToggle")
         }
-        .tint(BrandColor.accent)
-        .accessibilityIdentifier("onboarding.consentToggle")
         .padding(BrandSpacing.md)
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))

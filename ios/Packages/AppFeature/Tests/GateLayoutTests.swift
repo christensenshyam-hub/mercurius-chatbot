@@ -16,6 +16,14 @@ struct GateLayoutTests {
         #expect(Container.headingScrolls(at: .accessibility5))
     }
 
+    @Test("A screen can scroll its heading at every size (the disclosure, whose switch is pinned)")
+    func headingAlwaysScrolls() {
+        typealias Container = GateStepContainer<EmptyView, EmptyView>
+        #expect(Container.headingScrolls(at: .large, always: true))
+        #expect(Container.headingScrolls(at: .xxxLarge, always: true))
+        #expect(!Container.headingScrolls(at: .large, always: false))
+    }
+
     @Test("The age wheel never shrinks below three rows")
     func wheelHeight() {
         #expect(AgeStep.wheelMinHeight >= 120)

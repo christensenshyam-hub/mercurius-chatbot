@@ -720,6 +720,39 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// AUD-50: the consent switch is pinned above "Agree and continue" on a
+    /// short screen, and its sentence is part of the tap target: a student
+    /// who taps what they just read turns it on (a bare SwiftUI Toggle only
+    /// flips on the switch). The switch itself carries the sentence for
+    /// VoiceOver.
+    @MainActor
+    func testConsentSentenceTogglesTheSwitch() {
+        let app = launchApp(extraArgs: Self.freshInstallArgs + ["-GateStep", "disclosure"])
+        let toggle = onboardingElement(app, "onboarding.consentToggle")
+        XCTAssertTrue(toggle.waitForExistence(timeout: Self.firstScreenTimeout), "Consent switch missing")
+        XCTAssertTrue(toggle.isHittable, "The consent switch should be on screen without scrolling")
+        XCTAssertTrue(toggle.label.hasPrefix("I understand my messages"), "The switch should carry the sentence: '\(toggle.label)'")
+        XCTAssertEqual(toggle.value as? String, "0")
+
+        // The sentence sits to the left of the switch, in the same row.
+        let sentence = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: toggle.frame.minX - 120, dy: toggle.frame.midY))
+        sentence.tap()
+        XCTAssertTrue(waitForValue(toggle, "1"), "Tapping the sentence didn't turn the switch on")
+        sentence.tap()
+        XCTAssertTrue(waitForValue(toggle, "0"), "Tapping the sentence again didn't turn it off")
+        toggle.tap()
+        XCTAssertTrue(waitForValue(toggle, "1"), "Tapping the switch didn't turn it on")
+        XCTAssertTrue(onboardingElement(app, "onboarding.agree").isEnabled, "Agree stays disabled with the switch on")
+    }
+
+    @MainActor
+    private func waitForValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval = 3) -> Bool {
+        let predicate = NSPredicate(format: "value == %@", value)
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)],
+                                timeout: timeout) == .completed
+    }
+
     @MainActor
     func testUnderThirteenIsBlocked() {
         let app = launchApp(extraArgs: Self.freshInstallArgs)
