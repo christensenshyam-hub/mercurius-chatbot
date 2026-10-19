@@ -59,6 +59,27 @@ struct UnitDefenseGradingTests {
         #expect(UnitDefenseGrading.gradingError(for: .crisisSupport(message: "988")) == .crisis)
     }
 
+    @Test("A school filter's page names the network and leaves the answer free to resend (AUD-32)")
+    func blockedNetworkDoesNotLockTheAnswer() async throws {
+        #expect(UnitDefenseGrading.gradingError(for: .unreachableOnThisNetwork)
+                == .refused(message: APIError.unreachableOnThisNetwork.userFacingMessage, isRetryable: true))
+
+        let unit = try #require(MercuriusCurriculum.units.first)
+        let test = try #require(MercuriusCurriculum.unitTest(for: unit.id))
+        let model = UnitTestViewModel(unit: unit, test: test) { _ in
+            try await UnitDefenseGrading.grade { throw APIError.unreachableOnThisNetwork }
+        }
+        for question in model.questions { model.select(question.answer, for: question.id) }
+        model.submitQuiz()
+        model.continueAfterQuiz()
+        model.defenseAnswer = "An answer."
+        await model.submitDefense()
+        #expect(model.defenseError?.contains("network may be blocking Mercurius") == true)
+        // Before AUD-32 a block page decoded as `.decoding`, not retryable,
+        // and this same answer could not be sent again.
+        #expect(model.canSubmitDefense)
+    }
+
     @Test("End to end: the server's crisis payload takes the unit test to support, never a result")
     func viewModelReachesSupport() async throws {
         let unit = try #require(MercuriusCurriculum.units.first)

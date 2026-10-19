@@ -14,8 +14,10 @@ public enum APIError: Error, Equatable, Sendable {
 
     /// The device has a working network path, but this network would not
     /// let the request reach the server: DNS or connect refused, TLS
-    /// intercepted, or a proxy's own 401/403 page — what a school content
-    /// filter produces.
+    /// intercepted, a connection that never got through before the timeout,
+    /// or a page that isn't ours (a proxy's own 401/403, or a 2xx HTML block
+    /// or sign-in page in place of our JSON or event stream) — what a school
+    /// content filter or a captive portal produces.
     case unreachableOnThisNetwork
 
     /// The request took longer than the configured timeout.
@@ -81,7 +83,7 @@ public enum APIError: Error, Equatable, Sendable {
         case .connectionLost:
             return "The connection dropped. Try again."
         case .unreachableOnThisNetwork:
-            return "Can't reach Mercurius on this network. Try cellular data or a different Wi-Fi."
+            return "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi."
         case .messageTooLong:
             return "That message is too long — try a shorter one."
         case .timeout:

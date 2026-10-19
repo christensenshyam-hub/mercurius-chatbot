@@ -315,6 +315,23 @@ struct ChatViewModelErrorTests {
 
         #expect(model.phase == .failed(reason: copy, isRetryable: true))
     }
+
+    // MARK: Network failures (AUD-32)
+
+    @Test("A network that blocks Mercurius says so, with Retry")
+    func blockedNetwork() async throws {
+        let client = FakeChatClient()
+        client.outcome = .failure(APIError.unreachableOnThisNetwork)
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(
+            reason: "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi.",
+            isRetryable: true
+        ))
+    }
 }
 
 @Suite("ChatViewModel retry")
