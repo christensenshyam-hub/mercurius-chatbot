@@ -7,8 +7,14 @@ struct MessageListGeometry: Equatable, Sendable {
     /// the student has scrolled down.
     var contentMinY: CGFloat = 0
     var contentHeight: CGFloat = 0
-    /// Height of the visible reading area (it shrinks when the keyboard is up).
+    /// Height of the visible reading area (it shrinks when the keyboard is up,
+    /// and while the "Jump to latest" pill takes its strip below the list).
     var viewportHeight: CGFloat = 0
+    /// Height of the whole area the list and the pill's strip share. It
+    /// doesn't change when the pill comes or goes, so whether the pill fits
+    /// is judged on it (judged on the shrunken list, the pill would hide
+    /// itself again). 0 until measured; then the larger of the two counts.
+    var readingAreaHeight: CGFloat = 0
     /// Top of the latest message's row. `.infinity` until that row has been
     /// laid out — a value from an earlier message must never stand in for it.
     var latestMessageMinY: CGFloat = .infinity
@@ -96,9 +102,16 @@ struct MessageScrollPolicy: Equatable, Sendable {
     }
 
     /// Something below the latest message appeared or went (the Retry or
-    /// Explain more footer). Someone following keeps seeing the end.
-    func footerChanged() -> Action {
-        isFollowing ? .scrollToBottom(animated: true) : .none
+    /// Explain more footer), or the latest reply failed. Someone following
+    /// keeps seeing the end — except when the latest message is a failure
+    /// line alone (the reply failed before any text): then it opens at its
+    /// first line, as a reply does. Scrolling its top to the top of the
+    /// reading area stops at the end of the thread, so a failure that fits
+    /// lands exactly as the bottom would, Retry and all; one taller than the
+    /// reading area (an SE at AX5) no longer opens mid-sentence at its end.
+    func footerChanged(latestIsBareFailure: Bool = false) -> Action {
+        guard isFollowing else { return .none }
+        return latestIsBareFailure ? .showLatestMessageTop : .scrollToBottom(animated: true)
     }
 
     /// The student tapped "Jump to latest".
@@ -150,9 +163,14 @@ struct MessageScrollPolicy: Equatable, Sendable {
         geometry.latestMessageMinY = minY
     }
 
-    /// Whether the "Jump to latest" pill shows.
+    /// Whether the "Jump to latest" pill shows. It takes its own strip below
+    /// the list rather than floating over the last lines (it covered a line
+    /// of a reply, and with the keyboard up a large share of what was
+    /// visible). The strip shrinks the list, which only moves the end further
+    /// away, so the pill can't flicker: it shows beyond `pillDistance` and
+    /// hides within it, measured with the strip in place.
     var showsJumpPill: Bool {
-        geometry.viewportHeight >= Self.pillMinimumViewport
+        max(geometry.viewportHeight, geometry.readingAreaHeight) >= Self.pillMinimumViewport
             && geometry.distanceFromBottom > Self.pillDistance
     }
 }

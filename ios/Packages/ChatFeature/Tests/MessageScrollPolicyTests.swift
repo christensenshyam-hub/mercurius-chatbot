@@ -266,6 +266,22 @@ struct MessageScrollPolicyTests {
         #expect(following.footerChanged() == .none)
     }
 
+    @Test("A failure line alone opens at its first line; one that fits still lands at the end")
+    func bareFailureOpensAtItsTop() {
+        let following = policy(at: layout(offset: 400, content: 1_000))
+        // `showLatestMessageTop` scrolls the row's top to the top of the
+        // reading area, which stops at the end of the thread: a short
+        // failure lands where the bottom would, Retry in view; one taller
+        // than the reading area (an SE at AX5) shows its first sentence.
+        #expect(following.footerChanged(latestIsBareFailure: true) == .showLatestMessageTop)
+        #expect(following.footerChanged(latestIsBareFailure: false) == .scrollToBottom(animated: true))
+
+        var reading = policy(at: layout(offset: 400, content: 1_000))
+        _ = reading.geometryChanged(layout(offset: 100, content: 1_000))
+        #expect(reading.footerChanged(latestIsBareFailure: true) == .none,
+                "a student who scrolled up to re-read stays where they are")
+    }
+
     @Test("Jump to latest goes to the bottom and resumes following")
     func jumpToLatest() {
         var policy = policy(at: layout(offset: 400, content: 1_000))
@@ -286,6 +302,38 @@ struct MessageScrollPolicyTests {
         #expect(policy(at: layout(offset: 200, content: 1_000, viewport: 272)).showsJumpPill,
                 "an SE at the default size with the keyboard up does")
         #expect(!MessageScrollPolicy().showsJumpPill, "nothing laid out yet")
+    }
+
+    @Test("The pill's own strip can't make it hide itself again")
+    func pillStripDoesNotFlicker() {
+        // 200 pt to share: the pill shows, and its ~52 pt strip leaves the
+        // list 148 pt. Judged on the list alone it would hide again (below
+        // the 180 pt minimum), bring the 200 pt back, show, and so on.
+        var area = layout(offset: 200, content: 1_000, viewport: 148)
+        area.readingAreaHeight = 200
+        #expect(policy(at: area).showsJumpPill)
+
+        // The strip only moves the end further away: once the student is
+        // within `pillDistance` with the strip in place, it goes, and taking
+        // the strip out brings the end closer still.
+        var near = layout(offset: 800, content: 1_000, viewport: 148)
+        near.readingAreaHeight = 200
+        #expect(!policy(at: near).showsJumpPill)
+        var nearWithoutStrip = layout(offset: 800, content: 1_000, viewport: 200)
+        nearWithoutStrip.readingAreaHeight = 200
+        #expect(!policy(at: nearWithoutStrip).showsJumpPill)
+
+        // A small area stays pill-free however it's measured.
+        var small = layout(offset: 200, content: 1_000, viewport: 150)
+        small.readingAreaHeight = 150
+        #expect(!policy(at: small).showsJumpPill)
+    }
+
+    @Test("Showing or hiding the pill's strip doesn't move a student who isn't at the end")
+    func pillStripResizeLeavesReaderAlone() {
+        var policy = policy(at: layout(offset: 200, content: 1_000, viewport: 600))
+        #expect(policy.geometryChanged(layout(offset: 200, content: 1_000, viewport: 548)) == .none)
+        #expect(policy.geometryChanged(layout(offset: 200, content: 1_000, viewport: 600)) == .none)
     }
 }
 
@@ -392,5 +440,28 @@ struct LessonReplayFixtureTests {
             #expect(quizzes.count == 1)
             #expect(quizzes.first?.isWellFormed == true)
         }
+    }
+}
+
+@Suite("The end of the thread (AUD-09, AUD-29)")
+@MainActor
+struct ThreadEndTests {
+
+    @Test("A reply that failed before any text is a failure line alone")
+    func bareFailure() {
+        #expect(MessageListView.isBareFailure(
+            ChatMessage(role: .assistant, content: "", status: .failed(reason: "This network may be blocking Mercurius."))))
+        #expect(MessageListView.isBareFailure(
+            ChatMessage(role: .assistant, content: "  \n", status: .failed(reason: "Network error. Try again."))))
+    }
+
+    @Test("A cut-off reply, a reply still streaming, a settled reply and the student's turn are not")
+    func notBareFailure() {
+        #expect(!MessageListView.isBareFailure(
+            ChatMessage(role: .assistant, content: "Half a reply", status: .failed(reason: "Network error. Try again."))))
+        #expect(!MessageListView.isBareFailure(ChatMessage(role: .assistant, content: "", status: .streaming)))
+        #expect(!MessageListView.isBareFailure(ChatMessage(role: .assistant, content: "Done.")))
+        #expect(!MessageListView.isBareFailure(ChatMessage(role: .user, content: "")))
+        #expect(!MessageListView.isBareFailure(nil))
     }
 }

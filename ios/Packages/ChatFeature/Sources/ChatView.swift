@@ -453,6 +453,25 @@ struct MessageListView: View {
         return shouldShowExplainMore ? .explainMore : .none
     }
 
+    /// What sits at the end of the thread: the footer, and whether the latest
+    /// message is a failure line alone. When it changes, the end moves.
+    private struct ThreadEnd: Equatable {
+        let footer: Footer
+        let latestIsBareFailure: Bool
+    }
+
+    private var threadEnd: ThreadEnd {
+        ThreadEnd(footer: footer, latestIsBareFailure: Self.isBareFailure(messages.last))
+    }
+
+    /// A reply that failed before any text arrived: its row is the failure
+    /// line alone (and Retry, when it helps).
+    static func isBareFailure(_ message: ChatMessage?) -> Bool {
+        guard let message, message.role == .assistant,
+              case .failed = message.status else { return false }
+        return message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// The coach row exists (it collapses rather than leaves while the
     /// student types — taking the first row out of a lazy stack scrolled far
     /// down can leave it laid out blank).
@@ -486,109 +505,123 @@ struct MessageListView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                ThreadStack(lazy: !lessonStyle) {
-                    if let coach, hasCoachRow {
-                        MercCoachCard(line: coach.line, reaction: coach.reaction,
-                                      liveActivity: coach.activity)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .onGeometryChange(for: CGFloat.self) { geo in
-                                geo.size.height
-                            } action: { height in
-                                scroll.coachHeight = height
-                            }
-                            .frame(height: coachHiddenForTyping ? 0 : nil, alignment: .top)
-                            .clipped()
-                            .opacity(coachHiddenForTyping ? 0 : 1)
-                            .accessibilityHidden(coachHiddenForTyping)
-                            .id(Self.coachID)
-                    }
-
-                    if showsCoachIntro {
-                        coachIntro
-                            .transition(reduceMotion
-                                ? .opacity
-                                : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
-                    }
-
-                    ForEach(messages) { message in
-                        let isFocal = message.id == focalAssistantId
-                        // One live Merc at a time: while the coach intro is up
-                        // it carries the thinking/speaking motion and the
-                        // message avatars stay neutral; after it collapses the
-                        // latest assistant avatar becomes the live one.
-                        let isLive = isFocal && !showsCoachIntro
-                        MessageBubbleView(
-                            message: message,
-                            onReport: { reason in onReport(message, reason) },
-                            lessonStyle: lessonStyle,
-                            showAvatar: !lessonStyle,
-                            avatarMood: isLive ? mercMood : .neutral,
-                            avatarActivity: isLive ? mercActivity : .idle,
-                            avatarIdleLife: isLive,
-                            onCheckTap: onCheckTap,
-                            quizInteraction: quizInteraction(for: message)
-                        )
-                        .equatable()
-                        .id(message.id)
-                        .onGeometryChange(for: CGFloat.self) { geo in
-                            geo.frame(in: .named(messageListSpace)).minY
-                        } action: { minY in
-                            if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
+            VStack(spacing: 0) {
+                ScrollView {
+                    ThreadStack(lazy: !lessonStyle) {
+                        if let coach, hasCoachRow {
+                            MercCoachCard(line: coach.line, reaction: coach.reaction,
+                                          liveActivity: coach.activity)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onGeometryChange(for: CGFloat.self) { geo in
+                                    geo.size.height
+                                } action: { height in
+                                    scroll.coachHeight = height
+                                }
+                                .frame(height: coachHiddenForTyping ? 0 : nil, alignment: .top)
+                                .clipped()
+                                .opacity(coachHiddenForTyping ? 0 : 1)
+                                .accessibilityHidden(coachHiddenForTyping)
+                                .id(Self.coachID)
                         }
-                    }
 
-                    if case .failed(_, let isRetryable) = phase, isRetryable {
-                        retryFooter
-                            .id("retry-footer")
-                    } else if shouldShowExplainMore {
-                        // Soft footer surfaced after the assistant has
-                        // finished a turn and the user is idle. Mirrors
-                        // the spec's "first answer concise; user taps
-                        // for depth" loop. Disabled while sending so
-                        // taps don't queue alongside an in-flight send.
-                        explainMoreFooter
-                            .id("explain-more-footer")
-                    }
+                        if showsCoachIntro {
+                            coachIntro
+                                .transition(reduceMotion
+                                    ? .opacity
+                                    : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+                        }
 
-                    // The end of the thread, below every footer: what
-                    // "scroll to the bottom" aims at.
-                    Color.clear
-                        .frame(height: 1)
-                        .id(Self.bottomID)
-                        .accessibilityHidden(true)
+                        ForEach(messages) { message in
+                            let isFocal = message.id == focalAssistantId
+                            // One live Merc at a time: while the coach intro is up
+                            // it carries the thinking/speaking motion and the
+                            // message avatars stay neutral; after it collapses the
+                            // latest assistant avatar becomes the live one.
+                            let isLive = isFocal && !showsCoachIntro
+                            MessageBubbleView(
+                                message: message,
+                                onReport: { reason in onReport(message, reason) },
+                                lessonStyle: lessonStyle,
+                                showAvatar: !lessonStyle,
+                                avatarMood: isLive ? mercMood : .neutral,
+                                avatarActivity: isLive ? mercActivity : .idle,
+                                avatarIdleLife: isLive,
+                                onCheckTap: onCheckTap,
+                                quizInteraction: quizInteraction(for: message)
+                            )
+                            .equatable()
+                            .id(message.id)
+                            .onGeometryChange(for: CGFloat.self) { geo in
+                                geo.frame(in: .named(messageListSpace)).minY
+                            } action: { minY in
+                                if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
+                            }
+                        }
+
+                        if case .failed(_, let isRetryable) = phase, isRetryable {
+                            retryFooter
+                                .id("retry-footer")
+                        } else if shouldShowExplainMore {
+                            // Soft footer surfaced after the assistant has
+                            // finished a turn and the user is idle. Mirrors
+                            // the spec's "first answer concise; user taps
+                            // for depth" loop. Disabled while sending so
+                            // taps don't queue alongside an in-flight send.
+                            explainMoreFooter
+                                .id("explain-more-footer")
+                        }
+
+                        // The end of the thread, below every footer: what
+                        // "scroll to the bottom" aims at.
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.bottomID)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.vertical, BrandSpacing.md)
+                    // Gated like every other explicit animation in the app: under
+                    // Reduce Motion the intro just disappears (its transition is
+                    // already opacity-only) instead of sliding the thread up.
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.25),
+                               value: showsCoachIntro)
+                    .onGeometryChange(for: CGRect.self) { geo in
+                        geo.frame(in: .named(messageListSpace))
+                    } action: { frame in
+                        var geometry = scroll.policy.geometry
+                        geometry.contentMinY = frame.minY
+                        geometry.contentHeight = frame.height
+                        layoutChanged(geometry, proxy: proxy)
+                    }
                 }
-                .padding(.vertical, BrandSpacing.md)
-                // Gated like every other explicit animation in the app: under
-                // Reduce Motion the intro just disappears (its transition is
-                // already opacity-only) instead of sliding the thread up.
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.25),
-                           value: showsCoachIntro)
-                .onGeometryChange(for: CGRect.self) { geo in
-                    geo.frame(in: .named(messageListSpace))
-                } action: { frame in
+                .coordinateSpace(.named(messageListSpace))
+                .modifier(StudentScrollTracking { scrolling in
+                    scroll.policy.studentScrolling(scrolling)
+                })
+                .onGeometryChange(for: CGFloat.self) { geo in
+                    geo.size.height
+                } action: { height in
                     var geometry = scroll.policy.geometry
-                    geometry.contentMinY = frame.minY
-                    geometry.contentHeight = frame.height
+                    geometry.viewportHeight = height
                     layoutChanged(geometry, proxy: proxy)
                 }
+
+                // The pill's own strip under the list, never over the text: as
+                // an overlay it covered a line of the reply it pointed past, and
+                // with the keyboard up a large share of what was visible.
+                if showsJumpPill {
+                    jumpToLatestPill(proxy: proxy)
+                        .frame(maxWidth: .infinity)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
+                }
             }
-            .coordinateSpace(.named(messageListSpace))
-            .modifier(StudentScrollTracking { scrolling in
-                scroll.policy.studentScrolling(scrolling)
-            })
+            // The list and the strip together: whether the pill fits is
+            // judged on this, which the strip doesn't change.
             .onGeometryChange(for: CGFloat.self) { geo in
                 geo.size.height
             } action: { height in
                 var geometry = scroll.policy.geometry
-                geometry.viewportHeight = height
+                geometry.readingAreaHeight = height
                 layoutChanged(geometry, proxy: proxy)
-            }
-            .overlay(alignment: .bottom) {
-                if showsJumpPill {
-                    jumpToLatestPill(proxy: proxy)
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
-                }
             }
             .onChange(of: messages.last?.id) { _, newValue in
                 guard newValue != nil, let last = messages.last else { return }
@@ -604,8 +637,9 @@ struct MessageListView: View {
                 guard let content, !content.isEmpty else { return }
                 perform(scroll.policy.latestMessageGrew(), proxy: proxy)
             }
-            .onChange(of: footer) { _, _ in
-                perform(scroll.policy.footerChanged(), proxy: proxy)
+            .onChange(of: threadEnd) { _, end in
+                perform(scroll.policy.footerChanged(latestIsBareFailure: end.latestIsBareFailure),
+                        proxy: proxy)
             }
             // VoiceOver hears a reply land or fail wherever its focus is
             // (AUD-23).
@@ -665,8 +699,8 @@ struct MessageListView: View {
         }
     }
 
-    /// Floats over the bottom of the list whenever the end of the thread is
-    /// out of view — after a long reply was held at its top, or when the
+    /// Sits in its own strip under the list whenever the end of the thread
+    /// is out of view — after a long reply was held at its top, or when the
     /// student scrolled up to re-read.
     private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
         Button {
@@ -683,10 +717,10 @@ struct MessageListView: View {
         }
         .buttonStyle(.plain)
         .frame(minHeight: 44)
-        .padding(.bottom, BrandSpacing.xs)
-        // Chrome over the reading text: it stops growing at xxxLarge so at
-        // accessibility sizes it doesn't cover the lines it floats over
-        // (long-press shows it large).
+        .padding(.vertical, BrandSpacing.xxs)
+        // Chrome that takes reading space: it stops growing at xxxLarge so
+        // at accessibility sizes its strip stays small (long-press shows it
+        // large).
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityShowsLargeContentViewer()
         .accessibilityHint("Scrolls to the newest message")
