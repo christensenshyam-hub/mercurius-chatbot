@@ -10,7 +10,8 @@
  *      on the same database the student still has every turn: the hydrate
  *      reads the ledger's `answered` column, not the call count.
  *   2. A refused turn gets the safe refusal copy and uses no turn.
- *   3. A Stop before any text uses no turn.
+ *   3. A Stop before the API's message_start (nothing to bill) DOES use a
+ *      turn, so a script that cancels every request stays bounded.
  *   The dollar ledger still records every one of those calls.
  */
 
@@ -169,23 +170,26 @@ describe('only answered turns use the daily allowance (AUD-31)', () => {
     }
   });
 
-  test('a Stop before any text uses no turn', async () => {
+  test("a Stop on ': connected', before the API's message_start, uses a turn (review of AUD-31)", async () => {
+    // Such a call has no usage yet, so it settles at $0 and no dollar cap
+    // sees it. Before the review it used no turn either, so a script that
+    // cancels every request was bounded only by the per-minute limiters.
     const dbPath = tmpDb();
     dbs.push(dbPath);
     const s = newSession();
-    // A slow first token, so the client can leave between the headers and it.
-    const srv = await boot({ SQLITE_PATH: dbPath, SESSION_DAILY_CHAT_TURNS: '1', MOCK_STREAM_DELAY_MS: '400' });
+    // A slow first event, so the client leaves between the headers and it.
+    const srv = await boot({ SQLITE_PATH: dbPath, SESSION_DAILY_CHAT_TURNS: '2', MOCK_STREAM_DELAY_MS: '400' });
     try {
       for (let i = 0; i < 2; i++) {
         await sse(srv.base, s, [{ role: 'user', content: 'What is a token?' }], { abortAfterConnect: true });
       }
       const rows = await waitFor(() => readUsage(dbPath, s), (r) => r.length >= 2);
-      assert.deepEqual(rows.map((r) => [r.status, r.error_kind, r.answered]), [['aborted', 'client_abort', 0], ['aborted', 'client_abort', 0]]);
-
-      const answered = await sse(srv.base, s, [{ role: 'user', content: 'What is a token?' }]);
-      assert.ok(completed(answered.events), answered.raw);
+      assert.deepEqual(rows.map((r) => [r.status, r.error_kind, r.answered, r.cost_usd]), [
+        ['aborted', 'client_abort', 1, 0],
+        ['aborted', 'client_abort', 1, 0],
+      ]);
       const next = await sse(srv.base, s, [{ role: 'user', content: 'And a context window?' }]);
-      assert.equal(errorCode(next.events), 'daily_limit');
+      assert.equal(errorCode(next.events), 'daily_limit', 'the two cancelled calls used the allowance');
     } finally {
       await srv.stop();
     }

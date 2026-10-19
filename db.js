@@ -241,11 +241,13 @@ async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
-      -- usage.answered (AUD-31): 1 when the call gave the student an answer,
-      -- 0 when it was refused, failed or stopped before any text. Only
-      -- answered calls use a daily turn, so the per-session hydrate counts
-      -- only those. NULL = written before the column existed (counted, as
-      -- every call was then). The ALTER migrates older databases.
+      -- usage.answered (AUD-31): 1 when the call uses a daily turn (it gave
+      -- the student an answer, or the client stopped it before the API's
+      -- message_start, when it has no usage to bill); 0 when it was refused,
+      -- failed, or stopped after message_start but before any text. The
+      -- per-session hydrate counts only the 1s. NULL = written before the
+      -- column existed (counted, as every call was then). The ALTER migrates
+      -- older databases.
       ALTER TABLE usage ADD COLUMN IF NOT EXISTS answered INTEGER DEFAULT NULL;
 
       -- Read-path indexes for the admin/ops queries (recent sessions, per-session
@@ -981,8 +983,9 @@ module.exports = {
   //                                       is the turns used (rows with
   //                                       answered = 0 don't count, AUD-31);
   //                                       `usd` sums every row.
-  //   A row's `answered` (true/false) says whether the call gave the student
-  //   an answer; omitted → NULL, which counts as a turn.
+  //   A row's `answered` (true/false) says whether the call uses a turn (it
+  //   gave the student an answer, or a client stopped it before
+  //   message_start); omitted → NULL, which counts as a turn.
   //   usageSummarySince(tsMs)           → { calls, usd, byRoute: [{ route,
   //                                       calls, usd }], errors: [{ route,
   //                                       error_kind, count }] } for the admin

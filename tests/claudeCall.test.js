@@ -362,17 +362,17 @@ describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
     assert.equal(turns().chatTurns, 0);
   });
 
-  test('streamMessage: a Stop before any text uses no turn; a Stop after some text does', async () => {
-    // Before: abort as soon as the stream exists (the mock waits a delay
-    // before message_start, so no text has arrived).
-    const early = claudeCall.streamMessage({ route: '/api/chat', ip: IP, kind: 'chat', sessionId: 's4', params: chatParams() });
-    let earlyText = '';
-    early.on('text', (t) => { earlyText += t; });
-    early.abort();
-    await waitFor(early, 'end');
+  test('streamMessage: a Stop after message_start but before any text is billed and uses no turn; a Stop after some text uses one', async () => {
+    // Between message_start (input usage known) and the first text.
+    const atStart = claudeCall.streamMessage({ route: '/api/chat', ip: IP, kind: 'chat', sessionId: 's4', params: chatParams() });
+    let atStartText = '';
+    atStart.on('text', (t) => { atStartText += t; });
+    atStart.on('streamEvent', (ev) => { if (ev.type === 'message_start') atStart.abort(); });
+    await waitFor(atStart, 'end');
     await tick();
-    assert.equal(earlyText, '');
+    assert.equal(atStartText, '');
     assert.deepEqual([db.rows[0].status, db.rows[0].error_kind, db.rows[0].answered], ['aborted', 'client_abort', false]);
+    assert.ok(db.rows[0].cost_usd > 0, 'its input is billed, so the dollar caps see it');
     assert.equal(turns().chatTurns, 0);
 
     // After: the student saw a few chunks, then tapped Stop.
@@ -380,6 +380,24 @@ describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
     await streamToEnd({ kind: 'chat', sessionId: 's4', params: chatParams() }, (_t, s) => { chunks += 1; if (chunks === 3) s.abort(); });
     assert.deepEqual([db.rows[1].status, db.rows[1].error_kind, db.rows[1].answered], ['aborted', 'client_abort', true]);
     assert.equal(turns().chatTurns, 1);
+  });
+
+  test('streamMessage: a Stop before message_start has nothing to bill, so it uses a turn (review of AUD-31)', async () => {
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 2 });
+    for (let i = 0; i < 2; i++) {
+      // Abort as soon as the stream exists: the mock waits a delay before
+      // message_start, so neither usage nor text has arrived.
+      const early = claudeCall.streamMessage({ route: '/api/chat', ip: IP, kind: 'chat', sessionId: 's6', params: chatParams() });
+      early.abort();
+      await waitFor(early, 'end');
+    }
+    await tick();
+    assert.deepEqual(db.rows.map((r) => [r.status, r.error_kind, r.answered, r.cost_usd]), [
+      ['aborted', 'client_abort', true, 0],
+      ['aborted', 'client_abort', true, 0],
+    ]);
+    assert.equal(turns().chatTurns, 2);
+    assert.equal(quotas.check({ sessionId: 's6', ip: IP, kind: 'chat' }).ok, false, 'the allowance bounds a script that cancels every request');
   });
 
   test("streamMessage: the route's watchdog cutting a reply short uses no turn, even after text", async () => {
