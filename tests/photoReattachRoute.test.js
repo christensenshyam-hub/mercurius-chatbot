@@ -531,8 +531,10 @@ describe('the cached prefix', () => {
     const u1 = f1.reply.usage;
     const u2 = f2.reply.usage;
     assert.ok(u1.cache_creation_input_tokens >= 1200, `f1 writes the photo into the cache (${JSON.stringify(u1)})`);
-    assert.ok(u2.cache_read_input_tokens >= u1.cache_read_input_tokens + u1.cache_creation_input_tokens,
-      `f2 reads it back (${JSON.stringify(u2)})`);
+    // The mock rounds each of its sums to whole tokens (chars / 3.8), so the
+    // read-back may come out one token under the two sums it covers.
+    assert.ok(u2.cache_read_input_tokens >= u1.cache_read_input_tokens + u1.cache_creation_input_tokens - 1,
+      `f2 reads it back (${JSON.stringify(u1)} then ${JSON.stringify(u2)})`);
     assert.ok(u2.input_tokens < 1200, `the photo is not billed uncached on f2 (${u2.input_tokens})`);
   });
 });
