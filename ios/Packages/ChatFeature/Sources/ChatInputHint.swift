@@ -25,6 +25,14 @@ struct ChatInputHint: View {
     /// — same pattern used for onboarding and mode descriptions.
     static let storageKey = "hasSeenChatInputHint"
 
+    /// Whether the hint shows. It points at the starter prompts "above", and
+    /// at accessibility text sizes those prompts are below Merc, off screen,
+    /// while the hint itself takes a quarter of it — so there it stays
+    /// hidden (AUD-48).
+    static func isShown(chatIsEmpty: Bool, hasSeen: Bool, dynamicTypeSize: DynamicTypeSize) -> Bool {
+        chatIsEmpty && !hasSeen && !dynamicTypeSize.isAccessibilitySize
+    }
+
     var body: some View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: "arrow.down")

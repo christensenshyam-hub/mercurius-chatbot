@@ -26,6 +26,7 @@ struct LearningPathView: View {
         // Compute the frontier once per render; threaded into each node.
         let current = currentStopId
         let elements = buildElements()
+        let layout = LearningPathLayout.forSize(dynamicTypeSize)
 
         // GeometryReader so the path-side Merc can bow out in windows too
         // narrow for him to clear the swaying nodes (iPad Slide Over /
@@ -39,11 +40,18 @@ struct LearningPathView: View {
                         pathHeader
 
                         ForEach(Array(elements.enumerated()), id: \.element.id) { index, element in
-                            row(for: element,
-                                previous: index > 0 ? elements[index - 1] : nil,
-                                current: current,
-                                mercFits: mercFits)
-                                .id(element.id)
+                            Group {
+                                switch layout {
+                                case .winding:
+                                    row(for: element,
+                                        previous: index > 0 ? elements[index - 1] : nil,
+                                        current: current,
+                                        mercFits: mercFits)
+                                case .list:
+                                    listRow(for: element, current: current)
+                                }
+                            }
+                            .id(element.id)
                         }
 
                         Color.clear.frame(height: BrandSpacing.xxl)
@@ -79,6 +87,8 @@ struct LearningPathView: View {
             Text("Your learning path")
                 .font(BrandFont.roundedTitle)
                 .foregroundStyle(BrandColor.text)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             overallProgressBar(done: done, total: total)
         }
         .frame(maxWidth: .infinity)
@@ -172,6 +182,46 @@ struct LearningPathView: View {
             .overlay(alignment: mercSide(for: nodeIndex)) {
                 if status == .current, mercFits { pathMerc(for: nodeIndex) }
             }
+        }
+    }
+
+    /// The straight list used at accessibility text sizes (AUD-47): the same
+    /// stops, states and callbacks, without the sway, the connectors or the
+    /// path-side Merc.
+    @ViewBuilder
+    private func listRow(for element: PathElement, current: String?) -> some View {
+        switch element {
+        case .header(let unit):
+            UnitCheckpointHeader(
+                unit: unit,
+                completed: progress.completedCount(in: unit),
+                total: unit.lessons.count,
+                mastered: progress.isUnitMastered(unit.id)
+            )
+            .padding(.bottom, BrandSpacing.sm)
+
+        case .lesson(let lesson, let unit, _):
+            let status = lessonStatus(lesson, in: unit, current: current)
+            Button {
+                guard status != .locked else { return }
+                onStartLesson(lesson)
+            } label: {
+                LessonNode(lesson: lesson, status: status, labelSide: .trailing,
+                           isFrontier: current == PathElement.lessonId(lesson), layout: .list)
+            }
+            .buttonStyle(.plain)
+            .lockedNode(status == .locked)
+
+        case .unitTest(let unit, _):
+            let status = unitTestStatus(unit, current: current)
+            Button {
+                guard status != .locked else { return }
+                onStartUnitTest(unit)
+            } label: {
+                UnitTestNode(unit: unit, status: status, labelSide: .trailing, layout: .list)
+            }
+            .buttonStyle(.plain)
+            .lockedNode(status == .locked)
         }
     }
 

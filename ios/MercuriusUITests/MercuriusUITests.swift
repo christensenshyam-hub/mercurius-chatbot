@@ -92,9 +92,12 @@ final class MercuriusUITests: XCTestCase {
         }
         app.launchArguments += defaults + extraArgs
         if let contentSize {
-            // Dynamic Type sizes passed as a standard iOS preferred content
-            // size category — e.g. "UICTContentSizeCategoryAccessibilityL".
-            app.launchEnvironment["UIPreferredContentSizeCategoryName"] = contentSize
+            // Dynamic Type size as a standard iOS content size category,
+            // e.g. "UICTContentSizeCategoryAccessibilityXXXL". It must be a
+            // launch ARGUMENT (UserDefaults' argument domain, which UIKit
+            // reads): set in `launchEnvironment` it was silently ignored,
+            // and the app launched at the simulator's own text size.
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSize]
         }
         app.launch()
         return app
@@ -141,12 +144,24 @@ final class MercuriusUITests: XCTestCase {
         // unaffected by header chrome changes. (The brand caption that used to
         // anchor this was removed when the header was slimmed down.)
         chatCTA.tap()
+        // At accessibility text sizes the pills are one "Mode" menu
+        // (AUD-48), and "Debate" is an item inside it — so the menu is the
+        // signal there.
         let chatSignal = app.buttons["Debate"]
+        let modeMenu = element(app, Self.modeMenuIdentifier)
+        let deadline = Date().addingTimeInterval(timeout)
+        while !chatSignal.exists && !modeMenu.exists && Date() < deadline {
+            _ = chatSignal.waitForExistence(timeout: 0.5)
+        }
         XCTAssertTrue(
-            chatSignal.waitForExistence(timeout: timeout),
-            "Did not reach the chat tab — 'Debate' mode pill missing \(timeout)s after Chat with Merc"
+            chatSignal.exists || modeMenu.exists,
+            "Did not reach the chat tab — neither the 'Debate' mode pill nor the mode menu appeared \(timeout)s after Chat with Merc"
         )
     }
+
+    /// `ModeSelectorView.menuIdentifier`: the mode menu that replaces the
+    /// pills at accessibility text sizes.
+    static let modeMenuIdentifier = "chat.modeMenu"
 
     /// Any element by accessibility identifier, whatever type SwiftUI exposes
     /// it as (a `Link` and a `NavigationLink` both surface as buttons today,
@@ -724,6 +739,93 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// The largest accessibility text size (AX5).
+    static let largestTextSize = "UICTContentSizeCategoryAccessibilityXXXL"
+
+    /// Swipe the screen up until `element` can be tapped. The gate's CTAs
+    /// are pinned and need none; content controls (the consent switch) sit
+    /// in a scroll view that, at AX5, is taller than the screen. With
+    /// `above`, the element must also have cleared the top of that pinned
+    /// control (`isHittable` alone can be true for a point under it).
+    @MainActor
+    private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication,
+                                     above pinned: XCUIElement? = nil, maxSwipes: Int = 16) -> Bool {
+        func reachable() -> Bool {
+            guard element.exists, element.isHittable else { return false }
+            guard let pinned, pinned.exists else { return true }
+            return element.frame.maxY <= pinned.frame.minY
+        }
+        var swipes = 0
+        while !reachable() && swipes < maxSwipes {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        return reachable()
+    }
+
+    /// AUD-12: at the largest text size a new student must be able to walk
+    /// the whole first-run gate. Every step's CTA is pinned on screen
+    /// (hittable without scrolling), and the age wheel and consent switch
+    /// stay reachable.
+    @MainActor
+    func testFirstRunGateCompletesAtLargestTextSize() {
+        let app = launchApp(contentSize: Self.largestTextSize, extraArgs: Self.freshInstallArgs)
+
+        // Meet Merc: the copy overflows the screen at AX5; Continue is pinned.
+        let meetContinue = onboardingElement(app, "onboarding.continue")
+        XCTAssertTrue(meetContinue.waitForExistence(timeout: Self.firstScreenTimeout),
+                      "Meet Merc did not appear")
+        // A canary that the text size really took effect: at standard size
+        // the button is about 49 pt tall; at AX5 its label alone is ~60 pt.
+        XCTAssertGreaterThan(meetContinue.frame.height, 70,
+                             "Continue is \(meetContinue.frame.height) pt tall: the AX5 text size didn't apply")
+        XCTAssertTrue(meetContinue.isHittable, "Meet Merc's Continue is off-screen at AX5")
+        meetContinue.tap()
+
+        // Age: the wheel keeps a usable height; Continue is pinned.
+        let picker = onboardingElement(app, "onboarding.agePicker")
+        XCTAssertTrue(picker.waitForExistence(timeout: Self.lookupTimeout), "Age picker missing at AX5")
+        let ageContinue = onboardingElement(app, "onboarding.ageContinue")
+        XCTAssertTrue(scrollUntilHittable(app.pickerWheels.element, in: app, above: ageContinue),
+                      "Age wheel unreachable at AX5")
+        XCTAssertGreaterThanOrEqual(app.pickerWheels.element.frame.height, 100,
+                                    "Age wheel squeezed to \(app.pickerWheels.element.frame.height) pt at AX5")
+        app.pickerWheels.element.adjust(toPickerWheelValue: "15")
+        XCTAssertTrue(ageContinue.isHittable, "The age step's Continue is off-screen at AX5")
+        ageContinue.tap()
+
+        // Disclosure: the switch scrolls into reach; Agree is pinned. At AX5
+        // the toggle's label is ~660 pt tall and the switch itself sits at
+        // its foot, so the test scrolls to and taps the switch, as a
+        // student would.
+        let toggle = onboardingElement(app, "onboarding.consentToggle")
+        XCTAssertTrue(toggle.waitForExistence(timeout: Self.lookupTimeout), "Consent switch missing at AX5")
+        let agree = onboardingElement(app, "onboarding.agree")
+        let innerSwitch = toggle.descendants(matching: .switch).firstMatch
+        let switchControl = innerSwitch.exists ? innerSwitch : toggle
+        XCTAssertTrue(scrollUntilHittable(switchControl, in: app, above: agree), "Consent switch unreachable at AX5")
+        switchControl.tap()
+        XCTAssertEqual(toggle.value as? String, "1", "Tapping the consent switch at AX5 didn't turn it on")
+        XCTAssertTrue(agree.isHittable, "'Agree and continue' is off-screen at AX5")
+        agree.tap()
+
+        // Limits, then Your path.
+        let limitsAck = onboardingElement(app, "onboarding.limitsAck")
+        XCTAssertTrue(limitsAck.waitForExistence(timeout: Self.lookupTimeout), "Limits step missing at AX5")
+        XCTAssertTrue(limitsAck.isHittable, "'Got it' is off-screen at AX5")
+        limitsAck.tap()
+
+        let startLesson = onboardingElement(app, "onboarding.startLesson1")
+        XCTAssertTrue(startLesson.waitForExistence(timeout: Self.lookupTimeout), "Your path missing at AX5")
+        XCTAssertTrue(startLesson.isHittable, "'Start Lesson 1' is off-screen at AX5")
+        startLesson.tap()
+
+        XCTAssertTrue(
+            app.buttons["Continue. Start the lesson."].waitForExistence(timeout: Self.firstScreenTimeout),
+            "At AX5 the gate did not land in the Lesson 1 intro"
+        )
+    }
+
     @MainActor
     func testHeaderRemainsVisibleAtAccessibilityTextSize() {
         // At XXL accessibility text size the header used to overflow the
@@ -737,5 +839,44 @@ final class MercuriusUITests: XCTestCase {
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.exists, "Header control must stay reachable at XXL accessibility size")
         XCTAssertTrue(settings.isHittable, "Header control scrolled off-screen at XXL accessibility size")
+
+        // The modes are one menu at this size, and "Debate" is in it.
+        let modeMenu = element(app, Self.modeMenuIdentifier)
+        XCTAssertTrue(modeMenu.exists, "At XXL the mode pills should be one menu (\(Self.modeMenuIdentifier))")
+        XCTAssertTrue(modeMenu.isHittable, "The mode menu is off-screen at XXL accessibility size")
+        XCTAssertTrue(modeMenu.label.hasPrefix("Mode: Socratic"),
+                      "The mode menu should name the current mode, got '\(modeMenu.label)'")
+        modeMenu.tap()
+        XCTAssertTrue(
+            app.buttons["Debate"].waitForExistence(timeout: Self.lookupTimeout),
+            "'Debate' is missing from the mode menu at XXL accessibility size"
+        )
+    }
+
+    /// AUD-48: at an accessibility size, picking a mode from the menu runs
+    /// the same first-time flow as tapping its pill.
+    @MainActor
+    func testModeMenuShowsDescriptionSheetAtAccessibilityTextSize() {
+        let app = launchApp(
+            contentSize: "UICTContentSizeCategoryAccessibilityXXL",
+            extraArgs: [
+                "-seenModeDescription.socratic", "NO",
+                "-seenModeDescription.debate", "NO",
+                "-seenModeDescription.discussion", "NO",
+            ],
+            bypassModeDescriptions: false
+        )
+        waitForBootComplete(app)
+
+        let modeMenu = element(app, Self.modeMenuIdentifier)
+        XCTAssertTrue(modeMenu.waitForExistence(timeout: Self.lookupTimeout), "Mode menu missing at XXL")
+        modeMenu.tap()
+        let debate = app.buttons["Debate"]
+        XCTAssertTrue(debate.waitForExistence(timeout: Self.lookupTimeout), "'Debate' missing from the mode menu")
+        debate.tap()
+        XCTAssertTrue(
+            app.buttons["Got it"].waitForExistence(timeout: Self.lookupTimeout),
+            "Picking Debate from the menu should present its description sheet"
+        )
     }
 }

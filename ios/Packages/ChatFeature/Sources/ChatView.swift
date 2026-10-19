@@ -27,6 +27,8 @@ public struct ChatView: View {
     /// `model.messages.isEmpty` flips to false.
     @AppStorage(ChatInputHint.storageKey) private var hasSeenChatInputHint: Bool = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private enum ActiveSheet: Identifiable {
         case settings
         case quiz
@@ -162,7 +164,9 @@ public struct ChatView: View {
                     )
                 }
 
-                if model.messages.isEmpty && !hasSeenChatInputHint {
+                if ChatInputHint.isShown(chatIsEmpty: model.messages.isEmpty,
+                                         hasSeen: hasSeenChatInputHint,
+                                         dynamicTypeSize: dynamicTypeSize) {
                     ChatInputHint(onDismiss: dismissChatInputHint)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }

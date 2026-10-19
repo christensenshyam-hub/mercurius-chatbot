@@ -27,6 +27,74 @@ enum LearningPathMetrics {
         let n = swayOffsets.count
         return swayOffsets[((nodeIndex % n) + n) % n]
     }
+
+    /// The node in the straight list (accessibility sizes).
+    static let listNodeDiameter: CGFloat = 52
+}
+
+/// How the path is drawn. The winding path gives each title a fixed 148 pt
+/// beside a fixed-height node, which at accessibility text sizes cut titles
+/// to one word ("Few-shot…", "Comple…"). There the path is a straight list
+/// whose titles wrap freely (AUD-47).
+enum LearningPathLayout: Equatable {
+    case winding
+    case list
+
+    static func forSize(_ size: DynamicTypeSize) -> LearningPathLayout {
+        size.isAccessibilitySize ? .list : .winding
+    }
+}
+
+/// What a stop says and shows for its status: shared by the winding node and
+/// the list row so the two can't drift.
+struct PathStopPresentation: Equatable {
+    let systemImage: String
+    /// nil for an available lesson, which shows no status line.
+    let statusText: String?
+    let tone: Tone
+
+    enum Tone: Equatable {
+        case done, active, muted
+    }
+
+    /// The status line's colour: the text tokens, so "Completed" and
+    /// "Start now" read at 4.5:1 or better (AUD-21).
+    var statusColor: Color {
+        switch tone {
+        case .done:   return BrandColor.successText
+        case .active: return BrandColor.accentText
+        case .muted:  return BrandColor.textSecondary
+        }
+    }
+
+    static func lesson(_ status: PathNodeStatus) -> PathStopPresentation {
+        switch status {
+        case .completed:  return .init(systemImage: "checkmark", statusText: "Completed", tone: .done)
+        case .current:    return .init(systemImage: "star.fill", statusText: "Start now", tone: .active)
+        case .inProgress: return .init(systemImage: "arrow.triangle.2.circlepath", statusText: "In progress", tone: .active)
+        case .available:  return .init(systemImage: "book.fill", statusText: nil, tone: .muted)
+        case .locked:     return .init(systemImage: "lock.fill", statusText: "Locked", tone: .muted)
+        }
+    }
+
+    static func unitTest(_ status: PathNodeStatus) -> PathStopPresentation {
+        switch status {
+        case .completed: return .init(systemImage: "checkmark.seal.fill", statusText: "Mastered", tone: .done)
+        case .current:   return .init(systemImage: "crown.fill", statusText: "Take the test", tone: .active)
+        case .locked:    return .init(systemImage: "lock.fill", statusText: "Finish the unit first", tone: .muted)
+        default:         return .init(systemImage: "crown.fill", statusText: "Ready", tone: .active)
+        }
+    }
+
+    /// VoiceOver's reading of a lesson stop.
+    static func lessonLabel(number: Int, title: String, status: PathNodeStatus) -> String {
+        "Lesson \(number): \(title). \(lesson(status).statusText ?? "Available")."
+    }
+
+    /// VoiceOver's reading of a unit-test stop.
+    static func unitTestLabel(unitNumber: String, status: PathNodeStatus) -> String {
+        "Unit \(unitNumber) cumulative test. \(unitTest(status).statusText ?? "Available")."
+    }
 }
 
 /// The visual state of a single node, derived from `CurriculumProgressStore`.
@@ -54,6 +122,8 @@ struct PathNodeCircle: View {
     /// is `.inProgress` (the common mid-lesson case). Defaults off so non-path
     /// callers (unit-test nodes) are unchanged.
     var isFrontier: Bool = false
+    /// The disc's size: the path's 76 pt, or smaller in the list.
+    var diameter: CGFloat = LearningPathMetrics.nodeDiameter
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
@@ -66,7 +136,7 @@ struct PathNodeCircle: View {
             if showsPulse {
                 Circle()
                     .stroke(BrandColor.accent.opacity(0.35), lineWidth: 4)
-                    .frame(width: LearningPathMetrics.nodeDiameter, height: LearningPathMetrics.nodeDiameter)
+                    .frame(width: diameter, height: diameter)
                     .scaleEffect(pulse ? 1.24 : 1.0)
                     .opacity(pulse ? 0 : 0.9)
             }
@@ -75,18 +145,18 @@ struct PathNodeCircle: View {
                 .trim(from: 0, to: ringTrim)
                 .stroke(BrandGradient.mercHorizontal, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .frame(width: LearningPathMetrics.nodeDiameter + 10, height: LearningPathMetrics.nodeDiameter + 10)
+                .frame(width: diameter + 10, height: diameter + 10)
 
             Circle()
                 .fill(bodyStyle)
-                .frame(width: LearningPathMetrics.nodeDiameter, height: LearningPathMetrics.nodeDiameter)
+                .frame(width: diameter, height: diameter)
                 .overlay(
                     Circle().strokeBorder(borderStyle, lineWidth: 1.5)
                 )
                 .brandShadow(status == .locked ? .card : .node)
 
             Image(systemName: systemImage)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: diameter * 0.37, weight: .bold))
                 .foregroundStyle(iconColor)
         }
         .onAppear {
@@ -134,55 +204,37 @@ struct LessonNode: View {
     /// The frontier node carries the callout + pulse regardless of whether it
     /// is untouched (.current, "START") or midway (.inProgress, "RESUME").
     var isFrontier: Bool = false
+    var layout: LearningPathLayout = .winding
+
+    private var presentation: PathStopPresentation { .lesson(status) }
 
     var body: some View {
-        ZStack {
-            PathNodeCircle(status: status, systemImage: icon, isFrontier: isFrontier)
-                .overlay(alignment: .top) {
-                    if isFrontier {
-                        StartCallout(title: status == .inProgress ? "RESUME" : "START")
-                            .offset(y: -LearningPathMetrics.calloutLift)
-                    }
+        Group {
+            switch layout {
+            case .winding:
+                ZStack {
+                    PathNodeCircle(status: status, systemImage: presentation.systemImage, isFrontier: isFrontier)
+                        .overlay(alignment: .top) {
+                            if isFrontier {
+                                StartCallout(title: status == .inProgress ? "RESUME" : "START")
+                                    .offset(y: -LearningPathMetrics.calloutLift)
+                            }
+                        }
+
+                    NodeLabel(title: lesson.title, statusText: presentation.statusText,
+                              statusColor: presentation.statusColor, side: labelSide)
+                        .offset(x: labelXOffset(for: labelSide))
                 }
-
-            NodeLabel(title: lesson.title, statusText: statusText, statusColor: statusColor, side: labelSide)
-                .offset(x: labelXOffset(for: labelSide))
+                .frame(maxWidth: .infinity)
+                .frame(height: LearningPathMetrics.nodeCellHeight)
+            case .list:
+                PathListRow(title: lesson.title, presentation: presentation,
+                            status: status, isFrontier: isFrontier)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: LearningPathMetrics.nodeCellHeight)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Lesson \(lesson.number): \(lesson.title). \(statusText ?? "Available").")
+        .accessibilityLabel(PathStopPresentation.lessonLabel(number: lesson.number, title: lesson.title, status: status))
         .accessibilityAddTraits(status == .locked ? [] : .isButton)
-    }
-
-    private var icon: String {
-        switch status {
-        case .completed:  return "checkmark"
-        case .current:    return "star.fill"
-        case .inProgress: return "arrow.triangle.2.circlepath"
-        case .available:  return "book.fill"
-        case .locked:     return "lock.fill"
-        }
-    }
-
-    private var statusText: String? {
-        switch status {
-        case .completed:  return "Completed"
-        case .current:    return "Start now"
-        case .inProgress: return "In progress"
-        case .locked:     return "Locked"
-        case .available:  return nil
-        }
-    }
-
-    private var statusColor: Color {
-        switch status {
-        case .completed:  return BrandColor.successText
-        case .current:    return BrandColor.accentText
-        case .inProgress: return BrandColor.accentText
-        case .locked:     return BrandColor.textSecondary
-        case .available:  return BrandColor.textSecondary
-        }
     }
 }
 
@@ -193,51 +245,76 @@ struct UnitTestNode: View {
     let unit: Unit
     let status: PathNodeStatus
     let labelSide: NodeLabelSide
+    var layout: LearningPathLayout = .winding
+
+    private var presentation: PathStopPresentation { .unitTest(status) }
 
     var body: some View {
-        ZStack {
-            PathNodeCircle(status: status, systemImage: icon)
-                .overlay(alignment: .top) {
-                    if status == .current {
-                        StartCallout()
-                            .offset(y: -LearningPathMetrics.calloutLift)
-                    }
-                }
+        Group {
+            switch layout {
+            case .winding:
+                ZStack {
+                    PathNodeCircle(status: status, systemImage: presentation.systemImage)
+                        .overlay(alignment: .top) {
+                            if status == .current {
+                                StartCallout()
+                                    .offset(y: -LearningPathMetrics.calloutLift)
+                            }
+                        }
 
-            NodeLabel(title: "Unit \(unit.number) test", statusText: statusText, statusColor: statusColor, side: labelSide)
-                .offset(x: labelXOffset(for: labelSide))
+                    NodeLabel(title: "Unit \(unit.number) test", statusText: presentation.statusText,
+                              statusColor: presentation.statusColor, side: labelSide)
+                        .offset(x: labelXOffset(for: labelSide))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: LearningPathMetrics.nodeCellHeight)
+            case .list:
+                PathListRow(title: "Unit \(unit.number) test", presentation: presentation,
+                            status: status, isFrontier: status == .current)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: LearningPathMetrics.nodeCellHeight)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Unit \(unit.number) cumulative test. \(statusText ?? "Available").")
+        .accessibilityLabel(PathStopPresentation.unitTestLabel(unitNumber: unit.number, status: status))
         .accessibilityAddTraits(status == .locked ? [] : .isButton)
     }
+}
 
-    private var icon: String {
-        switch status {
-        case .completed: return "checkmark.seal.fill"
-        case .current:   return "crown.fill"
-        case .locked:    return "lock.fill"
-        default:         return "crown.fill"
-        }
-    }
+// MARK: - List row (accessibility sizes)
 
-    private var statusText: String? {
-        switch status {
-        case .completed: return "Mastered"
-        case .current:   return "Take the test"
-        case .locked:    return "Finish the unit first"
-        default:         return "Ready"
-        }
-    }
+/// One stop in the straight list: a small node on the left, the whole title
+/// wrapping freely beside it, and the status underneath. The row grows with
+/// its text instead of holding a fixed height (AUD-47).
+private struct PathListRow: View {
+    let title: String
+    let presentation: PathStopPresentation
+    let status: PathNodeStatus
+    let isFrontier: Bool
 
-    private var statusColor: Color {
-        switch status {
-        case .completed: return BrandColor.successText
-        case .locked:    return BrandColor.textSecondary
-        default:         return BrandColor.accentText
+    var body: some View {
+        HStack(alignment: .center, spacing: BrandSpacing.md) {
+            PathNodeCircle(status: status, systemImage: presentation.systemImage,
+                           isFrontier: isFrontier, diameter: LearningPathMetrics.listNodeDiameter)
+                .frame(width: LearningPathMetrics.listNodeDiameter + 10,
+                       height: LearningPathMetrics.listNodeDiameter + 10)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(BrandFont.roundedBodyEmphasized)
+                    .foregroundStyle(BrandColor.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let statusText = presentation.statusText {
+                    Text(statusText)
+                        .font(BrandFont.roundedCaption)
+                        .foregroundStyle(presentation.statusColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, BrandSpacing.lg)
+        .padding(.vertical, BrandSpacing.sm)
+        .frame(maxWidth: .infinity, minHeight: LearningPathMetrics.listNodeDiameter + 20, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -291,6 +368,12 @@ private struct StartCallout: View {
         Text(title)
             .font(.system(.caption, design: .rounded, weight: .heavy))
             .foregroundStyle(.white)
+            // One word that must never wrap ("STAR/T"); it is decoration on a
+            // node whose label already says "Start now", so it stops growing
+            // at xxxLarge (AUD-47).
+            .lineLimit(1)
+            .fixedSize()
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .padding(.horizontal, BrandSpacing.md)
             .padding(.vertical, 6)
             .background(BrandGradient.merc, in: Capsule())

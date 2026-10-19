@@ -7,12 +7,16 @@ import DesignSystem
 // MARK: - Shared chrome
 
 /// Title + subtitle up top, a scrolling content slot, and the CTAs pinned
-/// below so Dynamic Type can never push them off-screen.
+/// below so Dynamic Type can never push them off-screen. At accessibility
+/// text sizes the title and subtitle scroll with the content (AUD-12): pinned
+/// above it, they could fill the screen and leave the content an 11 pt strip.
 struct GateStepContainer<Content: View, CTA: View>: View {
     let title: String
     let subtitle: String?
     let content: () -> Content
     let cta: () -> CTA
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         title: String,
@@ -26,43 +30,92 @@ struct GateStepContainer<Content: View, CTA: View>: View {
         self.cta = cta
     }
 
-    var body: some View {
-        VStack(spacing: BrandSpacing.xl) {
-            VStack(spacing: BrandSpacing.sm) {
-                Text(title)
-                    .font(BrandFont.title)
-                    .foregroundStyle(BrandColor.text)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+    /// Whether the heading scrolls with the content rather than sitting
+    /// above it.
+    static func headingScrolls(at size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
 
-                if let subtitle {
-                    Text(subtitle)
-                        .font(BrandFont.body)
-                        .foregroundStyle(BrandColor.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+    var body: some View {
+        let headingScrolls = Self.headingScrolls(at: dynamicTypeSize)
+        VStack(spacing: BrandSpacing.xl) {
+            if !headingScrolls {
+                heading
             }
-            .padding(.horizontal, BrandSpacing.xl)
-            .padding(.top, BrandSpacing.xxl)
 
             ScrollView {
-                content()
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, BrandSpacing.xl)
+                VStack(spacing: BrandSpacing.xl) {
+                    if headingScrolls {
+                        heading
+                    }
+                    content()
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, BrandSpacing.xl)
+                }
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            VStack(spacing: BrandSpacing.md) {
-                cta()
+            GatePinnedCTA(content: cta)
+        }
+    }
+
+    private var heading: some View {
+        VStack(spacing: BrandSpacing.sm) {
+            Text(title)
+                .font(BrandFont.title)
+                .foregroundStyle(BrandColor.text)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(BrandFont.body)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: 420)
-            // Pin to ideal height: spare vertical space must go to the scroll
-            // area, not into DuoButton's flexible 3D plate (see HomeView).
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, BrandSpacing.xl)
-            .padding(.bottom, BrandSpacing.xl)
+        }
+        .padding(.horizontal, BrandSpacing.xl)
+        .padding(.top, BrandSpacing.xxl)
+    }
+}
+
+/// The CTAs under a gate screen, pinned below its scrolling content.
+private struct GatePinnedCTA<Content: View>: View {
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(spacing: BrandSpacing.md) {
+            content()
+        }
+        .frame(maxWidth: 420)
+        // Pin to ideal height: spare vertical space must go to the scroll
+        // area, not into DuoButton's flexible 3D plate (see HomeView).
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, BrandSpacing.xl)
+        .padding(.bottom, BrandSpacing.xl)
+    }
+}
+
+/// A scroll view whose content sits centred while it fits, and scrolls from
+/// the top once it doesn't — so Merc and the copy hold their resting layout
+/// at standard sizes, yet the largest text sizes can still reach every line
+/// (AUD-12).
+private struct CenteredScroll<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { geo in
+            ScrollView {
+                content
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
     }
 }
@@ -91,36 +144,33 @@ private struct GateRestScreen<CTA: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: BrandSpacing.xl) {
-            Spacer()
+        VStack(spacing: 0) {
+            CenteredScroll {
+                VStack(spacing: BrandSpacing.xl) {
+                    MercMascot(mercState, size: 150)
+                        .accessibilityHidden(true)
 
-            MercMascot(mercState, size: 150)
-                .accessibilityHidden(true)
+                    VStack(spacing: BrandSpacing.md) {
+                        Text(title)
+                            .font(BrandFont.title)
+                            .foregroundStyle(BrandColor.text)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier(titleIdentifier)
 
-            VStack(spacing: BrandSpacing.md) {
-                Text(title)
-                    .font(BrandFont.title)
-                    .foregroundStyle(BrandColor.text)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier(titleIdentifier)
-
-                Text(message)
-                    .font(BrandFont.body)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                        Text(message)
+                            .font(BrandFont.body)
+                            .foregroundStyle(BrandColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, BrandSpacing.xl)
+                }
+                .padding(.vertical, BrandSpacing.xl)
             }
-            .padding(.horizontal, BrandSpacing.xl)
 
-            Spacer()
-
-            cta()
-                .frame(maxWidth: 420)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, BrandSpacing.xl)
-                .padding(.bottom, BrandSpacing.xl)
+            GatePinnedCTA(content: cta)
         }
     }
 }
@@ -138,39 +188,42 @@ struct MeetMercStep: View {
     @State private var mercState: MercState = .idle
 
     var body: some View {
-        VStack(spacing: BrandSpacing.xl) {
-            Spacer()
+        // Scrolls once the copy outgrows the screen, with Continue pinned
+        // below it: at AX4-AX5 the fixed stack pushed Continue off-screen and
+        // a new student could go no further (AUD-12).
+        VStack(spacing: 0) {
+            CenteredScroll {
+                VStack(spacing: BrandSpacing.xl) {
+                    MercMascot(mercState, size: dynamicTypeSize.isAccessibilitySize ? 150 : 216,
+                               emphasis: .softGlow, idleAntics: true, pokeable: true)
+                        .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
+                        .opacity(entered ? 1 : 0)
+                        .offset(y: entered ? 0 : 36)
+                        .accessibilityHidden(true)
 
-            MercMascot(mercState, size: dynamicTypeSize.isAccessibilitySize ? 150 : 216,
-                       emphasis: .softGlow, idleAntics: true, pokeable: true)
-                .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
-                .opacity(entered ? 1 : 0)
-                .offset(y: entered ? 0 : 36)
-                .accessibilityHidden(true)
+                    VStack(spacing: BrandSpacing.md) {
+                        Text("Meet Merc")
+                            .font(BrandFont.title)
+                            .foregroundStyle(BrandColor.text)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
 
-            VStack(spacing: BrandSpacing.md) {
-                Text("Meet Merc")
-                    .font(BrandFont.title)
-                    .foregroundStyle(BrandColor.text)
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
-
-                Text("Your AI literacy tutor. Merc asks questions back instead of handing you answers, so you learn how AI works — and when not to trust it.")
-                    .font(BrandFont.body)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                        Text("Your AI literacy tutor. Merc asks questions back instead of handing you answers, so you learn how AI works — and when not to trust it.")
+                            .font(BrandFont.body)
+                            .foregroundStyle(BrandColor.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, BrandSpacing.xl)
+                }
+                .padding(.vertical, BrandSpacing.xl)
             }
-            .padding(.horizontal, BrandSpacing.xl)
 
-            Spacer()
-
-            DuoButton("Continue", style: .primary, action: onContinue)
-                .accessibilityIdentifier("onboarding.continue")
-                .frame(maxWidth: 420)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, BrandSpacing.xl)
-                .padding(.bottom, BrandSpacing.xl)
+            GatePinnedCTA {
+                DuoButton("Continue", style: .primary, action: onContinue)
+                    .accessibilityIdentifier("onboarding.continue")
+            }
         }
         .onAppear(perform: enter)
     }
@@ -198,6 +251,9 @@ struct MeetMercStep: View {
 struct AgeStep: View {
     let onContinue: (Int) -> Void
 
+    /// Room for the selected row and one neighbour on each side.
+    static let wheelMinHeight: CGFloat = 150
+
     @State private var selectedAge: Int?
 
     var body: some View {
@@ -215,6 +271,9 @@ struct AgeStep: View {
             .pickerStyle(.wheel)
 #endif
             .labelsHidden()
+            // The wheel keeps a usable height however large the text: at
+            // AX5 it had shrunk to an 11 pt strip (AUD-12).
+            .frame(minHeight: AgeStep.wheelMinHeight)
             .accessibilityIdentifier("onboarding.agePicker")
         } cta: {
             DuoButton("Continue", style: .primary, isEnabled: selectedAge != nil) {

@@ -2,11 +2,18 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 
-/// Horizontal pill group for switching between the three Mercurius
-/// modes. Tapping a mode for the first time shows an explainer sheet;
-/// thereafter it switches directly.
+/// The three Mercurius modes. A row of pills at standard text sizes; at
+/// accessibility sizes a single "Mode: Socratic" menu, because three pills
+/// side by side hyphenate or shrink to "So… De… Di…" (AUD-48). Tapping a
+/// mode for the first time shows an explainer sheet; thereafter it switches
+/// directly.
+///
+/// UI tests anchor on the "Debate" pill. At accessibility sizes it is an
+/// item of the menu (`chat.modeMenu`), so it is reachable once the menu opens.
 struct ModeSelectorView: View {
     @Bindable var model: ChatViewModel
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The description sheet presented the first time the user taps a
     /// mode. `nil` when no sheet is active. Set by `handleTap(...)`
@@ -16,13 +23,27 @@ struct ModeSelectorView: View {
     /// off this binding without a separate `isPresented` flag.
     @State private var pendingDescription: ModeDescription?
 
+    enum Layout: Equatable {
+        case pills
+        case menu
+    }
+
+    static func layout(for size: DynamicTypeSize) -> Layout {
+        size.isAccessibilitySize ? .menu : .pills
+    }
+
+    /// The menu's visible title and VoiceOver label.
+    static func menuTitle(for mode: ChatMode) -> String {
+        "Mode: \(mode.displayName)"
+    }
+
+    static let menuIdentifier = "chat.modeMenu"
+
     var body: some View {
-        // Three fixed modes — no scroll. Each pill takes an equal share of
-        // the row so the trio reads evenly spaced across the top.
-        HStack(spacing: BrandSpacing.sm) {
-            ForEach(ChatMode.allCases) { mode in
-                pill(for: mode)
-                    .frame(maxWidth: .infinity)
+        Group {
+            switch Self.layout(for: dynamicTypeSize) {
+            case .pills: pillRow
+            case .menu: modeMenu
             }
         }
         .padding(.horizontal, BrandSpacing.lg)
@@ -45,6 +66,71 @@ struct ModeSelectorView: View {
                 continueIntoMode(description.mode)
             }
         }
+    }
+
+    /// Three fixed modes — no scroll. Each pill takes an equal share of
+    /// the row so the trio reads evenly spaced across the top.
+    private var pillRow: some View {
+        HStack(spacing: BrandSpacing.sm) {
+            ForEach(ChatMode.allCases) { mode in
+                pill(for: mode)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// One control in place of the pills. The modes are a picker inside the
+    /// menu, so VoiceOver and the menu's checkmark both say which is on.
+    private var modeMenu: some View {
+        let isSwitching = model.modeSwitchInFlight != nil
+        return Menu {
+            Picker("Mode", selection: Binding(
+                get: { model.currentMode },
+                set: { handleTap(mode: $0) }
+            )) {
+                ForEach(ChatMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: BrandSpacing.sm) {
+                Text(Self.menuTitle(for: model.currentMode))
+                    .font(BrandFont.caption.weight(.semibold))
+                    .foregroundStyle(BrandColor.text)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isSwitching {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(BrandFont.caption.weight(.semibold))
+                        .foregroundStyle(BrandColor.accentText)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.vertical, BrandSpacing.sm)
+            .padding(.horizontal, BrandSpacing.md)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(BrandColor.surface,
+                        in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
+                    .strokeBorder(BrandColor.border, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        // Same rule as the pills: no switching mid-reply or mid-switch.
+        .disabled(isSwitching || isReplying)
+        // Chrome above the reading area: it stops growing at AX3, where
+        // "Mode: Socratic" still fits one line on an SE (at AX5 it took two
+        // lines and 180 pt). A long press shows it large.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        .accessibilityShowsLargeContentViewer()
+        .accessibilityLabel(Self.menuTitle(for: model.currentMode))
+        .accessibilityHint("Shows the three chat modes")
+        .accessibilityIdentifier(Self.menuIdentifier)
     }
 
     // MARK: - Pieces
