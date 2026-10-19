@@ -59,12 +59,17 @@ struct UnitDefenseGradingTests {
         #expect(UnitDefenseGrading.gradingError(for: .crisisSupport(message: "988")) == .crisis)
     }
 
-    @Test("A paused or capped server refuses without Retry; the network's allowance keeps it (AUD-30)")
+    @Test("A paused or capped server never locks the answer; the network's allowance doesn't either (AUD-30)")
     func refusalRetryRules() {
+        // No Retry in chat, but on the unit test "try again soon" must stay
+        // possible with the same answer (a non-retryable refusal locks it).
         #expect(UnitDefenseGrading.gradingError(for: .serviceUnavailable(code: "service_disabled", message: "Paused.", retryAfter: nil))
-                == .refused(message: "Paused.", isRetryable: false))
+                == .refused(message: "Paused.", isRetryable: true))
         #expect(UnitDefenseGrading.gradingError(for: .serviceUnavailable(code: "spend_cap", message: "Capped.", retryAfter: nil))
-                == .refused(message: "Capped.", isRetryable: false))
+                == .refused(message: "Capped.", isRetryable: true))
+        // A student's own daily limit still locks it, as before.
+        #expect(UnitDefenseGrading.gradingError(for: .quotaExceeded(message: "Used up.", retryAfter: nil, scope: "session"))
+                == .refused(message: "Used up.", isRetryable: false))
         guard case .refused(let message, let retryable) = UnitDefenseGrading.gradingError(
             for: .quotaExceeded(message: "Too many new sessions from this network today.", retryAfter: nil, scope: "ip")
         ) else {

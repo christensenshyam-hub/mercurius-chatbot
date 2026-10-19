@@ -17,6 +17,8 @@ enum UnitDefenseGrading {
     ///   an honest message instead of a connection error no retry can fix.
     /// - Any other `APIError` (a daily limit, the spend cap, a busy server)
     ///   carries its own copy; "check your connection" would be wrong.
+    ///   `isRetryable` here only decides whether the same answer may be
+    ///   submitted again (the screen has no Retry button: Submit is it).
     /// - Anything else propagates unchanged.
     static func grade(
         _ call: () async throws -> UnitDefenseResult
@@ -48,6 +50,12 @@ enum UnitDefenseGrading {
             return .crisis
         case .unknown(let underlying) where underlying == "HTTP 404":
             return .unavailable
+        case .serviceUnavailable:
+            // The spend cap and the kill switch have no Retry in chat, but
+            // here that would lock this answer until it's edited, and "try
+            // again soon" must stay possible with the same answer. Every
+            // other 503 refusal is retryable anyway.
+            return .refused(message: error.userFacingMessage, isRetryable: true)
         default:
             return .refused(message: error.userFacingMessage, isRetryable: error.isRetryable)
         }
