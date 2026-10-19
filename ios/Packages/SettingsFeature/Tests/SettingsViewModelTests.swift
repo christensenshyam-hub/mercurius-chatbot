@@ -579,9 +579,11 @@ struct DeviceOnlyResetNoticeTests {
         #expect(notice.sessionId == "old-id-1234567890abcdef")
         #expect(notice.title == "Reset this device only?")
         #expect(notice.message.contains("still has your chats"))
-        #expect(notice.message.contains("can't delete them any more"))
-        #expect(notice.message.contains("privacy@trymercurius.com"))
-        #expect(notice.message.contains("Copy it before you reset"))
+        // Plain words for a 14-year-old: who can't delete it, how to later,
+        // and what to do now.
+        #expect(notice.message.contains("After this reset, the app can't delete them for you."))
+        #expect(notice.message.contains("To delete them later, email privacy@trymercurius.com with this ID"))
+        #expect(notice.message.hasSuffix("so copy it first."))
         // Showing the notice changes nothing: the reset is a separate tap.
         #expect(storage.resetCount == 0)
     }
@@ -594,8 +596,16 @@ struct DeviceOnlyResetNoticeTests {
         let notice = model.deviceOnlyResetNotice()
         #expect(notice.sessionId == nil)
         #expect(notice.message.contains("can't be read"))
-        #expect(notice.message.contains("nothing on it can delete them"))
-        #expect(!notice.message.contains("Copy it"))
+        #expect(notice.message.contains("nothing on this device can delete them"))
+        #expect(!notice.message.localizedCaseInsensitiveContains("copy it"))
+    }
+
+    @Test("The session ID's Copy button is its icon alone at accessibility sizes, where the word wrapped")
+    func copyButtonAtLargeText() {
+        #expect(!SettingsView.copyShowsIconOnly(at: .large))
+        #expect(!SettingsView.copyShowsIconOnly(at: .xxxLarge))
+        #expect(SettingsView.copyShowsIconOnly(at: .accessibility1))
+        #expect(SettingsView.copyShowsIconOnly(at: .accessibility5))
     }
 
     @Test("The failure alert itself says what resetting only this device leaves behind")

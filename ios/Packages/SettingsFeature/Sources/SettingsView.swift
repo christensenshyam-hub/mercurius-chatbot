@@ -17,6 +17,7 @@ public struct SettingsView: View {
     @State private var model: SettingsViewModel
     @State private var showDeleteConfirm = false
     @State private var showCopied = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     // Alerts are driven by view-local copies of the model's error text so a
     // pushed `PrivacyChoicesView` can show its own alert without this
     // screen's alert competing for the same presentation.
@@ -31,6 +32,11 @@ public struct SettingsView: View {
     ) {
         _model = State(initialValue: model)
         self.dismissAction = dismissAction
+    }
+
+    /// Whether the session ID's Copy button shows its icon alone.
+    static func copyShowsIconOnly(at size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
     }
 
     public var body: some View {
@@ -157,11 +163,20 @@ public struct SettingsView: View {
                     Text("Session ID")
                     Spacer()
                     Button(action: copySessionId) {
-                        Label(
+                        let label = Label(
                             showCopied ? "Copied" : "Copy",
                             systemImage: showCopied ? "checkmark" : "doc.on.doc"
                         )
                         .font(BrandFont.caption)
+                        // At accessibility sizes the word wrapped mid-word
+                        // beside "Session ID" ("C / opy"): the icon alone,
+                        // which VoiceOver still reads as "Copy session ID".
+                        if Self.copyShowsIconOnly(at: dynamicTypeSize) {
+                            label.labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
+                        } else {
+                            label
+                        }
                     }
                     .buttonStyle(.borderless)
                     .tint(BrandColor.accent)
@@ -182,6 +197,9 @@ public struct SettingsView: View {
             } label: {
                 HStack {
                     Text("Delete my data & start over")
+                        // The readable red: the system red on white is
+                        // 3.57:1 (AUD-21). 6.5:1 light, 6.2:1 dark.
+                        .foregroundStyle(BrandColor.errorText)
                     Spacer()
                     if model.isDeleteInProgress {
                         ProgressView().controlSize(.small)

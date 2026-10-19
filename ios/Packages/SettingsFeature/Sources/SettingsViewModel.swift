@@ -332,11 +332,11 @@ public struct DeviceOnlyResetNotice: Equatable, Identifiable, Sendable {
     public var message: String {
         if sessionId != nil {
             return "Our server still has your chats and progress under the ID below. "
-                + "Once this device resets, it can't delete them any more: only an email to "
-                + "\(Self.privacyEmail) with this ID can. Copy it before you reset."
+                + "After this reset, the app can't delete them for you. "
+                + "To delete them later, email \(Self.privacyEmail) with this ID, so copy it first."
         }
         return "Our server still has your chats and progress under this device's ID, which can't be "
-            + "read right now. Once this device resets, nothing on it can delete them. "
+            + "read right now. After this reset, nothing on this device can delete them. "
             + "Try deleting again later instead if you can."
     }
 }
