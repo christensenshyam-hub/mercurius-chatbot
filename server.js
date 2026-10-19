@@ -62,7 +62,7 @@ const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
-const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = require('./lib/safetyCore');
+const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const { notifyReport } = require('./lib/reportWebhook');
 const { createScheduler } = require('./lib/scheduler');
@@ -1609,6 +1609,23 @@ function noteCrisisReply(reply, kind) {
   if (typeof reply === 'string' && CRISIS_RESOURCE_RE.test(reply)) metrics.crisisResourceRepliesTotal.inc({ kind });
 }
 
+// A reply the model refused outright. Claude's own classifier ends some
+// self-harm-method and weapon questions with stop_reason "refusal" and no
+// text, whatever the system prompt says, so this can't be fixed in a prompt.
+// Such a turn used to reach the student as "I seem to have lost my train of
+// thought. Try asking again?", with no crisis resources. It now gets
+// REFUSAL_COPY (988, 741741, 911, a trusted adult). An empty reply for any
+// other reason gets the same safe text rather than an invitation to retry.
+function isRefusedReply(stopReason, text) {
+  return stopReason === 'refusal' || typeof text !== 'string' || text.trim() === '';
+}
+
+// Count and log a refusal: route, call kind and stop reason only, never text.
+function noteRefusal(req, kind, stopReason) {
+  metrics.modelRefusalsTotal.inc({ route: '/api/chat', kind });
+  logger.forRequest(req).warn({ kind, stopReason: stopReason || 'empty' }, 'model refusal answered with the safe refusal copy');
+}
+
 // Server-synced progress (Phase 3A), belt and braces: the server just judged
 // the lesson complete, so record it in curriculum_progress itself rather
 // than trusting the client's PUT to arrive (app killed on the pass, offline
@@ -2026,7 +2043,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // markers even on a model slip (it was never instructed to emit
         // them). Streamed deltas can't be retro-scrubbed — clients' own
         // marker stripping is the live guard, this cleans the final record.
-        const assembled = fullText || "I seem to have lost my train of thought. Try asking again?";
+        // The finished message carries stop_reason; the SDK and the mock both
+        // keep it in receivedMessages before 'end'. A refusal replaces the
+        // whole reply, including any partial text already streamed: every
+        // client renders the 'complete' frame's reply as the final text.
+        const received = Array.isArray(stream.receivedMessages) ? stream.receivedMessages : [];
+        const stopReason = received.length ? received[received.length - 1].stop_reason : null;
+        const refused = isRefusedReply(stopReason, fullText);
+        if (refused) {
+          noteRefusal(req, callKind, stopReason);
+          // Stream the safe text as well, for any client (and the eval) that
+          // renders deltas rather than the complete frame's reply: on its own
+          // after an outright refusal, after a blank line if words streamed.
+          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText ? '\n\n' + REFUSAL_COPY : REFUSAL_COPY })}\n\n`);
+        }
+        const assembled = refused ? REFUSAL_COPY : fullText;
         const rawReply = wantsBlocks ? assembled : scrubBlockMarkers(assembled);
         // Only curriculum lessons emit [LESSON_COMPLETE]; gate on mode so a
         // stray marker in any other mode is never stripped or flagged.
@@ -2130,10 +2161,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         },
       });
 
-      const reflowed = reflowText(
-        response.content[0]?.text || "I seem to have lost my train of thought. Try asking again?",
-        reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
-      );
+      const replyText = (response.content && response.content[0] && response.content[0].text) || '';
+      const refused = isRefusedReply(response.stop_reason, replyText);
+      if (refused) noteRefusal(req, callKind, response.stop_reason);
+      // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
+      const reflowed = refused
+        ? REFUSAL_COPY
+        : reflowText(replyText, reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }));
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
       const lessonOutcome = isCurriculumMsg

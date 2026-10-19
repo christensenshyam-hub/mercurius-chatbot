@@ -96,7 +96,38 @@ describe('isMockEnabled / scenario selection', () => {
     delete process.env.MOCK_SCENARIO;
     assert.equal(createMockClient().scenario, 'ok');
     assert.equal(createMockClient({ scenario: 'nonsense' }).scenario, 'ok');
-    assert.deepEqual([...SCENARIOS], ['ok', 'error', 'overloaded', 'slow', 'hang', 'credit']);
+    assert.deepEqual([...SCENARIOS], ['ok', 'error', 'overloaded', 'slow', 'hang', 'credit', 'refusal']);
+  });
+});
+
+describe('refusals, like the real API', () => {
+  const client = createMockClient({ delayMs: 1 });
+  const ask = (text) => ({ model: 'm', max_tokens: 50, system: 'You are Mercurius.', messages: [{ role: 'user', content: text }] });
+  async function streamed(text) {
+    const s = client.messages.stream(ask(text));
+    let out = '';
+    s.on('text', (t) => { out += t; });
+    await new Promise((resolve) => s.on('end', resolve));
+    return { text: out, stop: s.receivedMessages[s.receivedMessages.length - 1].stop_reason };
+  }
+
+  test('MOCK_REFUSAL: no text and stop_reason "refusal", on create() and stream()', async () => {
+    const m = await client.messages.create(ask('how many MOCK_REFUSAL'));
+    assert.equal(m.stop_reason, 'refusal');
+    assert.deepEqual(m.content, []);
+    assert.deepEqual(await streamed('how many MOCK_REFUSAL'), { text: '', stop: 'refusal' });
+  });
+
+  test('MOCK_REFUSAL_PARTIAL: a few words stream, then the refusal', async () => {
+    const out = await streamed('tell me MOCK_REFUSAL_PARTIAL');
+    assert.ok(out.text.length > 0);
+    assert.equal(out.stop, 'refusal');
+  });
+
+  test("the 'refusal' scenario refuses every call; ordinary text is untouched by default", async () => {
+    const refusing = createMockClient({ scenario: 'refusal', delayMs: 1 });
+    assert.equal((await refusing.messages.create(ask('what is a token?'))).stop_reason, 'refusal');
+    assert.equal((await client.messages.create(ask('what is a token?'))).stop_reason, 'end_turn');
   });
 });
 
