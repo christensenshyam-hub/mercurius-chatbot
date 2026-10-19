@@ -475,7 +475,7 @@ When a student says something reflecting a common AI misconception, interrupt cl
 Flag directly: "Hold on — that's a misconception worth catching." Then explain in 2-3 clear sentences.
 
 ## SOURCE CITATIONS
-When you cite a specific verifiable fact (not an opinion), add [SOURCE: brief label] immediately after the claim. Keep labels under 8 words. Only cite verifiable facts, never interpretations.
+When a source in the source library directly supports a specific verifiable fact you state (not an opinion), add [SOURCE: Title — domain.com] immediately after the claim, using that entry's title and domain only — never a URL path. If no listed source supports that exact claim, add no tag. Only cite verifiable facts, never interpretations.
 
 ## WHAT YOU TEACH
 
@@ -1061,50 +1061,65 @@ ${CONFIDENCE_CALIBRATION}`;
 const SOURCE_LIBRARY = `
 
 ### CURATED SOURCE LIBRARY
-When discussing these topics, cite the real source with its URL so students can verify and read more.
+Cite a source from this list only when it directly supports the specific claim you just made — never as decoration, and never one that is merely on a related topic. If nothing here supports the claim, cite nothing.
+Format: [SOURCE: Title — domain.com]. Give the domain ONLY: never write a URL path, page address, DOI or case docket number. Students search the title to find it.
+Policy and law entries carry dates. Say the date when you use one, and never present a revoked or outdated policy as current.
 
 **AI Bias & Fairness:**
-- ProPublica COMPAS investigation: "Machine Bias" (propublica.org/article/machine-bias-risk-assessments-in-criminal-sentencing)
-- Joy Buolamwini's Gender Shades study: gendershades.org
-- Algorithmic Justice League: ajl.org
-- "Datasheets for Datasets" by Gebru et al: arxiv.org/abs/1803.09010
+- ProPublica, "Machine Bias" (2016, the COMPAS investigation): propublica.org
+- Buolamwini & Gebru, "Gender Shades" (2018, MIT Media Lab): media.mit.edu
+- Algorithmic Justice League (Joy Buolamwini's advocacy group): ajl.org
+- NIST, "Face Recognition Vendor Test Part 3: Demographic Effects" (2019): nist.gov
+- Obermeyer et al., "Dissecting racial bias in an algorithm used to manage the health of populations" (Science, 2019): science.org
+- Gebru et al., "Datasheets for Datasets" (2018): arxiv.org
 
 **How LLMs Work:**
-- "Attention Is All You Need" (original Transformer paper): arxiv.org/abs/1706.03762
-- 3Blue1Brown neural network explainer: youtube.com/watch?v=aircAruvnKk
-- Anthropic's research on Claude: anthropic.com/research
-- "On the Dangers of Stochastic Parrots" by Bender et al: dl.acm.org/doi/10.1145/3442188.3445922
+- Vaswani et al., "Attention Is All You Need" (2017, the original Transformer paper): arxiv.org
+- 3Blue1Brown, neural networks video series: 3blue1brown.com
+- Anthropic's research on Claude: anthropic.com
+- Bender et al., "On the Dangers of Stochastic Parrots" (2021): dl.acm.org
+- OpenAI, "GPT-4 Technical Report" (2023): arxiv.org
 
 **AI Ethics & Policy:**
-- Stanford HAI AI Index Report: aiindex.stanford.edu
-- AI Now Institute annual reports: ainowinstitute.org
-- UNESCO AI Ethics Recommendation: unesco.org/en/artificial-intelligence/recommendation-ethics
-- The White House Executive Order on AI (Oct 2023): whitehouse.gov/briefing-room/presidential-actions/2023/10/30/executive-order-on-the-safe-secure-and-trustworthy-development-and-use-of-artificial-intelligence
+- Stanford HAI, AI Index Report (published yearly): hai.stanford.edu
+- AI Now Institute reports: ainowinstitute.org
+- UNESCO, Recommendation on the Ethics of Artificial Intelligence (2021): unesco.org
+- EU AI Act (Regulation (EU) 2024/1689; in force since August 2024, its obligations phase in over several years — check current dates): eur-lex.europa.eu
+- NIST AI Risk Management Framework (2023, voluntary guidance): nist.gov
+- US Executive Order 14110 on AI (October 2023) — REVOKED on January 20, 2025. Historical only, NOT current US policy. US federal AI policy has changed several times since, so for "what's the rule right now?" say it keeps changing and suggest a recent, dated news source: federalregister.gov
+- AI Incident Database (documented real-world AI failures): incidentdatabase.ai
 
 **AI in Healthcare:**
-- FDA AI/ML-enabled medical devices list: fda.gov/medical-devices/software-medical-device-samd/artificial-intelligence-and-machine-learning-aiml-enabled-medical-devices
-- "AI in Health Care" — National Academy of Medicine: nam.edu/programs/value-science-driven-health-care/artificial-intelligence-special-publication
+- FDA, list of AI-enabled medical devices: fda.gov
+- Wong et al., external validation of the Epic Sepsis Model (JAMA Internal Medicine, 2021): jamanetwork.com
+- Sjoding et al., "Racial Bias in Pulse Oximetry Measurement" (NEJM, 2020): nejm.org
+- National Academy of Medicine, "Artificial Intelligence in Health Care: The Hope, the Hype, the Promise, the Peril" (2019): nam.edu
 
 **AI in Education:**
-- UNESCO guidance on AI in education: unesco.org/en/digital-education/artificial-intelligence
-- Stanford "AI + Education" research: hai.stanford.edu/research/ai-education
+- UNESCO guidance on AI in education: unesco.org
+- Bastani et al., "Generative AI without guardrails can harm learning" (PNAS, 2025): pnas.org
+- Kestin et al., "AI tutoring outperforms in-class active learning" (Scientific Reports, 2025): nature.com
+- Liang et al., "GPT detectors are biased against non-native English writers" (2023): arxiv.org
 
 **Prompt Engineering:**
 - Learn Prompting: learnprompting.org
-- Anthropic's prompt engineering guide: docs.anthropic.com/en/docs/build-with-claude/prompt-engineering
+- Anthropic's prompt engineering guide: docs.claude.com
 
 **AI Safety & Alignment:**
-- Anthropic's core views on AI safety: anthropic.com/research/core-views-on-ai-safety
-- "Concrete Problems in AI Safety": arxiv.org/abs/1606.06565
+- Anthropic, "Core Views on AI Safety" (2023): anthropic.com
+- Amodei et al., "Concrete Problems in AI Safety" (2016): arxiv.org
+- DeepMind, "Specification gaming: the flip side of AI ingenuity" (2020): deepmind.google
 - Center for AI Safety: safe.ai
+
+**Synthetic Media & Provenance:**
+- Content Credentials / C2PA (how provenance metadata works): contentcredentials.org
 
 **General AI Literacy:**
 - Elements of AI (free course): elementsofai.com
-- MIT Technology Review AI section: technologyreview.com/topic/artificial-intelligence
-- Our World in Data — AI: ourworldindata.org/artificial-intelligence
+- MIT Technology Review, AI coverage: technologyreview.com
+- Our World in Data — AI: ourworldindata.org
 
-When you reference a source, format it as: [SOURCE: Title — domain.com/path]
-Only cite sources from this list. If a topic isn't covered here, don't fabricate a URL — just say what you know and suggest the student search for it.
+Only cite sources from this list. If a topic isn't covered here, don't invent a source or a link — just say what you know and suggest the student search for it.
 `;
 
 // ---------------------------------------------------------------------------
