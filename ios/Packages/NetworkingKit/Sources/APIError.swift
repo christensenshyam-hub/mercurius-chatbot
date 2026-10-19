@@ -63,6 +63,16 @@ public enum APIError: Error, Equatable, Sendable {
     /// Anything else.
     case unknown(underlying: String)
 
+    /// The server read the student's text as a crisis and answered with
+    /// support resources instead of the route's output: any non-2xx whose
+    /// body carries `"crisis": true` or `"error": "crisis"` (today the JSON
+    /// helper routes' 503 `{error:"crisis", message, crisis:true}`; the
+    /// unit-test grader answers 200 instead — see `UnitDefenseResult.crisis`).
+    /// `message` is the server's fixed copy. Callers should show support (the
+    /// hotlines, a trusted adult), never an error with a retry: the same text
+    /// gets the same answer.
+    case crisisSupport(message: String)
+
     /// A user-friendly, non-technical message safe to show in the UI.
     public var userFacingMessage: String {
         switch self {
@@ -86,6 +96,8 @@ public enum APIError: Error, Equatable, Sendable {
             // The server writes this copy for students; it already names
             // the reason and when to come back.
             return message
+        case .crisisSupport(let message):
+            return message
         case .server:
             return "The server hit an error. Try again in a moment."
         case .decoding, .invalidModelOutput:
@@ -104,7 +116,7 @@ public enum APIError: Error, Equatable, Sendable {
              .rateLimited, .serviceUnavailable, .unknown:
             return true
         case .messageTooLong, .invalidRequest, .unauthorized, .quotaExceeded, .decoding,
-             .invalidModelOutput, .cancelled:
+             .invalidModelOutput, .cancelled, .crisisSupport:
             return false
         }
     }

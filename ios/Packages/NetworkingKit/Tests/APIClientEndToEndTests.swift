@@ -1061,6 +1061,52 @@ struct APIClientEndToEndTests {
         }
     }
 
+    @Test("gradeUnitDefense: the server's 200 crisis answer decodes with crisis set")
+    func gradeUnitDefenseCrisis200() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/unit-test/grade")
+            #expect(request.httpMethod == "POST")
+            return .response(status: 200, data: Data(UnitDefenseResultTests.serverCrisisPayload.utf8))
+        }
+        let client = makeTestAPIClient()
+        let result = try await client.gradeUnitDefense(
+            sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+        )
+        #expect(result.crisis)
+        #expect(!result.pass)
+    }
+
+    @Test("gradeUnitDefense: a normal 200 grade decodes with crisis unset")
+    func gradeUnitDefenseNormal() async throws {
+        StubURLProtocol.handler = { _ in
+            .response(status: 200, data: Data(#"{"grade":"A","pass":true,"feedback":"Strong."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        let result = try await client.gradeUnitDefense(
+            sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+        )
+        #expect(!result.crisis)
+        #expect(result.grade == "A")
+    }
+
+    @Test("gradeUnitDefense: a 503 crisis body throws APIError.crisisSupport")
+    func gradeUnitDefenseCrisis503() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 503, data: Data(#"{"error":"crisis","message":"Call or text 988.","crisis":true}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.gradeUnitDefense(
+                sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+            )
+            Issue.record("Expected APIError.crisisSupport")
+        } catch APIError.crisisSupport(let message) {
+            #expect(message == "Call or text 988.")
+        } catch {
+            Issue.record("Expected .crisisSupport, got \(error)")
+        }
+    }
+
     @Test("Stream: refusal frame + [DONE] → exactly one .refusal event, then a clean finish")
     func streamingRefusalFrame() async throws {
         let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."

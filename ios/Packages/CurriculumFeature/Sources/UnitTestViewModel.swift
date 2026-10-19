@@ -11,6 +11,10 @@ public enum DefenseGradingError: Error, Equatable, Sendable {
     /// The server or network refused the request — a daily limit, the spend
     /// cap, a busy server. `message` is safe to show.
     case refused(message: String, isRetryable: Bool)
+    /// The server answered the written defense with crisis support instead
+    /// of a grade, on a non-2xx (a 200 crisis arrives as
+    /// `DefenseResult.isCrisis`). Shows the support view, like that one.
+    case crisis
 }
 
 /// Drives a cumulative unit test: an objective multiple-choice quiz scored
@@ -29,6 +33,11 @@ public final class UnitTestViewModel {
         case defense
         /// Final pass/fail screen.
         case result
+        /// The written answer read as a student who may be in crisis, and the
+        /// server answered with support instead of a grade. The test is set
+        /// aside: no grade, no score, no retake — the hotlines, a trusted
+        /// adult, and a quiet way back to the path.
+        case support
     }
 
     /// The server's grade of the defense answer, normalized into the package.
@@ -36,12 +45,19 @@ public final class UnitTestViewModel {
         public let grade: String
         public let pass: Bool
         public let feedback: String
+        /// The server's crisis signal: this is not a grade, and the student
+        /// sees the support view instead of a result.
+        public let isCrisis: Bool
 
-        public init(grade: String, pass: Bool, feedback: String) {
+        public init(grade: String, pass: Bool, feedback: String, isCrisis: Bool = false) {
             self.grade = grade
             self.pass = pass
             self.feedback = feedback
+            self.isCrisis = isCrisis
         }
+
+        /// The crisis answer. It carries no grade and can never pass.
+        public static let crisisSupport = DefenseResult(grade: "", pass: false, feedback: "", isCrisis: true)
     }
 
     public let unit: Unit
@@ -179,9 +195,16 @@ public final class UnitTestViewModel {
         refusedAnswer = nil
         do {
             let result = try await gradeDefense(answer)
-            defenseResult = result
             isGrading = false
+            if result.isCrisis {
+                enterSupport()
+                return
+            }
+            defenseResult = result
             phase = .result
+        } catch DefenseGradingError.crisis {
+            isGrading = false
+            enterSupport()
         } catch DefenseGradingError.unavailable {
             // Honest copy: the endpoint doesn't exist on this server, so
             // blaming the student's connection would send them into a
@@ -198,14 +221,33 @@ public final class UnitTestViewModel {
         }
     }
 
+    /// Sets the test aside for support: nothing graded is kept, so no grade,
+    /// score or pass can reach the screen or the mastery callback.
+    private func enterSupport() {
+        defenseResult = nil
+        defenseError = nil
+        refusedAnswer = nil
+        phase = .support
+    }
+
     // MARK: - Result
 
     /// Overall pass requires BOTH halves: the MCQ score and the defense grade.
+    /// Never true on the support screen.
     public var overallPassed: Bool {
-        mcqPassed && (defenseResult?.pass ?? false)
+        phase != .support && mcqPassed && (defenseResult?.pass ?? false)
+    }
+
+    /// Whether the result screen offers "Retake test": only after a graded
+    /// attempt that didn't pass. Never on the support screen — the way back
+    /// from there is leaving the test.
+    public var offersRetake: Bool {
+        phase == .result && !overallPassed
     }
 
     public func retake() {
+        // Support is not a failed attempt; nothing there restarts the test.
+        guard phase != .support else { return }
         selections = [:]
         quizSubmitted = false
         defenseAnswer = ""

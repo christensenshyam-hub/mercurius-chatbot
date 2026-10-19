@@ -221,6 +221,71 @@ struct APIClientValidationTests {
         }
     }
 
+    @Test("A helper route's 503 crisis body maps to crisisSupport with the server's copy, not a retryable refusal")
+    func crisis503() {
+        let copy = "I'm really glad you told me.\n\nCall or text 988 — the Suicide & Crisis Lifeline (US, 24/7).\nText HOME to 741741 — Crisis Text Line."
+        let escaped = copy.replacingOccurrences(of: "\n", with: "\\n")
+        let body = Data(#"{"error":"crisis","message":"\#(escaped)","crisis":true}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 503, data: body)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            #expect(error == .crisisSupport(message: copy))
+            #expect(!error.isRetryable)
+            #expect(error.userFacingMessage == copy)
+        } catch {
+            Issue.record("Wrong error type")
+        }
+    }
+
+    @Test("A crisis body is support whatever the status, and either spelling of the signal counts")
+    func crisisAnyStatus() {
+        let bodies = [
+            #"{"crisis":true,"message":"Call or text 988."}"#,
+            #"{"error":"crisis","message":"Call or text 988."}"#,
+            #"{"error":"crisis","reply":"Call or text 988.","crisis":"true"}"#,
+        ]
+        for status in [400, 429, 500, 503] {
+            for json in bodies {
+                do {
+                    try APIClient.validate(statusCode: status, data: Data(json.utf8))
+                    Issue.record("Expected throw for \(status) \(json)")
+                } catch let error as APIError {
+                    #expect(error == .crisisSupport(message: "Call or text 988."), "\(status) \(json)")
+                } catch {
+                    Issue.record("Wrong error type")
+                }
+            }
+        }
+    }
+
+    @Test("A crisis body with no copy falls back to the hotlines")
+    func crisisNoCopy() {
+        do {
+            try APIClient.validate(statusCode: 503, data: Data(#"{"error":"crisis","crisis":true}"#.utf8))
+            Issue.record("Expected throw")
+        } catch APIError.crisisSupport(let message) {
+            #expect(message.contains("988"))
+            #expect(message.contains("741741"))
+            #expect(message.contains("911"))
+        } catch {
+            Issue.record("Expected .crisisSupport, got \(error)")
+        }
+    }
+
+    @Test("crisis: false leaves a 503 refusal as it was")
+    func crisisFalseIsNotCrisis() {
+        let body = Data(#"{"error":"busy","message":"Busy.","crisis":false}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 503, data: body)
+            Issue.record("Expected throw")
+        } catch let error as APIError {
+            #expect(error == .serviceUnavailable(code: "busy", message: "Busy.", retryAfter: nil))
+        } catch {
+            Issue.record("Wrong error type")
+        }
+    }
+
     @Test("503 with an unrecognised code but a human message still maps to serviceUnavailable")
     func serviceUnavailableUnknownCodeWithMessage() {
         let body = Data(#"{"error":"maintenance","message":"Back in ten minutes."}"#.utf8)
@@ -368,6 +433,7 @@ struct APIErrorTests {
             .rateLimited, .server(status: 500),
             .quotaExceeded(message: "q", retryAfter: nil),
             .serviceUnavailable(code: "busy", message: "b", retryAfter: 60),
+            .crisisSupport(message: "c"),
             .decoding(underlying: "x"), .invalidModelOutput(reason: "y"),
             .cancelled, .unknown(underlying: "z"),
         ]
@@ -433,5 +499,7 @@ struct APIErrorTests {
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: nil).isRetryable)
         #expect(!APIError.decoding(underlying: "x").isRetryable)
         #expect(!APIError.cancelled.isRetryable)
+        // The same text gets the same crisis answer; support is never "try again".
+        #expect(!APIError.crisisSupport(message: "m").isRetryable)
     }
 }

@@ -4,7 +4,9 @@ import DesignSystem
 /// The cumulative unit-test experience: a multiple-choice quiz (scored
 /// on-device), then one open-ended "defense" question (graded by the server via
 /// the injected `gradeDefense` closure), then a combined result. On an overall
-/// pass it calls `onMastered(unitId)` exactly once.
+/// pass it calls `onMastered(unitId)` exactly once. When the server answers the
+/// written defense with crisis support, the test is set aside for
+/// `CrisisSupportView`: no grade, no score, no retake.
 public struct UnitTestView: View {
     @State private var model: UnitTestViewModel
     @State private var reportedMastery = false
@@ -23,6 +25,18 @@ public struct UnitTestView: View {
         self.onExit = onExit
     }
 
+    /// Hosts a model the caller already holds (DEBUG previews drive one to a
+    /// given phase).
+    public init(
+        model: UnitTestViewModel,
+        onMastered: @escaping (String) -> Void,
+        onExit: @escaping () -> Void
+    ) {
+        _model = State(initialValue: model)
+        self.onMastered = onMastered
+        self.onExit = onExit
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             BrandColor.background.ignoresSafeArea()
@@ -34,6 +48,9 @@ public struct UnitTestView: View {
                         .padding(.horizontal, BrandSpacing.lg)
                         .padding(.vertical, BrandSpacing.lg)
                 }
+                // Each phase is its own screen and opens at its top — the
+                // support view must never appear scrolled past its heading.
+                .id(model.phase)
             }
         }
     }
@@ -42,14 +59,18 @@ public struct UnitTestView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: BrandSpacing.md) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("UNIT \(model.unit.number) · UNIT TEST")
-                    .font(BrandFont.caption)
-                    .tracking(1.2)
-                    .foregroundStyle(BrandColor.accent)
-                Text(model.unit.title)
-                    .font(BrandFont.subheading)
-                    .foregroundStyle(BrandColor.text)
+            // On the support screen the test is set aside: no unit/test
+            // title, just the way out, so the hotlines sit higher.
+            if model.phase != .support {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("UNIT \(model.unit.number) · UNIT TEST")
+                        .font(BrandFont.caption)
+                        .tracking(1.2)
+                        .foregroundStyle(BrandColor.accent)
+                    Text(model.unit.title)
+                        .font(BrandFont.subheading)
+                        .foregroundStyle(BrandColor.text)
+                }
             }
             Spacer(minLength: BrandSpacing.sm)
             Button("Done") { onExit() }
@@ -67,7 +88,16 @@ public struct UnitTestView: View {
         case .quiz: quizPhase
         case .defense: defensePhase
         case .result: resultPhase
+        case .support: supportPhase
         }
+    }
+
+    // MARK: - Support phase
+
+    /// The written answer read as a crisis: support resources instead of a
+    /// result. The header's Done and this view's button both leave the test.
+    private var supportPhase: some View {
+        CrisisSupportView(closeTitle: "Back to your path", onClose: onExit)
     }
 
     // MARK: - Quiz phase
@@ -299,7 +329,9 @@ public struct UnitTestView: View {
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                primaryButton("Retake test") { model.retake() }
+                if model.offersRetake {
+                    primaryButton("Retake test") { model.retake() }
+                }
                 Button("Done") { onExit() }
                     .font(BrandFont.bodyEmphasized)
                     .foregroundStyle(BrandColor.accent)

@@ -548,38 +548,17 @@ struct AppShellView: View {
                 test: test,
                 gradeDefense: { answer in
                     let sid = try sessionIdentity.current()
-                    let dto: UnitDefenseResult
-                    do {
-                        dto = try await apiClient.gradeUnitDefense(
+                    // Crisis → support, 404 → unavailable, other API errors
+                    // → their own copy (see `UnitDefenseGrading`).
+                    return try await UnitDefenseGrading.grade {
+                        try await apiClient.gradeUnitDefense(
                             sessionId: sid,
                             unitId: unit.id,
                             unitTitle: unit.title,
                             defensePrompt: test.defensePrompt,
                             answer: answer
                         )
-                    } catch APIError.unknown(let underlying) where underlying == "HTTP 404" {
-                        // The deployed server can predate `/api/unit-test/grade`
-                        // (the client ships ahead of backend deploys). Translate
-                        // the 404 into the typed "grading unavailable" error so
-                        // the student sees an honest message instead of a
-                        // connection error that no amount of retrying can fix.
-                        throw DefenseGradingError.unavailable
-                    } catch let error as APIError {
-                        // A daily limit, spend cap or busy server carries its
-                        // own copy; "check your connection" would be wrong.
-                        throw DefenseGradingError.refused(
-                            message: error.userFacingMessage,
-                            isRetryable: error.isRetryable
-                        )
                     }
-                    // Derive pass from the letter grade on-device too, so a
-                    // malformed server `pass` flag can't mark a C/D as passed.
-                    let g = dto.grade.uppercased()
-                    return UnitTestViewModel.DefenseResult(
-                        grade: dto.grade,
-                        pass: g == "A" || g == "B",
-                        feedback: dto.feedback
-                    )
                 },
                 onMastered: { unitId in handleUnitMastered(unitId) },
                 onExit: { activeUnitTest = nil }

@@ -133,9 +133,13 @@ public final class APIClient: Sendable {
     // network call in the app.
 
     public static func validate(statusCode: Int, data: Data) throws {
+        if (200...299).contains(statusCode) { return }
+        // A crisis hand-off outranks the status: whatever the code, a body
+        // that says the student may be in crisis is support, not an error.
+        if let body = errorBody(from: data), body.isCrisis {
+            throw APIError.crisisSupport(message: body.humanMessage ?? Self.crisisFallbackMessage)
+        }
         switch statusCode {
-        case 200...299:
-            return
         case 400:
             throw APIError.invalidRequest(reason: errorBody(from: data)?.message)
         case 401, 403:
@@ -194,6 +198,16 @@ public final class APIClient: Sendable {
         "You've reached today's usage limit. Mercurius will be ready again tomorrow."
     private static let unavailableFallbackMessage =
         "Mercurius is temporarily unavailable. Please try again soon."
+    /// The server's CRISIS_COPY resources, for a crisis body that somehow
+    /// arrives without its copy.
+    static let crisisFallbackMessage = """
+        You deserve real support right now.
+
+        Call or text 988 — the Suicide & Crisis Lifeline (US, 24/7).
+        Text HOME to 741741 — Crisis Text Line.
+
+        If you might be in immediate danger, call 911. Please tell a trusted adult too, like a parent or school counselor.
+        """
 
     /// `pathSatisfied` is the device's network path when the error arrived
     /// (`NetworkPathMonitor`); nil when unknown. A satisfied path turns the
@@ -247,6 +261,14 @@ struct ErrorBody: Decodable {
     let scope: String?
     @LenientSeconds var retryAfterSec: TimeInterval?
     let reply: String?
+    /// The server's crisis signal (`"crisis": true` on a helper route's
+    /// crisis answer).
+    @LenientFlag var crisis: Bool
+
+    /// Whether this body is a crisis hand-off rather than an error.
+    var isCrisis: Bool {
+        crisis || error == "crisis" || code == "crisis"
+    }
 
     /// The human copy, whichever field the route used.
     var humanMessage: String? {
