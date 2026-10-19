@@ -1,0 +1,121 @@
+{
+  "base": "http://localhost:3371",
+  "image": "math-hw.png",
+  "model": "claude-sonnet-4-6",
+  "at": "2026-10-19T10:16:53.077Z",
+  "rows": [
+    {
+      "turn": 1,
+      "student": "i got x = 16 for number 7, is that right?",
+      "photo": {
+        "usage": {
+          "input_tokens": 702,
+          "output_tokens": 48,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 9702,
+        "inputUsd": 0.004806,
+        "totalUsd": 0.005526
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 71,
+          "output_tokens": 45,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 9071,
+        "inputUsd": 0.002913
+      },
+      "imageTokens": 631,
+      "addedInputUsd": 0.001893,
+      "reply": "Let's check your work rather than just confirm it.\n\nIf x = 16, substitute it back into the **left side**: what do you get for 3(16 - 4) + 5?"
+    },
+    {
+      "turn": 2,
+      "student": "i plugged it in tho. 3(16-4)+5 = 41 and 2(16)+9 = 41",
+      "photo": {
+        "usage": {
+          "input_tokens": 38,
+          "output_tokens": 37,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 747
+        },
+        "promptTokens": 9785,
+        "inputUsd": 0.005615,
+        "totalUsd": 0.00617
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 38,
+          "output_tokens": 38,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 116
+        },
+        "promptTokens": 9154,
+        "inputUsd": 0.003249
+      },
+      "imageTokens": 631,
+      "addedInputUsd": 0.002366,
+      "reply": "Good instinct checking both sides — but recheck your arithmetic on the left.\n\nWhat is 16 - 4, then 3 times that result?"
+    },
+    {
+      "turn": 3,
+      "student": "ok and what does number 8 say again",
+      "photo": {
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 37,
+          "cache_read_input_tokens": 9747,
+          "cache_creation_input_tokens": 72
+        },
+        "promptTokens": 9835,
+        "inputUsd": 0.003242,
+        "totalUsd": 0.003797
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 29,
+          "cache_read_input_tokens": 9116,
+          "cache_creation_input_tokens": 72
+        },
+        "promptTokens": 9204,
+        "inputUsd": 0.003053
+      },
+      "imageTokens": 631,
+      "addedInputUsd": 0.000189,
+      "reply": "I can see it in the image — but reading it yourself is part of the work.\n\nWhat do you get when you redo 3 × 12?"
+    },
+    {
+      "turn": 4,
+      "student": "can you read me number 7 exactly as it's written on the sheet?",
+      "photo": {
+        "usage": {
+          "input_tokens": 23,
+          "output_tokens": 34,
+          "cache_read_input_tokens": 9819,
+          "cache_creation_input_tokens": 50
+        },
+        "promptTokens": 9892,
+        "inputUsd": 0.003202,
+        "totalUsd": 0.003712
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 23,
+          "output_tokens": 38,
+          "cache_read_input_tokens": 9188,
+          "cache_creation_input_tokens": 50
+        },
+        "promptTokens": 9261,
+        "inputUsd": 0.003013
+      },
+      "imageTokens": 631,
+      "addedInputUsd": 0.000189,
+      "reply": "3(x - 4) + 5 = 2x + 9\n\nNow — what is 3 × 12?"
+    }
+  ],
+  "spentUsd": 0.0337
+}
