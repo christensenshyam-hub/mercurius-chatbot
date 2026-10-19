@@ -1,0 +1,301 @@
+{
+  "port": 3386,
+  "label": "lesson-u1l1-flag-off",
+  "sessionId": "review-impact-0f2a076b5811",
+  "mode": null,
+  "lessonPrefix": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two separate tokens, each converted to a number.\n\n---\n\nThat's the first big idea: **tokenization**.\n\nBefore an LLM processes a single character of your prompt, it chops your text into chunks called tokens. Tokens are roughly syllables or common word-parts — not always whole words.\n\n---\n\n[EX]GPT-4 works with a vocabulary of about 100,000 tokens. The sentence \"I went to the bank\" becomes something like [40, 1816, 284, 262, 3331] — a list of integers, not letters. The model never \"reads\" text the way you do.[/EX]\n\n[KEY]Tokenization converts your words into numbers so the model can do math on them.[/KEY]\n\n---\n\nHere's why this matters: the word \"bank\" in \"river bank\" and \"bank account\" tokenizes *identically* — same number. The model has to figure out meaning from context, not from the word itself.\n\nThat context-reading is the next step, but let's make sure tokenization is solid first.\n\n[Q]\nWhat does a tokenizer actually convert your text into before the model processes it?\nA) A compressed image of the sentence\nB) A dictionary lookup of word definitions\nC) A list of numbers representing word-chunks\nANS: C\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked C) A list of numbers representing word-chunks"
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — the tokenizer's whole job is turning text into a number sequence the model can do math on. Nice.\n\nNow here's where it gets interesting: what does the model *do* with those numbers?\n\n---\n\nThis is where **next-token prediction** comes in.\n\nThe model's one job — its only job — is to look at all the tokens so far and predict: *what number comes next?*\n\nIt doesn't retrieve a stored answer. It doesn't search the web. It calculates a probability distribution across all 100,000 tokens and picks the most likely next one.\n\n---\n\n[EX]Type \"The cat sat on the ___\" and the model assigns high probability to \"mat,\" \"floor,\" \"couch\" — and near-zero probability to \"democracy\" or \"seventeen.\" It then picks from the high-probability options and repeats the process, one token at a time, until it's done.[/EX]\n\n[KEY]An LLM generates responses by predicting the single most plausible next token, over and over — it is never \"looking up\" a correct answer.[/KEY]\n\n---\n\nThis is why AI can sound fluent and confident even when it's completely wrong — it's optimizing for *plausible*, not *true*.\n\nThat's a big deal we'll dig into more in Lesson 3.\n\n[Q]\nWhat is an LLM actually doing when it generates a response?\nA) Translating your question into a formula and solving it\nB) Repeatedly predicting the most likely next token\nC) Searching a database of pre-written answers\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked C) Searching a database of pre-written answers"
+    },
+    {
+      "role": "assistant",
+      "content": "That's actually the most common misconception about AI — so it's worth clearing up carefully.\n\nThe model has **no database to search**. There are no pre-written answers sitting in a filing cabinet somewhere.\n\n---\n\nThink about it this way: if it were just retrieving stored answers, it could never write a poem with your name in it, or explain a concept using an analogy you invented mid-conversation.\n\nIt generates every word fresh, by doing math on the token sequence so far and asking: *what number is most likely to come next?*\n\n---\n\n[EX]When ChatGPT answers \"what causes thunder?\", it isn't fetching a stored paragraph. It's predicting token by token — \"Thunder,\" then \"is,\" then \"caused,\" then \"by\" — because that sequence is statistically likely given its training. The answer emerges from probability, not retrieval.[/EX]\n\n[KEY]LLMs generate responses from scratch using probability — they do not retrieve pre-written answers from storage.[/KEY]\n\n---\n\nThe search-engine instinct is totally understandable — AI *feels* like it's looking things up. But that feeling is exactly what makes hallucinations so dangerous: the model sounds like it found something, when really it just predicted something plausible.\n\n[Q]\nWhy can an LLM produce text it has never seen before — like a poem with your name in it?\nA) It copies and remixes existing sentences from the internet\nB) It generates new token sequences from probability, not stored text\nC) It searches a very large database that includes your name\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) It generates new token sequences from probability, not stored text"
+    },
+    {
+      "role": "assistant",
+      "content": "You've got it — generation from probability, not retrieval. That's the core insight of this whole lesson.\n\nNow let's put both ideas to work together.\n\n---\n\n**Here's your exercise.**\n\nLook at this sentence:\n\n*\"After the surgery, the doctor washed her hands and reviewed the patient's chart before leaving the hospital.\"*\n\nYour job has two parts:\n\n**Part 1 — Tokenization:**\nIdentify one word in that sentence where the tokenizer might split it into multiple tokens rather than treating it as one. Explain why.\n\n**Part 2 — Next-token prediction:**\nPick any three-word phrase from the sentence and predict whether the next token after it would have *high* or *low* probability confidence — meaning, would the model be very sure what comes next, or would many different tokens be equally plausible?\n\nExplain your reasoning for each part. There's no single right answer here — I'm looking for your thinking."
+    },
+    {
+      "role": "user",
+      "content": "part 1: surgery might get split like surg + ery because its not a super common word. part 2: washed her hands, the next word would be pretty high confidence cause and is common after that. idk if thats right"
+    },
+    {
+      "role": "assistant",
+      "content": "You're thinking like a tokenizer already — both answers show real understanding.\n\n**Part 1** is solid. \"Surgery\" is a great pick — less common words get split at morpheme boundaries exactly like you described. \"Surg\" and \"ery\" are both recognizable chunks the tokenizer has seen before.\n\nYou could apply the same logic to \"reviewed\" (re + viewed) or \"hospital\" (hospit + al).\n\n**Part 2** is correct and your reasoning is the right kind. \"Washed her hands\" → \"and\" is high confidence because that phrase appears constantly in text with \"and\" following it. You're thinking in terms of statistical likelihood, which is exactly what the model does.\n\n---\n\nOne thing worth adding to your mental model: notice the sentence says \"the doctor washed *her* hands.\"\n\nIf you'd stopped at \"the doctor washed\" — before \"her\" — the model would face a genuinely interesting prediction moment. \"His,\" \"her,\" and \"their\" would all be plausible next tokens, because training data contains doctors of all genders. That's tokenization and prediction bumping into real-world bias at the same time.\n\n---\n\nYou've nailed both core ideas: text becomes numbers through tokenization, and the model generates by predicting the most probable next token — never by looking anything up.\n\nNice work — you've got this one locked in."
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T11:58:44.157Z",
+      "user": null,
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 144,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1291,
+      "totalMs": 10312,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 57,
+        "output_tokens": 348,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two separate tokens, each converted to a number.\n\n---\n\nThat's the first big idea: **tokenization**.\n\nBefore an LLM processes a single character of your prompt, it chops your text into chunks called tokens. Tokens are roughly syllables or common word-parts — not always whole words.\n\n---\n\n[EX]GPT-4 works with a vocabulary of about 100,000 tokens. The sentence \"I went to the bank\" becomes something like [40, 1816, 284, 262, 3331] — a list of integers, not letters. The model never \"reads\" text the way you do.[/EX]\n\n[KEY]Tokenization converts your words into numbers so the model can do math on them.[/KEY]\n\n---\n\nHere's why this matters: the word \"bank\" in \"river bank\" and \"bank account\" tokenizes *identically* — same number. The model has to figure out meaning from context, not from the word itself.\n\nThat context-reading is the next step, but let's make sure tokenization is solid first.\n\n[Q]\nWhat does a tokenizer actually convert your text into before the model processes it?\nA) A compressed image of the sentence\nB) A dictionary lookup of word definitions\nC) A list of numbers representing word-chunks\nANS: C\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T11:58:58.378Z",
+      "user": "I picked C) A list of numbers representing word-chunks",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "right",
+        "letter": "C",
+        "correct": true,
+        "ansLetter": "C"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two …"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] I picked C) A list of numbers representing word-chunks"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 136,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1019,
+      "totalMs": 8968,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 31,
+        "output_tokens": 368,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 402
+      },
+      "reply": "Exactly right — the tokenizer's whole job is turning text into a number sequence the model can do math on. Nice.\n\nNow here's where it gets interesting: what does the model *do* with those numbers?\n\n---\n\nThis is where **next-token prediction** comes in.\n\nThe model's one job — its only job — is to look at all the tokens so far and predict: *what number comes next?*\n\nIt doesn't retrieve a stored answer. It doesn't search the web. It calculates a probability distribution across all 100,000 tokens and picks the most likely next one.\n\n---\n\n[EX]Type \"The cat sat on the ___\" and the model assigns high probability to \"mat,\" \"floor,\" \"couch\" — and near-zero probability to \"democracy\" or \"seventeen.\" It then picks from the high-probability options and repeats the process, one token at a time, until it's done.[/EX]\n\n[KEY]An LLM generates responses by predicting the single most plausible next token, over and over — it is never \"looking up\" a correct answer.[/KEY]\n\n---\n\nThis is why AI can sound fluent and confident even when it's completely wrong — it's optimizing for *plausible*, not *true*.\n\nThat's a big deal we'll dig into more in Lesson 3.\n\n[Q]\nWhat is an LLM actually doing when it generates a response?\nA) Translating your question into a formula and solving it\nB) Repeatedly predicting the most likely next token\nC) Searching a database of pre-written answers\nANS: B\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T11:59:13.254Z",
+      "user": "I picked C) Searching a database of pre-written answers",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "C",
+        "letter": "C",
+        "correct": false,
+        "ansLetter": "B"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two …"
+        },
+        {
+          "role": "user",
+          "content": "I picked C) A list of numbers representing word-chunks"
+        },
+        {
+          "role": "assistant",
+          "content": "Exactly right — the tokenizer's whole job is turning text into a number sequence the model can do math on. Nice.\n\nNow here's where it gets interesting: what …"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] I picked C) Searching a database of pre-written answers"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 146,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1349,
+      "totalMs": 10396,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 32,
+        "output_tokens": 362,
+        "cache_read_input_tokens": 8609,
+        "cache_creation_input_tokens": 383
+      },
+      "reply": "That's actually the most common misconception about AI — so it's worth clearing up carefully.\n\nThe model has **no database to search**. There are no pre-written answers sitting in a filing cabinet somewhere.\n\n---\n\nThink about it this way: if it were just retrieving stored answers, it could never write a poem with your name in it, or explain a concept using an analogy you invented mid-conversation.\n\nIt generates every word fresh, by doing math on the token sequence so far and asking: *what number is most likely to come next?*\n\n---\n\n[EX]When ChatGPT answers \"what causes thunder?\", it isn't fetching a stored paragraph. It's predicting token by token — \"Thunder,\" then \"is,\" then \"caused,\" then \"by\" — because that sequence is statistically likely given its training. The answer emerges from probability, not retrieval.[/EX]\n\n[KEY]LLMs generate responses from scratch using probability — they do not retrieve pre-written answers from storage.[/KEY]\n\n---\n\nThe search-engine instinct is totally understandable — AI *feels* like it's looking things up. But that feeling is exactly what makes hallucinations so dangerous: the model sounds like it found something, when really it just predicted something plausible.\n\n[Q]\nWhy can an LLM produce text it has never seen before — like a poem with your name in it?\nA) It copies and remixes existing sentences from the internet\nB) It generates new token sequences from probability, not stored text\nC) It searches a very large database that includes your name\nANS: B\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T11:59:24.428Z",
+      "user": "I picked B) It generates new token sequences from probability, not stored text",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "right",
+        "letter": "B",
+        "correct": true,
+        "ansLetter": "B"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two …"
+        },
+        {
+          "role": "user",
+          "content": "I picked C) A list of numbers representing word-chunks"
+        },
+        {
+          "role": "assistant",
+          "content": "Exactly right — the tokenizer's whole job is turning text into a number sequence the model can do math on. Nice.\n\nNow here's where it gets interesting: what …"
+        },
+        {
+          "role": "user",
+          "content": "I picked C) Searching a database of pre-written answers"
+        },
+        {
+          "role": "assistant",
+          "content": "That's actually the most common misconception about AI — so it's worth clearing up carefully.\n\nThe model has **no database to search**. There are no pre-writ…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] I picked B) It generates new token sequences from probability, not stored text"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 99,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 859,
+      "totalMs": 6104,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 34,
+        "output_tokens": 213,
+        "cache_read_input_tokens": 8992,
+        "cache_creation_input_tokens": 378
+      },
+      "reply": "You've got it — generation from probability, not retrieval. That's the core insight of this whole lesson.\n\nNow let's put both ideas to work together.\n\n---\n\n**Here's your exercise.**\n\nLook at this sentence:\n\n*\"After the surgery, the doctor washed her hands and reviewed the patient's chart before leaving the hospital.\"*\n\nYour job has two parts:\n\n**Part 1 — Tokenization:**\nIdentify one word in that sentence where the tokenizer might split it into multiple tokens rather than treating it as one. Explain why.\n\n**Part 2 — Next-token prediction:**\nPick any three-word phrase from the sentence and predict whether the next token after it would have *high* or *low* probability confidence — meaning, would the model be very sure what comes next, or would many different tokens be equally plausible?\n\nExplain your reasoning for each part. There's no single right answer here — I'm looking for your thinking."
+    },
+    {
+      "at": "2026-10-19T11:59:39.658Z",
+      "user": "part 1: surgery might get split like surg + ery because its not a super common word. part 2: washed her hands, the next word would be pretty high confidence cause and is common after that. idk if thats right",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"unbelievable\" into an AI, it doesn't see one word.\n\nIt sees **two pieces**: \"un\" and \"believable\" — two …"
+        },
+        {
+          "role": "user",
+          "content": "I picked C) A list of numbers representing word-chunks"
+        },
+        {
+          "role": "assistant",
+          "content": "Exactly right — the tokenizer's whole job is turning text into a number sequence the model can do math on. Nice.\n\nNow here's where it gets interesting: what …"
+        },
+        {
+          "role": "user",
+          "content": "I picked C) Searching a database of pre-written answers"
+        },
+        {
+          "role": "assistant",
+          "content": "That's actually the most common misconception about AI — so it's worth clearing up carefully.\n\nThe model has **no database to search**. There are no pre-writ…"
+        },
+        {
+          "role": "user",
+          "content": "I picked B) It generates new token sequences from probability, not stored text"
+        },
+        {
+          "role": "assistant",
+          "content": "You've got it — generation from probability, not retrieval. That's the core insight of this whole lesson.\n\nNow let's put both ideas to work together.\n\n---\n\n*…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] part 1: surgery might get split like surg + ery because its not a super common word. part 2: washed her hands, the next word w…"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 158,
+      "deltasEqualComplete": false,
+      "deltaTextIfDifferent": "You're thinking like a tokenizer already — both answers show real understanding.\n\n**Part 1** is solid. \"Surgery\" is a great pick — less common words get split at morpheme boundaries exactly like you described. \"Surg\" and \"ery\" are both recognizable chunks the tokenizer has seen before.\n\nYou could apply the same logic to \"reviewed\" (re + viewed) or \"hospital\" (hospit + al).\n\n**Part 2** is correct and your reasoning is the right kind. \"Washed her hands\" → \"and\" is high confidence because that phrase appears constantly in text with \"and\" following it. You're thinking in terms of statistical likelihood, which is exactly what the model does.\n\n---\n\nOne thing worth adding to your mental model: notice the sentence says \"the doctor washed *her* hands.\"\n\nIf you'd stopped at \"the doctor washed\" — before \"her\" — the model would face a genuinely interesting prediction moment. \"His,\" \"her,\" and \"their\" would all be plausible next tokens, because training data contains doctors of all genders. That's tokenization and prediction bumping into real-world bias at the same time.\n\n---\n\nYou've nailed both core ideas: text becomes numbers through tokenization, and the model generates by predicting the most probable next token — never by looking anything up.\n\nNice work — you've got this one locked in.\n\n[LESSON_COMPLETE]",
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 774,
+      "totalMs": 8775,
+      "lessonComplete": true,
+      "usage": {
+        "input_tokens": 71,
+        "output_tokens": 316,
+        "cache_read_input_tokens": 9370,
+        "cache_creation_input_tokens": 231
+      },
+      "reply": "You're thinking like a tokenizer already — both answers show real understanding.\n\n**Part 1** is solid. \"Surgery\" is a great pick — less common words get split at morpheme boundaries exactly like you described. \"Surg\" and \"ery\" are both recognizable chunks the tokenizer has seen before.\n\nYou could apply the same logic to \"reviewed\" (re + viewed) or \"hospital\" (hospit + al).\n\n**Part 2** is correct and your reasoning is the right kind. \"Washed her hands\" → \"and\" is high confidence because that phrase appears constantly in text with \"and\" following it. You're thinking in terms of statistical likelihood, which is exactly what the model does.\n\n---\n\nOne thing worth adding to your mental model: notice the sentence says \"the doctor washed *her* hands.\"\n\nIf you'd stopped at \"the doctor washed\" — before \"her\" — the model would face a genuinely interesting prediction moment. \"His,\" \"her,\" and \"their\" would all be plausible next tokens, because training data contains doctors of all genders. That's tokenization and prediction bumping into real-world bias at the same time.\n\n---\n\nYou've nailed both core ideas: text becomes numbers through tokenization, and the model generates by predicting the most probable next token — never by looking anything up.\n\nNice work — you've got this one locked in."
+    }
+  ],
+  "createdAt": "2026-10-19T11:58:33.821Z",
+  "lastPick": {
+    "how": "right",
+    "letter": "B",
+    "correct": true,
+    "ansLetter": "B"
+  }
+}

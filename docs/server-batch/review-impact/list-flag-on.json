@@ -1,0 +1,93 @@
+{
+  "port": 3385,
+  "label": "list-flag-on",
+  "sessionId": "review-impact-1bf4dd523fe7",
+  "mode": null,
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "give me a numbered list of 5 quick ways to tell if a pic is AI generated. keep each one short pls i have a quiz tmrw"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are 5 quick tells:\n\n1. **Hands** — wrong number of fingers, fused or melted joints\n2. **Text** — garbled, nonsense letters in signs or labels\n3. **Symmetry errors** — earrings that don't match, one glasses lens missing\n4. **Background bleed** — objects that merge into each other unnaturally\n5. **Too-perfect skin** — no pores, no asymmetry, plastic-looking texture\n\nThese are heuristics, not guarantees — newer models are getting better at hiding them.\n\nWhich of these do you think would be *hardest* to fake-proof, and why?"
+    },
+    {
+      "role": "assistant",
+      "content": "Let's go deeper on *why* these flaws exist in the first place — that's what will stick under quiz pressure.\n\n**The root cause is how image generators work.**\n\nModels like Stable Diffusion or Midjourney don't \"draw\" the way a human does — they learn statistical patterns from millions of images and reconstruct plausible-looking pixels from noise.\n\nThey don't have a body, so they have no internal model of \"a hand has exactly 5 fingers.\" They just know fingers tend to appear near palms — and they approximate.\n\n---\n\n**Why hands are the canonical failure point:**\n\nHands are *combinatorially complex* — 5 fingers, multiple joints each, foreshortening when angled, occlusion when overlapping.\n\nThe training data contains hands in thousands of poses, and the model has to reconcile all of them at once.\n\nThe result: statistically plausible *hand-shaped regions* that fall apart under inspection.\n\n---\n\n**Why text fails:**\n\nText in training images is visually present but semantically opaque to the model — it sees letter-shapes as *texture*, not meaning.\n\nSo it generates something that *looks like* text at a glance but isn't anchored to any alphabet.\n\n---\n\n**The arms race problem:**\n\nNewer models are explicitly trained on failure cases, so the obvious tells are shrinking.\n\nThis means detection is shifting toward **metadata and frequency analysis** — tools like forensic software that look at pixel-level noise patterns invisible to the human eye.\n\nSource: MIT Technology Review AI section (technologyreview.com)\n\n---\n\nSo here's the harder question for your quiz prep: if the visual tells keep disappearing, what does reliable AI image detection actually have to rely on?"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:02:23.883Z",
+      "user": "give me a numbered list of 5 quick ways to tell if a pic is AI generated. keep each one short pls i have a quiz tmrw",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "give me a numbered list of 5 quick ways to tell if a pic is AI generated. keep each one short pls i have a quiz tmrw"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 71,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 7146,
+      "totalMs": 10460,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 88,
+        "output_tokens": 151,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "Here are 5 quick tells:\n\n1. **Hands** — wrong number of fingers, fused or melted joints\n2. **Text** — garbled, nonsense letters in signs or labels\n3. **Symmetry errors** — earrings that don't match, one glasses lens missing\n4. **Background bleed** — objects that merge into each other unnaturally\n5. **Too-perfect skin** — no pores, no asymmetry, plastic-looking texture\n\nThese are heuristics, not guarantees — newer models are getting better at hiding them.\n\nWhich of these do you think would be *hardest* to fake-proof, and why?"
+    },
+    {
+      "at": "2026-10-19T12:05:56.404Z",
+      "user": null,
+      "injected": "Explain more — go deeper on the same topic. Don't repeat what you already said.",
+      "responseMode": "deep",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "give me a numbered list of 5 quick ways to tell if a pic is AI generated. keep each one short pls i have a quiz tmrw"
+        },
+        {
+          "role": "assistant",
+          "content": "Here are 5 quick tells:\n\n1. **Hands** — wrong number of fingers, fused or melted joints\n2. **Text** — garbled, nonsense letters in signs or labels\n3. **Symme…"
+        },
+        {
+          "role": "user",
+          "content": "Explain more — go deeper on the same topic. Don't repeat what you already said."
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 210,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 2148,
+      "totalMs": 12491,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 25,
+        "output_tokens": 396,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 235
+      },
+      "reply": "Let's go deeper on *why* these flaws exist in the first place — that's what will stick under quiz pressure.\n\n**The root cause is how image generators work.**\n\nModels like Stable Diffusion or Midjourney don't \"draw\" the way a human does — they learn statistical patterns from millions of images and reconstruct plausible-looking pixels from noise.\n\nThey don't have a body, so they have no internal model of \"a hand has exactly 5 fingers.\" They just know fingers tend to appear near palms — and they approximate.\n\n---\n\n**Why hands are the canonical failure point:**\n\nHands are *combinatorially complex* — 5 fingers, multiple joints each, foreshortening when angled, occlusion when overlapping.\n\nThe training data contains hands in thousands of poses, and the model has to reconcile all of them at once.\n\nThe result: statistically plausible *hand-shaped regions* that fall apart under inspection.\n\n---\n\n**Why text fails:**\n\nText in training images is visually present but semantically opaque to the model — it sees letter-shapes as *texture*, not meaning.\n\nSo it generates something that *looks like* text at a glance but isn't anchored to any alphabet.\n\n---\n\n**The arms race problem:**\n\nNewer models are explicitly trained on failure cases, so the obvious tells are shrinking.\n\nThis means detection is shifting toward **metadata and frequency analysis** — tools like forensic software that look at pixel-level noise patterns invisible to the human eye.\n\nSource: MIT Technology Review AI section (technologyreview.com)\n\n---\n\nSo here's the harder question for your quiz prep: if the visual tells keep disappearing, what does reliable AI image detection actually have to rely on?"
+    }
+  ],
+  "createdAt": "2026-10-19T12:02:13.398Z"
+}

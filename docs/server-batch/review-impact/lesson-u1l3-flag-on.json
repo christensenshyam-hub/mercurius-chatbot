@@ -1,0 +1,158 @@
+{
+  "port": 3385,
+  "label": "lesson-u1l3-flag-on",
+  "sessionId": "review-impact-7c34e5299bd2",
+  "mode": null,
+  "lessonPrefix": "[CURRICULUM: Unit 1, Lesson 3] Teach me about AI hallucination and why LLMs can sound confident even when wrong. Give a concrete example, then an exercise where I have to identify a potential hallucination.",
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's something that should make you a little nervous about every AI response you've ever read.\n\nIn 2023, two lawyers submitted a legal brief citing **six court cases** to support their client's position. The judge asked for copies. None of the cases existed — they had been invented, with realistic-sounding names, dates, and legal reasoning, by ChatGPT.\n\nThe lawyers were sanctioned. Their client's case was damaged. And the AI never once said \"I'm not sure.\"\n\nThat's the core mystery of this lesson: why does AI sound so certain when it's completely wrong?\n\nHere's the answer. An LLM doesn't retrieve facts from a database — it predicts the next most *plausible* token, over and over. \"Plausible\" means: what text would likely follow this, given everything I was trained on?\n\nThat's a very different question from \"what is true?\"\n\n[KEY]Fluency and accuracy are completely separate things — an LLM is optimized to sound right, not to be right.[/KEY]\n\n[EX]Legal case names follow predictable patterns: *Plaintiff v. Defendant*, a court name, a year, a citation number. An LLM trained on millions of legal documents is extremely good at generating text that *looks* like a real case — because that's exactly what \"plausible legal text\" looks like. The model has no internal alarm that fires when it crosses from real into invented.[/EX]\n\n[Q]\nWhy doesn't an LLM \"know\" when it's making something up?\nA) It does know, but RLHF training teaches it to hide uncertainty\nB) It has no separate fact-checking module — it only predicts what text comes next\nC) It only hallucinates on legal topics, not general knowledge\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked A) It does know, but RLHF training teaches it to hide uncertainty"
+    },
+    {
+      "role": "assistant",
+      "content": "That's a really understandable pick — and it's actually *partially* true, which makes it a great distractor.\n\nRLHF does make models sound more confident and polished, and researchers have a name for this: the **\"Waluigi effect\"** — fine-tuning that rewards helpful, fluent answers can inadvertently penalize hedging, making models *less* likely to say \"I'm not sure.\"\n\nBut here's why B is the more fundamental answer: the model doesn't start with knowledge of truth and then hide doubt. It never had a truth-check to begin with. There's no internal step that says \"verify this against reality\" — only \"predict the next token.\"\n\nRLHF shapes the *style* of the output. The deeper problem is the *architecture* itself.\n\n[KEY]Hallucination isn't dishonesty — it's a system that was never designed to distinguish true from plausible in the first place.[/KEY]\n\nNow let's put this to work.\n\n---\n\n**Your exercise:**\n\nRead this paragraph carefully. It's the kind of thing an AI might generate in response to \"tell me about the history of facial recognition technology.\"\n\n---\n\n*\"Facial recognition technology was first developed in the 1960s by Woodrow Wilson Bledsoe, who used a grid-based system to manually map facial features. The field advanced significantly in 1993 when DARPA launched the FERET program, producing the landmark study 'Eigenfaces for Recognition' by Turk and Pentland, published in the Journal of Cognitive Neuroscience. By 2003, the FBI's NGI database contained over 50 million facial images, making it the world's largest biometric database at that time.\"*\n\n---\n\nYour task:\n\n1. Identify **two specific claims** that could be hallucinated.\n2. For each, explain *why* it's risky — what makes it sound plausible but hard to verify?\n3. Name one concrete way you'd check each claim."
+    },
+    {
+      "role": "user",
+      "content": "1. the eigenfaces paper coming from the FERET program in 1993. it sounds legit cause it has real names and a journal but the dates could be mixed up. id look it up on google scholar to see the year. 2. the FBI having 50 million faces in 2003. super specific number which makes it sound real but its easy to make up. id check the FBI website"
+    },
+    {
+      "role": "assistant",
+      "content": "You nailed the key point about both claims — you spotted exactly what makes hallucinations dangerous: **specificity creates false credibility**.\n\nReal names, real journals, precise numbers — these are the signals we're trained to trust. An LLM knows that too, because it learned from human writing where those signals *do* indicate reliability.\n\nQuick corrections worth knowing: the Eigenfaces paper is real (Turk and Pentland, 1991), but it was *not* from FERET and the journal attribution is wrong — exactly the kind of date/source mixing you suspected. The FBI number is the type of claim that's nearly impossible to verify from a primary source, which is itself a red flag.\n\nYour verification instincts were solid. Google Scholar for the paper, FBI's own site or a Congressional report for the database claim — those are the right moves.\n\nOne thing to add to your toolkit: for claims like the FBI number, if you *can't* find a primary source after a real search, that absence is evidence. Don't just conclude \"I couldn't find it\" — conclude \"this may not exist.\"\n\n---\n\nYou've got the core skill here: spotting the gap between *sounds authoritative* and *is verifiable*, and knowing where to look."
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T11:57:40.599Z",
+      "user": null,
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 3] Teach me about AI hallucination and why LLMs can sound confident even when wrong. Give a concrete example, then an exercise wh…"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 176,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 975,
+      "totalMs": 11874,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 58,
+        "output_tokens": 411,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 8207
+      },
+      "reply": "Here's something that should make you a little nervous about every AI response you've ever read.\n\nIn 2023, two lawyers submitted a legal brief citing **six court cases** to support their client's position. The judge asked for copies. None of the cases existed — they had been invented, with realistic-sounding names, dates, and legal reasoning, by ChatGPT.\n\nThe lawyers were sanctioned. Their client's case was damaged. And the AI never once said \"I'm not sure.\"\n\nThat's the core mystery of this lesson: why does AI sound so certain when it's completely wrong?\n\nHere's the answer. An LLM doesn't retrieve facts from a database — it predicts the next most *plausible* token, over and over. \"Plausible\" means: what text would likely follow this, given everything I was trained on?\n\nThat's a very different question from \"what is true?\"\n\n[KEY]Fluency and accuracy are completely separate things — an LLM is optimized to sound right, not to be right.[/KEY]\n\n[EX]Legal case names follow predictable patterns: *Plaintiff v. Defendant*, a court name, a year, a citation number. An LLM trained on millions of legal documents is extremely good at generating text that *looks* like a real case — because that's exactly what \"plausible legal text\" looks like. The model has no internal alarm that fires when it crosses from real into invented.[/EX]\n\n[Q]\nWhy doesn't an LLM \"know\" when it's making something up?\nA) It does know, but RLHF training teaches it to hide uncertainty\nB) It has no separate fact-checking module — it only predicts what text comes next\nC) It only hallucinates on legal topics, not general knowledge\nANS: B\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T11:57:59.424Z",
+      "user": "I picked A) It does know, but RLHF training teaches it to hide uncertainty",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "wrong",
+        "letter": "A",
+        "correct": false,
+        "ansLetter": "B"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 3] Teach me about AI hallucination and why LLMs can sound confident even when wrong. Give a concrete example, then an exercise wh…"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's something that should make you a little nervous about every AI response you've ever read.\n\nIn 2023, two lawyers submitted a legal brief citing **six c…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 3] I picked A) It does know, but RLHF training teaches it to hide uncertainty"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 227,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1269,
+      "totalMs": 13056,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 39,
+        "output_tokens": 455,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 468
+      },
+      "reply": "That's a really understandable pick — and it's actually *partially* true, which makes it a great distractor.\n\nRLHF does make models sound more confident and polished, and researchers have a name for this: the **\"Waluigi effect\"** — fine-tuning that rewards helpful, fluent answers can inadvertently penalize hedging, making models *less* likely to say \"I'm not sure.\"\n\nBut here's why B is the more fundamental answer: the model doesn't start with knowledge of truth and then hide doubt. It never had a truth-check to begin with. There's no internal step that says \"verify this against reality\" — only \"predict the next token.\"\n\nRLHF shapes the *style* of the output. The deeper problem is the *architecture* itself.\n\n[KEY]Hallucination isn't dishonesty — it's a system that was never designed to distinguish true from plausible in the first place.[/KEY]\n\nNow let's put this to work.\n\n---\n\n**Your exercise:**\n\nRead this paragraph carefully. It's the kind of thing an AI might generate in response to \"tell me about the history of facial recognition technology.\"\n\n---\n\n*\"Facial recognition technology was first developed in the 1960s by Woodrow Wilson Bledsoe, who used a grid-based system to manually map facial features. The field advanced significantly in 1993 when DARPA launched the FERET program, producing the landmark study 'Eigenfaces for Recognition' by Turk and Pentland, published in the Journal of Cognitive Neuroscience. By 2003, the FBI's NGI database contained over 50 million facial images, making it the world's largest biometric database at that time.\"*\n\n---\n\nYour task:\n\n1. Identify **two specific claims** that could be hallucinated.\n2. For each, explain *why* it's risky — what makes it sound plausible but hard to verify?\n3. Name one concrete way you'd check each claim."
+    },
+    {
+      "at": "2026-10-19T11:58:18.800Z",
+      "user": "1. the eigenfaces paper coming from the FERET program in 1993. it sounds legit cause it has real names and a journal but the dates could be mixed up. id look it up on google scholar to see the year. 2. the FBI having 50 million faces in 2003. super specific number which makes it sound real but its easy to make up. id check the FBI website",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 3] Teach me about AI hallucination and why LLMs can sound confident even when wrong. Give a concrete example, then an exercise wh…"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's something that should make you a little nervous about every AI response you've ever read.\n\nIn 2023, two lawyers submitted a legal brief citing **six c…"
+        },
+        {
+          "role": "user",
+          "content": "I picked A) It does know, but RLHF training teaches it to hide uncertainty"
+        },
+        {
+          "role": "assistant",
+          "content": "That's a really understandable pick — and it's actually *partially* true, which makes it a great distractor.\n\nRLHF does make models sound more confident and …"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 3] 1. the eigenfaces paper coming from the FERET program in 1993. it sounds legit cause it has real names and a journal but the d…"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 153,
+      "deltasEqualComplete": false,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1109,
+      "totalMs": 9027,
+      "lessonComplete": true,
+      "usage": {
+        "input_tokens": 106,
+        "output_tokens": 284,
+        "cache_read_input_tokens": 8675,
+        "cache_creation_input_tokens": 478
+      },
+      "reply": "You nailed the key point about both claims — you spotted exactly what makes hallucinations dangerous: **specificity creates false credibility**.\n\nReal names, real journals, precise numbers — these are the signals we're trained to trust. An LLM knows that too, because it learned from human writing where those signals *do* indicate reliability.\n\nQuick corrections worth knowing: the Eigenfaces paper is real (Turk and Pentland, 1991), but it was *not* from FERET and the journal attribution is wrong — exactly the kind of date/source mixing you suspected. The FBI number is the type of claim that's nearly impossible to verify from a primary source, which is itself a red flag.\n\nYour verification instincts were solid. Google Scholar for the paper, FBI's own site or a Congressional report for the database claim — those are the right moves.\n\nOne thing to add to your toolkit: for claims like the FBI number, if you *can't* find a primary source after a real search, that absence is evidence. Don't just conclude \"I couldn't find it\" — conclude \"this may not exist.\"\n\n---\n\nYou've got the core skill here: spotting the gap between *sounds authoritative* and *is verifiable*, and knowing where to look."
+    }
+  ],
+  "createdAt": "2026-10-19T11:57:28.701Z",
+  "lastPick": {
+    "how": "wrong",
+    "letter": "A",
+    "correct": false,
+    "ansLetter": "B"
+  }
+}

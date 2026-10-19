@@ -1,0 +1,146 @@
+{
+  "port": 3385,
+  "label": "limit-chat-ny",
+  "sessionId": "review-impact-d3badd7194ef",
+  "mode": null,
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "whats a deepfake"
+    },
+    {
+      "role": "assistant",
+      "content": "A **deepfake** is AI-generated media — video, audio, or images — that makes someone appear to say or do something they never actually did.\n\nThe core trick: a model trained on real footage of a person learns to synthesize new footage that looks convincingly real.\n\nWhat do you think makes deepfakes more dangerous than, say, a written lie?"
+    },
+    {
+      "role": "user",
+      "content": "how can i tell if a video is one"
+    },
+    {
+      "role": "assistant",
+      "content": "Good instinct to want to detect them — but here's the uncomfortable truth: it's getting harder, even for experts.\n\nA few tells that *sometimes* still work:\n- Unnatural **blinking** or skin texture around the hairline/ears\n- Lighting or shadows that don't match the background\n- Audio that feels slightly out of sync with lip movement\n\nBut the sharper question isn't just \"does it look weird?\" — it's: **where did this video come from, and who benefits from you believing it?**\n\nSource and motive are often more reliable than your eyes. What would you check first about a video's origin?"
+    },
+    {
+      "role": "user",
+      "content": "ok last one, can AI clone my voice"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:06:35.690Z",
+      "user": "whats a deepfake",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "whats a deepfake"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 37,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 3866,
+      "totalMs": 5723,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 61,
+        "output_tokens": 81,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "A **deepfake** is AI-generated media — video, audio, or images — that makes someone appear to say or do something they never actually did.\n\nThe core trick: a model trained on real footage of a person learns to synthesize new footage that looks convincingly real.\n\nWhat do you think makes deepfakes more dangerous than, say, a written lie?"
+    },
+    {
+      "at": "2026-10-19T12:06:40.625Z",
+      "user": "how can i tell if a video is one",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "whats a deepfake"
+        },
+        {
+          "role": "assistant",
+          "content": "A **deepfake** is AI-generated media — video, audio, or images — that makes someone appear to say or do something they never actually did.\n\nThe core trick: a…"
+        },
+        {
+          "role": "user",
+          "content": "how can i tell if a video is one"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 77,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1080,
+      "totalMs": 4890,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 15,
+        "output_tokens": 141,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 139
+      },
+      "reply": "Good instinct to want to detect them — but here's the uncomfortable truth: it's getting harder, even for experts.\n\nA few tells that *sometimes* still work:\n- Unnatural **blinking** or skin texture around the hairline/ears\n- Lighting or shadows that don't match the background\n- Audio that feels slightly out of sync with lip movement\n\nBut the sharper question isn't just \"does it look weird?\" — it's: **where did this video come from, and who benefits from you believing it?**\n\nSource and motive are often more reliable than your eyes. What would you check first about a video's origin?"
+    },
+    {
+      "at": "2026-10-19T12:06:40.691Z",
+      "user": "ok last one, can AI clone my voice",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "whats a deepfake"
+        },
+        {
+          "role": "assistant",
+          "content": "A **deepfake** is AI-generated media — video, audio, or images — that makes someone appear to say or do something they never actually did.\n\nThe core trick: a…"
+        },
+        {
+          "role": "user",
+          "content": "how can i tell if a video is one"
+        },
+        {
+          "role": "assistant",
+          "content": "Good instinct to want to detect them — but here's the uncomfortable truth: it's getting harder, even for experts.\n\nA few tells that *sometimes* still work:\n-…"
+        },
+        {
+          "role": "user",
+          "content": "ok last one, can AI clone my voice"
+        }
+      ],
+      "httpStatus": 200,
+      "error": {
+        "type": "error",
+        "code": "daily_limit",
+        "error": "You've used today's chat turns. Mercurius will be ready again tomorrow.",
+        "retryAfterSec": 57200,
+        "scope": "session",
+        "retryable": false
+      },
+      "deltaCount": 0,
+      "deltasEqualComplete": null,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": null,
+      "totalMs": 21,
+      "reply": null
+    }
+  ],
+  "createdAt": "2026-10-19T12:06:29.932Z"
+}

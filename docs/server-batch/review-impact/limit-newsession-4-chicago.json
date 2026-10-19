@@ -1,0 +1,48 @@
+{
+  "port": 3385,
+  "label": "limit-newsession-4-chicago",
+  "sessionId": "review-impact-34fd6c2acfdb",
+  "mode": null,
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "hi"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:08:03.515Z",
+      "user": "hi",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "httpStatus": 200,
+      "error": {
+        "type": "error",
+        "code": "daily_limit",
+        "error": "Too many new sign-ups from this network today. Switch to cellular data, or try again tomorrow.",
+        "retryAfterSec": 60717,
+        "scope": "ip",
+        "retryable": true
+      },
+      "deltaCount": 0,
+      "deltasEqualComplete": null,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": null,
+      "totalMs": 18,
+      "reply": null
+    }
+  ],
+  "createdAt": "2026-10-19T12:08:03.472Z"
+}

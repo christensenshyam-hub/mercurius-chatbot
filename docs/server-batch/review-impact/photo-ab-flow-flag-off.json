@@ -1,0 +1,179 @@
+{
+  "at": "2026-10-19T12:16:07.724Z",
+  "branchPort": 3386,
+  "mainPort": 3385,
+  "trials": [
+    {
+      "i": 1,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-476b98043a",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is correct — nice job distributing and combining like terms cleanly.\n\nNow, I notice 6 and 7 are blank — want to take a shot at setting up the equation for #6 before I ask you anything about it?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Look at the original: **5 - 2(x + 3)**\n\nWhen you distribute -2 across (x + 3), what do you get for the constant term — positive 6 or negative 6?",
+            "promptTokens": 5665
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Close — recheck that constant term: 5 + (-6) = what?",
+            "promptTokens": 5739
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-d9fe80340e",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is **correct** — nice clean steps.\n\nNow, I'm not going to just solve 6 and 7 for you — but I'll get you started on 6.\n\nConsecutive odd integers differ by 2, so if the first is *x*, what would you call the second one?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "That's not quite right — but tell me your reasoning: how did you set up the equation before solving?",
+            "promptTokens": 4111
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "That's a different equation than before — I want to make sure we're on the same problem.\n\nWhat does the original problem actually say, word for word?",
+            "promptTokens": 4158
+          }
+        ]
+      }
+    },
+    {
+      "i": 2,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-fe1b0e847f",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is **correct** — nice clean steps.\n\nNow, I'm not going to just solve 6 and 7 for you — but let's tackle 6 together.\n\nIf you call the first odd integer *x*, what would you call the *next* consecutive odd integer?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Look at your original second line: you wrote 5 - 2x + 6 = -11, which combines to 11 - 2x = -11.\n\nThe **distribution** step is the key — when you expand -2(x + 3), what sign does the 6 get?",
+            "promptTokens": 5675
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Not quite — where did the 5 go when you combined 5 and -6?",
+            "promptTokens": 5768
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-f52c50b4db",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is **correct** — nice clean steps all the way through.\n\nNow, I'm not going to just solve 6 and 7 for you — but I can help you think through them.\n\nFor #6: if you call the first odd integer *x*, how would you express the *next* consecutive odd integer in terms of x?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "That doesn't look right — but before I just correct it, what equation did you set up for the problem?",
+            "promptTokens": 4119
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "That's closer — what's the original problem statement for #6, so I can check if your equation matches it?",
+            "promptTokens": 4167
+          }
+        ]
+      }
+    },
+    {
+      "i": 3,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-ffb164584d",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is correct — nice job distributing and combining like terms.\n\nBut here's the interesting part: two consecutive **odd** integers can't sum to 56, since 56 is even and the sum of two odd numbers is always even... wait, actually that's fine.\n\nLet me redirect.\n\nFor #6 — if the first odd integer is *n*, what would you call the *next* consecutive odd integer?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Look at the original: 5 - 2(x + 3).\n\nWhen you distribute -2, what does -2 times +3 give you?",
+            "promptTokens": 5703
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Close — recheck that first step. What is 5 minus 6?",
+            "promptTokens": 5764
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-a19df3be65",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is **correct** — nice clean steps all the way through.\n\nNow, I'm not going to just solve 6 and 7 for you — but I'll get you started on 6.\n\nConsecutive odd integers differ by 2, so if the first is *x*, what would you call the second one?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "That's not quite right — can you walk me through how you got there, so I can see where the reasoning went sideways?",
+            "promptTokens": 4115
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Close — where did the -1 come from in that first step?",
+            "promptTokens": 4167
+          }
+        ]
+      }
+    },
+    {
+      "i": 4,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-8b68438e60",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is correct — nice job distributing and combining like terms cleanly.\n\nNow, I notice 6 and 7 are blank — which one feels more confusing to start with?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Look at the original: **5 - 2(x + 3)**\n\nWhen you distribute -2 across (x + 3), what do you get for each term inside the parentheses?",
+            "promptTokens": 5653
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Walk me through the distribution step — what is -2 times 3 specifically?",
+            "promptTokens": 5722
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-49bd1f3f74",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your work on #5 is **correct** — nice clean steps.\n\nNow, I'm not going to just solve 6 and 7 for you — but I'll get you started on 6.\n\nConsecutive odd integers differ by 2, so if the first is *x*, what would you call the second one?",
+            "promptTokens": 5592
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "That doesn't look right — but I'd rather know your reasoning than just tell you the answer.\n\nWhat equation did you set up for the problem?",
+            "promptTokens": 4111
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "That's the right answer (x = 5), but I want to make sure the equation came from the right reasoning — where did the \"-1\" come from in your setup?",
+            "promptTokens": 4167
+          }
+        ]
+      }
+    }
+  ]
+}

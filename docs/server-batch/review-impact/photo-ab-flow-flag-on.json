@@ -1,0 +1,179 @@
+{
+  "at": "2026-10-19T12:19:07.113Z",
+  "branchPort": 3386,
+  "mainPort": 3385,
+  "trials": [
+    {
+      "i": 1,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-76be3074ca",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly. So what does the left side simplify to when you combine constants correctly?",
+            "promptTokens": 10697
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right track! Check the combining step: 5 + (-6) = **-1**, so you have `-1 - 2x = -11`.\n\nNow solve that — what do you get when you isolate x?",
+            "promptTokens": 10740
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-09c3ff1d02",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly — so now what does x come out to?",
+            "promptTokens": 9129
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right answer — but walk me through the step between those two lines.\n\nHow did you get from `-1 - 2x = -11` to `x = 5`?",
+            "promptTokens": 9166
+          }
+        ]
+      }
+    },
+    {
+      "i": 2,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-fb99027a6c",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly. So what does the left side simplify to when you combine constants correctly?",
+            "promptTokens": 10697
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right track! Double-check the constant: 5 + (-6) = ?",
+            "promptTokens": 10740
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-81a5947695",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2` times `+3` actually equal?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Yes — so now what does your equation look like, and where does that take x?",
+            "promptTokens": 9127
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "That's it — x = 5 is correct.\n\nWant to plug it back in to verify, or are you good to move on?",
+            "promptTokens": 9170
+          }
+        ]
+      }
+    },
+    {
+      "i": 3,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-62bf873bb8",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly. So what does the left side simplify to when you combine constants correctly?",
+            "promptTokens": 10697
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right track — check that constant again: 5 + (-6) = ?",
+            "promptTokens": 10740
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-854a40e569",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly — so now what does x come out to?",
+            "promptTokens": 9129
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right answer — but walk me through the step between those two lines.\n\nHow did you get from `-1 - 2x = -11` to `x = 5`?",
+            "promptTokens": 9166
+          }
+        ]
+      }
+    },
+    {
+      "i": 4,
+      "branch": {
+        "sessionId": "review-impact-photoab-branch-f0f3cc55b6",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly. So what does the left side simplify to when you combine constants correctly?",
+            "promptTokens": 10697
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right on both counts! Good catch.\n\nQuick check: does x = 5 actually satisfy the original equation `5 - 2(5 + 3) = -11`?",
+            "promptTokens": 10740
+          }
+        ]
+      },
+      "main": {
+        "sessionId": "review-impact-photoab-main-be22d49177",
+        "turns": [
+          {
+            "user": "can u check 5? i got x = 11",
+            "reply": "Your algebra steps are clean — but check the **distribution** on the first line.\n\nYou wrote `5 - 2x + 6`. What does `-2(x + 3)` actually expand to?",
+            "promptTokens": 10635
+          },
+          {
+            "user": "oh wait is it -2x - 6",
+            "reply": "Exactly — so now what does x come out to?",
+            "promptTokens": 9129
+          },
+          {
+            "user": "so its -1 - 2x = -11 and x = 5?",
+            "reply": "Right answer — but walk me through the step between those two lines.\n\nHow did you get from `-1 - 2x = -11` to `x = 5`?",
+            "promptTokens": 9166
+          }
+        ]
+      }
+    }
+  ]
+}

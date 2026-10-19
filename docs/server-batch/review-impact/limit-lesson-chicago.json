@@ -1,0 +1,160 @@
+{
+  "port": 3385,
+  "label": "limit-lesson-chicago",
+  "sessionId": "review-impact-c11c77beaa70",
+  "mode": null,
+  "lessonPrefix": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's a wild fact to start: when you type the word \"bank\" into an LLM, the model has **no idea** what it means yet.\n\nNot because it's dumb — but because meaning doesn't exist at the character level. The model has to build it from scratch, every single time.\n\n---\n\nThat process starts with **tokenization** — breaking your text into chunks called tokens.\n\nTokens aren't words. They're pieces of words, whole words, or even punctuation marks. The model converts each token into a number, because math is the only thing a neural network can actually do.\n\n[EX]GPT-4 uses a vocabulary of roughly 100,000 tokens. The word \"unbelievable\" might become three tokens: \"un\", \"believ\", \"able\". The word \"cat\" is probably one token. A rare word in Swahili might get split into many tiny pieces.[/EX]\n\n[KEY]Tokenization turns your text into a sequence of numbers — that's the only form an LLM can process.[/KEY]\n\n---\n\nHere's the thing that trips people up: at this stage, \"bank\" (the river edge) and \"bank\" (the financial institution) produce the **exact same token and number**.\n\nThe model doesn't know which one you mean yet. That disambiguation comes later — in a part of the architecture called attention. But we'll get there.\n\n---\n\n[Q]\nWhat is a token in an LLM?\nA) A single letter or character\nB) A chunk of text converted to a number\nC) A dictionary definition the model looks up\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) A chunk of text converted to a number"
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — and you caught the key detail: it's a *chunk*, not a letter, and it becomes a *number*, not a word the model \"reads.\"\n\n---\n\nNow here's where it gets interesting. A list of numbers isn't enough — the model needs to know what those numbers *mean relative to each other*.\n\nThat's where **embedding space** and the **attention mechanism** come in.\n\nEvery token gets placed into a giant mathematical space — imagine thousands of dimensions — where tokens with similar meanings end up close together. \"King\" and \"queen\" are near each other. \"Bank\" (finance) and \"interest rate\" are near each other.\n\n\"Bank\" (river) and \"shore\" are near each other.\n\nThe **attention mechanism** is what figures out *which* \"bank\" you meant.\n\n[EX]In the sentence \"I deposited cash at the bank,\" the attention mechanism notices \"deposited\" and \"cash\" are nearby tokens — and uses that context to pull \"bank\" toward the financial meaning, not the river meaning.[/EX]\n\n[KEY]Attention lets the model weigh which surrounding tokens matter most for understanding each word — that's how context resolves ambiguity.[/KEY]\n\n---\n\nThis all feeds into one final job: predicting the next token. The model doesn't \"think up\" an answer — it just keeps asking *what token is most likely to come next*, over and over, until the response is done.\n\n[Q]\nWhat does the attention mechanism actually do?\nA) Looks up answers in a database\nB) Weighs surrounding tokens to figure out what each token means in context\nC) Translates tokens back into English words\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) Weighs surrounding tokens to figure out what each token means in context"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:07:18.134Z",
+      "user": null,
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 152,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1053,
+      "totalMs": 10123,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 57,
+        "output_tokens": 369,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 8207
+      },
+      "reply": "Here's a wild fact to start: when you type the word \"bank\" into an LLM, the model has **no idea** what it means yet.\n\nNot because it's dumb — but because meaning doesn't exist at the character level. The model has to build it from scratch, every single time.\n\n---\n\nThat process starts with **tokenization** — breaking your text into chunks called tokens.\n\nTokens aren't words. They're pieces of words, whole words, or even punctuation marks. The model converts each token into a number, because math is the only thing a neural network can actually do.\n\n[EX]GPT-4 uses a vocabulary of roughly 100,000 tokens. The word \"unbelievable\" might become three tokens: \"un\", \"believ\", \"able\". The word \"cat\" is probably one token. A rare word in Swahili might get split into many tiny pieces.[/EX]\n\n[KEY]Tokenization turns your text into a sequence of numbers — that's the only form an LLM can process.[/KEY]\n\n---\n\nHere's the thing that trips people up: at this stage, \"bank\" (the river edge) and \"bank\" (the financial institution) produce the **exact same token and number**.\n\nThe model doesn't know which one you mean yet. That disambiguation comes later — in a part of the architecture called attention. But we'll get there.\n\n---\n\n[Q]\nWhat is a token in an LLM?\nA) A single letter or character\nB) A chunk of text converted to a number\nC) A dictionary definition the model looks up\nANS: B\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T12:07:28.041Z",
+      "user": "I picked B) A chunk of text converted to a number",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "right",
+        "letter": "B",
+        "correct": true,
+        "ansLetter": "B"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"bank\" into an LLM, the model has **no idea** what it means yet.\n\nNot because it's dumb — but because mea…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] I picked B) A chunk of text converted to a number"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 151,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1139,
+      "totalMs": 9864,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 31,
+        "output_tokens": 381,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 423
+      },
+      "reply": "Exactly right — and you caught the key detail: it's a *chunk*, not a letter, and it becomes a *number*, not a word the model \"reads.\"\n\n---\n\nNow here's where it gets interesting. A list of numbers isn't enough — the model needs to know what those numbers *mean relative to each other*.\n\nThat's where **embedding space** and the **attention mechanism** come in.\n\nEvery token gets placed into a giant mathematical space — imagine thousands of dimensions — where tokens with similar meanings end up close together. \"King\" and \"queen\" are near each other. \"Bank\" (finance) and \"interest rate\" are near each other.\n\n\"Bank\" (river) and \"shore\" are near each other.\n\nThe **attention mechanism** is what figures out *which* \"bank\" you meant.\n\n[EX]In the sentence \"I deposited cash at the bank,\" the attention mechanism notices \"deposited\" and \"cash\" are nearby tokens — and uses that context to pull \"bank\" toward the financial meaning, not the river meaning.[/EX]\n\n[KEY]Attention lets the model weigh which surrounding tokens matter most for understanding each word — that's how context resolves ambiguity.[/KEY]\n\n---\n\nThis all feeds into one final job: predicting the next token. The model doesn't \"think up\" an answer — it just keeps asking *what token is most likely to come next*, over and over, until the response is done.\n\n[Q]\nWhat does the attention mechanism actually do?\nA) Looks up answers in a database\nB) Weighs surrounding tokens to figure out what each token means in context\nC) Translates tokens back into English words\nANS: B\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T12:07:28.105Z",
+      "user": "I picked B) Weighs surrounding tokens to figure out what each token means in context",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "right",
+        "letter": "B",
+        "correct": true,
+        "ansLetter": "B"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After …"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's a wild fact to start: when you type the word \"bank\" into an LLM, the model has **no idea** what it means yet.\n\nNot because it's dumb — but because mea…"
+        },
+        {
+          "role": "user",
+          "content": "I picked B) A chunk of text converted to a number"
+        },
+        {
+          "role": "assistant",
+          "content": "Exactly right — and you caught the key detail: it's a *chunk*, not a letter, and it becomes a *number*, not a word the model \"reads.\"\n\n---\n\nNow here's where …"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 1] I picked B) Weighs surrounding tokens to figure out what each token means in context"
+        }
+      ],
+      "httpStatus": 200,
+      "error": {
+        "type": "error",
+        "code": "daily_limit",
+        "error": "You've used today's lesson turns. Mercurius will be ready again tomorrow.",
+        "retryAfterSec": 60752,
+        "scope": "session",
+        "retryable": false
+      },
+      "deltaCount": 0,
+      "deltasEqualComplete": null,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": null,
+      "totalMs": 20,
+      "reply": null
+    }
+  ],
+  "createdAt": "2026-10-19T12:07:07.987Z",
+  "lastPick": {
+    "how": "right",
+    "letter": "B",
+    "correct": true,
+    "ansLetter": "B"
+  }
+}

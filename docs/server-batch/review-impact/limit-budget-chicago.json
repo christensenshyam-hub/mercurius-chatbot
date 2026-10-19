@@ -1,0 +1,48 @@
+{
+  "port": 3385,
+  "label": "limit-budget-chicago",
+  "sessionId": "review-impact-e0752da965d6",
+  "mode": null,
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "hi"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:08:24.469Z",
+      "user": "hi",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "httpStatus": 200,
+      "error": {
+        "type": "error",
+        "code": "spend_cap",
+        "error": "Daily usage limit reached — please try again tomorrow.",
+        "retryAfterSec": 60696,
+        "scope": "global",
+        "retryable": false
+      },
+      "deltaCount": 0,
+      "deltasEqualComplete": null,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": null,
+      "totalMs": 27,
+      "reply": null
+    }
+  ],
+  "createdAt": "2026-10-19T12:08:24.414Z"
+}
