@@ -308,21 +308,45 @@ struct DisclosureStep: View {
     let onNotNow: () -> Void
 
     @State private var agreed = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// What the disclosure says, row by row, in order. Plain data so the
+    /// copy is pinned by a test; changing it is a consent-copy change (see
+    /// `ConsentGate.currentVersion`).
+    static let rows: [(symbol: String, text: String)] = [
+        ("paperplane",
+         "Your messages — and any photos you attach — are sent through our server to Anthropic's Claude to generate replies."),
+        ("clock.arrow.circlepath",
+         "Our server keeps your messages for 90 days and photos for 24 hours, then deletes them. "
+            + "You can delete them sooner in Settings → Delete my data. Deleting the app doesn't."),
+        ("person.crop.circle.badge.questionmark",
+         "There's no account. Mercurius uses an anonymous ID stored on this device to keep your chats together."),
+    ]
+
+    /// The agreement itself. Unchanged by AUD-27.
+    static let toggleText =
+        "I understand my messages and photos are sent to Anthropic's Claude to generate replies"
+
+    /// Whether the consent switch sits pinned right above "Agree and
+    /// continue" (AUD-50), rather than at the foot of the scrolling rows.
+    /// On an iPhone SE the rows pushed it below the fold, cut in half, with
+    /// "Agree" disabled for no visible reason. At accessibility sizes its
+    /// label alone can fill the screen, so there it scrolls with the rows
+    /// and the pinned area stays small.
+    static func pinsConsentToggle(at size: DynamicTypeSize) -> Bool {
+        !size.isAccessibilitySize
+    }
 
     var body: some View {
+        let pinsToggle = Self.pinsConsentToggle(at: dynamicTypeSize)
         GateStepContainer(
             title: "Before you start",
             subtitle: "Here's exactly what happens with what you type."
         ) {
             VStack(alignment: .leading, spacing: BrandSpacing.lg) {
-                disclosureRow(
-                    symbol: "paperplane",
-                    text: "Your messages — and any photos you attach — are sent through our server to Anthropic's Claude to generate replies."
-                )
-                disclosureRow(
-                    symbol: "person.crop.circle.badge.questionmark",
-                    text: "There's no account. Mercurius uses an anonymous ID stored on this device to keep your chats together."
-                )
+                ForEach(Self.rows, id: \.symbol) { row in
+                    disclosureRow(symbol: row.symbol, text: row.text)
+                }
 
                 if let url = URL(string: "https://trymercurius.com/privacy") {
                     Link("Read the privacy policy", destination: url)
@@ -330,25 +354,16 @@ struct DisclosureStep: View {
                         .foregroundStyle(BrandColor.accentText)
                 }
 
-                Toggle(isOn: $agreed) {
-                    Text("I understand my messages and photos are sent to Anthropic's Claude to generate replies")
-                        .font(BrandFont.body)
-                        .foregroundStyle(BrandColor.text)
-                        .fixedSize(horizontal: false, vertical: true)
+                if !pinsToggle {
+                    consentToggle
                 }
-                .tint(BrandColor.accent)
-                .accessibilityIdentifier("onboarding.consentToggle")
-                .padding(BrandSpacing.md)
-                .background(BrandColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
-                        .strokeBorder(agreed ? BrandColor.accent : BrandColor.border,
-                                      lineWidth: agreed ? 1.5 : 1)
-                )
             }
             .padding(.top, BrandSpacing.sm)
         } cta: {
+            if pinsToggle {
+                consentToggle
+            }
+
             DuoButton("Agree and continue", style: .primary, isEnabled: agreed, action: onAgree)
                 .accessibilityIdentifier("onboarding.agree")
                 .accessibilityHint(agreed ? "Continues to what Merc can't do"
@@ -363,6 +378,25 @@ struct DisclosureStep: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("onboarding.notNow")
         }
+    }
+
+    private var consentToggle: some View {
+        Toggle(isOn: $agreed) {
+            Text(Self.toggleText)
+                .font(BrandFont.body)
+                .foregroundStyle(BrandColor.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .tint(BrandColor.accent)
+        .accessibilityIdentifier("onboarding.consentToggle")
+        .padding(BrandSpacing.md)
+        .background(BrandColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                .strokeBorder(agreed ? BrandColor.accent : BrandColor.border,
+                              lineWidth: agreed ? 1.5 : 1)
+        )
     }
 
     private func disclosureRow(symbol: String, text: String) -> some View {
@@ -403,24 +437,29 @@ struct PausedView: View {
 struct LimitsStep: View {
     let onAcknowledge: () -> Void
 
+    /// The rows, in order. Plain data so the copy is pinned by a test.
+    static let rows: [(symbol: String, text: String)] = [
+        ("exclamationmark.triangle",
+         "It can be wrong. Check important claims against a real source."),
+        ("hand.raised",
+         "It isn't a counselor, doctor or lawyer."),
+        ("lock",
+         "Don't share your full name, address or anything private."),
+        ("phone",
+         "If you're in crisis, call or text 988, or text HOME to 741741."),
+    ]
+
+    static let subtitle = "Four things to keep in mind every time you chat."
+
     var body: some View {
         GateStepContainer(
             title: "What Merc can't do",
-            subtitle: "Three things to keep in mind every time you chat."
+            subtitle: Self.subtitle
         ) {
             VStack(alignment: .leading, spacing: BrandSpacing.lg) {
-                limitRow(
-                    symbol: "exclamationmark.triangle",
-                    text: "It can be wrong. Check important claims against a real source."
-                )
-                limitRow(
-                    symbol: "hand.raised",
-                    text: "It isn't a counselor, doctor or lawyer."
-                )
-                limitRow(
-                    symbol: "phone",
-                    text: "If you're in crisis, call or text 988, or text HOME to 741741."
-                )
+                ForEach(Self.rows, id: \.symbol) { row in
+                    limitRow(symbol: row.symbol, text: row.text)
+                }
             }
             .padding(BrandSpacing.lg)
             .background(BrandColor.surface, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))

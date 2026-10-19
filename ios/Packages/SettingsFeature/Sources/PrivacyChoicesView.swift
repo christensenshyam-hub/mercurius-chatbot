@@ -72,7 +72,7 @@ struct PrivacyChoicesView: View {
         Section {
             DisclosureRow(
                 title: "Where your messages go",
-                text: "Your messages, and any photos you attach, are sent through our server to Anthropic's Claude, which writes Merc's replies. Your chats are stored on our server under your anonymous ID."
+                text: "Your messages, and any photos you attach, are sent through our server to Anthropic's Claude, which writes Merc's replies. Your chats are stored on our server under your anonymous ID for 90 days, then deleted. Deleting the app doesn't delete them."
             )
             DisclosureRow(
                 title: "No accounts",
