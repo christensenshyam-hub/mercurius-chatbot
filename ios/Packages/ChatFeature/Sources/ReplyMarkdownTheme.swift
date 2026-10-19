@@ -13,7 +13,15 @@ import MarkdownUI
 /// small headings (rounded ramp), and blockquotes (accent bar + tinted card).
 struct ReplyMarkdownStyling: ViewModifier {
     let face: BrandReadingFace
-    let bodySize: CGFloat
+    /// The UNSCALED body size (17). MarkdownUI scales its theme's font size
+    /// for Dynamic Type itself (`Markdown` wraps it in its own
+    /// `@ScaledMetric(relativeTo: .body)`), so handing it an already-scaled
+    /// size scaled the reply twice: ~1.35x too big at xxxLarge, ~1.65x at
+    /// AX1 and ~3x at AX5, breaking words mid-word.
+    let baseSize: CGFloat
+    /// The Dynamic-Type-scaled body size, for the pieces drawn outside
+    /// MarkdownUI's text (list markers), which use fixed-size fonts.
+    let scaledSize: CGFloat
     /// Fenced-code background: `surfaceElevated` inside the white lesson card,
     /// plain `surface` on the flat free-chat bubble.
     let codeBlockBackground: Color
@@ -31,7 +39,7 @@ struct ReplyMarkdownStyling: ViewModifier {
             .markdownTextStyle {
                 FontFamily(face.markdownFamily)
                 ForegroundColor(BrandColor.assistantBubbleText)
-                FontSize(bodySize)
+                FontSize(baseSize)
             }
             .markdownTextStyle(\.code) {
                 FontFamily(.system(.monospaced))
@@ -73,11 +81,11 @@ struct ReplyMarkdownStyling: ViewModifier {
                     // Optically align the dot with the first text line across
                     // Dynamic Type sizes: half the line height minus half the
                     // dot, biased up a touch for the rounded face.
-                    .padding(.top, bodySize * 0.42)
+                    .padding(.top, scaledSize * 0.42)
             }
             .markdownBlockStyle(\.numberedListMarker) { config in
                 Text("\(config.itemNumber).")
-                    .font(.system(size: bodySize * 0.9, weight: .bold, design: .rounded))
+                    .font(.system(size: scaledSize * 0.9, weight: .bold, design: .rounded))
                     .foregroundStyle(BrandColor.accentText)
                     .frame(minWidth: 14, alignment: .trailing)
             }
@@ -139,11 +147,16 @@ private struct NoNetworkInlineImageProvider: InlineImageProvider {
 
 extension View {
     /// Apply the shared tutor-reply markdown styling. See `ReplyMarkdownStyling`.
+    /// - Parameters:
+    ///   - baseSize: the unscaled body size; MarkdownUI applies Dynamic Type.
+    ///   - scaledSize: the same size already scaled, for the list markers.
     func replyMarkdownStyling(
         face: BrandReadingFace,
-        bodySize: CGFloat,
+        baseSize: CGFloat,
+        scaledSize: CGFloat,
         codeBlockBackground: Color
     ) -> some View {
-        modifier(ReplyMarkdownStyling(face: face, bodySize: bodySize, codeBlockBackground: codeBlockBackground))
+        modifier(ReplyMarkdownStyling(face: face, baseSize: baseSize, scaledSize: scaledSize,
+                                      codeBlockBackground: codeBlockBackground))
     }
 }

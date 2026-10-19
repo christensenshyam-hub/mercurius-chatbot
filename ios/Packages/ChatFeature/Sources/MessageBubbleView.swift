@@ -66,11 +66,16 @@ struct MessageBubbleView: View {
         readingFaceOverride ?? BrandFont.readingFace
     }
 
-    /// Numeric size of the body text. MarkdownUI needs a `CGFloat`, and
-    /// SwiftUI's `Font` type doesn't expose its size, so we keep the value
-    /// here. `@ScaledMetric` makes it grow with the user's Dynamic Type
-    /// setting (relative to `.body`), so reading text stays accessible.
-    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = 17
+    /// The reply's body size before Dynamic Type. MarkdownUI gets this one:
+    /// it scales its theme size for Dynamic Type itself, so the scaled
+    /// `bodyFontSize` would scale the reply twice.
+    static let replyBaseSize: CGFloat = 17
+
+    /// The body size scaled for the student's Dynamic Type setting (relative
+    /// to `.body`), for what's drawn with fixed-size fonts outside MarkdownUI:
+    /// the key-idea and example cards, the check question, the quiz card and
+    /// the list markers.
+    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = MessageBubbleView.replyBaseSize
 
     /// Cap on the assistant text measure. Uncapped lines run ~60+ characters
     /// on wider phones, which reads slower than the ~45-55 character measure
@@ -258,7 +263,8 @@ struct MessageBubbleView: View {
         Markdown(text)
             .replyMarkdownStyling(
                 face: activeReadingFace,
-                bodySize: bodyFontSize,
+                baseSize: Self.replyBaseSize,
+                scaledSize: bodyFontSize,
                 codeBlockBackground: BrandColor.surfaceElevated
             )
     }
@@ -409,7 +415,8 @@ struct MessageBubbleView: View {
                 Markdown(Self.stripCheckTokens(message.content))
                     .replyMarkdownStyling(
                         face: activeReadingFace,
-                        bodySize: bodyFontSize,
+                        baseSize: Self.replyBaseSize,
+                        scaledSize: bodyFontSize,
                         codeBlockBackground: BrandColor.surface
                     )
             }
