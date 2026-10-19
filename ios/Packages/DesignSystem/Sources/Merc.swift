@@ -82,7 +82,7 @@ struct MercArmPose: Equatable {
 
     /// The arm's far end (the hand's centre line) at `degrees`.
     func hand(at degrees: Double) -> CGPoint {
-        let r = degrees * .pi / 180
+        let r = CGFloat(degrees * .pi / 180)
         return CGPoint(x: shoulder.x - sin(r) * Self.length, y: shoulder.y + cos(r) * Self.length)
     }
 }

@@ -37,7 +37,7 @@ struct MercArmPoseTests {
         // angle.
         let r = MercArmPose.width / 2
         for step in 0..<16 {
-            let a = Double(step) * .pi / 8
+            let a = CGFloat(step) * .pi / 8
             let p = CGPoint(x: pose.shoulder.x + r * cos(a), y: pose.shoulder.y + r * sin(a))
             #expect(insideToga(p), "cap point \(p) is off the toga")
         }
