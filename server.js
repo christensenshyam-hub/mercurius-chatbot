@@ -48,7 +48,8 @@ const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { buildUserContent } = require('./lib/visionContent');
 const { processLessonOutcome } = require('./lib/lessonOutcome');
-const { createReflow, reflowText, reflowLimit } = require('./lib/airyReflow');
+const { reflowLimit } = require('./lib/airyReflow');
+const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
@@ -2009,19 +2010,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
       let fullText = '';
 
-      // Deterministic airiness: reflow the stream so no prose paragraph
-      // exceeds its sentence limit (prompting alone is ~90% compliant at
-      // temperature). The transformer is chunk-boundary independent, so the
-      // streamed bytes always equal the final reply's reflow — clients never
-      // see the text change shape at finalize. fullText accumulates the
-      // REFLOWED text; markers pass through untouched.
-      const reflow = createReflow({
+      // Deterministic formatting (lib/replyPipeline): blocks_v1 clients get
+      // each [Q] check's options in the server's stable order (AUD-18), and
+      // every reply is reflowed so no prose paragraph exceeds its sentence
+      // limit (prompting alone is ~90% compliant at temperature). The
+      // pipeline is chunk-boundary independent, so the streamed bytes always
+      // equal the final reply — clients never see the text change shape at
+      // finalize. fullText accumulates the TRANSFORMED text.
+      const pipeline = createReplyPipeline({
         limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+        shuffleQuiz: wantsBlocks,
       });
 
       stream.on('text', (text) => {
         touch();
-        const out = reflow.push(text);
+        const out = pipeline.push(text);
         if (!out) return; // held back pending a sentence-boundary decision
         fullText += out;
         safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
@@ -2033,8 +2036,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) return;
-        // Drain the reflow hold-back so the tail reaches the client too.
-        const tail = reflow.flush();
+        // Drain the pipeline's hold-back so the tail reaches the client too.
+        const tail = pipeline.flush();
         if (tail) {
           fullText += tail;
           safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
@@ -2164,10 +2167,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const replyText = (response.content && response.content[0] && response.content[0].text) || '';
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
-      // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
+      // REFUSAL_COPY keeps its own line breaks; only a model reply goes
+      // through the same transforms as the stream (lib/replyPipeline).
       const reflowed = refused
         ? REFUSAL_COPY
-        : reflowText(replyText, reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }));
+        : transformReply(replyText, {
+          limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+          shuffleQuiz: wantsBlocks,
+        });
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
       const lessonOutcome = isCurriculumMsg
