@@ -295,8 +295,9 @@ public final class ChatViewModel {
     /// Send the current draft as a user message.
     ///
     /// No-op if the draft is empty or a request is already in flight.
-    /// After a previous failure, sending a new message drops the failed
-    /// assistant bubble so the history stays clean.
+    /// After a previous failure, an empty failed reply is dropped; one that
+    /// had already streamed text is kept as cut off and sent on the wire
+    /// (see `settleTrailingFailedReply`).
     ///
     /// `responseMode` controls the answer's length / depth. The default
     /// is `.concise` — the mobile-native short answer. The "Explain
@@ -352,12 +353,7 @@ public final class ChatViewModel {
         case .idle:
             break
         case .failed:
-            // Drop the trailing failed assistant bubble, if any.
-            if let last = messages.last,
-               last.role == .assistant,
-               case .failed = last.status {
-                messages.removeLast()
-            }
+            settleTrailingFailedReply()
         }
 
         // A photo-only turn must never carry empty content: Anthropic
@@ -398,8 +394,14 @@ public final class ChatViewModel {
     /// curriculum wire prefix in runSend) so server-side history stays a
     /// coherent user/assistant alternation — the model just sees the student
     /// answering its question. Balanced budget: the reaction beat teaches.
+    /// Also allowed after a failure: a [Q] that streamed in full before the
+    /// reply was cut off can still be answered, and `send()` keeps that reply
+    /// on the wire, so the model sees the question being answered.
     public func sendQuickReply(_ text: String) {
-        guard case .idle = phase else { return }
+        switch phase {
+        case .sending, .streaming: return
+        case .idle, .failed: break
+        }
         let savedDraft = draft
         draft = text
         send(responseMode: .balanced)
@@ -478,14 +480,9 @@ public final class ChatViewModel {
         if case .sending = phase { return }
         if case .streaming = phase { return }
 
-        // Drop a previous failed bubble if there is one, mirroring
-        // `send()`'s housekeeping.
-        if case .failed = phase,
-           let trailing = messages.last,
-           trailing.role == .assistant,
-           case .failed = trailing.status {
-            messages.removeLast()
-        }
+        // Mirror `send()`'s housekeeping: the guard above means a failed
+        // trailing reply has text, so it stays as a cut-off reply on the wire.
+        if case .failed = phase { settleTrailingFailedReply() }
 
         let placeholder = ChatMessage(role: .assistant, content: "", status: .streaming)
         messages.append(placeholder)
@@ -648,6 +645,29 @@ public final class ChatViewModel {
         return LastRequest(responseMode: lastResponseMode,
                            injectedUserTurn: nil,
                            image: lastUser.image)
+    }
+
+    /// The student moved on after a failed reply (typed, tapped an option,
+    /// asked for more) instead of tapping Retry. A failed reply with no text
+    /// goes. One that had already streamed text stays — the student is
+    /// answering it — marked cut off, saved with the thread, and replayed on
+    /// the wire as Merc's turn, so the model sees what it already said (and
+    /// the question being answered) instead of re-teaching from before it.
+    /// The server has no "interrupted" field, so the text goes as it is.
+    private func settleTrailingFailedReply() {
+        guard let idx = messages.indices.last,
+              messages[idx].role == .assistant,
+              case .failed = messages[idx].status else { return }
+        let said = isLessonConversation
+            ? LessonMarker.cleaned(messages[idx].content)
+            : messages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !said.isEmpty else {
+            messages.removeLast()
+            return
+        }
+        messages[idx].content = said
+        messages[idx].status = .interrupted
+        persistMessage(messages[idx])
     }
 
     /// Cancel any in-flight request. The assistant bubble is marked

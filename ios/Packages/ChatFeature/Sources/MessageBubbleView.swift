@@ -96,15 +96,20 @@ struct MessageBubbleView: View {
                         )
                         .accessibilityLabel("Attached photo")
                 }
-                if message.role == .assistant && lessonStyle && !isEmptyTyping {
+                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure {
                     presenceLine
                 }
-                // Skip an empty text bubble for an image-only user message.
-                if message.role == .assistant || !message.content.isEmpty {
+                // Skip an empty text bubble for an image-only user message,
+                // and for a reply that failed before any text arrived — the
+                // error line alone says what happened (AUD-29).
+                if Self.drawsBubble(message) {
                     bubble
                 }
                 if case .failed(let reason) = message.status, message.role == .assistant {
                     failureLabel(reason)
+                }
+                if message.status == .interrupted, message.role == .assistant {
+                    interruptedLabel
                 }
             }
 
@@ -124,7 +129,7 @@ struct MessageBubbleView: View {
     /// accent line takes over as the assistant attribution there.
     private var shouldShowAvatar: Bool {
         showAvatar && message.role == .assistant && !lessonStyle
-            && !dynamicTypeSize.isAccessibilitySize
+            && !dynamicTypeSize.isAccessibilitySize && !isEmptyFailure
     }
 
     private var avatarView: some View {
@@ -163,6 +168,21 @@ struct MessageBubbleView: View {
     private var isEmptyTyping: Bool {
         if message.content.isEmpty, case .streaming = message.status { return true }
         return false
+    }
+
+    /// A reply that failed before any text arrived: nothing to draw but the
+    /// error line.
+    private var isEmptyFailure: Bool { Self.isEmptyFailure(message) }
+
+    static func isEmptyFailure(_ message: ChatMessage) -> Bool {
+        guard message.role == .assistant, case .failed = message.status else { return false }
+        return message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Whether the message draws a text bubble: never an empty one for an
+    /// image-only user turn, nor for a reply that failed before any text.
+    static func drawsBubble(_ message: ChatMessage) -> Bool {
+        message.role == .assistant ? !isEmptyFailure(message) : !message.content.isEmpty
     }
 
     /// "● Merc" sender line above the lesson bubble (green dot + soft ring).
@@ -422,6 +442,15 @@ struct MessageBubbleView: View {
             .padding(.horizontal, BrandSpacing.sm)
     }
 
+    /// Under a cut-off reply the student answered anyway: a quiet note, not
+    /// an error — the conversation carried on from here.
+    private var interruptedLabel: some View {
+        Label("Reply cut off here", systemImage: "scissors")
+            .font(BrandFont.caption)
+            .foregroundStyle(BrandColor.textSecondary)
+            .padding(.horizontal, BrandSpacing.sm)
+    }
+
     // MARK: - Shapes
 
     private var userShape: some Shape {
@@ -452,9 +481,15 @@ struct MessageBubbleView: View {
         if case .streaming = message.status {
             return Text("Mercurius is replying")
         }
+        if isEmptyFailure, case .failed(let reason) = message.status {
+            return Text("Merc's reply didn't arrive. \(reason)")
+        }
         // Speak the reply with questions flagged and never a raw marker — and
         // never the [Q] answer key (plainText drops ANS lines).
         let spoken = BlockParser.plainText(message.content)
+        if message.status == .interrupted {
+            return Text("\(roleLabel), cut off: \(spoken)")
+        }
         return Text("\(roleLabel): \(spoken)")
     }
 }

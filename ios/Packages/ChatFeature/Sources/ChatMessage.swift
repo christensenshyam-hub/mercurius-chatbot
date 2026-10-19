@@ -20,6 +20,10 @@ public struct ChatMessage: Identifiable, Equatable, Sendable {
         case streaming
         /// A request failed. Error message is shown under the bubble.
         case failed(reason: String)
+        /// A reply that stopped early (a dropped stream or Stop) which the
+        /// student then answered instead of tapping Retry. It stays in the
+        /// thread, and on the wire, as what Merc said so far.
+        case interrupted
     }
 
     public let id: UUID

@@ -523,16 +523,21 @@ struct MessageListView: View {
     }
 
     /// blocks_v1 interaction for one lesson bubble: taps live only on the
-    /// LATEST assistant message while idle; older [Q]s render inert with the
-    /// student's prior pick recovered from the following user message's
-    /// "I picked X)" prefix — zero persistence changes.
+    /// LATEST assistant message while no reply is in flight; older [Q]s
+    /// render inert with the student's prior pick recovered from the
+    /// following user message's "I picked X)" prefix — zero persistence
+    /// changes. A complete [Q] in a reply that was then cut off stays
+    /// answerable: the pick keeps that reply on the wire (AUD-29).
     private func quizInteraction(for message: ChatMessage) -> MessageBubbleView.QuizInteraction? {
         guard lessonStyle, let onQuizPick else { return nil }
         let isLatest = message.id == focalAssistantId
-        var isIdle = false
-        if case .idle = phase { isIdle = true }
+        let canAnswer: Bool
+        switch phase {
+        case .idle, .failed: canAnswer = true
+        case .sending, .streaming: canAnswer = false
+        }
         return MessageBubbleView.QuizInteraction(
-            isEnabled: isLatest && isIdle,
+            isEnabled: isLatest && canAnswer,
             answeredIndex: priorPickIndex(after: message),
             onPick: { quiz, index in
                 let letter = String(UnicodeScalar(65 + index)!)

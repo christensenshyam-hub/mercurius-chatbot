@@ -30,6 +30,8 @@ final class ControllableChatClient: ChatStreaming, @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: AsyncThrowingStream<ChatStreamEvent, Error>.Continuation?
     private(set) var callCount: Int = 0
+    /// The wire history of every request, in order.
+    private(set) var receivedMessages: [[ChatMessageDTO]] = []
 
     func streamChat(
         messages: [ChatMessageDTO],
@@ -39,6 +41,7 @@ final class ControllableChatClient: ChatStreaming, @unchecked Sendable {
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         lock.lock()
         callCount += 1
+        receivedMessages.append(messages)
         lock.unlock()
         return AsyncThrowingStream { continuation in
             self.lock.lock()
