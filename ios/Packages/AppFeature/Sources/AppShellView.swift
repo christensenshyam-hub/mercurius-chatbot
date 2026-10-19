@@ -112,6 +112,10 @@ struct AppShellView: View {
     /// leaving the lesson must not clear.
     @State private var activityShowsWin = false
 
+    /// The lesson whose Live Activity is running, so a streak confirmed
+    /// mid-lesson can take the "Streak ends in" countdown off the card.
+    @State private var activityLessonId: String?
+
     enum Tab: String, Hashable {
         case chat
         case history       // action: present chat-history sheet
@@ -228,6 +232,9 @@ struct AppShellView: View {
         .onChange(of: chatModel.phase) { _, phase in
             if phase == .sending { lastActivityStore.touch() }
         }
+        // The lesson's first reply confirms today's streak: a card that was
+        // counting down to the streak's end drops the countdown (AUD-37).
+        .onChange(of: streakStore.lastUpdatedAt) { _, _ in refreshRunningLearningActivity() }
         // A started lesson opens in its OWN full-screen curriculum window — not
         // the chat tab, not a new mode. The starter prompt is sent behind the
         // scenes (see CurriculumLessonView / ChatViewModel.beginLesson).
@@ -623,6 +630,7 @@ struct AppShellView: View {
         }
 #endif
         activityShowsWin = false
+        activityLessonId = nil
         if let unit = queuedUnitTest {
             queuedUnitTest = nil
             handleStartUnitTest(unit)
@@ -683,15 +691,17 @@ struct AppShellView: View {
 
     // MARK: - Live Activity
 
-    /// Start the learning Live Activity for the lesson's unit. Framed as
-    /// streak defense: the ring tracks lessons-in-unit and the countdown runs
-    /// to the end of the local day — the same window the reminders defend.
-    /// No-ops when the parent unit can't be resolved or the user has Live
-    /// Activities off (the controller checks authorization).
+    /// Start the learning Live Activity for the lesson's unit: the ring tracks
+    /// lessons-in-unit, the meta line this week's lessons against the goal,
+    /// and a countdown to the end of the local day shows only while a live
+    /// streak ends tonight (AUD-37). No-ops when the parent unit can't be
+    /// resolved or the user has Live Activities off (the controller checks
+    /// authorization).
     private func startLearningActivity(for lessonId: String) {
 #if os(iOS)
         guard let unit = parentUnit(of: lessonId) else { return }
         activityShowsWin = false
+        activityLessonId = lessonId
         LearningActivityController.shared.startSession(
             title: "Unit \(unit.number) · \(unit.title)",
             state: learningState(in: unit)
@@ -709,10 +719,37 @@ struct AppShellView: View {
         if state.lessonsDone >= state.lessonsTotal {
             LearningActivityController.shared.complete(state: state)
             activityShowsWin = true
+            activityLessonId = nil
         } else {
             LearningActivityController.shared.update(state: state)
         }
 #endif
+    }
+
+    /// Re-push the running lesson's card with fresh streak and week values.
+    /// No-op when no lesson card is running (or it's a lingering win).
+    private func refreshRunningLearningActivity() {
+#if os(iOS)
+        guard let lessonId = activityLessonId, !activityShowsWin,
+              let unit = parentUnit(of: lessonId) else { return }
+        LearningActivityController.shared.update(state: learningState(in: unit))
+#endif
+    }
+
+    /// Whether a live streak ends tonight: the server confirmed it recently,
+    /// today is the last day a chat still saves it (the reminders' window,
+    /// counted in local days), and today isn't saved yet. Only then does the
+    /// Live Activity show a countdown, labelled "Streak ends in" (AUD-37).
+    static func streakEndsTonight(
+        streak: Int,
+        isFresh: Bool,
+        confirmedToday: Bool,
+        streakDay: Date?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard isFresh, streak > 0, !confirmedToday, let streakDay else { return false }
+        return ReminderPlanner.dailyHorizon(now: now, streakDay: streakDay, calendar: calendar) == 1
     }
 
     private func parentUnit(of lessonId: String) -> CurriculumFeature.Unit? {
@@ -774,17 +811,30 @@ struct AppShellView: View {
             byAdding: .day, value: 1,
             to: Calendar.current.startOfDay(for: Date())
         ) ?? Date().addingTimeInterval(3600)
-        return .init(
+        let week = WeeklyPlan.compute(progress: progress)
+        let atRisk = Self.streakEndsTonight(
+            streak: streakStore.current,
+            isFresh: streakStore.isCurrentFresh,
+            confirmedToday: streakStore.confirmedToday,
+            streakDay: streakStore.lastConfirmedDay
+        )
+        let fraction: Double = total > 0 ? Double(done) / Double(total) : 0
+        let level: Int = (Int(unit.number) ?? 0) + 1
+        var state = LearningActivityAttributes.ContentState(
             phase: .active,
             lessonsDone: done,
             lessonsTotal: total,
-            progress: total > 0 ? Double(done) / Double(total) : 0,
+            progress: fraction,
             streakCount: streakStore.current,
-            level: (Int(unit.number) ?? 0) + 1,
+            level: level,
             lessonsToLevel: max(total - done, 0),
             deadline: endOfDay,
             lastUpdated: Date()
         )
+        state.weekDone = week.done
+        state.weekGoal = week.goal
+        state.streakAtRisk = atRisk
+        return state
     }
 #endif
 

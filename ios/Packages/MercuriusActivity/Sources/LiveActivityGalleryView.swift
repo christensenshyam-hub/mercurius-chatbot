@@ -18,8 +18,11 @@ public struct LiveActivityGalleryView: View {
                 section("Active — lock card") {
                     LockCardView(state: .demoActive, isStale: false)
                 }
-                section("Active, no streak yet — lock card") {
+                section("First lesson, no streak yet — lock card") {
                     LockCardView(state: .demoActiveNoStreak, isStale: false)
+                }
+                section("Streak ends tonight — lock card") {
+                    LockCardView(state: .demoActiveStreakAtRisk, isStale: false)
                 }
                 section("Completed — lock card") {
                     LockCardView(state: .demoCompleted, isStale: false)
@@ -33,6 +36,12 @@ public struct LiveActivityGalleryView: View {
 
                 section("Active — DI expanded") {
                     islandWell { ExpandedBody(state: .demoActive, isStale: false) }
+                }
+                section("First lesson — DI expanded") {
+                    islandWell { ExpandedBody(state: .demoActiveNoStreak, isStale: false) }
+                }
+                section("Streak ends tonight — DI expanded") {
+                    islandWell { ExpandedBody(state: .demoActiveStreakAtRisk, isStale: false) }
                 }
                 section("Error — DI expanded") {
                     islandWell { ExpandedBody(state: .demoError, isStale: false) }
@@ -72,24 +81,39 @@ public struct LiveActivityGalleryView: View {
 }
 
 extension LearningActivityAttributes.ContentState {
-    /// The handoff's sample data: streak 24, 3 of 5 done, 2 lessons left in
-    /// Unit 6 (`level` 7 = unit + 1).
+    /// The handoff's sample data: streak 24, 3 of 5 done in Unit 6 (`level`
+    /// 7 = unit + 1), one lesson done this week, streak already saved today.
     static var demoActive: Self {
         .init(
             phase: .active, lessonsDone: 3, lessonsTotal: 5, progress: 0.6,
             streakCount: 24, level: 7, lessonsToLevel: 2,
             deadline: Date().addingTimeInterval(2 * 3600 + 40 * 60),
-            lastUpdated: Date().addingTimeInterval(-6 * 60)
+            lastUpdated: Date().addingTimeInterval(-6 * 60),
+            weekDone: 1, weekGoal: 2, streakAtRisk: false
         )
     }
 
-    /// First lesson of a unit with no streak yet: the chip drops the count.
+    /// A new student's first lesson (AUD-37's case): Unit 1, nothing done,
+    /// no streak — a neutral headline and the week, no countdown.
     static var demoActiveNoStreak: Self {
         .init(
-            phase: .active, lessonsDone: 0, lessonsTotal: 5, progress: 0,
-            streakCount: 0, level: 7, lessonsToLevel: 5,
-            deadline: Date().addingTimeInterval(5 * 3600),
-            lastUpdated: Date()
+            phase: .active, lessonsDone: 0, lessonsTotal: 4, progress: 0,
+            streakCount: 0, level: 2, lessonsToLevel: 4,
+            deadline: Date().addingTimeInterval(15 * 3600 + 30 * 60),
+            lastUpdated: Date(),
+            weekDone: 0, weekGoal: 2, streakAtRisk: false
+        )
+    }
+
+    /// A live streak whose last save day is today, not yet saved: the one
+    /// case with a countdown, and it says what it counts down to.
+    static var demoActiveStreakAtRisk: Self {
+        .init(
+            phase: .active, lessonsDone: 2, lessonsTotal: 4, progress: 0.5,
+            streakCount: 6, level: 3, lessonsToLevel: 2,
+            deadline: Date().addingTimeInterval(4 * 3600 + 12 * 60),
+            lastUpdated: Date(),
+            weekDone: 0, weekGoal: 2, streakAtRisk: true
         )
     }
 
