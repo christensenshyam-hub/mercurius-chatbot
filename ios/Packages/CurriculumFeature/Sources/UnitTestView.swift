@@ -66,7 +66,7 @@ public struct UnitTestView: View {
                     Text("UNIT \(model.unit.number) · UNIT TEST")
                         .font(BrandFont.caption)
                         .tracking(1.2)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                     Text(model.unit.title)
                         .font(BrandFont.subheading)
                         .foregroundStyle(BrandColor.text)
@@ -75,7 +75,7 @@ public struct UnitTestView: View {
             Spacer(minLength: BrandSpacing.sm)
             Button("Done") { onExit() }
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityLabel("Done. Exit unit test.")
         }
         .padding(.horizontal, BrandSpacing.lg)
@@ -198,7 +198,7 @@ public struct UnitTestView: View {
                 if submitted && isAnswer {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(BrandColor.success)
+                        .foregroundStyle(BrandColor.successText)
                 } else if submitted && isSelected {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
@@ -226,7 +226,7 @@ public struct UnitTestView: View {
             Text("WRITTEN DEFENSE")
                 .font(BrandFont.caption)
                 .tracking(1.2)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
             Text("Nice — \(model.mcqScore)/\(model.mcqTotal) on the quiz. One written question left, graded by Mercurius.")
                 .font(BrandFont.caption)
                 .foregroundStyle(BrandColor.textSecondary)
@@ -286,7 +286,7 @@ public struct UnitTestView: View {
         return VStack(spacing: BrandSpacing.lg) {
             Image(systemName: passed ? "checkmark.seal.fill" : "arrow.counterclockwise.circle.fill")
                 .font(.system(size: 56))
-                .foregroundStyle(passed ? BrandColor.success : BrandColor.accent)
+                .foregroundStyle(passed ? BrandColor.successText : BrandColor.accentText)
                 .padding(.top, BrandSpacing.md)
 
             Text(passed ? "Unit mastered" : "Almost there")
@@ -334,7 +334,7 @@ public struct UnitTestView: View {
                 }
                 Button("Done") { onExit() }
                     .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
         }
         .frame(maxWidth: .infinity)
@@ -350,7 +350,7 @@ public struct UnitTestView: View {
     private func resultRow(label: String, detail: String, ok: Bool) -> some View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(ok ? BrandColor.success : BrandColor.error)
+                .foregroundStyle(ok ? BrandColor.successText : BrandColor.error)
             Text(label)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.text)

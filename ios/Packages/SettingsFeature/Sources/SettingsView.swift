@@ -56,7 +56,7 @@ public struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: dismissAction)
                         .fontWeight(.semibold)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                         // Leaving mid-erasure would let a send start under the
                         // OLD id: the server re-creates rows the user was told
                         // were gone, and the message vanishes at the local reset.
@@ -224,24 +224,24 @@ public struct SettingsView: View {
 
             if let faq = URL(string: "https://trymercurius.com/support") {
                 Link("Help & FAQ", destination: faq)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
             if let feedback = URL(string: "https://trymercurius.com/feedback") {
                 Link("Send feedback", destination: feedback)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .accessibilityIdentifier("settings.sendFeedback")
             }
             if let support = URL(string: "mailto:support@trymercurius.com") {
                 Link("Contact support", destination: support)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
             if let terms = URL(string: "https://trymercurius.com/terms") {
                 Link("Terms of Use", destination: terms)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
             if let privacy = URL(string: "https://trymercurius.com/privacy") {
                 Link("Privacy Policy", destination: privacy)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
 
             Text("Mercurius AI is an AI literacy tutor — built to help you think critically about AI, not think for you.")

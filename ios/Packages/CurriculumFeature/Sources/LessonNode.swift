@@ -177,9 +177,9 @@ struct LessonNode: View {
 
     private var statusColor: Color {
         switch status {
-        case .completed:  return BrandColor.success
-        case .current:    return BrandColor.accent
-        case .inProgress: return BrandColor.accent
+        case .completed:  return BrandColor.successText
+        case .current:    return BrandColor.accentText
+        case .inProgress: return BrandColor.accentText
         case .locked:     return BrandColor.textSecondary
         case .available:  return BrandColor.textSecondary
         }
@@ -234,9 +234,9 @@ struct UnitTestNode: View {
 
     private var statusColor: Color {
         switch status {
-        case .completed: return BrandColor.success
+        case .completed: return BrandColor.successText
         case .locked:    return BrandColor.textSecondary
-        default:         return BrandColor.accent
+        default:         return BrandColor.accentText
         }
     }
 }

@@ -303,11 +303,11 @@ struct MessageBubbleView: View {
         HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
             Image(systemName: "questionmark.bubble.fill")
                 .font(.system(size: bodyFontSize * 0.9, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
             Text(text)
                 .font(readingFont(size: bodyFontSize, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .multilineTextAlignment(.leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

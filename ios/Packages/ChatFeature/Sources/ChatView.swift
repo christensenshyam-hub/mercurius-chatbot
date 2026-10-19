@@ -666,7 +666,7 @@ struct MessageListView: View {
         } label: {
             Label("Jump to latest", systemImage: "arrow.down")
                 .font(BrandFont.caption.weight(.semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .padding(.vertical, BrandSpacing.sm)
                 .padding(.horizontal, BrandSpacing.md)
                 .background(BrandColor.surfaceElevated, in: Capsule())
@@ -715,7 +715,7 @@ struct MessageListView: View {
                     .padding(.vertical, BrandSpacing.sm)
                     .padding(.horizontal, BrandSpacing.md)
                     .background(BrandColor.surfaceElevated)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .clipShape(Capsule())
             }
             .frame(minHeight: 44)
@@ -799,7 +799,7 @@ struct MessageListView: View {
                 .padding(.vertical, BrandSpacing.sm)
                 .padding(.horizontal, BrandSpacing.md)
                 .background(BrandColor.surface)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .overlay(
                     Capsule()
                         .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)

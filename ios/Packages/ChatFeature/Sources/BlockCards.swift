@@ -21,7 +21,7 @@ struct KeyIdeaCard: View {
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .tracking(1.2)
             }
-            .foregroundStyle(BrandColor.accent)
+            .foregroundStyle(BrandColor.accentText)
             .accessibilityHidden(true)
             Text(text)
                 .font(font)
@@ -99,11 +99,11 @@ struct CheckQuizCard: View {
             HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
                 Image(systemName: "questionmark.bubble.fill")
                     .font(.system(size: bodySize * 0.9, weight: .semibold))
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .accessibilityHidden(true)
                 Text(quiz.stem)
                     .font(stemFont)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -119,6 +119,15 @@ struct CheckQuizCard: View {
         .sensoryFeedback(.impact, trigger: localPick)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Question: \(quiz.stem)")
+    }
+
+    /// The option letter is text, so it takes a text token in the row's
+    /// grading hue (AUD-21).
+    private func letterColor(isAnswer: Bool, isPick: Bool) -> Color {
+        guard graded else { return BrandColor.accentText }
+        if isAnswer { return BrandColor.successText }
+        if isPick { return BrandColor.error }
+        return BrandColor.accentText
     }
 
     private func optionRow(index: Int, option: String) -> some View {
@@ -143,7 +152,7 @@ struct CheckQuizCard: View {
             HStack(alignment: .top, spacing: BrandSpacing.sm) {
                 Text(String(UnicodeScalar(65 + index)!))
                     .font(.system(size: bodySize * 0.8, weight: .bold, design: .rounded))
-                    .foregroundStyle(graded && (isAnswer || isPick) ? stroke : BrandColor.accent)
+                    .foregroundStyle(letterColor(isAnswer: isAnswer, isPick: isPick))
                 Text(option)
                     .font(.system(size: bodySize * 0.85))
                     .foregroundStyle(BrandColor.text)
@@ -153,7 +162,7 @@ struct CheckQuizCard: View {
                 if graded && isAnswer {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(BrandColor.success)
+                        .foregroundStyle(BrandColor.successText)
                 } else if graded && isPick {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)

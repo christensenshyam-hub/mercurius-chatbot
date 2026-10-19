@@ -604,7 +604,7 @@ private struct LessonHeaderBar: View {
                     Text(eyebrow)
                         .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
                         .tracking(0.4)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .minimumScaleFactor(0.85)
                     if let title, !dynamicTypeSize.isAccessibilitySize {
@@ -623,7 +623,7 @@ private struct LessonHeaderBar: View {
                 Button(action: onExit) {
                     Text(exitTitle)
                         .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                         .lineLimit(1)
                         .fixedSize()
                         .padding(.horizontal, 10)

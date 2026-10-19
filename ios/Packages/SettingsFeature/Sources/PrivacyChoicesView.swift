@@ -84,7 +84,7 @@ struct PrivacyChoicesView: View {
             )
             if let privacy = URL(string: "https://trymercurius.com/privacy") {
                 Link("Read the full privacy policy", destination: privacy)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
         } header: {
             Text("How Mercurius uses your data")

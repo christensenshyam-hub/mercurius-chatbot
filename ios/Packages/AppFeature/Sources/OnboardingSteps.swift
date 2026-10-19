@@ -268,7 +268,7 @@ struct DisclosureStep: View {
                 if let url = URL(string: "https://trymercurius.com/privacy") {
                     Link("Read the privacy policy", destination: url)
                         .font(BrandFont.bodyEmphasized)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                 }
 
                 Toggle(isOn: $agreed) {

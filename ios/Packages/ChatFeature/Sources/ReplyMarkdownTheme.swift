@@ -78,7 +78,7 @@ struct ReplyMarkdownStyling: ViewModifier {
             .markdownBlockStyle(\.numberedListMarker) { config in
                 Text("\(config.itemNumber).")
                     .font(.system(size: bodySize * 0.9, weight: .bold, design: .rounded))
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .frame(minWidth: 14, alignment: .trailing)
             }
             // Small headings in the rounded (gamified) ramp — replies only

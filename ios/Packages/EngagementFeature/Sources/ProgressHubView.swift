@@ -69,7 +69,7 @@ public struct ProgressHubView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: onDone)
                         .font(BrandFont.roundedBodyEmphasized)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                 }
             }
         }

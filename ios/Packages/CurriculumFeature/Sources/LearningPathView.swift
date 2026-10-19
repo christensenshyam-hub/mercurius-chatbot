@@ -140,12 +140,15 @@ struct LearningPathView: View {
                 } else {
                     connector(before: element, nodeIndex: nodeIndex, previous: previous)
                 }
-                Button { onStartLesson(lesson) } label: {
+                Button {
+                    guard status != .locked else { return }
+                    onStartLesson(lesson)
+                } label: {
                     LessonNode(lesson: lesson, status: status, labelSide: labelSide(for: nodeIndex),
                                isFrontier: isFrontier)
                 }
                 .buttonStyle(.plain)
-                .disabled(status == .locked)
+                .lockedNode(status == .locked)
                 .offset(x: LearningPathMetrics.offset(for: nodeIndex))
             }
             .overlay(alignment: mercSide(for: nodeIndex)) {
@@ -156,11 +159,14 @@ struct LearningPathView: View {
             let status = unitTestStatus(unit, current: current)
             VStack(spacing: 0) {
                 connector(before: element, nodeIndex: nodeIndex, previous: previous)
-                Button { onStartUnitTest(unit) } label: {
+                Button {
+                    guard status != .locked else { return }
+                    onStartUnitTest(unit)
+                } label: {
                     UnitTestNode(unit: unit, status: status, labelSide: labelSide(for: nodeIndex))
                 }
                 .buttonStyle(.plain)
-                .disabled(status == .locked)
+                .lockedNode(status == .locked)
                 .offset(x: LearningPathMetrics.offset(for: nodeIndex))
             }
             .overlay(alignment: mercSide(for: nodeIndex)) {
@@ -336,5 +342,16 @@ private enum PathElement: Identifiable {
         case .lesson(_, _, let i):    return i
         case .unitTest(_, let i):     return i
         }
+    }
+}
+
+private extension View {
+    /// A locked node takes no taps and isn't announced as a button, but
+    /// keeps its full colours: `.disabled` dimmed the already-secondary
+    /// "Locked" label below a readable contrast (AUD-21). The node's own
+    /// accessibility label still says "Locked".
+    func lockedNode(_ locked: Bool) -> some View {
+        allowsHitTesting(!locked)
+            .accessibilityRemoveTraits(locked ? .isButton : [])
     }
 }

@@ -322,7 +322,7 @@ struct AppShellView: View {
                     }
                 }
             }
-            .tint(BrandColor.accent)
+            .tint(BrandColor.accentText)
         }
         .sheet(isPresented: $showProgress) {
             ProgressHubView(
@@ -570,7 +570,7 @@ struct AppShellView: View {
                     .foregroundStyle(BrandColor.text)
                 Button("Done") { activeUnitTest = nil }
                     .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(BrandColor.background.ignoresSafeArea())

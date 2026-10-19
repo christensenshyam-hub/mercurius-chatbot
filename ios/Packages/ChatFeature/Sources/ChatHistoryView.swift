@@ -258,7 +258,7 @@ private struct ChatHistoryRow: View {
         Text(displayMode)
             .font(BrandFont.caption)
             .fontWeight(.semibold)
-            .foregroundStyle(BrandColor.accent)
+            .foregroundStyle(BrandColor.accentText)
             .padding(.vertical, 2)
             .padding(.horizontal, BrandSpacing.sm)
             .background(BrandColor.accent.opacity(0.12))

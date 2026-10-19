@@ -29,7 +29,7 @@ struct ChatInputHint: View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: "arrow.down")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
 
             Text("Try a prompt above, or type your own below.")
