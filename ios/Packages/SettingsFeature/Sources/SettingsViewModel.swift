@@ -110,10 +110,6 @@ public final class SettingsViewModel {
 
     static let resetLeavesServerCopy = "Resetting only this device leaves your chats on our server."
 
-    /// Where a student who reset only this device can still have the old
-    /// ID's data deleted (the privacy policy's email route).
-    public static let privacyEmail = "privacy@trymercurius.com"
-
     /// The alert copy for a failed server delete. Only a connection problem
     /// gets the "check your connection" line; a 400/429/500 says what the
     /// server actually did. `.unknown` is treated as a connection problem:
@@ -322,6 +318,10 @@ public final class SettingsViewModel {
 /// `privacyEmail` quoting the old ID can. The sheet shows the ID with a Copy
 /// button first.
 public struct DeviceOnlyResetNotice: Equatable, Identifiable, Sendable {
+    /// Where a student who reset only this device can still have the old
+    /// ID's data deleted (the privacy policy's email route).
+    public static let privacyEmail = "privacy@trymercurius.com"
+
     /// The current (soon old) ID, or nil when it can't be read.
     public let sessionId: String?
 
@@ -333,7 +333,7 @@ public struct DeviceOnlyResetNotice: Equatable, Identifiable, Sendable {
         if sessionId != nil {
             return "Our server still has your chats and progress under the ID below. "
                 + "Once this device resets, it can't delete them any more: only an email to "
-                + "\(SettingsViewModel.privacyEmail) with this ID can. Copy it before you reset."
+                + "\(Self.privacyEmail) with this ID can. Copy it before you reset."
         }
         return "Our server still has your chats and progress under this device's ID, which can't be "
             + "read right now. Once this device resets, nothing on it can delete them. "
