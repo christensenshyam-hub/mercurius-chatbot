@@ -59,6 +59,22 @@ struct UnitDefenseGradingTests {
         #expect(UnitDefenseGrading.gradingError(for: .crisisSupport(message: "988")) == .crisis)
     }
 
+    @Test("A paused or capped server refuses without Retry; the network's allowance keeps it (AUD-30)")
+    func refusalRetryRules() {
+        #expect(UnitDefenseGrading.gradingError(for: .serviceUnavailable(code: "service_disabled", message: "Paused.", retryAfter: nil))
+                == .refused(message: "Paused.", isRetryable: false))
+        #expect(UnitDefenseGrading.gradingError(for: .serviceUnavailable(code: "spend_cap", message: "Capped.", retryAfter: nil))
+                == .refused(message: "Capped.", isRetryable: false))
+        guard case .refused(let message, let retryable) = UnitDefenseGrading.gradingError(
+            for: .quotaExceeded(message: "Too many new sessions from this network today.", retryAfter: nil, scope: "ip")
+        ) else {
+            Issue.record("Expected .refused")
+            return
+        }
+        #expect(retryable)
+        #expect(message.contains("cellular"))
+    }
+
     @Test("A school filter's page names the network and leaves the answer free to resend (AUD-32)")
     func blockedNetworkDoesNotLockTheAnswer() async throws {
         #expect(UnitDefenseGrading.gradingError(for: .unreachableOnThisNetwork)

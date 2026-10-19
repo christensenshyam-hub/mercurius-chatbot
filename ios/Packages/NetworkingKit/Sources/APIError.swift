@@ -40,8 +40,10 @@ public enum APIError: Error, Equatable, Sendable {
 
     /// Today's usage allowance is used up (429 with `error == "daily_limit"`).
     /// `message` is the server's own human copy; `retryAfter` is seconds
-    /// until the allowance resets. Retrying sooner re-hits the same wall.
-    case quotaExceeded(message: String, retryAfter: TimeInterval?)
+    /// until the allowance resets; `scope` is whose allowance it is
+    /// (`"session"` or `"ip"`). Retrying sooner re-hits the same wall, unless
+    /// it's the network's and the student switches network.
+    case quotaExceeded(message: String, retryAfter: TimeInterval?, scope: String? = nil)
 
     /// The server is up but not serving right now (503 with a
     /// `ServerRefusalCode` such as `spend_cap` / `service_disabled` / `busy` /
@@ -75,8 +77,37 @@ public enum APIError: Error, Equatable, Sendable {
     /// gets the same answer.
     case crisisSupport(message: String)
 
+    /// The server refusal behind a `quotaExceeded` or `serviceUnavailable`,
+    /// which decides its copy and whether Retry can help.
+    public var serverRefusal: ServerRefusal? {
+        switch self {
+        case .quotaExceeded(let message, let retryAfter, let scope):
+            return ServerRefusal(
+                code: ServerRefusalCode.dailyLimit.rawValue,
+                message: message,
+                retryAfter: retryAfter,
+                scope: scope
+            )
+        case .serviceUnavailable(let code, let message, let retryAfter):
+            return ServerRefusal(code: code, message: message, retryAfter: retryAfter)
+        default:
+            return nil
+        }
+    }
+
     /// A user-friendly, non-technical message safe to show in the UI.
     public var userFacingMessage: String {
+        userFacingMessage(clock: .current)
+    }
+
+    /// `userFacingMessage`, with the clock a daily limit's reset time is
+    /// read on.
+    public func userFacingMessage(clock: LocalClock) -> String {
+        if let refusal = serverRefusal {
+            // The server writes this copy for students; it already names
+            // the reason. A daily limit gets its reset as a local time.
+            return refusal.studentMessage(clock: clock)
+        }
         switch self {
         case .offline:
             return "You're offline. Reconnect and try again."
@@ -94,10 +125,8 @@ public enum APIError: Error, Equatable, Sendable {
             return "You're not signed in to do that."
         case .rateLimited:
             return "You're moving fast — give it a moment, then try again."
-        case .quotaExceeded(let message, _), .serviceUnavailable(_, let message, _):
-            // The server writes this copy for students; it already names
-            // the reason and when to come back.
-            return message
+        case .quotaExceeded(let message, _, _), .serviceUnavailable(_, let message, _):
+            return message  // Unreachable: `serverRefusal` answers both above.
         case .crisisSupport(let message):
             return message
         case .server:
@@ -112,12 +141,17 @@ public enum APIError: Error, Equatable, Sendable {
     }
 
     /// Whether the error is likely transient and a retry could succeed.
+    /// Refusals follow `ServerRefusal.isRetryable`: no Retry for a used-up
+    /// allowance (unless it's the network's), the spend cap or the kill
+    /// switch; Retry for a busy or restarting server.
     public var isRetryable: Bool {
         switch self {
         case .offline, .connectionLost, .unreachableOnThisNetwork, .timeout, .server,
-             .rateLimited, .serviceUnavailable, .unknown:
+             .rateLimited, .unknown:
             return true
-        case .messageTooLong, .invalidRequest, .unauthorized, .quotaExceeded, .decoding,
+        case .quotaExceeded, .serviceUnavailable:
+            return serverRefusal?.isRetryable ?? false
+        case .messageTooLong, .invalidRequest, .unauthorized, .decoding,
              .invalidModelOutput, .cancelled, .crisisSupport:
             return false
         }

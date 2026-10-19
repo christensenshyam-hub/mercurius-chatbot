@@ -185,7 +185,8 @@ public final class APIClient: Sendable {
             if body?.error == ServerRefusalCode.dailyLimit.rawValue {
                 throw APIError.quotaExceeded(
                     message: body?.humanMessage ?? Self.quotaFallbackMessage,
-                    retryAfter: body?.retryAfterSec
+                    retryAfter: body?.retryAfterSec,
+                    scope: body?.scope
                 )
             }
             throw APIError.rateLimited

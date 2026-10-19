@@ -115,7 +115,7 @@ struct APIClientValidationTests {
         }
     }
 
-    @Test("429 daily_limit maps to quotaExceeded carrying the server's copy and retryAfter")
+    @Test("429 daily_limit maps to quotaExceeded carrying the server's copy, retryAfter and scope")
     func dailyLimit() {
         let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
         let body = Data(#"""
@@ -125,7 +125,8 @@ struct APIClientValidationTests {
             try APIClient.validate(statusCode: 429, data: body)
             Issue.record("Expected throw")
         } catch let error as APIError {
-            #expect(error == .quotaExceeded(message: copy, retryAfter: 31337))
+            #expect(error == .quotaExceeded(message: copy, retryAfter: 31337, scope: "session"))
+            #expect(!error.isRetryable)
         } catch {
             Issue.record("Wrong error type")
         }
@@ -138,7 +139,9 @@ struct APIClientValidationTests {
             try APIClient.validate(statusCode: 429, data: body)
             Issue.record("Expected throw")
         } catch let error as APIError {
-            #expect(error == .quotaExceeded(message: "This network has reached today's usage limit.", retryAfter: nil))
+            #expect(error == .quotaExceeded(message: "This network has reached today's usage limit.", retryAfter: nil, scope: "ip"))
+            // The network's allowance: another network (cellular) gets past it.
+            #expect(error.isRetryable)
         } catch {
             Issue.record("Wrong error type")
         }
@@ -152,7 +155,7 @@ struct APIClientValidationTests {
             try APIClient.validate(statusCode: 429, data: body)
             Issue.record("Expected throw")
         } catch let error as APIError {
-            #expect(error == .quotaExceeded(message: copy, retryAfter: 3600))
+            #expect(error == .quotaExceeded(message: copy, retryAfter: 3600, scope: "session"))
         } catch {
             Issue.record("Wrong error type")
         }
@@ -191,7 +194,7 @@ struct APIClientValidationTests {
         do {
             try APIClient.validate(statusCode: 429, data: body)
             Issue.record("Expected throw")
-        } catch APIError.quotaExceeded(let message, let retryAfter) {
+        } catch APIError.quotaExceeded(let message, let retryAfter, _) {
             #expect(!message.isEmpty)
             #expect(!message.contains("{"))
             #expect(retryAfter == nil)
@@ -442,13 +445,17 @@ struct APIErrorTests {
         }
     }
 
-    @Test("quotaExceeded and serviceUnavailable show the server's copy verbatim")
+    @Test("quotaExceeded shows the server's copy with its reset as a local time; serviceUnavailable shows it verbatim")
     func refusalsPreferServerCopy() {
         let quota = APIError.quotaExceeded(
             message: "You've used today's chat turns. Mercurius will be ready again tomorrow.",
             retryAfter: 3600
         )
-        #expect(quota.userFacingMessage == "You've used today's chat turns. Mercurius will be ready again tomorrow.")
+        // 23:00 UTC → reset at 00:00 UTC = 7:00 PM in Chicago (CDT), same day.
+        let clock = LocalClock.pinned(utc: "2026-10-18T23:00:00Z", zone: "America/Chicago")
+        #expect(normalized(quota.userFacingMessage(clock: clock))
+            == "You've used today's chat turns. Try again after 7:00 PM.")
+        #expect(quota.userFacingMessage.hasPrefix("You've used today's chat turns."))
 
         let paused = APIError.serviceUnavailable(
             code: "service_disabled",
@@ -490,13 +497,22 @@ struct APIErrorTests {
         #expect(APIError.server(status: 500).isRetryable)
         #expect(APIError.rateLimited.isRetryable)
         #expect(APIError.serviceUnavailable(code: "busy", message: "m", retryAfter: 60).isRetryable)
-        #expect(APIError.serviceUnavailable(code: "spend_cap", message: "m", retryAfter: nil).isRetryable)
+        #expect(APIError.serviceUnavailable(code: "restarting", message: "m", retryAfter: 5).isRetryable)
+        // An unknown 503 that explained itself is treated as a moment.
+        #expect(APIError.serviceUnavailable(code: "maintenance", message: "m", retryAfter: nil).isRetryable)
+        #expect(APIError.unreachableOnThisNetwork.isRetryable)
+        #expect(APIError.connectionLost.isRetryable)
+        #expect(APIError.quotaExceeded(message: "m", retryAfter: 3600, scope: "ip").isRetryable)
 
         #expect(!APIError.invalidRequest(reason: nil).isRetryable)
         #expect(!APIError.messageTooLong.isRetryable)
         #expect(!APIError.unauthorized.isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: 3600).isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: nil).isRetryable)
+        #expect(!APIError.quotaExceeded(message: "m", retryAfter: 3600, scope: "session").isRetryable)
+        // The spend cap and the kill switch say no until they lift (AUD-30).
+        #expect(!APIError.serviceUnavailable(code: "spend_cap", message: "m", retryAfter: nil).isRetryable)
+        #expect(!APIError.serviceUnavailable(code: "service_disabled", message: "m", retryAfter: nil).isRetryable)
         #expect(!APIError.decoding(underlying: "x").isRetryable)
         #expect(!APIError.cancelled.isRetryable)
         // The same text gets the same crisis answer; support is never "try again".

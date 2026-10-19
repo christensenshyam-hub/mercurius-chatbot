@@ -152,6 +152,10 @@ public final class ChatViewModel {
     /// record it for resume; only the view model mutates it.
     public private(set) var conversationId: UUID?
 
+    /// The clock a daily limit's reset time is read on ("Try again after
+    /// 8:00 PM"). The device's own; tests pin it.
+    var clock: LocalClock = .current
+
     /// Response-mode used by the most recent `send` call. `retry()`
     /// reuses this so a failed deep request retries deep, not as a
     /// concise one-off. Defaults to `.concise` (the mobile default).
@@ -450,7 +454,7 @@ public final class ChatViewModel {
             } catch is CancellationError {
                 return
             } catch let error as APIError {
-                markCurrentFailed(reason: error.userFacingMessage, isRetryable: error.isRetryable, assistantId: assistantId)
+                markCurrentFailed(reason: error.userFacingMessage(clock: clock), isRetryable: error.isRetryable, assistantId: assistantId)
                 return
             } catch {
                 markCurrentFailed(reason: "Couldn't attach that photo. Try again.", isRetryable: true, assistantId: assistantId)
@@ -1195,19 +1199,19 @@ public final class ChatViewModel {
                     if sessionDrifted { await realignServerMode() }
                     return
 
-                case .refusal(let code, let message, _):
+                case .refusal(let code, let message, let retryAfter, let scope):
                     // The server declined before answering and wrote the
-                    // copy for the student itself — show it as-is (no
-                    // sanitize: its wording is trusted and must not be
-                    // masked by the billing heuristics). A used-up daily
-                    // allowance won't clear on Retry, so hide the button;
-                    // busy / restarting / paused / spend-cap can.
-                    let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // copy for the student itself — show it (no sanitize:
+                    // its wording is trusted and must not be masked by the
+                    // billing heuristics), with a daily limit's reset as a
+                    // local time. Retry only where it can help: not for a
+                    // used-up allowance, the spend cap or a pause; yes for
+                    // busy or restarting, and for a network's allowance
+                    // (cellular data gets past it). See `ServerRefusal`.
+                    let refusal = ServerRefusal(code: code, message: message, retryAfter: retryAfter, scope: scope)
                     markCurrentFailed(
-                        reason: trimmed.isEmpty
-                            ? "Mercurius can't answer right now. Please try again soon."
-                            : trimmed,
-                        isRetryable: code != ServerRefusalCode.dailyLimit.rawValue,
+                        reason: refusal.studentMessage(clock: clock),
+                        isRetryable: refusal.isRetryable,
                         assistantId: assistantId
                     )
                     return
@@ -1254,7 +1258,7 @@ public final class ChatViewModel {
             }
         } catch let error as APIError {
             markCurrentFailed(
-                reason: error.userFacingMessage,
+                reason: error.userFacingMessage(clock: clock),
                 isRetryable: error.isRetryable,
                 assistantId: assistantId
             )

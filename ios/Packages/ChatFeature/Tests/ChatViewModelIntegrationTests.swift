@@ -685,10 +685,15 @@ struct SSERoundTripTests {
         #expect(model.messages.last?.content == "ok")
     }
 
-    @Test("A refusal frame flows through the parser as a non-retryable daily_limit failure")
+    @Test("A refusal frame flows through the parser as a non-retryable daily_limit failure, with its reset as a local time")
     func refusalFrameFlowsThroughParser() async throws {
         let client = ControllableChatClient()
         let model = makeModel(chat: client)
+        // 18:00 in New York (22:00Z); the frame's hour puts the reset at 7:00 PM.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let instant = ISO8601DateFormatter().date(from: "2026-10-18T22:00:00Z")!
+        model.clock = LocalClock(now: { instant }, calendar: calendar, locale: Locale(identifier: "en_US"))
         model.draft = "Hi"
         model.send()
 
@@ -703,10 +708,13 @@ struct SSERoundTripTests {
             if case .failed = model.phase { return true }
             return false
         }
-        #expect(model.phase == .failed(
-            reason: "You've used today's chat turns. Mercurius will be ready again tomorrow.",
-            isRetryable: false
-        ))
+        guard case .failed(let reason, let retryable) = model.phase else {
+            Issue.record("Expected .failed, got \(model.phase)")
+            return
+        }
+        #expect(reason.replacingOccurrences(of: "\u{202F}", with: " ")
+            == "You've used today's chat turns. Try again after 7:00 PM.")
+        #expect(!retryable)
     }
 
     @Test("A plain error frame (no refusal code) stays a retryable streamError")

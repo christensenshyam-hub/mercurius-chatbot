@@ -1032,9 +1032,10 @@ struct APIClientEndToEndTests {
         do {
             _ = try await client.generateQuiz(sessionId: testSessionId)
             Issue.record("Expected APIError.quotaExceeded")
-        } catch APIError.quotaExceeded(let message, let retryAfter) {
+        } catch APIError.quotaExceeded(let message, let retryAfter, let scope) {
             #expect(message == "This network has reached today's usage limit.")
             #expect(retryAfter == 600)
+            #expect(scope == "ip")
         } catch {
             Issue.record("Expected .quotaExceeded, got \(error)")
         }
@@ -1191,9 +1192,10 @@ struct APIClientEndToEndTests {
         do {
             for try await _ in stream {}
             Issue.record("Expected .quotaExceeded")
-        } catch APIError.quotaExceeded(let message, let retryAfter) {
+        } catch APIError.quotaExceeded(let message, let retryAfter, let scope) {
             #expect(message == "You've used today's chat turns.")
             #expect(retryAfter == 1200)
+            #expect(scope == "session")
         } catch {
             Issue.record("Expected .quotaExceeded, got \(error)")
         }

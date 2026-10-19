@@ -201,7 +201,7 @@ struct SSEParserDecodeTests {
     @Test("A refusal frame with no text falls back to calm copy rather than a technical string")
     func refusalWithoutText() throws {
         let event = try parseChatEvent(from: #"{"type":"error","code":"busy","retryAfterSec":60}"#)
-        guard case .refusal(let code, let message, let retryAfter) = event else {
+        guard case .refusal(let code, let message, let retryAfter, _) = event else {
             Issue.record("Expected .refusal, got \(String(describing: event))")
             return
         }
