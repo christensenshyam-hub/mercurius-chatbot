@@ -60,10 +60,19 @@ struct LearningPathView: View {
                 .scrollContentBackground(.hidden)
                 .background(BrandColor.background)
                 .onAppear {
-                    guard let current else { return }
+                    let opening = PathOpeningScroll.target(
+                        frontierID: current,
+                        rows: elements.map { (id: $0.id, isBanner: $0.isBanner) })
                     // Defer a frame so the lazy stack has laid out before scrolling.
                     DispatchQueue.main.async {
-                        withAnimation(.easeInOut) { proxy.scrollTo(current, anchor: .center) }
+                        switch opening {
+                        case .top:
+                            break
+                        case .unitBanner(let id):
+                            withAnimation(reduceMotion ? nil : .easeInOut) { proxy.scrollTo(id, anchor: .top) }
+                        case .centered(let id):
+                            withAnimation(reduceMotion ? nil : .easeInOut) { proxy.scrollTo(id, anchor: .center) }
+                        }
                     }
                 }
             }
@@ -385,6 +394,11 @@ private enum PathElement: Identifiable {
         case .lesson(let l, _, _):  return PathElement.lessonId(l)
         case .unitTest(let u, _):   return PathElement.unitTestId(u)
         }
+    }
+
+    var isBanner: Bool {
+        if case .header = self { return true }
+        return false
     }
 
     var nodeIndex: Int? {

@@ -7,13 +7,29 @@ import SwiftUI
 @Suite("Learning path layout")
 struct LearningPathLayoutTests {
 
-    @Test("The winding path up to xxxLarge, the list at every accessibility size")
+    @Test("The winding path below xxxLarge, the list from xxxLarge up, where winding titles truncated")
     func layoutBySize() {
-        let standard: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
-        let accessibility: [DynamicTypeSize] = [.accessibility1, .accessibility2, .accessibility3,
-                                                .accessibility4, .accessibility5]
-        for size in standard { #expect(LearningPathLayout.forSize(size) == .winding, "\(size)") }
-        for size in accessibility { #expect(LearningPathLayout.forSize(size) == .list, "\(size)") }
+        let winding: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge]
+        let list: [DynamicTypeSize] = [.xxxLarge, .accessibility1, .accessibility2, .accessibility3,
+                                       .accessibility4, .accessibility5]
+        for size in winding { #expect(LearningPathLayout.forSize(size) == .winding, "\(size)") }
+        for size in list { #expect(LearningPathLayout.forSize(size) == .list, "\(size)") }
+    }
+
+    @Test("The path opens at the top on its first stop, at the unit's banner on a unit's first lesson, centred otherwise")
+    func openingScroll() {
+        let rows: [(id: String, isBanner: Bool)] = [
+            ("H_u1", true), ("L_1", false), ("L_2", false), ("T_u1", false),
+            ("H_u2", true), ("L_5", false), ("L_6", false), ("T_u2", false),
+        ]
+        #expect(PathOpeningScroll.target(frontierID: "L_1", rows: rows) == .top,
+                "the top shows the title, Unit 1's banner and its first node")
+        #expect(PathOpeningScroll.target(frontierID: "L_5", rows: rows) == .unitBanner(id: "H_u2"),
+                "Unit 2's banner whole, its first node below")
+        #expect(PathOpeningScroll.target(frontierID: "L_2", rows: rows) == .centered(id: "L_2"))
+        #expect(PathOpeningScroll.target(frontierID: "T_u1", rows: rows) == .centered(id: "T_u1"))
+        #expect(PathOpeningScroll.target(frontierID: nil, rows: rows) == .top, "the whole path is done")
+        #expect(PathOpeningScroll.target(frontierID: "gone", rows: rows) == .top)
     }
 
     @Test("Each lesson status keeps its words and glyph")

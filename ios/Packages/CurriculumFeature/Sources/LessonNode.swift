@@ -34,14 +34,42 @@ enum LearningPathMetrics {
 
 /// How the path is drawn. The winding path gives each title a fixed 148 pt
 /// beside a fixed-height node, which at accessibility text sizes cut titles
-/// to one word ("Few-shot…", "Comple…"). There the path is a straight list
-/// whose titles wrap freely (AUD-47).
+/// to one word ("Few-shot…", "Comple…"), and at xxxLarge still cut them on
+/// every phone ("What happens when you type a p…"). From xxxLarge up the
+/// path is a straight list whose titles wrap freely (AUD-47).
 enum LearningPathLayout: Equatable {
     case winding
     case list
 
+    /// The smallest size drawn as the list.
+    static let listFrom: DynamicTypeSize = .xxxLarge
+
     static func forSize(_ size: DynamicTypeSize) -> LearningPathLayout {
-        size.isAccessibilitySize ? .list : .winding
+        size >= listFrom ? .list : .winding
+    }
+}
+
+/// Where the path opens. Centring the frontier node used to cut a unit's
+/// banner in half under the pinned streak bar at large text (on the first
+/// lesson of a unit the banner sits right above the node), leaving
+/// "UNIT 01" and the start of the unit's name hidden.
+enum PathOpeningScroll: Equatable {
+    /// At the top: nothing to show, or the frontier is the path's first stop,
+    /// which the top already shows under "Your learning path".
+    case top
+    /// The frontier opens its unit: that unit's banner at the top, the node
+    /// right below it.
+    case unitBanner(id: String)
+    /// The frontier node in the middle of the screen.
+    case centered(id: String)
+
+    /// - Parameters:
+    ///   - frontierID: the row of the learner's next stop, if any.
+    ///   - rows: every row of the path, in order; `isBanner` marks a unit banner.
+    static func target(frontierID: String?, rows: [(id: String, isBanner: Bool)]) -> PathOpeningScroll {
+        guard let frontierID, let index = rows.firstIndex(where: { $0.id == frontierID }) else { return .top }
+        guard index > 0, rows[index - 1].isBanner else { return .centered(id: frontierID) }
+        return index - 1 == 0 ? .top : .unitBanner(id: rows[index - 1].id)
     }
 }
 
