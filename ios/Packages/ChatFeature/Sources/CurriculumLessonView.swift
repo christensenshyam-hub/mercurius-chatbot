@@ -284,7 +284,11 @@ public struct CurriculumLessonView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                 showCelebration = true
             }
-            AccessibilityNotification.Announcement("Lesson complete").post()
+            // High priority: it lands with the reply's own announcement and
+            // must not be cut off by it.
+            var line = AttributedString("Lesson complete")
+            line.accessibilitySpeechAnnouncementPriority = .high
+            AccessibilityNotification.Announcement(line).post()
         }
         // INTERMEDIATE progress reacts cleanly on lesson ENTRY (when the learner
         // opens the next lesson) — never buried under the completion overlay. Only

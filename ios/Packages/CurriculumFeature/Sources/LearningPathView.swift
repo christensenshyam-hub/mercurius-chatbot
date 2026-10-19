@@ -89,6 +89,7 @@ struct LearningPathView: View {
                 .foregroundStyle(BrandColor.text)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             overallProgressBar(done: done, total: total)
         }
         .frame(maxWidth: .infinity)

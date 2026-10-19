@@ -196,8 +196,13 @@ struct ChatInputBar: View {
                     .font(.system(size: 20))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, .black.opacity(0.5))
+                    // The glyph stays small in the thumbnail's corner; the
+                    // target around it is 44 pt (AUD-46).
+                    .padding(4)
+                    .frame(width: 44, height: 44, alignment: .topTrailing)
+                    .contentShape(Rectangle())
             }
-            .padding(4)
+            .buttonStyle(.plain)
             .accessibilityLabel("Remove photo")
         }
         .padding(.leading, 44)  // align past the photo button

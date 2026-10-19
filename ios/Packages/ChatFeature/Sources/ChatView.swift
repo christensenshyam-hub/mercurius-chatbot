@@ -610,6 +610,13 @@ struct MessageListView: View {
             .onChange(of: footer) { _, _ in
                 perform(scroll.policy.footerChanged(), proxy: proxy)
             }
+            // VoiceOver hears a reply land or fail wherever its focus is
+            // (AUD-23).
+            .onChange(of: phase) { old, new in
+                if let line = ChatAnnouncement.afterPhaseChange(from: old, to: new, latest: messages.last) {
+                    AccessibilityNotification.Announcement(line).post()
+                }
+            }
             .onChange(of: composerFocused) { _, focused in
                 let geometry = scroll.policy.geometry
                 let coachOnScreen = hasCoachRow && !coachHiddenForTyping

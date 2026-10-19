@@ -52,7 +52,8 @@ struct ChatInputHint: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(BrandColor.textSecondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)   // AUD-46: was 32 pt
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("Dismiss hint")
             .accessibilityHint("Hides this hint and doesn't show it again")
