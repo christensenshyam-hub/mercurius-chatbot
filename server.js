@@ -1085,6 +1085,12 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 //     and loosened debate's line contract (9–10 lines vs ≤ 7); the
 //     discussion-scoring regression it was meant to fix was actually the
 //     mode prompt's own "pose a question first" rule, fixed in the prompt;
+//   - the app facts (lib/appFacts: Claude by Anthropic, retention, the
+//     delete button, the mode buttons) go just before the shared safety
+//     block, which stays LAST: every chat, lesson and widget prefix is
+//     built with systemBlocks.composeStaticWithAppFacts. The JSON helper
+//     routes and the pre-briefing keep plain composeStatic (withAppFacts
+//     refuses a HELPER_CRISIS_RULE prefix);
 //   - club knowledge appears only in the widget variants (club_v1 clients);
 //     the App Store app never pays for it, and lessons carry no club
 //     material for anyone; the source library (curated URLs + the
@@ -1096,8 +1102,8 @@ Only cite sources from this list. If a topic isn't covered here, don't fabricate
 const SOURCE_BLOCK = '<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
 const CLUB_BLOCK = clubContext.staticClubBlock({ capabilities: [clubContext.CLUB_V1], clubKnowledge: CLUB_KNOWLEDGE });
 // v2 (USE_UNIFIED_PROMPT) prefixes for free chat.
-const V2_STATIC_APP = systemBlocks.composeStatic([UNIFIED_PROMPT, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
-const V2_STATIC_WIDGET = systemBlocks.composeStatic([UNIFIED_PROMPT, CLUB_BLOCK, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+const V2_STATIC_APP = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+const V2_STATIC_WIDGET = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT, CLUB_BLOCK, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
 // Legacy (flag off) and curriculum prefixes, memoized per variant.
 const LEGACY_MODE_PROMPTS = { socratic: SOCRATIC_PROMPT, debate: DEBATE_PROMPT, discussion: DISCUSSION_PROMPT };
 const staticPrefixCache = new Map();
@@ -1105,7 +1111,7 @@ function legacyStatic(mode, isWidget) {
   const m = LEGACY_MODE_PROMPTS[mode] ? mode : 'socratic';
   const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
   if (!staticPrefixCache.has(key)) {
-    staticPrefixCache.set(key, systemBlocks.composeStatic([
+    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
       qualityPrefix(m),
       LEGACY_MODE_PROMPTS[m],
       isWidget ? CLUB_BLOCK : null,
@@ -1118,7 +1124,7 @@ function legacyStatic(mode, isWidget) {
 function curriculumStatic(wantsBlocks) {
   const key = `curriculum:${wantsBlocks ? 'blocks' : 'prose'}`;
   if (!staticPrefixCache.has(key)) {
-    staticPrefixCache.set(key, systemBlocks.composeStatic([
+    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
       CURRICULUM_PROMPT,
       wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : null,
       SOURCE_BLOCK,
