@@ -57,7 +57,25 @@ describe('SAFETY_CORE shape', () => {
 
   test('exports are frozen', () => {
     assert.ok(Object.isFrozen(safetyCore));
-    assert.deepEqual(Object.keys(safetyCore).sort(), ['CRISIS_COPY', 'HELPER_CRISIS_RULE', 'SAFETY_CORE', 'SAFETY_CORE_TAGGED']);
+    assert.deepEqual(Object.keys(safetyCore).sort(), ['CRISIS_COPY', 'HELPER_CRISIS_RULE', 'REFUSAL_COPY', 'SAFETY_CORE', 'SAFETY_CORE_TAGGED']);
+  });
+});
+
+describe('REFUSAL_COPY (sent when the model refuses outright)', () => {
+  test('gives both hotlines exactly as CRISIS_COPY does, plus 911 and a trusted adult', () => {
+    const { REFUSAL_COPY, CRISIS_COPY } = safetyCore;
+    for (const line of ['Call or text 988 — the Suicide & Crisis Lifeline (US, 24/7).', 'Text HOME to 741741 — Crisis Text Line.']) {
+      assert.ok(CRISIS_COPY.includes(line));
+      assert.ok(REFUSAL_COPY.includes(line), line);
+    }
+    assert.match(REFUSAL_COPY, /\b911\b/);
+    assert.match(REFUSAL_COPY, /trusted adult/);
+  });
+
+  test('never invites a retry, and carries no prompt markers', () => {
+    const { REFUSAL_COPY } = safetyCore;
+    assert.doesNotMatch(REFUSAL_COPY, /try (asking )?again|rephrase|train of thought/i);
+    assert.doesNotMatch(REFUSAL_COPY, /\[(CHECK|Q|KEY|EX|LESSON_COMPLETE)\]/);
   });
 });
 
