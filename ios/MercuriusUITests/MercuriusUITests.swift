@@ -747,9 +747,14 @@ final class MercuriusUITests: XCTestCase {
     /// in a scroll view that, at AX5, is taller than the screen. With
     /// `above`, the element must also have cleared the top of that pinned
     /// control (`isHittable` alone can be true for a point under it).
+    ///
+    /// It drags from 45% to 12% of the screen's height and holds, rather
+    /// than `app.swipeUp()`: on an iPhone SE at AX5 the pinned CTAs fill the
+    /// lower 40% of the screen, and sixteen `swipeUp`s in a row left the
+    /// disclosure unscrolled (a finger drag from the same point scrolls it).
     @MainActor
     private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication,
-                                     above pinned: XCUIElement? = nil, maxSwipes: Int = 16) -> Bool {
+                                     above pinned: XCUIElement? = nil, maxSwipes: Int = 24) -> Bool {
         func reachable() -> Bool {
             guard element.exists, element.isHittable else { return false }
             guard let pinned, pinned.exists else { return true }
@@ -757,7 +762,9 @@ final class MercuriusUITests: XCTestCase {
         }
         var swipes = 0
         while !reachable() && swipes < maxSwipes {
-            app.swipeUp(velocity: .slow)
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
             swipes += 1
         }
         return reachable()
