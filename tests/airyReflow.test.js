@@ -94,6 +94,25 @@ describe('airyReflow', () => {
     }
   });
 
+  test('abbreviations hold at every chunk boundary (every two-way split equals one-shot)', () => {
+    const texts = [
+      'He sued. See Mata v. Avianca for more. It was big.',
+      'Dr. Smith agrees. Mr. Jones does not. Use e.g. this one. Or i.e. that. Fine.',
+      'J. Buolamwini led it. The U.S. agreed. Inc. too. Done now.',
+    ];
+    for (const text of texts) {
+      for (const limit of [1, 2, 3]) {
+        const oneShot = reflowText(text, limit);
+        for (let cut = 0; cut <= text.length; cut += 1) {
+          const r = createReflow({ limit });
+          const out = r.push(text.slice(0, cut)) + r.push(text.slice(cut)) + r.flush();
+          assert.equal(out, oneShot, `limit ${limit}, cut at ${cut}: ${JSON.stringify(text)}`);
+        }
+      }
+    }
+    assert.equal(reflowText('He sued. See Mata v. Avianca for more. It was big.', 2), 'He sued. See Mata v. Avianca for more.\n\nIt was big.');
+  });
+
   test('reflowLimit: 3 for curriculum/deep, 2 otherwise, debate exempt', () => {
     assert.equal(reflowLimit({ isCurriculum: true, responseMode: 'balanced' }), 3);
     assert.equal(reflowLimit({ isCurriculum: false, responseMode: 'deep' }), 3);
