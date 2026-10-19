@@ -115,6 +115,7 @@ applies) — unlike the quotas below, where `0` means refuse.
 |---|---|---|
 | `SQLITE_PATH` | SQLite file used only when `DATABASE_URL` is unset | `./mercurius.db` beside `db.js` |
 | `IMAGE_STORAGE_DRIVER` | Where uploaded images are persisted | `db` (bytes in the database). Object-storage drivers plug in via `lib/imageStore.js`. |
+| `PHOTO_REATTACH_TURNS` | How many follow-up user turns keep seeing a photo the student sent: the server re-attaches it to the turn it came with (`lib/photoReattach.js`, AUD-10), while it is under `IMAGE_RETENTION_HOURS` old (at most 24 h). Integer `0`–`20`; `0` turns re-attaching off (photos are still linked to their turn). Read once at boot. | `6` |
 | `GAMIFICATION_ENABLED` | `1`/`true` activates the standby gamification tables and `/api/progression/*` | off; when off nothing gamification-related is created or served |
 
 ### Spend + safety rails
@@ -171,7 +172,7 @@ default; `0` refuses everything.
 | `DIGEST_UTC_HOUR` | UTC hour after which the daily Discord digest posts once | `13` |
 | `RETENTION_UTC_HOUR` | UTC hour after which the daily retention sweep runs once | `8` |
 | `MESSAGE_RETENTION_DAYS` | chat/lesson transcripts older than this are deleted (`0`/`off` disables) | `90` |
-| `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the next turn is the only consumer). The image purge also runs every 5 minutes, whatever the hour, and an older image is never served or attached | `24` |
+| `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the photo's own turn and up to `PHOTO_REATTACH_TURNS` follow-ups are the only consumers). The image purge also runs every 5 minutes, whatever the hour, and an older image is never served or attached | `24` |
 | `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved. A report quotes a student's turn verbatim, so it is not kept indefinitely; it outlives the 90-day transcript because it is the review record for a flagged reply | `180` |
 | `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
 | `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |

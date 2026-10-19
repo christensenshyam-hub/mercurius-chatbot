@@ -63,6 +63,7 @@ const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
+const photoReattach = require('./lib/photoReattach');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const { notifyReport } = require('./lib/reportWebhook');
@@ -1320,6 +1321,50 @@ const isRateLimited = sessionLimiter(60 * 1000, envInt('SESSION_PER_MIN', 10));
 // Per-turn budget for every user message the model sees in /api/chat.
 const MAX_USER_TURN_CHARS = 2000;
 
+// Photo re-attach (AUD-10, lib/photoReattach): how many follow-up user turns
+// keep seeing a photo the student sent. 0 turns re-attaching off (photos are
+// still linked to their turn, so turning it back on needs no backfill).
+const PHOTO_REATTACH_TURNS = (() => {
+  const raw = String(process.env.PHOTO_REATTACH_TURNS ?? '').trim();
+  if (raw === '') return photoReattach.DEFAULT_MAX_TURNS;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 && n <= 20 ? n : photoReattach.DEFAULT_MAX_TURNS;
+})();
+
+// Show the model the session's earlier photos again, each on the user turn
+// it came with (lib/photoReattach). `thread` is `history` plus the new turn
+// (indices agree). Any failure leaves the history text-only, as before.
+async function reattachPhotos(req, { sessionId, linkedFetch, thread, history, excludeId, kind }) {
+  if (!linkedFetch) return history;
+  try {
+    const links = await linkedFetch;
+    const picks = photoReattach.plan({
+      thread,
+      links,
+      maxTurns: PHOTO_REATTACH_TURNS,
+      excludeIds: excludeId ? [excludeId] : [],
+    });
+    if (picks.length === 0) return history;
+    const images = await Promise.all(picks.map((p) => imageStore.get(p.id).catch(() => null)));
+    const attachments = [];
+    picks.forEach((p, k) => {
+      const img = images[k];
+      // Same rule as the current turn: only the uploader's own session.
+      if (img && img.sessionId === sessionId) {
+        attachments.push({ index: p.index, image: { contentType: img.contentType, dataBase64: img.data.toString('base64') } });
+      }
+    });
+    if (attachments.length > 0) {
+      metrics.photoReattachedImagesTotal.inc({ kind }, attachments.length);
+      logger.forRequest(req).info({ reattached: attachments.length }, 'chat: re-attached earlier photo(s)');
+    }
+    return photoReattach.apply(history, attachments);
+  } catch (err) {
+    logger.forRequest(req).warn({ err: err.message }, 'chat: photo re-attach failed — proceeding text-only');
+    return history;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Async route wrapper — Express 4 does NOT forward rejections from async
 // handlers to the error middleware at the bottom of this file, so any await
@@ -1737,6 +1782,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // image is fetched alongside the session reads, not after them.
   const imageFetch = imageId ? imageStore.get(imageId) : null;
   if (imageFetch) imageFetch.catch(() => {}); // observed below; never unhandled
+  // Photo re-attach (AUD-10): the session's answered photos (metadata only)
+  // load alongside too. Only a thread with an earlier user turn can hold one.
+  const userTurns = clientMessages.reduce((n, m) => n + (m && m.role === 'user' ? 1 : 0), 0);
+  const linkedFetch = PHOTO_REATTACH_TURNS > 0 && userTurns > 1
+    ? imageStore.linkedForSession(sessionId)
+    : null;
+  if (linkedFetch) linkedFetch.catch(() => {}); // observed in reattachPhotos
 
   // Fetch streak and session state in parallel. The conversation itself comes
   // from the client's thread (every shipped client sends it) — the server no
@@ -1834,9 +1886,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   // v3 vision: if the student attached an image (uploaded earlier via
   // POST /api/images), fetch it and make THIS user turn multimodal so Claude
-  // can see it. Only the current turn carries the image — history stays text
-  // (Claude's own description of the image persists there), which keeps token
-  // cost bounded. A missing/unreadable image degrades to a normal text turn.
+  // can see it. Once that turn is answered, the photo is linked to it and
+  // re-attached to it on the session's next few turns (AUD-10, below); every
+  // other historical turn stays text. A missing/unreadable image degrades to
+  // a normal text turn.
   let attachedImage = null;
   if (imageId) {
     try {
@@ -1867,10 +1920,40 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // the same message arrives untagged on the next turn. Stripping the tag
   // from every user turn except the index-0 opener makes the replayed prefix
   // byte-identical from turn to turn — a prerequisite for caching it later.
-  const priorHistory = curriculumTag.normalizeReplayedHistory(clientMessages)
+  const replayed = curriculumTag.normalizeReplayedHistory(clientMessages);
+  const priorText = replayed
     .slice(0, -1)
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ role: m.role, content: m.content }));
+  // The thread exactly as every later turn will replay it (lesson re-tag
+  // stripped, the per-turn cut applied), the new turn last: what a photo
+  // turn is keyed on (lib/photoReattach).
+  const latestReplayed = replayed[replayed.length - 1];
+  const photoThread = [
+    ...priorText,
+    { role: 'user', content: latestReplayed && typeof latestReplayed.content === 'string' ? latestReplayed.content : '' },
+  ];
+  // AUD-10: earlier photos go back on the turns they came with. They sit in
+  // the replayed history, so the breakpoint below caches them.
+  const priorHistory = await reattachPhotos(req, {
+    sessionId,
+    linkedFetch,
+    thread: photoThread,
+    history: priorText,
+    excludeId: attachedImage ? imageId : null,
+    kind: callKind,
+  });
+  // This turn's own photo is linked to this turn once the model has answered
+  // it (streamed any text that was not a refusal): a photo the API rejected,
+  // or one that only drew a refusal, is never shown again.
+  const photoLinkKeys = attachedImage ? photoReattach.keysForTurn(photoThread, photoThread.length - 1) : null;
+  let photoLinked = false;
+  const linkPhoto = () => {
+    if (!photoLinkKeys || photoLinked) return;
+    photoLinked = true;
+    imageStore.link(imageId, sessionId, photoLinkKeys)
+      .catch((err) => logger.forRequest(req).warn({ err: err.message }, 'chat: photo link failed'));
+  };
   const apiMessages = priorHistory.length > 0
     ? [...priorHistory, { role: 'user', content: latestContent }]
     : [{ role: 'user', content: latestContent }];
@@ -2025,8 +2108,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         shuffleQuiz: wantsBlocks,
       });
 
+      let modelSpoke = false;
       stream.on('text', (text) => {
         touch();
+        modelSpoke = true;
         const out = pipeline.push(text);
         if (!out) return; // held back: a sentence boundary, a [Q] block or a [SOURCE] tag
         fullText += out;
@@ -2038,7 +2123,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
-        if (stream.errored || stream.aborted) return;
+        if (stream.errored || stream.aborted) {
+          // The API took the photo and began answering: a Stop or a dropped
+          // stream mid-reply still leaves that turn in the student's thread.
+          if (modelSpoke) linkPhoto();
+          return;
+        }
         // Drain the pipeline's hold-back so the tail reaches the client too.
         const tail = pipeline.flush();
         if (tail) {
@@ -2056,6 +2146,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const received = Array.isArray(stream.receivedMessages) ? stream.receivedMessages : [];
         const stopReason = received.length ? received[received.length - 1].stop_reason : null;
         const refused = isRefusedReply(stopReason, fullText);
+        if (!refused) linkPhoto();
         if (refused) {
           noteRefusal(req, callKind, stopReason);
           // Stream the safe text as well, for any client (and the eval) that
@@ -2170,6 +2261,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const replyText = (response.content && response.content[0] && response.content[0].text) || '';
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
+      else linkPhoto();
       // REFUSAL_COPY keeps its own line breaks; only a model reply goes
       // through the same transforms as the stream (lib/replyPipeline).
       const reflowed = refused

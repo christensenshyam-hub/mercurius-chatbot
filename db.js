@@ -161,6 +161,12 @@ async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_images_created ON images(created_at);
+      -- Photo re-attach (AUD-10, lib/photoReattach): which user turn of the
+      -- client's thread an answered photo belongs to, as two hashes of that
+      -- turn's text (never the text itself). NULL until the photo's turn is
+      -- answered. The ALTERs migrate databases created before the columns.
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS turn_key TEXT DEFAULT NULL;
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS turn_anchor TEXT DEFAULT NULL;
 
       -- User reports of objectionable AI responses (App Store Guideline 1.2).
       -- user_message = the student's turn that preceded the reported reply,
@@ -390,6 +396,10 @@ async function initSchema() {
     if (!reportCols.includes('user_message')) sqliteDb.exec('ALTER TABLE reports ADD COLUMN user_message TEXT DEFAULT NULL');
     if (!reportCols.includes('context'))      sqliteDb.exec('ALTER TABLE reports ADD COLUMN context TEXT DEFAULT NULL');
     if (!reportCols.includes('resolved_at'))  sqliteDb.exec('ALTER TABLE reports ADD COLUMN resolved_at INTEGER DEFAULT NULL');
+    // images.turn_key / turn_anchor (photo re-attach) — see the pg block above.
+    const imageCols = sqliteDb.prepare('PRAGMA table_info(images)').all().map(c => c.name);
+    if (!imageCols.includes('turn_key'))    sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_key TEXT DEFAULT NULL');
+    if (!imageCols.includes('turn_anchor')) sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_anchor TEXT DEFAULT NULL');
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -635,6 +645,43 @@ module.exports = {
       'SELECT id, session_id, content_type, file_name, size_bytes, data, created_at FROM images WHERE id = ?',
       [id],
     );
+  },
+
+  // Photo re-attach (AUD-10, lib/photoReattach). Contract:
+  //   linkImageTurn(id, sessionId, { turnKey, anchorKey })
+  //       → true when the row exists AND belongs to sessionId (the keys are
+  //         then stored, replacing earlier ones); false otherwise. An UPDATE
+  //         only: a link landing after an erasure finds no row and writes
+  //         nothing.
+  //   linkedImages(sessionId, { sinceMs, limit = 20 })
+  //       → that session's linked images created at or after sinceMs, newest
+  //         first (created_at DESC, id DESC), metadata only — never the bytes:
+  //         [{ id, turnKey, anchorKey, sizeBytes, createdAt }] with numbers
+  //         as numbers on both drivers. `limit` is clamped to 1..50.
+  async linkImageTurn(id, sessionId, { turnKey, anchorKey } = {}) {
+    if (typeof turnKey !== 'string' || typeof anchorKey !== 'string') return false;
+    const n = await execCount(
+      'UPDATE images SET turn_key = ?, turn_anchor = ? WHERE id = ? AND session_id = ?',
+      [turnKey, anchorKey, id, sessionId],
+    );
+    return n > 0;
+  },
+
+  async linkedImages(sessionId, { sinceMs = 0, limit = 20 } = {}) {
+    const lim = Math.min(50, Math.max(1, Math.round(Number(limit)) || 20));
+    const rows = await query(
+      'SELECT id, turn_key, turn_anchor, size_bytes, created_at FROM images'
+        + ' WHERE session_id = ? AND turn_key IS NOT NULL AND created_at >= ?'
+        + ' ORDER BY created_at DESC, id DESC LIMIT ?',
+      [sessionId, num(sinceMs), lim],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      turnKey: r.turn_key,
+      anchorKey: r.turn_anchor,
+      sizeBytes: num(r.size_bytes),
+      createdAt: num(r.created_at),
+    }));
   },
 
   // ─── Content reports (App Store Guideline 1.2 + admin review queue) ───
