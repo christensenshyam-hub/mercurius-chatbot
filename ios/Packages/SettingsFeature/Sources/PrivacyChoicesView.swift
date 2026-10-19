@@ -39,6 +39,7 @@ struct PrivacyChoicesView: View {
         .modifier(DeleteFailureAlert(
             message: $withdrawFailure,
             retry: withdraw,
+            notice: { model.deviceOnlyResetNotice() },
             resetDeviceOnly: withdrawLocally
         ))
         .modifier(ResetFailureAlert(message: $resetFailure))

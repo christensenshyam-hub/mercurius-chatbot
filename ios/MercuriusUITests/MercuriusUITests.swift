@@ -482,6 +482,77 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// Whether something answers on the dev server port `-UseLocalServer`
+    /// points the app at. The delete-failure test needs it closed.
+    private func localServerAnswers() -> Bool {
+        let semaphore = DispatchSemaphore(value: 0)
+        var answered = false
+        let request = URLRequest(url: URL(string: "http://localhost:3000/health")!, timeoutInterval: 2)
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            answered = response != nil
+            semaphore.signal()
+        }.resume()
+        _ = semaphore.wait(timeout: .now() + 4)
+        return answered
+    }
+
+    /// AUD-54: when "Delete my data" can't reach the server, the fallback
+    /// doesn't reset at once. It first shows the ID the server data is still
+    /// under, with a Copy button, and says only an email to privacy@ can
+    /// delete it after a reset. Cancelling leaves the ID as it was.
+    @MainActor
+    func testDeleteFailureShowsTheOldIdBeforeADeviceOnlyReset() throws {
+        // `-UseLocalServer` points the app at localhost:3000; with nothing
+        // listening there, the server delete fails as it would offline.
+        if localServerAnswers() {
+            throw XCTSkip("A server is listening on localhost:3000; this test needs the delete to fail")
+        }
+        let app = launchApp(extraArgs: ["-UseLocalServer"])
+        waitForBootComplete(app)
+
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(
+            app.navigationBars["Settings"].firstMatch.waitForExistence(timeout: Self.lookupTimeout),
+            "Settings sheet did not present"
+        )
+        let idLabel = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Session identifier: ")).firstMatch
+        XCTAssertTrue(idLabel.waitForExistence(timeout: Self.lookupTimeout), "Settings shows no session ID")
+        let sessionId = String(idLabel.label.dropFirst("Session identifier: ".count))
+        XCTAssertGreaterThan(sessionId.count, 8, "Unexpected session ID '\(sessionId)'")
+
+        element(app, "settings.deleteData").tap()
+        let confirmDelete = app.alerts.buttons["Delete"]
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: Self.lookupTimeout), "No delete confirmation")
+        confirmDelete.tap()
+
+        let failure = app.alerts["Couldn't delete your data"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 30), "The failed delete didn't show its alert")
+        let fallback = failure.buttons["Reset this device only…"]
+        XCTAssertTrue(fallback.exists, "The failure alert has no device-only fallback")
+        fallback.tap()
+
+        let confirmReset = element(app, "settings.deviceReset.confirm")
+        XCTAssertTrue(confirmReset.waitForExistence(timeout: Self.lookupTimeout),
+                      "The fallback reset straight away instead of showing what it leaves behind")
+        XCTAssertTrue(element(app, "settings.deviceReset.copyId").exists, "No Copy ID button")
+        XCTAssertTrue(app.staticTexts["Session ID: \(sessionId)"].exists
+                      || app.staticTexts[sessionId].exists,
+                      "The sheet doesn't show the ID the server data is under")
+        XCTAssertTrue(
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "privacy@trymercurius.com")).firstMatch.exists,
+            "The sheet doesn't say an email to privacy@ is the only way to delete it afterwards"
+        )
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "device-only-reset-sheet"
+        shot.lifetime = .keepAlways
+        add(shot)
+
+        app.navigationBars.buttons["Cancel"].firstMatch.tap()
+        XCTAssertFalse(confirmReset.waitForExistence(timeout: 2), "Cancel didn't close the sheet")
+        XCTAssertEqual(idLabel.label, "Session identifier: \(sessionId)", "Cancel must leave the ID alone")
+    }
+
     @MainActor
     func testSettingsHasFeedbackAndHowItTeaches() {
         let app = launchApp()

@@ -79,6 +79,7 @@ public struct SettingsView: View {
             .modifier(DeleteFailureAlert(
                 message: $deleteFailure,
                 retry: deleteData,
+                notice: { model.deviceOnlyResetNotice() },
                 resetDeviceOnly: resetDeviceOnly
             ))
             .modifier(ResetFailureAlert(message: $resetFailure))
