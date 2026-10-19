@@ -119,19 +119,23 @@ describe('legacy (flag off): qualityPrefix carries the shared rules', () => {
     assert.ok(!d.includes('specific fact / case / study'), 'no longer asks for a fact from memory');
   });
 
-  test('review 2026-10-19: both debate rule sets point to SAFETY CORE rule 4 before "take the other side"', () => {
+  test('review 2026-10-19: both debate rule sets put the protective-side exception before "take the other side"', () => {
     // AUD-11's side rule argued the harmful side ("fake nudes are just a
     // joke") when the student named the protective one. The exception sits
     // where the side is chosen, in both flag states.
     const legacy = MODE_RULES.debate;
     const v2 = between(UNIFIED_PROMPT, 'WHO ARGUES WHAT:', 'YOUR ARGUMENT');
     for (const [name, text] of [['legacy', legacy], ['v2', v2]]) {
-      assert.ok(text.includes('the protective one on a topic SAFETY CORE rule 4 lists'), `${name} names the exception`);
+      assert.ok(text.includes('the protective one on any of these topics'), `${name} names the exception`);
+      assert.ok(text.includes('fake nudes') && text.includes('meeting online contacts alone'), `${name} lists the topics itself`);
+      // Gate 2026-10-19: "This falls under Safety Core rule 4" (flag on, 3/3)
+      // came from the pointer naming the rule; the pointers name no rule.
+      assert.ok(!/rule \d/i.test(text), `${name} names no rule number`);
       assert.ok(text.includes('Agree in one line') || text.includes('agree in one line'), `${name} says what to do instead`);
       assert.ok(text.includes('a nearby question that can genuinely be argued'), `${name} offers a nearby question`);
     }
     // In v2 the exception comes first, before "take the opposite side".
-    assert.ok(v2.indexOf('SAFETY CORE rule 4') < v2.indexOf('take the opposite side'));
+    assert.ok(v2.indexOf('Safety comes first') < v2.indexOf('take the opposite side'));
   });
 
   test('EXPAND_MODE_NOTE bounds a repeated Explain more', () => {
@@ -193,7 +197,8 @@ describe('v2 (flag on): mercurius-v2.md gets the same rules', () => {
     // check-in question and no hotline lines 0/3 until this pointer was added.
     const section = between(UNIFIED_PROMPT, '<safety_privacy>', '</safety_privacy>');
     assert.ok(section.includes('needing to "burn off" food before they can sleep'));
-    assert.ok(section.includes('get SAFETY CORE rule 1 in your very first reply, with both hotline lines'));
+    assert.ok(section.includes('are a crisis: your very first reply gives both hotline lines (988 and 741741)'));
+    assert.ok(!/rule \d/i.test(section), 'names no rule number');
     assert.ok(section.includes('A check-in question alone is not enough.'));
   });
 
