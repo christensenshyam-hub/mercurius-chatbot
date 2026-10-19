@@ -165,3 +165,25 @@ struct HomeStateTests {
                 == .unitTest(unitNumber: unit1.number, unitTitle: unit1.title))
     }
 }
+
+// AUD-50: on an iPhone SE, Home's reminder card pushed "Chat with Merc"
+// below the fold.
+@Suite("Home on short screens")
+struct HomeShortScreenTests {
+
+    @Test("An SE's 647 pt is short; every Face ID iPhone is not")
+    func compactHeight() {
+        #expect(HomeView.isCompactHeight(647))
+        #expect(!HomeView.isCompactHeight(728))   // 13 mini, inside its safe area
+        #expect(!HomeView.isCompactHeight(839))   // 16 Pro Max
+        #expect(!HomeView.isCompactHeight(0))     // first layout pass
+    }
+
+    @Test("Merc shrinks on a short screen, and at accessibility sizes")
+    func mercSizes() {
+        #expect(HomeView.mercSize(compactHeight: false, accessibility: false) == 216)
+        #expect(HomeView.mercSize(compactHeight: false, accessibility: true) == 150)
+        #expect(HomeView.mercSize(compactHeight: true, accessibility: false) == 120)
+        #expect(HomeView.mercSize(compactHeight: true, accessibility: true) == 120)
+    }
+}

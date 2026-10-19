@@ -20,8 +20,8 @@ public struct ChatView: View {
     @State private var encourage = false
     @State private var encourageTask: Task<Void, Never>?
 
-    /// First-launch hint above the input bar. Visible only when the
-    /// chat is empty AND the user hasn't dismissed it once. The X
+    /// First-launch hint at the foot of the empty chat's prompts. Visible
+    /// only when the chat is empty AND the user hasn't dismissed it once. The X
     /// button on the hint is the only explicit dismissal path;
     /// sending a first message implicitly hides it because
     /// `model.messages.isEmpty` flips to false.
@@ -132,6 +132,10 @@ public struct ChatView: View {
                         suggestions: ModePromptProvider.prompts(for: model.currentMode),
                         mercMood: focalMercState.mood,
                         mercActivity: focalMercState.activity,
+                        showsHint: ChatInputHint.isShown(chatIsEmpty: true,
+                                                         hasSeen: hasSeenChatInputHint,
+                                                         dynamicTypeSize: dynamicTypeSize),
+                        onDismissHint: dismissChatInputHint,
                         onSuggestion: { suggestion in
                             model.draft = suggestion
                             model.send()
@@ -162,13 +166,6 @@ public struct ChatView: View {
                         mercMood: focalMercState.mood,
                         mercActivity: focalMercState.activity
                     )
-                }
-
-                if ChatInputHint.isShown(chatIsEmpty: model.messages.isEmpty,
-                                         hasSeen: hasSeenChatInputHint,
-                                         dynamicTypeSize: dynamicTypeSize) {
-                    ChatInputHint(onDismiss: dismissChatInputHint)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
                 ChatInputBar(

@@ -1,9 +1,9 @@
 import SwiftUI
 import DesignSystem
 
-/// One-time nudge that sits between the empty-chat state and the
-/// input bar, pointing the user at where to actually type their
-/// question. Mirrors the `ModeDescriptionSheet` pattern: shown once,
+/// One-time nudge at the foot of the empty chat's starter prompts
+/// (inside its scroll content since AUD-50), pointing the user at where
+/// to actually type their question. Mirrors the `ModeDescriptionSheet` pattern: shown once,
 /// then suppressed forever via `@AppStorage`.
 ///
 /// Why it exists: first-launch users land on EmptyChatView with four

@@ -54,6 +54,10 @@ struct GateStepContainer<Content: View, CTA: View>: View {
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
+            // On a short screen the rows run on under the pinned controls
+            // (the consent switch, AUD-50): flash the indicator so it's clear
+            // there's more to read.
+            .scrollIndicatorsFlash(onAppear: true)
 
             GatePinnedCTA(content: cta)
         }
