@@ -183,6 +183,18 @@ describe('eval-pacing metrics', () => {
     assert.equal(maxParagraphSentences(''), 0);
   });
 
+  test('maxParagraphSentences: list lines under an intro line are exempt too, as in the reflow (AUD-17)', async () => {
+    const { maxParagraphSentences } = await modP;
+    // A tight list now stays whole (the reflow used to split it at "2."):
+    // its item numbers are not sentence ends.
+    const exercise = '**Your exercise:** Identify TWO claims that could be hallucinated. For each one, tell me:\n' +
+      '1. What exactly the claim says\n2. Why it feels suspicious\n3. How you would verify it';
+    assert.equal(maxParagraphSentences(exercise), 2);
+    assert.equal(maxParagraphSentences('Steps:\n1. Open the app. Look.\n2. Type. Wait. Read.\n- a bullet. Two.'), 1);
+    // The prose around a list still counts.
+    assert.equal(maxParagraphSentences('One. Two. Three.\n1. Item.'), 3);
+  });
+
   test('airy paragraphs criterion: chat ≤2, curriculum ≤3', async () => {
     const { computeMetrics, evaluateCriteria } = await modP;
     const packed = 'One. Two. Three.'; // 3-sentence paragraph

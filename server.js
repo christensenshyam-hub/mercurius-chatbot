@@ -2028,7 +2028,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       stream.on('text', (text) => {
         touch();
         const out = pipeline.push(text);
-        if (!out) return; // held back pending a sentence-boundary decision
+        if (!out) return; // held back: a sentence boundary, a [Q] block or a [SOURCE] tag
         fullText += out;
         safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });

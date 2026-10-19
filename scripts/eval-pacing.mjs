@@ -181,12 +181,15 @@ export function maxParagraphSentences(rawText) {
   // interior is a native quiz card, not prose; drop the whole span.
   const noQuiz = String(rawText ?? '').replace(/\[Q\][\s\S]*?(?:\[\/Q\]|$)/g, ' ');
   const noFences = stripMarkers(noQuiz).replace(/```[\s\S]*?(?:```|$)/g, '');
+  // List LINES are exempt, as in the server's reflow (lib/airyReflow.js):
+  // an intro line followed by a tight "1. … 2. … 3. …" list is one markdown
+  // paragraph, and its item numbers must not count as sentence ends. (Only
+  // all-list paragraphs used to be exempt; the reflow used to split such
+  // lists at "2.", which hid this — AUD-17.)
   const paragraphs = noFences
     .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    // Bullet/numbered paragraphs: every non-empty line starts with a list marker.
-    .filter((p) => !p.split('\n').every((l) => /^\s*(?:[-*+]|\d+[.)])\s/.test(l.trim()) || !l.trim()));
+    .map((p) => p.split('\n').filter((l) => !/^\s*(?:[-*+]|\d+[.)])\s/.test(l.trim())).join('\n').trim())
+    .filter(Boolean);
   return Math.max(0, ...paragraphs.map((p) => countSentences(p)));
 }
 
