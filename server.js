@@ -58,6 +58,7 @@ const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 const spendCap = require('./lib/spendCap');
 const killSwitch = require('./lib/killSwitch');
 const quotas = require('./lib/quotas');
+const productDay = require('./lib/productDay');
 const alerts = require('./lib/alerts');
 const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
@@ -1496,7 +1497,34 @@ const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 15000
 // Wire contract (stable — clients key off `error`):
 //   503 restarting | service_disabled | spend_cap | busy
 //   429 daily_limit  { scope: 'session' | 'ip', retryAfterSec }
+// Every refusal also carries `retryable` (and `scope` / `retryAfterSec` when
+// known) in both shapes, the JSON body and the SSE error frame. Those are
+// additive: 2.0.0, 2.3.0 and the widget decode `error`/`code` and the copy
+// and ignore the rest; PR #43's iOS client reads `scope` and `retryAfterSec`
+// from both. A daily allowance and the spend cap come back at the next
+// product-day midnight (lib/productDay, STREAK_TZ), and `retryAfterSec`
+// counts down to it.
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Whether a Retry button can help the student (AUD-30). A used-up daily
+// allowance, the spend cap and the kill switch say no again until they lift,
+// so they are not retryable; the student reads when to come back instead. A
+// network's own allowance (scope 'ip') is the exception: it belongs to the
+// school's shared address, and another network (cellular data) isn't under
+// it. Busy, restarting and the per-minute limiter pass in moments. PR #43's
+// iOS client applies the same rule on its own (ServerRefusal.isRetryable);
+// the widget's FINAL_CODES agrees except that it offers no Retry for any
+// daily limit, the network's included. No client reads this field yet.
+function isRetryableRefusal(error, scope) {
+  switch (error) {
+    case 'daily_limit': return scope === 'ip';
+    case 'spend_cap':
+    case 'service_disabled':
+      return false;
+    default:
+      return true;
+  }
+}
 
 // Answer a refusal in the shape the CALLER can render. Shipped iOS builds map
 // every 429/503 to a generic "give it a moment" with a Retry button, but they
@@ -1513,7 +1541,7 @@ function sendRefusal(req, res, { status, error, scope, message, reply, retryAfte
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec, scope, retryable: isRetryableRefusal(error, scope) })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
     return true;
@@ -1524,6 +1552,7 @@ function sendRefusal(req, res, { status, error, scope, message, reply, retryAfte
     reply: reply || message,
     message,
     retryAfterSec,
+    retryable: isRetryableRefusal(error, scope),
   });
   return true;
 }
@@ -1549,11 +1578,16 @@ function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
   }
   if (spendCap.isCeilingExceeded()) {
     metrics.quotaRejectionsTotal.inc({ scope: 'budget' });
+    // Not retryable (AUD-30): the budget opens again at the product-day
+    // midnight, which `retryAfterSec` (and the Retry-After header) count
+    // down to, so "tomorrow" is true.
     return sendRefusal(req, res, {
       status: 503,
       error: 'spend_cap',
+      scope: 'global',
       reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
       message: "Daily usage limit reached — please try again tomorrow.",
+      retryAfterSec: spendCap.secondsUntilReset(),
     });
   }
   // The route passes ITS session id explicitly — never read from the body
@@ -1567,7 +1601,7 @@ function refuseWithVerdict(req, res, verdict) {
   metrics.quotaRejectionsTotal.inc({ scope: `${verdict.scope}:${verdict.error}` });
   if (verdict.scope === 'ip' && verdict.error === 'daily_limit') {
     const h = claudeCall.hashIp(req.ip);
-    alerts.notify(`ip_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+    alerts.notify(`ip_cap:${h}:${productDay.dayKey()}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
   }
   return sendRefusal(req, res, {
     status: verdict.status || 429,
@@ -1687,18 +1721,18 @@ function recordLessonProgress(sessionId, clientMessages) {
 }
 
 // Per-session quota counters live in memory; the first time a session is
-// seen each UTC day, seed them from the usage ledger so a mid-day redeploy
-// doesn't hand every session a fresh allowance.
+// seen each product day (lib/productDay), seed them from the usage ledger so
+// a mid-day redeploy doesn't hand every session a fresh allowance.
 const hydratedSessions = new Set();
-let hydratedDay = new Date().toISOString().slice(0, 10);
+let hydratedDay = productDay.dayKey();
 async function hydrateSessionQuota(sessionId) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = Date.now();
+  const today = productDay.dayKey(now);
   if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
   if (hydratedSessions.has(sessionId)) return;
   hydratedSessions.add(sessionId);
   try {
-    const midnight = Date.parse(`${today}T00:00:00Z`);
-    const rows = await db.sessionUsageSince(sessionId, midnight);
+    const rows = await db.sessionUsageSince(sessionId, productDay.startOfDayMs(now));
     if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
   } catch (e) {
     logger.warn({ err: e.message }, 'session quota hydrate failed');
@@ -3039,6 +3073,7 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
       scope: imageVerdict.scope,
       message: imageVerdict.message,
       retryAfterSec: imageVerdict.retryAfterSec,
+      retryable: isRetryableRefusal(imageVerdict.error, imageVerdict.scope),
     });
   }
 
@@ -3137,7 +3172,7 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
       if (reportVerdict.scope === 'ip') {
         const h = claudeCall.hashIp(req.ip);
-        alerts.notify(`report_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+        alerts.notify(`report_cap:${h}:${productDay.dayKey()}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
       }
       return res.json({ ok: true });
     }
@@ -3415,8 +3450,8 @@ db.initSchema().then(async () => {
     }
   }
   try {
-    const midnight = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
-    const spentToday = await db.sumCostSince(midnight);
+    // Today's spend so far, from the start of the product day the cap keys on.
+    const spentToday = await db.sumCostSince(productDay.startOfDayMs());
     if (spentToday > 0) spendCap.hydrate(spentToday);
   } catch (e) {
     logger.warn({ err: e.message }, 'spend hydrate failed — starting today at $0');

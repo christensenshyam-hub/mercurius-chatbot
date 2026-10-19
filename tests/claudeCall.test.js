@@ -233,16 +233,23 @@ describe('claudeCall', () => {
     assert.match(posts[0], /credit balance is too low.*\/api\/quiz/);
   });
 
-  test('the budget-spent page fires again on the next UTC day, even < 24 h later', async (t) => {
+  test('the budget-spent page fires again on the next budget day, even < 24 h later', async (t) => {
     const saved = process.env.DAILY_BUDGET_USD;
+    const savedTz = process.env.STREAK_TZ;
     process.env.DAILY_BUDGET_USD = '0.000001';
-    t.after(() => { if (saved === undefined) delete process.env.DAILY_BUDGET_USD; else process.env.DAILY_BUDGET_USD = saved; });
-    t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 28, 23, 0, 0) });
+    process.env.STREAK_TZ = 'America/Chicago';
+    t.after(() => {
+      if (saved === undefined) delete process.env.DAILY_BUDGET_USD; else process.env.DAILY_BUDGET_USD = saved;
+      if (savedTz === undefined) delete process.env.STREAK_TZ; else process.env.STREAK_TZ = savedTz;
+    });
+    t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 28, 23, 0, 0) }); // 6 PM CDT, Sep 28
     const posts = [];
     alerts.configure({ webhookUrl: 'https://discord.invalid/hook', fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true }; } });
     spendCap.__resetForTest();
 
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() });
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() }).catch(() => {});
+    t.mock.timers.setTime(Date.UTC(2026, 8, 29, 1, 0, 0)); // 8 PM CDT: past UTC midnight, same budget day
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() }).catch(() => {});
     t.mock.timers.setTime(Date.UTC(2026, 8, 29, 20, 0, 0)); // 21 h later, a new budget day
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b2', ip: '10.0.0.9', params: chatParams() });
@@ -250,6 +257,7 @@ describe('claudeCall', () => {
 
     const spent = posts.filter((p) => /Daily model budget spent/.test(p));
     assert.equal(spent.length, 2, `one page per budget day, repeats inside a day throttled (posts: ${JSON.stringify(posts)})`);
+    assert.match(spent[0], /refused until midnight America\/Chicago\./, 'the page names the reset, not UTC midnight');
   });
 });
 

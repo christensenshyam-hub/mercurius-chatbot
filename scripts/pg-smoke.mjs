@@ -425,7 +425,8 @@ await step('C5 usage ledger: recordUsage / sumCostSince (spend-cap hydrate) / se
   assert.equal(await db.recordUsage({ session_id: S, ip_hash: 'h1', route: '/api/chat', kind: 'lesson', cost_usd: 0.0075, status: 'ok' }), true, 'snake_case keys');
   assert.equal(await db.recordUsage({ sessionId: S, route: '/api/quiz', kind: 'helper', costUsd: 0, status: 'error', errorKind: 'overloaded' }), true);
   assert.equal(await db.recordUsage({}), true, 'defaults fill the NOT NULL columns');
-  // The exact boot-time hydrate server.js runs: db.sumCostSince(UTC midnight).
+  // The boot-time hydrate's query. server.js passes the start of the
+  // STREAK_TZ day; any window start exercises the same SQL.
   const spent = await db.sumCostSince(midnight);
   assertNum(spent, 'sumCostSince');
   assert.ok(Math.abs(spent - baseline - 0.02) < 1e-9, `spent ${spent} - baseline ${baseline} should be 0.02`);

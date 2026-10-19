@@ -80,7 +80,7 @@ view: what to set in production and why.
 | `NODE_ENV` | `production` switches log level to INFO and disables dev niceties | `development` |
 | `ADMIN_PASSWORD` | Gates every `/api/admin/*` route via the `x-admin-password` header (events, kill switch) | Unset = admin endpoints always 401. Use a random 32+ char string. `ADMIN_AUTH_FAIL_ALERT_AT` (default `20`) wrong passwords within an hour, process-wide, page Discord (`admin_auth_fail`, at most hourly). |
 | `USE_UNIFIED_PROMPT` | `1`/`true` serves every mode from the single unified system prompt (`lib/unifiedPrompt.js`) | Off. **Railway prod runs with it ON** — verify prompt work under both states. |
-| `STREAK_TZ` | IANA zone that decides when a streak "day" rolls over | `America/New_York` |
+| `STREAK_TZ` | IANA zone that decides when a "day" rolls over: streaks, every daily quota below, and `DAILY_BUDGET_USD` all turn over at midnight here (`lib/productDay.js`). An unknown zone logs a warning and uses the default. | `America/New_York` |
 
 ### Anthropic + stream lifecycle + mock
 
@@ -126,7 +126,7 @@ below before running more than one replica.
 
 | Var | Purpose | Default |
 |---|---|---|
-| `DAILY_BUDGET_USD` | Global daily Anthropic spend ceiling in US dollars, priced per call from `lib/pricing.js`. Once reached, every Claude-backed route returns 503 until UTC midnight. Re-hydrated from the usage table on restart. `0` refuses every call. Replaces the retired `DAILY_TOKEN_CEILING`, which is no longer read. | `15` |
+| `DAILY_BUDGET_USD` | Global daily Anthropic spend ceiling in US dollars, priced per call from `lib/pricing.js`. Once reached, every Claude-backed route returns `503 spend_cap` (not retryable, with `retryAfterSec` and `Retry-After`) until midnight in `STREAK_TZ`. Re-hydrated from the usage table on restart, from that midnight. `0` refuses every call. Replaces the retired `DAILY_TOKEN_CEILING`, which is no longer read. | `15` |
 | `CLAUDE_DISABLED` | `1`/`true` boots with all Anthropic calls disabled (503). The runtime toggle `POST /api/admin/kill-switch {"disabled":true\|false}` overrides it in seconds, no redeploy. | off |
 
 ### Per-minute rate limits (`lib/rateLimiter.js`)
@@ -148,10 +148,27 @@ of students never looks like one abusive client.
 
 Per-session and per-address backstops beneath `DAILY_BUDGET_USD`, so a
 single runaway client cannot drain it for every other student. Counters
-are per UTC day and in-memory. A tripped daily quota answers
-`429 daily_limit` (with `retryAfterSec` = seconds to UTC midnight); a
-tripped in-flight cap answers `503 busy` with a 60 s retry. Unset =
-default; `0` refuses everything.
+are per product day (midnight to midnight in `STREAK_TZ`, the same day as
+the streaks and the budget) and in-memory. A tripped daily quota answers
+`429 daily_limit` (with `retryAfterSec` = seconds to that midnight, so the
+copy's "tomorrow" is true); a tripped in-flight cap answers `503 busy`
+with a 60 s retry. Unset = default; `0` refuses everything.
+
+Every refusal carries `scope` (`session`, `ip` or `global`, when it has
+one), `retryAfterSec` (when there is a wait) and `retryable`, in the JSON
+body and in the SSE `error` frame on `/api/chat`. `retryable` is false for
+a student's own daily limit, `spend_cap` and `service_disabled`, and true
+for a network's (`scope: ip`) daily limit, because cellular data is
+another network. The network's messages say "Switch to cellular data, or
+try again tomorrow." These fields are additive: older clients key off
+`error`/`code` and ignore them.
+
+**Day boundaries (AUD-30):** before this, the quotas and the budget
+rolled at UTC midnight (7 PM CDT / 8 PM EDT). Now they roll at midnight
+in `STREAK_TZ`. The Discord budget page says when ("refused until
+midnight America/Chicago"). The digest and `/api/admin/stats` still bucket
+by **UTC** day, so a digest's "yesterday's cost" (a UTC day) no longer
+lines up exactly with one budget day.
 
 Only a turn that got an answer uses a turn allowance (AUD-31). A call
 that was refused, failed upstream, hit the server's own stream timeout,
@@ -323,7 +340,7 @@ and scale vertically.
 | Deploy stalls, then Railway marks it failed after ~2 min | `/api/health` never returned 2xx inside `healthcheckTimeout` — usually DB connectivity or a startup crash | Read the deploy log; check `DATABASE_URL`. `initSchema` creates or upgrades every table at boot, so a missing table points at a failed boot DDL (see "Startup crashes" below), not at a skipped migration |
 | Boot fails at once with `… but DATABASE_URL is empty` | The service lost its `DATABASE_URL` (variable deleted or the Postgres reference renamed) | Re-add `DATABASE_URL=${{Postgres.DATABASE_URL}}` in Variables and redeploy. The guard is deliberate: it stops a silent run on ephemeral SQLite |
 | `/api/health` returns 503 with `db: "error: ..."` | Postgres connection down / connection pool exhausted | Check `DATABASE_URL` validity; check Railway Postgres service health |
-| Every Claude-backed route returns 503 and Discord got a `budget_100` alert | `DAILY_BUDGET_USD` reached | Decide whether the spend is legitimate. Raise the var (restart) or wait for UTC midnight. Look at `/api/admin/events` for who spent it. |
+| Every Claude-backed route returns 503 and Discord got a `budget_100` alert | `DAILY_BUDGET_USD` reached | Decide whether the spend is legitimate. Raise the var (restart) or wait for midnight in `STREAK_TZ`. Look at `/api/admin/events` for who spent it. |
 | Claude-backed routes return `503 restarting` for a few seconds | A deploy is draining the old replica (`DRAIN_TIMEOUT_MS`) | Expected; clients retry. If it outlasts the drain window the new replica failed its health check — read the deploy log. |
 | Every Claude-backed route returns `503 service_disabled`, no budget alert | Kill switch is on — either `CLAUDE_DISABLED` at boot or a runtime flip | `GET /api/admin/kill-switch` to confirm; `POST /api/admin/kill-switch {"disabled":false}` to re-enable |
 | Client sees `{"error":"rate_limited"}` en masse | Shared IP (school network, NAT) plus a burst of students over `API_IP_PER_MIN` / `CHAT_IP_PER_MIN` | Raise the relevant `*_PER_MIN` var for the event, then restore it. Per-session limits are unaffected. |

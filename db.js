@@ -2,6 +2,7 @@
 
 const logger = require('./lib/logger');
 const { PROGRESS_STATUS_RANK, INT4_MAX } = require('./lib/schemas');
+const productDay = require('./lib/productDay');
 
 // ─── Database abstraction: PostgreSQL (production) or SQLite (local dev) ───
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -552,10 +553,12 @@ function rankSql(col) {
 // timezone (default America/New_York, override with STREAK_TZ) instead of the
 // server's UTC date — with UTC the day flips at 5-8pm local (prime
 // after-school time), letting a streak tick twice in one evening while the
-// next-morning session earns nothing. 'en-CA' formats as YYYY-MM-DD, the same
-// string shape last_session_date has always stored.
+// next-morning session earns nothing. The day comes from lib/productDay
+// (YYYY-MM-DD, the same string shape last_session_date has always stored),
+// which the daily quotas and the spend cap share, so a streak day and a
+// student's daily allowance turn over at the same midnight.
 function streakDay(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.STREAK_TZ || 'America/New_York' }).format(now);
+  return productDay.dayKey(now.getTime());
 }
 
 // ─── Recently erased ids ───

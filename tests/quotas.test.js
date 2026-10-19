@@ -270,7 +270,7 @@ describe('daily USD caps', () => {
     assert.equal(r.error, 'daily_limit');
     assert.equal(r.scope, 'ip');
     assert.equal(r.reason, 'ip_usd');
-    assert.equal(r.message, "This network has reached today's usage limit. Mercurius will be ready again tomorrow.");
+    assert.equal(r.message, "This network has reached today's usage limit. Switch to cellular data, or try again tomorrow.");
 
     // A different network is untouched.
     assert.equal(quotas.check({ sessionId: 'sess_c', ip: '10.0.0.2', kind: 'chat' }).ok, true);
@@ -321,7 +321,7 @@ describe('noteNewSession() per-ip cap', () => {
     assert.equal(r.error, 'daily_limit');
     assert.equal(r.scope, 'ip');
     assert.equal(r.reason, 'new_sessions');
-    assert.equal(r.message, 'Too many new sessions from this network today.');
+    assert.equal(r.message, 'Too many new sign-ups from this network today. Switch to cellular data, or try again tomorrow.');
     assert.ok(r.retryAfterSec >= 1);
 
     // The refused attempt did not bump the counter.
@@ -433,22 +433,57 @@ describe('check() evaluation order', () => {
 });
 
 describe('retryAfterSec', () => {
-  afterEach(() => mock.timers.reset());
+  const savedTz = process.env.STREAK_TZ;
+  afterEach(() => {
+    mock.timers.reset();
+    if (savedTz === undefined) delete process.env.STREAK_TZ;
+    else process.env.STREAK_TZ = savedTz;
+  });
 
-  test('daily refusals report the seconds until UTC midnight', () => {
-    mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 23, 23, 59, 30) });
+  test('daily refusals report the seconds until midnight in the product zone (AUD-30)', () => {
+    process.env.STREAK_TZ = 'America/Chicago';
+    // The audit's capture: refused at 21:10:57Z, 4:10 PM in Chicago. It used
+    // to say 10143 s (UTC midnight, 7 PM that evening).
+    mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-18T21:10:57Z') });
     quotas.__resetForTest();
     quotas.configure({ SESSION_DAILY_CHAT_TURNS: 0, IP_DAILY_NEW_SESSIONS: 0 });
 
-    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 30);
-    assert.equal(quotas.noteNewSession(IP).retryAfterSec, 30);
+    const r = quotas.check({ sessionId: SID, ip: IP, kind: 'chat' });
+    assert.equal(r.retryAfterSec, 28143, 'until 05:00Z, midnight in Chicago');
+    assert.equal(quotas.noteNewSession(IP).retryAfterSec, 28143);
 
     // Sub-second remainders round UP, and never report 0.
-    mock.timers.setTime(Date.UTC(2026, 8, 23, 23, 59, 59, 800));
+    mock.timers.setTime(Date.parse('2026-10-19T04:59:59.800Z'));
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 1);
 
+    mock.timers.setTime(Date.parse('2026-10-19T05:00:00Z'));
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 86400);
+  });
+
+  test('with STREAK_TZ=UTC the day is the UTC day, as before', () => {
+    process.env.STREAK_TZ = 'UTC';
+    mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 23, 23, 59, 30) });
+    quotas.__resetForTest();
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 0 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 30);
     mock.timers.setTime(Date.UTC(2026, 8, 23, 0, 0, 0));
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 86400);
+  });
+
+  test('unset STREAK_TZ is New York, like the streaks', () => {
+    delete process.env.STREAK_TZ;
+    mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-18T21:10:57Z') }); // 5:10 PM EDT
+    quotas.__resetForTest();
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 0 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 24543, 'until 04:00Z');
+  });
+
+  test('a 25-hour day (DST ends) reports its full length', () => {
+    process.env.STREAK_TZ = 'America/New_York';
+    mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-01T04:00:00Z') }); // 00:00 EDT, Nov 1
+    quotas.__resetForTest();
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 0 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).retryAfterSec, 25 * 3600);
   });
 
   test('busy refusals report a flat 60 seconds', () => {
@@ -464,11 +499,17 @@ describe('retryAfterSec', () => {
 // ---------------------------------------------------------------------------
 // Day rollover
 // ---------------------------------------------------------------------------
-describe('UTC day rollover', () => {
-  afterEach(() => mock.timers.reset());
+describe('product-day rollover (AUD-30)', () => {
+  const savedTz = process.env.STREAK_TZ;
+  afterEach(() => {
+    mock.timers.reset();
+    if (savedTz === undefined) delete process.env.STREAK_TZ;
+    else process.env.STREAK_TZ = savedTz;
+  });
 
-  test('daily counters reset at UTC midnight; in-flight does not', () => {
-    mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 23, 22, 0, 0) });
+  test('daily counters reset at midnight in STREAK_TZ, not at UTC midnight; in-flight does not', () => {
+    process.env.STREAK_TZ = 'America/Chicago';
+    mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-23T22:00:00Z') }); // 5 PM CDT
     quotas.__resetForTest();
     quotas.configure({ SESSION_DAILY_LESSON_TURNS: 1, IP_DAILY_NEW_SESSIONS: 1, MAX_INFLIGHT: 1 });
 
@@ -479,12 +520,17 @@ describe('UTC day rollover', () => {
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }).reason, 'lesson_turns');
     assert.equal(quotas.noteNewSession(IP).ok, false);
 
-    // 23:59:59 → still yesterday's counters.
-    mock.timers.setTime(Date.UTC(2026, 8, 23, 23, 59, 59));
+    // UTC midnight is 7 PM in Chicago: still today, so "tomorrow" was true.
+    mock.timers.setTime(Date.parse('2026-09-24T00:00:00Z'));
+    assert.equal(quotas.snapshot().day, '2026-09-23');
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }).ok, false);
 
-    // Midnight: daily state is fresh.
-    mock.timers.setTime(Date.UTC(2026, 8, 24, 0, 0, 0));
+    // 11:59:59 PM in Chicago → still today's counters.
+    mock.timers.setTime(Date.parse('2026-09-24T04:59:59Z'));
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }).ok, false);
+
+    // Midnight in Chicago: daily state is fresh.
+    mock.timers.setTime(Date.parse('2026-09-24T05:00:00Z'));
     const snap = quotas.snapshot();
     assert.equal(snap.day, '2026-09-24');
     assert.equal(snap.sessions.tracked, 0);
@@ -500,6 +546,7 @@ describe('UTC day rollover', () => {
   });
 
   test('a session can be hydrated again on the new day', () => {
+    process.env.STREAK_TZ = 'America/Chicago';
     mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 23, 12, 0, 0) });
     quotas.__resetForTest();
     assert.equal(quotas.hydrateSession(SID, [{ kind: 'chat', count: 3, usd: 0.1 }]), true);
