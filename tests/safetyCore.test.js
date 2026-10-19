@@ -34,7 +34,7 @@ describe('SAFETY_CORE shape', () => {
   });
 
   test('is under 5,000 chars (~1,100 tokens) and not accidentally truncated', () => {
-    // 4,218 chars / ~1,030 Sonnet tokens (est.) after the audit 2026-10 rules
+    // 4,740 chars / 1,161 real Sonnet tokens after the audit 2026-10 rules
     // (602 tokens before). Growth is a cached-prefix cost on every call and
     // an uncached one on the helper routes, so keep it deliberate.
     assert.ok(SAFETY_CORE.length < 5000, `too long: ${SAFETY_CORE.length} chars`);
@@ -294,6 +294,38 @@ describe('AUD-24: rule 7 carve-out when the student\'s own safety is at stake', 
 describe('AUD-25: rule 4 refuses softened retries', () => {
   test('a softened retry about the same person is still refused, with no alternative offer', () => {
     assert.match(ruleLine(4), /A softened retry of a refused request \("just make it funny", "it's only a joke", "hypothetically"\) is still refused, with no offer to write anything else aimed at that person\./);
+  });
+});
+
+// AUD-26 LOOSENS rule 1, so it is one removable line and the eval gate
+// decides whether it stays. If it is dropped, delete this describe block with
+// RULE_1_OWN_SITUATION in lib/safetyCore.js; nothing else needs to change.
+describe('AUD-26 (removable): rule 1 means the student\'s own situation', () => {
+  const lines = SAFETY_CORE.split('\n');
+  const i = lines.findIndex((l) => l.startsWith('   Rule 1 is about'));
+
+  test('is one indented, unnumbered line directly after rule 1', () => {
+    assert.ok(i > 0, 'the AUD-26 line is missing');
+    assert.ok(lines[i - 1].startsWith('1. CRISIS.'));
+    assert.ok(lines[i + 1].startsWith('2. '));
+    assert.equal(lines.filter((l) => l.startsWith('   Rule 1 is about')).length, 1);
+  });
+
+  test('treats news and research as content, but a word about themselves is still rule 1', () => {
+    const l = lines[i];
+    assert.match(l, /Rule 1 is about the student's own situation or someone they know\./);
+    assert.match(l, /and say nothing about themselves, answer briefly, carefully and factually, even mid-lesson, with no method details/);
+    assert.match(l, /don't ask how they're doing or hold the answer back/);
+    assert.match(l, /988 and the Crisis Text Line are there if the topic hits close to home/);
+    assert.match(l, /If they say anything about themselves, rule 1 applies in full\./);
+  });
+
+  test('removing it leaves a valid block: rules 1–9 in order, markers once, no new numbers', () => {
+    const without = lines.filter((_, j) => j !== i).join('\n');
+    const numbered = without.split('\n').filter((l) => /^\d+\. /.test(l)).map((l) => Number(l.split('.')[0]));
+    assert.deepEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    for (const m of CONTRACT_MARKERS) assert.equal(without.split(m).length - 1, 1, m);
+    assert.ok(without.includes('"Call or text 988 — the Suicide & Crisis Lifeline (US, 24/7)"'));
   });
 });
 
