@@ -1,0 +1,33 @@
+{
+  "base": "on-u1l1.json",
+  "keepTurns": 8,
+  "student": "presents? i think thats pretty high too bc its a party but it could also be card or eyes so maybe medium",
+  "flag": "main-on",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": true,
+      "reply": "You nailed it — \"presents,\" \"gifts,\" \"card,\" and \"eyes\" all fit, so confidence is actually **lower** than Blank 1.\n\nBlank 1 had one overwhelming completion (\"sing\"). Blank 2 has several plausible ones competing — that's exactly what low-to-medium confidence looks like.\n\nYou've now correctly applied all three ideas:\n\n- **Tokenization** — text becomes numbers before anything else\n- **Attention** — surrounding tokens (\"candles,\" \"birthday\") shape what each word means\n- **Next-token prediction** — one dominant completion = high confidence, many plausible ones = low\n\nThat's the full pipeline, reasoned through a real example. Nice work.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": true,
+      "reply": "You nailed it — \"presents,\" \"card,\" and \"eyes\" all fit, which is exactly why this is lower confidence than Blank 1.\n\n\"Blew out the candles\" almost *locks in* singing. But \"opened her ___\" at a birthday still leaves several plausible tokens competing — presents, card, eyes, gift. The attention mechanism sees the birthday context but can't narrow it down to one dominant answer.\n\nThat tension — one clear winner vs. several plausible competitors — is the whole game with next-token prediction.\n\nYou've now traced the full pipeline:\n\n- Text → **tokens** (numbers, not words)\n- Tokens → **embeddings** (meaning-space positions)\n- Embeddings → **attention** (context resolves ambiguity)\n- Attention → **next-token prediction** (one plausible chunk at a time)\n\nAnd you correctly applied confidence reasoning to a real example, catching the nuance that \"medium\" confidence exists when a few good options compete.\n\nNice work — you've genuinely got this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": true,
+      "reply": "You nailed it — \"presents,\" \"card,\" and \"eyes\" all fit, which is exactly what makes this *medium-to-low* confidence rather than high.\n\nHigh confidence needs one word to dominate. Here, the birthday context pushes toward \"presents\" but doesn't crush the competition the way \"Happy birthday to ___\" crushes everything except \"you.\"\n\nYour reasoning was spot on: you used the attention context (birthday party), identified the top candidate, AND noticed the competition. That's exactly how to think about this.\n\nYou've now traced the full pipeline:\n\n- Text → **tokens** (numbered chunks)\n- Tokens → **embeddings** (meaning-space positions)\n- Embeddings → **attention** (context resolves meaning)\n- Attention → **next-token prediction** (one plausible word at a time)\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": true,
+      "reply": "You nailed it — \"presents,\" \"cards,\" and \"eyes\" all fit, which is exactly what makes this *medium-to-low* confidence rather than high.\n\nYou nailed the key point: **high confidence requires one word to dominate**, not just be likely. When several plausible words compete, confidence drops — even if the context is clear.\n\nThat's the whole pipeline in action:\n\n- Tokenizer slices your text into numbered chunks\n- Embeddings place each token in meaning-space\n- Attention uses surrounding tokens to resolve context\n- Next-token prediction picks the most probable completion — confidently when one word dominates, hesitantly when many compete\n\nYou reasoned through all of that yourself. Really solid work.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": true,
+      "reply": "You nailed it — \"presents,\" \"gifts,\" \"card,\" and \"eyes\" all fit, so confidence is actually **lower** than Blank 1.\n\nBlank 1 has one overwhelming completion (\"sing\"). Blank 2 has several plausible ones competing — that's exactly what low-to-medium confidence looks like in next-token prediction.\n\nYou've now got the full picture:\n\n- Text → **tokens** (numbers, not words)\n- Tokens → **embeddings** (points in meaning-space)\n- **Attention** uses context to resolve meaning\n- Model predicts **one token at a time**, confidence depends on how many words plausibly fit\n\nThat's genuinely solid work — you reasoned through both blanks using the actual mechanics, not just intuition.\n\n[LESSON_COMPLETE]"
+    }
+  ]
+}

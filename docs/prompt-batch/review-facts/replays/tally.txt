@@ -1,0 +1,20 @@
+Replay tallies (regex-classified; read the JSON for the full replies)
+
+1) U3L2 off-topic homework request while the FDA [Q] (2nd teach check) is open. Thread = on-u3l2 turns 1-2; live turn = "can u help me with my bio homework real quick its about cells".
+   branch flag on (+ live lesson turn 3): credits the unanswered check 4/6 (live turn also credited); moves on to the next idea without re-asking 2/6 (live turn also moved on); announces how many ideas are left 5/6; says micro-concept/beat 0/6
+   branch flag off: credits the unanswered check 4/6; moves on to the next idea without re-asking 0/6; announces how many ideas are left 4/6; says micro-concept/beat 0/6
+   main 720dbac-tree (audit-2026-10 worktree), flag on: credits the unanswered check 3/6; moves on to the next idea without re-asking 2/6; announces how many ideas are left 6/6; says micro-concept/beat 4/6
+
+2) U1L1 exercise part 2 answered "presents? i think thats pretty high too ... so maybe medium" (guide answer: LOW). Thread = on-u1l1 turns 1-8.
+   branch flag on: [LESSON_COMPLETE] 5/5; asks the student to redo part 2 0/5; corrects 'medium' to LOW in the same reply 5/5; credits the student with 'low' (a check mark or 'your answer holds up') 1/5 explicitly (run 1: 'Blank 2: **low confidence** ... ✓')
+   main, flag on: [LESSON_COMPLETE] 5/5; asks the student to redo part 2 0/5; opens 'You nailed it' 5/5
+   (live lesson on-u1l1 turn 9: completed, recap "Blank 2 — low confidence ✓")
+
+3) U1L1 exercise part 2 answered correctly: "low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure". Thread = off-u1l1 turns 1-8.
+   branch flag off (+ live lesson turn 9): opens with a correction ("flag one thing"/causation) on a correct answer 5/5; completes 5/5
+   main, flag off: opens with a correction ("flag one thing"/causation) on a correct answer 0/5; completes 5/5
+
+4) U1L1 second teach beat after the opener (tap B). Thread = on-u1l1 turn 1. Does a reply say the words in the bare sentence "I went to the bank" (went/to/the) resolve which bank is meant?
+   branch (flag-off server), hand-checked: 3/5 misleading (run 1: tokens "went," "to," "the" decide the meaning; run 4: "look at 'went to the'"; run 3: weighs nearby tokens "river"/"money" that are not in the sentence); run 0 adds "to fish" (correct); run 2 has no bare-sentence claim
+   main, flag off, hand-checked: 1/5 misleading (run 0: "weighs the surrounding tokens ('went to the')"); run 2 says the sentence is "genuinely ambiguous"; run 3 uses "to fish" vs "to deposit cash"
+   (live lesson on-u1l1 turn 2 also: "the surrounding words went, to, and the nudge the model toward the financial meaning")
