@@ -473,12 +473,17 @@ await step('C7 events blob: setEventsInDB upsert / getEventsFromDB / getEventsUp
   assert.ok(updatedAt > 0);
 });
 
-await step('C8 lesson_events: start / turn / complete, complete deduped per attempt, retake completes again', async () => {
+await step('C8 lesson_events: start / turn / complete, complete deduped per attempt, retake completes again, lastLessonMilestone', async () => {
   const L = newSid('lesson');
   await db.ensureSession(L);
+  assert.equal(await db.lastLessonMilestone(L, 'u2_l3'), null, 'no milestone yet');
   assert.equal(await db.recordLessonEvent({ ts: now - 5000, sessionId: L, lessonId: 'u2_l3', event: 'start', turnIndex: 1 }), true);
   assert.equal(await db.recordLessonEvent({ ts: now - 4000, sessionId: L, unit: 2, lesson: 3, event: 'turn', turnIndex: 2 }), true);
+  const open = await db.lastLessonMilestone(L, 'u2_l3');
+  assert.deepEqual(open, { event: 'start', turnIndex: 1, ts: now - 5000 }, "a 'turn' is not a milestone");
+  assertNum(open.ts, 'lastLessonMilestone.ts'); assertNum(open.turnIndex, 'lastLessonMilestone.turnIndex');
   assert.equal(await db.recordLessonEvent({ ts: now - 3000, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 2 }), true);
+  assert.deepEqual(await db.lastLessonMilestone(L, 'u2_l3'), { event: 'complete', turnIndex: 2, ts: now - 3000 });
   assert.equal(await db.recordLessonEvent({ ts: now - 2000, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 3 }), false, 'second complete in the same attempt');
   assert.equal(await db.recordLessonEvent({ ts: now - 1000, sessionId: L, lessonId: 'u2_l3', event: 'start', turnIndex: 1 }), true);
   assert.equal(await db.recordLessonEvent({ ts: now, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 4 }), true, 'retake');

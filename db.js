@@ -791,6 +791,10 @@ module.exports = {
   //         'start') can complete again.
   //   lessonEventsSince(tsMs) → [{ id, ts, session_id, unit, lesson,
   //         lesson_id, event, turn_index }] with ts >= tsMs, oldest first.
+  //   lastLessonMilestone(sessionId, lessonId) → { event, turnIndex, ts } of
+  //         the session's latest 'start' or 'complete' row for that lesson
+  //         (latest by ts, then id), or null when it has neither. server.js
+  //         decides from it whether an answered turn starts an attempt.
   async recordLessonEvent(row = {}) {
     try {
       const event = String(row.event || '');
@@ -835,6 +839,14 @@ module.exports = {
       logger.error({ err: e, event: row && row.event }, 'recordLessonEvent failed (row dropped)');
       return false;
     }
+  },
+
+  async lastLessonMilestone(sessionId, lessonId) {
+    const r = await queryOne(
+      "SELECT event, turn_index, ts FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event IN ('start', 'complete') ORDER BY ts DESC, id DESC LIMIT 1",
+      [String(sessionId), String(lessonId)],
+    );
+    return r ? { event: r.event, turnIndex: numOrNull(r.turn_index), ts: num(r.ts) } : null;
   },
 
   async lessonEventsSince(tsMs) {

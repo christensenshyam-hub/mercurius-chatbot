@@ -1653,9 +1653,10 @@ async function refuseUnseenSession(req, res, sessionId) {
 // Lesson lifecycle events (start / turn / complete) — the founder's weekly
 // numbers come from these. `lib/lessonOutcome.js` already computes
 // completion; it was previously forwarded to the client and dropped. One row
-// per turn, written only once the reply is in hand: the opener turn IS the
-// 'start' row (a refused or failed opener plus the client's retry must not
-// count as two starts), so a lesson with no row after its start is abandoned.
+// per answered turn, written only once the reply is in hand: an attempt's
+// first answered turn IS its 'start' row (a failed opener plus the client's
+// retry must not count as two starts), so a lesson with no row after its
+// start is abandoned.
 let scheduler = null;
 function lessonMetaFor(clientMessages) {
   const opener = clientMessages.find(
@@ -1668,9 +1669,8 @@ function lessonMetaFor(clientMessages) {
 }
 // A loose `[CURRICULUM:` thread (billed and quota-gated as a lesson) has no
 // parsable lesson id; its row is still written with lesson_id NULL.
-function recordLessonEvent(sessionId, meta, event) {
-  if (!meta) return;
-  Promise.resolve(db.recordLessonEvent({
+function writeLessonEvent(sessionId, meta, event) {
+  return Promise.resolve(db.recordLessonEvent({
     ts: Date.now(),
     sessionId,
     unit: meta.unit,
@@ -1682,6 +1682,52 @@ function recordLessonEvent(sessionId, meta, event) {
     // Counted on the write, not the call: a deduped 'complete' is not an event.
     if (written) metrics.lessonEventsTotal.inc({ event });
   }).catch(() => {});
+}
+
+// Whether an answered lesson turn is its attempt's 'start' or a 'turn',
+// decided from the session's own funnel rows rather than the wire thread.
+// Since AUD-29 a student who answers a cut-off opener sends [opener, cut-off
+// reply, answer]: it looks like a later turn, but the cut-off opener wrote
+// no row, so that attempt never got a 'start' (and a retake's 'complete' was
+// then dropped as a repeat of the previous attempt's).
+//
+//   no 'start' or 'complete' for this lesson yet    → 'start'
+//   the latest is a 'start' (an attempt is open)    → 'turn'
+//   the latest is a 'complete' (that attempt ended) → 'start' if this thread
+//       is shorter than the one that passed (a retake: its opener, or the
+//       answer to a cut-off one); otherwise 'turn' (iOS keeps a passed
+//       lesson's thread open, and those turns are not a new attempt)
+//
+// A loose thread has no lesson id to look up, and a failed read must not lose
+// the row: both fall back to the thread (its opener, or no reply in it yet).
+async function lessonTurnEvent(sessionId, meta, clientMessages) {
+  const threadSaysStart = meta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant');
+  const fallback = threadSaysStart ? 'start' : 'turn';
+  if (!meta.lessonId) return fallback;
+  let last;
+  try {
+    last = await db.lastLessonMilestone(sessionId, meta.lessonId);
+  } catch (e) {
+    logger.warn({ err: e.message }, 'lesson milestone read failed; using the thread');
+    return fallback;
+  }
+  if (!last) return 'start';
+  if (last.event === 'start') return 'turn';
+  if (last.turnIndex == null) return fallback;
+  return meta.turnIndex < last.turnIndex ? 'start' : 'turn';
+}
+
+// One answered lesson turn's rows, in order: its 'start' or 'turn', then the
+// 'complete' when the server judged the lesson passed (that row's dedupe
+// reads the latest 'start', so it must land after it). Fire-and-forget: a
+// lost analytics row must never fail the student's turn.
+function recordLessonTurn(sessionId, meta, clientMessages, lessonComplete) {
+  if (!meta) return;
+  Promise.resolve()
+    .then(() => lessonTurnEvent(sessionId, meta, clientMessages))
+    .then((event) => writeLessonEvent(sessionId, meta, event))
+    .then(() => (lessonComplete ? writeLessonEvent(sessionId, meta, 'complete') : null))
+    .catch((e) => logger.warn({ err: e && e.message }, 'lesson event write failed (row dropped)'));
 }
 
 const CRISIS_RESOURCE_RE = /\b988\b|\b741741\b/;
@@ -1782,13 +1828,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // against different daily allowances.
   const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
+  // Whether this turn starts the lesson is decided once its reply is in hand,
+  // from the session's lesson_events (recordLessonTurn).
   const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages) : null;
-  // The opener is the lesson's start — and so is any lesson thread with no
-  // assistant turn yet: a student whose opener got no reply (stop, timeout,
-  // refusal) and who types on instead of tapping Retry sends [opener, turn],
-  // which is still the first answered turn.
-  const lessonStart = Boolean(lessonMeta)
-    && (lessonMeta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant'));
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
@@ -2198,10 +2240,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const reply = lessonOutcome.reply;
         if (!refused) linkPhoto(reply);
         noteCrisisReply(reply, callKind);
-        if (lessonMeta) {
-          recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
-          if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
-        }
+        recordLessonTurn(sessionId, lessonMeta, clientMessages, lessonOutcome.lessonComplete);
         if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
 
         try {
@@ -2313,10 +2352,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const reply = lessonOutcome.reply;
       if (!refused) linkPhoto(reply);
       noteCrisisReply(reply, callKind);
-      if (lessonMeta) {
-        recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
-        if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
-      }
+      recordLessonTurn(sessionId, lessonMeta, clientMessages, lessonOutcome.lessonComplete);
       if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
 
       // Save assistant reply to DB
