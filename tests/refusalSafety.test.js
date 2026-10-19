@@ -111,6 +111,7 @@ describe('a refused reply becomes the safe refusal copy', () => {
     assert.ok(out.done, 'the stream finishes with [DONE]');
     assert.ok(out.complete, 'a complete frame is sent');
     assertSafeReply(out.complete.reply);
+    assert.equal(out.deltas, REFUSAL_COPY, 'the safe text is streamed too');
     assert.equal(savedReply(s), REFUSAL_COPY);
   });
 
@@ -118,7 +119,8 @@ describe('a refused reply becomes the safe refusal copy', () => {
     const s = sid();
     const out = await stream(s, [{ role: 'user', content: 'tell me MOCK_REFUSAL_PARTIAL' }]);
     assert.equal(out.status, 200, out.text.slice(0, 300));
-    assert.ok(out.deltas.length > 0, 'some words streamed before the refusal');
+    assert.ok(out.deltas.length > REFUSAL_COPY.length, 'some words streamed before the refusal');
+    assert.ok(out.deltas.endsWith('\n\n' + REFUSAL_COPY), 'the safe text follows the partial words');
     assertSafeReply(out.complete.reply);
     assert.equal(savedReply(s), REFUSAL_COPY);
   });

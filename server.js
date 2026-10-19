@@ -2050,7 +2050,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const received = Array.isArray(stream.receivedMessages) ? stream.receivedMessages : [];
         const stopReason = received.length ? received[received.length - 1].stop_reason : null;
         const refused = isRefusedReply(stopReason, fullText);
-        if (refused) noteRefusal(req, callKind, stopReason);
+        if (refused) {
+          noteRefusal(req, callKind, stopReason);
+          // Stream the safe text as well, for any client (and the eval) that
+          // renders deltas rather than the complete frame's reply: on its own
+          // after an outright refusal, after a blank line if words streamed.
+          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText ? '\n\n' + REFUSAL_COPY : REFUSAL_COPY })}\n\n`);
+        }
         const assembled = refused ? REFUSAL_COPY : fullText;
         const rawReply = wantsBlocks ? assembled : scrubBlockMarkers(assembled);
         // Only curriculum lessons emit [LESSON_COMPLETE]; gate on mode so a
