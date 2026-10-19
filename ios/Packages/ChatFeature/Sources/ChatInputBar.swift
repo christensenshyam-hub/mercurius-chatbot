@@ -34,6 +34,10 @@ struct ChatInputBar: View {
     /// passes its own ("Type your answer…"), since there Merc is the one
     /// asking (AUD-44).
     var placeholder: String = "Ask Mercurius…"
+    /// A shorter placeholder for accessibility sizes, where the field fits
+    /// only a few characters ("Type yo…" at AX5 on an SE). Nil keeps
+    /// `placeholder` at every size.
+    var compactPlaceholder: String? = nil
     /// The most lines the field grows to before it scrolls. A lesson caps it
     /// lower so a long answer can't swallow the reading area above.
     var maxLines: Int = 5
@@ -41,6 +45,13 @@ struct ChatInputBar: View {
     var onFocusChange: ((Bool) -> Void)? = nil
 
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The placeholder for this text size.
+    static func placeholder(_ placeholder: String, compact: String?, at size: DynamicTypeSize) -> String {
+        if size.isAccessibilitySize, let compact { return compact }
+        return placeholder
+    }
     @State private var pickerItem: PhotosPickerItem?
     /// A picked photo failed to load (e.g. an iCloud-optimized original while
     /// offline, or a corrupt asset). Without this the picker dismisses and
@@ -75,7 +86,16 @@ struct ChatInputBar: View {
             HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
                 photoButton
 
-                TextField(placeholder, text: $text, axis: .vertical)
+                // The placeholder in the secondary text token, not the
+                // system's faint one (1.7:1 in light mode): in a lesson it
+                // is the instruction (AUD-44). 4.7:1 light, 6.3:1 dark on
+                // the field.
+                let prompt = Self.placeholder(placeholder, compact: compactPlaceholder, at: dynamicTypeSize)
+                TextField(text: $text,
+                          prompt: Text(prompt).foregroundStyle(BrandColor.textSecondary),
+                          axis: .vertical) {
+                    Text(prompt)
+                }
                     .lineLimit(1...max(1, maxLines))
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)

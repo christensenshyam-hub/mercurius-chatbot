@@ -424,6 +424,18 @@ struct LessonHeaderCopyTests {
         #expect(CurriculumLessonView.eyebrow(unitLabel: "UNIT 01", lessonNumber: 2, totalInUnit: 0)
                 == "UNIT 01 · LESSON 2")
     }
+
+    @Test("The title gets two lines in the header, and moves to the thread at accessibility sizes")
+    func titleIsAlwaysSomewhere() {
+        // One line truncated every title at the default size.
+        #expect(LessonHeaderBar.titleLineLimit == 2)
+        #expect(LessonHeaderBar.showsTitle(at: .large))
+        #expect(LessonHeaderBar.showsTitle(at: .xxxLarge))
+        // There the header keeps its room for the lesson (AUD-08) and the
+        // lesson view hands the title to the thread's first row instead.
+        #expect(!LessonHeaderBar.showsTitle(at: .accessibility1))
+        #expect(!LessonHeaderBar.showsTitle(at: .accessibility5))
+    }
 }
 
 @Suite("Lesson replay fixture")

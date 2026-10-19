@@ -181,6 +181,9 @@ public struct CurriculumLessonView: View {
                     // (thinking pulse while a reply streams; antics at rest).
                     coach: LessonCoach(line: coachLine, reaction: coachReaction,
                                        activity: coachActivity),
+                    // Where the header drops the title (accessibility
+                    // sizes), the thread opens with it, in full.
+                    threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
 
@@ -201,6 +204,7 @@ public struct CurriculumLessonView: View {
                     focusTrigger: inputFocusTrigger,
                     // Merc asks; the student answers (AUD-44).
                     placeholder: "Type your answer…",
+                    compactPlaceholder: "Your answer…",
                     // A long answer must not swallow the reading area.
                     maxLines: 3,
                     onFocusChange: { composerFocused = $0 }
@@ -349,7 +353,7 @@ public struct CurriculumLessonView: View {
         totalInUnit > 0 ? "Lesson \(lessonNumber) of \(totalInUnit)" : "Lesson \(lessonNumber)"
     }
 
-    /// The lesson's header: eyebrow and a one-line title beside Done (AUD-08).
+    /// The lesson's header: eyebrow and the title beside Done (AUD-08).
     private var header: some View {
         LessonHeaderBar(
             eyebrow: eyebrowText,
@@ -569,18 +573,28 @@ public struct CurriculumLessonView: View {
 }
 
 /// The top row of a lesson (and of its intro): the eyebrow, optionally a
-/// one-line title, and the exit on the trailing edge — a 44 pt target that
-/// never truncates, wraps or scrolls away (AUD-08). At accessibility sizes
-/// the title steps out (it stays in the VoiceOver label) and the row's text
+/// title of up to two lines, and the exit on the trailing edge — a 44 pt
+/// target that never truncates, wraps or scrolls away (AUD-08). At
+/// accessibility sizes the title steps out (it stays in the VoiceOver label,
+/// and the thread's first row shows it in full) and the row's text
 /// stops growing at AX2, like the system's own bars; long-pressing the exit
 /// shows it large. Its own view so the size cap reaches its scaled metrics.
-private struct LessonHeaderBar: View {
+struct LessonHeaderBar: View {
     let eyebrow: String
     let title: String?
     let accessibilityLabel: String
     let exitTitle: String
     let exitAccessibilityLabel: String
     let onExit: () -> Void
+
+    /// Below accessibility sizes the title sits in the bar, on up to two
+    /// lines. At accessibility sizes it steps out of the bar (AUD-08's
+    /// reading room) and the thread opens with it instead.
+    static func showsTitle(at size: DynamicTypeSize) -> Bool {
+        !size.isAccessibilitySize
+    }
+
+    static let titleLineLimit = 2
 
     var body: some View {
         Content(eyebrow: eyebrow, title: title, accessibilityLabel: accessibilityLabel,
@@ -611,12 +625,15 @@ private struct LessonHeaderBar: View {
                         .foregroundStyle(BrandColor.accentText)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .minimumScaleFactor(0.85)
-                    if let title, !dynamicTypeSize.isAccessibilitySize {
+                    if let title, LessonHeaderBar.showsTitle(at: dynamicTypeSize) {
                         Text(title)
                             .font(.system(size: titleSize, weight: .black, design: .rounded))
                             .foregroundStyle(BrandColor.text)
-                            .lineLimit(1)
+                            // Two lines: at one, every title truncated at the
+                            // default size ("What happens when you typ…").
+                            .lineLimit(LessonHeaderBar.titleLineLimit)
                             .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

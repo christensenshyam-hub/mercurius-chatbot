@@ -431,6 +431,10 @@ struct MessageListView: View {
     /// accessibility text sizes, and while the student types if it's on
     /// screen (see `CoachCardPresence`).
     var coach: LessonCoach? = nil
+    /// Lessons at accessibility sizes, where the header has no room for it:
+    /// the lesson's title as the thread's first row, so the student still
+    /// sees which lesson this is. It scrolls away with the lesson.
+    var threadTitle: String? = nil
     /// Whether the composer under the list has focus (the keyboard is up).
     var composerFocused: Bool = false
 
@@ -508,6 +512,18 @@ struct MessageListView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     ThreadStack(lazy: !lessonStyle) {
+                        if let threadTitle {
+                            Text(threadTitle)
+                                .font(BrandFont.roundedTitle)
+                                .foregroundStyle(BrandColor.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, BrandSpacing.lg)
+                                .padding(.bottom, BrandSpacing.sm)
+                                // The header's VoiceOver label already says it.
+                                .accessibilityHidden(true)
+                        }
+
                         if let coach, hasCoachRow {
                             MercCoachCard(line: coach.line, reaction: coach.reaction,
                                           liveActivity: coach.activity)

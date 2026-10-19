@@ -16,6 +16,25 @@ struct AccessibilityLayoutTests {
         #expect(ModeSelectorView.layout(for: .accessibility5) == .menu)
     }
 
+    @Test("The pill row needs room for three of its widest pill, so the menu stands in before a label wraps")
+    func pillRowNeedsTheWidestThreeTimes() {
+        // "Discussion" is the widest: equal thirds must each hold it.
+        #expect(EqualWidthHStack.neededWidth(idealWidths: [90, 80, 110], spacing: 8) == 346)
+        #expect(EqualWidthHStack.neededWidth(idealWidths: [], spacing: 8) == 0)
+    }
+
+    @Test("The lesson composer shortens its placeholder at accessibility sizes only")
+    func composerPlaceholder() {
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .large)
+                == "Type your answer…")
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .xxxLarge)
+                == "Type your answer…")
+        #expect(ChatInputBar.placeholder("Type your answer…", compact: "Your answer…", at: .accessibility1)
+                == "Your answer…")
+        #expect(ChatInputBar.placeholder("Ask Mercurius…", compact: nil, at: .accessibility5)
+                == "Ask Mercurius…")
+    }
+
     @Test("The menu names the current mode; the UI tests find it by its identifier")
     func menuTitle() {
         #expect(ModeSelectorView.menuTitle(for: .socratic) == "Mode: Socratic")

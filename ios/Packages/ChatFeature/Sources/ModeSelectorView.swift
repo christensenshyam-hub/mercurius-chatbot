@@ -4,7 +4,9 @@ import NetworkingKit
 
 /// The three Mercurius modes. A row of pills at standard text sizes; at
 /// accessibility sizes a single "Mode: Socratic" menu, because three pills
-/// side by side hyphenate or shrink to "So… De… Di…" (AUD-48). Tapping a
+/// side by side hyphenate or shrink to "So… De… Di…" (AUD-48). At standard
+/// sizes the menu also stands in whenever the pills don't fit on one line
+/// each (an SE at xxxLarge hyphenated "Discus-sion"). Tapping a
 /// mode for the first time shows an explainer sheet; thereafter it switches
 /// directly.
 ///
@@ -42,7 +44,12 @@ struct ModeSelectorView: View {
     var body: some View {
         Group {
             switch Self.layout(for: dynamicTypeSize) {
-            case .pills: pillRow
+            case .pills:
+                // The pills only where every label fits on one line.
+                ViewThatFits(in: .horizontal) {
+                    pillRow
+                    modeMenu
+                }
             case .menu: modeMenu
             }
         }
@@ -69,9 +76,11 @@ struct ModeSelectorView: View {
     }
 
     /// Three fixed modes — no scroll. Each pill takes an equal share of
-    /// the row so the trio reads evenly spaced across the top.
+    /// the row so the trio reads evenly spaced across the top. The row's
+    /// ideal width is three times the widest pill, so `ViewThatFits` falls
+    /// back to the menu exactly when an equal share would wrap a label.
     private var pillRow: some View {
-        HStack(spacing: BrandSpacing.sm) {
+        EqualWidthHStack(spacing: BrandSpacing.sm) {
             ForEach(ChatMode.allCases) { mode in
                 pill(for: mode)
                     .frame(maxWidth: .infinity)
@@ -154,6 +163,7 @@ struct ModeSelectorView: View {
                 Text(mode.displayName)
                     .font(BrandFont.caption)
                     .fontWeight(isActive ? .semibold : .regular)
+                    .lineLimit(1)
                 if isPending {
                     ProgressView().controlSize(.mini)
                 }
@@ -229,5 +239,46 @@ struct ModeSelectorView: View {
     /// just performs the post-sheet side effect — select the mode.
     private func continueIntoMode(_ mode: ChatMode) {
         Task { await model.switchMode(to: mode) }
+    }
+}
+
+
+/// Children side by side in equal columns. Its ideal width is what the row
+/// needs for every child to have its own ideal width: the widest child
+/// times the count, plus the spacing. Offered more, the columns share it
+/// equally.
+struct EqualWidthHStack: Layout {
+    var spacing: CGFloat
+
+    static func neededWidth(idealWidths: [CGFloat], spacing: CGFloat) -> CGFloat {
+        guard let widest = idealWidths.max() else { return 0 }
+        return widest * CGFloat(idealWidths.count) + spacing * CGFloat(idealWidths.count - 1)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let needed = Self.neededWidth(idealWidths: subviews.map { $0.sizeThatFits(.unspecified).width },
+                                      spacing: spacing)
+        let width = max(proposal.width ?? needed, needed)
+        let column = columnWidth(total: width, count: subviews.count)
+        let height = subviews
+            .map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+            .max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let column = columnWidth(total: bounds.width, count: subviews.count)
+        var x = bounds.minX
+        for subview in subviews {
+            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                          proposal: ProposedViewSize(width: column, height: bounds.height))
+            x += column + spacing
+        }
+    }
+
+    private func columnWidth(total: CGFloat, count: Int) -> CGFloat {
+        max(0, (total - spacing * CGFloat(count - 1)) / CGFloat(count))
     }
 }
