@@ -19,7 +19,7 @@ const crypto = require('node:crypto');
 const Database = require('better-sqlite3');
 const { spawnServer } = require('./support/spawnServer');
 const { waitFor } = require('./support/waitFor');
-const { replyKey } = require('../lib/photoReattach');
+const { replyKey, REATTACHED_PHOTO_NOTE } = require('../lib/photoReattach');
 
 const SHARED = '[Shared an image]';
 const BLOCKS = ['blocks_v1'];
@@ -133,15 +133,22 @@ function callFor(server, marker) {
   return calls[0];
 }
 
-// [{ index, data, text }] for every message the model was shown with an image.
+// [{ index, data, text, note }] for every message the model was shown with an
+// image: `text` is the turn's own words (its last text block), `note` whether
+// the re-attach note sits between the image and them.
 function imagesIn(call) {
   const out = [];
   call.messages.forEach((m, index) => {
     if (!Array.isArray(m.content)) return;
     for (const b of m.content) {
       if (b.type === 'image') {
-        const textBlock = m.content.find((x) => x.type === 'text');
-        out.push({ index, data: b.source.data, text: textBlock ? textBlock.text : null });
+        const texts = m.content.filter((x) => x.type === 'text');
+        out.push({
+          index,
+          data: b.source.data,
+          text: texts.length ? texts[texts.length - 1].text : null,
+          note: texts.some((x) => x.text === REATTACHED_PHOTO_NOTE),
+        });
       }
     }
   });
@@ -229,6 +236,8 @@ describe('the photo lands on the turn it came with (AUD-10)', () => {
     assert.equal(imgs[0].index, 2, 'on the photo turn (hi, reply, PHOTO, reply, new)');
     assert.equal(imgs[0].data, p.b64, 'the bytes the student uploaded');
     assert.equal(imgs[0].text, SHARED);
+    assert.equal(imgs[0].note, true, 'the model is told the photo is from earlier, as sent then');
+    assert.deepEqual(call.messages[2].content.map((b) => b.type), ['image', 'text', 'text']);
     assert.equal(imageRow(S, p.id).turn_reply, replyKey(p.reply.reply), 'the link records the reply iOS keeps');
     assert.equal(call.messages.length, 5);
     const last = call.messages[4];
@@ -319,6 +328,42 @@ describe('the photo lands on the turn it came with (AUD-10)', () => {
     assert.deepEqual(imagesIn(back.call).map((i) => [i.index, i.data]), [[0, A.b64]], 'chat 1 gets A, not the newer B');
     const on = await followUp(S, s, c2, 'and number 8?');
     assert.deepEqual(imagesIn(on.call).map((i) => [i.index, i.data]), [[0, B.b64]]);
+  });
+
+  test("a chat with no photo that opens with another chat's words never gets that chat's photo (review probe 1)", async () => {
+    const S = servers.on;
+    const s = sid();
+    const opener = 'can you help me with this';
+    // Chat A: the photo turn, answered (so linked).
+    const a = thread();
+    await sendPhotoTurn(S, s, a, opener, { capabilities: BLOCKS });
+    // Chat B, same session (a New chat, or the next student on a shared
+    // iPad): the same first words, no photo. A real model words B's reply
+    // differently from A's; the mock is deterministic, so stand it in.
+    const b = thread();
+    b.user(opener);
+    await chat(S, s, b.wire(), { capabilities: BLOCKS });
+    b.assistant('Sure. What are you working on? Tell me the first problem in your own words.');
+    const { call } = await followUp(S, s, b, 'what is problem 1', { capabilities: BLOCKS });
+    assert.deepEqual(imagesIn(call), [], 'chat B was never sent a photo');
+    // Chat A, going on, still sees its own.
+    const back = await followUp(S, s, a, 'and the next one?', { capabilities: BLOCKS });
+    assert.equal(imagesIn(back.call).length, 1);
+  });
+
+  test("a photo sent mid-chat does not land on another chat's identical opener (review probe 2)", async () => {
+    const S = servers.on;
+    const s = sid();
+    const a = thread();
+    a.user('i have algebra homework');
+    a.assistant((await chat(S, s, a.wire(), { capabilities: BLOCKS })).reply);
+    await sendPhotoTurn(S, s, a, 'what about this one?', { capabilities: BLOCKS });
+    const b = thread();
+    b.user('what about this one?');
+    await chat(S, s, b.wire(), { capabilities: BLOCKS });
+    b.assistant('Which one do you mean? Paste or type it and we can look together.');
+    const { call } = await followUp(S, s, b, 'the quadratic', { capabilities: BLOCKS });
+    assert.deepEqual(imagesIn(call), [], 'chat B was never sent a photo');
   });
 
   test('the JSON path re-attaches too', async () => {

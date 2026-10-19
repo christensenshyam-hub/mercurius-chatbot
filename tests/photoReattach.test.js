@@ -17,6 +17,7 @@ const {
   MAX_IMAGES,
   CANON_CHARS,
   REPLY_CHARS,
+  REATTACHED_PHOTO_NOTE,
 } = require('../lib/photoReattach');
 const { normalizeReplayedHistory } = require('../lib/curriculumTag');
 const { truncateUnits } = require('../lib/schemas');
@@ -142,14 +143,37 @@ describe('plan', () => {
     const links = [linkFor('newer', chat2, 0), linkFor('older', chat1, 0)]; // newest first
     assert.deepEqual(plan({ thread: chat2, links }), [{ index: 0, id: 'newer' }]);
     assert.deepEqual(plan({ thread: chat1, links }), [{ index: 0, id: 'older' }], 'not the newer chat\'s photo');
-    // No reply to go on (a link from before the reply was recorded): newest.
+    // A link with no reply recorded never claims a turn that has a reply.
     const bare = links.map((l) => ({ ...l, replyKey: null }));
-    assert.deepEqual(plan({ thread: chat1, links: bare }), [{ index: 0, id: 'newer' }]);
+    assert.deepEqual(plan({ thread: chat1, links: bare }), []);
+  });
+
+  test('a chat that opens with the same words as another chat\'s photo turn never gets that photo (review probe 1)', () => {
+    // Chat A: the photo turn, answered. Chat B: the same words, no photo,
+    // a different reply. Same session, so both links are the session's.
+    const chatA = [u('can you help me with this'), a('That worksheet is about solving for x. Which one first?'), u('#5')];
+    const chatB = [u('can you help me with this'), a('Sure. What are you working on?'), u('problem 1')];
+    assert.equal(keysForTurn(chatA, 0).anchorKey, keysForTurn(chatB, 0).anchorKey, 'they share an anchor');
+    const links = [linkFor('photoA', chatA, 0)];
+    assert.deepEqual(plan({ thread: chatB, links }), []);
+    assert.deepEqual(plan({ thread: chatA, links }), [{ index: 0, id: 'photoA' }], 'chat A still gets its own');
+    // Chat B's opener got no reply in its thread (a failed first reply that
+    // an older build dropped): nothing before it, so nothing ties it to A.
+    assert.deepEqual(plan({ thread: [u('can you help me with this'), u('hello?')], links }), []);
+  });
+
+  test('a photo sent mid-chat does not land on another chat\'s identical opener (review probe 2, the text-only fallback)', () => {
+    const chatA = [u('i have algebra homework'), a('Nice, what is it?'), u('what about this one?'), a('That one is a quadratic. What do you notice first?'), u('ok')];
+    const links = [linkFor('photoA', chatA, 2)];
+    const chatB = [u('what about this one?'), a('Which one do you mean? Paste or type it.'), u('the quadratic')];
+    assert.equal(keysForTurn(chatB, 0).turnKey, links[0].turnKey, 'same words');
+    assert.deepEqual(plan({ thread: chatB, links }), []);
+    assert.deepEqual(plan({ thread: chatA, links }), [{ index: 2, id: 'photoA' }]);
   });
 
   test('re-attached while at most maxTurns user turns follow the photo turn', () => {
     const base = [u('hi'), a('Hey!'), u(SHARED)];
-    const link = linkFor('img', base, 2);
+    const link = linkFor('img', [...base, a('reply 1')], 2);
     let thread = base.slice();
     const seen = [];
     for (let n = 1; n <= DEFAULT_MAX_TURNS + 2; n++) {
@@ -172,7 +196,7 @@ describe('plan', () => {
 
   test('the text-only fallback applies only to a turn that is first in the thread', () => {
     // Linked while the reply before it was still in the thread …
-    const linkedThread = [u('hi'), a('Hey!'), u(SHARED)];
+    const linkedThread = [u('hi'), a('Hey!'), u(SHARED), a('I see problem 7.')];
     const links = [linkFor('img', linkedThread, 2)];
     // … the client's byte cap later drops "hi" and "Hey!": the turn is first.
     const capped = [u(SHARED), a('I see problem 7.'), u('and #8?')];
@@ -180,6 +204,8 @@ describe('plan', () => {
     // A same-text turn anywhere else is a different turn.
     const elsewhere = [u('new chat'), a('Hi!'), u(SHARED), a('?'), u('and #8?')];
     assert.deepEqual(plan({ thread: elsewhere, links }), []);
+    // First in the thread, but followed by a different reply: not this photo.
+    assert.deepEqual(plan({ thread: [u(SHARED), a('A graph of phone plans.'), u('and #8?')], links }), []);
   });
 
   test('excluded ids (the new turn\'s own photo) are never re-attached', () => {
@@ -189,13 +215,9 @@ describe('plan', () => {
 
   test('at most MAX_IMAGES photos, newest turns first, and a byte budget', () => {
     let thread = [];
-    const links = [];
-    for (let n = 0; n < 5; n++) {
-      thread.push(u(`${SHARED} ${n}`));
-      links.unshift(linkFor(`img${n}`, thread, thread.length - 1));
-      thread.push(a(`reply ${n}`));
-    }
+    for (let n = 0; n < 5; n++) thread.push(u(`${SHARED} ${n}`), a(`reply ${n}`));
     thread.push(u('which one was hardest?'));
+    const links = [0, 1, 2, 3, 4].map((n) => linkFor(`img${n}`, thread, 2 * n)).reverse(); // newest first
     const picks = plan({ thread, links });
     assert.equal(MAX_IMAGES, 3);
     assert.deepEqual(picks.map((p) => p.id), ['img4', 'img3', 'img2']);
@@ -212,7 +234,7 @@ describe('plan', () => {
 describe('apply', () => {
   const image = { contentType: 'image/png', dataBase64: 'iVBORw0KGgo=' };
 
-  test('rebuilds the turn as [image, text] and never mutates its input', () => {
+  test('rebuilds the turn as [image, note, text] and never mutates its input', () => {
     const history = [u('hi'), a('Hey!'), u(SHARED), a('Problem 7.')];
     const before = JSON.stringify(history);
     const out = apply(history, [{ index: 2, image }]);
@@ -221,9 +243,12 @@ describe('apply', () => {
       role: 'user',
       content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/png', data: image.dataBase64 } },
+        { type: 'text', text: REATTACHED_PHOTO_NOTE },
         { type: 'text', text: SHARED },
       ],
     });
+    assert.match(REATTACHED_PHOTO_NOTE, /earlier/);
+    assert.match(REATTACHED_PHOTO_NOTE, /newest message/);
     assert.equal(out[0], history[0]);
     assert.equal(out[3], history[3]);
   });
@@ -239,11 +264,12 @@ describe('withHistoryBreakpoint on a re-attached photo turn', () => {
   test('the breakpoint goes on the text block after the image', () => {
     const history = apply([u('hi'), a('Hey!'), u(SHARED)], [{ index: 2, image }]);
     const out = withHistoryBreakpoint([...history, u('hello?')], { window: 40 });
-    assert.equal(out[2].content.length, 2);
+    assert.equal(out[2].content.length, 3);
     assert.equal(out[2].content[0].type, 'image');
     assert.equal(out[2].content[0].cache_control, undefined);
-    assert.deepEqual(out[2].content[1], { type: 'text', text: SHARED, cache_control: { type: 'ephemeral' } });
-    assert.equal(history[2].content[1].cache_control, undefined, 'input not mutated');
+    assert.deepEqual(out[2].content[1], { type: 'text', text: REATTACHED_PHOTO_NOTE });
+    assert.deepEqual(out[2].content[2], { type: 'text', text: SHARED, cache_control: { type: 'ephemeral' } });
+    assert.equal(history[2].content[2].cache_control, undefined, 'input not mutated');
   });
 
   test('an earlier photo turn is simply part of the cached prefix', () => {
