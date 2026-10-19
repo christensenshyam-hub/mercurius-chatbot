@@ -16,6 +16,9 @@ import NetworkingKit
 /// - `-LessonReplaySlow`: stream four times slower, to catch it mid-reply.
 /// - `-LessonReplayShort`: only each reply's opening paragraphs, so a whole
 ///   turn (and a cut-off reply's captions) fits on one screen.
+/// - `-LessonReplayNetwork <scenario>`: no replies; every request goes
+///   through the real `APIClient` and gets a failure production or a school
+///   network sends (see `NetworkScenario`).
 enum LessonReplay {
     static var isRequested: Bool {
         ProcessInfo.processInfo.arguments.contains("-LessonReplay")
@@ -24,13 +27,14 @@ enum LessonReplay {
     @MainActor
     static func makeModel() -> ChatViewModel {
         let args = ProcessInfo.processInfo.arguments
+        let replay = LessonReplayClient(
+            cutFirstReply: args.contains("-LessonReplayCut"),
+            failFirstReplyEmpty: args.contains("-LessonReplayFailEmpty"),
+            short: args.contains("-LessonReplayShort"),
+            chunkDelay: .milliseconds(args.contains("-LessonReplaySlow") ? 200 : 50)
+        )
         let model = ChatViewModel(
-            chatClient: LessonReplayClient(
-                cutFirstReply: args.contains("-LessonReplayCut"),
-                failFirstReplyEmpty: args.contains("-LessonReplayFailEmpty"),
-                short: args.contains("-LessonReplayShort"),
-                chunkDelay: .milliseconds(args.contains("-LessonReplaySlow") ? 200 : 50)
-            ),
+            chatClient: NetworkScenario.requested.map { $0.makeClient() as ChatStreaming } ?? replay,
             modeClient: LessonReplayModeClient(),
             sessionIdProvider: { "debug-lesson-replay" },
             store: nil,
