@@ -37,6 +37,16 @@ struct ReminderPlannerTests {
         #expect(p[1].pose != .sleep)
     }
 
+    @Test("No rotation line lectures about scrolling or screen time (AUD-44)")
+    func noLecture() {
+        #expect(ReminderPlanner.dailyLines.count == 6)
+        for line in ReminderPlanner.dailyLines.map(\.body) {
+            #expect(!line.localizedCaseInsensitiveContains("scroll"), "\(line)")
+            #expect(!line.localizedCaseInsensitiveContains("screen time"), "\(line)")
+        }
+        #expect(Set(ReminderPlanner.dailyLines.map(\.body)).count == ReminderPlanner.dailyLines.count)
+    }
+
     @Test("Every rotation line carries its paired pose")
     func rotationPoses() {
         let p = plan(streak: nil)

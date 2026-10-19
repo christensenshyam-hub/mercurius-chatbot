@@ -188,7 +188,7 @@ public final class NotificationScheduler {
             let flavors: [(TimeInterval, String, ReminderPlanner.Pose)] = [
                 (4, ReminderPlanner.defenseLine(streak: 2), .sleep),
                 (10, ReminderPlanner.weeklyLine(weekday: wednesday.weekday, done: 0), wednesday.pose),
-                (16, ReminderPlanner.dailyLines[5].body, .celebrate),
+                (16, ReminderPlanner.dailyLines[4].body, ReminderPlanner.dailyLines[4].pose),
             ]
             for (delay, body, pose) in flavors {
                 let reminder = ReminderPlanner.PlannedReminder(

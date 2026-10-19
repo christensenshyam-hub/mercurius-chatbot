@@ -209,12 +209,12 @@ public enum ReminderPlanner {
     }
 
     /// The Merc-voiced rotation, each line paired with the pose Merc strikes
-    /// on the banner. Warm and inviting — this app's audience is 9+, so no
-    /// Duo-style guilt, just personality.
+    /// on the banner. Warm and inviting — no Duo-style guilt, and no
+    /// lecturing about how students spend the rest of their time (AUD-44
+    /// dropped a line about scrolling).
     static let dailyLines: [(body: String, pose: Pose)] = [
         ("Merc here! Got two minutes to think together today?", .wave),
         ("Curious about anything today? Merc loves a good question.", .thinking),
-        ("Two minutes of thinking beats two hours of scrolling — Merc's ready.", .happy),
         ("Merc's been pondering something. Come ask him about it!", .thinking),
         ("Your learning path misses you. One small step today?", .happy),
         ("A question a day keeps your brain in play. Merc's waiting!", .celebrate),
