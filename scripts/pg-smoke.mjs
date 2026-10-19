@@ -435,6 +435,17 @@ await step('C5 usage ledger: recordUsage / sumCostSince (spend-cap hydrate) / se
   assert.equal(lesson.count, 2);
   assertNum(lesson.usd, 'sessionUsageSince.usd');
   assert.ok(Math.abs(lesson.usd - 0.02) < 1e-9);
+  // AUD-31: an unanswered call (refused, failed, stopped before any text) is
+  // billed but uses no turn; a row with answered unset still counts. Its own
+  // session, so C14's cascade receipt for S is unchanged.
+  const A = newSid('answered');
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.004, status: 'ok' }), true);
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.001, status: 'error', errorKind: 'overloaded', answered: false }), true);
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.002, status: 'ok', answered: true }), true);
+  const answeredLesson = (await db.sessionUsageSince(A, midnight)).find((r) => r.kind === 'lesson');
+  assertNum(answeredLesson.count, 'sessionUsageSince.count (answered)');
+  assert.equal(answeredLesson.count, 2, 'answered = false is not a turn');
+  assert.ok(Math.abs(answeredLesson.usd - 0.007) < 1e-9, 'but it is billed');
   const sum = await db.usageSummarySince(midnight);
   assertNum(sum.calls, 'usageSummarySince.calls');
   assert.ok(sum.calls >= 4);

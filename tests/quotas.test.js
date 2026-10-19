@@ -208,6 +208,36 @@ describe('session daily turn caps', () => {
     assert.equal(quotas.snapshot().sessions.totals.chatTurns, 0);
     assert.equal(quotas.snapshot().sessions.totals.usd, 0.05);
   });
+
+  test('counted: false (no answer, AUD-31) adds the dollars but uses no turn, for every kind', () => {
+    quotas.configure({ SESSION_DAILY_LESSON_TURNS: 1, SESSION_DAILY_CHAT_TURNS: 1, SESSION_DAILY_IMAGES: 1, IP_DAILY_IMAGES: 1 });
+    for (const kind of ['lesson', 'chat', 'helper', 'image']) {
+      recordN(5, { sessionId: SID, ip: IP, kind, usd: 0.01, counted: false });
+    }
+    const snap = quotas.snapshot();
+    assert.deepEqual(
+      { lesson: snap.sessions.totals.lessonTurns, chat: snap.sessions.totals.chatTurns, images: snap.sessions.totals.images },
+      { lesson: 0, chat: 0, images: 0 },
+    );
+    assert.ok(Math.abs(snap.sessions.totals.usd - 0.2) < 1e-9, 'all 20 calls are billed to the session');
+    assert.ok(Math.abs(snap.ips.usd - 0.2) < 1e-9, 'and to the network');
+    for (const kind of ['lesson', 'chat', 'image']) {
+      assert.equal(quotas.check({ sessionId: SID, ip: IP, kind }).ok, true, kind);
+    }
+    // counted: true, or omitted, is a turn as before.
+    quotas.record({ sessionId: SID, ip: IP, kind: 'lesson', usd: 0, counted: true });
+    quotas.record({ sessionId: SID, ip: IP, kind: 'chat', usd: 0 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }).reason, 'lesson_turns');
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).reason, 'chat_turns');
+  });
+
+  test('unanswered calls still reach the session dollar cap', () => {
+    quotas.configure({ SESSION_DAILY_USD: 0.1 });
+    recordN(11, { sessionId: SID, ip: IP, kind: 'chat', usd: 0.01, counted: false });
+    const r = quotas.check({ sessionId: SID, ip: IP, kind: 'chat' });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'session_usd');
+  });
 });
 
 // ---------------------------------------------------------------------------

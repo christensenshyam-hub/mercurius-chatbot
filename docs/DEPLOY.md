@@ -153,6 +153,14 @@ are per UTC day and in-memory. A tripped daily quota answers
 tripped in-flight cap answers `503 busy` with a 60 s retry. Unset =
 default; `0` refuses everything.
 
+Only a turn that got an answer uses a turn allowance (AUD-31). A call
+that was refused, failed upstream, hit the server's own stream timeout,
+or was stopped before any text arrived is still billed, so it counts
+toward the dollar caps (`SESSION_DAILY_USD`, `IP_DAILY_USD`,
+`DAILY_BUDGET_USD`), but not toward `SESSION_DAILY_LESSON_TURNS` or
+`SESSION_DAILY_CHAT_TURNS`. The usage ledger's `answered` column (0/1)
+records which is which, so the counts survive a restart.
+
 | Var | Scope | Default |
 |---|---|---|
 | `SESSION_DAILY_LESSON_TURNS` | curriculum (lesson) turns per session | `40` |

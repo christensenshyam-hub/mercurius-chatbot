@@ -235,10 +235,17 @@ async function initSchema() {
         status TEXT NOT NULL,
         error_kind TEXT,
         duration_ms INTEGER,
-        trace_id TEXT
+        trace_id TEXT,
+        answered INTEGER DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
+      -- usage.answered (AUD-31): 1 when the call gave the student an answer,
+      -- 0 when it was refused, failed or stopped before any text. Only
+      -- answered calls use a daily turn, so the per-session hydrate counts
+      -- only those. NULL = written before the column existed (counted, as
+      -- every call was then). The ALTER migrates older databases.
+      ALTER TABLE usage ADD COLUMN IF NOT EXISTS answered INTEGER DEFAULT NULL;
 
       -- Read-path indexes for the admin/ops queries (recent sessions, per-session
       -- report lookups, time-windowed message counts).
@@ -353,7 +360,8 @@ async function initSchema() {
         status TEXT NOT NULL,
         error_kind TEXT,
         duration_ms INTEGER,
-        trace_id TEXT
+        trace_id TEXT,
+        answered INTEGER DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
@@ -404,6 +412,9 @@ async function initSchema() {
     if (!imageCols.includes('turn_key'))    sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_key TEXT DEFAULT NULL');
     if (!imageCols.includes('turn_anchor')) sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_anchor TEXT DEFAULT NULL');
     if (!imageCols.includes('turn_reply'))  sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_reply TEXT DEFAULT NULL');
+    // usage.answered (AUD-31) — see the pg block above.
+    const usageCols = sqliteDb.prepare('PRAGMA table_info(usage)').all().map(c => c.name);
+    if (!usageCols.includes('answered')) sqliteDb.exec('ALTER TABLE usage ADD COLUMN answered INTEGER DEFAULT NULL');
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -951,7 +962,12 @@ module.exports = {
   //   sumCostSince(tsMs)                → number: USD summed over rows with
   //                                       ts >= tsMs (0 when none).
   //   sessionUsageSince(sessionId, tsMs) → [{ kind, count, usd }] per kind,
-  //                                       for per-session throttles.
+  //                                       for per-session throttles. `count`
+  //                                       is the turns used (rows with
+  //                                       answered = 0 don't count, AUD-31);
+  //                                       `usd` sums every row.
+  //   A row's `answered` (true/false) says whether the call gave the student
+  //   an answer; omitted → NULL, which counts as a turn.
   //   usageSummarySince(tsMs)           → { calls, usd, byRoute: [{ route,
   //                                       calls, usd }], errors: [{ route,
   //                                       error_kind, count }] } for the admin
@@ -962,12 +978,14 @@ module.exports = {
       const int = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : 0; };
       const optInt = (v) => { const n = Number(v); return v != null && Number.isFinite(n) ? Math.round(n) : null; };
       const str = (v, fallback = null) => (v == null || v === '' ? fallback : String(v));
+      // true/1 → 1, false/0 → 0, anything else → NULL (unknown = counted).
+      const flag = (v) => (v === true || v === 1 ? 1 : v === false || v === 0 ? 0 : null);
       const tsRaw = Number(row.ts);
       const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
       const cost = Number(pick('costUsd', 'cost_usd'));
       await query(
-        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id, answered)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ts,
           wasErased(pick('sessionId', 'session_id')) ? null : str(pick('sessionId', 'session_id')),
@@ -984,6 +1002,7 @@ module.exports = {
           str(pick('errorKind', 'error_kind')),
           optInt(pick('durationMs', 'duration_ms')),
           str(pick('traceId', 'trace_id')),
+          flag(row.answered),
         ],
       );
       return true;
@@ -999,8 +1018,10 @@ module.exports = {
   },
 
   async sessionUsageSince(sessionId, tsMs) {
+    // `count` is the turns used: answered calls only (AUD-31), with a NULL
+    // (pre-column) row counted as before. `usd` is every call's cost.
     const rows = await query(
-      'SELECT kind, COUNT(*) AS count, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE session_id = ? AND ts >= ? GROUP BY kind ORDER BY kind',
+      'SELECT kind, SUM(CASE WHEN answered = 0 THEN 0 ELSE 1 END) AS count, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE session_id = ? AND ts >= ? GROUP BY kind ORDER BY kind',
       [sessionId, num(tsMs)],
     );
     return rows.map((r) => ({ kind: r.kind, count: num(r.count), usd: num(r.usd) }));
