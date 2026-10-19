@@ -9,8 +9,9 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createSourceRewriter, rewriteSources, parseSourceTag, formatSource, contextOf,
-  REWRITTEN_SOURCE_RE, ENDS_WITH_REWRITTEN_SOURCE_RE, MAX_TAG_CHARS,
+  REWRITTEN_SOURCE_RE, ENDS_WITH_REWRITTEN_SOURCE_RE, MAX_TAG_CHARS, MAX_LINK_CHARS,
 } = require('../lib/sourceTags');
+const { transformReply } = require('../lib/replyPipeline');
 
 // Every distinct real tag in the audit transcripts and docs/evals, with
 // what a student now reads when it stands on its own line.
@@ -187,6 +188,66 @@ describe('sourceTags: chunk boundaries', () => {
       }
       out += r.flush();
       assert.equal(out, oneShot, `run ${run}`);
+    }
+  });
+});
+
+describe('sourceTags: a tag the model wrapped as a markdown link (review of AUD-38)', () => {
+  // Both real, from one debate reply (docs/evals/pacing-server-2026-10-branch-flag-off-rerun-debate.json).
+  const MID = "Your strongest attack is accuracy bias — Joy Buolamwini's Gender Shades study ([SOURCE: Gender Shades — gendershades.org](http://gendershades.org)) showed error rates up to 34% higher for darker-skinned women.";
+  const LINE = "That's a genuinely hard problem I can't fully dismiss.\n\n[SOURCE: Gender Shades — gendershades.org](http://gendershades.org) backs your bias data; I'm not disputing the disparity exists.";
+  const REPLY = `${MID}\n\n${LINE}`;
+
+  test('the link destination goes with the tag; no raw URL is glued to the domain', () => {
+    assert.equal(rewriteSources(MID), "Your strongest attack is accuracy bias — Joy Buolamwini's Gender Shades study (Source: Gender Shades, gendershades.org) showed error rates up to 34% higher for darker-skinned women.");
+    assert.equal(rewriteSources(LINE), "That's a genuinely hard problem I can't fully dismiss.\n\nSource: Gender Shades (gendershades.org) backs your bias data; I'm not disputing the disparity exists.");
+    // The whole server chain for a blocks_v1 client, as the review ran it.
+    const out = transformReply(REPLY, { limit: 3, rewriteSources: true, shuffleQuiz: true });
+    assert.ok(!/http|\]\(|\)\(/.test(out), out);
+    assert.match(out, /\(Source: Gender Shades, gendershades\.org\) showed/);
+    assert.match(out, /Source: Gender Shades \(gendershades\.org\) backs/);
+  });
+
+  test("the link's host fills in a tag with no domain; a path, www and angle brackets are dropped", () => {
+    assert.equal(rewriteSources('[SOURCE: Gender Shades](https://www.gendershades.org/overview.html) found it.'), 'Source: Gender Shades (gendershades.org) found it.');
+    assert.equal(rewriteSources('Fact. [SOURCE: NIST — nist.gov](<https://nist.gov/frvt>)'), 'Fact. Source: NIST (nist.gov)');
+  });
+
+  test('a "(" that is not a link destination stays as written', () => {
+    for (const [input, expected] of [
+      ['[SOURCE: Gender Shades — gendershades.org] (see above) shows it', 'Source: Gender Shades (gendershades.org) (see above) shows it'],
+      ['[SOURCE: Gender Shades — gendershades.org](see above) shows it', 'Source: Gender Shades (gendershades.org)(see above) shows it'],
+      ['[SOURCE: Gender Shades — gendershades.org](2018) shows it', 'Source: Gender Shades (gendershades.org)(2018) shows it'],
+      ['[SOURCE: Gender Shades — gendershades.org](http://gendershades.org', 'Source: Gender Shades (gendershades.org)(http://gendershades.org'],
+    ]) assert.equal(rewriteSources(input), expected, input);
+    const long = `[SOURCE: A — a.org](http://a.org/${'x'.repeat(MAX_LINK_CHARS)})`;
+    assert.equal(rewriteSources(long), `Source: A (a.org)(http://a.org/${'x'.repeat(MAX_LINK_CHARS)})`, 'past MAX_LINK_CHARS it is text');
+  });
+
+  test('a tag at the very end of the stream is still rewritten at flush', () => {
+    const r = createSourceRewriter();
+    assert.equal(r.push('Fact. [SOURCE: NIST — nist.gov]'), 'Fact. ', 'held for the next character');
+    assert.equal(r.flush(), 'Source: NIST (nist.gov)');
+  });
+
+  test('every two-way split, and random chunkings, equal the one-shot result', () => {
+    const oneShot = rewriteSources(REPLY);
+    for (let cut = 0; cut <= REPLY.length; cut += 1) {
+      const r = createSourceRewriter();
+      assert.equal(r.push(REPLY.slice(0, cut)) + r.push(REPLY.slice(cut)) + r.flush(), oneShot, `cut at ${cut}`);
+    }
+    let seed = 11;
+    const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    for (let run = 0; run < 200; run++) {
+      const r = createSourceRewriter();
+      let out = '';
+      for (let i = 0; i < REPLY.length;) {
+        const n = 1 + Math.floor(rand() * 20);
+        out += r.push(REPLY.slice(i, i + n));
+        i += n;
+        assert.ok(!out.includes('[S') && !out.includes('](http'), `run ${run}: raw tag or link emitted`);
+      }
+      assert.equal(out + r.flush(), oneShot, `run ${run}`);
     }
   });
 });
