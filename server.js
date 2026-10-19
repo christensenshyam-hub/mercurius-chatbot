@@ -2011,6 +2011,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       let fullText = '';
 
       // Deterministic formatting (lib/replyPipeline): blocks_v1 clients get
+      // [SOURCE: …] tags as plain "Source: label (domain)" text (AUD-38; the
+      // widget, club_v1, keeps the tag for its own source pill) and
       // each [Q] check's options in the server's stable order (AUD-18), and
       // every reply is reflowed so no prose paragraph exceeds its sentence
       // limit (prompting alone is ~90% compliant at temperature). The
@@ -2019,6 +2021,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // finalize. fullText accumulates the TRANSFORMED text.
       const pipeline = createReplyPipeline({
         limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+        rewriteSources: wantsBlocks && !isWidget,
         shuffleQuiz: wantsBlocks,
       });
 
@@ -2173,6 +2176,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? REFUSAL_COPY
         : transformReply(replyText, {
           limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
+          rewriteSources: wantsBlocks && !isWidget,
           shuffleQuiz: wantsBlocks,
         });
       // Same non-capable scrub as the streaming path (defense in depth).

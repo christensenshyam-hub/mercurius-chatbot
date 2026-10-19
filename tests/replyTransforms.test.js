@@ -12,6 +12,9 @@
 //     client without blocks_v1 keeps the model's order (and its final reply
 //     is scrubbed to prose, as before).
 //   - AUD-17: a tight numbered list and a score rubric arrive whole.
+//   - AUD-38: blocks_v1 clients get [SOURCE: label — url] as "Source: label
+//     (domain)"; the widget (club_v1) keeps the tag for its source pill, and
+//     a client without capabilities (iOS 2.0.0) gets the reply as before.
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -34,7 +37,14 @@ let proc;
 const sid = () => 'xform_' + crypto.randomBytes(8).toString('hex');
 
 before(async () => {
-  const server = spawnServer({ SQLITE_PATH: dbPath, MOCK_STREAM_DELAY_MS: '1' });
+  // Widget turns fetch the club feeds; point them at a closed local port.
+  const server = spawnServer({
+    SQLITE_PATH: dbPath,
+    MOCK_STREAM_DELAY_MS: '1',
+    CLUB_EVENTS_URL: 'http://127.0.0.1:1/events-data.json',
+    CLUB_BLOG_URL: 'http://127.0.0.1:1/blog-content.json',
+    CLUB_FEED_TIMEOUT_MS: '300',
+  });
   proc = server.proc;
   ({ base: BASE } = await server.ready);
 });
@@ -98,7 +108,7 @@ describe('[Q] options in the server order for blocks_v1 clients (AUD-18)', () =>
     const s = sid();
     const out = await stream(s, lessonTurn(QUIZ_REPLY), { capabilities: BLOCKS });
     assert.equal(out.status, 200, out.text.slice(0, 300));
-    const expected = transformReply(QUIZ_REPLY, { limit: 3, shuffleQuiz: true });
+    const expected = transformReply(QUIZ_REPLY, { limit: 3, rewriteSources: true, shuffleQuiz: true });
     assert.equal(out.deltas, expected);
     assert.equal(out.complete.reply, expected);
     assert.equal(savedReply(s), expected);
@@ -120,7 +130,7 @@ describe('[Q] options in the server order for blocks_v1 clients (AUD-18)', () =>
     const s = sid();
     const out = await postJson(s, lessonTurn(QUIZ_REPLY), { capabilities: BLOCKS });
     assert.equal(out.status, 200, JSON.stringify(out.body));
-    const expected = transformReply(QUIZ_REPLY, { limit: 3, shuffleQuiz: true });
+    const expected = transformReply(QUIZ_REPLY, { limit: 3, rewriteSources: true, shuffleQuiz: true });
     assert.equal(out.body.reply, expected);
     assert.equal(savedReply(s), expected);
   });
@@ -164,5 +174,61 @@ describe('reflow end to end (AUD-17)', () => {
     const expected = rubric.replace(/(\*\* — [^\n]*)\n(?=\*\*(?:Evidence|Nuance|Logic|Originality))/g, '$1  \n');
     assert.equal(out.body.reply, expected);
     assert.equal(savedReply(s), expected);
+  });
+});
+
+const SOURCE_REPLY = 'Facial analysis erred far more on darker-skinned women. [SOURCE: Gender Shades — gendershades.org]\n\n' +
+  'Lawyers cited cases that never existed [SOURCE: Mata v. Avianca — the case behind the lawyers story: courtlistener.com/docket/16708263/mata-v-avianca-inc] and were fined.\n\n' +
+  'Who should have checked?';
+const SOURCE_PLAIN = 'Facial analysis erred far more on darker-skinned women. Source: Gender Shades (gendershades.org)\n\n' +
+  'Lawyers cited cases that never existed (Source: Mata v. Avianca — the case behind the lawyers story, courtlistener.com) and were fined.\n\n' +
+  'Who should have checked?';
+
+describe('[SOURCE] tags as plain text for blocks_v1 clients (AUD-38)', () => {
+  test('streaming: deltas, complete reply and saved turn carry the plain source, no path', async () => {
+    const s = sid();
+    const out = await stream(s, [{ role: 'user', content: `MOCK_REPLY:\n${SOURCE_REPLY}` }], { capabilities: BLOCKS });
+    assert.equal(out.status, 200, out.text.slice(0, 300));
+    assert.equal(out.complete.reply, SOURCE_PLAIN);
+    assert.equal(out.deltas, SOURCE_PLAIN);
+    assert.equal(savedReply(s), SOURCE_PLAIN);
+    let sent = '';
+    for (const f of out.deltaFrames) {
+      sent += f;
+      assert.ok(!sent.includes('[S'), 'no raw tag text on the wire');
+    }
+  });
+
+  test('JSON path: the same plain text', async () => {
+    const s = sid();
+    const out = await postJson(s, [{ role: 'user', content: `MOCK_REPLY:\n${SOURCE_REPLY}` }], { capabilities: BLOCKS });
+    assert.equal(out.body.reply, SOURCE_PLAIN);
+    assert.equal(savedReply(s), SOURCE_PLAIN);
+  });
+
+  test('inside a lesson, next to a [Q] check: both transforms apply', async () => {
+    const reply = `Models predict text. [SOURCE: Attention Is All You Need — arxiv.org/abs/1706.03762]\n\n${REAL_BLOCKS[0].block}`;
+    const out = await stream(sid(), lessonTurn(reply), { capabilities: BLOCKS });
+    assert.ok(out.complete.reply.startsWith('Models predict text. Source: Attention Is All You Need (arxiv.org)\n\n[Q]\n'));
+    assert.equal(out.complete.reply, transformReply(reply, { limit: 3, rewriteSources: true, shuffleQuiz: true }));
+    assert.equal(out.deltas, out.complete.reply);
+  });
+
+  test('the widget (club_v1) keeps the tag for its source pill', async () => {
+    const s = sid();
+    const out = await postJson(s, [{ role: 'user', content: `MOCK_REPLY:\n${SOURCE_REPLY}` }], { capabilities: ['club_v1'] });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    assert.equal(out.body.reply, transformReply(SOURCE_REPLY, { limit: 2 }));
+    assert.ok(out.body.reply.includes('[SOURCE: Gender Shades — gendershades.org]'));
+    assert.equal(savedReply(s), out.body.reply);
+    // A widget that also declared blocks_v1 would still want its pill.
+    const both = await postJson(sid(), [{ role: 'user', content: `MOCK_REPLY:\n${SOURCE_REPLY}` }], { capabilities: ['club_v1', 'blocks_v1'] });
+    assert.ok(both.body.reply.includes('[SOURCE: Gender Shades — gendershades.org]'));
+  });
+
+  test('a client without capabilities (iOS 2.0.0) gets the reply as before', async () => {
+    const out = await stream(sid(), [{ role: 'user', content: `MOCK_REPLY:\n${SOURCE_REPLY}` }]);
+    assert.equal(out.complete.reply, transformReply(SOURCE_REPLY, { limit: 2 }));
+    assert.ok(out.complete.reply.includes('[SOURCE: Gender Shades — gendershades.org]'));
   });
 });

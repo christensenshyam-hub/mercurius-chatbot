@@ -70,6 +70,9 @@ import { createRequire } from 'node:module';
 // The blocks_v1 contract lives in one CJS module shared with the server —
 // the gate validates with the same code the scrubber uses, so they can't drift.
 const { validateBlocks, parseQuizInterior, BLOCKS_V1 } = createRequire(import.meta.url)('../lib/blockMarkup.js');
+// blocks_v1 replies carry [SOURCE: …] tags rewritten as "Source: label
+// (domain)" (AUD-38); the metrics treat both forms alike.
+const { REWRITTEN_SOURCE_RE, ENDS_WITH_REWRITTEN_SOURCE_RE } = createRequire(import.meta.url)('../lib/sourceTags.js');
 
 /**
  * "Tap" the [Q] in the previous reply the way the app would: parse the last
@@ -99,7 +102,7 @@ export const PREVIEW_RE =
   /we['’]ll cover|there are (?:two|three|four|\d+)|first,[\s\S]{0,400}?second,|later (?:we|i)['’]ll|next,? we\b/i;
 
 export function stripMarkers(text) {
-  return String(text ?? '').replace(MARKER_RE, ' ').replace(/[ \t]+/g, ' ').trim();
+  return String(text ?? '').replace(MARKER_RE, ' ').replace(REWRITTEN_SOURCE_RE, ' ').replace(/[ \t]+/g, ' ').trim();
 }
 
 /**
@@ -122,7 +125,7 @@ export function countSentences(text) {
 }
 
 export function countLines(text) {
-  const t = String(text ?? '').replace(MARKER_RE, ' ');
+  const t = String(text ?? '').replace(MARKER_RE, ' ').replace(REWRITTEN_SOURCE_RE, ' ');
   return t.split('\n').filter((l) => l.trim().length > 0).length;
 }
 
@@ -152,6 +155,7 @@ export function isTruncated(text) {
   // words before the marker lack terminal punctuation ("Grade: A").
   const raw = String(text ?? '').trim();
   if (/(\[CHECK\]|\[\/CHECK\]|\[LESSON_COMPLETE\]|\[SOURCE:[^\]]*\]|\[\/KEY\]|\[\/EX\]|\[\/Q\])$/.test(raw)) return false;
+  if (ENDS_WITH_REWRITTEN_SOURCE_RE.test(raw)) return false;
   // Emoji are a deliberate ending too ("…own this. 🎯") — strip any trailing
   // emoji/pictographs (plus joiners and variation selectors) before the
   // terminal-punctuation check so they don't read as a mid-sentence cutoff.

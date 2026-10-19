@@ -91,6 +91,22 @@ describe('eval-pacing metrics', () => {
     );
   });
 
+  test('the rewritten source forms blocks_v1 replies carry (AUD-38) measure like the raw tag', async () => {
+    const { stripMarkers, countLines, countSentences, isTruncated } = await modP;
+    const { rewriteSources } = require('../lib/sourceTags');
+    const raw = 'ProPublica found bias. [SOURCE: Machine Bias — propublica.org/article/x]\n\n' +
+      'COMPAS was approved [SOURCE: Machine Bias — propublica.org/x] anyway.\n\n[SOURCE: Gender Shades — gendershades.org]\n\nWhat follows?';
+    const rewritten = rewriteSources(raw);
+    assert.ok(!rewritten.includes('[SOURCE'));
+    assert.equal(stripMarkers(rewritten), stripMarkers(raw));
+    assert.equal(countLines(rewritten), countLines(raw));
+    assert.equal(countSentences(rewritten), countSentences(raw));
+    // A lesson reply that ends on its source was not cut off.
+    const ending = 'That is exactly the skill this lesson is about.\n\n[SOURCE: Algorithmic Justice League — ajl.org]';
+    assert.equal(isTruncated(ending), false);
+    assert.equal(isTruncated(rewriteSources(ending)), false);
+  });
+
   test('median and percentile helpers', async () => {
     const { median, percentile } = await modP;
     assert.equal(median([1, 2, 3, 4, 5]), 3);

@@ -16,6 +16,7 @@ const LESSON_REPLY = [
   '[KEY]An LLM continues text; it does not retrieve facts.[/KEY]',
   '[EX]Ask it for a court case and it writes something case-shaped. Lawyers learned this in 2023. It cost them.[/EX]',
   'Steps to check a claim:\n1. Find the source. Open it.\n2. Read the date. Check it.\n3. Compare two sources. Note gaps.',
+  'Courts fined the lawyers. [SOURCE: Mata v. Avianca — courtlistener.com/docket/1/x] It was public [SOURCE: Reuters — reuters.com/a] news.',
   REAL_BLOCKS[1].block,
 ].join('\n\n');
 
@@ -52,7 +53,8 @@ describe('replyPipeline', () => {
   test('chunk fuzz: any chunking of the chain equals the one-shot transform', () => {
     let seed = 99;
     const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-    for (const opts of [{ limit: 2 }, { limit: 3, shuffleQuiz: true }, { limit: Infinity, shuffleQuiz: true }]) {
+    for (const opts of [{ limit: 2 }, { limit: 3, shuffleQuiz: true }, { limit: Infinity, shuffleQuiz: true },
+      { limit: 3, rewriteSources: true, shuffleQuiz: true }, { limit: 2, rewriteSources: true }]) {
       const oneShot = transformReply(LESSON_REPLY, opts);
       for (const sizes of [[1], [2], [3], [12], [LESSON_REPLY.length]]) {
         assert.equal(chunked(LESSON_REPLY, opts, sizes), oneShot, `${JSON.stringify(opts)} sizes ${sizes}`);
@@ -64,10 +66,20 @@ describe('replyPipeline', () => {
     }
   });
 
+  test('all three stages: sources rewritten first, then the quiz order, then the reflow', () => {
+    const out = transformReply(LESSON_REPLY, { limit: 3, rewriteSources: true, shuffleQuiz: true });
+    assert.ok(!out.includes('[SOURCE'));
+    assert.ok(out.includes('Courts fined the lawyers. Source: Mata v. Avianca (courtlistener.com) It was public (Source: Reuters, reuters.com) news.'), out);
+    assert.ok(out.includes(shuffleQuizzes(REAL_BLOCKS[1].block)));
+    // Without the flag the tag is left for clients that render it.
+    assert.ok(transformReply(LESSON_REPLY, { limit: 3 }).includes('[SOURCE: Mata v. Avianca — courtlistener.com/docket/1/x]'));
+  });
+
   test('a reply ending inside held text still comes out whole at flush', () => {
-    for (const text of ['Almost done [Q', 'Unclosed [Q]\nPick\nA) one', 'Ends on a terminal.', '']) {
-      assert.equal(transformReply(text, { limit: 2, shuffleQuiz: true }), text);
-      assert.equal(chunked(text, { limit: 2, shuffleQuiz: true }, [1]), text);
+    for (const text of ['Almost done [Q', 'Unclosed [Q]\nPick\nA) one', 'Ends on a terminal.', 'Ends mid-tag [SOURCE: Gender', '']) {
+      const opts = { limit: 2, rewriteSources: true, shuffleQuiz: true };
+      assert.equal(transformReply(text, opts), text);
+      assert.equal(chunked(text, opts, [1]), text);
     }
   });
 });
