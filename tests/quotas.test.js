@@ -299,7 +299,7 @@ describe('session daily image cap', () => {
     assert.equal(r.ok, false);
     assert.equal(r.scope, 'session');
     assert.equal(r.reason, 'images');
-    assert.equal(r.message, "You've used today's image uploads. Mercurius will be ready again tomorrow.");
+    assert.equal(r.message, "You've used today's photo uploads — you can still type your question. Photos come back tomorrow.");
 
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).ok, true);
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }).ok, true);

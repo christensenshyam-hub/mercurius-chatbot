@@ -78,6 +78,13 @@ describe('daily-limit copy contract (AUD-30, PR #43)', () => {
     quotas.__resetForTest();
   });
 
+  test("the photo allowance says typing still works, and keeps that after PR #43 drops the 'tomorrow' sentence", () => {
+    const copy = messages.images;
+    assert.match(copy, /you can still type/i);
+    assert.doesNotMatch(copy, /Mercurius will be ready/, 'the tutor is not closed: only photos are');
+    assert.match(droppingTomorrow(copy), /you can still type your question\.$/);
+  });
+
   test("the copy alone tells the network's allowance from the student's", () => {
     for (const c of calls) {
       assert.equal(namesNetwork(messages[c.reason]), c.scope === 'ip', `${c.scope} ${c.reason}: ${messages[c.reason]}`);
