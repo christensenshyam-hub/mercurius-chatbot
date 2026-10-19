@@ -17,24 +17,36 @@ struct GateStepContainer<Content: View, CTA: View>: View {
     /// accessibility sizes. For a screen whose pinned controls are tall
     /// (the disclosure's consent switch), so its rows get the room.
     let headingAlwaysScrolls: Bool
+    /// The scroll content's required control (`.id`), and a counter the step
+    /// bumps to bring it into view: a tap on a pinned button that is still
+    /// disabled because that control is off-screen (accessibility sizes).
+    let revealID: String?
+    let revealRequest: Int
     let content: () -> Content
     let cta: () -> CTA
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         title: String,
         subtitle: String? = nil,
         headingAlwaysScrolls: Bool = false,
+        revealID: String? = nil,
+        revealRequest: Int = 0,
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder cta: @escaping () -> CTA
     ) {
         self.title = title
         self.subtitle = subtitle
         self.headingAlwaysScrolls = headingAlwaysScrolls
+        self.revealID = revealID
+        self.revealRequest = revealRequest
         self.content = content
         self.cta = cta
     }
+
+    static var edgeFadeHeight: CGFloat { 20 }
 
     /// Whether the heading scrolls with the content rather than sitting
     /// above it. It starts in the same place either way; it only differs
@@ -50,21 +62,44 @@ struct GateStepContainer<Content: View, CTA: View>: View {
                 heading
             }
 
-            ScrollView {
-                VStack(spacing: BrandSpacing.xl) {
-                    if headingScrolls {
-                        heading
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: BrandSpacing.xl) {
+                        if headingScrolls {
+                            heading
+                        }
+                        content()
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, BrandSpacing.xl)
                     }
-                    content()
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, BrandSpacing.xl)
+                    // Lets the last line clear the edge fade at the end.
+                    .padding(.bottom, Self.edgeFadeHeight)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                // A line running on under the pinned controls fades out
+                // rather than being sliced mid-line (the SE's retention row
+                // under the pinned consent switch): it reads as "more below".
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [BrandColor.background.opacity(0), BrandColor.background],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.edgeFadeHeight)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                // On a short screen the rows run on under the pinned controls
+                // (the consent switch, AUD-50): flash the indicator so it's clear
+                // there's more to read.
+                .scrollIndicatorsFlash(onAppear: true)
+                .onChange(of: revealRequest) { _, _ in
+                    guard let revealID else { return }
+                    // Bottom, not centre: the control then sits right above
+                    // the button it enables, and a consent row taller than
+                    // the screen (AX5) shows its foot, where the switch is.
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
+                        proxy.scrollTo(revealID, anchor: .bottom)
+                    }
                 }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            // On a short screen the rows run on under the pinned controls
-            // (the consent switch, AUD-50): flash the indicator so it's clear
-            // there's more to read.
-            .scrollIndicatorsFlash(onAppear: true)
 
             GatePinnedCTA(content: cta)
         }
@@ -110,6 +145,56 @@ private struct GatePinnedCTA<Content: View>: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, BrandSpacing.xl)
         .padding(.bottom, BrandSpacing.xl)
+    }
+}
+
+/// Why a pinned button is still dimmed, when the control that enables it
+/// may be scrolled out of sight (accessibility sizes, AUD-12/AUD-50). Only
+/// VoiceOver heard the button's hint before; a student tapping the dimmed
+/// button saw nothing happen. The line says what to do, and tapping it (or
+/// the dimmed button, see `revealsOnTap`) scrolls to the control and
+/// outlines it.
+struct GateRequiredControlHint: View {
+    let text: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(text, systemImage: "arrow.up.circle")
+                .font(BrandFont.caption.weight(.semibold))
+                .foregroundStyle(BrandColor.accentText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Pinned chrome on a screen already short of room: it stops growing
+        // at AX2 (long-press shows it large).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .accessibilityShowsLargeContentViewer()
+        .accessibilityHint("Scrolls to it")
+    }
+}
+
+/// How long a revealed control stays outlined.
+enum GateReveal {
+    static let highlightSeconds: Double = 1.6
+}
+
+extension View {
+    /// While `active`, a tap anywhere on this (disabled) button runs `reveal`
+    /// instead of doing nothing. Hidden from VoiceOver, which reads the
+    /// button's own hint.
+    func revealsOnTap(_ active: Bool, reveal: @escaping () -> Void) -> some View {
+        overlay {
+            if active {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: reveal)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 
@@ -266,11 +351,27 @@ struct AgeStep: View {
     static let wheelMinHeight: CGFloat = 150
 
     @State private var selectedAge: Int?
+    @State private var revealRequest = 0
+    @State private var highlightsWheel = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let wheelHint = "Pick your age on the wheel to continue"
+
+    /// At accessibility sizes the heading can push the wheel out of sight
+    /// (an SE at AX5 opens with no wheel and a dimmed Continue), so until an
+    /// age is picked a visible line says what Continue is waiting for.
+    static func showsWheelHint(hasPick: Bool, at size: DynamicTypeSize) -> Bool {
+        !hasPick && size.isAccessibilitySize
+    }
 
     var body: some View {
+        let showsHint = Self.showsWheelHint(hasPick: selectedAge != nil, at: dynamicTypeSize)
         GateStepContainer(
             title: "How old are you?",
-            subtitle: "Checked on this device only — your age isn't saved or sent anywhere."
+            subtitle: "Checked on this device only — your age isn't saved or sent anywhere.",
+            revealID: Self.wheelID,
+            revealRequest: revealRequest
         ) {
             Picker("Age", selection: $selectedAge) {
                 Text("Select your age").tag(Int?.none)
@@ -286,11 +387,35 @@ struct AgeStep: View {
             // AX5 it had shrunk to an 11 pt strip (AUD-12).
             .frame(minHeight: AgeStep.wheelMinHeight)
             .accessibilityIdentifier("onboarding.agePicker")
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                    .strokeBorder(BrandColor.accent, lineWidth: 3)
+                    .opacity(highlightsWheel ? 1 : 0)
+                    .allowsHitTesting(false)
+            )
+            .id(Self.wheelID)
         } cta: {
             DuoButton("Continue", style: .primary, isEnabled: selectedAge != nil) {
                 if let selectedAge { onContinue(selectedAge) }
             }
+            .revealsOnTap(showsHint, reveal: revealWheel)
             .accessibilityIdentifier("onboarding.ageContinue")
+            .accessibilityHint(selectedAge == nil ? "Pick your age on the wheel first" : "")
+
+            if showsHint {
+                GateRequiredControlHint(text: Self.wheelHint, action: revealWheel)
+                    .accessibilityIdentifier("onboarding.ageHint")
+            }
+        }
+    }
+
+    private static let wheelID = "onboarding.ageWheel"
+
+    private func revealWheel() {
+        revealRequest += 1
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { highlightsWheel = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + GateReveal.highlightSeconds) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { highlightsWheel = false }
         }
     }
 }
@@ -319,7 +444,21 @@ struct DisclosureStep: View {
     let onNotNow: () -> Void
 
     @State private var agreed = false
+    @State private var revealRequest = 0
+    @State private var highlightsSwitch = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let switchHint = "Turn on the switch above to continue"
+
+    /// Where the switch scrolls with the rows (accessibility sizes) it is
+    /// usually out of sight when the screen opens, so until it's on a
+    /// visible line under "Agree" says what Agree is waiting for.
+    static func showsSwitchHint(agreed: Bool, at size: DynamicTypeSize) -> Bool {
+        !agreed && !pinsConsentToggle(at: size)
+    }
+
+    private static let switchID = "onboarding.consentRow"
 
     /// What the disclosure says, row by row, in order. Plain data so the
     /// copy is pinned by a test; changing it is a consent-copy change (see
@@ -329,7 +468,8 @@ struct DisclosureStep: View {
          "Your messages — and any photos you attach — are sent through our server to Anthropic's Claude to generate replies."),
         ("clock.arrow.circlepath",
          "Our server keeps your messages for 90 days and photos for 24 hours, then deletes them. "
-            + "You can delete them sooner in Settings → Delete my data. Deleting the app doesn't."),
+            + "You can delete them sooner in Settings → Delete my data & start over. "
+            + "Deleting the app doesn't delete them."),
         ("person.crop.circle.badge.questionmark",
          "There's no account. Mercurius uses an anonymous ID stored on this device to keep your chats together."),
     ]
@@ -350,12 +490,15 @@ struct DisclosureStep: View {
 
     var body: some View {
         let pinsToggle = Self.pinsConsentToggle(at: dynamicTypeSize)
+        let showsHint = Self.showsSwitchHint(agreed: agreed, at: dynamicTypeSize)
         GateStepContainer(
             title: "Before you start",
             subtitle: "Here's exactly what happens with what you type.",
             // With the switch pinned, the heading scrolls away so the rows
             // get its room: on an SE at xxxLarge the rows had a ~75 pt window.
-            headingAlwaysScrolls: pinsToggle
+            headingAlwaysScrolls: pinsToggle,
+            revealID: Self.switchID,
+            revealRequest: revealRequest
         ) {
             VStack(alignment: .leading, spacing: BrandSpacing.lg) {
                 ForEach(Self.rows, id: \.symbol) { row in
@@ -370,6 +513,7 @@ struct DisclosureStep: View {
 
                 if !pinsToggle {
                     consentToggle
+                        .id(Self.switchID)
                 }
             }
             .padding(.top, BrandSpacing.sm)
@@ -379,9 +523,15 @@ struct DisclosureStep: View {
             }
 
             DuoButton("Agree and continue", style: .primary, isEnabled: agreed, action: onAgree)
+                .revealsOnTap(showsHint, reveal: revealSwitch)
                 .accessibilityIdentifier("onboarding.agree")
                 .accessibilityHint(agreed ? "Continues to what Merc can't do"
                                           : "Turn on the switch above to continue")
+
+            if showsHint {
+                GateRequiredControlHint(text: Self.switchHint, action: revealSwitch)
+                    .accessibilityIdentifier("onboarding.consentHint")
+            }
 
             Button(action: onNotNow) {
                 Text("Not now")
@@ -423,9 +573,17 @@ struct DisclosureStep: View {
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
-                .strokeBorder(agreed ? BrandColor.accent : BrandColor.border,
-                              lineWidth: agreed ? 1.5 : 1)
+                .strokeBorder(agreed || highlightsSwitch ? BrandColor.accent : BrandColor.border,
+                              lineWidth: highlightsSwitch ? 3 : (agreed ? 1.5 : 1))
         )
+    }
+
+    private func revealSwitch() {
+        revealRequest += 1
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { highlightsSwitch = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + GateReveal.highlightSeconds) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { highlightsSwitch = false }
+        }
     }
 
     private func disclosureRow(symbol: String, text: String) -> some View {

@@ -960,6 +960,38 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// At accessibility sizes the consent switch scrolls with the rows and
+    /// opens out of sight, under a dimmed "Agree and continue". A visible
+    /// line says what Agree is waiting for, and tapping the dimmed button
+    /// scrolls the switch into view instead of doing nothing.
+    @MainActor
+    func testDimmedAgreeShowsTheSwitchAtLargestTextSize() {
+        let app = launchApp(contentSize: Self.largestTextSize,
+                            extraArgs: Self.freshInstallArgs + ["-GateStep", "disclosure"])
+        let agree = onboardingElement(app, "onboarding.agree")
+        XCTAssertTrue(agree.waitForExistence(timeout: Self.firstScreenTimeout), "Disclosure did not appear")
+        XCTAssertFalse(agree.isEnabled, "Agree must wait for the switch")
+        let hint = onboardingElement(app, "onboarding.consentHint")
+        XCTAssertTrue(hint.exists, "No visible line says what Agree is waiting for")
+
+        let toggle = onboardingElement(app, "onboarding.consentToggle")
+        let innerSwitch = toggle.descendants(matching: .switch).firstMatch
+        let switchControl = innerSwitch.exists ? innerSwitch : toggle
+        func switchInView() -> Bool {
+            switchControl.exists && switchControl.isHittable && switchControl.frame.maxY <= agree.frame.minY
+        }
+        XCTAssertFalse(switchInView(), "The switch is already in view: this screen no longer tests the reveal")
+
+        agree.tap()
+        let revealed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in switchInView() }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [revealed], timeout: 3), .completed,
+                       "Tapping the dimmed Agree didn't bring the switch into view")
+        switchControl.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(agree.isEnabled)
+        XCTAssertFalse(hint.exists, "The line should go once the switch is on")
+    }
+
     @MainActor
     func testHeaderRemainsVisibleAtAccessibilityTextSize() {
         // At XXL accessibility text size the header used to overflow the

@@ -41,8 +41,9 @@ struct GateCopyTests {
     func disclosureRetention() {
         #expect(disclosure.contains("90 days"))
         #expect(disclosure.contains("photos for 24 hours"))
-        #expect(disclosure.contains("Settings → Delete my data"))
-        #expect(disclosure.contains("Deleting the app doesn't"))
+        // Names the button as Settings labels it, and ends on a sentence.
+        #expect(disclosure.contains("Settings → Delete my data & start over."))
+        #expect(disclosure.contains("Deleting the app doesn't delete them."))
         // The rows the screen had before stay, in their order around the new one.
         #expect(DisclosureStep.rows.map(\.symbol)
                 == ["paperplane", "clock.arrow.circlepath", "person.crop.circle.badge.questionmark"])
@@ -63,6 +64,25 @@ struct GateCopyTests {
         #expect(LimitsStep.rows.count == 4)
         #expect(LimitsStep.subtitle.hasPrefix("Four things"))
         #expect(Set(LimitsStep.rows.map(\.symbol)).count == LimitsStep.rows.count)
+    }
+
+    @Test("Where the switch scrolls out of sight, a visible line says what Agree is waiting for")
+    func consentSwitchHint() {
+        #expect(!DisclosureStep.showsSwitchHint(agreed: false, at: .large), "the switch is pinned in view")
+        #expect(!DisclosureStep.showsSwitchHint(agreed: false, at: .xxxLarge), "the switch is pinned in view")
+        #expect(DisclosureStep.showsSwitchHint(agreed: false, at: .accessibility1))
+        #expect(DisclosureStep.showsSwitchHint(agreed: false, at: .accessibility5))
+        #expect(!DisclosureStep.showsSwitchHint(agreed: true, at: .accessibility5), "nothing left to do")
+        #expect(DisclosureStep.switchHint == "Turn on the switch above to continue")
+    }
+
+    @Test("At accessibility sizes, a visible line says Continue is waiting for an age")
+    func ageWheelHint() {
+        #expect(!AgeStep.showsWheelHint(hasPick: false, at: .large))
+        #expect(!AgeStep.showsWheelHint(hasPick: false, at: .xxxLarge))
+        #expect(AgeStep.showsWheelHint(hasPick: false, at: .accessibility1))
+        #expect(AgeStep.showsWheelHint(hasPick: false, at: .accessibility5))
+        #expect(!AgeStep.showsWheelHint(hasPick: true, at: .accessibility5))
     }
 
     @Test("The consent switch is pinned above Agree up to xxxLarge, and scrolls with the rows at accessibility sizes")
