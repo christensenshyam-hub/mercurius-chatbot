@@ -236,7 +236,7 @@ public struct RootView: View {
         VStack(spacing: BrandSpacing.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(BrandColor.error)
+                .foregroundStyle(BrandColor.errorText)
             Text("Couldn't start")
                 .font(BrandFont.title)
                 .foregroundStyle(BrandColor.text)

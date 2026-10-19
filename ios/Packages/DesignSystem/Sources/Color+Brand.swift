@@ -67,6 +67,10 @@ public enum BrandColor {
     /// Red for fills and strokes. For text or a glyph, use `errorText`.
     public static let error = Color(red: 0xEF / 255, green: 0x44 / 255, blue: 0x44 / 255)
 
+    /// Red for text and state glyphs (a failed reply's reason, a wrong
+    /// answer's mark). The fill red was 3.6:1 as text in light mode.
+    public static let errorText = adaptive(BrandPalette.errorText)
+
     /// Green for fills and strokes. For text or a glyph, use `successText`.
     public static let success = Color(red: 0x22 / 255, green: 0xC5 / 255, blue: 0x5E / 255)
 
@@ -129,6 +133,8 @@ enum BrandPalette {
     /// tinted correct-answer row over an elevated card); the fill green in
     /// dark, where it already reads at 5:1 or better.
     static let successText = Pair(light: 0x166534, dark: 0x22C55E)
+    /// Red 700 in light mode, red 400 in dark.
+    static let errorText = Pair(light: 0xB91C1C, dark: 0xF87171)
 }
 
 // MARK: - Brand gradient

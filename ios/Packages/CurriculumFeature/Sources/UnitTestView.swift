@@ -225,7 +225,7 @@ public struct UnitTestView: View {
             if let error = model.defenseError {
                 Text(error)
                     .font(BrandFont.caption)
-                    .foregroundStyle(BrandColor.error)
+                    .foregroundStyle(BrandColor.errorText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -332,7 +332,7 @@ public struct UnitTestView: View {
     private func resultRow(label: String, detail: String, ok: Bool) -> some View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(ok ? BrandColor.successText : BrandColor.error)
+                .foregroundStyle(ok ? BrandColor.successText : BrandColor.errorText)
             Text(label)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.text)

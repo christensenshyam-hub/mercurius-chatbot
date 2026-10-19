@@ -146,7 +146,7 @@ struct CheckQuizCard: View {
     private func letterColor(isAnswer: Bool, isPick: Bool) -> Color {
         guard graded else { return BrandColor.accentText }
         if isAnswer { return BrandColor.successText }
-        if isPick { return BrandColor.error }
+        if isPick { return BrandColor.errorText }
         return BrandColor.accentText
     }
 
@@ -189,7 +189,7 @@ struct CheckQuizCard: View {
                 } else if graded && isPick {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(BrandColor.error)
+                        .foregroundStyle(BrandColor.errorText)
                 }
             }
             .padding(.vertical, 10)

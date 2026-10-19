@@ -65,6 +65,7 @@ struct BrandContrastTests {
         ("textSecondary", BrandPalette.textSecondary),
         ("accentText", BrandPalette.accentText),
         ("successText", BrandPalette.successText),
+        ("errorText", BrandPalette.errorText),
     ]
 
     /// The three page and card surfaces.
@@ -105,6 +106,11 @@ struct BrandContrastTests {
         .init(name: "correct mark, elevated card", text: BrandPalette.successText,
               tint: BrandPalette.success, alpha: 0.18, base: BrandPalette.surfaceElevated),
         // Answer text on the selected, correct and wrong rows.
+        // A wrong pick's mark on its red row.
+        .init(name: "wrong mark", text: BrandPalette.errorText,
+              tint: BrandPalette.error, alpha: 0.15, base: BrandPalette.surface),
+        .init(name: "wrong mark, elevated card", text: BrandPalette.errorText,
+              tint: BrandPalette.error, alpha: 0.15, base: BrandPalette.surfaceElevated),
         .init(name: "selected answer", text: BrandPalette.text,
               tint: BrandPalette.accent, alpha: 0.18, base: BrandPalette.surface),
         .init(name: "correct answer", text: BrandPalette.text,
@@ -148,6 +154,9 @@ struct BrandContrastTests {
         let greenOnSurface = Self.contrast(Self.shade(BrandPalette.success, .light),
                                            Self.shade(BrandPalette.surface, .light))
         #expect(greenOnSurface < 3)
+        let redOnBackground = Self.contrast(Self.shade(BrandPalette.error, .light),
+                                            Self.shade(BrandPalette.background, .light))
+        #expect(redOnBackground < Self.minimum)
     }
 
     @Test("The audit's measurements reproduce (check question 3.95:1, 'Nailed it!' 2.28:1)")

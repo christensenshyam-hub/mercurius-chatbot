@@ -66,7 +66,7 @@ struct ChatInputBar: View {
             if let note = ComposerLimit.note(count: text.utf16.count, limit: characterLimit, wasCut: wasCut) {
                 Text(note)
                     .font(BrandFont.caption)
-                    .foregroundStyle(wasCut ? BrandColor.error : BrandColor.textSecondary)
+                    .foregroundStyle(wasCut ? BrandColor.errorText : BrandColor.textSecondary)
                     .monospacedDigit()
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityIdentifier("composer.limit")
@@ -120,7 +120,7 @@ struct ChatInputBar: View {
     private func attachmentFailure(_ message: String, clear: @escaping () -> Void) -> some View {
         Text(message)
             .font(BrandFont.caption)
-            .foregroundStyle(BrandColor.error)
+            .foregroundStyle(BrandColor.errorText)
             .padding(.leading, 44)  // align past the photo button
             .task(id: message) {
                 try? await Task.sleep(for: .seconds(3))

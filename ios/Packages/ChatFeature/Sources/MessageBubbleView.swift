@@ -460,7 +460,7 @@ struct MessageBubbleView: View {
     private func failureLabel(_ reason: String) -> some View {
         Label(reason, systemImage: "exclamationmark.circle.fill")
             .font(BrandFont.caption)
-            .foregroundStyle(BrandColor.error)
+            .foregroundStyle(BrandColor.errorText)
             .padding(.horizontal, BrandSpacing.sm)
     }
 

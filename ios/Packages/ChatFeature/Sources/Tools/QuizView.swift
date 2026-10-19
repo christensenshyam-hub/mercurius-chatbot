@@ -195,7 +195,7 @@ public struct QuizView: View {
                     .foregroundStyle(
                         isUserCorrect ? BrandColor.successText :
                             (isCorrectOption ? BrandColor.successText :
-                                (isUserWrong ? BrandColor.error : BrandColor.textSecondary))
+                                (isUserWrong ? BrandColor.errorText : BrandColor.textSecondary))
                     )
                     .accessibilityHidden(true)
                 }

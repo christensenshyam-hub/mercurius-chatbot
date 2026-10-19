@@ -106,7 +106,7 @@ struct UnitTestOptionRow: View {
         switch state.grade {
         case .open:                         return state.isSelected ? BrandColor.accentText : BrandColor.textSecondary
         case .correctPick, .correctAnswer:  return BrandColor.successText
-        case .wrongPick:                    return BrandColor.error
+        case .wrongPick:                    return BrandColor.errorText
         case .other:                        return BrandColor.textSecondary
         }
     }
@@ -136,7 +136,7 @@ struct UnitTestOptionRow: View {
         case .open, .other:  return nil
         case .correctPick:   return ("checkmark.circle.fill", BrandColor.successText)
         case .correctAnswer: return ("checkmark.circle", BrandColor.successText)
-        case .wrongPick:     return ("xmark.circle.fill", BrandColor.error)
+        case .wrongPick:     return ("xmark.circle.fill", BrandColor.errorText)
         }
     }
 }
