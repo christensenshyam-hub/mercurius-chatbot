@@ -34,7 +34,8 @@ open Mercurius.xcodeproj
 - **Simulator:** ⌘R in Xcode.
 - **Tests (all):** ⌘U in Xcode.
 - **Tests (package only):** `swift test` inside `Packages/`.
-- **Mac app:** scheme `MercuriusMac` (⌘R), or `xcodebuild build -scheme MercuriusMac -destination 'platform=macOS'`. Screenshots: `scripts/mac-snapshots.sh <dir>` (the app renders its own window; no Screen Recording permission).
+- **Mac app:** scheme `MercuriusMac` (⌘R), or `xcodebuild build -scheme MercuriusMac -destination 'platform=macOS'`. Screenshots: `scripts/mac-snapshots.sh <dir>` (the app renders its own window; no Screen Recording permission); Mac App Store screenshots: `scripts/mac-store-screenshots.sh <dir>`. A built bundle's store answers: `scripts/mac-bundle-check.sh <Mercurius.app> debug|release`.
+- **Release:** `scripts/provision.sh [--platform mac]` (one-time signing assets; `--check` is read-only), then `scripts/release.sh [--platform mac]` (archive → export → upload; `--no-upload` stops after export). Both stop with a plain explanation when App Store Connect refuses for an unaccepted agreement.
 
 ## Bundle identifier
 

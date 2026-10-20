@@ -50,17 +50,20 @@ Today the server can't tell a Mac from an iPhone. Every request carries only `Co
    - the lesson-complete card;
    - dark mode checked in every state.
    It also found that macOS gives SwiftUI apps no Dynamic Type (measured).
-3. **Release.**
-   - Create the Mac App Store provisioning profile "Mercurius Mac App Store" for the real id and a Mac Installer Distribution certificate.
-   - Add a `release.sh --mac` path: archive → export → `.pkg` → upload.
-   - In App Store Connect, add the macOS platform to the existing app record (universal purchase), plus Mac screenshots and the same privacy label.
-   - Add a CI job that builds `MercuriusMac` on macos-14 / Xcode 16.2, and the `X-Mercurius-Client` header.
+3. **Tests, CI and release tooling** (done; `03-tests-ci-release.md`).
+   - Tests for the sidebar's routing, the composer's Return key and send rule, the snapshot harness's arguments (and the scripts that pass them), and the release settings across `project.yml`, the export options and the scripts.
+   - A `mac` CI job: unsigned Debug and universal Release builds, `mac-bundle-check.sh`, a launch smoke test.
+   - `provision.sh --platform mac` / `--check`, `release.sh --platform mac`, `ExportOptionsMac.plist`, `asc-api.sh` (a plain message for the App Store Connect 403 about an unaccepted agreement).
+   - `mac-store-screenshots.sh` (2560 × 1600; 2880 × 1800 needs a taller display).
+   - `docs/APP_STORE_LISTING.md` §7 and `FOUNDER_STEPS.md`.
+4. **Founder: ship it** (`FOUNDER_STEPS.md`). Accept the agreement that makes App Store Connect answer 403, run `provision.sh --platform mac`, add the macOS platform to the record, `release.sh --platform mac`, rehearse from TestFlight, take the store screenshots on an unlocked Mac, submit.
 
-   Also open:
-   - window state restoration and the App Store review prompt on the Mac;
-   - a Mac UI-test target (clicking through delete, withdraw and report);
-   - the Mac wording of the network messages ("try cellular data") and of the consent disclosure's Settings path;
-   - a text-size control.
+Still open (not started):
+- the `X-Mercurius-Client` header (client side; the server change that reads it is separate);
+- window state restoration and the App Store review prompt on the Mac;
+- a Mac UI-test target (clicking through delete, withdraw and report). It would drive the real pointer and keyboard of whatever Mac runs it, and macOS asks for an administrator to allow UI automation, so it suits CI better than the founder's Mac;
+- the Mac wording of the network messages ("try cellular data") and of the consent disclosure's Settings path;
+- a text-size control.
 
 ## Open questions for the founder
 
