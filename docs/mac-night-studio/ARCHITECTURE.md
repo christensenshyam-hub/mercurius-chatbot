@@ -145,6 +145,15 @@ The window's own chrome stays the system's: the sidebar, toolbar, menus and the 
 1. **The canvas glow is a surface too.** Text directly over the peak of both glow pools falls under 4.5 with the lab's opacities (16% and 10% light, 34% and 22% dark): ink3 drops to 4.07 (light) and 3.41 (dark). Either cap the pools at 10% and 6% (light) and 18% and 12% (dark), the worst case then being 4.58 and 4.74, or keep text off the bare canvas. Whichever is chosen, `NightContrastTests` must include the glow peak.
 2. **White on `accent` `#6366F1` is 4.47:1.** Today's student bubble (white text on an `accent`→`accentLight` gradient) is under AA at its lightest stop. Night's tinted card with ink text (15.4) fixes it on the Mac.
 
+> **Reconciling with SPEC.md.** `SPEC.md` (c7df5eb) was committed in parallel with this note and agrees on the mechanism: `BrandColor` is remapped under `#if os(macOS)`, Night lives in `DesignSystem/Sources/Night/`, and the views change only in Mac branches. Two differences, and which one wins:
+>
+> - **Token values: SPEC.md's win.** It moves `ink3` to `#575F83` / `#959DCB` and dark `errorText` to `#FCA5A5`, to keep a margin under the glow pools (§2.3's first finding), and it adds the Increase Contrast column.
+> - **Where the Night files compile.** SPEC.md wraps every Night file in `#if os(macOS)`; §2.4 below has them platform-neutral. Both keep iOS unchanged.
+>   - SPEC.md's choice is the stricter one: `ios-source-diff.py` then reports the files as `new/mac` and iOS compiles nothing new.
+>   - Its cost: CI's iOS build doesn't compile the Night components until roadmap Q8 lifts the guard.
+>
+>   Follow SPEC.md. Lifting the guard is one line per file when iOS adopts Night.
+
 ### 2.4 Layer 2: Night components in DesignSystem
 
 These are new files under `DesignSystem/Sources/Night/`. They are platform-neutral and not `#if DEBUG`, and every name has a `Night`/`night` prefix, so no new overload or extension member can capture an existing iOS call.
