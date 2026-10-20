@@ -75,6 +75,8 @@ struct ChatInputBar: View {
     @State private var pasteMonitor: Any?
     @State private var pasteContext = ComposerPasteContext()
     @Environment(\.isEnabled) private var isEnabled
+    @NightSettings private var night
+    @State private var attachHovered = false
     #endif
 
     var body: some View {
@@ -100,6 +102,9 @@ struct ChatInputBar: View {
                     .accessibilityIdentifier("composer.limit")
             }
 
+            #if os(macOS)
+            nightFieldRow
+            #else
             HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
                 photoButton
 
@@ -146,10 +151,19 @@ struct ChatInputBar: View {
 
                 actionButton
             }
+            #endif
         }
+        #if os(macOS)
+        // Night Studio: the composer floats on the canvas (no band of its
+        // own behind it).
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 14)
+        #else
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.vertical, BrandSpacing.sm)
         .background { composerBackground }
+        #endif
         .onChange(of: pickerItem) { _, newItem in
             loadPickedImage(newItem)
         }
@@ -229,6 +243,132 @@ struct ChatInputBar: View {
         .disabled(isSending)
         .help("Attach an image (⇧⌘A). You can also drag one here or paste it.")
         .accessibilityLabel("Attach image")
+    }
+
+    /// Night Studio's composer (SPEC.md §5.4): one floating-chrome field
+    /// with the attach button inside it at the leading end and the send
+    /// circle at the trailing end; a `fieldStroke` edge (≥ 3:1) that turns
+    /// into Night's focus ring (`focusRing`, 2 pt, 3 under Increase
+    /// Contrast) while the field has focus (the field's own is off). Every key, drop and paste behaviour is the
+    /// field's, as before.
+    private var nightFieldRow: some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let prompt = Self.placeholder(placeholder, compact: compactPlaceholder, at: dynamicTypeSize)
+        return HStack(alignment: .bottom, spacing: 8) {
+            nightAttachButton
+            // The placeholder is drawn here, in `ink3` (5.3:1 on the chrome
+            // at worst): the Mac draws a field's own prompt in its faint
+            // system placeholder colour (3.9:1 measured) whatever style it is
+            // given, and in a lesson the placeholder is the instruction
+            // (AUD-44). VoiceOver hears it as the field's hint.
+            TextField("", text: $text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .lineLimit(1...max(1, maxLines))
+            .font(NightType.body)
+            .foregroundStyle(Night.ink)
+            .tint(Night.accentText)
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(prompt)
+                        .font(NightType.body)
+                        .foregroundStyle(Night.ink3)
+                        .lineLimit(1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.vertical, 5)
+            .frame(minHeight: 30)
+            .focused($focused)
+            .focusEffectDisabled()
+            .submitLabel(.send)
+            // Return sends.
+            .onSubmit(triggerSend)
+            // Shift-Return: a new line where the cursor is.
+            .onKeyPress(.return, phases: .down) { press in
+                MacComposerKeys.handleReturn(modifiers: press.modifiers) ? .handled : .ignored
+            }
+            .accessibilityLabel("Message")
+            .accessibilityHint(prompt)
+            .onChange(of: focusTrigger) { _, _ in focused = true }
+            .onChange(of: focused) { _, isFocused in onFocusChange?(isFocused) }
+            nightActionButton
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 5)
+        .padding(.vertical, 5)
+        .frame(minHeight: 40)
+        .nightChrome(in: shape)
+        // The field's edge: `fieldStroke`, or the focus ring's colour and
+        // width while it has focus (one ring, not two).
+        .overlay {
+            shape.strokeBorder(focused ? Night.focusRing : Night.fieldStroke,
+                               lineWidth: focused ? night.focusRingWidth : 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .contentShape(shape)
+        .onTapGesture { focused = true }
+    }
+
+    /// The attach button inside the field: a 30 pt circle, `ink2`, lumen
+    /// under the pointer.
+    private var nightAttachButton: some View {
+        Button { showsFilePanel = true } label: {
+            Image(systemName: "photo.badge.plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isSending ? Night.ink3 : Night.ink2)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Night.lumen.opacity(attachHovered && !isSending ? 0.12 : 0)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { attachHovered = $0 }
+        .disabled(isSending)
+        .nightFocusRing(Circle())
+        .help("Attach an image (⇧⌘A). You can also drag one here or paste it.")
+        .accessibilityLabel("Attach image")
+    }
+
+    /// Send: a 30 pt `prominent` circle with a white arrow (`hairline` with
+    /// an `ink3` arrow while there's nothing to send). Stop: the same circle
+    /// with a square.
+    private var nightActionButton: some View {
+        Group {
+            if isSending {
+                Button(action: onCancel) {
+                    nightCircle(systemName: "stop.fill", active: true)
+                }
+                .accessibilityLabel("Stop replying")
+                .help("Stop the reply")
+            } else {
+                Button(action: triggerSend) {
+                    nightCircle(systemName: "arrow.up", active: canSend)
+                }
+                .disabled(!canSend)
+                .accessibilityLabel("Send")
+                .help("Send (Return)")
+            }
+        }
+        .buttonStyle(.plain)
+        .nightFocusRing(Circle())
+    }
+
+    private func nightCircle(systemName: String, active: Bool) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(active ? Color.white : Night.ink3)
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(active ? Night.prominent : Night.hairline))
+            .contentShape(Circle())
+    }
+
+    /// This bar with another placeholder (a lesson with a check on screen:
+    /// "Or answer in your own words…").
+    func nightPlaceholder(_ text: String) -> ChatInputBar {
+        var bar = self
+        bar.placeholder = text
+        return bar
     }
 
     /// This bar with the host's attach trigger (File ▸ Attach Image…).

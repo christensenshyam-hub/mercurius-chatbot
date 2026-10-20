@@ -154,6 +154,36 @@ public extension View {
     }
 }
 
+/// The KEY / Your turn wash (§2.6): `lumen` at 12% (light) or 16% (dark)
+/// from the top-leading corner, fading out by 320 pt, inside the card's
+/// shape. A glow, so none under Increase Contrast. Apply before
+/// `nightLit`, so it sits over the surface and under the text.
+struct NightWash: ViewModifier {
+    let radius: CGFloat
+    @Environment(\.colorScheme) private var scheme
+    @NightSettings private var night
+
+    func body(content: Content) -> some View {
+        content.background {
+            if !night.increasedContrast {
+                RadialGradient(colors: [Night.lumen.opacity(NightPalette.Tint.keyWash(dark: scheme == .dark)),
+                                        Night.lumen.opacity(0)],
+                               center: .topLeading, startRadius: 0, endRadius: 320)
+                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+public extension View {
+    /// The KEY / Your turn wash, inside a card of `radius` (§2.6).
+    func nightWash(radius: CGFloat = Night.Radius.card) -> some View {
+        modifier(NightWash(radius: radius))
+    }
+}
+
 /// Today's Up next card's background: the **only** gradient fill in the app
 /// (§2.5). The hero gradient, the lamp at Merc's corner, a few stars, a
 /// light edge and its one shadow (light mode only). Under Increase Contrast:

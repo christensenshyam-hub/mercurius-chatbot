@@ -386,13 +386,21 @@ public struct NightMercLamp: View {
     private let state: MercState
     private let size: CGFloat
     private let mood: MercMood
+    private let activity: MercActivity
+    private let antics: Bool
     @Environment(\.colorScheme) private var scheme
     @NightSettings private var night
 
-    public init(_ state: MercState = .idle, size: CGFloat, mood: MercMood = .neutral) {
+    /// `activity`: what Merc is doing (thinking while a reply is on its way).
+    /// `antics`: his idle antics and poke (a coach between turns); off
+    /// under Reduce Motion.
+    public init(_ state: MercState = .idle, size: CGFloat, mood: MercMood = .neutral,
+                activity: MercActivity = .idle, antics: Bool = false) {
         self.state = state
         self.size = size
         self.mood = mood
+        self.activity = activity
+        self.antics = antics
     }
 
     public var body: some View {
@@ -404,10 +412,40 @@ public struct NightMercLamp: View {
                     .frame(width: size * 1.24, height: size * 1.24)
                     .offset(y: size * 0.04)
             }
-            MercMascot(state, size: size, mood: mood, idleLife: !night.reduceMotion)
+            MercMascot(state, size: size, mood: mood, activity: activity, idleLife: !night.reduceMotion,
+                       idleAntics: antics && !night.reduceMotion, pokeable: antics)
         }
         .frame(width: size * 1.24, height: size * 1.24)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Token chip
+
+/// A token as machine text (§3.2): SF Mono in `accentText` on a `lumen`
+/// wash (12% light, 16% dark) with a 1 pt `lumen` 55% edge, radius `chip`.
+/// No shadow, no glow. Under Increase Contrast the edge is solid
+/// `accentText`.
+public struct NightTokenChip: View {
+    private let text: String
+    @Environment(\.colorScheme) private var scheme
+    @NightSettings private var night
+
+    public init(_ text: String) {
+        self.text = text
+    }
+
+    public var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Night.Radius.chip, style: .continuous)
+        Text(text)
+            .nightFont(.machine)
+            .foregroundStyle(Night.accentText)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Night.lumen.opacity(NightPalette.Tint.chip(dark: scheme == .dark)),
+                        in: shape)
+            .overlay(shape.strokeBorder(night.increasedContrast ? Night.accentText : Night.lumen.opacity(0.55),
+                                        lineWidth: 1))
     }
 }
 

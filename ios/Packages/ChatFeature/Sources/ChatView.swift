@@ -132,7 +132,12 @@ public struct ChatView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio: the ink canvas with the indigo pool (§2.4).
+            NightCanvas(pools: .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             VStack(spacing: 0) {
                 #if os(macOS)
@@ -159,6 +164,9 @@ public struct ChatView: View {
                             model.send()
                         }
                     )
+                    #if os(macOS)
+                    .nightMode(model.currentMode)
+                    #endif
                     // Re-key the view on the active mode so a mode
                     // switch crossfades the prompt chips rather than
                     // snap-replacing them. Cheap and obvious to the
@@ -184,6 +192,9 @@ public struct ChatView: View {
                         mercMood: focalMercState.mood,
                         mercActivity: focalMercState.activity
                     )
+                    #if os(macOS)
+                    .nightChat(yourTurn: NightYourTurn.modes.contains(model.currentMode))
+                    #endif
                 }
 
                 composer
@@ -272,22 +283,15 @@ public struct ChatView: View {
             }
         }
         ToolbarItem(placement: .principal) {
-            Picker("Mode", selection: Binding(
-                get: { model.currentMode },
-                set: { requestMode($0) }
-            )) {
-                ForEach(ChatMode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            // Night Studio's mode switch. Same rule as the iPhone's pills:
+            // no switching mid-reply or mid-switch.
+            NightModeSwitcher(
+                current: model.currentMode,
+                isEnabled: model.modeSwitchInFlight == nil && !isSending,
+                onSelect: { requestMode($0) }
+            )
             .fixedSize()
-            // Same rule as the iPhone's pills: no switching mid-reply or
-            // mid-switch.
-            .disabled(model.modeSwitchInFlight != nil || isSending)
             .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌥⌘1, ⌥⌘2, ⌥⌘3)")
-            .accessibilityLabel("Mode")
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
@@ -503,11 +507,21 @@ private struct ThreadStack<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
+        #if os(macOS)
+        // Night Studio: turns breathe on the page (no bubbles to separate
+        // them).
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: 22) { content }
+        } else {
+            VStack(alignment: .leading, spacing: 22) { content }
+        }
+        #else
         if lazy {
             LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
         } else {
             VStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
         }
+        #endif
     }
 }
 
@@ -591,6 +605,18 @@ struct MessageListView: View {
     @State private var showsJumpPill = false
     @State private var coachHiddenForTyping = false
 
+    #if os(macOS)
+    /// Night Studio, free chat: the latest completed reply's closing
+    /// question becomes the Your turn card (the chat's mode allows it).
+    var nightYourTurn = false
+    /// Night Studio, lessons: the lesson is complete, so the part strip's
+    /// dashed "more may come" segment goes.
+    var nightLessonComplete = false
+    @State private var nightParts = NightPartIndex()
+    @State private var nightMarks = NightPartMarks()
+    @State private var nightCurrentPart = 1
+    #endif
+
     private static let bottomID = "message-list-bottom"
     private static let coachID = "lesson-coach"
 
@@ -656,6 +682,19 @@ struct MessageListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
+                #if os(macOS)
+                if lessonStyle, !nightPlan.parts.isEmpty {
+                    NightPartStrip(parts: nightPlan.parts,
+                                   current: min(nightCurrentPart, nightPlan.parts.count),
+                                   moreMayFollow: !nightLessonComplete) { number in
+                        nightJump(toPart: number, proxy: proxy)
+                    }
+                    .padding(.horizontal, NightRowMetrics.gutter)
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+                    .macReadableColumn()
+                }
+                #endif
                 ScrollView {
                     ThreadStack(lazy: !lessonStyle) {
                         if let threadTitle {
@@ -697,6 +736,30 @@ struct MessageListView: View {
                         }
 
                         ForEach(messages) { message in
+                            #if os(macOS)
+                            NightMessageRow(
+                                message: message,
+                                style: lessonStyle ? .lesson : .chat,
+                                sections: lessonStyle ? nightParts.sections(for: message) : [],
+                                firstPart: nightPlan.starts[message.id] ?? 1,
+                                showsYourTurn: nightYourTurn && message.id == messages.last?.id
+                                    && message.role == .assistant && message.status == .idle,
+                                mercMood: message.id == focalAssistantId && !showsCoachIntro ? mercMood : .neutral,
+                                mercActivity: message.id == focalAssistantId && !showsCoachIntro ? mercActivity : .idle,
+                                quizInteraction: quizInteraction(for: message),
+                                onReport: { reason in onReport(message, reason) },
+                                onCheckTap: onCheckTap,
+                                coordinateSpace: messageListSpace,
+                                onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) }
+                            )
+                            .equatable()
+                            .id(message.id)
+                            .onGeometryChange(for: CGFloat.self) { geo in
+                                geo.frame(in: .named(messageListSpace)).minY
+                            } action: { minY in
+                                if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
+                            }
+                            #else
                             let isFocal = message.id == focalAssistantId
                             // One live Merc at a time: while the coach intro is up
                             // it carries the thinking/speaking motion and the
@@ -721,6 +784,7 @@ struct MessageListView: View {
                             } action: { minY in
                                 if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
                             }
+                            #endif
                         }
 
                         if case .failed(_, let isRetryable) = phase, isRetryable {
@@ -746,6 +810,10 @@ struct MessageListView: View {
                     // The Mac's reading column, centred in a wide window.
                     .macReadableColumn()
                     .padding(.vertical, BrandSpacing.md)
+                    #if os(macOS)
+                    // Clear of the bottom fade below.
+                    .padding(.bottom, 12)
+                    #endif
                     // Gated like every other explicit animation in the app: under
                     // Reduce Motion the intro just disappears (its transition is
                     // already opacity-only) instead of sliding the thread up.
@@ -761,6 +829,11 @@ struct MessageListView: View {
                     }
                 }
                 .coordinateSpace(.named(messageListSpace))
+                #if os(macOS)
+                // Night Studio: the thread fades into the canvas over its last
+                // 18 pt instead of stopping at a hard edge (§2.8).
+                .mask { NightScrollFade() }
+                #endif
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
                 })
@@ -834,6 +907,15 @@ struct MessageListView: View {
                     AccessibilityNotification.Announcement(line).post()
                 }
             }
+            #if os(macOS) && DEBUG
+            // `-NightScrollToPart <n>` (shots only): each time a reply
+            // settles, the part strip's jump to part n.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle,
+                      let part = Int(UserDefaults.standard.string(forKey: "NightScrollToPart") ?? "") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { nightJump(toPart: part, proxy: proxy) }
+            }
+            #endif
             .onChange(of: composerFocused) { _, focused in
                 let geometry = scroll.policy.geometry
                 let coachOnScreen = hasCoachRow && !coachHiddenForTyping
@@ -888,6 +970,27 @@ struct MessageListView: View {
     /// Sits in its own strip under the list whenever the end of the thread
     /// is out of view — after a long reply was held at its top, or when the
     /// student scrolled up to re-read.
+    #if os(macOS)
+    private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
+        // Night Studio: a pill of floating chrome (§5.4).
+        Button {
+            perform(scroll.policy.jumpToLatest(), proxy: proxy)
+        } label: {
+            Label("Jump to latest", systemImage: "arrow.down")
+                .nightFont(.calloutStrong)
+                .foregroundStyle(Night.accentText)
+                .padding(.horizontal, 14)
+                .frame(height: 32)
+                .nightChrome(in: Capsule(), interactive: true)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .nightFocusRing(Capsule())
+        .padding(.vertical, 6)
+        .help("Scroll to the newest message")
+        .accessibilityHint("Scrolls to the newest message")
+    }
+    #else
     private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
         Button {
             perform(scroll.policy.jumpToLatest(), proxy: proxy)
@@ -912,10 +1015,29 @@ struct MessageListView: View {
         .accessibilityHint("Scrolls to the newest message")
     }
 
+    #endif
+
     /// The larger Merc coach moment above a brand-new thread — the handoff
     /// beat between the empty-state intro ("Hi, I'm Merc") and the compact
     /// per-message avatars. Carries the live thinking/speaking motion while
     /// Merc works on his first reply.
+    #if os(macOS)
+    private var coachIntro: some View {
+        // Night Studio: Merc in his lamp, on the page.
+        VStack(spacing: 10) {
+            NightMercLamp(.idle, size: 64, mood: mercMood, activity: mercActivity, antics: true)
+            Text("Let’s sharpen this question together.")
+                .nightFont(.callout)
+                .foregroundStyle(Night.ink2)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, BrandSpacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Merc, your tutor: Let’s sharpen this question together.")
+    }
+
+    #else
     private var coachIntro: some View {
         VStack(spacing: BrandSpacing.sm) {
             MercMascot(.idle, size: 84, emphasis: .softGlow,
@@ -934,6 +1056,22 @@ struct MessageListView: View {
         .accessibilityLabel("Merc, your tutor: Let’s sharpen this question together.")
     }
 
+    #endif
+
+    #if os(macOS)
+    private var retryFooter: some View {
+        // Night Studio: under the failure line, a secondary button (§5.10).
+        HStack {
+            NightSecondaryButton("Retry", systemImage: "arrow.clockwise", action: onRetry)
+                .help("Try again (⌘R)")
+                .accessibilityLabel("Retry sending the last message")
+            Spacer()
+        }
+        .padding(.horizontal, NightRowMetrics.gutter)
+        .padding(.bottom, BrandSpacing.sm)
+    }
+
+    #else
     private var retryFooter: some View {
         HStack {
             Spacer()
@@ -957,6 +1095,8 @@ struct MessageListView: View {
         .padding(.bottom, BrandSpacing.sm)
     }
 
+    #endif
+
     /// Visible when the conversation is idle and the most recent reply
     /// was from the assistant — invites the user to ask for more depth
     /// without re-typing. Wires to `ChatViewModel.explainMore()` which
@@ -965,6 +1105,26 @@ struct MessageListView: View {
     /// In the free chat the chip leads-aligns with the assistant bubble's
     /// text edge (past the Merc avatar) so it reads as part of Merc's turn;
     /// lessons have no avatar column, so it stays centered there.
+    #if os(macOS)
+    private var explainMoreFooter: some View {
+        // Night Studio: the real reply chips, as floating chrome under the
+        // latest reply (§5.4). No "hint": there is no such feature.
+        HStack(spacing: 10) {
+            NightReplyChip(title: "Explain more", systemImage: "text.alignleft", action: onExplainMore)
+                .help("Ask Merc to go deeper on the last answer (⇧⌘E)")
+                .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
+            if let onQuizMe, messages.filter({ $0.role == .user }).count >= 2 {
+                NightReplyChip(title: "Quiz me", systemImage: "checklist", action: onQuizMe)
+                    .help("A short quiz on this conversation")
+                    .accessibilityHint("Generates a short quiz from this conversation")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, NightRowMetrics.gutter)
+        .padding(.bottom, BrandSpacing.sm)
+    }
+
+    #else
     private var explainMoreFooter: some View {
         HStack {
             if !alignsWithAvatar { Spacer() }
@@ -984,6 +1144,8 @@ struct MessageListView: View {
         .padding(.top, BrandSpacing.xs)
         .padding(.bottom, BrandSpacing.sm)
     }
+
+    #endif
 
     /// blocks_v1 interaction for one lesson bubble: taps live only on the
     /// LATEST assistant message while no reply is in flight; older [Q]s
@@ -1042,6 +1204,62 @@ struct MessageListView: View {
         .frame(minHeight: 44)
         .accessibilityLabel(title)
     }
+
+    #if os(macOS)
+    // MARK: Night Studio (Mac)
+
+    /// This list with the free chat's Night options.
+    func nightChat(yourTurn: Bool) -> MessageListView {
+        var list = self
+        list.nightYourTurn = yourTurn
+        return list
+    }
+
+    /// This list with the lesson's Night options.
+    func nightLesson(complete: Bool) -> MessageListView {
+        var list = self
+        list.nightLessonComplete = complete
+        return list
+    }
+
+    /// The lesson thread's parts so far (empty in free chat).
+    private var nightPlan: NightPartPlan {
+        lessonStyle ? nightParts.plan(for: messages) : NightPartPlan()
+    }
+
+    /// A part mark moved (a scroll, a layout): maybe the strip's "now
+    /// reading" changed.
+    private func nightPartMarkMoved(_ number: Int, minY: CGFloat) {
+        nightMarks.positions[number] = minY
+        let geometry = scroll.policy.geometry
+        let current = nightMarks.current(partCount: nightPlan.parts.count, viewportHeight: geometry.viewportHeight,
+                                         atBottom: geometry.isAtBottom && geometry.contentHeight > geometry.viewportHeight)
+        if current != nightCurrentPart { nightCurrentPart = current }
+    }
+
+    /// The strip's jump: part `number`'s mark to the top of the reading area
+    /// (part 1: the lesson's start). It stops following a streaming reply,
+    /// as a scroll of the student's own would.
+    private func nightJump(toPart number: Int, proxy: ScrollViewProxy) {
+        let target: AnyHashable
+        if number > 1 {
+            target = NightPartMark.scrollID(number)
+        } else if hasCoachRow {
+            target = Self.coachID
+        } else if let first = messages.first(where: { $0.role == .assistant }) {
+            target = first.id
+        } else {
+            return
+        }
+        scroll.policy.partJumped()
+        nightCurrentPart = number
+        if reduceMotion || Night.debugReduceMotion {
+            proxy.scrollTo(target, anchor: .top)
+        } else {
+            withAnimation(Night.Motion.layout) { proxy.scrollTo(target, anchor: .top) }
+        }
+    }
+    #endif
 
     /// Show the Explain More footer only when:
     ///   - we're not in a failure state (retry footer takes priority),

@@ -113,6 +113,27 @@ public enum Night {
         }
     }
 
+    // MARK: Tints (§2.3: each one's contrast is computed)
+
+    /// The alphas of Night's tinted surfaces, for views outside this module.
+    /// `NightContrastTests` checks text on each.
+    public enum Tint {
+        /// A picked answer row: `accent` over `surface`.
+        public static func selected(dark: Bool) -> Double { NightPalette.Tint.selected(dark: dark) }
+        /// The student's turn: `accent` over the canvas.
+        public static func student(dark: Bool) -> Double { NightPalette.Tint.student(dark: dark) }
+        /// The student's turn's edge: `lumen`.
+        public static func studentEdge(dark: Bool) -> Double { dark ? 0.30 : 0.18 }
+        /// The KEY / Your turn wash: `lumen` from the top-leading corner.
+        public static func keyWash(dark: Bool) -> Double { NightPalette.Tint.keyWash(dark: dark) }
+        /// Correct and wrong rows: `success` / `error` over `surface`.
+        public static let answer = NightPalette.Tint.answer
+        /// Hover on a clickable lit surface: `lumen` over it.
+        public static let hover = NightPalette.Tint.hover
+        /// A source chip's icon well: `lumen` over `surface`.
+        public static let well = 0.14
+    }
+
     // MARK: Motion (§4.1)
 
     public enum Motion {

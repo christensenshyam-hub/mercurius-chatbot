@@ -76,6 +76,8 @@ public struct CurriculumLessonView: View {
     #if os(macOS)
     /// Opens the composer's image panel (File ▸ Attach Image…, ⇧⌘A).
     @State private var attachTrigger = 0
+    /// A check on screen holds a pick that isn't locked in (Escape keeps it).
+    @State private var nightUncommittedPick = false
     #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -165,7 +167,12 @@ public struct CurriculumLessonView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio: the ink canvas with the indigo pool (§2.4).
+            NightCanvas(pools: .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             VStack(spacing: 0) {
                 #if os(iOS)
@@ -207,6 +214,10 @@ public struct CurriculumLessonView: View {
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
+                #if os(macOS)
+                .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
+                .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
+                #endif
 
                 // Clean, fixed composer — nothing tucked behind it.
                 composer
@@ -364,11 +375,15 @@ public struct CurriculumLessonView: View {
         if showIntro { return true }
         return Self.escapeLeaves(isSending: isSending, draft: model.draft,
                                  hasAttachment: model.pendingImage != nil,
-                                 isCelebrating: showCelebration)
+                                 isCelebrating: showCelebration,
+                                 hasUncommittedPick: nightUncommittedPick)
     }
 
-    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool) -> Bool {
-        !isSending && !isCelebrating && !hasAttachment
+    /// Nothing would be lost: no reply coming in, no celebration, no photo,
+    /// no draft, and no check answer picked but not locked in.
+    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool,
+                             hasUncommittedPick: Bool = false) -> Bool {
+        !isSending && !isCelebrating && !hasAttachment && !hasUncommittedPick
             && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -411,7 +426,12 @@ public struct CurriculumLessonView: View {
             onFocusChange: { composerFocused = $0 }
         )
         #if os(macOS)
-        return bar.withAttachTrigger(attachTrigger).macReadableColumn()
+        // While Merc's check waits for an answer, the composer is the other
+        // way to answer (§5.3.3).
+        let checkOpen = NightCheckKeys.hasAnswerableCheck(messages: model.messages, isIdle: model.phase == .idle)
+        return bar.withAttachTrigger(attachTrigger)
+            .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder : "Type your answer…")
+            .macReadableColumn()
         #else
         return bar
         #endif
@@ -517,20 +537,38 @@ public struct CurriculumLessonView: View {
     }
 
     #if os(macOS)
-    /// The intro on a Mac: the speech bubble, Merc and Continue as one group,
-    /// centred in the window (on a phone it sits at the bottom, by the
-    /// thumb). The way out is the toolbar's Not now.
+    /// The intro on a Mac, in Night Studio (SPEC.md §5.3.1): one centred group
+    /// in the gate's box: Merc waving in his lamp, the lesson's place, its
+    /// title, the existing line, and Continue (Return). The way out is the
+    /// toolbar's Not now. No speech bubble.
     private var macLessonIntro: some View {
         ZStack {
-            BrandColor.background.ignoresSafeArea()
+            NightCanvas(pools: .indigo, stars: false)
             GeometryReader { geo in
                 ScrollView {
-                    VStack(spacing: 0) {
-                        introSpeechBubble
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, Self.introBubbleTailRoom)
-                        introFooter
+                    VStack(spacing: 14) {
+                        NightMercLamp(.wave, size: 96)
+                        NightEyebrow(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
+                                                      totalInUnit: totalInUnit))
+                        Text(title)
+                            .nightFont(.display)
+                            .foregroundStyle(Night.ink)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Ready to dig in? I'll walk you through it — then check what landed.")
+                            .nightFont(.body)
+                            .foregroundStyle(Night.ink2)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        NightPrimaryButton("Continue", size: .large, action: startFromIntro)
+                            .keyboardShortcut(.defaultAction)
+                            .help("Start the lesson (Return)")
+                            .accessibilityLabel("Continue. Start the lesson.")
+                            .padding(.top, 10)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
                     .frame(maxWidth: MacLayout.gateWidth)
                     .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }
