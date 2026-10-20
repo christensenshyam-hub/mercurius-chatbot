@@ -300,7 +300,7 @@ struct ChatViewModelErrorTests {
         try await waitUntilSettled(model)
 
         #expect(failedReason(model)
-            == "Too many new sessions from this network today. Switch to cellular data and try again, or come back after 7:00 PM.")
+            == "Too many new sessions from this network today. \(NetworkSwitchAdvice.current.switchNetwork) and try again, or come back after 7:00 PM.")
         #expect(isRetryable(model) == true)
     }
 
@@ -417,7 +417,7 @@ struct ChatViewModelErrorTests {
         try await waitUntilSettled(model)
 
         #expect(model.phase == .failed(
-            reason: "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi.",
+            reason: "This network may be blocking Mercurius. School Wi-Fi often does. \(NetworkSwitchAdvice.current.tryAnotherNetwork)",
             isRetryable: true
         ))
     }

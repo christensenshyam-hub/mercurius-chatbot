@@ -102,11 +102,11 @@ public enum APIError: Error, Equatable, Sendable {
 
     /// `userFacingMessage`, with the clock a daily limit's reset time is
     /// read on.
-    public func userFacingMessage(clock: LocalClock) -> String {
+    public func userFacingMessage(clock: LocalClock, advice: NetworkSwitchAdvice = .current) -> String {
         if let refusal = serverRefusal {
             // The server writes this copy for students; it already names
             // the reason. A daily limit gets its reset as a local time.
-            return refusal.studentMessage(clock: clock)
+            return refusal.studentMessage(clock: clock, advice: advice)
         }
         switch self {
         case .offline:
@@ -114,7 +114,7 @@ public enum APIError: Error, Equatable, Sendable {
         case .connectionLost:
             return "The connection dropped. Try again."
         case .unreachableOnThisNetwork:
-            return "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi."
+            return "This network may be blocking Mercurius. School Wi-Fi often does. \(advice.tryAnotherNetwork)"
         case .messageTooLong:
             return "That message is too long — try a shorter one."
         case .timeout:

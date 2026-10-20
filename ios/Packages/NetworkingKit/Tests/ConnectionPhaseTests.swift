@@ -55,7 +55,7 @@ struct APIClientPhaseMappingTests {
         #expect(error == .unreachableOnThisNetwork)
         #expect(error.isRetryable)
         #expect(error.userFacingMessage.contains("network may be blocking Mercurius"))
-        #expect(error.userFacingMessage.contains("cellular"))
+        #expect(error.userFacingMessage.contains(NetworkSwitchAdvice.current.tryAnotherNetwork))
     }
 
     @Test("A timeout that never connected with no network path is offline")

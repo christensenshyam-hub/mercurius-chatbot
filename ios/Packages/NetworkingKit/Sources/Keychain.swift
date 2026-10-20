@@ -20,7 +20,15 @@ public protocol KeychainStore: Sendable {
 ///   whether to fall through or surface.
 /// - Scoped to the app via `kSecAttrService`; no cross-app sharing.
 /// - Uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so secrets
-///   survive restarts but do not sync to iCloud or leave the device.
+///   survive restarts but do not sync to iCloud or leave the device — on
+///   iOS. On macOS these queries go to the login keychain (they don't set
+///   `kSecUseDataProtectionKeychain`), which ignores that accessibility
+///   attribute: the item still never syncs through iCloud, but it is a
+///   file on this Mac, so it moves to another Mac with Migration Assistant
+///   or a Time Machine restore, unlike on iOS. Moving the Mac app to the
+///   data-protection keychain needs the app's keychain entitlement (unsigned
+///   CI builds have none) and a read of the old item first; see
+///   docs/mac-app/PLAN.md, "iPad-on-Mac users".
 public struct Keychain: Sendable, KeychainStore {
     public enum KeychainError: Error, Equatable {
         case itemNotFound

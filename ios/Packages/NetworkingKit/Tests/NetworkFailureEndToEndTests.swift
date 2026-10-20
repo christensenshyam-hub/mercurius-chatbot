@@ -164,7 +164,7 @@ extension APIClientEndToEndTests {
         } catch let error as APIError {
             #expect(error.isRetryable)
             #expect(normalized(error.userFacingMessage(clock: chicagoAtAudit))
-                == "Too many new sessions from this network today. Switch to cellular data and try again, or come back after 7:00 PM.")
+                == "Too many new sessions from this network today. \(NetworkSwitchAdvice.current.switchNetwork) and try again, or come back after 7:00 PM.")
         } catch {
             Issue.record("Expected APIError, got \(error)")
         }

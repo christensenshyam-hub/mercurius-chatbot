@@ -89,6 +89,7 @@ public final class AppEnvironment: ObservableObject {
         //   -SeedDemoChat  → InMemoryChatStore preloaded with ~50 msgs
         //                    (used by PerformanceTests for realistic
         //                    scroll / memory measurements).
+        //   (Both are DEBUG-only: `testHookArguments`.)
         //   -UITests YES   → empty InMemoryChatStore. MercuriusUITests
         //                    assumes a clean slate each run — without
         //                    this the disk-backed SwiftData store from a
@@ -129,7 +130,7 @@ public final class AppEnvironment: ObservableObject {
         self.achievementStore = AchievementStore()
         self.reminderStore = ReminderStore()
 
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = Self.testHookArguments(ProcessInfo.processInfo.arguments)
         let isUITesting = arguments.contains(Self.uiTestArgument)
         let progress = CurriculumProgressStore(preferences: Self.curriculumProgressPreferences)
         self.progressStore = progress
@@ -239,11 +240,26 @@ public final class AppEnvironment: ObservableObject {
     static let uiTestArgument = "-UITests"
 
     private static func shouldSeedDemoChat() -> Bool {
-        ProcessInfo.processInfo.arguments.contains(seedDemoChatArgument)
+        testHookArguments(ProcessInfo.processInfo.arguments).contains(seedDemoChatArgument)
     }
 
     private static func shouldUseCleanInMemoryStore() -> Bool {
-        ProcessInfo.processInfo.arguments.contains(uiTestArgument)
+        testHookArguments(ProcessInfo.processInfo.arguments).contains(uiTestArgument)
+    }
+
+    /// The launch arguments the test hooks (`-UITests`, `-KeepAgeBlock`,
+    /// `-SeedDemoChat`) may read: all of them in a DEBUG build — the UI
+    /// tests and the screenshot harness run Debug — and none in Release.
+    /// On a Mac anyone can launch the store build with arguments (`open -a
+    /// Mercurius --args -UITests YES`), and `-UITests` would move the
+    /// under-13 block into a suite wiped at every launch, ending its 7-day
+    /// stop; on iOS an App Store build can't be given arguments at all.
+    static func testHookArguments(_ arguments: [String]) -> [String] {
+        #if DEBUG
+        arguments
+        #else
+        []
+        #endif
     }
 
     /// Where `CurriculumProgressStore` persists. Under `-UITests` this is a
@@ -252,7 +268,7 @@ public final class AppEnvironment: ObservableObject {
     /// hide the lesson intro the first-run UI test anchors on. Evaluated once
     /// per process, so the wipe happens once per launch.
     public static let curriculumProgressPreferences: PreferenceStore =
-        makeCurriculumProgressPreferences(arguments: ProcessInfo.processInfo.arguments)
+        makeCurriculumProgressPreferences(arguments: testHookArguments(ProcessInfo.processInfo.arguments))
 
     static let uiTestProgressSuite = "com.mayoailiteracy.mercurius.uitests.curriculumProgress"
     static let uiTestLastActivitySuite = "com.mayoailiteracy.mercurius.uitests.lastActivity"

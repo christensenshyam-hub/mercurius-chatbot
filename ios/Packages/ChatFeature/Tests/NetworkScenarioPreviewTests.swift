@@ -45,7 +45,7 @@ struct NetworkScenarioPreviewTests {
 
         let newSessions = try await failure(for: .newSessions)
         #expect(newSessions.reason.hasPrefix(
-            "Too many new sessions from this network today. Switch to cellular data and try again, or come back "))
+            "Too many new sessions from this network today. \(NetworkSwitchAdvice.current.switchNetwork) and try again, or come back "))
         #expect(newSessions.retryable)
 
         #expect(try await failure(for: .paused) == ("Mercurius is temporarily paused — please try again soon.", false))
