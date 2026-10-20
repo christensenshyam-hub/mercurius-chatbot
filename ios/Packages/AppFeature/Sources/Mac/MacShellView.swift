@@ -559,7 +559,15 @@ struct MacShellView: View {
         } else if args.contains("-LessonPreview"), let lesson = MercuriusCurriculum.units.first?.lessons.first {
             shell.openLesson(lesson)
         } else if args.contains("-ChatPreview") {
-            shell.showChat()
+            if MacNightDemo.isRequested, let store = env.chatStore {
+                // `-NightChatDemo`: the recorded Socratic thread, opened from
+                // its sidebar row.
+                let id = MacNightDemo.seed(store)
+                shell.refreshConversations()
+                shell.show(.chat(id))
+            } else {
+                shell.showChat()
+            }
             if args.contains("-ChatSeed"), shell.chatModel.messages.isEmpty {
                 shell.chatModel.draft = "What is a token in an LLM?"
                 shell.chatModel.send()

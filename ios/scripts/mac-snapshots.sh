@@ -186,9 +186,19 @@ run() {
     path)            window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES ;;
     lesson-intro)    window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES ;;
     lesson)          window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -MacSnapshotDelay 10 ;;
+    # Night Studio's check (DEBUG -NightCheckState, -NightScrollToPart): the
+    # recorded first reply's check with B picked and Lock it in showing; then
+    # locked in, which sends "I picked B) …" through the real path and
+    # replays Merc's second reply, the part strip's jump back to the check.
+    lesson-top)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 1 -MacSnapshotDelay 10 ;;
+    lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
+    lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
     lesson-complete) window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -ForceCelebrate YES -MacSnapshotDelay 5 ;;
     chat)            window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
     chat-thread)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -SeedDemoChat YES ;;
+    # A real recorded Socratic thread (DEBUG -NightChatDemo): Merc's last
+    # reply cites a source and ends on a question (the source chip, Your turn).
+    chat-socratic)   window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -NightChatDemo YES -MacSnapshotDelay 6 ;;
     # The toolbar's mode switch (as ⌘2/⌘3): Debate's one-time description,
     # then the chat in Debate and in Discussion. The switch asks the server
     # first, so the last two need a local server on :3000 that answers
@@ -211,7 +221,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent today today-week path lesson-intro lesson lesson-complete chat chat-thread chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
+ALL="gate-meet gate-age gate-consent today today-week path lesson-intro lesson lesson-top lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL
