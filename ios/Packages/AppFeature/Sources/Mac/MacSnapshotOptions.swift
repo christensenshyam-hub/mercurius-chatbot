@@ -51,6 +51,12 @@ public struct MacSnapshotOptions: Equatable, Sendable {
     /// `-MacSnapshotOpaque YES`: fill the window's transparent rounded
     /// corners, so the PNG has no alpha (the App Store's screenshots).
     public var opaque = false
+    /// The app is activated and the photographed window made key first, so
+    /// it looks as it does in use (red traffic lights, full-contrast
+    /// sidebar), and an inactive picture is a problem. `-MacSnapshotActivate
+    /// NO` leaves the keyboard where it was and accepts an inactive window.
+    public var activates = true
+
     /// What was asked for but couldn't be honoured, in words, for the
     /// harness to print (`MacSnapshot: problem …`) — a script can fail on it
     /// instead of shipping a picture of the wrong size.
@@ -59,9 +65,9 @@ public struct MacSnapshotOptions: Equatable, Sendable {
     /// The main window's size when none is given.
     public static let defaultSize = CGSize(width: 1280, height: 800)
     /// The main window's minimum (`MercuriusMacApp`'s `.frame(minWidth:
-    /// 860, minHeight: 600)`): the window can't be made smaller, so a
+    /// 700, minHeight: 600)`): the window can't be made smaller, so a
     /// smaller size isn't what the picture would show.
-    public static let minimumWindowSize = CGSize(width: 860, height: 600)
+    public static let minimumWindowSize = CGSize(width: 700, height: 600)
 
     /// Every flag the harness reads. Each takes a value: AppKit opens a bare
     /// word after a value-less flag as a document, and SwiftUI then shows no
@@ -70,7 +76,7 @@ public struct MacSnapshotOptions: Equatable, Sendable {
         "-MacSnapshot", "-MacSnapshotName", "-MacSnapshotDelay", "-MacSnapshotSize",
         "-MacSnapshotAppearance", "-MacSnapshotWindow", "-MacSnapshotOnScreen",
         "-MacSnapshotDumpControls", "-MacSnapshotType", "-MacSnapshotSubmit",
-        "-MacSnapshotOpaque",
+        "-MacSnapshotOpaque", "-MacSnapshotActivate",
     ]
 
     public init(directory: URL) {
@@ -141,6 +147,7 @@ public struct MacSnapshotOptions: Equatable, Sendable {
             problems.append("MacSnapshotSubmit YES without MacSnapshotType: nothing to submit")
         }
         opaque = Self.isYes(value("MacSnapshotOpaque"))
+        if let raw = value("MacSnapshotActivate") { activates = Self.isYes(raw) }
     }
 
     /// The options in this process's own launch arguments.
@@ -182,6 +189,111 @@ public struct MacSnapshotOptions: Equatable, Sendable {
 
     private static func format(_ number: Double) -> String {
         number == number.rounded() ? String(Int(number)) : String(number)
+    }
+}
+
+/// What the harness checks in its own picture before it writes it, so a
+/// script (and CI's launch smoke test) can't count a picture that shows
+/// nothing as a screenshot. Each problem comes back in words; the harness
+/// prints them as `MacSnapshot: problem …`, which fails the run.
+public enum MacSnapshotCheck {
+    /// Problems with `image`, a capture of a window whose frame is
+    /// `pointSize` at `scale`.
+    ///
+    /// - The size: a locked or sleeping screen gives a picture at a
+    ///   fractional scale (2306 × 1442 px for a 1280 × 800 pt window at 2×).
+    /// - One colour: the window server drew nothing (all black when locked).
+    /// - `expectsKeyWindow`: the close button must be red. An inactive
+    ///   window's traffic lights are grey and its sidebar text washed out,
+    ///   which isn't how the app looks in use.
+    public static func problems(in image: CGImage, pointSize: CGSize, scale: CGFloat,
+                                expectsKeyWindow: Bool) -> [String] {
+        var problems: [String] = []
+        let expected = CGSize(width: (pointSize.width * scale).rounded(), height: (pointSize.height * scale).rounded())
+        if abs(CGFloat(image.width) - expected.width) > 2 || abs(CGFloat(image.height) - expected.height) > 2 {
+            problems.append("the picture is \(image.width)x\(image.height) px, not the window's "
+                + "\(Int(pointSize.width))x\(Int(pointSize.height)) pt at \(scale)x "
+                + "(\(Int(expected.width))x\(Int(expected.height)) px): the window server didn't draw it at the "
+                + "display's scale (a locked or sleeping screen does this)")
+        }
+        guard let pixels = Pixels(image) else {
+            problems.append("the picture couldn't be read back to check it")
+            return problems
+        }
+        if pixels.isOneColour() {
+            problems.append("the picture is a single colour: nothing was drawn (a locked or sleeping screen does this)")
+        }
+        if expectsKeyWindow, !pixels.hasRedCloseButton(scale: scale) {
+            problems.append("the window wasn't the key window (its close button isn't red): an inactive window's "
+                + "traffic lights are grey and its sidebar text washed out. Run on an unlocked Mac with nothing "
+                + "else taking the keyboard, or pass -MacSnapshotActivate NO to accept it")
+        }
+        return problems
+    }
+
+    /// The image as 8-bit sRGB RGBA, top row first.
+    struct Pixels {
+        let width: Int
+        let height: Int
+        private let bytes: [UInt8]
+
+        init?(_ image: CGImage) {
+            let w = image.width, h = image.height
+            guard w > 0, h > 0 else { return nil }
+            var buffer = [UInt8](repeating: 0, count: w * h * 4)
+            let drawn = buffer.withUnsafeMutableBytes { raw -> Bool in
+                guard let context = CGContext(data: raw.baseAddress, width: w, height: h,
+                                              bitsPerComponent: 8, bytesPerRow: w * 4,
+                                              space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+                context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+                return true
+            }
+            guard drawn else { return nil }
+            width = w
+            height = h
+            bytes = buffer
+        }
+
+        /// (r, g, b, a) at x, y (y = 0 is the top row).
+        func pixel(_ x: Int, _ y: Int) -> (r: Int, g: Int, b: Int, a: Int) {
+            let offset = (y * width + x) * 4
+            return (Int(bytes[offset]), Int(bytes[offset + 1]), Int(bytes[offset + 2]), Int(bytes[offset + 3]))
+        }
+
+        /// Every sample on a grid over the middle of the picture (clear of
+        /// the rounded corners) is within a few levels of the first.
+        func isOneColour(tolerance: Int = 4) -> Bool {
+            let columns = 48, rows = 32
+            let x0 = width / 10, y0 = height / 10
+            let spanX = max(width - 2 * x0 - 1, 0), spanY = max(height - 2 * y0 - 1, 0)
+            let first = pixel(x0, y0)
+            for row in 0...rows {
+                for column in 0...columns {
+                    let p = pixel(x0 + spanX * column / columns, y0 + spanY * row / rows)
+                    if abs(p.r - first.r) > tolerance || abs(p.g - first.g) > tolerance
+                        || abs(p.b - first.b) > tolerance || abs(p.a - first.a) > tolerance {
+                        return false
+                    }
+                }
+            }
+            return true
+        }
+
+        /// A red pixel where a key window's close button sits: within the
+        /// first 48 pt of the top-left corner. (#FF5F57 in light and dark;
+        /// an inactive window's is grey.)
+        func hasRedCloseButton(scale: CGFloat) -> Bool {
+            let reach = min(Int((48 * max(scale, 1)).rounded()), width, height)
+            for y in 0..<reach {
+                for x in 0..<reach {
+                    let p = pixel(x, y)
+                    guard p.a > 200 else { continue }
+                    if p.r >= 190, p.g <= 140, p.b <= 140, p.r - p.g >= 80 { return true }
+                }
+            }
+            return false
+        }
     }
 }
 

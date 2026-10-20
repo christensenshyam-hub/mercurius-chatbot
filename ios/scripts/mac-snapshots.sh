@@ -11,16 +11,23 @@
 # its Retry state.
 #
 # Each launch opens a real window for a few seconds, moved almost entirely
-# off screen before it is drawn (the window server still renders it), and
-# never takes the keyboard. Liquid Glass surfaces that blend with what's
-# behind the window (sidebar, toolbar, checkbox and pop-up bezels) come out
-# dark or missing in the PNGs; see MercuriusMac/App/MacSnapshot.swift.
+# off screen before it is drawn (the window server still renders it). The
+# app activates itself and makes the window key, so the picture shows it as
+# it looks in use (red traffic lights, full-contrast sidebar): it takes the
+# keyboard for those few seconds, so run the set when nobody is typing.
+# ACTIVATE=NO leaves the keyboard alone and accepts inactive pictures.
+# Liquid Glass surfaces that blend with what's behind the window (sidebar,
+# toolbar, checkbox and pop-up bezels) come out dark or missing in the PNGs;
+# see MercuriusMac/App/MacSnapshot.swift.
+#
+# The screen must be unlocked: while it is locked the window server draws
+# nothing, and every picture comes out black at the wrong size.
 #
 # Usage (from ios/, after building the MercuriusMac scheme into the derived
 # data below):
 #   scripts/mac-snapshots.sh <out-dir> [shot ...]
 # Each window shot is taken four ways: <shot>.png (1280×800, light),
-# <shot>-dark.png, <shot>-min.png (860×600, the window's minimum) and
+# <shot>-dark.png, <shot>-min.png (700×600, the window's minimum) and
 # <shot>-min-dark.png. The Settings and Help windows have their own size:
 # light and dark only. Set VARIANTS="light" (or any of light dark min
 # min-dark) to take fewer. VARIANTS="store" takes <shot>-store.png instead:
@@ -30,8 +37,12 @@
 # mac-store-screenshots.sh.
 #
 # The harness prints anything it couldn't do as asked ("MacSnapshot:
-# problem …", e.g. a size below the window's minimum); that shot then
-# counts as failed. The script exits non-zero if any shot failed.
+# problem …", e.g. a size below the window's minimum) and checks its own
+# picture: the right pixel size, not one colour (blank), and — activated —
+# a key window. Any problem fails that shot. The script also checks each
+# PNG's pixel size itself against the size the harness expected, and fails
+# a shot with no picture or no expected size. It exits non-zero if any shot
+# failed.
 set -euo pipefail
 
 OUT=${1:?usage: mac-snapshots.sh <out-dir> [shot ...]}
@@ -47,7 +58,8 @@ STORE_SIZE=${STORE_SIZE:-1280x800}
 # Every flag carries a value: AppKit takes a bare word after a value-less
 # flag (`-EnterShell -MacSnapshotDelay 9`) as a document to open, and SwiftUI
 # then opens no window.
-ISOLATED=(-UITests YES -EphemeralSession YES -UseLocalServer YES -ApplePersistenceIgnoreState YES)
+ISOLATED=(-UITests YES -EphemeralSession YES -UseLocalServer YES -ApplePersistenceIgnoreState YES
+          -MacSnapshotActivate "${ACTIVATE:-YES}")
 GATE=(-consentVersion 0 -hasSeenOnboarding NO)
 PAST_GATE=(-consentVersion 1 -hasSeenOnboarding YES -hasSeenChatInputHint NO)
 
@@ -87,7 +99,23 @@ snap() {
     FAILED=1
   fi
   if [ -f "$OUT/$name.png" ]; then
-    echo "$name: ok"
+    # The PNG's own size against what the harness expected (its frame at
+    # the display's scale): a locked screen gives a smaller, black picture.
+    local expect got
+    expect=$(sed -n 's/^MacSnapshot: expect \([0-9]*x[0-9]*\)$/\1/p' "$log" | tail -1)
+    got="$(sips -g pixelWidth "$OUT/$name.png" | awk '/pixelWidth/ {print $2}')x$(sips -g pixelHeight "$OUT/$name.png" | awk '/pixelHeight/ {print $2}')"
+    if [ -z "$expect" ]; then
+      echo "$name: problem: the harness reported no expected size (no window-server picture)" >&2
+      FAILED=1
+    elif [ "$got" != "$expect" ]; then
+      echo "$name: problem: the PNG is $got px, expected $expect" >&2
+      FAILED=1
+    fi
+    if [ -n "$problems" ] || [ -z "$expect" ] || [ "$got" != "$expect" ]; then
+      echo "$name: FAILED ($got)" >&2
+    else
+      echo "$name: ok ($got)"
+    fi
   else
     echo "$name: FAILED" >&2
     cat "$log" >&2
@@ -112,8 +140,8 @@ window_shot() {
     case $variant in
       light)    snap "$name"          "$@" -MacSnapshotAppearance light ;;
       dark)     snap "$name-dark"     "$@" -MacSnapshotAppearance dark ;;
-      min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 860x600 ;;
-      min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 860x600 ;;
+      min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 700x600 ;;
+      min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 700x600 ;;
       store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
     esac
   done

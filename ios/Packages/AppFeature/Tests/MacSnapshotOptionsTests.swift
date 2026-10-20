@@ -44,6 +44,7 @@ struct MacSnapshotOptionsTests {
         #expect(parsed.typedText == nil)
         #expect(!parsed.submitsTypedText)
         #expect(!parsed.opaque)
+        #expect(parsed.activates, "activated by default, so the window is photographed as the key window")
         #expect(parsed.problems.isEmpty)
     }
 
@@ -54,6 +55,7 @@ struct MacSnapshotOptionsTests {
             "-MacSnapshotSize", "1440x900", "-MacSnapshotAppearance", "dark", "-MacSnapshotWindow", "main",
             "-MacSnapshotOnScreen", "YES", "-MacSnapshotDumpControls", "YES",
             "-MacSnapshotType", "Why?|Really?", "-MacSnapshotSubmit", "YES", "-MacSnapshotOpaque", "YES",
+            "-MacSnapshotActivate", "NO",
         ]))
         #expect(parsed.name == "chat-typing")
         #expect(parsed.delay == 6.5)
@@ -64,6 +66,7 @@ struct MacSnapshotOptionsTests {
         #expect(parsed.typedText == "Why?|Really?")
         #expect(parsed.submitsTypedText)
         #expect(parsed.opaque)
+        #expect(!parsed.activates)
         #expect(parsed.problems.isEmpty)
     }
 
@@ -94,13 +97,13 @@ struct MacSnapshotOptionsTests {
         #expect(parsed.problems.count == 6)
     }
 
-    @Test("Below the main window's 860×600 minimum is a problem; the Help window takes any size")
+    @Test("Below the main window's 700×600 minimum is a problem; the Help window takes any size")
     func minimum() throws {
-        let small = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotSize", "800x500"]))
+        let small = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotSize", "640x500"]))
         #expect(small.problems.count == 1)
-        #expect(small.pixelSize(scale: 2) == CGSize(width: 1720, height: 1200))
+        #expect(small.pixelSize(scale: 2) == CGSize(width: 1400, height: 1200))
 
-        let atMinimum = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotSize", "860x600"]))
+        let atMinimum = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotSize", "700x600"]))
         #expect(atMinimum.problems.isEmpty)
 
         let help = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotWindow", "help",
@@ -174,6 +177,63 @@ struct MacSnapshotOptionsTests {
         #expect(rgb(199, 99) == detail)
         // Every pixel is opaque.
         #expect(stride(from: 3, to: bytes.count, by: 4).allSatisfy { bytes[$0] == 255 })
+    }
+
+    // MARK: The harness's checks on its own picture
+
+    /// A window picture with its close button: red when the window is key,
+    /// grey when not, at 2x.
+    private func pictureWithCloseButton(red: Bool, width: Int = 400, height: Int = 300) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0.96, green: 0.96, blue: 0.97, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.setFillColor(CGColor(srgbRed: 0.2, green: 0.2, blue: 0.3, alpha: 1))
+        context.fill(CGRect(x: width / 2, y: height / 3, width: width / 3, height: 20))   // some text
+        // The close button: 12 pt across, centred 26 pt in from the top-left
+        // (bottom-left origin here).
+        context.setFillColor(red ? CGColor(srgbRed: 1, green: 0.37, blue: 0.34, alpha: 1)
+                                 : CGColor(srgbRed: 0.82, green: 0.82, blue: 0.83, alpha: 1))
+        context.fillEllipse(in: CGRect(x: 40, y: height - 64, width: 24, height: 24))
+        return try #require(context.makeImage())
+    }
+
+    private func blank(width: Int, height: Int) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try #require(context.makeImage())
+    }
+
+    @Test("A key window's picture at the right size passes")
+    func goodPicture() throws {
+        let problems = MacSnapshotCheck.problems(in: try pictureWithCloseButton(red: true),
+                                                 pointSize: CGSize(width: 200, height: 150), scale: 2,
+                                                 expectsKeyWindow: true)
+        #expect(problems.isEmpty, "\(problems)")
+    }
+
+    @Test("A locked screen's picture — black, at a fractional scale — fails on size and on colour")
+    func lockedScreenPicture() throws {
+        // What step 04 got for a 1280×800 pt window at 2x: 2306×1442, black.
+        let problems = MacSnapshotCheck.problems(in: try blank(width: 2306, height: 1442),
+                                                 pointSize: CGSize(width: 1280, height: 800), scale: 2,
+                                                 expectsKeyWindow: false)
+        #expect(problems.count == 2, "\(problems)")
+        #expect(problems.contains { $0.contains("2306x1442") })
+        #expect(problems.contains { $0.contains("single colour") })
+    }
+
+    @Test("An inactive window (grey close button) fails when a key window was asked for, and only then")
+    func inactiveWindow() throws {
+        let grey = try pictureWithCloseButton(red: false)
+        let size = CGSize(width: 200, height: 150)
+        let strict = MacSnapshotCheck.problems(in: grey, pointSize: size, scale: 2, expectsKeyWindow: true)
+        #expect(strict.count == 1 && strict[0].contains("key window"), "\(strict)")
+        #expect(MacSnapshotCheck.problems(in: grey, pointSize: size, scale: 2, expectsKeyWindow: false).isEmpty)
     }
 
     /// The Mac App Store's screenshot sizes (16:10), in pixels.

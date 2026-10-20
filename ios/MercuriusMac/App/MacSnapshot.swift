@@ -48,6 +48,20 @@ import AppFeature
 ///   corners with the colour just inside each one, and write the PNG with
 ///   no alpha channel (the Mac App Store's screenshots;
 ///   `ios/scripts/mac-store-screenshots.sh`).
+/// - `-MacSnapshotActivate NO`: don't activate the app. By default it is
+///   activated and the photographed window made key, so the picture shows
+///   the window as it looks in use: red traffic lights, full-contrast
+///   sidebar text (an inactive window's sidebar labels come out washed out,
+///   lighter than their captions). An inactive picture is then a problem.
+///
+/// Before writing, the harness checks its own picture
+/// (`MacSnapshotCheck`): the pixel size is the window's at the display's
+/// scale, it isn't one colour, and (activated) the close button is red.
+/// While the screen is locked the app can't become active, so an activated
+/// run fails the last check; with the display asleep as well the window
+/// server draws nothing, which fails the first two. (Locked with the
+/// display awake — `caffeinate -u` — and `-MacSnapshotActivate NO`, the
+/// window is drawn, as an inactive window.)
 ///
 /// The flags are parsed by `MacSnapshotOptions` (AppFeature, unit-tested).
 /// Anything it can't honour — a size it can't read, a size below the
@@ -66,8 +80,8 @@ import AppFeature
 /// 9` — is taken by AppKit as a document to open at launch, and SwiftUI then
 /// opens no window at all.
 ///
-/// The window is never activated (the keyboard stays where it was), so it
-/// photographs as an inactive window.
+/// Activating takes the keyboard from whatever app had it for the few
+/// seconds of each run: run the set when nobody is typing.
 ///
 /// The app is sandboxed: when `<dir>` isn't writable from the sandbox, the
 /// PNG goes to the container's temporary directory instead. Either way the
@@ -91,6 +105,8 @@ enum MacSnapshot {
         case .light: NSApp.appearance = NSAppearance(named: .aqua)
         case nil: break
         }
+        let activates = options.activates
+        if activates { NSApp.activate() }
 
         let target = options.target.rawValue
 
@@ -130,13 +146,31 @@ enum MacSnapshot {
         }
 
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delay))
+            // Made key a moment before the picture, so it is drawn as the
+            // key window (a Settings or Help window opens after launch).
+            let settle = min(0.8, delay / 2)
+            try? await Task.sleep(for: .seconds(delay - settle))
+            if activates, let window = snapshotWindow(target) {
+                NSApp.activate()
+                window.makeKeyAndOrderFront(nil)
+            }
+            try? await Task.sleep(for: .seconds(settle))
             if let window = snapshotWindow(target) {
                 let content = window.contentRect(forFrameRect: window.frame).size
                 log("MacSnapshot: content \(Int(content.width))x\(Int(content.height)) pt, scale \(window.backingScaleFactor)")
+                log("MacSnapshot: app active \(NSApp.isActive), window key \(window.isKeyWindow)")
+                if isScreenLocked() {
+                    // Not a problem by itself: with the display awake the
+                    // window is still drawn (the checks below catch the
+                    // blank picture a sleeping display gives). But the app
+                    // can't become active behind the lock screen.
+                    log("MacSnapshot: note the screen is locked: the app can't become active, so the "
+                        + "window is drawn as an inactive one; with the display asleep nothing is drawn at all")
+                }
             }
             if let window = snapshotWindow(target),
-               let png = windowServerImage(window, opaque: options.opaque) ?? cachedDisplay(window) {
+               let png = windowServerImage(window, opaque: options.opaque, expectsKeyWindow: activates)
+                ?? cachedDisplay(window) {
                 if dumpsControls, let root = window.contentView {
                     dumpControls(root)
                 }
@@ -222,8 +256,8 @@ enum MacSnapshot {
 
     /// Type into the main window's message field with real key events, so
     /// the composer's own key handling runs (Return sends, Shift-Return
-    /// breaks the line). The window isn't key (the harness never activates
-    /// the app), so the field is made first responder directly.
+    /// breaks the line). The field is made first responder directly, so
+    /// this works whether or not the window is key yet.
     private static func typeIntoComposer(_ text: String, submit: Bool) {
         guard let window = mainWindow(), let root = window.contentView,
               let field = editableField(in: root) else {
@@ -270,10 +304,17 @@ enum MacSnapshot {
             ?? ""
     }
 
+    /// The login session says its screen is locked.
+    private static func isScreenLocked() -> Bool {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        return (session["CGSSessionScreenIsLocked"] as? Bool) ?? false
+    }
+
     /// The window server's image of this process's own window, at the
-    /// display's resolution, without the shadow. `opaque` fills the rounded
-    /// corners and drops the alpha channel.
-    private static func windowServerImage(_ window: NSWindow, opaque: Bool) -> Data? {
+    /// display's resolution, without the shadow, after the harness's own
+    /// checks (`MacSnapshotCheck`; each problem is printed). `opaque` fills
+    /// the rounded corners and drops the alpha channel.
+    private static func windowServerImage(_ window: NSWindow, opaque: Bool, expectsKeyWindow: Bool) -> Data? {
         typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW),
               let symbol = dlsym(handle, "CGWindowListCreateImage") else { return nil }
@@ -284,12 +325,23 @@ enum MacSnapshot {
             .takeRetainedValue() else { return nil }
         let output = opaque ? (MacSnapshotImage.flattened(image) ?? image) : image
         log("MacSnapshot: pixels \(output.width)x\(output.height)")
+        // What the picture should measure: the window's frame at the
+        // display's scale (the script checks the PNG against it too).
+        log("MacSnapshot: expect \(Int((window.frame.width * window.backingScaleFactor).rounded()))x"
+            + "\(Int((window.frame.height * window.backingScaleFactor).rounded()))")
+        for problem in MacSnapshotCheck.problems(in: output, pointSize: window.frame.size,
+                                                 scale: window.backingScaleFactor,
+                                                 expectsKeyWindow: expectsKeyWindow) {
+            log("MacSnapshot: problem \(problem)")
+        }
         return NSBitmapImageRep(cgImage: output).representation(using: .png, properties: [:])
     }
 
     /// Fallback: the view hierarchy drawn into a bitmap. On macOS 26 this
-    /// draws the window chrome but not SwiftUI's content.
+    /// draws the window chrome but not SwiftUI's content, so a picture made
+    /// this way is reported as a problem.
     private static func cachedDisplay(_ window: NSWindow) -> Data? {
+        log("MacSnapshot: problem the window server gave no picture; the fallback draws only the window's frame")
         guard let view = window.contentView?.superview ?? window.contentView else { return nil }
         view.layoutSubtreeIfNeeded()
         let bounds = view.bounds
@@ -319,6 +371,10 @@ enum MacSnapshot {
     /// Every AppKit control under `view`, frames in window coordinates
     /// (origin bottom-left).
     private static func dumpControls(_ view: NSView) {
+        if let scroll = view as? NSScrollView {
+            log("SCROLL frame=\(scroll.convert(scroll.bounds, to: nil)) hidden=\(scroll.isHiddenOrHasHiddenAncestor) "
+                + "document=\(scroll.documentView?.frame ?? .zero) visible=\(scroll.documentVisibleRect)")
+        }
         if view is NSControl || view is NSTextView {
             let title = (view as? NSButton)?.title ?? (view as? NSPopUpButton)?.titleOfSelectedItem ?? ""
             log("CONTROL \(type(of: view)) frame=\(view.convert(view.bounds, to: nil)) hidden=\(view.isHiddenOrHasHiddenAncestor) alpha=\(view.alphaValue) title=\(title)")
