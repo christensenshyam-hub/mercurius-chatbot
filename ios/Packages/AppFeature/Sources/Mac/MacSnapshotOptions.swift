@@ -20,9 +20,10 @@ public struct MacSnapshotOptions: Equatable, Sendable {
         case light, dark
     }
 
-    /// Which window to photograph.
+    /// Which window to photograph. `sheet`: the sheet attached to the
+    /// main window (a sheet is a window of its own).
     public enum Target: String, Sendable, CaseIterable {
-        case main, settings, help
+        case main, settings, help, sheet
     }
 
     /// Where the PNG goes (the sandbox may send it to the container's
@@ -36,7 +37,7 @@ public struct MacSnapshotOptions: Equatable, Sendable {
     public var size = MacSnapshotOptions.defaultSize
     /// `-MacSnapshotAppearance light|dark`; nil follows the system.
     public var appearance: Appearance?
-    /// `-MacSnapshotWindow main|settings|help`.
+    /// `-MacSnapshotWindow main|settings|help|sheet`.
     public var target: Target = .main
     /// The window is moved almost entirely off screen unless
     /// `-MacSnapshotOnScreen YES`.
@@ -127,7 +128,7 @@ public struct MacSnapshotOptions: Equatable, Sendable {
             if let parsed = Target(rawValue: raw) {
                 target = parsed
             } else {
-                problems.append("MacSnapshotWindow '\(raw)' isn't main, settings or help; photographing the main window")
+                problems.append("MacSnapshotWindow '\(raw)' isn't main, settings, help or sheet; photographing the main window")
             }
         }
 

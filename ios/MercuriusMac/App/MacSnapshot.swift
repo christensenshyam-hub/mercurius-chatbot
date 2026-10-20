@@ -39,6 +39,7 @@ import AppFeature
 /// - `-MacSnapshotWindow settings|help`: photograph that window instead of
 ///   the main one (pair with `-MacOpenWindow settings|help`, which opens
 ///   it; `-MacSettingsTab general|privacy|about` picks the Settings tab).
+///   `-MacSnapshotWindow sheet`: the sheet attached to the main window.
 /// - `-MacSnapshotType <text>`: halfway through the delay, put the cursor
 ///   in the composer and type `text` into it with real key events (`|`
 ///   types Shift-Return); `-MacSnapshotSubmit YES` then presses Return. The
@@ -181,6 +182,14 @@ enum MacSnapshot {
             }
             forgetFrames()
             NSApp.terminate(nil)
+            // A SwiftUI sheet attached to the window can hold the quit up
+            // (the mode explainer, the Quiz me sheet). The picture is
+            // written: leave anyway.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.5))
+                UserDefaults.standard.synchronize()
+                exit(0)
+            }
         }
     }
 
@@ -204,6 +213,11 @@ enum MacSnapshot {
             return NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.contains("Settings") ?? false) }
         case "help":
             return NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.hasPrefix("help") ?? false) }
+        case "sheet":
+            // The sheet attached to the main window (the mode explainer, the
+            // Quiz me sheet): a window of its own, which the main window's
+            // picture doesn't include.
+            return mainWindow()?.attachedSheet
         default:
             return mainWindow() ?? NSApp.windows.first { $0.isVisible && !($0 is NSPanel) && $0.contentView != nil }
         }
