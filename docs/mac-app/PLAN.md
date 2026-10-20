@@ -26,10 +26,10 @@ Branch `feat/mac-app-2026-10`, based on `fix/ios-student-2026-10` (PR #43). Step
 
 | Requirement | Status |
 |---|---|
-| Consent/age gate before **any** network call | Step 1: the shared `AppEntryView` gate runs in the Mac window's detail column. While it shows, the sidebar is hidden and disabled, the menu commands are off (`MacShellModel.isGated`), the Settings window shows a placeholder, and the shell's server tasks (progress pull, Progress hub) wait. Bootstrap's server fetches only run when consent is already current, as on iOS. |
-| Crisis support shows the numbers as readable, selectable text | **Step 2.** `CrisisSupportView` uses `tel:`/`sms:` `Link`s; on a Mac those open FaceTime or Messages, or nothing. |
-| Delete my data | Step 1 wires it: the Settings window (⌘,) and the chat header's Settings sheet both use the iOS `SettingsSheet`, including server erasure and consent withdrawal, and withdrawal puts the window back on the gate. Step 2 verifies it end to end on the Mac. |
-| Report a reply | Step 1 leaves the iOS flow in place (`ChatView` → `MessageListView` `onReport`), but its long-press entry point needs a Mac equivalent (context menu). **Step 2.** |
+| Consent/age gate before **any** network call | Step 1: the shared `AppEntryView` gate runs in the Mac window's detail column. While it shows, the sidebar is hidden and disabled, the menu commands are off (`MacShellModel.isGated`), the Settings window shows a placeholder, and the shell's server tasks (progress pull, Progress hub) wait. Bootstrap's server fetches only run when consent is already current, as on iOS. Step 2's new menu items are gated the same way; the Help window is static. |
+| Crisis support shows the numbers as readable, selectable text | **Done in step 2.** `MacCrisisNumbers`: each number large and selectable with a Copy button, then FaceTime/Messages links. |
+| Delete my data | **Step 2:** the native Settings window (Privacy tab) on the iPhone's `SettingsViewModel` and reset wiring; the main window is disabled while an erasure runs, even after Settings closes. Not clicked through end to end on the Mac (no Mac UI automation yet). |
+| Report a reply | **Step 2:** right-click a reply ▸ Report response ▸ reason (Copy is the first item), the same `reportMessage` path and feedback alert as iOS. |
 
 ## Client identification (server unchanged)
 
@@ -40,11 +40,27 @@ Today the server can't tell a Mac from an iPhone. Every request carries only `Co
 ## Steps
 
 1. **Target and shell** (done; `01-target-shell.md`). Includes dark mode for the Mac (BrandColor had no macOS dark variant). Covers the macOS target (sandbox, hardened runtime, Mac icon, privacy manifest, scheme); the App with WindowGroup + Settings + Commands; the NavigationSplitView shell; DEBUG state arguments; the `-MacSnapshot` harness; and tests.
-2. **Safety parity.** Crisis numbers as selectable text on macOS. A Mac entry point for reporting a reply (context menu). Delete my data and consent withdrawal driven end to end in the Settings window. Gate controls checked by eye on screen: the consent checkbox, and the age pop-up, which replaces the iOS wheel. The age step's "on the wheel" VoiceOver hint is wrong on a Mac.
-3. **Mac-native chat and lessons.** Return sends and Shift-Return adds a newline. The composer's text-field style (it draws a dark bezel inside the capsule). A readable message width in a wide window. Focus, hover, a toolbar (New Chat, mode), paste and drag-and-drop for images, and window titles.
-4. **Notifications.** `NotificationScheduler` / `NotificationRouter` are iOS-only today. On the Mac the Your path step's reminder choices are stored but schedule nothing, and Today hides the weekly-nudge card. Also deep links (`mercurius://lesson/<id>`).
-5. **Polish.** Help menu (How Mercurius teaches, support resources), the Settings window layout, a dark-mode pass, VoiceOver and keyboard navigation, window state restoration, the App Store review prompt (not wired on the Mac), and Mac-sized path and Today layouts.
-6. **Release.** Create the Mac App Store provisioning profile "Mercurius Mac App Store" for the real id and a Mac Installer Distribution certificate. Add a `release.sh --mac` path (archive → export → `.pkg` → upload). In App Store Connect, add the macOS platform to the existing app record (universal purchase), plus Mac screenshots and the same privacy label. Add a CI job that builds `MercuriusMac` on macos-14 / Xcode 16.2, plus the `X-Mercurius-Client` header.
+2. **Mac-native** (done; `02-mac-native.md`). This took in what the first plan split across steps 2–5:
+   - safety parity (crisis numbers, Report by right-click, delete in the Settings window, the age step's Mac wording);
+   - the composer: Return sends, Shift-Return breaks the line, focus on open; images by button, drop or paste;
+   - reading columns, hover and the pointing hand, Copy;
+   - the chat toolbar (mode, Explain More, New Chat) and the menu bar (⌘N, ⌘1–⌘3 modes, ⌘R, ⇧⌘E, ⇧⌘A, ⌥⌘1–⌥⌘3, ⌘?);
+   - the native Settings window and a Help window;
+   - reminders through UserNotifications, with the click-to-lesson link;
+   - the lesson-complete card;
+   - dark mode checked in every state.
+   It also found that macOS gives SwiftUI apps no Dynamic Type (measured).
+3. **Release.**
+   - Create the Mac App Store provisioning profile "Mercurius Mac App Store" for the real id and a Mac Installer Distribution certificate.
+   - Add a `release.sh --mac` path: archive → export → `.pkg` → upload.
+   - In App Store Connect, add the macOS platform to the existing app record (universal purchase), plus Mac screenshots and the same privacy label.
+   - Add a CI job that builds `MercuriusMac` on macos-14 / Xcode 16.2, and the `X-Mercurius-Client` header.
+
+   Also open:
+   - window state restoration and the App Store review prompt on the Mac;
+   - a Mac UI-test target (clicking through delete, withdraw and report);
+   - the Mac wording of the network messages ("try cellular data") and of the consent disclosure's Settings path;
+   - a text-size control.
 
 ## Open questions for the founder
 

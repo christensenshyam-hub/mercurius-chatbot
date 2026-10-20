@@ -1,0 +1,4 @@
+CONTROL SwiftUIPopupButton frame=(565.0, 598.0, 150.0, 28.0) hidden=false alpha=1.0 title=Select your age
+CONTROL NSScroller frame=(280.0, 526.0, 0.0, 100.0) hidden=true alpha=1.0 title=
+CONTROL SwiftUIOutlineListView frame=(8.0, 292.0, 250.0, 476.0) hidden=true alpha=1.0 title=
+CONTROL NSScroller frame=(-9.0, 792.0, 17.0, 0.0) hidden=true alpha=1.0 title=
