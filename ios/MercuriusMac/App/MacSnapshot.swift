@@ -35,6 +35,14 @@ import AppKit
 /// - `-MacSnapshotDumpControls YES`: also print every AppKit control in the
 ///   window (class, frame, title) as `CONTROL …` lines — evidence for the
 ///   controls the capture can't show (below).
+/// - `-MacSnapshotWindow settings|help`: photograph that window instead of
+///   the main one (pair with `-MacOpenWindow settings|help`, which opens
+///   it; `-MacSettingsTab general|privacy|about` picks the Settings tab).
+/// - `-MacSnapshotType <text>`: halfway through the delay, put the cursor
+///   in the composer and type `text` into it with real key events (`|`
+///   types Shift-Return); `-MacSnapshotSubmit YES` then presses Return. The
+///   field's text is printed as `COMPOSER <text>` after each, so a run
+///   shows what Shift-Return and Return did.
 ///
 /// What the capture can't show: Liquid Glass surfaces that blend with what is
 /// behind the window. With only this window in the picture they come out
@@ -73,33 +81,155 @@ enum MacSnapshot {
         default: break
         }
 
-        // SwiftUI has made the window by now (applicationDidFinishLaunching):
-        // size it and move it before it is first drawn on screen.
+        let target = defaults.string(forKey: "MacSnapshotWindow") ?? "main"
+
+        // SwiftUI has made the main window by now
+        // (applicationDidFinishLaunching): size it and move it before it is
+        // first drawn on screen. A Settings or Help window opens a moment
+        // later; `placeNewWindows` moves it as it appears.
         if let window = mainWindow() {
-            window.setContentSize(size)
-            if offscreen {
-                window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
-            } else {
-                window.center()
+            if target == "main" { window.setContentSize(size) }
+            place(window, offscreen: offscreen)
+        }
+        placeNewWindows(offscreen: offscreen, helpSize: target == "help" ? size : nil)
+
+        if let text = defaults.string(forKey: "MacSnapshotType") {
+            let submits = defaults.bool(forKey: "MacSnapshotSubmit")
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(delay / 2))
+                typeIntoComposer(text, submit: submits)
             }
         }
 
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
-            if let window = mainWindow(), let png = windowServerImage(window) ?? cachedDisplay(window) {
+            if let window = snapshotWindow(target), let png = windowServerImage(window) ?? cachedDisplay(window) {
                 if dumpsControls, let root = window.contentView {
                     dumpControls(root)
                 }
                 write(png, name: name, preferred: directory)
             } else {
-                log("MacSnapshot: no window to render")
+                log("MacSnapshot: no \(target) window to render; windows: "
+                    + NSApp.windows.map { "\($0.identifier?.rawValue ?? "-") visible=\($0.isVisible)" }.joined(separator: ", "))
             }
+            forgetFrames()
             NSApp.terminate(nil)
         }
     }
 
     private static func mainWindow() -> NSWindow? {
-        NSApp.windows.first { $0.isVisible && !($0 is NSPanel) && $0.contentView != nil }
+        NSApp.windows.first { $0.isVisible && !($0 is NSPanel) && $0.contentView != nil && isMain($0) }
+    }
+
+    private static func isMain(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue.hasPrefix("main") ?? false
+    }
+
+    /// The window to photograph: the main one, or the Settings / Help window.
+    private static func snapshotWindow(_ target: String) -> NSWindow? {
+        switch target {
+        case "settings":
+            return NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.contains("Settings") ?? false) }
+        case "help":
+            return NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.hasPrefix("help") ?? false) }
+        default:
+            return mainWindow() ?? NSApp.windows.first { $0.isVisible && !($0 is NSPanel) && $0.contentView != nil }
+        }
+    }
+
+    /// Windows already moved (by number), so each is placed once.
+    private static var placed: Set<Int> = []
+    /// The autosave names of the windows moved, to forget their frames.
+    private static var autosaveNames: Set<String> = []
+
+    /// Move a window off screen (or centre it), and keep its frame out of
+    /// the app's saved window frames — or the next real launch would open
+    /// it off screen.
+    private static func place(_ window: NSWindow, offscreen: Bool) {
+        guard placed.insert(window.windowNumber).inserted else { return }
+        if !window.frameAutosaveName.isEmpty { autosaveNames.insert(window.frameAutosaveName) }
+        window.setFrameAutosaveName("")
+        if offscreen {
+            window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+        } else {
+            window.center()
+        }
+    }
+
+    /// Place every window that appears from now on, as it appears.
+    private static func placeNewWindows(offscreen: Bool, helpSize: NSSize?) {
+        NotificationCenter.default.addObserver(forName: NSWindow.didUpdateNotification, object: nil,
+                                               queue: .main) { note in
+            // Delivered on the main queue, so the window is used on the
+            // main actor.
+            nonisolated(unsafe) let object = note.object
+            MainActor.assumeIsolated {
+                guard let window = object as? NSWindow, window.isVisible,
+                      !placed.contains(window.windowNumber) else { return }
+                if let helpSize, window.identifier?.rawValue.hasPrefix("help") == true {
+                    window.setContentSize(helpSize)
+                }
+                place(window, offscreen: offscreen)
+            }
+        }
+    }
+
+    private static func forgetFrames() {
+        for name in autosaveNames {
+            UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(name)")
+        }
+    }
+
+    // MARK: - Typing into the composer
+
+    /// Type into the main window's message field with real key events, so
+    /// the composer's own key handling runs (Return sends, Shift-Return
+    /// breaks the line). The window isn't key (the harness never activates
+    /// the app), so the field is made first responder directly.
+    private static func typeIntoComposer(_ text: String, submit: Bool) {
+        guard let window = mainWindow(), let root = window.contentView,
+              let field = editableField(in: root) else {
+            log("MacSnapshot: no composer to type into")
+            return
+        }
+        window.makeFirstResponder(field)
+        for character in text {
+            if character == "|" {
+                press("\r", keyCode: 36, flags: .shift, in: window)
+            } else {
+                press(String(character), keyCode: 0, flags: [], in: window)
+            }
+        }
+        log("COMPOSER \(composerText(window).debugDescription)")
+        if submit {
+            press("\r", keyCode: 36, flags: [], in: window)
+            log("COMPOSER after Return \(composerText(window).debugDescription)")
+        }
+    }
+
+    private static func press(_ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags, in window: NSWindow) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: flags,
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: keyCode) else { continue }
+            window.sendEvent(event)
+        }
+    }
+
+    private static func editableField(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField, field.isEditable { return field }
+        for sub in view.subviews {
+            if let field = editableField(in: sub) { return field }
+        }
+        return nil
+    }
+
+    private static func composerText(_ window: NSWindow) -> String {
+        (window.firstResponder as? NSTextView)?.string
+            ?? window.contentView.flatMap(editableField(in:))?.stringValue
+            ?? ""
     }
 
     /// The window server's image of this process's own window, at the

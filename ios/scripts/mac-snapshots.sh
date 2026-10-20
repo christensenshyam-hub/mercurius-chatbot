@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
 # Screenshots of the native Mac app, rendered by the app itself.
 #
-# Each shot launches the DEBUG build with `-MacSnapshot <dir>` plus a state
-# argument; the app draws its own window into a PNG (NSView.cacheDisplay — no
-# screencapture, no Screen Recording permission), writes it and quits. Every
-# run is isolated: in-memory chats (-UITests), an in-memory session id
-# (-EphemeralSession, no Keychain item) and the local server URL
-# (-UseLocalServer), so nothing reaches production.
+# Each shot launches the DEBUG build with `-MacSnapshot <dir>` plus state
+# arguments; the app photographs its own window (the window server's image
+# of it — no screencapture, no Screen Recording permission), writes the PNG
+# and quits. Every run is isolated: in-memory chats (-UITests), an in-memory
+# session id (-EphemeralSession, no Keychain item) and the local server URL
+# (-UseLocalServer), so nothing reaches production. A send in a shot fails
+# fast against the (absent) local server, which is how `chat-failed` gets
+# its Retry state.
 #
 # Each launch opens a real window for a few seconds, moved almost entirely
-# off screen before it is drawn (the window server still renders it). Liquid
-# Glass surfaces that blend with what's behind the window (sidebar, toolbar
-# edge, checkbox and pop-up bezels) come out dark or missing in the PNGs;
-# the gate shots also write <shot>.controls.txt, the window's AppKit controls,
-# to show those are present. See MercuriusMac/App/MacSnapshot.swift.
+# off screen before it is drawn (the window server still renders it), and
+# never takes the keyboard. Liquid Glass surfaces that blend with what's
+# behind the window (sidebar, toolbar, checkbox and pop-up bezels) come out
+# dark or missing in the PNGs; see MercuriusMac/App/MacSnapshot.swift.
 #
 # Usage (from ios/, after building the MercuriusMac scheme into the derived
 # data below):
 #   scripts/mac-snapshots.sh <out-dir> [shot ...]
-# Shots: gate-meet gate-age gate-consent today path lesson chat today-dark
-# (default: all).
+# Each window shot is taken four ways: <shot>.png (1280×800, light),
+# <shot>-dark.png, <shot>-min.png (860×600, the window's minimum) and
+# <shot>-min-dark.png. The Settings and Help windows have their own size:
+# light and dark only. Set VARIANTS="light" (or any of light dark min
+# min-dark) to take fewer.
 set -euo pipefail
 
 OUT=${1:?usage: mac-snapshots.sh <out-dir> [shot ...]}
@@ -29,15 +33,17 @@ BIN="$APP/Contents/MacOS/Mercurius"
 [ -x "$BIN" ] || { echo "no Mac build at $APP" >&2; exit 1; }
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
+VARIANTS=${VARIANTS:-"light dark min min-dark"}
 
 # Every flag carries a value: AppKit takes a bare word after a value-less
 # flag (`-EnterShell -MacSnapshotDelay 9`) as a document to open, and SwiftUI
 # then opens no window.
 ISOLATED=(-UITests YES -EphemeralSession YES -UseLocalServer YES -ApplePersistenceIgnoreState YES)
 GATE=(-consentVersion 0 -hasSeenOnboarding NO)
-PAST_GATE=(-consentVersion 1 -hasSeenOnboarding YES)
+PAST_GATE=(-consentVersion 1 -hasSeenOnboarding YES -hasSeenChatInputHint NO)
 
-shot() {
+# One launch → one PNG.
+snap() {
   local name=$1; shift
   local log
   log=$(mktemp)
@@ -45,7 +51,7 @@ shot() {
   "$BIN" -MacSnapshot "$OUT" -MacSnapshotName "$name" "${ISOLATED[@]}" "$@" 2>"$log" &
   local pid=$!
   # The app quits itself after its delay; give it a hard ceiling anyway.
-  for _ in $(seq 1 40); do
+  for _ in $(seq 1 50); do
     kill -0 "$pid" 2>/dev/null || break
     sleep 0.5
   done
@@ -63,26 +69,67 @@ shot() {
   if [ -n "$wrote" ] && [ "$wrote" != "$OUT/$name.png" ]; then
     cp "$wrote" "$OUT/$name.png"
   fi
-  if [ -f "$OUT/$name.png" ]; then echo "$name: $OUT/$name.png"; else echo "$name: FAILED" >&2; cat "$log" >&2; fi
+  if [ -f "$OUT/$name.png" ]; then echo "$name: ok"; else echo "$name: FAILED" >&2; cat "$log" >&2; fi
   grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
+  grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
   rm -f "$log"
 }
 
+# A main-window state in each variant.
+window_shot() {
+  local name=$1; shift
+  for variant in $VARIANTS; do
+    case $variant in
+      light)    snap "$name"          "$@" -MacSnapshotAppearance light ;;
+      dark)     snap "$name-dark"     "$@" -MacSnapshotAppearance dark ;;
+      min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 860x600 ;;
+      min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 860x600 ;;
+    esac
+  done
+}
+
+# The Settings or Help window: its own size, light and dark.
+panel_shot() {
+  local name=$1; shift
+  for variant in $VARIANTS; do
+    case $variant in
+      light) snap "$name"      "$@" -MacSnapshotAppearance light ;;
+      dark)  snap "$name-dark" "$@" -MacSnapshotAppearance dark ;;
+    esac
+  done
+}
+
+LESSON=(-LessonPreview YES -LessonReplay YES -LessonSkipIntro YES)
+
 run() {
   case $1 in
-    gate-meet)    shot "$1" "${GATE[@]}" -GateStep meet ;;
-    gate-age)     shot "$1" "${GATE[@]}" -GateStep age -MacSnapshotDumpControls YES ;;
-    gate-consent) shot "$1" "${GATE[@]}" -GateStep disclosure -MacSnapshotDumpControls YES ;;
-    today)        shot "$1" "${PAST_GATE[@]}" -EnterShell YES ;;
-    path)         shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES ;;
-    lesson)       shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -LessonReplay YES -LessonSkipIntro YES -MacSnapshotDelay 9 ;;
-    chat)         shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
-    today-dark)   shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacSnapshotAppearance dark ;;
+    gate-meet)       window_shot "$1" "${GATE[@]}" -GateStep meet ;;
+    gate-age)        window_shot "$1" "${GATE[@]}" -GateStep age -MacSnapshotDumpControls YES ;;
+    gate-consent)    window_shot "$1" "${GATE[@]}" -GateStep disclosure -MacSnapshotDumpControls YES ;;
+    today)           window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES ;;
+    path)            window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES ;;
+    lesson-intro)    window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES ;;
+    lesson)          window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -MacSnapshotDelay 10 ;;
+    lesson-complete) window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -ForceCelebrate YES -MacSnapshotDelay 5 ;;
+    chat)            window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
+    chat-thread)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -SeedDemoChat YES ;;
+    chat-typing)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "Why do chatbots sound so sure?|Even when they're wrong?" -MacSnapshotDelay 6 ;;
+    chat-failed)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "What is a token?" -MacSnapshotSubmit YES -MacSnapshotDelay 8 ;;
+    unit-test)       window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage review ;;
+    crisis)          window_shot "$1" "${PAST_GATE[@]}" -UnitTestCrisisPreview YES -MacSnapshotDelay 5 ;;
+    settings-general) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab general ;;
+    settings-privacy) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab privacy ;;
+    settings-about)   panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab about ;;
+    help)            panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 ;;
+    help-mac)        panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 -MacHelpTab mac ;;
+    help-support)    panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 -MacHelpTab help ;;
     *) echo "unknown shot: $1" >&2; return 1 ;;
   esac
 }
 
+ALL="gate-meet gate-age gate-consent today path lesson-intro lesson lesson-complete chat chat-thread chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
 if [ $# -eq 0 ]; then
-  set -- gate-meet gate-age gate-consent today path lesson chat today-dark
+  # shellcheck disable=SC2086
+  set -- $ALL
 fi
 for name in "$@"; do run "$name"; done
