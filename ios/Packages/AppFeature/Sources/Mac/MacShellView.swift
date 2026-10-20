@@ -61,11 +61,13 @@ struct MacShellView: View {
                 progress: env.progressStore,
                 onDelete: { pendingDelete = $0 }
             )
-            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
             .disabled(isGated)
             // On the sidebar column, where the split view reads it: no way
             // to reveal the (empty, disabled) sidebar while the gate shows.
             .toolbar(removing: isGated ? .sidebarToggle : nil)
+            // Outermost: under `.toolbar(removing:)` the split view ignored
+            // it and opened the sidebar at 148 pt.
+            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
         } detail: {
             detail
                 .frame(minWidth: 520, minHeight: 480)
