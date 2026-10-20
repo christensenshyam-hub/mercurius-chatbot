@@ -125,6 +125,57 @@ struct MacSnapshotOptionsTests {
         #expect(Self.appStoreSizes.contains(store.pixelSize(scale: 1)))
     }
 
+    /// A window-like picture: the left half one colour (the sidebar), the
+    /// right half another (the detail), its four corners transparent.
+    private func windowPicture(width: Int = 200, height: Int = 100, corner: Int = 10) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0.9, green: 0.9, blue: 0.95, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width / 2, height: height))
+        context.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(CGRect(x: width / 2, y: 0, width: width - width / 2, height: height))
+        for origin in [(0, 0), (width - corner, 0), (0, height - corner), (width - corner, height - corner)] {
+            context.clear(CGRect(x: origin.0, y: origin.1, width: corner, height: corner))
+        }
+        return try #require(context.makeImage())
+    }
+
+    /// RGBA bytes of `image`, row 0 at the top.
+    private func pixels(_ image: CGImage) throws -> (bytes: [UInt8], bytesPerRow: Int) {
+        let context = try #require(CGContext(
+            data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let data = try #require(context.data)
+        let count = context.bytesPerRow * image.height
+        return (Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: count)),
+                context.bytesPerRow)
+    }
+
+    @Test("An opaque picture has no alpha channel and keeps its size")
+    func opaqueHasNoAlpha() throws {
+        let flat = try #require(MacSnapshotImage.flattened(try windowPicture()))
+        #expect(flat.width == 200 && flat.height == 100)
+        #expect([.none, .noneSkipLast, .noneSkipFirst].contains(flat.alphaInfo))
+    }
+
+    @Test("Each transparent corner takes the colour just inside it; the rest is unchanged")
+    func cornersFilled() throws {
+        let flat = try #require(MacSnapshotImage.flattened(try windowPicture()))
+        let (bytes, row) = try pixels(flat)
+        func rgb(_ x: Int, _ y: Int) -> [UInt8] { Array(bytes[(y * row + x * 4)..<(y * row + x * 4 + 3)]) }
+        let sidebar = rgb(50, 50), detail = rgb(150, 50)
+        #expect(sidebar != detail)
+        // Corners: left ones the sidebar's colour, right ones the detail's.
+        #expect(rgb(0, 0) == sidebar)
+        #expect(rgb(0, 99) == sidebar)
+        #expect(rgb(199, 0) == detail)
+        #expect(rgb(199, 99) == detail)
+        // Every pixel is opaque.
+        #expect(stride(from: 3, to: bytes.count, by: 4).allSatisfy { bytes[$0] == 255 })
+    }
+
     /// The Mac App Store's screenshot sizes (16:10), in pixels.
     static let appStoreSizes: [CGSize] = [
         CGSize(width: 1280, height: 800), CGSize(width: 1440, height: 900),

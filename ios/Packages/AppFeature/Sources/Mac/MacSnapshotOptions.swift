@@ -184,4 +184,55 @@ public struct MacSnapshotOptions: Equatable, Sendable {
         number == number.rounded() ? String(Int(number)) : String(number)
     }
 }
+
+/// The harness's picture as the Mac App Store wants it (`-MacSnapshotOpaque`).
+public enum MacSnapshotImage {
+    /// The image with its transparent corners filled and no alpha channel.
+    /// Each corner takes the colour found a little inside it (the sidebar's
+    /// at the left, the detail's at the right), so the window reads as a
+    /// square-cornered picture of itself.
+    public static func flattened(_ image: CGImage) -> CGImage? {
+        let width = image.width, height = image.height
+        guard width > 0, height > 0,
+              let source = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let full = CGRect(x: 0, y: 0, width: width, height: height)
+        source.draw(image, in: full)
+        guard let pixels = source.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+        let bytesPerRow = source.bytesPerRow
+        // 24 px covers the corner radius at 2x with room to spare; the colour
+        // is read from inside it.
+        let corner = min(24, width / 4, height / 4)
+        let probe = min(corner * 2, width / 2, height / 2)
+        func color(x: Int, y: Int) -> CGColor {
+            // Row 0 of the buffer is the top of the picture.
+            let offset = y * bytesPerRow + x * 4
+            let alpha = CGFloat(pixels[offset + 3]) / 255
+            guard alpha > 0 else { return CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1) }
+            return CGColor(srgbRed: CGFloat(pixels[offset]) / 255 / alpha,
+                           green: CGFloat(pixels[offset + 1]) / 255 / alpha,
+                           blue: CGFloat(pixels[offset + 2]) / 255 / alpha, alpha: 1)
+        }
+        guard let output = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                     bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        // Corners in buffer terms (top-left origin) and their drawing rects
+        // (bottom-left origin).
+        let corners: [(probeX: Int, probeY: Int, rect: CGRect)] = [
+            (probe, probe, CGRect(x: 0, y: height - corner, width: corner, height: corner)),
+            (width - 1 - probe, probe, CGRect(x: width - corner, y: height - corner, width: corner, height: corner)),
+            (probe, height - 1 - probe, CGRect(x: 0, y: 0, width: corner, height: corner)),
+            (width - 1 - probe, height - 1 - probe, CGRect(x: width - corner, y: 0, width: corner, height: corner)),
+        ]
+        output.setFillColor(color(x: width / 2, y: height / 2))
+        output.fill(full)
+        for item in corners {
+            output.setFillColor(color(x: item.probeX, y: item.probeY))
+            output.fill(item.rect)
+        }
+        output.draw(image, in: full)
+        return output.makeImage()
+    }
+}
 #endif
