@@ -274,9 +274,18 @@ struct NightLessonComplete: View {
                 content(compact: compact)
                     .padding(.horizontal, Night.Space.hero)
                     .padding(.top, Night.Space.hero)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 16)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // In a short window the content scrolls above the pinned
+            // buttons: a line running under them fades out rather than
+            // being cut mid-line.
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [fadeColor.opacity(0), fadeColor], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 16)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             buttons
                 .padding(.horizontal, Night.Space.hero)
                 .padding(.top, 12)
@@ -291,6 +300,9 @@ struct NightLessonComplete: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
+
+    /// The card's canvas at its foot (flat under Increase Contrast).
+    private var fadeColor: Color { night.increasedContrast ? Night.canvasTop : Night.canvasBottom }
 
     private func content(compact: Bool) -> some View {
         let objective = recap.objective
