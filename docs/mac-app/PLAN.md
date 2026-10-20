@@ -20,7 +20,7 @@ Branch `feat/mac-app-2026-10`, based on `fix/ios-student-2026-10` (PR #43). Step
 - Deployment targets are iOS 17 and macOS 14. Locally we build with Xcode 26.4 (Swift 6.3); CI uses Xcode 16.2 (Swift 6.0.3) on macos-14. So any API newer than macOS 14 / iOS 17 needs `#available` **and** has to compile on the macOS 15 SDK. Also avoid `Double`·`CGFloat` mixes, which Swift 6.0 rejects.
 - Live Activity, ActivityKit, widgets and haptics are iOS-only. UserNotifications, the Keychain, SwiftData, PhotosPicker and URLSession SSE all work on macOS.
 - **The server is unchanged.** The Mac talks to production exactly as iOS does (see Client identification).
-- **Identity is per device.** `SessionIdentity` keeps an anonymous id in the Keychain. On macOS that is the login keychain, which doesn't sync through iCloud. A student's Mac and iPhone are therefore two separate anonymous sessions, each with its own progress, streak and chats. There are no accounts. **Product gap:** nothing carries progress from phone to Mac. Cross-device sync is out of scope here, because it needs accounts or a pairing scheme.
+- **Identity is per device.** `SessionIdentity` keeps an anonymous id in the Keychain. On macOS that is the login keychain, which doesn't sync through iCloud. It is not "this device only" the way iOS's is, though: the login keychain ignores that attribute, so the item moves to a new Mac with Migration Assistant or a Time Machine restore (the `Keychain` comment says so; step 05). A student's Mac and iPhone are therefore two separate anonymous sessions, each with its own progress, streak and chats. There are no accounts. **Product gap:** nothing carries progress from phone to Mac. Cross-device sync is out of scope here, because it needs accounts or a pairing scheme.
 
 ## Safety and consent parity (must match iOS)
 
@@ -28,7 +28,7 @@ Branch `feat/mac-app-2026-10`, based on `fix/ios-student-2026-10` (PR #43). Step
 |---|---|
 | Consent/age gate before **any** network call | Step 1: the shared `AppEntryView` gate runs in the Mac window's detail column. While it shows, the sidebar is hidden and disabled, the menu commands are off (`MacShellModel.isGated`), the Settings window shows a placeholder, and the shell's server tasks (progress pull, Progress hub) wait. Bootstrap's server fetches only run when consent is already current, as on iOS. Step 2's new menu items are gated the same way; the Help window is static. |
 | Crisis support shows the numbers as readable, selectable text | **Done in step 2.** `MacCrisisNumbers`: each number large and selectable with a Copy button, then FaceTime/Messages links. |
-| Delete my data | **Step 2:** the native Settings window (Privacy tab) on the iPhone's `SettingsViewModel` and reset wiring; the main window is disabled while an erasure runs, even after Settings closes. Not clicked through end to end on the Mac (no Mac UI automation yet). |
+| Delete my data | **Step 2:** the native Settings window (Privacy tab) on the iPhone's `SettingsViewModel` and reset wiring; the main window is disabled while an erasure runs, even after Settings closes. **Step 5:** an erase (or reset, or withdrawal) also stops a lesson's reply in flight before the server delete and closes the lesson or unit check, and the menu's shell commands are off meanwhile (tested). Not clicked through end to end on the Mac (no Mac UI automation yet). |
 | Report a reply | **Step 2:** right-click a reply ▸ Report response ▸ reason (Copy is the first item), the same `reportMessage` path and feedback alert as iOS. |
 
 ## Client identification (server unchanged)
@@ -39,12 +39,12 @@ Today the server can't tell a Mac from an iPhone. Every request carries only `Co
 
 ## Steps
 
-1. **Target and shell** (done; `01-target-shell.md`). Includes dark mode for the Mac (BrandColor had no macOS dark variant). Covers the macOS target (sandbox, hardened runtime, Mac icon, privacy manifest, scheme); the App with WindowGroup + Settings + Commands; the NavigationSplitView shell; DEBUG state arguments; the `-MacSnapshot` harness; and tests.
+1. **Target and shell** (done; `01-target-shell.md`). Includes dark mode for the Mac (BrandColor had no macOS dark variant). Covers the macOS target (sandbox, hardened runtime, Mac icon, privacy manifest, scheme); the App with WindowGroup (a single `Window` since step 05) + Settings + Commands; the NavigationSplitView shell; DEBUG state arguments; the `-MacSnapshot` harness; and tests.
 2. **Mac-native** (done; `02-mac-native.md`). This took in what the first plan split across steps 2–5:
    - safety parity (crisis numbers, Report by right-click, delete in the Settings window, the age step's Mac wording);
    - the composer: Return sends, Shift-Return breaks the line, focus on open; images by button, drop or paste;
    - reading columns, hover and the pointing hand, Copy;
-   - the chat toolbar (mode, Explain More, New Chat) and the menu bar (⌘N, ⌘1–⌘3 modes, ⌘R, ⇧⌘E, ⇧⌘A, ⌥⌘1–⌥⌘3, ⌘?);
+   - the chat toolbar (mode, Explain More, New Chat) and the menu bar (⌘N, ⌘1–⌘3 modes, ⌘R, ⇧⌘E, ⇧⌘A, ⌥⌘1–⌥⌘3, ⌘?; step 05 swapped the modes and the destinations);
    - the native Settings window and a Help window;
    - reminders through UserNotifications, with the click-to-lesson link;
    - the lesson-complete card;
@@ -61,16 +61,29 @@ Today the server can't tell a Mac from an iPhone. Every request carries only `Co
    - No network before consent, by code reading and by fresh-container launches against a logging server.
    - No screenshots: the screen stayed locked.
    - Two low findings: Release honours launch arguments on a Mac (`-UITests`, the argument domain); `mac-snapshots.sh` accepts blank pictures.
-5. **Founder: ship it** (`FOUNDER_STEPS.md`). Accept the agreement that makes App Store Connect answer 403, run `provision.sh --platform mac`, add the macOS platform to the record, `release.sh --platform mac`, rehearse from TestFlight, take the store screenshots on an unlocked Mac, submit.
+5. **The review's findings** (done; `05-review-fixes.md`). A design review (the views students use were still the iPhone app at Mac size) and a code review (an erase leaving a lesson running) gave 18 findings; all are fixed, two partly (the consent wording waits on the founder; the session id's keychain is documented, not moved):
+   - one Mac type ramp (`MacTypeRamp`: body 15, captions ≥ 12, replies 15) and narrower columns;
+   - the crisis numbers in one card at body size;
+   - lessons and unit checks put their title, place and way back in the toolbar; the path's streak is a toolbar button;
+   - Today is an overview (next lesson, week, streak, recent chats);
+   - first-run steps size to their content; Return, Escape (when nothing is lost) and A–D in the unit check;
+   - ⌘1–⌘3 for Today / Path / Chat, ⌥⌘1–⌥⌘3 for the modes (chat only);
+   - a 700 pt minimum with the sidebar folding below 860 pt; a single `Window`;
+   - sidebar chat rows, a New Chat row, a folding Learning path, the Delete key; thread opens run in order;
+   - the erase fix; test hooks DEBUG-only; per-platform network copy;
+   - the harness activates the app and fails blank, wrong-sized or inactive pictures.
+   The screenshots were retaken on a locked Mac with its display kept awake (drawn, but as an inactive window).
+6. **Founder: ship it** (`FOUNDER_STEPS.md`). Accept the agreement that makes App Store Connect answer 403, run `provision.sh --platform mac`, add the macOS platform to the record, `release.sh --platform mac`, rehearse from TestFlight, take the store screenshots on an unlocked Mac, submit.
 
 Still open (not started):
 - the `X-Mercurius-Client` header (client side; the server change that reads it is separate);
 - window state restoration and the App Store review prompt on the Mac;
 - a Mac UI-test target (clicking through delete, withdraw and report). It would drive the real pointer and keyboard of whatever Mac runs it, and macOS asks for an administrator to allow UI automation, so it suits CI better than the founder's Mac;
-- the Mac wording of the network messages ("try cellular data") and of the consent disclosure's Settings path;
-- a text-size control.
+- the Mac wording of the consent disclosure's Settings path (versioned consent text: the founder's call; the network messages are per platform since step 05);
+- a text-size control (the Mac's ramp is fixed at 15 pt body);
+- a set of screenshots of the key window, which needs an unlocked Mac (`shots/05` shows inactive windows).
 
 ## Open questions for the founder
 
-- **iPad-on-Mac users.** Once the native app ships, the Mac App Store replaces an installed iPad version. The native app then reads that version's container (consent, the local progress cache, and its chats in the SwiftData store). It does **not** read its Keychain session id: iPad apps use the data-protection keychain, while this app uses the login keychain. Such a student would see their old chats and progress locally under a **new** anonymous session, and the progress would push to that new session. Possible fix: use the data-protection keychain on macOS. That needs the app's keychain access group, which an App Store build has, and it keeps the old id. Not verified yet; it needs a TestFlight-for-Mac build.
+- **iPad-on-Mac users.** (The same fix would make the Mac's session id this-device-only, as on iOS.) Once the native app ships, the Mac App Store replaces an installed iPad version. The native app then reads that version's container (consent, the local progress cache, and its chats in the SwiftData store). It does **not** read its Keychain session id: iPad apps use the data-protection keychain, while this app uses the login keychain. Such a student would see their old chats and progress locally under a **new** anonymous session, and the progress would push to that new session. Possible fix: use the data-protection keychain on macOS. That needs the app's keychain access group, which an App Store build has, and it keeps the old id. Not verified yet; it needs a TestFlight-for-Mac build.
 - Keep or drop the Debug-only `.macdev` bundle id (above).

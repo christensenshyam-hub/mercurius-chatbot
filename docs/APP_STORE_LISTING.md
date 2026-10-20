@@ -426,13 +426,17 @@ corners filled and no alpha channel. It writes `01-path.png` … `06-chat-thread
 and fails on a wrong size, on alpha, or on anything the harness couldn't do.
 **The Mac must be unlocked with the display on**: with the screen locked the
 window server draws nothing and the pictures come out blank and the wrong size.
+The harness also activates the app for each shot and fails a picture of an
+inactive window (grey traffic lights, washed-out sidebar text, grey
+prominent buttons), which a locked Mac can't avoid: run it when nobody is
+typing on the Mac, since each shot takes the keyboard for a few seconds.
 
 | # | State | What it shows | Caption (if you add a band) |
 |---|---|---|---|
 | 1 | `path` | Unit 1's stretch of the path in the window, the sidebar with all eight units | *Learn how AI really works — 35 short lessons.* |
 | 2 | `lesson` | A lesson reply with KEY IDEA / EXAMPLE cards at the Mac's reading width | *Short lessons. Show you understand.* |
 | 3 | `chat` | The empty chat: the toolbar's Socratic / Debate / Discussion picker and the prompt cards | *A tutor that asks — so you actually learn.* |
-| 4 | `today` | Today: Merc, this week's goal and the next lesson | *Pick up where you left off.* |
+| 4 | `today` | Today: the next lesson, this week's goal, the streak and recent chats | *Pick up where you left off.* |
 | 5 | `gate-consent` | The first-launch disclosure: where messages and photos go | *You know where your words go.* |
 | 6 | `chat-thread` | A saved thread (see the caution below) | — |
 
@@ -477,7 +481,7 @@ FIRST LAUNCH (in the main window, before anything is sent)
 Then the window shows a sidebar: Today, the learning path by unit, and Chats.
 
 MODES
-Socratic (default), Discussion and Debate: the segmented control in the chat's toolbar, or the Chat menu (Command-1, -2, -3).
+Socratic (default), Discussion and Debate: the segmented control in the chat's toolbar, or the Chat menu (Option-Command-1, -2, -3) while a chat is open. Command-1, -2, -3 open Today, the Learning Path and the chat.
 
 IMAGES
 In a chat or lesson: the image button left of the message field (opens a file panel), dragging an image onto the window, or pasting one. The image goes through our server to Claude with the message.

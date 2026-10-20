@@ -161,6 +161,8 @@ All traffic goes through `APIClient`: `urlSession.data(for:)` in `APIClient.swif
 
 ## Findings for the founder (not fixed here: this step fixes only build and test breakages)
 
+> **Step 05 fixed findings 1 and 2** (`05-review-fixes.md`): `-UITests`, `-KeepAgeBlock` and `-SeedDemoChat` are DEBUG-only, and the harness and `mac-snapshots.sh` reject a blank, wrong-sized or (activated) inactive picture. It also found that a locked screen draws the window after all while the display is kept awake.
+
 1. **On a Mac, launch arguments reach a Release build. Low severity.** On iOS, nobody can pass launch arguments to an App Store app. On a Mac anyone can, for example `open -a Mercurius --args …`, and the Release build honours two kinds:
    - **Argument values for any defaults key.** `-consentVersion 1 -hasSeenOnboarding YES` skips the whole consent and age gate. This is how the harness and the UI tests skip it, and it's Foundation behaviour, not DEBUG code.
    - **`-UITests YES`.** It isn't inside `#if DEBUG` (`AppEnvironment.makeDefaults`). It moves the under-13 block into a defaults suite that is wiped at every launch, so the 7-day cool-off ends on the next launch. It also makes chats in-memory and turns off progress sync.

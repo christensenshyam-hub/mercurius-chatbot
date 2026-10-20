@@ -1,3 +1,5 @@
+> **Superseded by step 05.** `../05/` (not committed) has the full set, taken on 2026-10-20 with the display kept awake behind the lock screen, so every window is drawn but inactive; `../../key-shots/` has 11 of them, compressed and committed. `05-review-fixes.md` §3 explains. The commands below still work; on an unlocked Mac drop `ACTIVATE=NO` so the harness photographs the key window.
+
 # Verification screenshots: not taken
 
 **This folder has no pictures yet.** The Mac's screen was locked for the whole verification run, from 00:47 to 01:28 on 2026-10-20 (`CGSSessionScreenIsLocked` = true). While the screen is locked, the window server draws nothing for the app's window. Every capture came back all black, at 2306 × 1442 px instead of 2560 × 1600. I waited 35 minutes for an unlock that didn't come. Blank pictures aren't committed. The step 02 set in `../02/` is still the latest set of real pictures.

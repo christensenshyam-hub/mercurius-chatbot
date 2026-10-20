@@ -121,8 +121,11 @@ is in `docs/APP_STORE_LISTING.md` **§7**:
 
 - description, keywords and promotional text (§7.1);
 - screenshots, 16:10 (§7.2): `scripts/mac-store-screenshots.sh <dir>` makes
-  2560 × 1600 PNGs on this Mac. **Unlock the Mac first** (a locked screen
-  gives blank pictures) and look at each one before uploading;
+  2560 × 1600 PNGs on this Mac. **Unlock the Mac first and leave it alone
+  while it runs** (about a minute): each shot activates the app and takes
+  the keyboard for a few seconds, and the script fails a picture of an
+  inactive window, a blank one or one of the wrong size. Look at each one
+  before uploading;
 - Support and Marketing URLs (the iOS ones);
 - App Review Information: contact details, sign-in "No", and the Mac notes
   (§7.3);
@@ -135,6 +138,16 @@ for iOS. The Mac version is reviewed on its own; it can go out before or
 after the next iOS version.
 
 ## Decisions waiting on you
+
+- **The consent screen's Settings path on a Mac.** The disclosure says
+  "Settings → Delete my data & start over"; on a Mac it's Settings ▸
+  Privacy ▸ Delete My Data & Start Over…. It's the versioned consent text
+  (`ConsentGate.currentVersion`): changing the version shows the agreement
+  again to everyone. Keep it, or approve a Mac-only line under the same
+  version (`05-review-fixes.md` §4).
+- **Escape in a lesson.** It leaves a lesson or unit check only when
+  nothing would be lost (no answer typed, no reply coming in, no picks).
+  Keep, or make lessons ignore Escape.
 
 - **Progress doesn't follow a student between devices.** There are no
   accounts, and a student's Mac and iPhone are separate anonymous sessions
