@@ -56,7 +56,12 @@ Today the server can't tell a Mac from an iPhone. Every request carries only `Co
    - `provision.sh --platform mac` / `--check`, `release.sh --platform mac`, `ExportOptionsMac.plist`, `asc-api.sh` (a plain message for the App Store Connect 403 about an unaccepted agreement).
    - `mac-store-screenshots.sh` (2560 × 1600; 2880 × 1800 needs a taller display).
    - `docs/APP_STORE_LISTING.md` §7 and `FOUNDER_STEPS.md`.
-4. **Founder: ship it** (`FOUNDER_STEPS.md`). Accept the agreement that makes App Store Connect answer 403, run `provision.sh --platform mac`, add the macOS platform to the record, `release.sh --platform mac`, rehearse from TestFlight, take the store screenshots on an unlocked Mac, submit.
+4. **Full verification** (done; `VERIFY.md`).
+   - Passing: the branch is clean; `swift test` 994/994 from an empty scratch path; iOS build plus CI-flag `xcodebuild test` 31/31; Mac Debug, plus unsigned universal Release without the DEBUG harness.
+   - No network before consent, by code reading and by fresh-container launches against a logging server.
+   - No screenshots: the screen stayed locked.
+   - Two low findings: Release honours launch arguments on a Mac (`-UITests`, the argument domain); `mac-snapshots.sh` accepts blank pictures.
+5. **Founder: ship it** (`FOUNDER_STEPS.md`). Accept the agreement that makes App Store Connect answer 403, run `provision.sh --platform mac`, add the macOS platform to the record, `release.sh --platform mac`, rehearse from TestFlight, take the store screenshots on an unlocked Mac, submit.
 
 Still open (not started):
 - the `X-Mercurius-Client` header (client side; the server change that reads it is separate);
