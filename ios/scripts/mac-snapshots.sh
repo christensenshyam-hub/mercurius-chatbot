@@ -36,6 +36,13 @@
 # on a display whose visible area is at least 900 pt tall). See
 # mac-store-screenshots.sh.
 #
+# Night Studio's accessibility variants, through the app's DEBUG overrides
+# (the Mac's own settings are never touched): hc / hc-dark (Increase
+# Contrast, -NightContrast increased), rt / rt-dark (Reduce Transparency),
+# rm (Reduce Motion), noglass / noglass-dark (the macOS 14–25 and CI-build
+# material fallback, drawn on macOS 26). Each is <shot>-<variant>.png at
+# 1280×800.
+#
 # The harness prints anything it couldn't do as asked ("MacSnapshot:
 # problem …", e.g. a size below the window's minimum) and checks its own
 # picture: the right pixel size, not one colour (blank), and — activated —
@@ -124,7 +131,7 @@ snap() {
   # The control dump and the composer log once per state (the light,
   # full-size shot), not once per variant.
   case $name in
-    *-dark|*-min|*-store) ;;
+    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass) ;;
     *)
       grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
       grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
@@ -143,6 +150,13 @@ window_shot() {
       min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 700x600 ;;
       min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 700x600 ;;
       store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
+      hc)       snap "$name-hc"       "$@" -MacSnapshotAppearance light -NightContrast increased ;;
+      hc-dark)  snap "$name-dark-hc"  "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
+      rt)       snap "$name-rt"       "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
+      rt-dark)  snap "$name-dark-rt"  "$@" -MacSnapshotAppearance dark -NightReduceTransparency YES ;;
+      rm)       snap "$name-rm"       "$@" -MacSnapshotAppearance light -NightReduceMotion YES ;;
+      noglass)  snap "$name-noglass"  "$@" -MacSnapshotAppearance light -NightNoGlass YES ;;
+      noglass-dark) snap "$name-dark-noglass" "$@" -MacSnapshotAppearance dark -NightNoGlass YES ;;
     esac
   done
 }
@@ -166,6 +180,9 @@ run() {
     gate-age)        window_shot "$1" "${GATE[@]}" -GateStep age -MacSnapshotDumpControls YES ;;
     gate-consent)    window_shot "$1" "${GATE[@]}" -GateStep disclosure -MacSnapshotDumpControls YES ;;
     today)           window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES ;;
+    # Today with a week in it: two lessons this week, Lesson 3 opened, a
+    # 4-day streak and a saved chat (DEBUG -TodayDemo; nothing is pushed).
+    today-week)      window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -TodayDemo YES -SeedDemoChat YES ;;
     path)            window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES ;;
     lesson-intro)    window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES ;;
     lesson)          window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -MacSnapshotDelay 10 ;;
@@ -194,7 +211,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent today path lesson-intro lesson lesson-complete chat chat-thread chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
+ALL="gate-meet gate-age gate-consent today today-week path lesson-intro lesson lesson-complete chat chat-thread chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL

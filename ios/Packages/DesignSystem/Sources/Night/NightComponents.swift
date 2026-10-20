@@ -176,6 +176,28 @@ private struct NightTextButtonBody: View {
     }
 }
 
+/// A clickable lit card or row: Night's hover (§4.2) and, while pressed, an
+/// `ink` 8% overlay on its shape (§4.3). No scale, so nothing moves under
+/// Reduce Motion. Pair with `nightFocusRing` on the same shape.
+public struct NightCardButtonStyle: ButtonStyle {
+    private let cornerRadius: CGFloat
+
+    public init(cornerRadius: CGFloat = Night.Radius.card) {
+        self.cornerRadius = cornerRadius
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return configuration.label
+            .overlay {
+                shape.fill(Night.ink.opacity(configuration.isPressed ? 0.08 : 0))
+                    .allowsHitTesting(false)
+            }
+            .nightHover(cornerRadius: cornerRadius)
+            .contentShape(shape)
+    }
+}
+
 /// Night's prominent button with its focus ring: the screen's one.
 public struct NightPrimaryButton: View {
     private let title: String

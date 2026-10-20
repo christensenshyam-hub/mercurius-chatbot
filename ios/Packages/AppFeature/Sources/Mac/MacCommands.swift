@@ -11,7 +11,8 @@ import NetworkingKit
 ///   Explain More (⇧⌘E). The modes are on only while the free chat shows:
 ///   a lesson has no mode, and switching from one would close it.
 /// - View: Today / Learning Path / Chat (⌘1 / ⌘2 / ⌘3, the sidebar's
-///   destinations, as in Mail or Finder) above the sidebar commands.
+///   destinations, as in Mail or Finder) and Progress (⌘4, the Progress
+///   sheet) above the sidebar commands.
 /// - Help: Mercurius Help (⌘?) opens the Help window; the support site,
 ///   feedback and support email follow.
 ///
@@ -75,6 +76,9 @@ public struct MacCommands: Commands {
             Button("Chat") { shell.showChat() }
                 .keyboardShortcut(Self.destinationKey(.chat))
                 .disabled(shell.commandsBlocked)
+            Button("Progress") { shell.showProgress() }
+                .keyboardShortcut(Self.progressKey)
+                .disabled(shell.commandsBlocked)
             Divider()
         }
 
@@ -107,6 +111,10 @@ public struct MacCommands: Commands {
         let index = Destination.allCases.firstIndex(of: destination) ?? 0
         return KeyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
     }
+
+    /// ⌘4: View ▸ Progress, after the three destinations (the toolbar's
+    /// Progress button; the streak left the toolbar for it).
+    static let progressKey = KeyboardShortcut("4", modifiers: .command)
 
     /// The mode items work only on the free chat in front (a lesson's
     /// command target has no mode), and never behind the gate or mid-erase.

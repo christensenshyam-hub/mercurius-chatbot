@@ -94,8 +94,13 @@ struct MacShellView: View {
                 // themselves; the Mac's default push-button bezel put grey
                 // boxes around their icons and labels.
                 .buttonStyle(.borderless)
+                // Night Studio's toolbar: the system's glass on macOS 26,
+                // the canvas colour before it (SPEC.md §2.8).
+                .nightToolbarBackground()
         }
-        .tint(BrandColor.accent)
+        // Night's prominent indigo for the system controls (7.9:1 under
+        // white, where `accent` was 4.47:1).
+        .tint(Night.prominent)
         // A narrow window (tiled beside a browser) folds the sidebar away,
         // as Mail and Notes do, so the detail keeps its whole toolbar; ⌃⌘S
         // or the toolbar button brings it back. Widening the window again
@@ -129,7 +134,7 @@ struct MacShellView: View {
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT.
         .onChange(of: env.progressStore.revision) { _, _ in
-            guard !isGated else { return }
+            guard !isGated, Self.debugTodayDemoStreak == nil else { return }
             env.progressSync.pushSoon()
         }
         .sheet(isPresented: $shell.showsProgress) {
@@ -143,7 +148,7 @@ struct MacShellView: View {
                 onDone: { shell.showsProgress = false }
             )
             .frame(minWidth: 460, idealWidth: 520, minHeight: 560, idealHeight: 680)
-            .tint(BrandColor.accent)
+            .tint(Night.prominent)
         }
         .confirmationDialog(
             "Delete this chat?",
@@ -197,13 +202,14 @@ struct MacShellView: View {
         }
     }
 
-    /// Today: an overview of the next stop, the week, the streak and the
-    /// recent chats (`MacTodayView`), on the same `HomeState` as the
-    /// iPhone's Home.
+    /// Today: an overview of the next stop, the week, a question to think
+    /// through and the recent chats (`MacTodayView`), on the same
+    /// `HomeState` as the iPhone's Home.
     private var todayView: some View {
         let state = HomeState.build(
             // Only a streak the server confirmed recently (as Home on iOS).
-            streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0,
+            streak: Self.debugTodayDemoStreak
+                ?? (env.streakStore.isCurrentFresh ? env.streakStore.current : 0),
             progress: env.progressStore
         )
         return MacTodayView(
@@ -217,12 +223,19 @@ struct MacShellView: View {
             onOpenPath: { shell.showPath() },
             onOpenChat: { shell.show(.chat($0)) },
             onNewChat: { shell.newChat() },
-            onShowProgress: { shell.showsProgress = true }
+            onShowProgress: { shell.showProgress() },
+            chatMode: shell.currentChatMode,
+            onThinkItThrough: { shell.newChat(draft: $0) }
         )
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                MacProgressButton { shell.showProgress() }
+            }
+        }
     }
 
     /// A unit's stretch of the path. The iPhone pins its stats bar above the
-    /// path (with a Home button); on the Mac the streak is a toolbar button,
+    /// path (with a Home button); on the Mac Progress is a toolbar button,
     /// as in the chat, and Today is a sidebar row.
     private func unitPath(_ unitId: String) -> some View {
         CurriculumView(
@@ -233,7 +246,7 @@ struct MacShellView: View {
         )
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                StreakChip(streakStore: env.streakStore, action: { shell.showsProgress = true })
+                MacProgressButton { shell.showProgress() }
             }
         }
     }
@@ -246,9 +259,10 @@ struct MacShellView: View {
             sessionIdentity: env.sessionIdentity,
             achievementStore: env.achievementStore,
             // No Settings or Home buttons in the chat: Settings is ⌘, and
-            // Today is a sidebar row. The streak chip goes in the toolbar.
-            headerAccessory: { [env, shell] in
-                AnyView(StreakChip(streakStore: env.streakStore, action: { shell.showsProgress = true }))
+            // Today is a sidebar row. Progress goes in the toolbar (Night
+            // Studio keeps the streak's number off the chrome).
+            headerAccessory: { [shell] in
+                AnyView(MacProgressButton { shell.showProgress() })
             }
         )
         .macChrome(onNewChat: { shell.newChat() }, modeRequest: $shell.modeRequest)
@@ -473,6 +487,39 @@ struct MacShellView: View {
         return nil
     }
 
+    /// DEBUG `-TodayDemo YES` (screenshots of Today with a week in it): a
+    /// 4-day streak shown without touching the streak store, and — in the
+    /// `-UITests` progress suite, which is emptied at every launch — Unit 1's
+    /// first two lessons finished this week (one on the week's second day,
+    /// one today) with Lesson 3 opened. Its progress is never pushed.
+    private static var debugTodayDemoStreak: Int? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-TodayDemo") && args.contains("-UITests") ? 4 : nil
+        #else
+        nil
+        #endif
+    }
+
+    private func seedTodayDemo() {
+        #if DEBUG
+        guard let unit = MercuriusCurriculum.units.first, unit.lessons.count >= 3 else { return }
+        let now = Date()
+        let calendar = Calendar.current
+        let weekStart = WeeklyPlan.compute(progress: env.progressStore, now: now, calendar: calendar).weekStart
+        let secondDay = calendar.date(byAdding: .hour, value: 34, to: weekStart) ?? weekStart
+        let first = min(secondDay, now.addingTimeInterval(-2 * 3600))
+        let second = now.addingTimeInterval(-30 * 60)
+        env.progressStore.merge(
+            completed: [unit.lessons[0].id, unit.lessons[1].id],
+            mastered: [],
+            remoteVersion: MercuriusCurriculum.version,
+            remoteUpdatedAt: [unit.lessons[0].id: first, unit.lessons[1].id: second]
+        )
+        env.progressStore.markOpened(unit.lessons[2].id)
+        #endif
+    }
+
     /// DEBUG: a fake resume id skips a fresh lesson's speech-bubble intro
     /// (`-LessonSkipIntro`, as iOS's `-LessonPreview`); it falls through to a
     /// fresh start, so with `-LessonReplay` the recorded replies stream in.
@@ -502,6 +549,9 @@ struct MacShellView: View {
         guard !appliedDebugState else { return }
         appliedDebugState = true
         let args = ProcessInfo.processInfo.arguments
+        if Self.debugTodayDemoStreak != nil {
+            seedTodayDemo()
+        }
         if args.contains("-UnitTestCrisisPreview") || args.contains("-UnitTestPreview"),
            let unit = MercuriusCurriculum.units.first {
             // The previews show Unit 1's check: its row, as the real check's.
