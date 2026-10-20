@@ -13,6 +13,7 @@ public struct UnitTestView: View {
     #if os(macOS)
     /// The question the keyboard answers (A–D, 1–4); Tab, ↑ and ↓ move it.
     @FocusState private var focusedQuestion: String?
+    @NightSettings private var night
     #endif
     private let onMastered: (String) -> Void
     private let onExit: () -> Void
@@ -43,7 +44,13 @@ public struct UnitTestView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio's canvas with its indigo pool; flat behind the
+            // support resources (SPEC.md §2.4, §5.9).
+            NightCanvas(pools: model.phase == .support ? .flat : .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
             VStack(spacing: 0) {
                 #if os(iOS)
                 header
@@ -61,7 +68,8 @@ public struct UnitTestView: View {
                     // The question the keyboard moved to comes into view.
                     .onChange(of: focusedQuestion) { _, id in
                         guard let id else { return }
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id) }
+                        // Instant under Reduce Motion (§4.5).
+                        withAnimation(night.reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id) }
                     }
                     #endif
                 }
@@ -128,12 +136,18 @@ public struct UnitTestView: View {
     }
 
     @ViewBuilder private var content: some View {
+        #if os(macOS)
+        // Night Studio (SPEC.md §5.5): the same model, phases and keys.
+        NightUnitTestContent(model: model, focusedQuestion: $focusedQuestion,
+                             reportedMastery: $reportedMastery, onMastered: onMastered, onExit: onExit)
+        #else
         switch model.phase {
         case .quiz: quizPhase
         case .defense: defensePhase
         case .result: resultPhase
         case .support: supportPhase
         }
+        #endif
     }
 
     // MARK: - Support phase
@@ -152,15 +166,6 @@ public struct UnitTestView: View {
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            #if os(macOS)
-            if !model.quizSubmitted {
-                Label("Keyboard: A–D answers the highlighted question, Tab or ↓ moves on, ⌘Return submits.",
-                      systemImage: "keyboard")
-                    .font(BrandFont.caption)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            #endif
 
             ForEach(Array(model.questions.enumerated()), id: \.element.id) { index, question in
                 questionCard(index: index, question: question)
@@ -184,48 +189,8 @@ public struct UnitTestView: View {
         }
         .onChange(of: model.quizSubmitted) { _, submitted in
             if submitted, let line = model.scoreAnnouncement { announce(line) }
-            #if os(macOS)
-            if submitted { focusedQuestion = nil }
-            #endif
         }
-        #if os(macOS)
-        .onAppear {
-            if !model.quizSubmitted { focusedQuestion = model.questions.first?.id }
-        }
-        #endif
     }
-
-    #if os(macOS)
-    /// A–D / 1–4 answer the focused question and move to the next one;
-    /// ↑ and ↓ move between questions. ⌘-keys pass through (⌘Return
-    /// submits).
-    private func handleQuizKey(_ press: KeyPress, question: UnitTestQuestion, index: Int) -> KeyPress.Result {
-        guard !model.quizSubmitted, !press.modifiers.contains(.command) else { return .ignored }
-        switch press.key {
-        case .downArrow:
-            moveFocus(from: index, by: 1)
-            return .handled
-        case .upArrow:
-            moveFocus(from: index, by: -1)
-            return .handled
-        default:
-            break
-        }
-        guard let letter = UnitTestViewModel.optionLetter(forKey: press.characters,
-                                                          optionCount: question.options.count) else {
-            return .ignored
-        }
-        model.select(letter, for: question.id)
-        moveFocus(from: index, by: 1)
-        return .handled
-    }
-
-    private func moveFocus(from index: Int, by step: Int) {
-        let next = index + step
-        guard model.questions.indices.contains(next) else { return }
-        focusedQuestion = model.questions[next].id
-    }
-    #endif
 
     private func questionCard(index: Int, question: UnitTestQuestion) -> some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -257,20 +222,6 @@ public struct UnitTestView: View {
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
         .id(question.id)
-        #if os(macOS)
-        // In the Tab loop whatever the student's Full Keyboard Access
-        // setting (`.edit`, like a text field), with its own ring.
-        .focusable(!model.quizSubmitted, interactions: .edit)
-        .focused($focusedQuestion, equals: question.id)
-        .focusEffectDisabled()
-        .overlay(
-            RoundedRectangle(cornerRadius: BrandRadius.md)
-                .strokeBorder(BrandColor.accent, lineWidth: 2)
-                .opacity(focusedQuestion == question.id && !model.quizSubmitted ? 1 : 0)
-                .allowsHitTesting(false)
-        )
-        .onKeyPress(phases: .down) { press in handleQuizKey(press, question: question, index: index) }
-        #endif
     }
 
     // MARK: - Defense phase
@@ -472,9 +423,6 @@ public struct UnitTestView: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        #if os(macOS)
-        .keyboardShortcut(submitsWithCommandReturn ? KeyboardShortcut(.return, modifiers: .command) : nil)
-        #endif
     }
 
     private func announce(_ line: String) {

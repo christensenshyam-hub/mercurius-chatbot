@@ -128,7 +128,11 @@ struct GateStepContainer<Content: View, CTA: View>: View {
     private var heading: some View {
         VStack(spacing: BrandSpacing.sm) {
             Text(title)
+                #if os(macOS)
+                .nightFont(.display)
+                #else
                 .font(BrandFont.title)
+                #endif
                 .foregroundStyle(BrandColor.text)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -136,7 +140,11 @@ struct GateStepContainer<Content: View, CTA: View>: View {
 
             if let subtitle {
                 Text(subtitle)
+                    #if os(macOS)
+                    .nightFont(.body)
+                    #else
                     .font(BrandFont.body)
+                    #endif
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -274,6 +282,9 @@ private struct GateRestScreen<CTA: View>: View {
     let titleIdentifier: String
     let message: String
     let cta: () -> CTA
+    #if os(macOS)
+    @NightSettings private var night
+    #endif
 
     init(
         mercState: MercState,
@@ -292,12 +303,23 @@ private struct GateRestScreen<CTA: View>: View {
     var body: some View {
         GateHeroLayout {
             VStack(spacing: BrandSpacing.xl) {
+                // On the Mac a plain Merc, smaller, with no lamp: these are
+                // resting screens and stay calm (SPEC.md §5.7).
+                #if os(macOS)
+                MercMascot(mercState, size: 112, idleLife: !night.reduceMotion)
+                    .accessibilityHidden(true)
+                #else
                 MercMascot(mercState, size: 150)
                     .accessibilityHidden(true)
+                #endif
 
                 VStack(spacing: BrandSpacing.md) {
                     Text(title)
+                        #if os(macOS)
+                        .nightFont(.display)
+                        #else
                         .font(BrandFont.title)
+                        #endif
                         .foregroundStyle(BrandColor.text)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -305,7 +327,11 @@ private struct GateRestScreen<CTA: View>: View {
                         .accessibilityIdentifier(titleIdentifier)
 
                     Text(message)
+                        #if os(macOS)
+                        .nightFont(.body)
+                        #else
                         .font(BrandFont.body)
+                        #endif
                         .foregroundStyle(BrandColor.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -337,23 +363,40 @@ struct MeetMercStep: View {
         // a new student could go no further (AUD-12).
         GateHeroLayout {
             VStack(spacing: BrandSpacing.xl) {
+                #if os(macOS)
+                // Night Studio: Merc in his lamp, at the Mac's size (§5.7).
+                NightMercLamp(mercState, size: 120, antics: true)
+                    .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
+                    .opacity(entered ? 1 : 0)
+                    .offset(y: entered ? 0 : 36)
+                    .accessibilityHidden(true)
+                #else
                 MercMascot(mercState, size: dynamicTypeSize.isAccessibilitySize ? 150 : 216,
                            emphasis: .softGlow, idleAntics: true, pokeable: true)
                     .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
                     .opacity(entered ? 1 : 0)
                     .offset(y: entered ? 0 : 36)
                     .accessibilityHidden(true)
+                #endif
 
                 VStack(spacing: BrandSpacing.md) {
                     Text("Meet Merc")
+                        #if os(macOS)
+                        .nightFont(.display)
+                        #else
                         .font(BrandFont.title)
+                        #endif
                         .foregroundStyle(BrandColor.text)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
 
                     Text("Your AI literacy tutor. Merc asks questions back instead of handing you answers, so you learn how AI works — and when not to trust it.")
+                        #if os(macOS)
+                        .nightFont(.body)
+                        #else
                         .font(BrandFont.body)
+                        #endif
                         .foregroundStyle(BrandColor.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -370,6 +413,9 @@ struct MeetMercStep: View {
     }
 
     private func enter() {
+        #if os(macOS)
+        let reduceMotion = self.reduceMotion || Night.debugReduceMotion
+        #endif
         guard !reduceMotion else {
             entered = true
             return
@@ -569,8 +615,14 @@ struct DisclosureStep: View {
 
                 if let url = URL(string: "https://trymercurius.com/privacy") {
                     Link("Read the privacy policy", destination: url)
+                        #if os(macOS)
+                        .nightFont(.headline)
+                        .foregroundStyle(BrandColor.accentText)
+                        .macPointingHand()
+                        #else
                         .font(BrandFont.bodyEmphasized)
                         .foregroundStyle(BrandColor.accentText)
+                        #endif
                 }
 
                 if !pinsToggle {
@@ -596,6 +648,10 @@ struct DisclosureStep: View {
                     .accessibilityIdentifier("onboarding.consentHint")
             }
 
+            #if os(macOS)
+            NightTextButton("Not now", color: Night.ink2, action: onNotNow)
+                .accessibilityIdentifier("onboarding.notNow")
+            #else
             Button(action: onNotNow) {
                 Text("Not now")
                     .font(BrandFont.bodyEmphasized)
@@ -604,6 +660,7 @@ struct DisclosureStep: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("onboarding.notNow")
+            #endif
         }
     }
 
@@ -618,7 +675,11 @@ struct DisclosureStep: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: BrandSpacing.md))
         return layout {
             Text(Self.toggleText)
+                #if os(macOS)
+                .nightFont(.body)
+                #else
                 .font(BrandFont.body)
+                #endif
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -628,12 +689,22 @@ struct DisclosureStep: View {
 
             Toggle(Self.toggleText, isOn: $agreed)
                 .labelsHidden()
+                #if os(macOS)
+                // The native checkbox, in Night's prominent indigo.
+                .tint(Night.prominent)
+                #else
                 .tint(BrandColor.accent)
+                #endif
                 .accessibilityIdentifier("onboarding.consentToggle")
         }
         .padding(BrandSpacing.md)
+        #if os(macOS)
+        // A lit row (SPEC.md §5.7).
+        .nightLit(radius: Night.Radius.row)
+        #else
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
+        #endif
         .overlay(
             RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
                 .strokeBorder(agreed || highlightsSwitch ? BrandColor.accent : BrandColor.border,
@@ -653,12 +724,20 @@ struct DisclosureStep: View {
         HStack(alignment: .top, spacing: BrandSpacing.md) {
             Image(systemName: symbol)
                 .font(.system(size: 20, weight: .medium))
+                #if os(macOS)
+                .foregroundStyle(Night.accentText)
+                #else
                 .foregroundStyle(BrandColor.accent)
+                #endif
                 .frame(width: 28)
                 .accessibilityHidden(true)
 
             Text(text)
+                #if os(macOS)
+                .nightFont(.body)
+                #else
                 .font(BrandFont.body)
+                #endif
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -713,7 +792,11 @@ struct LimitsStep: View {
                 }
             }
             .padding(BrandSpacing.lg)
+            #if os(macOS)
+            .nightLit(radius: Night.Radius.card)
+            #else
             .background(BrandColor.surface, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+            #endif
             .padding(.top, BrandSpacing.sm)
         } cta: {
             DuoButton("Got it", style: .primary, action: onAcknowledge)
@@ -726,12 +809,20 @@ struct LimitsStep: View {
         HStack(alignment: .top, spacing: BrandSpacing.md) {
             Image(systemName: symbol)
                 .font(.system(size: 20, weight: .medium))
+                #if os(macOS)
+                .foregroundStyle(Night.accentText)
+                #else
                 .foregroundStyle(BrandColor.accent)
+                #endif
                 .frame(width: 28)
                 .accessibilityHidden(true)
 
             Text(text)
+                #if os(macOS)
+                .nightFont(.body)
+                #else
                 .font(BrandFont.body)
+                #endif
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

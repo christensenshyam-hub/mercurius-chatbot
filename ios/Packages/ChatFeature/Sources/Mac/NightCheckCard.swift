@@ -27,7 +27,6 @@ struct NightCheckCard: View {
     @State private var locked: Int?
     @FocusState private var focused: Bool
     @NightSettings private var night
-    @Environment(\.colorScheme) private var scheme
 
     private var gradedPick: Int? { locked ?? answeredIndex }
     private var graded: Bool { gradedPick != nil }
@@ -127,11 +126,10 @@ struct NightCheckCard: View {
 
     // MARK: Rows
 
-    private enum RowState { case rest, picked, correct, wrong, other }
-
-    private func state(of index: Int) -> RowState {
+    /// The shared answer row's state for option `index` (`NightAnswerRow`).
+    private func mark(of index: Int) -> NightAnswerRow.Mark {
         if let gradedPick {
-            if index == quiz.answerIndex { return .correct }
+            if index == quiz.answerIndex { return .correct(picked: index == gradedPick) }
             if index == gradedPick { return .wrong }
             return .other
         }
@@ -139,113 +137,20 @@ struct NightCheckCard: View {
     }
 
     private func row(index: Int, option: String) -> some View {
-        let state = state(of: index)
-        let shape = RoundedRectangle(cornerRadius: Night.Radius.row, style: .continuous)
+        let mark = mark(of: index)
         let spoken = CheckQuizCard.optionAccessibility(index: index, option: option, pick: gradedPick,
                                                        answerIndex: quiz.answerIndex)
-        return Button {
+        return NightAnswerRow(letter: ChatAnnouncement.letter(index), text: option, mark: mark,
+                              isInteractive: answerable) {
             choose(index)
             if answerable { focused = true }
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                disc(index: index, state: state)
-                Text(option)
-                    .nightFont(.body)
-                    .foregroundStyle(state == .other ? Night.ink2 : Night.ink)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                switch state {
-                case .correct:
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Night.successText)
-                        .accessibilityHidden(true)
-                case .wrong:
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Night.errorText)
-                        .accessibilityHidden(true)
-                default:
-                    EmptyView()
-                }
-            }
-            .padding(.horizontal, Night.Space.rowHorizontal)
-            .padding(.vertical, Night.Space.rowVertical)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(fill(state), in: shape)
-            .overlay(shape.strokeBorder(stroke(state), lineWidth: strokeWidth(state)))
-            .contentShape(shape)
-            .nightHover(cornerRadius: Night.Radius.row, isEnabled: answerable)
         }
-        .buttonStyle(.plain)
-        .allowsHitTesting(answerable)
         .accessibilityLabel(spoken.label)
-        .accessibilityValue(spoken.value ?? (state == .picked ? "Picked, not locked in" : ""))
-        .accessibilityAddTraits(state == .picked || state == .wrong || (state == .correct && gradedPick == index)
+        .accessibilityValue(spoken.value ?? (mark == .picked ? "Picked, not locked in" : ""))
+        .accessibilityAddTraits(mark == .picked || mark == .wrong || mark == .correct(picked: true)
                                 ? .isSelected : [])
         .accessibilityRemoveTraits(answerable ? [] : .isButton)
         .accessibilityHint(answerable ? "Picks this answer. Then lock it in." : "")
-    }
-
-    private func fill(_ state: RowState) -> Color {
-        let dark = scheme == .dark
-        switch state {
-        case .rest, .other: return Night.surfaceRaised
-        case .picked: return Night.accent.opacity(Night.Tint.selected(dark: dark))
-        case .correct: return Night.success.opacity(Night.Tint.answer)
-        case .wrong: return Night.error.opacity(Night.Tint.answer)
-        }
-    }
-
-    private func stroke(_ state: RowState) -> Color {
-        switch state {
-        case .rest, .other: return night.increasedContrast ? Night.hairline : .clear
-        case .picked: return Night.accentText
-        case .correct: return Night.success
-        case .wrong: return Night.error
-        }
-    }
-
-    private func strokeWidth(_ state: RowState) -> CGFloat {
-        switch state {
-        case .rest, .other: return 1.5
-        default: return 2
-        }
-    }
-
-    /// The 26 pt letter disc. Picked: the letter in white on `prominent`
-    /// (7.9:1; white on `accent` would be 4.47:1). Correct: a check on
-    /// `success`. Wrong: the letter in `errorText` in an `errorText` ring.
-    @ViewBuilder
-    private func disc(index: Int, state: RowState) -> some View {
-        let letter = ChatAnnouncement.letter(index)
-        ZStack {
-            switch state {
-            case .picked:
-                Circle().fill(Night.prominent)
-                discLetter(letter, color: .white)
-            case .correct:
-                Circle().fill(Night.success)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(Night.surface)
-            case .wrong:
-                Circle().strokeBorder(Night.errorText, lineWidth: 1.5)
-                discLetter(letter, color: Night.errorText)
-            case .rest, .other:
-                Circle().strokeBorder(night.increasedContrast ? Night.ink3 : Night.ink3.opacity(0.55), lineWidth: 1.5)
-                discLetter(letter, color: Night.ink2)
-            }
-        }
-        .frame(width: 26, height: 26)
-        .accessibilityHidden(true)
-    }
-
-    private func discLetter(_ letter: String, color: Color) -> some View {
-        Text(letter)
-            .font(NightType.lexend(13, semibold: true))
-            .foregroundStyle(color)
     }
 
     #if DEBUG

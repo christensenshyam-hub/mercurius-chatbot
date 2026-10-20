@@ -251,6 +251,13 @@ public struct RootView: View {
     }
 
     private func failureView(reason: String) -> some View {
+        #if os(macOS)
+        // Night Studio: a line and a way forward on a flat canvas (§5.10).
+        MacStartFailure(reason: reason) {
+            bootstrapState = .loading
+            Task { await bootstrap() }
+        }
+        #else
         VStack(spacing: BrandSpacing.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 40))
@@ -269,6 +276,7 @@ public struct RootView: View {
             .frame(maxWidth: 200)
         }
         .padding(BrandSpacing.xl)
+        #endif
     }
 
     // MARK: - Bootstrap
@@ -304,6 +312,13 @@ public struct RootView: View {
         // place in the sidebar, and the shell runs the streak seed and the
         // progress pull itself once consent is current.
         _ = start
+        #if DEBUG
+        // `-NightStartFailure YES` (shots only): the start-up failure screen.
+        if ProcessInfo.processInfo.arguments.contains("-NightStartFailure") {
+            bootstrapState = .failed(reason: "Could not create a session on this device. Please restart the app.")
+            return
+        }
+        #endif
         bootstrapState = result
         #else
         if case .ready = result {
@@ -420,6 +435,13 @@ struct UnitTestPreviewHost: View {
                     model.continueAfterQuiz()
                     model.defenseAnswer = "DEBUG preview answer."
                     await model.submitDefense()
+                #if os(macOS)
+                case "written":
+                    // The written question, not yet answered (Mac shots).
+                    for question in model.questions { model.select(question.answer, for: question.id) }
+                    model.submitQuiz()
+                    model.continueAfterQuiz()
+                #endif
                 default:
                     break
                 }

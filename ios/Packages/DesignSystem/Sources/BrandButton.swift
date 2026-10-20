@@ -33,7 +33,37 @@ public struct BrandButton: View {
         self.action = action
     }
 
+    #if os(macOS)
+    /// The crisis view keeps the pre-Night button (palette only).
+    @Environment(\.brandButtonClassic) private var classicOnMac
+    #endif
+
     public var body: some View {
+        #if os(macOS)
+        // Night Studio on the Mac (SPEC.md §3.2): the same title, action and
+        // enabled state, drawn as Night's prominent, secondary or text
+        // button — unless the view asked for the classic look.
+        if classicOnMac {
+            Button(action: action) {
+                Text(title)
+                    .font(BrandFont.bodyEmphasized)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.horizontal, BrandSpacing.lg)
+            }
+            .buttonStyle(BrandButtonStyle(style: style))
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1 : 0.5)
+        } else {
+            switch style {
+            case .primary:
+                NightPrimaryButton(title, action: action).disabled(!isEnabled)
+            case .secondary:
+                NightSecondaryButton(title, action: action).disabled(!isEnabled)
+            case .ghost:
+                NightTextButton(title, action: action).disabled(!isEnabled)
+            }
+        }
+        #else
         Button(action: action) {
             Text(title)
                 .font(BrandFont.bodyEmphasized)
@@ -43,8 +73,24 @@ public struct BrandButton: View {
         .buttonStyle(BrandButtonStyle(style: style))
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.5)
+        #endif
     }
 }
+
+#if os(macOS)
+private struct BrandButtonClassicKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Mac: `BrandButton` keeps its pre-Night look below this point. The
+    /// crisis view sets it: it takes Night's palette and nothing else.
+    var brandButtonClassic: Bool {
+        get { self[BrandButtonClassicKey.self] }
+        set { self[BrandButtonClassicKey.self] = newValue }
+    }
+}
+#endif
 
 private struct BrandButtonStyle: ButtonStyle {
     let style: BrandButton.Style

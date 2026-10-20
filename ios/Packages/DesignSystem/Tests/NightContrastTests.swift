@@ -430,3 +430,93 @@ struct NightReadingContrastTests {
     }
 }
 #endif
+
+#if os(macOS)
+/// Step 03's screens (the unit page, lesson complete, the unit check, the
+/// gate, Settings): the pairs they add to SPEC.md §2.3.
+@Suite("Night Studio contrast: the path, lesson complete, the unit check")
+struct NightRestContrastTests {
+    typealias Variant = NightPalette.Variant
+    typealias RGB = NightContrastTests.RGB
+
+    func rgb(_ quad: NightPalette.Quad, _ v: Variant, over base: RGB? = nil) -> RGB {
+        NightContrastTests.rgb(quad, v, over: base)
+    }
+
+    /// The lesson-complete card draws its own canvas, both pools on, at a
+    /// card's size: the pools sit closer together there than in a window.
+    /// Every text token on it, sampled across the card as NightCanvas draws
+    /// it, reads at 4.5:1.
+    @Test("Text on the complete card's own canvas reads at 4.5:1 everywhere", arguments: [Variant.light, .dark])
+    func completeCardCanvas(variant: Variant) {
+        for size in [CGSize(width: 520, height: 640), CGSize(width: 520, height: 500),
+                     CGSize(width: 472, height: 500)] {
+            let indigo = NightCanvas.indigoPool(in: size)
+            let violet = NightCanvas.violetPool(in: size)
+            let top = rgb(NightPalette.canvasTop, variant)
+            let bottom = rgb(NightPalette.canvasBottom, variant)
+            for (name, quad) in NightContrastTests.textTokens {
+                var worst = Double.infinity
+                for x in stride(from: 0.0, through: Double(size.width), by: 8) {
+                    for y in stride(from: 0.0, through: Double(size.height), by: 8) {
+                        let base = bottom.over(top, alpha: y / Double(size.height))
+                        let d1 = hypot(x - Double(indigo.center.x), y - Double(indigo.center.y))
+                        let d2 = hypot(x - Double(violet.center.x), y - Double(violet.center.y))
+                        let a1 = NightPalette.poolAccentAlpha(variant) * max(0, 1 - d1 / Double(indigo.radius))
+                        let a2 = NightPalette.poolVioletAlpha(variant) * max(0, 1 - d2 / Double(violet.radius))
+                        let lit = rgb(NightPalette.violet, variant)
+                            .over(rgb(NightPalette.accent, variant).over(base, alpha: a1), alpha: a2)
+                        worst = min(worst, NightContrastTests.contrast(rgb(quad, variant), lit))
+                    }
+                }
+                #expect(worst >= NightContrastTests.textMinimum,
+                        "\(name) (\(variant)) on a \(size) card falls to \(NightContrastTests.ratio(worst)):1")
+            }
+        }
+    }
+
+    @Test("The path's nodes: the done check, the mastered check, a node's number", arguments: Variant.allCases)
+    func pathNodes(variant v: Variant) {
+        let surface = rgb(NightPalette.surface, v)
+        // The done node's check (non-text, 3:1): white on each stop of the
+        // brand light, or `surface` on the flat HC fill.
+        if v.isIncreasedContrast {
+            let check = NightContrastTests.contrast(surface, rgb(NightPalette.accentText, v))
+            #expect(check >= 3, "done check under HC (\(v)) is \(NightContrastTests.ratio(check)):1")
+        } else {
+            for stop in [NightPalette.accent, NightPalette.violet] {
+                let check = NightContrastTests.contrast(.white, rgb(stop, v))
+                #expect(check >= 3, "done check (\(v)) is \(NightContrastTests.ratio(check)):1")
+            }
+        }
+        // The mastered check node: `surface` on `successText`.
+        #expect(NightContrastTests.contrast(surface, rgb(NightPalette.successText, v)) >= 3)
+        // Numbers in nodes (text): accentText on surface (current), ink2 on
+        // the canvas (ahead).
+        #expect(NightContrastTests.contrast(rgb(NightPalette.accentText, v), surface) >= 4.5)
+        #expect(NightContrastTests.contrast(rgb(NightPalette.ink2, v), rgb(NightPalette.canvasTop, v)) >= 4.5)
+        // The ahead node's ring against the canvas (non-text).
+        #expect(NightContrastTests.contrast(rgb(NightPalette.ink3, v), rgb(NightPalette.canvasTop, v)) >= 3)
+    }
+
+    @Test("The written answer's well: its edge, its text and its placeholder", arguments: Variant.allCases)
+    func writtenAnswerWell(variant v: Variant) {
+        let raised = rgb(NightPalette.surfaceRaised, v)
+        let edge = rgb(NightPalette.fieldStroke, v, over: raised)
+        #expect(NightContrastTests.contrast(edge, raised) >= 3,
+                "field edge on the well (\(v)) is \(NightContrastTests.ratio(NightContrastTests.contrast(edge, raised))):1")
+        for quad in [NightPalette.ink, NightPalette.ink3] {
+            #expect(NightContrastTests.contrast(rgb(quad, v), raised) >= 4.5)
+        }
+    }
+
+    @Test("The complete card's week well and its text", arguments: Variant.allCases)
+    func weekWell(variant v: Variant) {
+        let raised = rgb(NightPalette.surfaceRaised, v)
+        for quad in [NightPalette.ink, NightPalette.ink2] {
+            let floor = v.isIncreasedContrast ? NightContrastTests.textMinimumHC : NightContrastTests.textMinimum
+            #expect(NightContrastTests.contrast(rgb(quad, v), raised) >= floor)
+        }
+    }
+}
+#endif

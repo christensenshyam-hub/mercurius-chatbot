@@ -56,6 +56,9 @@ struct OnboardingFlow: View {
     @AppStorage(OnboardingFlow.storageKey) private var hasSeenOnboarding: Bool = false
 
     @State private var step: Step
+    #if os(macOS)
+    @NightSettings private var night
+    #endif
 
     init(
         mode: Mode,
@@ -94,21 +97,41 @@ struct OnboardingFlow: View {
 
     var body: some View {
         ZStack {
+            #if os(macOS)
+            // The Mac shell draws Night Studio's canvas behind the gate's box
+            // (SPEC.md §5.7): a fill here would cut its light off at the box.
+            Color.clear
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                #if os(macOS)
+                // Reduce Motion: a crossfade, no slide.
+                .transition(night.reduceMotion ? .opacity : .asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+                #else
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
+                #endif
                 // Each step is its own view identity: the slide animates, and
                 // per-step state (the age wheel, the consent toggle) starts
                 // fresh every time a step is entered.
                 .id(step)
         }
+        #if os(macOS)
+        .animation(night.reduceMotion ? Night.Motion.fade : .easeInOut(duration: 0.3), value: step)
+        // Night's prominent indigo for the checkbox and the pop-up.
+        .tint(Night.prominent)
+        #else
         .animation(.easeInOut(duration: 0.3), value: step)
         .tint(BrandColor.accent)
+        #endif
         .onAppear { OnboardingTelemetry.gateShown(mode: mode == .full ? "full" : "gateOnly") }
     }
 

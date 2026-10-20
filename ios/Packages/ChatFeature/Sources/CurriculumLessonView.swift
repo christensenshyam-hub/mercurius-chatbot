@@ -248,6 +248,12 @@ public struct CurriculumLessonView: View {
                     // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
                     onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
                 )
+                #if os(macOS)
+                // The Mac's card recaps the objective and Merc's [KEY] ideas.
+                .environment(\.nightLessonRecap,
+                             NightLessonRecap(objective: objective,
+                                              keyIdeas: NightKeyIdeas.collect(from: model.messages)))
+                #endif
                 .accessibilityAddTraits(.isModal)
                 .transition(.opacity)
                 .zIndex(1)
@@ -319,6 +325,17 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if DEBUG && os(macOS)
+        // `-NightCompleteAfterReply YES` (shots only): the complete card once
+        // the replay's first reply is in, so it recaps that reply's [KEY]
+        // ideas. Like `-ForceCelebrate`, it never reports a completion.
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, UserDefaults.standard.bool(forKey: "NightCompleteAfterReply"),
+                  model.messages.contains(where: { $0.role == .assistant }), !showCelebration else { return }
+            showIntro = false
+            showCelebration = true
+        }
+        #endif
         #if os(macOS)
         .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
         .focusedSceneValue(\.chatCommandTarget, commandTarget)

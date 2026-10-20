@@ -217,6 +217,15 @@ public struct ChatView: View {
         .toolbar { macToolbar }
         // On iOS these hang off the header, which the Mac doesn't show.
         .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        #if DEBUG
+        // `-NightOpenQuiz YES` (shots only): the Quiz me sheet, as its chip
+        // opens it. Without a local server it shows its failure state.
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("-NightOpenQuiz") else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            activeSheet = .quiz
+        }
+        #endif
         .reportFeedbackAlert(reportFeedback)
         .sheet(item: $pendingModeDescription) { description in
             ModeDescriptionSheet(description: description) {

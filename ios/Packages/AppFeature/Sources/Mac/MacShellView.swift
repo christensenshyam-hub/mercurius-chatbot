@@ -134,7 +134,8 @@ struct MacShellView: View {
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT.
         .onChange(of: env.progressStore.revision) { _, _ in
-            guard !isGated, Self.debugTodayDemoStreak == nil else { return }
+            guard !isGated, Self.debugTodayDemoStreak == nil, !Self.debugCompleteDemo,
+                  Self.debugPathDemo == nil else { return }
             env.progressSync.pushSoon()
         }
         .sheet(isPresented: $shell.showsProgress) {
@@ -177,7 +178,10 @@ struct MacShellView: View {
                 // stretching a step that scrolls.
                 .frame(maxWidth: MacLayout.gateWidth, maxHeight: 700)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(BrandColor.background)
+                // Night Studio's canvas with its indigo pool and no stars
+                // (SPEC.md §5.7). Drawn, not fetched: nothing here may
+                // reach the network before consent.
+                .background(NightCanvas(pools: .indigo, stars: false))
                 .navigationTitle("Welcome to Mercurius")
         } else if let debugPreview = debugDetailPreview {
             debugPreview
@@ -234,19 +238,37 @@ struct MacShellView: View {
         }
     }
 
-    /// A unit's stretch of the path. The iPhone pins its stats bar above the
-    /// path (with a Home button); on the Mac Progress is a toolbar button,
-    /// as in the chat, and Today is a sidebar row.
+    /// A unit's page of the path, in Night Studio (`MacUnitPage`): its
+    /// cover, the thread of its lessons and check, and the next unit. The
+    /// iPhone pins its stats bar above the path (with a Home button); on
+    /// the Mac Progress is a toolbar button, as in the chat, and Today is a
+    /// sidebar row.
+    @ViewBuilder
     private func unitPath(_ unitId: String) -> some View {
-        CurriculumView(
-            progress: env.progressStore,
-            unitId: unitId,
-            onStartLesson: { shell.openLesson($0) },
-            onStartUnitTest: { shell.openUnitTest($0) }
-        )
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                MacProgressButton { shell.showProgress() }
+        if let unit = MercuriusCurriculum.unit(withId: unitId) {
+            MacUnitPage(
+                unit: unit,
+                progress: env.progressStore,
+                onStartLesson: { shell.openLesson($0) },
+                onStartUnitTest: { shell.openUnitTest($0) },
+                onOpenUnit: { shell.show(.unit($0)) }
+            )
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    MacProgressButton { shell.showProgress() }
+                }
+            }
+        } else {
+            CurriculumView(
+                progress: env.progressStore,
+                unitId: unitId,
+                onStartLesson: { shell.openLesson($0) },
+                onStartUnitTest: { shell.openUnitTest($0) }
+            )
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    MacProgressButton { shell.showProgress() }
+                }
             }
         }
     }
@@ -319,7 +341,20 @@ struct MacShellView: View {
             // Settings' erasure stops this lesson's reply in flight.
             onRegisterStop: { shell.registerLessonStop($0) }
         )
+        // The complete card's week row: this week's count, read again as the
+        // completion lands (the progress store is observed).
+        .environment(\.nightLessonWeek, Self.lessonWeek(lessonId: lesson.id, progress: progress))
         // The lesson sets the window's title, subtitle and way back itself.
+    }
+
+    /// This week's lessons for the complete card (`NightLessonWeek`): the
+    /// weekly plan's count and goal, and whether this lesson is one of them
+    /// (first completed this week), so the ring lights its arc.
+    static func lessonWeek(lessonId: String, progress: CurriculumProgressStore,
+                           now: Date = Date(), calendar: Calendar = .current) -> NightLessonWeek {
+        let plan = WeeklyPlan.compute(progress: progress, now: now, calendar: calendar)
+        return NightLessonWeek(done: plan.done, goal: plan.goal,
+                               includesThisLesson: progress.completions(since: plan.weekStart).contains(lessonId))
     }
 
     /// The celebration's primary button: the next lesson replaces this one;
@@ -350,7 +385,7 @@ struct MacShellView: View {
 
     @ViewBuilder
     private func unitTestView(_ unit: CurriculumFeature.Unit) -> some View {
-        if let test = MercuriusCurriculum.unitTest(for: unit.id) {
+        if let test = MercuriusCurriculum.unitTest(for: unit.id), !Self.debugUnitTestUnavailable {
             UnitTestView(
                 unit: unit,
                 test: test,
@@ -373,16 +408,7 @@ struct MacShellView: View {
             )
             // The check sets the window's title, subtitle and way back.
         } else {
-            VStack(spacing: BrandSpacing.md) {
-                Text("This unit test isn't available right now.")
-                    .font(BrandFont.body)
-                    .foregroundStyle(BrandColor.text)
-                Button("Done") { shell.closeActivity() }
-                    .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accentText)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(BrandColor.background)
+            MacUnitTestUnavailable(unit: unit) { shell.closeActivity() }
         }
     }
 
@@ -520,6 +546,43 @@ struct MacShellView: View {
         #endif
     }
 
+    /// DEBUG `-NightCompleteDemo YES` (shots of the complete card, with
+    /// `-UITests`, whose progress suite is emptied at every launch): Unit 1
+    /// Lesson 1 counts as finished a minute ago. Its progress is never
+    /// pushed.
+    private static var debugCompleteDemo: Bool {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-NightCompleteDemo") && args.contains("-UITests")
+        #else
+        false
+        #endif
+    }
+
+    /// DEBUG `-NightPathDemo check|mastered` (shots of the unit page, with
+    /// `-UITests`): Unit 1's lessons done, its check open or passed. Never
+    /// pushed.
+    private static var debugPathDemo: String? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-UITests"), let value = UserDefaults.standard.string(forKey: "NightPathDemo"),
+              value == "check" || value == "mastered" else { return nil }
+        return value
+        #else
+        nil
+        #endif
+    }
+
+    /// DEBUG `-NightUnitTestUnavailable YES`: Unit 1's check shows the
+    /// "isn't available" state (shots).
+    private static var debugUnitTestUnavailable: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-NightUnitTestUnavailable")
+        #else
+        false
+        #endif
+    }
+
     /// DEBUG: a fake resume id skips a fresh lesson's speech-bubble intro
     /// (`-LessonSkipIntro`, as iOS's `-LessonPreview`); it falls through to a
     /// fresh start, so with `-LessonReplay` the recorded replies stream in.
@@ -551,6 +614,23 @@ struct MacShellView: View {
         let args = ProcessInfo.processInfo.arguments
         if Self.debugTodayDemoStreak != nil {
             seedTodayDemo()
+        } else if Self.debugCompleteDemo, let lesson = MercuriusCurriculum.units.first?.lessons.first {
+            // `-NightCompleteDemo`: the replayed lesson counts as finished
+            // just now, so the complete card's week row reads 1 of 2.
+            env.progressStore.merge(completed: [lesson.id], mastered: [],
+                                    remoteVersion: MercuriusCurriculum.version,
+                                    remoteUpdatedAt: [lesson.id: Date().addingTimeInterval(-60)])
+        }
+        if let demo = Self.debugPathDemo, let unit = MercuriusCurriculum.units.first {
+            // `-NightPathDemo check|mastered`: Unit 1's lessons all done a
+            // day ago, its check open (or passed).
+            let yesterday = Date().addingTimeInterval(-86_400)
+            env.progressStore.merge(
+                completed: unit.lessons.map(\.id),
+                mastered: demo == "mastered" ? [unit.id] : [],
+                remoteVersion: MercuriusCurriculum.version,
+                remoteUpdatedAt: Dictionary(uniqueKeysWithValues: unit.lessons.map { ($0.id, yesterday) })
+            )
         }
         if args.contains("-UnitTestCrisisPreview") || args.contains("-UnitTestPreview"),
            let unit = MercuriusCurriculum.units.first {
@@ -581,7 +661,50 @@ struct MacShellView: View {
         } else if args.contains("-EnterShell") {
             shell.show(.today)
         }
+        if args.contains("-NightUnitTestUnavailable"), let unit = MercuriusCurriculum.units.first {
+            shell.openUnitTest(unit)
+        }
+        // `-NightPathUnit <unit id>`: that unit's page (shots).
+        if let unitId = UserDefaults.standard.string(forKey: "NightPathUnit"),
+           MercuriusCurriculum.unit(withId: unitId) != nil {
+            shell.show(.unit(unitId))
+        }
         #endif
+    }
+}
+
+/// A unit check that can't be shown (no authored test for the unit): a
+/// line of text and a way back, on a flat canvas (SPEC.md §5.10). No sad
+/// Merc, no illustration, no colour wash.
+struct MacUnitTestUnavailable: View {
+    let unit: CurriculumFeature.Unit
+    let onDone: () -> Void
+
+    static let message = "This unit test isn't available right now."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NightEyebrow("Unit \(Int(unit.number) ?? 0) check", systemImage: "exclamationmark.circle")
+            Text(Self.message)
+                .nightFont(.title2)
+                .foregroundStyle(Night.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Go back to the path. Your lessons and progress are unchanged.")
+                .nightFont(.body)
+                .foregroundStyle(Night.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            NightPrimaryButton("Done", action: onDone)
+                .keyboardShortcut(.defaultAction)
+                .help("Back to the path (Return)")
+                .padding(.top, 4)
+        }
+        .padding(Night.Space.card)
+        .frame(maxWidth: 440, alignment: .leading)
+        .nightLit(radius: Night.Radius.card)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(NightCanvas(pools: .flat, stars: false))
+        .navigationTitle("Unit \(Int(unit.number) ?? 0) Check")
+        .navigationSubtitle(unit.title)
     }
 }
 

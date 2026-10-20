@@ -91,6 +91,58 @@ struct NightCopyTests {
         }
     }
 
+    /// Every line the unit pages, the unit-check fallback and the start-up
+    /// failure say, over fresh, midway, open-check and mastered units.
+    static func everyRestLine() -> [String] {
+        var lines: [String] = [MacUnitTestUnavailable.message, MacStartFailure.title, MacUnitPage.takeCheck]
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())
+        func collect() {
+            for unit in MercuriusCurriculum.units {
+                let page = MacUnitPage.page(unit: unit, progress: progress)
+                lines += [MacUnitPage.coverEyebrow(page), MacUnitPage.coverMeterLabel(page),
+                          MacUnitPage.checkTitle(page), MacUnitPage.checkDetail(questionCount: page.questionCount),
+                          MacUnitPage.checkAccessibility(page), MacUnitPage.subtitle(unitId: unit.id)]
+                if let note = MacUnitPage.checkNote(page) { lines.append(note) }
+                if let next = page.nextUnit { lines.append(MacUnitPage.nextUnitLabel(next)) }
+                for stop in page.lessons {
+                    lines.append(MacUnitPage.lessonAccessibility(stop))
+                    switch stop.state {
+                    case .current(let isFrontier, let inProgress):
+                        lines += [MacUnitPage.currentEyebrow(code: stop.code, isFrontier: isFrontier),
+                                  MacUnitPage.currentButton(code: stop.code, inProgress: inProgress)]
+                    case .locked:
+                        lines.append(MacUnitPage.opensAfter(stop.code))
+                    case .done, .open:
+                        break
+                    }
+                }
+            }
+        }
+        collect()
+        let unit1 = MercuriusCurriculum.units[0]
+        progress.markCompleted(unit1.lessons[0].id)
+        progress.markInProgress(unit1.lessons[1].id, conversationId: UUID())
+        collect()
+        for lesson in unit1.lessons { progress.markCompleted(lesson.id) }
+        collect()
+        progress.markUnitMastered(unit1.id)
+        collect()
+        return lines
+    }
+
+    @Test("No line on the unit pages promises a preview, a time or a total it can't back")
+    func noBannedPhrasesOnTheRest() throws {
+        let lines = Self.everyRestLine()
+        #expect(lines.count > 200)
+        for pattern in Self.banned + ["padlock", "locked"] {
+            let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+            for line in lines {
+                let range = NSRange(line.startIndex..., in: line)
+                #expect(regex.firstMatch(in: line, range: range) == nil, "“\(line)” matches /\(pattern)/")
+            }
+        }
+    }
+
     @Test("The banned list catches the concept's own lines")
     func bannedListWorks() throws {
         let concept = [

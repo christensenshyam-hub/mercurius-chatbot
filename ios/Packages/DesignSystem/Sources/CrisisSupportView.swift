@@ -116,6 +116,11 @@ public struct CrisisSupportView: View {
             }
 
             BrandButton(closeTitle, style: .secondary, action: onClose)
+                #if os(macOS)
+                // Night Studio leaves this screen its palette only: calm,
+                // unbranded, no glass, no capsule (SPEC.md §5.9).
+                .environment(\.brandButtonClassic, true)
+                #endif
                 .accessibilityIdentifier("crisis.close")
         }
         .frame(maxWidth: .infinity, alignment: .leading)

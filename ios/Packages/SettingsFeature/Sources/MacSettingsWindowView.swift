@@ -50,6 +50,9 @@ public struct MacSettingsWindowView: View {
                 .tag(Tab.about)
         }
         .frame(width: 540)
+        // Night's prominent indigo for the radio buttons, toggles and the
+        // default button (white on it is 7.9:1).
+        .tint(Night.prominent)
         .task { model.loadSessionId() }
         .onAppear(perform: applyDebugTab)
         .alert("Delete my data?", isPresented: $showDeleteConfirm) {
@@ -76,6 +79,7 @@ public struct MacSettingsWindowView: View {
                     }
             }
             .frame(minWidth: 480, idealWidth: 520, minHeight: 520, idealHeight: 600)
+            .tint(Night.prominent)
         }
     }
 
@@ -94,18 +98,19 @@ public struct MacSettingsWindowView: View {
                 .pickerStyle(.radioGroup)
             } footer: {
                 Text("System follows your Mac's Light or Dark appearance.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Night.ink3)
             }
             if GamificationFlag.clientEnabled {
                 Section {
                     Toggle("Show progress nudges", isOn: $model.nudgesEnabled)
                 } footer: {
                     Text("Brief, factual credit when you make a good reasoning move. Your progress counts either way.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Night.ink3)
                 }
             }
         }
         .formStyle(.grouped)
+        .nightSettingsPane()
         .frame(height: GamificationFlag.clientEnabled ? 300 : 200)
     }
 
@@ -118,7 +123,7 @@ public struct MacSettingsWindowView: View {
                     HStack(spacing: BrandSpacing.sm) {
                         Text(model.sessionId.isEmpty ? "—" : model.sessionId)
                             .font(BrandFont.mono)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Night.ink3)
                             .textSelection(.enabled)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -147,7 +152,7 @@ public struct MacSettingsWindowView: View {
                 Text("Your data")
             } footer: {
                 Text("Deleting your data erases your chats, lessons, streak and progress on this Mac and on our server right away, and gives you a new anonymous ID. Your session ID is the only thing that links this Mac to your data — copy it if you ever need to contact us about it.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Night.ink3)
             }
 
             Section {
@@ -156,10 +161,11 @@ public struct MacSettingsWindowView: View {
                     .accessibilityIdentifier("settings.privacyChoices")
             } footer: {
                 Text("Where your messages go, and how to withdraw consent.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Night.ink3)
             }
         }
         .formStyle(.grouped)
+        .nightSettingsPane()
         .frame(height: 380)
     }
 
@@ -173,7 +179,7 @@ public struct MacSettingsWindowView: View {
                     .accessibilityIdentifier("settings.howItTeaches")
             } footer: {
                 Text("Mercurius AI is an AI literacy tutor — built to help you think critically about AI, not think for you.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Night.ink3)
             }
             Section("Help") {
                 link("Help & FAQ", "https://trymercurius.com/support")
@@ -187,6 +193,7 @@ public struct MacSettingsWindowView: View {
             }
         }
         .formStyle(.grouped)
+        .nightSettingsPane()
         .frame(height: 520)
     }
 
@@ -199,7 +206,7 @@ public struct MacSettingsWindowView: View {
                     Spacer()
                     Image(systemName: "arrow.up.right")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Night.ink3)
                         .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
@@ -250,6 +257,17 @@ public struct MacSettingsWindowView: View {
             tab = debugTab
         }
         #endif
+    }
+}
+
+private extension View {
+    /// A Settings pane in Night Studio (SPEC.md §5.8, D10): still the Mac's
+    /// own grouped form, system type and controls, on Night's flat canvas
+    /// instead of the window's grey. Footers use `ink3` (≥ 4.5:1 on it,
+    /// where the system's secondary label is about 4:1).
+    func nightSettingsPane() -> some View {
+        scrollContentBackground(.hidden)
+            .background(NightCanvas(pools: .flat, stars: false))
     }
 }
 #endif
