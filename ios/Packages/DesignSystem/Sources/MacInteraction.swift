@@ -9,15 +9,21 @@ import AppKit
 ///
 /// - `macReadableColumn()`: a reading column of `MacLayout.readableWidth`,
 ///   centred in a wide window (the chat, a lesson, the path).
-/// - `macHoverHighlight(cornerRadius:)`: a card that can be clicked tints and
-///   shows the pointing hand while the pointer is over it.
-/// - `macPointingHand()`: the pointing hand alone, for controls whose own
-///   look already says they can be clicked (path nodes, links).
+/// - `macHoverHighlight(cornerRadius:)`: a card that can be clicked tints
+///   while the pointer is over it. No pointing hand: the Mac keeps that for
+///   links.
+/// - `macPointingHand()`: the pointing hand, for links only.
 public enum MacLayout {
     /// The widest a column of reading text gets in a wide Mac window: about
-    /// 75 characters of the 17 pt reading face — past that, lines get hard to
-    /// track back from.
-    public static let readableWidth: CGFloat = 720
+    /// 80 characters of the Mac's 15 pt body (`MacTypeRamp`) once the
+    /// column's own padding is taken off — past that, lines get hard to
+    /// track back from. (It was 720 pt for 17 pt text; at 13 pt that ran to
+    /// 110 characters a line.)
+    public static let readableWidth: CGFloat = 620
+
+    /// The first-run flow's box: about 75 characters of 15 pt body inside
+    /// its 24 pt margins.
+    public static let gateWidth: CGFloat = 600
 
     /// The widest a reply's text runs inside that column. On a phone the cap
     /// is 340 pt (MessageBubbleView); on the Mac the bubble may use most of
@@ -42,9 +48,10 @@ public extension View {
         #endif
     }
 
-    /// Mac: a soft accent tint over the view while the pointer is over it,
-    /// and the pointing-hand cursor. `isEnabled == false` (a locked or
-    /// answered option) shows neither. iOS: the view unchanged.
+    /// Mac: a soft accent tint over the view while the pointer is over it
+    /// (the arrow stays an arrow: the Mac shows the pointing hand only over
+    /// links). `isEnabled == false` (a locked or answered option) shows no
+    /// tint. iOS: the view unchanged.
     @ViewBuilder
     func macHoverHighlight(cornerRadius: CGFloat, isEnabled: Bool = true) -> some View {
         #if os(macOS)
@@ -54,8 +61,20 @@ public extension View {
         #endif
     }
 
-    /// Mac: the pointing-hand cursor while the pointer is over the view.
-    /// iOS: the view unchanged.
+    /// Mac: Return presses this button (a screen's one primary action — a
+    /// first-run step's Continue). Disabled, it ignores Return too. iOS: the
+    /// view unchanged.
+    @ViewBuilder
+    func macDefaultAction() -> some View {
+        #if os(macOS)
+        keyboardShortcut(.defaultAction)
+        #else
+        self
+        #endif
+    }
+
+    /// Mac: the pointing-hand cursor while the pointer is over the view —
+    /// for links (the HIG keeps it for them). iOS: the view unchanged.
     @ViewBuilder
     func macPointingHand(isEnabled: Bool = true) -> some View {
         #if os(macOS)
@@ -109,7 +128,6 @@ private struct MacHoverHighlight: ViewModifier {
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
             .onHover { hovering = $0 }
-            .modifier(MacPointingHand(isEnabled: isEnabled))
     }
 }
 

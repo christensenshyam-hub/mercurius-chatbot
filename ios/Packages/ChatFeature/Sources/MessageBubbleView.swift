@@ -69,7 +69,13 @@ struct MessageBubbleView: View {
     /// The reply's body size before Dynamic Type. MarkdownUI gets this one:
     /// it scales its theme size for Dynamic Type itself, so the scaled
     /// `bodyFontSize` would scale the reply twice.
+    /// On the Mac it is the ramp's reading size (`MacTypeRamp.reading`), the
+    /// same as the student's own text (`BrandFont.body`).
+    #if os(macOS)
+    static let replyBaseSize: CGFloat = MacTypeRamp.reading
+    #else
     static let replyBaseSize: CGFloat = 17
+    #endif
 
     /// The body size scaled for the student's Dynamic Type setting (relative
     /// to `.body`), for what's drawn with fixed-size fonts outside MarkdownUI:

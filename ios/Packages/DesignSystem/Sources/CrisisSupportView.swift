@@ -178,8 +178,9 @@ public struct CrisisSupportView: View {
 }
 
 #if os(macOS)
-/// The crisis lines on a Mac: each number large and selectable, with a Copy
-/// button, and the call/text links (FaceTime, Messages) under it. Used by
+/// The crisis lines on a Mac, in one card: each number large and selectable,
+/// with a Copy button, and the call/text links (FaceTime, Messages) under
+/// it; the card ends with the note on when those links work. Used by
 /// `CrisisSupportView` and the Mac Help window. The links and numbers are
 /// the app's own (`CrisisResources`), never server or model text.
 public struct MacCrisisNumbers: View {
@@ -216,16 +217,41 @@ public struct MacCrisisNumbers: View {
              call: CrisisResources.call911, text: nil),
     ]
 
+    /// The caveat for the FaceTime / Messages buttons, inside the card,
+    /// under the buttons it qualifies.
+    static let linksNote = "Use your phone, or the buttons if this Mac is set up to call (FaceTime) or text (Messages)."
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
-            ForEach(Self.lines) { line in
+        // One card: the three lines, then the note about the buttons. Every
+        // word in it is body size (15 pt on the Mac) or larger — the 10 pt
+        // footnote was the Mac's smallest text, on the screen that matters
+        // most.
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(Self.lines.enumerated()), id: \.element.id) { index, line in
+                if index > 0 {
+                    Divider().overlay(BrandColor.border)
+                }
                 row(line)
             }
-            Text("Use your phone, or the buttons if this Mac is set up to call (FaceTime) or text (Messages).")
-                .font(BrandFont.caption)
-                .foregroundStyle(BrandColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Divider().overlay(BrandColor.border)
+            Label {
+                Text(Self.linksNote)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "info.circle")
+                    .accessibilityHidden(true)
+            }
+            .font(BrandFont.body)
+            .foregroundStyle(BrandColor.textSecondary)
+            .padding(BrandSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(BrandColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                .stroke(BrandColor.border, lineWidth: 1)
+        )
     }
 
     private func row(_ line: Line) -> some View {
@@ -245,7 +271,7 @@ public struct MacCrisisNumbers: View {
                         .foregroundStyle(BrandColor.text)
                         .textSelection(.enabled)
                     Text(line.detail)
-                        .font(BrandFont.caption)
+                        .font(BrandFont.body)
                         .foregroundStyle(BrandColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -266,10 +292,11 @@ public struct MacCrisisNumbers: View {
                           systemImage: copied == line.id ? "checkmark" : "doc.on.doc")
                 }
                 .buttonStyle(.bordered)
+                .help("Copy \(line.number)")
                 .accessibilityLabel("Copy \(line.number)")
                 .accessibilityIdentifier("crisis.copy\(line.id)")
             }
-            HStack(spacing: BrandSpacing.md) {
+            HStack(spacing: BrandSpacing.lg) {
                 if let call = line.call {
                     Link(destination: call) {
                         Label("Call with FaceTime", systemImage: "phone.fill")
@@ -283,18 +310,12 @@ public struct MacCrisisNumbers: View {
                     .accessibilityLabel("Text \(line.id == "741741" ? "HOME to 741741" : line.number) with Messages")
                 }
             }
-            .font(BrandFont.caption.weight(.semibold))
+            .font(BrandFont.bodyEmphasized)
             .foregroundStyle(BrandColor.accentText)
             .macPointingHand()
         }
-        .padding(BrandSpacing.md)
+        .padding(BrandSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BrandColor.surface)
-        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
-                .stroke(BrandColor.border, lineWidth: 1)
-        )
         .accessibilityElement(children: .contain)
     }
 }

@@ -38,7 +38,12 @@ public struct LessonCompleteOverlay: View {
     @State private var share: ShareState = .rendering
     @State private var dismissalReported = false
     @ScaledMetric(relativeTo: .title) private var headlineSize: CGFloat = 27
+    // The Mac's body size (`MacTypeRamp`): the Mac has no Dynamic Type.
+    #if os(macOS)
+    @ScaledMetric(relativeTo: .subheadline) private var subtitleSize: CGFloat = MacTypeRamp.body
+    #else
     @ScaledMetric(relativeTo: .subheadline) private var subtitleSize: CGFloat = 13.5
+    #endif
 
     private enum ShareState {
         case rendering
