@@ -4,8 +4,10 @@ import PackageDescription
 let package = Package(
     name: "LocalPackages",
     // macOS listed alongside iOS so `swift test` can run the logic
-    // tests from the command line. The app itself only ships for iOS.
-    // macOS 14 matches the iOS 17-era SwiftUI API surface we depend on.
+    // tests from the command line — and for the native Mac app
+    // (MercuriusMac in ios/project.yml), whose window lives in AppFeature
+    // behind `#if os(macOS)` (AppFeature/Sources/Mac). macOS 14 matches
+    // the iOS 17-era SwiftUI API surface we depend on.
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),

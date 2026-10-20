@@ -4,6 +4,9 @@ import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
+#if os(macOS)
+import ChatFeature
+#endif
 
 /// Shared logger for app-level diagnostics. Surfaces in Console.app
 /// under the `com.mayoailiteracy.mercurius` subsystem when filtered
@@ -57,6 +60,12 @@ public final class AppEnvironment: ObservableObject {
     /// to open. The shell presents it and clears it.
     @Published public var pendingLessonId: String?
 
+    #if os(macOS)
+    /// The Mac window's navigation state and shared chat model, which the
+    /// menu bar and the Settings window act on too.
+    public let macShell: MacShellModel
+    #endif
+
     /// The streak seed has succeeded this process.
     private var didSeedStreak = false
 
@@ -108,7 +117,7 @@ public final class AppEnvironment: ObservableObject {
     /// so we have to avoid calling into SwiftData at all in those
     /// contexts.
     public init(environment: APIEnvironment = .production, chatStore: ChatStore?) {
-        let identity = SessionIdentity()
+        let identity = SessionIdentity(keychain: Self.makeKeychain(arguments: ProcessInfo.processInfo.arguments))
         self.sessionIdentity = identity
         self.apiClient = APIClient(
             environment: environment,
@@ -147,7 +156,38 @@ public final class AppEnvironment: ObservableObject {
             // down. Its logic is covered by the AppFeature unit tests.
             reminderCardStore.markHandled()
         }
+        #if os(macOS)
+        let client = apiClient
+        let streak = streakStore
+        let achievements = achievementStore
+        self.macShell = MacShellModel(
+            progress: progress,
+            lastActivityStore: lastActivityStore,
+            chatStore: chatStore,
+            makeChatModel: {
+                ChatViewModel(
+                    apiClient: client,
+                    sessionIdentity: identity,
+                    store: chatStore,
+                    streakStore: streak,
+                    achievementStore: achievements
+                )
+            }
+        )
+        #endif
     }
+
+    /// The Keychain the session id lives in. DEBUG `-EphemeralSession` keeps
+    /// it in memory instead, so screenshot runs (the Mac's `-MacSnapshot`)
+    /// never create or read a real Keychain item on the machine.
+    static func makeKeychain(arguments: [String]) -> KeychainStore {
+        #if DEBUG
+        if arguments.contains(ephemeralSessionArgument) { return EphemeralKeychain() }
+        #endif
+        return Keychain()
+    }
+
+    static let ephemeralSessionArgument = "-EphemeralSession"
 
     /// Seed the streak cache from the server's session row. Runs at most once
     /// successfully per process: the launch hold runs it when consent is
