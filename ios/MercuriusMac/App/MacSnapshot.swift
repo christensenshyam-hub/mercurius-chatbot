@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import AppFeature
 
 /// DEBUG `-MacSnapshot <dir>`: render the app's own window to a PNG, write
 /// it, and quit. No `screencapture`, no Screen Recording permission. Pair it
@@ -43,6 +44,15 @@ import AppKit
 ///   types Shift-Return); `-MacSnapshotSubmit YES` then presses Return. The
 ///   field's text is printed as `COMPOSER <text>` after each, so a run
 ///   shows what Shift-Return and Return did.
+/// - `-MacSnapshotOpaque YES`: fill the window's transparent rounded
+///   corners with the colour just inside each one, and write the PNG with
+///   no alpha channel (the Mac App Store's screenshots;
+///   `ios/scripts/mac-store-screenshots.sh`).
+///
+/// The flags are parsed by `MacSnapshotOptions` (AppFeature, unit-tested).
+/// Anything it can't honour — a size it can't read, a size below the
+/// window's minimum — is printed as `MacSnapshot: problem <what>`, and the
+/// scripts fail on it.
 ///
 /// What the capture can't show: Liquid Glass surfaces that blend with what is
 /// behind the window. With only this window in the picture they come out
@@ -65,36 +75,54 @@ import AppKit
 @MainActor
 enum MacSnapshot {
     static func startIfRequested() {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let flag = arguments.firstIndex(of: "-MacSnapshot"), flag + 1 < arguments.count else { return }
-        let directory = URL(fileURLWithPath: arguments[flag + 1], isDirectory: true)
-        let defaults = UserDefaults.standard
-        let name = defaults.string(forKey: "MacSnapshotName") ?? "window"
-        let delay = defaults.double(forKey: "MacSnapshotDelay") > 0 ? defaults.double(forKey: "MacSnapshotDelay") : 4
-        let size = parseSize(defaults.string(forKey: "MacSnapshotSize")) ?? NSSize(width: 1280, height: 800)
-        let offscreen = defaults.string(forKey: "MacSnapshotOnScreen") != "YES"
-        let dumpsControls = defaults.bool(forKey: "MacSnapshotDumpControls")
+        guard let options = MacSnapshotOptions.fromProcess() else { return }
+        for problem in options.problems {
+            log("MacSnapshot: problem \(problem)")
+        }
+        let directory = options.directory
+        let name = options.name
+        let delay = options.delay
+        let size = NSSize(width: options.size.width, height: options.size.height)
+        let offscreen = options.offscreen
+        let dumpsControls = options.dumpsControls
 
-        switch defaults.string(forKey: "MacSnapshotAppearance") {
-        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
-        case "light": NSApp.appearance = NSAppearance(named: .aqua)
-        default: break
+        switch options.appearance {
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case nil: break
         }
 
-        let target = defaults.string(forKey: "MacSnapshotWindow") ?? "main"
+        let target = options.target.rawValue
 
         // SwiftUI has made the main window by now
         // (applicationDidFinishLaunching): size it and move it before it is
         // first drawn on screen. A Settings or Help window opens a moment
         // later; `placeNewWindows` moves it as it appears.
+        //
+        // Sized while still on its screen: AppKit keeps it within that
+        // screen's visible frame, so a size taller than the screen can't be
+        // had (1440×900 on a 14-inch MacBook Pro, whose visible frame is
+        // 888 pt tall). Resizing it once it is off screen doesn't work
+        // either: the window server then returns a blank picture at a
+        // fractional scale. So a size that doesn't fit is a problem, said
+        // out loud, and the scripts fail on it.
         if let window = mainWindow() {
-            if target == "main" { window.setContentSize(size) }
+            if target == "main" {
+                window.setContentSize(size)
+                if !hasContentSize(window, size) {
+                    let got = window.contentRect(forFrameRect: window.frame).size
+                    let visible = window.screen?.visibleFrame.size ?? .zero
+                    log("MacSnapshot: problem the main window can't be \(Int(size.width))x\(Int(size.height)) pt on this display "
+                        + "(visible area \(Int(visible.width))x\(Int(visible.height)) pt); it came out "
+                        + "\(Int(got.width))x\(Int(got.height)). Use a smaller -MacSnapshotSize or a bigger display.")
+                }
+            }
             place(window, offscreen: offscreen)
         }
         placeNewWindows(offscreen: offscreen, helpSize: target == "help" ? size : nil)
 
-        if let text = defaults.string(forKey: "MacSnapshotType") {
-            let submits = defaults.bool(forKey: "MacSnapshotSubmit")
+        if let text = options.typedText {
+            let submits = options.submitsTypedText
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay / 2))
                 typeIntoComposer(text, submit: submits)
@@ -103,7 +131,12 @@ enum MacSnapshot {
 
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
-            if let window = snapshotWindow(target), let png = windowServerImage(window) ?? cachedDisplay(window) {
+            if let window = snapshotWindow(target) {
+                let content = window.contentRect(forFrameRect: window.frame).size
+                log("MacSnapshot: content \(Int(content.width))x\(Int(content.height)) pt, scale \(window.backingScaleFactor)")
+            }
+            if let window = snapshotWindow(target),
+               let png = windowServerImage(window, opaque: options.opaque) ?? cachedDisplay(window) {
                 if dumpsControls, let root = window.contentView {
                     dumpControls(root)
                 }
@@ -115,6 +148,11 @@ enum MacSnapshot {
             forgetFrames()
             NSApp.terminate(nil)
         }
+    }
+
+    private static func hasContentSize(_ window: NSWindow, _ size: NSSize) -> Bool {
+        let content = window.contentRect(forFrameRect: window.frame).size
+        return abs(content.width - size.width) < 0.5 && abs(content.height - size.height) < 0.5
     }
 
     private static func mainWindow() -> NSWindow? {
@@ -233,8 +271,9 @@ enum MacSnapshot {
     }
 
     /// The window server's image of this process's own window, at the
-    /// display's resolution, without the shadow.
-    private static func windowServerImage(_ window: NSWindow) -> Data? {
+    /// display's resolution, without the shadow. `opaque` fills the rounded
+    /// corners and drops the alpha channel.
+    private static func windowServerImage(_ window: NSWindow, opaque: Bool) -> Data? {
         typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW),
               let symbol = dlsym(handle, "CGWindowListCreateImage") else { return nil }
@@ -243,7 +282,57 @@ enum MacSnapshot {
         let options: UInt32 = (1 << 0) | (1 << 3)                // BoundsIgnoreFraming | BestResolution
         guard let image = create(.null, includingWindow, UInt32(window.windowNumber), options)?
             .takeRetainedValue() else { return nil }
-        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        let output = opaque ? (flattened(image) ?? image) : image
+        log("MacSnapshot: pixels \(output.width)x\(output.height)")
+        return NSBitmapImageRep(cgImage: output).representation(using: .png, properties: [:])
+    }
+
+    /// The image with its transparent corners filled and no alpha channel.
+    /// Each corner takes the colour found a little inside it (the sidebar's
+    /// at the left, the detail's at the right), so the window reads as a
+    /// square-cornered picture of itself.
+    private static func flattened(_ image: CGImage) -> CGImage? {
+        let width = image.width, height = image.height
+        guard width > 0, height > 0,
+              let source = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let full = CGRect(x: 0, y: 0, width: width, height: height)
+        source.draw(image, in: full)
+        guard let pixels = source.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+        let bytesPerRow = source.bytesPerRow
+        // 24 px covers the corner radius at 2x with room to spare; the colour
+        // is read from inside it.
+        let corner = min(24, width / 4, height / 4)
+        let probe = min(corner * 2, width / 2, height / 2)
+        func color(x: Int, y: Int) -> CGColor {
+            // Row 0 of the buffer is the top of the picture.
+            let offset = y * bytesPerRow + x * 4
+            let alpha = CGFloat(pixels[offset + 3]) / 255
+            guard alpha > 0 else { return CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1) }
+            return CGColor(srgbRed: CGFloat(pixels[offset]) / 255 / alpha,
+                           green: CGFloat(pixels[offset + 1]) / 255 / alpha,
+                           blue: CGFloat(pixels[offset + 2]) / 255 / alpha, alpha: 1)
+        }
+        guard let output = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                     bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        // Corners in buffer terms (top-left origin) and their drawing rects
+        // (bottom-left origin).
+        let corners: [(probeX: Int, probeY: Int, rect: CGRect)] = [
+            (probe, probe, CGRect(x: 0, y: height - corner, width: corner, height: corner)),
+            (width - 1 - probe, probe, CGRect(x: width - corner, y: height - corner, width: corner, height: corner)),
+            (probe, height - 1 - probe, CGRect(x: 0, y: 0, width: corner, height: corner)),
+            (width - 1 - probe, height - 1 - probe, CGRect(x: width - corner, y: 0, width: corner, height: corner)),
+        ]
+        output.setFillColor(color(x: width / 2, y: height / 2))
+        output.fill(full)
+        for item in corners {
+            output.setFillColor(color(x: item.probeX, y: item.probeY))
+            output.fill(item.rect)
+        }
+        output.draw(image, in: full)
+        return output.makeImage()
     }
 
     /// Fallback: the view hierarchy drawn into a bitmap. On macOS 26 this
@@ -283,12 +372,6 @@ enum MacSnapshot {
             log("CONTROL \(type(of: view)) frame=\(view.convert(view.bounds, to: nil)) hidden=\(view.isHiddenOrHasHiddenAncestor) alpha=\(view.alphaValue) title=\(title)")
         }
         for sub in view.subviews { dumpControls(sub) }
-    }
-
-    private static func parseSize(_ text: String?) -> NSSize? {
-        guard let parts = text?.split(separator: "x"), parts.count == 2,
-              let width = Double(parts[0]), let height = Double(parts[1]) else { return nil }
-        return NSSize(width: width, height: height)
     }
 
     private static func log(_ line: String) {

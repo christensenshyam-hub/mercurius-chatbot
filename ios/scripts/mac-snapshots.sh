@@ -23,7 +23,15 @@
 # <shot>-dark.png, <shot>-min.png (860×600, the window's minimum) and
 # <shot>-min-dark.png. The Settings and Help windows have their own size:
 # light and dark only. Set VARIANTS="light" (or any of light dark min
-# min-dark) to take fewer.
+# min-dark) to take fewer. VARIANTS="store" takes <shot>-store.png instead:
+# light, square corners, no alpha, at STORE_SIZE points (default 1280x800,
+# 2560×1600 px on a Retina display; STORE_SIZE=1440x900 gives 2880×1800 px
+# on a display whose visible area is at least 900 pt tall). See
+# mac-store-screenshots.sh.
+#
+# The harness prints anything it couldn't do as asked ("MacSnapshot:
+# problem …", e.g. a size below the window's minimum); that shot then
+# counts as failed. The script exits non-zero if any shot failed.
 set -euo pipefail
 
 OUT=${1:?usage: mac-snapshots.sh <out-dir> [shot ...]}
@@ -34,6 +42,7 @@ BIN="$APP/Contents/MacOS/Mercurius"
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 VARIANTS=${VARIANTS:-"light dark min min-dark"}
+STORE_SIZE=${STORE_SIZE:-1280x800}
 
 # Every flag carries a value: AppKit takes a bare word after a value-less
 # flag (`-EnterShell -MacSnapshotDelay 9`) as a document to open, and SwiftUI
@@ -41,6 +50,8 @@ VARIANTS=${VARIANTS:-"light dark min min-dark"}
 ISOLATED=(-UITests YES -EphemeralSession YES -UseLocalServer YES -ApplePersistenceIgnoreState YES)
 GATE=(-consentVersion 0 -hasSeenOnboarding NO)
 PAST_GATE=(-consentVersion 1 -hasSeenOnboarding YES -hasSeenChatInputHint NO)
+
+FAILED=0
 
 # One launch → one PNG.
 snap() {
@@ -69,11 +80,23 @@ snap() {
   if [ -n "$wrote" ] && [ "$wrote" != "$OUT/$name.png" ]; then
     cp "$wrote" "$OUT/$name.png"
   fi
-  if [ -f "$OUT/$name.png" ]; then echo "$name: ok"; else echo "$name: FAILED" >&2; cat "$log" >&2; fi
+  local problems
+  problems=$(sed -n 's/^MacSnapshot: problem //p' "$log")
+  if [ -n "$problems" ]; then
+    echo "$problems" | sed "s/^/$name: problem: /" >&2
+    FAILED=1
+  fi
+  if [ -f "$OUT/$name.png" ]; then
+    echo "$name: ok"
+  else
+    echo "$name: FAILED" >&2
+    cat "$log" >&2
+    FAILED=1
+  fi
   # The control dump and the composer log once per state (the light,
   # full-size shot), not once per variant.
   case $name in
-    *-dark|*-min) ;;
+    *-dark|*-min|*-store) ;;
     *)
       grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
       grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
@@ -91,6 +114,7 @@ window_shot() {
       dark)     snap "$name-dark"     "$@" -MacSnapshotAppearance dark ;;
       min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 860x600 ;;
       min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 860x600 ;;
+      store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
     esac
   done
 }
@@ -140,3 +164,4 @@ if [ $# -eq 0 ]; then
   set -- $ALL
 fi
 for name in "$@"; do run "$name"; done
+exit "$FAILED"
