@@ -303,6 +303,35 @@ public final class UnitTestViewModel {
         phase = .quiz
     }
 
+    // MARK: - Keyboard (the Mac)
+
+    /// Leaving now loses nothing the student did: no picks yet on the quiz,
+    /// no written answer (and none being graded), or a result or the support
+    /// screen. The Mac binds Escape to the way out only then.
+    public var exitLosesNothing: Bool {
+        switch phase {
+        case .quiz: return selections.isEmpty
+        case .defense: return !isGrading && defenseAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .result, .support: return true
+        }
+    }
+
+    /// The option a key picks on the Mac: A–D (either case) or 1–4, within
+    /// the question's options; nil for any other key.
+    public static func optionLetter(forKey characters: String, optionCount: Int) -> String? {
+        guard characters.count == 1, let character = characters.uppercased().first else { return nil }
+        let index: Int
+        if let digit = character.wholeNumberValue, character.isASCII {
+            index = digit - 1
+        } else if let ascii = character.asciiValue, ascii >= 65, ascii <= 90 {
+            index = Int(ascii) - 65
+        } else {
+            return nil
+        }
+        guard index >= 0, index < optionCount else { return nil }
+        return optionLetter(index)
+    }
+
     // MARK: - Display helpers
 
     /// Option letter ("A"–"D") for a zero-based index.

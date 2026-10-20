@@ -46,6 +46,12 @@ struct MacShellView: View {
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
+    /// The sidebar was folded away because the window got narrow (not by
+    /// the student), so it comes back when the window is wide again.
+    @State private var collapsedForWidth = false
+    /// The window's last width, for re-applying the rule as the gate clears.
+    @State private var windowWidth: CGFloat = 0
+
     /// Standby gamification cache — default-constructed, so the client gate
     /// is off: no network calls and nothing rendered (as on iOS).
     @State private var gamificationStore = GamificationStore()
@@ -57,6 +63,11 @@ struct MacShellView: View {
     @State private var appliedDebugState = false
 
     private var isGated: Bool { gate != nil }
+
+    /// The detail column's narrowest: the chat's toolbar (mode picker,
+    /// Explain More, New Chat) and a lesson's reading column still fit, and
+    /// with the sidebar's minimum it stays under the window's 700 pt.
+    static let detailMinWidth: CGFloat = 430
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -70,17 +81,32 @@ struct MacShellView: View {
             // to reveal the (empty, disabled) sidebar while the gate shows.
             .toolbar(removing: isGated ? .sidebarToggle : nil)
             // Outermost: under `.toolbar(removing:)` the split view ignored
-            // it and opened the sidebar at 148 pt.
-            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
+            // it and opened the sidebar at 148 pt. The sidebar's minimum
+            // plus the detail's (`detailMinWidth`) plus the floating
+            // sidebar's insets must stay under the window's 700 pt minimum,
+            // or the window's content overflows it and is cut off at both
+            // edges (measured at 700 pt with 210 + 480).
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)
         } detail: {
             detail
-                .frame(minWidth: 520, minHeight: 480)
+                .frame(minWidth: Self.detailMinWidth, minHeight: 480)
                 // The shared views' buttons are drawn by the views
                 // themselves; the Mac's default push-button bezel put grey
                 // boxes around their icons and labels.
                 .buttonStyle(.borderless)
         }
         .tint(BrandColor.accent)
+        // A narrow window (tiled beside a browser) folds the sidebar away,
+        // as Mail and Notes do, so the detail keeps its whole toolbar; ⌃⌘S
+        // or the toolbar button brings it back. Widening the window again
+        // restores a sidebar that was folded this way.
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { resized(to: geo.size.width) }
+                    .onChange(of: geo.size.width) { _, width in resized(to: width) }
+            }
+        }
         // While Settings erases this student's data nothing here may start
         // a request: it would go out under the old ID.
         .disabled(shell.isErasing)
@@ -140,9 +166,11 @@ struct MacShellView: View {
             // The flow is laid out for a phone: on a wide window its lines
             // and buttons stay at a readable width, centred.
             gate
-                // A tall window would push each step's button far below
-                // its question: the flow keeps to a phone-and-a-half box.
-                .frame(maxWidth: 720, maxHeight: 700)
+                // Each step sizes itself to its content, centred, with its
+                // button right under it (`GateStepContainer`); the box keeps
+                // lines to a readable length and a tall window from
+                // stretching a step that scrolls.
+                .frame(maxWidth: MacLayout.gateWidth, maxHeight: 700)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(BrandColor.background)
                 .navigationTitle("Welcome to Mercurius")
@@ -169,40 +197,45 @@ struct MacShellView: View {
         }
     }
 
+    /// Today: an overview of the next stop, the week, the streak and the
+    /// recent chats (`MacTodayView`), on the same `HomeState` as the
+    /// iPhone's Home.
     private var todayView: some View {
         let state = HomeState.build(
             // Only a streak the server confirmed recently (as Home on iOS).
             streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0,
             progress: env.progressStore
         )
-        return HomeView(
+        return MacTodayView(
             state: state,
-            onStartNext: { shell.open(state.next) },
-            onStartChat: { shell.showChat() },
+            progress: env.progressStore,
+            conversations: shell.conversations,
             // The same one-time weekly-nudge offer as the iPhone's Home: the
             // Mac schedules the same reminders.
-            showsReminderCard: todayReminders.shows,
-            onAcceptReminders: todayReminders.onAccept,
-            onDismissReminderCard: todayReminders.onDismiss
+            reminders: todayReminders,
+            onOpenNext: { shell.open(state.next) },
+            onOpenPath: { shell.showPath() },
+            onOpenChat: { shell.show(.chat($0)) },
+            onNewChat: { shell.newChat() },
+            onShowProgress: { shell.showsProgress = true }
         )
-        .navigationTitle("Today")
     }
 
+    /// A unit's stretch of the path. The iPhone pins its stats bar above the
+    /// path (with a Home button); on the Mac the streak is a toolbar button,
+    /// as in the chat, and Today is a sidebar row.
     private func unitPath(_ unitId: String) -> some View {
         CurriculumView(
             progress: env.progressStore,
             unitId: unitId,
             onStartLesson: { shell.openLesson($0) },
-            onStartUnitTest: { shell.openUnitTest($0) },
-            topBar: {
-                GamifiedTopBar(
-                    streakStore: env.streakStore,
-                    gamificationStore: gamificationStore,
-                    onOpenProfile: { shell.showsProgress = true },
-                    onGoHome: { shell.show(.today) }
-                )
-            }
+            onStartUnitTest: { shell.openUnitTest($0) }
         )
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                StreakChip(streakStore: env.streakStore, action: { shell.showsProgress = true })
+            }
+        }
     }
 
     private var chatView: some View {
@@ -219,8 +252,10 @@ struct MacShellView: View {
             }
         )
         .macChrome(onNewChat: { shell.newChat() }, modeRequest: $shell.modeRequest)
+        // No subtitle: the toolbar's mode picker already says the mode, and
+        // the room keeps the picker out of the overflow menu down to the
+        // window's 700 pt minimum with the sidebar showing.
         .navigationTitle("Chat")
-        .navigationSubtitle("\(model.currentMode.displayName) mode")
         .onChange(of: model.phase) { _, phase in
             if phase == .sending { env.lastActivityStore.touch() }
             // A finished turn may have saved a new thread (or renamed one).
@@ -228,8 +263,10 @@ struct MacShellView: View {
         }
         .onChange(of: model.conversationId) { _, id in
             // New Chat, a reset or a delete moved the thread: keep the
-            // sidebar's highlight on it.
-            if case .chat = shell.selection { shell.selection = .chat(id) }
+            // sidebar's highlight on it. Not while the sidebar's thread opens
+            // are queued: an older open landing must not pull the highlight
+            // back from the newer pick (`MacShellModel.route`).
+            if case .chat = shell.selection, !shell.isOpeningThread { shell.selection = .chat(id) }
             shell.refreshConversations()
         }
     }
@@ -264,9 +301,11 @@ struct MacShellView: View {
             onAdvanceToNext: { advance(to: next) },
             completedInUnit: unit.map { progress.completedCount(in: $0) } ?? 0,
             totalInUnit: unit?.lessons.count ?? 0,
-            nextStop: next.map(AppShellView.celebrationStop)
+            nextStop: next.map(AppShellView.celebrationStop),
+            // Settings' erasure stops this lesson's reply in flight.
+            onRegisterStop: { shell.registerLessonStop($0) }
         )
-        .navigationTitle("Lesson \(lesson.number) · \(lesson.title)")
+        // The lesson sets the window's title, subtitle and way back itself.
     }
 
     /// The celebration's primary button: the next lesson replaces this one;
@@ -318,7 +357,7 @@ struct MacShellView: View {
                 onMastered: { handleUnitMastered($0) },
                 onExit: { shell.closeActivity() }
             )
-            .navigationTitle("Unit \(Int(unit.number) ?? 0) check")
+            // The check sets the window's title, subtitle and way back.
         } else {
             VStack(spacing: BrandSpacing.md) {
                 Text("This unit test isn't available right now.")
@@ -357,6 +396,38 @@ struct MacShellView: View {
     private func applyGate(_ gated: Bool) {
         shell.setGated(gated)
         columnVisibility = gated ? .detailOnly : .all
+        collapsedForWidth = false
+        if !gated { resized(to: windowWidth) }
+    }
+
+    private func resized(to width: CGFloat) {
+        windowWidth = width
+        guard !isGated, width > 0 else { return }
+        let next = Self.sidebarAfterResize(width: width, visibility: columnVisibility,
+                                           collapsedForWidth: collapsedForWidth)
+        if next.visibility != columnVisibility { columnVisibility = next.visibility }
+        collapsedForWidth = next.collapsedForWidth
+    }
+
+    /// Below this window width the sidebar folds away by itself: the chat's
+    /// toolbar (mode picker, Explain More, New Chat) needs the detail's
+    /// whole width there.
+    nonisolated static let sidebarFoldWidth: CGFloat = 860
+
+    /// The sidebar after the window changes width: folded below
+    /// `sidebarFoldWidth` (remembering that the width did it), and back once
+    /// the window is wide again — unless the student folded it.
+    nonisolated static func sidebarAfterResize(
+        width: CGFloat,
+        visibility: NavigationSplitViewVisibility,
+        collapsedForWidth: Bool
+    ) -> (visibility: NavigationSplitViewVisibility, collapsedForWidth: Bool) {
+        if width < sidebarFoldWidth {
+            if visibility == .detailOnly { return (visibility, collapsedForWidth) }
+            return (.detailOnly, true)
+        }
+        if collapsedForWidth { return (.all, false) }
+        return (visibility, false)
     }
 
     /// A lesson a reminder or a `mercurius://lesson/<id>` link asked for.
@@ -392,13 +463,11 @@ struct MacShellView: View {
               let test = MercuriusCurriculum.unitTest(for: unit.id) else { return nil }
         if args.contains("-UnitTestCrisisPreview") {
             return AnyView(UnitTestCrisisPreviewHost(unit: unit, test: test,
-                                                     via503: args.contains("-CrisisVia503"))
-                .navigationTitle("Unit 1 check"))
+                                                     via503: args.contains("-CrisisVia503")))
         }
         if args.contains("-UnitTestPreview") {
             return AnyView(UnitTestPreviewHost(unit: unit, test: test,
-                                               stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
-                .navigationTitle("Unit 1 check"))
+                                               stage: UserDefaults.standard.string(forKey: "UnitTestStage")))
         }
         #endif
         return nil
@@ -424,7 +493,7 @@ struct MacShellView: View {
     ///   `-LessonSkipIntro` to start it straight away.
     /// - `-ChatPreview` → the chat; `-ChatSeed` also sends a starter (this
     ///   one does reach the server). `-ChatPreviewMode debate|discussion`
-    ///   then switches modes the way the toolbar picker and ⌘2/⌘3 do: the
+    ///   then switches modes the way the toolbar picker and ⌥⌘2/⌥⌘3 do: the
     ///   mode's one-time description first, unless seen
     ///   (`-seenAllModeDescriptions YES`), then the server is asked — so a
     ///   screenshot run needs a local server that answers `POST /api/mode`.
@@ -433,7 +502,11 @@ struct MacShellView: View {
         guard !appliedDebugState else { return }
         appliedDebugState = true
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("-LessonPreview"), let lesson = MercuriusCurriculum.units.first?.lessons.first {
+        if args.contains("-UnitTestCrisisPreview") || args.contains("-UnitTestPreview"),
+           let unit = MercuriusCurriculum.units.first {
+            // The previews show Unit 1's check: its row, as the real check's.
+            shell.selection = .unit(unit.id)
+        } else if args.contains("-LessonPreview"), let lesson = MercuriusCurriculum.units.first?.lessons.first {
             shell.openLesson(lesson)
         } else if args.contains("-ChatPreview") {
             shell.showChat()
@@ -486,7 +559,13 @@ func settingsSheet(
         scheduler: scheduler,
         sessionDeleter: env.apiClient,
         onConsentWithdrawn: onConsentWithdrawn,
-        afterReset: { shell.refreshConversations() }
+        // The Settings window can erase while a lesson or unit check is open
+        // in the main window (on the iPhone Settings can't be reached then):
+        // its reply in flight stops before the server delete, and the
+        // lesson closes, so nothing of the erased session stays on screen or
+        // goes back to the server under the new ID.
+        beforeErase: { shell.beforeSettingsErase() },
+        afterReset: { shell.afterSettingsReset() }
     )
 }
 #endif

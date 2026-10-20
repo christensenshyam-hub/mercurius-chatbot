@@ -7,18 +7,20 @@ import NetworkingKit
 ///
 /// - File: New Chat (⌘N) in place of New Window — the app is one window —
 ///   and Attach Image… (⇧⌘A).
-/// - Chat: Socratic / Debate / Discussion (⌘1 / ⌘2 / ⌘3), Retry (⌘R),
-///   Explain More (⇧⌘E).
-/// - View: Today / Learning Path / Chat (⌥⌘1 / ⌥⌘2 / ⌥⌘3) above the sidebar
-///   commands.
+/// - Chat: Socratic / Debate / Discussion (⌥⌘1 / ⌥⌘2 / ⌥⌘3), Retry (⌘R),
+///   Explain More (⇧⌘E). The modes are on only while the free chat shows:
+///   a lesson has no mode, and switching from one would close it.
+/// - View: Today / Learning Path / Chat (⌘1 / ⌘2 / ⌘3, the sidebar's
+///   destinations, as in Mail or Finder) above the sidebar commands.
 /// - Help: Mercurius Help (⌘?) opens the Help window; the support site,
 ///   feedback and support email follow.
 ///
 /// Settings (⌘,) is the app menu's own, from the `Settings` scene.
 ///
-/// Every item that touches the shell is off while the consent gate shows
-/// (and `MacShellModel` ignores them then anyway). Retry, Explain More and
-/// Attach Image act on whichever chat or lesson the key window shows
+/// Every item that touches the shell is off while the consent gate shows or
+/// Settings is erasing the student's data (`MacShellModel.commandsBlocked`;
+/// the model ignores the gate's anyway). Retry, Explain More and Attach
+/// Image act on whichever chat or lesson the key window shows
 /// (`ChatCommandTarget`), and are off when there is none.
 public struct MacCommands: Commands {
     private let shell: MacShellModel
@@ -37,10 +39,10 @@ public struct MacCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Chat") { shell.newChat() }
                 .keyboardShortcut("n")
-                .disabled(shell.isGated)
+                .disabled(shell.commandsBlocked)
             Button("Attach Image…") { target?.attachImage() }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-                .disabled(shell.isGated || target?.canAttach != true)
+                .disabled(shell.commandsBlocked || target?.canAttach != true)
         }
 
         CommandMenu("Chat") {
@@ -49,30 +51,30 @@ public struct MacCommands: Commands {
                     get: { target?.currentMode == mode },
                     set: { _ in shell.requestMode(mode) }
                 ))
-                .keyboardShortcut(Self.modeKey(mode))
-                .disabled(shell.isGated)
+                .keyboardShortcut(Self.modeKey(mode), modifiers: Self.modeModifiers)
+                .disabled(!Self.modesEnabled(blocked: shell.commandsBlocked, chatMode: target?.currentMode))
             }
             Divider()
             Button("Retry") { target?.retry() }
                 .keyboardShortcut("r")
-                .disabled(shell.isGated || target?.canRetry != true)
+                .disabled(shell.commandsBlocked || target?.canRetry != true)
             Button("Explain More") { target?.explainMore() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(shell.isGated || target?.canExplainMore != true)
+                .disabled(shell.commandsBlocked || target?.canExplainMore != true)
         }
 
         SidebarCommands()
 
         CommandGroup(before: .sidebar) {
             Button("Today") { shell.show(.today) }
-                .keyboardShortcut("1", modifiers: [.command, .option])
-                .disabled(shell.isGated)
+                .keyboardShortcut(Self.destinationKey(.today))
+                .disabled(shell.commandsBlocked)
             Button("Learning Path") { shell.showPath() }
-                .keyboardShortcut("2", modifiers: [.command, .option])
-                .disabled(shell.isGated)
+                .keyboardShortcut(Self.destinationKey(.path))
+                .disabled(shell.commandsBlocked)
             Button("Chat") { shell.showChat() }
-                .keyboardShortcut("3", modifiers: [.command, .option])
-                .disabled(shell.isGated)
+                .keyboardShortcut(Self.destinationKey(.chat))
+                .disabled(shell.commandsBlocked)
             Divider()
         }
 
@@ -88,10 +90,28 @@ public struct MacCommands: Commands {
         }
     }
 
-    /// ⌘1 Socratic, ⌘2 Debate, ⌘3 Discussion — the toolbar's order.
+    /// ⌥⌘1 Socratic, ⌥⌘2 Debate, ⌥⌘3 Discussion — the toolbar's order.
     static func modeKey(_ mode: ChatMode) -> KeyEquivalent {
         let index = ChatMode.allCases.firstIndex(of: mode) ?? 0
         return KeyEquivalent(Character(String(index + 1)))
+    }
+
+    static let modeModifiers: EventModifiers = [.command, .option]
+
+    /// The View menu's destinations, in the sidebar's order.
+    enum Destination: CaseIterable { case today, path, chat }
+
+    /// ⌘1 Today, ⌘2 Learning Path, ⌘3 Chat (plain ⌘-number, as the Mac's
+    /// sidebar apps use it).
+    static func destinationKey(_ destination: Destination) -> KeyboardShortcut {
+        let index = Destination.allCases.firstIndex(of: destination) ?? 0
+        return KeyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+    }
+
+    /// The mode items work only on the free chat in front (a lesson's
+    /// command target has no mode), and never behind the gate or mid-erase.
+    nonisolated static func modesEnabled(blocked: Bool, chatMode: ChatMode?) -> Bool {
+        !blocked && chatMode != nil
     }
 }
 

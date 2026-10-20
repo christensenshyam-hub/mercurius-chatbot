@@ -72,7 +72,7 @@ public struct ChatView: View {
     /// The Mac shell's New Chat (toolbar, ⌘N), set by `macChrome`.
     private var macOnNewChat: (() -> Void)?
     /// A mode the menu bar asked for (Chat ▸ Socratic/Debate/Discussion,
-    /// ⌘1–⌘3), handled like a click on the toolbar picker and then cleared.
+    /// ⌥⌘1–⌥⌘3), handled like a click on the toolbar picker and then cleared.
     private var macModeRequest: Binding<ChatMode?>?
     /// The mode explainer the toolbar picker shows the first time a mode is
     /// chosen (the iPhone's pills show it from `ModeSelectorView`).
@@ -286,7 +286,7 @@ public struct ChatView: View {
             // Same rule as the iPhone's pills: no switching mid-reply or
             // mid-switch.
             .disabled(model.modeSwitchInFlight != nil || isSending)
-            .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌘1, ⌘2, ⌘3)")
+            .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌥⌘1, ⌥⌘2, ⌥⌘3)")
             .accessibilityLabel("Mode")
         }
         ToolbarItem(placement: .primaryAction) {

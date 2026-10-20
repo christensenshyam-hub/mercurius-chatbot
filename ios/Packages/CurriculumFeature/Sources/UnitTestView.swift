@@ -10,6 +10,10 @@ import DesignSystem
 public struct UnitTestView: View {
     @State private var model: UnitTestViewModel
     @State private var reportedMastery = false
+    #if os(macOS)
+    /// The question the keyboard answers (A–D, 1–4); Tab, ↑ and ↓ move it.
+    @FocusState private var focusedQuestion: String?
+    #endif
     private let onMastered: (String) -> Void
     private let onExit: () -> Void
 
@@ -41,21 +45,50 @@ public struct UnitTestView: View {
         ZStack(alignment: .top) {
             BrandColor.background.ignoresSafeArea()
             VStack(spacing: 0) {
+                #if os(iOS)
                 header
-                    .macReadableColumn()
                 Divider().overlay(BrandColor.border)
-                ScrollView {
-                    content
-                        .padding(.horizontal, BrandSpacing.lg)
-                        .padding(.vertical, BrandSpacing.lg)
-                        // The Mac's reading column, centred in a wide window.
-                        .macReadableColumn()
+                #endif
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        content
+                            .padding(.horizontal, BrandSpacing.lg)
+                            .padding(.vertical, BrandSpacing.lg)
+                            // The Mac's reading column, centred in a wide window.
+                            .macReadableColumn()
+                    }
+                    #if os(macOS)
+                    // The question the keyboard moved to comes into view.
+                    .onChange(of: focusedQuestion) { _, id in
+                        guard let id else { return }
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id) }
+                    }
+                    #endif
                 }
                 // Each phase is its own screen and opens at its top — the
                 // support view must never appear scrolled past its heading.
                 .id(model.phase)
             }
         }
+        #if os(macOS)
+        // The window's toolbar carries what the iPhone's header row shows:
+        // the title, the unit (subtitle) and the way back.
+        .navigationTitle(model.phase == .support ? "Support" : "Unit \(Int(model.unit.number) ?? 0) Check")
+        .navigationSubtitle(model.phase == .support ? "" : model.unit.title)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { onExit() } label: {
+                    Label("Done", systemImage: "chevron.backward")
+                }
+                .buttonStyle(.automatic)
+                // Escape only when leaving loses nothing (no picks, no
+                // written answer, nothing being graded).
+                .keyboardShortcut(model.exitLosesNothing ? .cancelAction : nil)
+                .help(model.exitLosesNothing ? "Done: back to the path (Esc)" : "Done: back to the path")
+                .accessibilityLabel("Done. Exit unit test.")
+            }
+        }
+        #endif
     }
 
     // MARK: - Header
@@ -119,6 +152,15 @@ public struct UnitTestView: View {
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            #if os(macOS)
+            if !model.quizSubmitted {
+                Label("Keyboard: A–D answers the highlighted question, Tab or ↓ moves on, ⌘Return submits.",
+                      systemImage: "keyboard")
+                    .font(BrandFont.caption)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            #endif
 
             ForEach(Array(model.questions.enumerated()), id: \.element.id) { index, question in
                 questionCard(index: index, question: question)
@@ -129,20 +171,61 @@ public struct UnitTestView: View {
                     Text("You got \(model.mcqScore) of \(model.mcqTotal) correct.")
                         .font(BrandFont.bodyEmphasized)
                         .foregroundStyle(BrandColor.text)
-                    primaryButton(model.mcqPassed ? "Continue to the written question" : "See results") {
+                    primaryButton(model.mcqPassed ? "Continue to the written question" : "See results",
+                                  submitsWithCommandReturn: true) {
                         model.continueAfterQuiz()
                     }
                 }
             } else {
-                primaryButton(model.submitTitle, enabled: model.allAnswered) {
+                primaryButton(model.submitTitle, enabled: model.allAnswered, submitsWithCommandReturn: true) {
                     model.submitQuiz()
                 }
             }
         }
         .onChange(of: model.quizSubmitted) { _, submitted in
             if submitted, let line = model.scoreAnnouncement { announce(line) }
+            #if os(macOS)
+            if submitted { focusedQuestion = nil }
+            #endif
         }
+        #if os(macOS)
+        .onAppear {
+            if !model.quizSubmitted { focusedQuestion = model.questions.first?.id }
+        }
+        #endif
     }
+
+    #if os(macOS)
+    /// A–D / 1–4 answer the focused question and move to the next one;
+    /// ↑ and ↓ move between questions. ⌘-keys pass through (⌘Return
+    /// submits).
+    private func handleQuizKey(_ press: KeyPress, question: UnitTestQuestion, index: Int) -> KeyPress.Result {
+        guard !model.quizSubmitted, !press.modifiers.contains(.command) else { return .ignored }
+        switch press.key {
+        case .downArrow:
+            moveFocus(from: index, by: 1)
+            return .handled
+        case .upArrow:
+            moveFocus(from: index, by: -1)
+            return .handled
+        default:
+            break
+        }
+        guard let letter = UnitTestViewModel.optionLetter(forKey: press.characters,
+                                                          optionCount: question.options.count) else {
+            return .ignored
+        }
+        model.select(letter, for: question.id)
+        moveFocus(from: index, by: 1)
+        return .handled
+    }
+
+    private func moveFocus(from index: Int, by step: Int) {
+        let next = index + step
+        guard model.questions.indices.contains(next) else { return }
+        focusedQuestion = model.questions[next].id
+    }
+    #endif
 
     private func questionCard(index: Int, question: UnitTestQuestion) -> some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -173,6 +256,21 @@ public struct UnitTestView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+        .id(question.id)
+        #if os(macOS)
+        // In the Tab loop whatever the student's Full Keyboard Access
+        // setting (`.edit`, like a text field), with its own ring.
+        .focusable(!model.quizSubmitted, interactions: .edit)
+        .focused($focusedQuestion, equals: question.id)
+        .focusEffectDisabled()
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.md)
+                .strokeBorder(BrandColor.accent, lineWidth: 2)
+                .opacity(focusedQuestion == question.id && !model.quizSubmitted ? 1 : 0)
+                .allowsHitTesting(false)
+        )
+        .onKeyPress(phases: .down) { press in handleQuizKey(press, question: question, index: index) }
+        #endif
     }
 
     // MARK: - Defense phase
@@ -242,7 +340,7 @@ public struct UnitTestView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, BrandSpacing.xs)
             } else {
-                primaryButton("Submit for grading", enabled: model.canSubmitDefense) {
+                primaryButton("Submit for grading", enabled: model.canSubmitDefense, submitsWithCommandReturn: true) {
                     Task { await model.submitDefense() }
                 }
             }
@@ -353,7 +451,10 @@ public struct UnitTestView: View {
 
     /// Enabled: white on indigo. Not yet enabled: readable secondary text
     /// on a quiet card, not the whole button faded to half (AUD-22).
-    private func primaryButton(_ title: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// `submitsWithCommandReturn`: on the Mac, ⌘Return presses it (the
+    /// quiz's submit, the written answer's submit).
+    private func primaryButton(_ title: String, enabled: Bool = true, submitsWithCommandReturn: Bool = false,
+                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(BrandFont.bodyEmphasized)
@@ -371,6 +472,9 @@ public struct UnitTestView: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        #if os(macOS)
+        .keyboardShortcut(submitsWithCommandReturn ? KeyboardShortcut(.return, modifiers: .command) : nil)
+        #endif
     }
 
     private func announce(_ line: String) {

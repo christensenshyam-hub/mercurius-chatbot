@@ -48,6 +48,11 @@ public struct CurriculumLessonView: View {
     private let totalInUnit: Int
     /// Fired once when a real completion's celebration goes away, by any path.
     private let onCelebrationDismissed: (() -> Void)?
+    /// The Mac: hands the host a way to stop a reply this lesson is still
+    /// receiving (Settings' erasure runs in its own window while a lesson
+    /// shows). Called on appear; unused on iOS, where Settings can't be
+    /// reached during a lesson.
+    private let onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)?
 
     @State private var model: ChatViewModel
     @State private var didBegin = false
@@ -77,8 +82,14 @@ public struct CurriculumLessonView: View {
 
     // Dynamic Type: the design sizes at the default setting, scaled with it.
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 15
+    // The Mac has no Dynamic Type: its intro is set on the Mac's ramp.
+    #if os(macOS)
+    @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = MacTypeRamp.title
+    @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = MacTypeRamp.body
+    #else
     @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = 17
     @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = 13.5
+    #endif
 
     public init(
         lessonId: String,
@@ -102,7 +113,8 @@ public struct CurriculumLessonView: View {
         completedInUnit: Int = 0,
         totalInUnit: Int = 0,
         nextStop: LessonCompleteOverlay.NextStop? = nil,
-        onCelebrationDismissed: (() -> Void)? = nil
+        onCelebrationDismissed: (() -> Void)? = nil,
+        onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)? = nil
     ) {
         self.lessonId = lessonId
         self.unitLabel = unitLabel
@@ -121,6 +133,7 @@ public struct CurriculumLessonView: View {
         self.totalInUnit = totalInUnit
         self.nextStop = nextStop
         self.onCelebrationDismissed = onCelebrationDismissed
+        self.onRegisterStop = onRegisterStop
         // Fresh lessons open on the speech-bubble intro; resumed ones skip it.
         _showIntro = State(initialValue: resumeConversationId == nil)
         // Seed the de-dupe high-water mark, CLAMPED to the current count. This
@@ -155,11 +168,14 @@ public struct CurriculumLessonView: View {
             BrandColor.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                #if os(iOS)
                 // One compact row, so the lesson itself gets the screen
-                // (AUD-08). Done never wraps or scrolls away.
+                // (AUD-08). Done never wraps or scrolls away. On the Mac the
+                // window's toolbar carries the title, the place in the unit
+                // (subtitle) and the way back (`macToolbar`).
                 header
-                    .macReadableColumn()
                 Divider().overlay(BrandColor.border)
+                #endif
 
                 MessageListView(
                     messages: model.messages,
@@ -295,7 +311,81 @@ public struct CurriculumLessonView: View {
         #if os(macOS)
         .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
         .focusedSceneValue(\.chatCommandTarget, commandTarget)
+        .navigationTitle(title)
+        .navigationSubtitle(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
+                                             totalInUnit: totalInUnit))
+        .toolbar { macToolbar }
+        .onAppear {
+            // Settings' erasure stops a reply this lesson is still
+            // receiving, before the server delete (`onRegisterStop`).
+            onRegisterStop?({ [weak model] in
+                guard let model else { return }
+                switch model.phase {
+                case .sending, .streaming: model.cancel()
+                case .idle, .failed: break
+                }
+            })
+        }
         #endif
+    }
+
+    #if os(macOS)
+    /// The lesson's way back, in the window's toolbar: "Not now" while the
+    /// intro shows (it leaves without starting), Done once the lesson runs.
+    /// Escape takes it too, but only when nothing would be lost: not while
+    /// a reply is coming in or the composer holds an answer, and not under
+    /// the celebration (which takes Escape itself).
+    @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                if showIntro {
+                    onExit()
+                } else {
+                    model.cancel()
+                    onExit()
+                }
+            } label: {
+                Label(showIntro ? "Not now" : "Done", systemImage: "chevron.backward")
+            }
+            // A toolbar button's own look (the detail column's views use
+            // borderless buttons).
+            .buttonStyle(.automatic)
+            .keyboardShortcut(escapeLeaves ? .cancelAction : nil)
+            .help(showIntro
+                  ? "Not now: back to \(Self.unitName(unitLabel)) without starting (Esc)"
+                  : "Done: back to \(Self.unitName(unitLabel))\(escapeLeaves ? " (Esc)" : "")")
+            .accessibilityLabel(showIntro ? "Not now. Leave without starting the lesson." : "Done. Exit lesson.")
+            .disabled(showCelebration)
+        }
+    }
+
+    /// Escape leaves the lesson only when that loses nothing.
+    private var escapeLeaves: Bool {
+        if showIntro { return true }
+        return Self.escapeLeaves(isSending: isSending, draft: model.draft,
+                                 hasAttachment: model.pendingImage != nil,
+                                 isCelebrating: showCelebration)
+    }
+
+    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool) -> Bool {
+        !isSending && !isCelebrating && !hasAttachment
+            && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// "Unit 1 · Lesson 2 of 4", the window's subtitle under the lesson's
+    /// title (the iPhone's eyebrow, in title case).
+    static func macSubtitle(unitLabel: String, lessonNumber: Int, totalInUnit: Int) -> String {
+        "\(unitName(unitLabel)) · \(place(lessonNumber: lessonNumber, totalInUnit: totalInUnit))"
+    }
+    #endif
+
+    /// "UNIT 01" → "Unit 1"; anything else as it came, capitalised.
+    static func unitName(_ unitLabel: String) -> String {
+        let parts = unitLabel.split(separator: " ")
+        if parts.count == 2, parts[0].uppercased() == "UNIT", let number = Int(parts[1]) {
+            return "Unit \(number)"
+        }
+        return unitLabel.capitalized
     }
 
     private var composer: some View {
@@ -419,6 +509,38 @@ public struct CurriculumLessonView: View {
     /// doesn't start the lesson (AUD-33); the speech bubble scrolls when it
     /// outgrows the screen (large text), with Continue pinned below (AUD-08).
     private var lessonIntro: some View {
+        #if os(macOS)
+        macLessonIntro
+        #else
+        phoneLessonIntro
+        #endif
+    }
+
+    #if os(macOS)
+    /// The intro on a Mac: the speech bubble, Merc and Continue as one group,
+    /// centred in the window (on a phone it sits at the bottom, by the
+    /// thumb). The way out is the toolbar's Not now.
+    private var macLessonIntro: some View {
+        ZStack {
+            BrandColor.background.ignoresSafeArea()
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        introSpeechBubble
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, Self.introBubbleTailRoom)
+                        introFooter
+                    }
+                    .frame(maxWidth: MacLayout.gateWidth)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+        }
+    }
+    #endif
+
+    private var phoneLessonIntro: some View {
         ZStack {
             BrandColor.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {

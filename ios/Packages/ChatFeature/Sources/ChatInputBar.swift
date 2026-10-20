@@ -333,6 +333,9 @@ struct ChatInputBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove photo")
+            #if os(macOS)
+            .help("Remove the photo")
+            #endif
         }
         .padding(.leading, 44)  // align past the photo button
         .accessibilityElement(children: .contain)
@@ -348,6 +351,9 @@ struct ChatInputBar: View {
                         .foregroundStyle(BrandColor.textSecondary)
                 }
                 .accessibilityLabel("Stop replying")
+                #if os(macOS)
+                .help("Stop the reply")
+                #endif
             } else if useBrandSend {
                 Button(action: triggerSend) {
                     Circle()
@@ -363,6 +369,9 @@ struct ChatInputBar: View {
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Send")
+                #if os(macOS)
+                .help("Send (Return)")
+                #endif
             } else {
                 Button(action: triggerSend) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -372,6 +381,9 @@ struct ChatInputBar: View {
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Send")
+                #if os(macOS)
+                .help("Send (Return)")
+                #endif
             }
         }
         .frame(minWidth: 44, minHeight: 44)

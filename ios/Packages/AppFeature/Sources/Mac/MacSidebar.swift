@@ -5,17 +5,27 @@ import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 
-/// The Mac window's sidebar: Today, the learning path by unit, and the chats
-/// (New Chat plus the saved threads, newest first).
+/// The Mac window's sidebar: Today, the learning path by unit (a section
+/// that folds away), and the chats — New Chat, then the saved threads,
+/// newest first.
 ///
-/// A click goes through `MacShellModel.show(_:)`, which closes any open
+/// A click goes through `MacShellModel.select(_:)`, which closes any open
 /// lesson and opens a saved thread; code that routes on its own (opening a
 /// lesson under its unit) sets the selection directly and isn't undone here.
+///
+/// New Chat is a row, not a button: while the chat shows a thread with no
+/// saved message yet, that row is the thread's (`unsavedChatId`) and is
+/// highlighted; otherwise selecting it starts one. The Delete key asks to
+/// delete the selected saved thread, through the same confirmation as the
+/// context menu.
 struct MacSidebar: View {
     @Bindable var shell: MacShellModel
     let progress: CurriculumProgressStore
     /// Ask to delete a saved thread (the shell confirms first).
     let onDelete: (ConversationSummary) -> Void
+
+    /// The Learning path section is open (kept across launches).
+    @AppStorage("mac.sidebar.pathExpanded") private var pathExpanded = true
 
     var body: some View {
         List(selection: selection) {
@@ -24,7 +34,7 @@ struct MacSidebar: View {
                     .tag(MacShellModel.Destination.today)
             }
 
-            Section("Learning path") {
+            Section("Learning path", isExpanded: $pathExpanded) {
                 ForEach(MercuriusCurriculum.units) { unit in
                     UnitRow(unit: unit, progress: progress)
                         .tag(MacShellModel.Destination.unit(unit.id))
@@ -32,13 +42,9 @@ struct MacSidebar: View {
             }
 
             Section("Chats") {
-                Button {
-                    shell.newChat()
-                } label: {
-                    Label("New Chat", systemImage: "square.and.pencil")
-                }
-                .buttonStyle(.plain)
-                .help("Start a new chat (⌘N)")
+                Label("New Chat", systemImage: "square.and.pencil")
+                    .tag(MacShellModel.Destination.chat(shell.unsavedChatId))
+                    .help("Start a new chat (⌘N)")
 
                 ForEach(shell.conversations) { conversation in
                     ConversationRow(conversation: conversation)
@@ -50,6 +56,20 @@ struct MacSidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .onDeleteCommand {
+            if let conversation = Self.deletableConversation(selection: shell.selection,
+                                                            in: shell.conversations) {
+                onDelete(conversation)
+            }
+        }
+    }
+
+    /// The saved thread the Delete key would delete: the selected row's, if
+    /// it is a saved thread.
+    nonisolated static func deletableConversation(selection: MacShellModel.Destination?,
+                                                  in conversations: [ConversationSummary]) -> ConversationSummary? {
+        guard case .chat(let id?) = selection else { return nil }
+        return conversations.first { $0.id == id }
     }
 
     /// Clicks route through the model; reads show what the detail shows.
@@ -73,10 +93,18 @@ struct MacSidebar: View {
 
     /// The sidebar's unit number: the unit's own number, 0 if it has none.
     nonisolated static func unitNumber(_ unit: CurriculumFeature.Unit) -> Int { Int(unit.number) ?? 0 }
+
+    /// A unit row's icon: its number in a circle (SF Symbols has 0–50), a
+    /// seal once mastered.
+    nonisolated static func unitSymbol(number: Int, mastered: Bool) -> String {
+        if mastered { return "checkmark.seal.fill" }
+        return (1...50).contains(number) ? "\(number).circle" : "book.closed"
+    }
 }
 
-/// "Unit 1 · What AI is" with the unit's lessons done, or a seal once its
-/// check is mastered.
+/// A unit: its number in the icon, its title, and its lessons done — or a
+/// seal once its check is mastered. One line per unit where the title
+/// fits, so the chats below stay in view.
 private struct UnitRow: View {
     let unit: CurriculumFeature.Unit
     let progress: CurriculumProgressStore
@@ -87,15 +115,10 @@ private struct UnitRow: View {
         let mastered = progress.isUnitMastered(unit.id)
         HStack(spacing: BrandSpacing.sm) {
             Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Unit \(Self.number(unit))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(unit.title)
-                        .lineLimit(2)
-                }
+                Text(unit.title)
+                    .lineLimit(2)
             } icon: {
-                Image(systemName: mastered ? "checkmark.seal.fill" : "book.closed")
+                Image(systemName: MacSidebar.unitSymbol(number: Self.number(unit), mastered: mastered))
                     .foregroundStyle(mastered ? BrandColor.successText : BrandColor.accentText)
             }
             Spacer(minLength: 0)
@@ -111,17 +134,22 @@ private struct UnitRow: View {
     static func number(_ unit: CurriculumFeature.Unit) -> Int { MacSidebar.unitNumber(unit) }
 }
 
-/// A saved thread: its title, and its mode underneath.
+/// A saved thread: a chat bubble, its title, and its mode underneath —
+/// lined up with the rows above it.
 private struct ConversationRow: View {
     let conversation: ConversationSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(conversation.title)
-                .lineLimit(1)
-            Text(mode)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(conversation.title)
+                    .lineLimit(1)
+                Text(mode)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: "bubble.left")
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(mode) chat. \(conversation.title).")

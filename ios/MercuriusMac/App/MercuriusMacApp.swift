@@ -7,10 +7,14 @@ import AppFeature
 /// - The main window hosts `RootView` — the same bootstrap as iOS (session
 ///   id, then the consent gate before anything reaches the server), which on
 ///   the Mac lands in `MacShellView`, a NavigationSplitView of Today, the
-///   path by unit and the chats.
-/// - `MacCommands` is the menu bar: New Chat (⌘N), the modes (⌘1–⌘3), Retry
-///   (⌘R), Explain More (⇧⌘E), Attach Image… (⇧⌘A), Today / Learning Path /
-///   Chat (⌥⌘1–⌥⌘3) and Help (⌘?).
+///   path by unit and the chats. It is a single `Window`, not a
+///   `WindowGroup`: everything in it shares one shell model and one chat, so
+///   a second window would only mirror the first (and re-run its launch
+///   work). Closing it keeps the app running; the Dock icon or Window ▸
+///   Mercurius brings it back.
+/// - `MacCommands` is the menu bar: New Chat (⌘N), Today / Learning Path /
+///   Chat (⌘1–⌘3), the modes (⌥⌘1–⌥⌘3), Retry (⌘R), Explain More (⇧⌘E),
+///   Attach Image… (⇧⌘A) and Help (⌘?).
 /// - Settings (⌘,) is `MacSettingsView`: General, Privacy, About.
 /// - Help is `MacHelpView`: how Mercurius teaches, the Mac's shortcuts, and
 ///   where to get help.
@@ -20,11 +24,14 @@ struct MercuriusMacApp: App {
     @StateObject private var environment = AppEnvironment(environment: .production)
 
     var body: some Scene {
-        WindowGroup("Mercurius", id: "main") {
+        Window("Mercurius", id: "main") {
             RootView()
                 .environmentObject(environment)
-                // Any smaller and the sidebar and a lesson stop fitting side by side.
-                .frame(minWidth: 860, minHeight: 600)
+                // Narrow enough to tile beside a browser on a 13-inch
+                // MacBook (half of its 1440–1470 pt screen). Below the
+                // sidebar plus the detail's minimum, the sidebar folds away
+                // (⌃⌘S brings it back).
+                .frame(minWidth: 700, minHeight: 600)
                 #if DEBUG
                 .background(MacDebugWindows())
                 #endif

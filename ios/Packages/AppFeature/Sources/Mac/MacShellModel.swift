@@ -33,8 +33,10 @@ public final class MacShellModel {
         /// One unit's stretch of the learning path.
         case unit(String)
         /// The free chat, on this thread. Saved threads are sidebar rows
-        /// tagged with their id; a new thread has no row until its first
-        /// message is saved.
+        /// tagged with their id. A new thread that has no saved message yet
+        /// is the sidebar's New Chat row (`unsavedChatId`); `.chat(nil)` is
+        /// that row when it stands for no thread, and selecting it starts
+        /// one.
         case chat(UUID?)
     }
 
@@ -65,10 +67,15 @@ public final class MacShellModel {
     /// The window holds still meanwhile: a message sent now would go out
     /// under the old ID (on the iPhone the Settings sheet can't be left
     /// then; the Mac's Settings window can).
-    var isErasing: Bool {
+    public var isErasing: Bool {
         guard let settingsModel else { return false }
         return settingsModel.isDeleteInProgress || settingsModel.isResetInProgress
     }
+
+    /// The menu bar's shell commands are off: the gate shows, or Settings
+    /// is erasing (a mode switch, a send or an opened thread would reach the
+    /// server under the old ID).
+    public var commandsBlocked: Bool { isGated || isErasing }
 
     /// A chat mode the menu bar asked for (Chat ▸ Socratic / Debate /
     /// Discussion). The chat view takes it — the explainer the first time,
@@ -91,7 +98,21 @@ public final class MacShellModel {
     @ObservationIgnored private let lastActivityStore: LastActivityStore
     @ObservationIgnored private let chatStore: ChatStore?
     @ObservationIgnored private let makeChatModel: @MainActor () -> ChatViewModel
-    @ObservationIgnored private var builtChatModel: ChatViewModel?
+    /// Observed, so the sidebar's New Chat row follows the chat's thread.
+    private var builtChatModel: ChatViewModel?
+
+    /// The thread open the sidebar or a menu asked for last. Opens run one
+    /// at a time, newest last (`route`).
+    @ObservationIgnored private var openTask: Task<Void, Never>?
+    /// Thread opens queued or running. While any is, the chat's thread
+    /// changing is an open landing, not a reason to move the sidebar's
+    /// highlight (`MacShellView.chatView`).
+    @ObservationIgnored private(set) var queuedOpens = 0
+    var isOpeningThread: Bool { queuedOpens > 0 }
+
+    /// Stops a reply the open lesson is still receiving. Registered by the
+    /// lesson as it appears (`CurriculumLessonView(onRegisterStop:)`).
+    @ObservationIgnored private var lessonStop: (@MainActor () -> Void)?
 
     init(
         progress: CurriculumProgressStore,
@@ -126,10 +147,24 @@ public final class MacShellModel {
 
     /// The sidebar list's selection changed. A row routes like `show(_:)`;
     /// nil (the list deselecting, e.g. a click on empty space below the
-    /// rows) keeps what the detail shows, so its row stays selected.
+    /// rows) keeps what the detail shows, so its row stays selected. The
+    /// New Chat row, when it stands for no thread (`.chat(nil)`), starts one.
     public func select(_ destination: Destination?) {
         guard let destination else { return }
-        show(destination)
+        if destination == .chat(nil) {
+            newChat()
+        } else {
+            show(destination)
+        }
+    }
+
+    /// The chat's current thread while no sidebar row lists it — a new
+    /// thread before its first saved message, which the sidebar's New Chat
+    /// row stands for. nil before the chat exists (behind the gate it is
+    /// never built here) or once the thread has its own row.
+    var unsavedChatId: UUID? {
+        guard let id = builtChatModel?.conversationId else { return nil }
+        return conversations.contains { $0.id == id } ? nil : id
     }
 
     /// View ▸ Chat (⌘3), Today's "Chat with Merc": the current thread.
@@ -146,7 +181,7 @@ public final class MacShellModel {
         selection = .unit(Self.pathUnitId(frontier: progress.frontier()))
     }
 
-    /// Chat ▸ Socratic / Debate / Discussion (⌘1–⌘3): the chat, in that
+    /// Chat ▸ Socratic / Debate / Discussion (⌥⌘1–⌥⌘3): the chat, in that
     /// mode. The switch itself is the chat view's (`ChatView.macChrome`), so
     /// a menu command and the toolbar picker behave alike.
     public func requestMode(_ mode: ChatMode) {
@@ -169,23 +204,48 @@ public final class MacShellModel {
         activeLesson = nil
         activeUnitTest = nil
         selection = destination
-        if case .chat(let id?) = destination, id != chatModel.conversationId {
-            Task { @MainActor in
-                // A thread in another mode switches the server's mode first
-                // (`openConversation`), which is why this runs only past the
-                // gate.
-                let opened = await chatModel.openConversation(id: id)
-                // A thread that can't open (deleted meanwhile, or saved in a
-                // mode this build no longer has, like the betas' "direct")
-                // leaves the chat on its current thread: select that one, so
-                // the sidebar never highlights a thread the detail isn't
-                // showing.
-                if !opened, selection == .chat(id) {
-                    selection = .chat(chatModel.conversationId)
-                }
-                refreshConversations()
+        guard case .chat(let id?) = destination, id != chatModel.conversationId || isOpeningThread else { return }
+        // Opens run one at a time, and only the newest selection's runs. A
+        // thread in another mode switches the server's mode first
+        // (`openConversation`), and two of those racing could land out of
+        // order, leaving the chat — and the highlight — on an older pick.
+        // So each open waits for the one before it, then a moment more (a
+        // key held on ↓ skims past threads without opening each, or
+        // switching the server's mode for each), and goes ahead only if
+        // its thread is still the one selected.
+        let previous = openTask
+        queuedOpens += 1
+        openTask = Task { @MainActor [weak self] in
+            await previous?.value
+            try? await Task.sleep(for: Self.openSettle)
+            guard let self else { return }
+            defer { self.queuedOpens -= 1 }
+            guard self.selection == .chat(id) else { return }
+            guard id != self.chatModel.conversationId else {
+                self.refreshConversations()
+                return
             }
+            // Only past the gate: the mode switch reaches the server.
+            let opened = await self.chatModel.openConversation(id: id)
+            // A thread that can't open (deleted meanwhile, or saved in a
+            // mode this build no longer has, like the betas' "direct")
+            // leaves the chat on its current thread: select that one, so
+            // the sidebar never highlights a thread the detail isn't
+            // showing.
+            if !opened, self.selection == .chat(id) {
+                self.selection = .chat(self.chatModel.conversationId)
+            }
+            self.refreshConversations()
         }
+    }
+
+    /// How long a selected thread waits before it opens, so arrowing
+    /// through the sidebar opens only where the student stops.
+    static let openSettle: Duration = .milliseconds(150)
+
+    /// Wait for the queued thread opens (tests).
+    func settleOpens() async {
+        await openTask?.value
     }
 
     /// The chat detail on the current thread (unguarded: the first-run
@@ -233,6 +293,35 @@ public final class MacShellModel {
     func closeActivity() {
         activeLesson = nil
         activeUnitTest = nil
+    }
+
+    /// The open lesson hands over how to stop its reply in flight.
+    func registerLessonStop(_ stop: @escaping @MainActor () -> Void) {
+        lessonStop = stop
+    }
+
+    /// Settings' hook before an erasure reaches the server
+    /// (`settingsSheet`'s `beforeErase`).
+    func beforeSettingsErase() {
+        stopActivityForErase()
+    }
+
+    /// Settings' hook after a reset cleared the on-device state: nothing of
+    /// the old session stays open, and the sidebar re-reads its chats.
+    func afterSettingsReset() {
+        stopActivityForErase()
+        refreshConversations()
+    }
+
+    /// Settings is about to erase (or has reset) this student's data: stop a
+    /// lesson reply still coming in under the old ID — before the server
+    /// delete, or its completion would re-create the session — and close the
+    /// lesson or check, so nothing from the erased session stays on screen
+    /// or is replayed to the server under the new ID by a later send.
+    func stopActivityForErase() {
+        if activeLesson != nil { lessonStop?() }
+        lessonStop = nil
+        closeActivity()
     }
 
     /// The unit page "Learning Path" opens: the next stop's unit, else the

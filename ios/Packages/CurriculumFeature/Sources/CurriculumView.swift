@@ -44,11 +44,18 @@ public struct CurriculumView<TopBar: View>: View {
                 onStartUnitTest: onStartUnitTest
             )
             .background(BrandColor.background.ignoresSafeArea())
-            .navigationTitle(Self.title(unitId: unitId))
 #if os(iOS)
+            .navigationTitle(Self.title(unitId: unitId))
             .navigationBarTitleDisplayMode(.inline)
-#endif
             .safeAreaInset(edge: .top, spacing: 0) { topBar }
+#else
+            // The unit's banner names it; the window says where that is.
+            // No top bar on the Mac: its streak is a toolbar button. (Even
+            // an empty top inset left the path drawn blank once the split
+            // view folded its sidebar away in a narrow window, macOS 26.)
+            .navigationTitle("Learning Path")
+            .navigationSubtitle(Self.macSubtitle(unitId: unitId))
+#endif
         }
     }
 }
@@ -58,6 +65,14 @@ extension CurriculumView {
     static func title(unitId: String?) -> String {
         guard let unitId, let unit = MercuriusCurriculum.unit(withId: unitId) else { return "Curriculum" }
         return "Unit \(Int(unit.number) ?? 0) · \(unit.title)"
+    }
+
+    /// The Mac window's subtitle under "Learning Path": "Unit 1 of 8", or
+    /// "All units" for the whole path.
+    static func macSubtitle(unitId: String?) -> String {
+        let units = MercuriusCurriculum.units
+        guard let unitId, let index = units.firstIndex(where: { $0.id == unitId }) else { return "All units" }
+        return "Unit \(index + 1) of \(units.count)"
     }
 }
 

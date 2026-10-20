@@ -44,6 +44,7 @@ struct YourPathStep: View {
             .padding(.top, BrandSpacing.sm)
         } cta: {
             DuoButton("Start Lesson 1", style: .primary, action: onStartLesson1)
+                .macDefaultAction()
                 .accessibilityIdentifier("onboarding.startLesson1")
 
             DuoButton("Just chat instead", style: .secondary, action: onJustChat)

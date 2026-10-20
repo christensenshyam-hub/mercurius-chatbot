@@ -56,8 +56,28 @@ struct GateStepContainer<Content: View, CTA: View>: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        // A Mac window is taller than a step: the step keeps its own height,
+        // centred, with its buttons right under it — and scrolls only in a
+        // window too short for it.
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: BrandSpacing.xl) {
+                heading
+                content()
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, BrandSpacing.xl)
+                GatePinnedCTA(content: cta)
+            }
+            scrollingBody
+        }
+        #else
+        scrollingBody
+        #endif
+    }
+
+    private var scrollingBody: some View {
         let headingScrolls = Self.headingScrolls(at: dynamicTypeSize, always: headingAlwaysScrolls)
-        VStack(spacing: BrandSpacing.xl) {
+        return VStack(spacing: BrandSpacing.xl) {
             if !headingScrolls {
                 heading
             }
@@ -216,6 +236,36 @@ private struct CenteredScroll<Content: View>: View {
     }
 }
 
+/// A centred hero with its buttons pinned below (Meet Merc, the resting
+/// screens). On a Mac the two stay together at their own height, centred in
+/// the window, and scroll only when the window is too short for them; on a
+/// phone the hero centres in the space above the pinned buttons.
+private struct GateHeroLayout<Hero: View, CTA: View>: View {
+    @ViewBuilder let hero: () -> Hero
+    @ViewBuilder let cta: () -> CTA
+
+    var body: some View {
+        #if os(macOS)
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: 0) {
+                hero()
+                GatePinnedCTA(content: cta)
+            }
+            pinned
+        }
+        #else
+        pinned
+        #endif
+    }
+
+    private var pinned: some View {
+        VStack(spacing: 0) {
+            CenteredScroll { hero() }
+            GatePinnedCTA(content: cta)
+        }
+    }
+}
+
 /// A dead-end or resting screen: Merc, a title, one line of explanation and
 /// an optional single action.
 private struct GateRestScreen<CTA: View>: View {
@@ -240,33 +290,31 @@ private struct GateRestScreen<CTA: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            CenteredScroll {
-                VStack(spacing: BrandSpacing.xl) {
-                    MercMascot(mercState, size: 150)
-                        .accessibilityHidden(true)
+        GateHeroLayout {
+            VStack(spacing: BrandSpacing.xl) {
+                MercMascot(mercState, size: 150)
+                    .accessibilityHidden(true)
 
-                    VStack(spacing: BrandSpacing.md) {
-                        Text(title)
-                            .font(BrandFont.title)
-                            .foregroundStyle(BrandColor.text)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(.isHeader)
-                            .accessibilityIdentifier(titleIdentifier)
+                VStack(spacing: BrandSpacing.md) {
+                    Text(title)
+                        .font(BrandFont.title)
+                        .foregroundStyle(BrandColor.text)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier(titleIdentifier)
 
-                        Text(message)
-                            .font(BrandFont.body)
-                            .foregroundStyle(BrandColor.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, BrandSpacing.xl)
+                    Text(message)
+                        .font(BrandFont.body)
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, BrandSpacing.xl)
+                .padding(.horizontal, BrandSpacing.xl)
             }
-
-            GatePinnedCTA(content: cta)
+            .padding(.vertical, BrandSpacing.xl)
+        } cta: {
+            cta()
         }
     }
 }
@@ -287,39 +335,36 @@ struct MeetMercStep: View {
         // Scrolls once the copy outgrows the screen, with Continue pinned
         // below it: at AX4-AX5 the fixed stack pushed Continue off-screen and
         // a new student could go no further (AUD-12).
-        VStack(spacing: 0) {
-            CenteredScroll {
-                VStack(spacing: BrandSpacing.xl) {
-                    MercMascot(mercState, size: dynamicTypeSize.isAccessibilitySize ? 150 : 216,
-                               emphasis: .softGlow, idleAntics: true, pokeable: true)
-                        .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
-                        .opacity(entered ? 1 : 0)
-                        .offset(y: entered ? 0 : 36)
-                        .accessibilityHidden(true)
+        GateHeroLayout {
+            VStack(spacing: BrandSpacing.xl) {
+                MercMascot(mercState, size: dynamicTypeSize.isAccessibilitySize ? 150 : 216,
+                           emphasis: .softGlow, idleAntics: true, pokeable: true)
+                    .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
+                    .opacity(entered ? 1 : 0)
+                    .offset(y: entered ? 0 : 36)
+                    .accessibilityHidden(true)
 
-                    VStack(spacing: BrandSpacing.md) {
-                        Text("Meet Merc")
-                            .font(BrandFont.title)
-                            .foregroundStyle(BrandColor.text)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(.isHeader)
+                VStack(spacing: BrandSpacing.md) {
+                    Text("Meet Merc")
+                        .font(BrandFont.title)
+                        .foregroundStyle(BrandColor.text)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
 
-                        Text("Your AI literacy tutor. Merc asks questions back instead of handing you answers, so you learn how AI works — and when not to trust it.")
-                            .font(BrandFont.body)
-                            .foregroundStyle(BrandColor.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, BrandSpacing.xl)
+                    Text("Your AI literacy tutor. Merc asks questions back instead of handing you answers, so you learn how AI works — and when not to trust it.")
+                        .font(BrandFont.body)
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, BrandSpacing.xl)
+                .padding(.horizontal, BrandSpacing.xl)
             }
-
-            GatePinnedCTA {
-                DuoButton("Continue", style: .primary, action: onContinue)
-                    .accessibilityIdentifier("onboarding.continue")
-            }
+            .padding(.vertical, BrandSpacing.xl)
+        } cta: {
+            DuoButton("Continue", style: .primary, action: onContinue)
+                .macDefaultAction()
+                .accessibilityIdentifier("onboarding.continue")
         }
         .onAppear(perform: enter)
     }
@@ -414,6 +459,7 @@ struct AgeStep: View {
             DuoButton("Continue", style: .primary, isEnabled: selectedAge != nil) {
                 if let selectedAge { onContinue(selectedAge) }
             }
+            .macDefaultAction()
             .revealsOnTap(showsHint, reveal: revealWheel)
             .accessibilityIdentifier("onboarding.ageContinue")
             .accessibilityHint(selectedAge == nil ? Self.continueHint : "")
@@ -539,6 +585,7 @@ struct DisclosureStep: View {
             }
 
             DuoButton("Agree and continue", style: .primary, isEnabled: agreed, action: onAgree)
+                .macDefaultAction()
                 .revealsOnTap(showsHint, reveal: revealSwitch)
                 .accessibilityIdentifier("onboarding.agree")
                 .accessibilityHint(agreed ? "Continues to what Merc can't do"
@@ -630,6 +677,7 @@ struct PausedView: View {
             message: "You can agree any time — nothing is sent until you do."
         ) {
             DuoButton("Review the agreement", style: .primary, action: onReview)
+                .macDefaultAction()
                 .accessibilityIdentifier("onboarding.review")
         }
     }
@@ -669,6 +717,7 @@ struct LimitsStep: View {
             .padding(.top, BrandSpacing.sm)
         } cta: {
             DuoButton("Got it", style: .primary, action: onAcknowledge)
+                .macDefaultAction()
                 .accessibilityIdentifier("onboarding.limitsAck")
         }
     }

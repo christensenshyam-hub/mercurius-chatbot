@@ -147,6 +147,76 @@ struct MacSidebarTests {
         #expect(shell.conversations.map(\.id) == [open])
     }
 
+    @Test("Arrowing past threads opens only where the student stops, and the highlight stays there")
+    func rapidSelectionOpensTheLast() async throws {
+        // Saved oldest first: the chat starts on the newest (Socratic) one.
+        let debate = store.createConversation(mode: .debate)
+        store.append(StoredMessage(id: UUID(), role: "user", content: "Argue with me",
+                                   createdAt: Date().addingTimeInterval(-3600)), to: debate)
+        let socratic = savedThread("What is a token?", minutesAgo: 1)
+        let shell = makeShell()
+        #expect(try #require(shell.chatModel.conversationId) == socratic)
+        let older = savedThread("Why do chatbots sound so sure?", minutesAgo: 30)
+
+        // ↓ onto the Debate thread (its open would switch the server's mode
+        // first), then straight on to a Socratic one.
+        shell.select(.chat(debate))
+        #expect(shell.isOpeningThread)
+        shell.select(.chat(older))
+        await shell.settleOpens()
+
+        #expect(shell.selection == .chat(older))
+        #expect(shell.chatModel.conversationId == older, "an older pick's open must not land after the newer one")
+        #expect(shell.chatModel.currentMode == .socratic, "the skipped Debate thread never switched the mode")
+        #expect(!shell.isOpeningThread)
+    }
+
+    @Test("The New Chat row stands for a thread with nothing saved yet; once saved, it starts a new one")
+    func newChatRow() async throws {
+        let shell = makeShell()
+        shell.newChat()
+        let fresh = shell.chatModel.conversationId
+        #expect(fresh != nil)
+        #expect(shell.unsavedChatId == fresh, "the empty thread is the New Chat row")
+        #expect(shell.selection == .chat(shell.unsavedChatId), "and that row is highlighted")
+
+        // A saved thread opens: it has a row of its own, so the New Chat
+        // row stands for nothing…
+        let saved = savedThread("What is a token?", minutesAgo: 5)
+        shell.refreshConversations()
+        shell.select(.chat(saved))
+        await shell.settleOpens()
+        #expect(shell.chatModel.conversationId == saved)
+        #expect(shell.unsavedChatId == nil)
+
+        // …and selecting it (`.chat(nil)`) starts a fresh thread.
+        shell.select(.chat(nil))
+        let next = try #require(shell.chatModel.conversationId)
+        #expect(next != saved)
+        #expect(shell.selection == .chat(next))
+        #expect(shell.unsavedChatId == next)
+    }
+
+    @Test("The Delete key deletes only a selected saved thread")
+    func deleteKeyTarget() {
+        let now = Date()
+        let saved = ConversationSummary(id: UUID(), mode: "socratic", title: "t", preview: "p",
+                                        messageCount: 2, createdAt: now, updatedAt: now)
+        #expect(MacSidebar.deletableConversation(selection: .chat(saved.id), in: [saved]) == saved)
+        #expect(MacSidebar.deletableConversation(selection: .chat(UUID()), in: [saved]) == nil)
+        #expect(MacSidebar.deletableConversation(selection: .chat(nil), in: [saved]) == nil)
+        #expect(MacSidebar.deletableConversation(selection: .today, in: [saved]) == nil)
+        #expect(MacSidebar.deletableConversation(selection: nil, in: [saved]) == nil)
+    }
+
+    @Test("A unit row's icon is its number; mastered, a seal")
+    func unitSymbols() {
+        #expect(MacSidebar.unitSymbol(number: 1, mastered: false) == "1.circle")
+        #expect(MacSidebar.unitSymbol(number: 8, mastered: false) == "8.circle")
+        #expect(MacSidebar.unitSymbol(number: 3, mastered: true) == "checkmark.seal.fill")
+        #expect(MacSidebar.unitSymbol(number: 0, mastered: false) == "book.closed")
+    }
+
     @Test("A unit row reads its number, title and progress; mastered says so")
     func unitRowLabel() {
         #expect(MacSidebar.unitAccessibilityLabel(number: 1, title: "How AI Actually Works", done: 2, total: 4,

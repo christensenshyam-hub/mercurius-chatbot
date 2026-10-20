@@ -82,11 +82,13 @@ public struct MacHelpView: View {
         Shortcut(keys: "Return", action: "Send your message"),
         Shortcut(keys: "⇧ Return", action: "New line in your message"),
         Shortcut(keys: "⌘N", action: "New chat"),
-        Shortcut(keys: "⌘1  ⌘2  ⌘3", action: "Socratic, Debate or Discussion mode"),
+        Shortcut(keys: "⌘1  ⌘2  ⌘3", action: "Today, Learning Path, Chat"),
+        Shortcut(keys: "⌥⌘1  ⌥⌘2  ⌥⌘3", action: "Socratic, Debate or Discussion mode (in a chat)"),
         Shortcut(keys: "⌘R", action: "Retry a reply that didn't arrive"),
         Shortcut(keys: "⇧⌘E", action: "Ask Merc to explain more"),
         Shortcut(keys: "⇧⌘A", action: "Attach an image"),
-        Shortcut(keys: "⌥⌘1  ⌥⌘2  ⌥⌘3", action: "Today, Learning Path, Chat"),
+        Shortcut(keys: "Esc", action: "Leave a lesson or unit check (when nothing's typed)"),
+        Shortcut(keys: "A–D", action: "Answer a unit check question; ⌘Return submits"),
         Shortcut(keys: "⌘,", action: "Settings"),
     ]
 

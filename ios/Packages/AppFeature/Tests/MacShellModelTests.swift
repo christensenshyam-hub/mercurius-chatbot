@@ -4,8 +4,11 @@ import Testing
 @testable import AppFeature
 import ChatFeature
 import CurriculumFeature
+import EngagementFeature
 import NetworkingKit
 import PersistenceKit
+import SettingsFeature
+import SwiftUI
 
 /// The Mac window's navigation model: what the sidebar, the menu commands
 /// and the first-run flow can open, and that nothing opens while the consent
@@ -162,11 +165,132 @@ struct MacShellModelTests {
         #expect(!shell.isErasing)
     }
 
-    @Test("⌘1, ⌘2, ⌘3 are Socratic, Debate, Discussion — the toolbar's order")
+    @Test("⌥⌘1, ⌥⌘2, ⌥⌘3 are Socratic, Debate, Discussion — the toolbar's order")
     func modeKeys() {
         #expect(MacCommands.modeKey(.socratic) == "1")
         #expect(MacCommands.modeKey(.debate) == "2")
         #expect(MacCommands.modeKey(.discussion) == "3")
+        #expect(MacCommands.modeModifiers == [.command, .option])
+    }
+
+    @Test("⌘1, ⌘2, ⌘3 are the sidebar's destinations: Today, Learning Path, Chat")
+    func destinationKeys() {
+        #expect(MacCommands.destinationKey(.today) == KeyboardShortcut("1", modifiers: .command))
+        #expect(MacCommands.destinationKey(.path) == KeyboardShortcut("2", modifiers: .command))
+        #expect(MacCommands.destinationKey(.chat) == KeyboardShortcut("3", modifiers: .command))
+    }
+
+    @Test("The mode items work only on the free chat — never on a lesson, behind the gate or mid-erase")
+    func modeItemsOnlyInTheChat() {
+        #expect(MacCommands.modesEnabled(blocked: false, chatMode: .socratic))
+        #expect(!MacCommands.modesEnabled(blocked: false, chatMode: nil), "a lesson's target has no mode")
+        #expect(!MacCommands.modesEnabled(blocked: true, chatMode: .debate))
+    }
+
+    @Test("Behind the gate the shell's commands are blocked; past it they aren't")
+    func commandsBlockedFollowsTheGate() {
+        #expect(makeShell(gated: true).commandsBlocked)
+        #expect(!makeShell().commandsBlocked)
+    }
+
+    // MARK: Settings' erasure with a lesson open (the Mac's Settings is its own window)
+
+    /// Records whether the lesson was already stopped and closed when the
+    /// server delete arrived.
+    private final class RecordingDeleter: SessionDeleting, @unchecked Sendable {
+        var lessonOpenAtDelete: Bool?
+        var stopsAtDelete: Int?
+        var probe: (@MainActor () -> (open: Bool, stops: Int))?
+        func deleteSession(sessionId: String) async throws {
+            if let probe {
+                let state = await probe()
+                lessonOpenAtDelete = state.open
+                stopsAtDelete = state.stops
+            }
+        }
+    }
+
+    private func settings(for shell: MacShellModel, deleter: SessionDeleting?) -> SettingsViewModel {
+        let identity = SessionIdentity(keychain: InMemoryKeychain())
+        return SettingsSheet(
+            sessionIdentity: identity,
+            themeStore: ThemePreferenceStore(preferences: InMemoryPreferenceStore()),
+            chatStore: chatStore,
+            chatModel: shell.chatModel,
+            streakStore: StreakStore(defaults: freshDefaults("mac.erase.streak")),
+            achievementStore: AchievementStore(defaults: freshDefaults("mac.erase.achievements")),
+            progress: progress,
+            progressSync: CurriculumProgressSync(
+                progress: progress, remote: StubProgressRemote(),
+                sessionId: { try identity.current() }, isEnabled: false
+            ),
+            reminderStore: ReminderStore(defaults: freshDefaults("mac.erase.reminders")),
+            scheduler: NotificationScheduler(),
+            sessionDeleter: deleter,
+            onConsentWithdrawn: nil,
+            // The Mac shell's wiring (`settingsSheet`).
+            beforeErase: { shell.beforeSettingsErase() },
+            afterReset: { shell.afterSettingsReset() }
+        ).makeModel(dismiss: {})
+    }
+
+    @Test("Delete my data with a lesson open stops its reply and closes it before the server delete")
+    func eraseClosesTheOpenLesson() async {
+        let shell = makeShell()
+        shell.openLesson(lesson1)
+        var stops = 0
+        shell.registerLessonStop { stops += 1 }
+        let deleter = RecordingDeleter()
+        deleter.probe = { (shell.activeLesson != nil, stops) }
+
+        #expect(await settings(for: shell, deleter: deleter).deleteServerDataAndStartOver())
+        #expect(deleter.lessonOpenAtDelete == false, "the lesson must be closed before the server erases")
+        #expect(deleter.stopsAtDelete == 1, "its reply in flight must be stopped before the server erases")
+        #expect(shell.activeLesson == nil)
+    }
+
+    @Test("Resetting this device only, or with a unit check open, closes it too")
+    func deviceResetClosesActivity() async {
+        let shell = makeShell()
+        shell.openUnitTest(MercuriusCurriculum.units[0])
+        #expect(await settings(for: shell, deleter: nil).resetSession())
+        #expect(shell.activeUnitTest == nil)
+
+        shell.openLesson(lesson1)
+        var stops = 0
+        shell.registerLessonStop { stops += 1 }
+        #expect(await settings(for: shell, deleter: nil).resetSession())
+        #expect(shell.activeLesson == nil)
+        #expect(stops == 1)
+    }
+
+    @Test("A lesson stop registered by a lesson that already closed isn't called again")
+    func staleStopIgnored() {
+        let shell = makeShell()
+        var stops = 0
+        shell.registerLessonStop { stops += 1 }
+        shell.beforeSettingsErase()
+        #expect(stops == 0, "no lesson open: nothing to stop")
+    }
+
+    @Test("A narrow window folds the sidebar away and a wide one brings it back — unless the student folded it")
+    func sidebarFoldsWithWidth() {
+        let fold = MacShellView.sidebarFoldWidth
+        // Narrowed: folded, and remembered as the width's doing.
+        var next = MacShellView.sidebarAfterResize(width: 700, visibility: .all, collapsedForWidth: false)
+        #expect(next.visibility == .detailOnly && next.collapsedForWidth)
+        // Widened again: back.
+        next = MacShellView.sidebarAfterResize(width: fold + 100, visibility: next.visibility,
+                                               collapsedForWidth: next.collapsedForWidth)
+        #expect(next.visibility == .all && !next.collapsedForWidth)
+        // Folded by the student in a wide window: widening leaves it folded.
+        next = MacShellView.sidebarAfterResize(width: 1280, visibility: .detailOnly, collapsedForWidth: false)
+        #expect(next.visibility == .detailOnly)
+        // Already folded when the window narrows: still the student's.
+        next = MacShellView.sidebarAfterResize(width: 700, visibility: .detailOnly, collapsedForWidth: false)
+        #expect(next.visibility == .detailOnly && !next.collapsedForWidth)
+        // The fold sits above the window's minimum, so a tiled window works.
+        #expect(fold > MacSnapshotOptions.minimumWindowSize.width)
     }
 
     @Test("Today's primary button with the whole path done shows the first unit")
