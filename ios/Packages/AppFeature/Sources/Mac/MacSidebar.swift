@@ -61,18 +61,18 @@ struct MacSidebar: View {
     }
 
     /// VoiceOver's reading of a unit row.
-    static func unitAccessibilityLabel(number: Int, title: String, done: Int, total: Int, mastered: Bool) -> String {
+    nonisolated static func unitAccessibilityLabel(number: Int, title: String, done: Int, total: Int, mastered: Bool) -> String {
         "Unit \(number), \(title). \(done) of \(total) lessons done\(mastered ? ", mastered" : "")."
     }
 
     /// A saved thread's mode, as its row's second line says it. A mode this
     /// build doesn't know (the betas' "direct") reads as its stored name.
-    static func modeName(_ raw: String) -> String {
+    nonisolated static func modeName(_ raw: String) -> String {
         ChatMode(rawValue: raw)?.displayName ?? raw.capitalized
     }
 
     /// The sidebar's unit number: the unit's own number, 0 if it has none.
-    static func unitNumber(_ unit: CurriculumFeature.Unit) -> Int { Int(unit.number) ?? 0 }
+    nonisolated static func unitNumber(_ unit: CurriculumFeature.Unit) -> Int { Int(unit.number) ?? 0 }
 }
 
 /// "Unit 1 · What AI is" with the unit's lessons done, or a seal once its

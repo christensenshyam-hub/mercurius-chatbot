@@ -385,7 +385,7 @@ struct ChatInputBar: View {
     /// Whether the send button (and, on the Mac, Return) sends: some text
     /// that isn't only spaces and line breaks, or a photo; nothing already
     /// on its way; no photo still being prepared.
-    static func canSend(text: String, hasAttachment: Bool, isSending: Bool, isPreparingAttachment: Bool) -> Bool {
+    nonisolated static func canSend(text: String, hasAttachment: Bool, isSending: Bool, isPreparingAttachment: Bool) -> Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return (hasText || hasAttachment) && !isSending && !isPreparingAttachment
     }
