@@ -191,6 +191,9 @@ run() {
     # locked in, which sends "I picked B) …" through the real path and
     # replays Merc's second reply, the part strip's jump back to the check.
     lesson-top)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 1 -MacSnapshotDelay 10 ;;
+    # AUD-29 in Night: the first reply (its opening paragraphs) drops
+    # mid-stream and is kept, with its failure line and Retry.
+    lesson-cut)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -LessonReplayCut YES -LessonReplayShort YES -MacSnapshotDelay 8 ;;
     lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
     lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
     lesson-complete) window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -ForceCelebrate YES -MacSnapshotDelay 5 ;;
@@ -221,7 +224,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent today today-week path lesson-intro lesson lesson-top lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
+ALL="gate-meet gate-age gate-consent today today-week path lesson-intro lesson lesson-top lesson-cut lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL
