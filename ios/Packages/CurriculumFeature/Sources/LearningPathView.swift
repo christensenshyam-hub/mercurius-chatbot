@@ -63,6 +63,7 @@ struct LearningPathView: View {
 
                         Color.clear.frame(height: BrandSpacing.xxl)
                     }
+                    .macReadableColumn(MacLayout.pathWidth)
                 }
                 .scrollContentBackground(.hidden)
                 .background(BrandColor.background)
@@ -176,6 +177,7 @@ struct LearningPathView: View {
                 }
                 .buttonStyle(.plain)
                 .lockedNode(status == .locked)
+                .macPointingHand(isEnabled: status != .locked)
                 .offset(x: LearningPathMetrics.offset(for: nodeIndex))
             }
             .overlay(alignment: mercSide(for: nodeIndex)) {
@@ -194,6 +196,7 @@ struct LearningPathView: View {
                 }
                 .buttonStyle(.plain)
                 .lockedNode(status == .locked)
+                .macPointingHand(isEnabled: status != .locked)
                 .offset(x: LearningPathMetrics.offset(for: nodeIndex))
             }
             .overlay(alignment: mercSide(for: nodeIndex)) {
@@ -228,6 +231,7 @@ struct LearningPathView: View {
             }
             .buttonStyle(.plain)
             .lockedNode(status == .locked)
+            .macPointingHand(isEnabled: status != .locked)
 
         case .unitTest(let unit, _):
             let status = unitTestStatus(unit, current: current)

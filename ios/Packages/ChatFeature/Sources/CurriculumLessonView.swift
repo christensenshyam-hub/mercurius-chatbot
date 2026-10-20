@@ -68,6 +68,10 @@ public struct CurriculumLessonView: View {
     @State private var reactionClearTask: Task<Void, Never>?
     /// The composer has focus (the keyboard is up); the coach card makes room.
     @State private var composerFocused = false
+    #if os(macOS)
+    /// Opens the composer's image panel (File ▸ Attach Image…, ⇧⌘A).
+    @State private var attachTrigger = 0
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -154,6 +158,7 @@ public struct CurriculumLessonView: View {
                 // One compact row, so the lesson itself gets the screen
                 // (AUD-08). Done never wraps or scrolls away.
                 header
+                    .macReadableColumn()
                 Divider().overlay(BrandColor.border)
 
                 MessageListView(
@@ -188,27 +193,7 @@ public struct CurriculumLessonView: View {
                 )
 
                 // Clean, fixed composer — nothing tucked behind it.
-                ChatInputBar(
-                    text: Binding(get: { model.draft }, set: { model.draft = $0 }),
-                    isSending: isSending,
-                    attachment: model.pendingImage,
-                    isPreparingAttachment: model.isPreparingAttachment,
-                    attachmentError: model.attachmentError,
-                    characterLimit: model.draftCharacterLimit,
-                    onSend: { model.send() },
-                    onCancel: { model.cancel() },
-                    onAttachImage: { model.attachImage(data: $0) },
-                    onRemoveAttachment: { model.clearAttachment() },
-                    useBrandSend: true,
-                    backgroundFade: true,
-                    focusTrigger: inputFocusTrigger,
-                    // Merc asks; the student answers (AUD-44).
-                    placeholder: "Type your answer…",
-                    compactPlaceholder: "Answer…",
-                    // A long answer must not swallow the reading area.
-                    maxLines: 3,
-                    onFocusChange: { composerFocused = $0 }
-                )
+                composer
             }
             // The intro and the celebration cover the lesson: VoiceOver and a
             // keyboard must not reach (or send from) what's underneath.
@@ -307,7 +292,60 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if os(macOS)
+        .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
+        .focusedSceneValue(\.chatCommandTarget, commandTarget)
+        #endif
     }
+
+    private var composer: some View {
+        let bar = ChatInputBar(
+            text: Binding(get: { model.draft }, set: { model.draft = $0 }),
+            isSending: isSending,
+            attachment: model.pendingImage,
+            isPreparingAttachment: model.isPreparingAttachment,
+            attachmentError: model.attachmentError,
+            characterLimit: model.draftCharacterLimit,
+            onSend: { model.send() },
+            onCancel: { model.cancel() },
+            onAttachImage: { model.attachImage(data: $0) },
+            onRemoveAttachment: { model.clearAttachment() },
+            useBrandSend: true,
+            backgroundFade: true,
+            focusTrigger: inputFocusTrigger,
+            // Merc asks; the student answers (AUD-44).
+            placeholder: "Type your answer…",
+            compactPlaceholder: "Answer…",
+            // A long answer must not swallow the reading area.
+            maxLines: 3,
+            onFocusChange: { composerFocused = $0 }
+        )
+        #if os(macOS)
+        return bar.withAttachTrigger(attachTrigger).macReadableColumn()
+        #else
+        return bar
+        #endif
+    }
+
+    #if os(macOS)
+    /// What the menu bar's chat commands act on while this lesson shows.
+    /// Nothing while the intro or the celebration covers it.
+    private var commandTarget: ChatCommandTarget {
+        let covered = showIntro || showCelebration
+        let canRetry: Bool
+        if case .failed(_, let isRetryable) = model.phase { canRetry = isRetryable && !covered } else { canRetry = false }
+        return ChatCommandTarget(
+            currentMode: nil,
+            canRetry: canRetry,
+            retry: { [model] in model.retry() },
+            canExplainMore: !covered
+                && MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
+            explainMore: { [model] in model.explainMore() },
+            canAttach: !covered && !isSending,
+            attachImage: { attachTrigger += 1 }
+        )
+    }
+    #endif
 
     /// Start the lesson the first time the view appears: resume the saved
     /// conversation if we have one (and it still exists), otherwise begin a fresh
@@ -416,6 +454,9 @@ public struct CurriculumLessonView: View {
 
                 introFooter
             }
+            // The Mac's reading column: the bubble and Merc stay together
+            // in a wide window.
+            .macReadableColumn()
         }
     }
 
@@ -460,6 +501,11 @@ public struct CurriculumLessonView: View {
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
         }
         .accessibilityLabel("Continue. Start the lesson.")
+        #if os(macOS)
+        .buttonStyle(.plain)
+        .keyboardShortcut(.defaultAction)
+        .help("Start the lesson (Return)")
+        #endif
     }
 
     private var introSpeechBubble: some View {

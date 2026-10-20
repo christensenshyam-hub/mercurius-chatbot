@@ -90,6 +90,7 @@ struct UnitTestOptionRow: View {
                     .stroke(borderColor, lineWidth: state.grade == .correctPick || state.grade == .correctAnswer ? 1.5 : 1)
             )
             .contentShape(Rectangle())
+            .macHoverHighlight(cornerRadius: BrandRadius.md, isEnabled: !state.isSubmitted)
         }
         .buttonStyle(.plain)
         // Locked once submitted, without `.disabled`'s fade.

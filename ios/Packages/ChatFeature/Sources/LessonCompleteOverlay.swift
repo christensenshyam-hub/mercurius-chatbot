@@ -26,7 +26,14 @@ public struct LessonCompleteOverlay: View {
     let reduceMotion: Bool
     let exits: LessonCompleteExits
 
+    #if os(macOS)
+    /// The Mac's card rises a little as it fades in, rather than sliding up
+    /// from the bottom of the screen like the iPhone's sheet.
+    @State private var sheetOffset: CGFloat = 40
+    @State private var cardShown = false
+    #else
     @State private var sheetOffset: CGFloat = 800
+    #endif
     @State private var mercScale: CGFloat = 0.6
     @State private var share: ShareState = .rendering
     @State private var dismissalReported = false
@@ -73,6 +80,57 @@ public struct LessonCompleteOverlay: View {
     }
 
     public var body: some View {
+        #if os(macOS)
+        macBody
+        #else
+        phoneBody
+        #endif
+    }
+
+    #if os(macOS)
+    /// In a window the celebration is a card centred over the lesson — a
+    /// bottom sheet as wide as the window read as a stretched phone. Return
+    /// takes the primary button, Escape keeps reading.
+    private var macBody: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(0.38)
+                    .contentShape(Rectangle())
+                    .onTapGesture { exit(.dismiss) }
+                    .accessibilityLabel("Dismiss")
+                    .accessibilityHint("Keep reading the lesson")
+
+                contentCard
+                    .overlay(alignment: .top) {
+                        MercMascot(.celebrate, size: 128)
+                            .scaleEffect(mercScale)
+                            .offset(y: -72)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(maxWidth: 440)
+                    .frame(maxHeight: max(320, geo.size.height - 150))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 64)
+                    .offset(y: sheetOffset)
+                    .opacity(cardShown ? 1 : 0)
+                    .padding(BrandSpacing.xl)
+
+                // Escape: back to the lesson, as a click on the dimmed
+                // backdrop does.
+                Button("Keep reading") { exit(.dismiss) }
+                    .keyboardShortcut(.cancelAction)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .onAppear(perform: animateIn)
+        .task { await renderShareCard() }
+    }
+    #endif
+
+    private var phoneBody: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Dimmed scrim. Tapping it keeps the celebration out of the way
@@ -135,15 +193,23 @@ public struct LessonCompleteOverlay: View {
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 34, bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0, topTrailingRadius: 34, style: .continuous
-            )
+        .background(cardBackground)
+    }
+
+    @ViewBuilder private var cardBackground: some View {
+        #if os(macOS)
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
             .fill(BrandColor.surface)
-            .ignoresSafeArea(edges: .bottom)
-            .shadow(color: .black.opacity(0.3), radius: 28, y: -8)
+            .shadow(color: .black.opacity(0.3), radius: 28, y: 10)
+        #else
+        UnevenRoundedRectangle(
+            topLeadingRadius: 34, bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0, topTrailingRadius: 34, style: .continuous
         )
+        .fill(BrandColor.surface)
+        .ignoresSafeArea(edges: .bottom)
+        .shadow(color: .black.opacity(0.3), radius: 28, y: -8)
+        #endif
     }
 
     private func upNext(_ label: String) -> some View {
@@ -193,10 +259,16 @@ public struct LessonCompleteOverlay: View {
         VStack(spacing: BrandSpacing.sm) {
             if let primaryActionTitle {
                 BrandButton(primaryActionTitle, style: .primary) { exit(.next) }
+                    #if os(macOS)
+                    .keyboardShortcut(.defaultAction)
+                    #endif
                 shareButton
                 BrandButton("Back to lessons", style: .ghost) { exit(.backToLessons) }
             } else {
                 BrandButton("Back to lessons", style: .primary) { exit(.backToLessons) }
+                    #if os(macOS)
+                    .keyboardShortcut(.defaultAction)
+                    #endif
                 shareButton
             }
         }
@@ -254,7 +326,12 @@ public struct LessonCompleteOverlay: View {
     }
 
     private func animateIn() {
+        #if os(macOS)
+        guard !reduceMotion else { sheetOffset = 0; mercScale = 1; cardShown = true; return }
+        withAnimation(.easeOut(duration: 0.25)) { cardShown = true }
+        #else
         guard !reduceMotion else { sheetOffset = 0; mercScale = 1; return }
+        #endif
         withAnimation(.timingCurve(0.2, 0.9, 0.3, 1.1, duration: 0.45)) { sheetOffset = 0 }
         withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.12)) { mercScale = 1 }
     }

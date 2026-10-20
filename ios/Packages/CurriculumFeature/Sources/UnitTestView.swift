@@ -42,11 +42,14 @@ public struct UnitTestView: View {
             BrandColor.background.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
+                    .macReadableColumn()
                 Divider().overlay(BrandColor.border)
                 ScrollView {
                     content
                         .padding(.horizontal, BrandSpacing.lg)
                         .padding(.vertical, BrandSpacing.lg)
+                        // The Mac's reading column, centred in a wide window.
+                        .macReadableColumn()
                 }
                 // Each phase is its own screen and opens at its top — the
                 // support view must never appear scrolled past its heading.

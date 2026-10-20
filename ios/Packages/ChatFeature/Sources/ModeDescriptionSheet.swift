@@ -44,6 +44,9 @@ struct ModeDescriptionSheet: View {
             .scrollBounceBehavior(.basedOnSize)
             .safeAreaInset(edge: .bottom) {
                 BrandButton("Got it", style: .primary, action: acknowledge)
+                    #if os(macOS)
+                    .keyboardShortcut(.defaultAction)
+                    #endif
                     .padding(.horizontal, BrandSpacing.xl)
                     .padding(.vertical, BrandSpacing.md)
                     .background(BrandColor.background)
@@ -64,6 +67,10 @@ struct ModeDescriptionSheet: View {
         }
         // The tint colours the Close text (the Got it fill sets its own).
         .tint(BrandColor.accentText)
+        #if os(macOS)
+        // A Mac sheet sizes to its content, and a scroll view has none.
+        .frame(minWidth: 460, idealWidth: 520, minHeight: 460, idealHeight: 560)
+        #endif
         // `.medium` detent keeps this lightweight — the user can
         // pull to `.large` if they want more breathing room at
         // accessibility Dynamic Type sizes.
