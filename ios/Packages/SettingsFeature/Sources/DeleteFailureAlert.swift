@@ -131,6 +131,10 @@ struct DeviceOnlyResetSheet: View {
             [[UTType.plainText.identifier: id]],
             options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.pasteboardLifetime)]
         )
+#elseif os(macOS)
+        // The same care on the Mac: off Universal Clipboard, hidden from
+        // clipboard history, wiped again after the same lifetime.
+        MacPasteboard.copy(id, currentHostOnly: true, concealed: true, clearAfter: Self.pasteboardLifetime)
 #endif
         copied = true
     }

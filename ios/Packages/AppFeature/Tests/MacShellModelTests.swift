@@ -133,6 +133,42 @@ struct MacShellModelTests {
         #expect(shell.selection == .unit(MacShellModel.pathUnitId(frontier: progress.frontier())))
     }
 
+    @Test("A mode from the menu bar opens the chat and waits there for the chat view to take it")
+    func modeRequestOpensChat() {
+        let shell = makeShell()
+        shell.openLesson(lesson1)
+        shell.requestMode(.debate)
+        #expect(shell.modeRequest == .debate)
+        #expect(shell.activeLesson == nil)
+        if case .chat = shell.selection {} else { Issue.record("expected the chat row, got \(String(describing: shell.selection))") }
+    }
+
+    @Test("Behind the gate a mode request does nothing, and a gate that comes back drops one")
+    func modeRequestGated() {
+        let gated = makeShell(gated: true)
+        gated.requestMode(.discussion)
+        #expect(gated.modeRequest == nil)
+        #expect(gated.selection == .today)
+
+        let shell = makeShell()
+        shell.requestMode(.discussion)
+        shell.setGated(true)
+        #expect(shell.modeRequest == nil)
+    }
+
+    @Test("The window only holds still while a Settings model is erasing")
+    func erasingFollowsTheSettingsModel() {
+        let shell = makeShell()
+        #expect(!shell.isErasing)
+    }
+
+    @Test("⌘1, ⌘2, ⌘3 are Socratic, Debate, Discussion — the toolbar's order")
+    func modeKeys() {
+        #expect(MacCommands.modeKey(.socratic) == "1")
+        #expect(MacCommands.modeKey(.debate) == "2")
+        #expect(MacCommands.modeKey(.discussion) == "3")
+    }
+
     @Test("Today's primary button with the whole path done shows the first unit")
     func openNilStopShowsFirstUnit() {
         let shell = makeShell()

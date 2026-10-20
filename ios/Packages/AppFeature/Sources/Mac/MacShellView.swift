@@ -40,6 +40,10 @@ struct MacShellView: View {
     /// Settings' "withdraw consent": the entry view puts the gate back.
     let onConsentWithdrawn: @MainActor () -> Void
 
+    /// Today's one-time weekly-nudge offer (the iPhone Home's card), decided
+    /// by the entry view as on iOS.
+    var todayReminders = MacTodayReminders.hidden
+
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     /// Standby gamification cache — default-constructed, so the client gate
@@ -71,8 +75,15 @@ struct MacShellView: View {
         } detail: {
             detail
                 .frame(minWidth: 520, minHeight: 480)
+                // The shared views' buttons are drawn by the views
+                // themselves; the Mac's default push-button bezel put grey
+                // boxes around their icons and labels.
+                .buttonStyle(.borderless)
         }
         .tint(BrandColor.accent)
+        // While Settings erases this student's data nothing here may start
+        // a request: it would go out under the old ID.
+        .disabled(shell.isErasing)
         .onAppear {
             shell.onConsentWithdrawn = onConsentWithdrawn
             applyGate(isGated)
@@ -133,6 +144,8 @@ struct MacShellView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(BrandColor.background)
                 .navigationTitle("Welcome to Mercurius")
+        } else if let debugPreview = debugDetailPreview {
+            debugPreview
         } else if let lesson = shell.activeLesson {
             lessonView(lesson)
                 // A new lesson (the celebration's "Next lesson") is a fresh
@@ -164,9 +177,11 @@ struct MacShellView: View {
             state: state,
             onStartNext: { shell.open(state.next) },
             onStartChat: { shell.showChat() },
-            // The weekly-nudge card offers notifications, which the Mac app
-            // doesn't schedule yet (docs/mac-app/PLAN.md).
-            showsReminderCard: false
+            // The same one-time weekly-nudge offer as the iPhone's Home: the
+            // Mac schedules the same reminders.
+            showsReminderCard: todayReminders.shows,
+            onAcceptReminders: todayReminders.onAccept,
+            onDismissReminderCard: todayReminders.onDismiss
         )
         .navigationTitle("Today")
     }
@@ -195,19 +210,15 @@ struct MacShellView: View {
             apiClient: env.apiClient,
             sessionIdentity: env.sessionIdentity,
             achievementStore: env.achievementStore,
-            settingsPresenter: { [env, shell, scheduler, onConsentWithdrawn] in
-                AnyView(
-                    settingsSheet(env: env, shell: shell, scheduler: scheduler,
-                                  onConsentWithdrawn: onConsentWithdrawn)
-                        .frame(minWidth: 480, idealWidth: 540, minHeight: 560, idealHeight: 680)
-                )
-            },
+            // No Settings or Home buttons in the chat: Settings is ⌘, and
+            // Today is a sidebar row. The streak chip goes in the toolbar.
             headerAccessory: { [env, shell] in
                 AnyView(StreakChip(streakStore: env.streakStore, action: { shell.showsProgress = true }))
-            },
-            onGoHome: { shell.show(.today) }
+            }
         )
-        .navigationTitle(model.currentMode.displayName)
+        .macChrome(onNewChat: { shell.newChat() }, modeRequest: $shell.modeRequest)
+        .navigationTitle("Chat")
+        .navigationSubtitle("\(model.currentMode.displayName) mode")
         .onChange(of: model.phase) { _, phase in
             if phase == .sending { env.lastActivityStore.touch() }
             // A finished turn may have saved a new thread (or renamed one).
@@ -368,6 +379,29 @@ struct MacShellView: View {
 
     // MARK: - DEBUG launch arguments
 
+    /// DEBUG: the unit test's whole-screen previews, in the detail column
+    /// (`-UnitTestCrisisPreview`: the crisis support view, reached through
+    /// the real grading path with no network; `-UnitTestPreview` with
+    /// `-UnitTestStage <stage>`).
+    private var debugDetailPreview: AnyView? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        guard let unit = MercuriusCurriculum.units.first,
+              let test = MercuriusCurriculum.unitTest(for: unit.id) else { return nil }
+        if args.contains("-UnitTestCrisisPreview") {
+            return AnyView(UnitTestCrisisPreviewHost(unit: unit, test: test,
+                                                     via503: args.contains("-CrisisVia503"))
+                .navigationTitle("Unit 1 check"))
+        }
+        if args.contains("-UnitTestPreview") {
+            return AnyView(UnitTestPreviewHost(unit: unit, test: test,
+                                               stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
+                .navigationTitle("Unit 1 check"))
+        }
+        #endif
+        return nil
+    }
+
     /// DEBUG: a fake resume id skips a fresh lesson's speech-bubble intro
     /// (`-LessonSkipIntro`, as iOS's `-LessonPreview`); it falls through to a
     /// fresh start, so with `-LessonReplay` the recorded replies stream in.
@@ -410,8 +444,18 @@ struct MacShellView: View {
     }
 }
 
-/// Settings with the Mac shell's wiring — shared by the chat header's sheet
-/// and the Settings window (`MacSettingsView`).
+/// Today's weekly-nudge card: whether it shows and what its buttons do —
+/// the iPhone Home's card, decided the same way (`ReminderCardStore.shows`).
+struct MacTodayReminders {
+    let shows: Bool
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    static let hidden = MacTodayReminders(shows: false, onAccept: {}, onDismiss: {})
+}
+
+/// Settings with the Mac shell's wiring, for the Settings window
+/// (`MacSettingsView`).
 @MainActor
 func settingsSheet(
     env: AppEnvironment,

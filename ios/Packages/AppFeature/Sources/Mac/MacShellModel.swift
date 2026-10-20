@@ -6,6 +6,7 @@ import CurriculumFeature
 import EngagementFeature
 import NetworkingKit
 import PersistenceKit
+import SettingsFeature
 
 /// The Mac window's navigation state and its one shared `ChatViewModel`.
 ///
@@ -55,6 +56,24 @@ public final class MacShellModel {
 
     /// The Progress hub (streak, achievements), from the streak chip.
     var showsProgress = false
+
+    /// The Settings window's model, kept past the window's life: an erasure
+    /// it started runs on after the window closes.
+    var settingsModel: SettingsViewModel?
+
+    /// Settings is deleting the student's data or resetting the session.
+    /// The window holds still meanwhile: a message sent now would go out
+    /// under the old ID (on the iPhone the Settings sheet can't be left
+    /// then; the Mac's Settings window can).
+    var isErasing: Bool {
+        guard let settingsModel else { return false }
+        return settingsModel.isDeleteInProgress || settingsModel.isResetInProgress
+    }
+
+    /// A chat mode the menu bar asked for (Chat ▸ Socratic / Debate /
+    /// Discussion). The chat view takes it — the explainer the first time,
+    /// then the switch — and clears it.
+    var modeRequest: ChatMode?
 
     /// Saved free-chat threads with at least one message, newest first, for
     /// the sidebar. Re-read on demand (`refreshConversations`).
@@ -117,6 +136,15 @@ public final class MacShellModel {
         activeLesson = nil
         activeUnitTest = nil
         selection = .unit(Self.pathUnitId(frontier: progress.frontier()))
+    }
+
+    /// Chat ▸ Socratic / Debate / Discussion (⌘1–⌘3): the chat, in that
+    /// mode. The switch itself is the chat view's (`ChatView.macChrome`), so
+    /// a menu command and the toolbar picker behave alike.
+    public func requestMode(_ mode: ChatMode) {
+        guard !isGated else { return }
+        modeRequest = mode
+        openChat()
     }
 
     /// File ▸ New Chat (⌘N) and the sidebar's New Chat row: a fresh thread
@@ -237,6 +265,7 @@ public final class MacShellModel {
             activeLesson = nil
             activeUnitTest = nil
             showsProgress = false
+            modeRequest = nil
             selection = .today
             conversations = []
         }

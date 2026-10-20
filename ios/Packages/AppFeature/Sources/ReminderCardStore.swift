@@ -1,7 +1,8 @@
 import Foundation
 import Observation
-#if os(iOS)
+#if os(iOS) || os(macOS)
 import UserNotifications
+import EngagementFeature
 #endif
 
 /// The one-time Home card that offers the weekly nudges to installs which
@@ -54,8 +55,10 @@ final class ReminderCardStore {
     }
 
     static func notificationPermission() async -> Permission {
-        #if os(iOS)
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        #if os(iOS) || os(macOS)
+        // No center outside an app bundle (the Mac's `swift test` host).
+        guard let center = NotificationScheduler.center else { return .notDetermined }
+        let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .notDetermined: return .notDetermined
         case .authorized, .provisional, .ephemeral: return .allowed

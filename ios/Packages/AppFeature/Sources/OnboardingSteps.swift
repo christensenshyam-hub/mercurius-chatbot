@@ -356,7 +356,14 @@ struct AgeStep: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    #if os(macOS)
+    // The Mac's picker is a pop-up menu, not a wheel.
+    static let wheelHint = "Pick your age from the menu to continue"
+    static let continueHint = "Pick your age from the menu first"
+    #else
     static let wheelHint = "Pick your age on the wheel to continue"
+    static let continueHint = "Pick your age on the wheel first"
+    #endif
 
     /// At accessibility sizes the heading can push the wheel out of sight
     /// (an SE at AX5 opens with no wheel and a dimmed Continue), so until an
@@ -383,9 +390,16 @@ struct AgeStep: View {
             .pickerStyle(.wheel)
 #endif
             .labelsHidden()
+#if os(macOS)
+            // A pop-up menu at its own size (a wheel's 150 pt only centred
+            // it in empty space).
+            .controlSize(.large)
+            .fixedSize()
+#else
             // The wheel keeps a usable height however large the text: at
             // AX5 it had shrunk to an 11 pt strip (AUD-12).
             .frame(minHeight: AgeStep.wheelMinHeight)
+#endif
             .accessibilityIdentifier("onboarding.agePicker")
             .overlay(
                 RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
@@ -400,7 +414,7 @@ struct AgeStep: View {
             }
             .revealsOnTap(showsHint, reveal: revealWheel)
             .accessibilityIdentifier("onboarding.ageContinue")
-            .accessibilityHint(selectedAge == nil ? "Pick your age on the wheel first" : "")
+            .accessibilityHint(selectedAge == nil ? Self.continueHint : "")
 
             if showsHint {
                 GateRequiredControlHint(text: Self.wheelHint, action: revealWheel)

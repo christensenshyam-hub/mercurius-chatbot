@@ -71,9 +71,9 @@ public struct RootView: View {
             liveActivityGallery
         } else if ProcessInfo.processInfo.arguments.contains("-ReplyFontGallery") {
             ReplyFontGalleryView()
-        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestCrisisPreview") {
+        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestCrisisPreview") && !Self.shellHostsPreviews {
             unitTestCrisisPreview
-        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") {
+        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") && !Self.shellHostsPreviews {
             unitTestPreview
         } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
             QuizView(
@@ -90,9 +90,10 @@ public struct RootView: View {
     }
 
     #if DEBUG
-    /// On the Mac, `-LessonPreview` and `-ChatPreview` open inside the window's
-    /// shell (past the gate, sidebar and all — see `MacShellView`) rather than
-    /// replacing the whole window as they do on iPhone.
+    /// On the Mac, `-LessonPreview`, `-ChatPreview`, `-UnitTestPreview` and
+    /// `-UnitTestCrisisPreview` open inside the window's shell (past the gate,
+    /// sidebar and all — see `MacShellView`) rather than replacing the whole
+    /// window as they do on iPhone.
     private static var shellHostsPreviews: Bool {
         #if os(macOS)
         true
@@ -387,7 +388,7 @@ private struct ChatPreviewHost: View {
 /// every question, the first one wrong, and submits; `mastered` and
 /// `almost` reach the result screen through a canned grade. With no stage
 /// it opens untouched.
-private struct UnitTestPreviewHost: View {
+struct UnitTestPreviewHost: View {
     @State private var model: UnitTestViewModel
     private let stage: String?
 
@@ -432,7 +433,7 @@ private struct UnitTestPreviewHost: View {
 /// (`UnitDefenseResult`) and mapping (`UnitDefenseGrading`). With `via503` the
 /// same copy arrives as a helper route's 503 crisis body through
 /// `APIClient.validate`. No network call is made.
-private struct UnitTestCrisisPreviewHost: View {
+struct UnitTestCrisisPreviewHost: View {
     @State private var model: UnitTestViewModel
 
     /// `/api/unit-test/grade`'s crisis answer, byte for byte (server.js

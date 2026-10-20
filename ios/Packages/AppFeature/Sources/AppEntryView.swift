@@ -170,7 +170,7 @@ struct AppEntryView: View {
                 scheduler.weekProgress = { [progress = env.progressStore] in
                     Self.weekProgress(WeeklyPlan.compute(progress: progress))
                 }
-                #if os(iOS)
+                #if os(iOS) || os(macOS)
                 // Before this, a reminder tapped at cold launch is held by
                 // the router; setting the handler delivers it.
                 NotificationRouter.shared.onOpenLesson = { [env] lessonId in
@@ -267,9 +267,23 @@ struct AppEntryView: View {
                 consentVersion = 0
                 gateClearedThisLaunch = false
                 env.lastActivityStore.lastTab = nil
-            }
+            },
+            // Today's weekly-nudge offer, decided as for the iPhone's Home.
+            todayReminders: MacTodayReminders(
+                shows: ReminderCardStore.shows(
+                    weeklyEnabled: env.reminderStore.weeklyEnabled,
+                    handled: env.reminderCardStore.isHandled,
+                    onboardingComplete: hasSeenOnboarding,
+                    permission: notificationPermission
+                ),
+                onAccept: acceptReminders,
+                onDismiss: { env.reminderCardStore.markHandled() }
+            )
         )
         .onAppear { env.macShell.scheduler = scheduler }
+        // A `mercurius://` link (a reminder's lesson) goes to this window
+        // rather than opening a second one.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         #else
         if showsGate {
             onboardingFlow

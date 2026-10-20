@@ -123,6 +123,8 @@ public struct SettingsView: View {
             [[UTType.plainText.identifier: model.sessionId]],
             options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(120)]
         )
+#elseif os(macOS)
+        MacPasteboard.copy(model.sessionId, currentHostOnly: true, concealed: true, clearAfter: 120)
 #endif
         showCopied = true
         Task {
