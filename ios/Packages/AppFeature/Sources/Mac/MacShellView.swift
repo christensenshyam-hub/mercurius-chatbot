@@ -140,7 +140,9 @@ struct MacShellView: View {
             // The flow is laid out for a phone: on a wide window its lines
             // and buttons stay at a readable width, centred.
             gate
-                .frame(maxWidth: 720)
+                // A tall window would push each step's button far below
+                // its question: the flow keeps to a phone-and-a-half box.
+                .frame(maxWidth: 720, maxHeight: 700)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(BrandColor.background)
                 .navigationTitle("Welcome to Mercurius")

@@ -392,7 +392,9 @@ struct AgeStep: View {
             .labelsHidden()
 #if os(macOS)
             // A pop-up menu at its own size (a wheel's 150 pt only centred
-            // it in empty space).
+            // it in empty space), with its bezel: the window's borderless
+            // button style would otherwise draw it as bare text.
+            .buttonStyle(.automatic)
             .controlSize(.large)
             .fixedSize()
 #else

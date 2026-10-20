@@ -790,6 +790,25 @@ struct MessageListView: View {
                 geometry.readingAreaHeight = height
                 layoutChanged(geometry, proxy: proxy)
             }
+            #if os(macOS)
+            // The Mac's window builds the chat afresh each time its sidebar
+            // row is chosen, with the thread already loaded: open at the
+            // latest message, as a thread that loads in place does. The lazy
+            // rows only estimate their heights until they are drawn, so one
+            // jump lands short; it repeats (briefly) until the end is in
+            // view, unless the student scrolls first.
+            .task {
+                guard !messages.isEmpty else { return }
+                _ = scroll.policy.latestMessageChanged(isNewReply: false)
+                for _ in 0..<8 {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard !Task.isCancelled, scroll.policy.isFollowing else { return }
+                    let geometry = scroll.policy.geometry
+                    if geometry.contentHeight > 0, geometry.isAtBottom { return }
+                    perform(.scrollToBottom(animated: false), proxy: proxy)
+                }
+            }
+            #endif
             .onChange(of: messages.last?.id) { _, newValue in
                 guard newValue != nil, let last = messages.last else { return }
                 // Merc's empty placeholder means a reply is on its way (a

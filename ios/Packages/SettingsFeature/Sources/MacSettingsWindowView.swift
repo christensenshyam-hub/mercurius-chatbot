@@ -187,7 +187,7 @@ public struct MacSettingsWindowView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 400)
+        .frame(height: 520)
     }
 
     @ViewBuilder

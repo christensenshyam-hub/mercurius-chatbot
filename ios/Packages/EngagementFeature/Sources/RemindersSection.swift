@@ -66,7 +66,7 @@ public struct RemindersSection: View {
             }
 
             if permissionDenied {
-                Text("Notifications are off for Mercurius. Turn them on in the iOS Settings app to get reminders.")
+                Text(Self.permissionDeniedNote)
                     .font(BrandFont.caption)
                     .foregroundStyle(BrandColor.textSecondary)
             }
@@ -80,6 +80,15 @@ public struct RemindersSection: View {
                 Task { await refreshAuthorization() }
             }
         }
+    }
+
+    /// Where to turn notifications back on, in the platform's words.
+    static var permissionDeniedNote: String {
+        #if os(macOS)
+        "Notifications are off for Mercurius. Turn them on in System Settings ▸ Notifications to get reminders."
+        #else
+        "Notifications are off for Mercurius. Turn them on in the iOS Settings app to get reminders."
+        #endif
     }
 
     private func toggle(_ kind: ReminderEnabler.Kind, title: String, detail: String) -> some View {

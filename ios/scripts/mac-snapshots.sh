@@ -70,8 +70,15 @@ snap() {
     cp "$wrote" "$OUT/$name.png"
   fi
   if [ -f "$OUT/$name.png" ]; then echo "$name: ok"; else echo "$name: FAILED" >&2; cat "$log" >&2; fi
-  grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
-  grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
+  # The control dump and the composer log once per state (the light,
+  # full-size shot), not once per variant.
+  case $name in
+    *-dark|*-min) ;;
+    *)
+      grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
+      grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
+      ;;
+  esac
   rm -f "$log"
 }
 
