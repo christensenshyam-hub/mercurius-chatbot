@@ -137,8 +137,7 @@ struct ChatInputBar: View {
                     #if os(macOS)
                     // Shift-Return: a new line where the cursor is.
                     .onKeyPress(.return, phases: .down) { press in
-                        guard press.modifiers.contains(.shift) else { return .ignored }
-                        return MacComposerKeys.insertNewline() ? .handled : .ignored
+                        MacComposerKeys.handleReturn(modifiers: press.modifiers) ? .handled : .ignored
                     }
                     #endif
                     .accessibilityLabel("Message")
@@ -379,8 +378,16 @@ struct ChatInputBar: View {
     }
 
     private var canSend: Bool {
+        Self.canSend(text: text, hasAttachment: attachment != nil,
+                     isSending: isSending, isPreparingAttachment: isPreparingAttachment)
+    }
+
+    /// Whether the send button (and, on the Mac, Return) sends: some text
+    /// that isn't only spaces and line breaks, or a photo; nothing already
+    /// on its way; no photo still being prepared.
+    static func canSend(text: String, hasAttachment: Bool, isSending: Bool, isPreparingAttachment: Bool) -> Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return (hasText || attachment != nil) && !isSending && !isPreparingAttachment
+        return (hasText || hasAttachment) && !isSending && !isPreparingAttachment
     }
 
     private func triggerSend() {

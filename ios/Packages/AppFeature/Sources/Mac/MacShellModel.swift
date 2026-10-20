@@ -124,6 +124,14 @@ public final class MacShellModel {
         route(to: destination)
     }
 
+    /// The sidebar list's selection changed. A row routes like `show(_:)`;
+    /// nil (the list deselecting, e.g. a click on empty space below the
+    /// rows) keeps what the detail shows, so its row stays selected.
+    public func select(_ destination: Destination?) {
+        guard let destination else { return }
+        show(destination)
+    }
+
     /// View ▸ Chat (⌘3), Today's "Chat with Merc": the current thread.
     public func showChat() {
         guard !isGated else { return }
@@ -166,7 +174,15 @@ public final class MacShellModel {
                 // A thread in another mode switches the server's mode first
                 // (`openConversation`), which is why this runs only past the
                 // gate.
-                await chatModel.openConversation(id: id)
+                let opened = await chatModel.openConversation(id: id)
+                // A thread that can't open (deleted meanwhile, or saved in a
+                // mode this build no longer has, like the betas' "direct")
+                // leaves the chat on its current thread: select that one, so
+                // the sidebar never highlights a thread the detail isn't
+                // showing.
+                if !opened, selection == .chat(id) {
+                    selection = .chat(chatModel.conversationId)
+                }
                 refreshConversations()
             }
         }

@@ -158,16 +158,39 @@ private struct MacImageDrop: ViewModifier {
 // MARK: - Composer keys
 
 enum MacComposerKeys {
-    /// Shift-Return in the composer: a new line at the insertion point. The
-    /// field's own Return sends (its `onSubmit`); Option-Return already
-    /// inserts a line on the Mac and still does.
-    ///
-    /// Returns false when the key should go on to the field: there is no
-    /// field editor, or an input method is composing (Return then confirms
-    /// the composition).
+    /// What Return does in the composer.
+    enum ReturnAction: Equatable {
+        /// The field's own Return: it sends through `onSubmit`, when
+        /// `ChatInputBar.canSend` allows (an empty field or a reply on its
+        /// way sends nothing).
+        case send
+        /// A line break at the insertion point (Shift-Return).
+        case newline
+        /// The key is the field's to handle as it always does: an input
+        /// method that is composing takes Return to confirm the composition,
+        /// and Option-Return already breaks the line on the Mac.
+        case field
+    }
+
+    /// The decision, from the keys held and whether an input method is
+    /// composing. Only `.newline` is the composer's own work; the other two
+    /// pass the key on to the field.
+    static func returnAction(modifiers: EventModifiers, isComposing: Bool) -> ReturnAction {
+        if isComposing { return .field }
+        if modifiers.contains(.shift) { return .newline }
+        if modifiers.contains(.option) { return .field }
+        return .send
+    }
+
+    /// Return pressed in the composer: Shift-Return puts a new line at the
+    /// insertion point and is handled here. Everything else returns false
+    /// and goes on to the field (whose Return sends, its `onSubmit`) — also
+    /// when there is no field editor to insert into.
     @MainActor
-    static func insertNewline() -> Bool {
-        guard let editor = activeFieldEditor, !editor.hasMarkedText() else { return false }
+    static func handleReturn(modifiers: EventModifiers) -> Bool {
+        guard let editor = activeFieldEditor,
+              returnAction(modifiers: modifiers, isComposing: editor.hasMarkedText()) == .newline
+        else { return false }
         editor.insertNewlineIgnoringFieldEditor(nil)
         return true
     }
