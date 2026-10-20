@@ -25,6 +25,9 @@ xcodebuild test -project Mercurius.xcodeproj -scheme Mercurius \
   -only-testing:MercuriusUITests/MercuriusUITests/testBootCompletes   # single UI test
 ```
 
+### Mac app (`ios/MercuriusMac`, scheme `MercuriusMac`)
+A native SwiftUI Mac app (not Catalyst), a universal purchase with iOS: same bundle id in Release, `….macdev` in Debug so dev runs never share the installed iPad-on-Mac app's sandbox container. Its window lives in `AppFeature/Sources/Mac` (`#if os(macOS)`, so `swift test` compiles and tests it): `AppEntryView` mounts `MacShellView` (a `NavigationSplitView`) and hands it the consent gate while it shows. Screenshots: `ios/scripts/mac-snapshots.sh <dir>` — the DEBUG `-MacSnapshot <dir>` harness renders the app's own window (Liquid Glass surfaces come out dark or blank; see `MacSnapshot.swift`). Give every launch flag a value (`-EnterShell YES`): a bare word after a flag is opened as a document and SwiftUI then shows no window. Plan and step notes: `docs/mac-app/`.
+
 ### iOS — release tooling (`ios/scripts/`)
 - `provision.sh` — bootstraps the Apple Distribution cert + BOTH App Store profiles (app + `MercuriusWidgets` appex) via the ASC API. Credentials in `~/.appstoreconnect/`; dedicated keychain `mercurius-codesign.keychain-db`.
 - `release.sh` — bump build number → xcodegen → archive → export → altool upload. `--no-bump` / `--no-upload` flags.
