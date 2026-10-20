@@ -144,6 +144,14 @@ run() {
     lesson-complete) window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -ForceCelebrate YES -MacSnapshotDelay 5 ;;
     chat)            window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
     chat-thread)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -SeedDemoChat YES ;;
+    # The toolbar's mode switch (as ⌘2/⌘3): Debate's one-time description,
+    # then the chat in Debate and in Discussion. The switch asks the server
+    # first, so the last two need a local server on :3000 that answers
+    # POST /api/mode with {"mode": …}; without one they show "Couldn't
+    # switch modes". Not in the default set for that reason.
+    chat-mode-intro) window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode debate -seenModeDescription.debate NO ;;
+    chat-debate)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode debate -seenAllModeDescriptions YES -MacSnapshotDelay 6 ;;
+    chat-discussion) window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode discussion -seenAllModeDescriptions YES -MacSnapshotDelay 6 ;;
     chat-typing)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "Why do chatbots sound so sure?|Even when they're wrong?" -MacSnapshotDelay 6 ;;
     chat-failed)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "What is a token?" -MacSnapshotSubmit YES -MacSnapshotDelay 8 ;;
     unit-test)       window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage review ;;
@@ -158,7 +166,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent today path lesson-intro lesson lesson-complete chat chat-thread chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
+ALL="gate-meet gate-age gate-consent today path lesson-intro lesson lesson-complete chat chat-thread chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL

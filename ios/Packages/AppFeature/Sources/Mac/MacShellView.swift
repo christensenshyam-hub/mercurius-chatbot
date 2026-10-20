@@ -423,7 +423,11 @@ struct MacShellView: View {
     ///   `-LessonReplay` for the recorded replies (no network) and
     ///   `-LessonSkipIntro` to start it straight away.
     /// - `-ChatPreview` → the chat; `-ChatSeed` also sends a starter (this
-    ///   one does reach the server).
+    ///   one does reach the server). `-ChatPreviewMode debate|discussion`
+    ///   then switches modes the way the toolbar picker and ⌘2/⌘3 do: the
+    ///   mode's one-time description first, unless seen
+    ///   (`-seenAllModeDescriptions YES`), then the server is asked — so a
+    ///   screenshot run needs a local server that answers `POST /api/mode`.
     private func applyDebugStateIfNeeded() {
         #if DEBUG
         guard !appliedDebugState else { return }
@@ -436,6 +440,10 @@ struct MacShellView: View {
             if args.contains("-ChatSeed"), shell.chatModel.messages.isEmpty {
                 shell.chatModel.draft = "What is a token in an LLM?"
                 shell.chatModel.send()
+            }
+            if let raw = UserDefaults.standard.string(forKey: "ChatPreviewMode"),
+               let mode = ChatMode(rawValue: raw) {
+                shell.requestMode(mode)
             }
         } else if args.contains("-EnterShellCurriculum") {
             shell.showPath()
