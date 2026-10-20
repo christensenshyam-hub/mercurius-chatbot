@@ -187,17 +187,51 @@ enum MacComposerKeys {
     }
 
     /// Whether ⌘V should attach an image rather than paste text: the
-    /// composer has focus and the key window's text cursor is in a field
-    /// (not, say, the Settings window).
+    /// composer has focus, and the key press is in the composer's own window
+    /// with the text cursor in a field (a ⌘V in the Settings window, whose
+    /// selectable session ID also takes a field editor, is not the
+    /// composer's).
     @MainActor
-    static func isComposerPaste(_ event: NSEvent, composerFocused: Bool) -> Bool {
+    static func isComposerPaste(_ event: NSEvent, composerFocused: Bool, composerWindow: NSWindow?) -> Bool {
         guard composerFocused,
               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               event.charactersIgnoringModifiers?.lowercased() == "v",
-              let window = event.window, window.isKeyWindow,
+              let window = event.window, window === composerWindow, window.isKeyWindow,
               let editor = window.firstResponder as? NSTextView, editor.isFieldEditor
         else { return false }
         return true
+    }
+}
+
+/// What the composer's ⌘V watcher reads when a key arrives: a reference the
+/// view keeps current, because the watcher's closure outlives the view value
+/// that installed it.
+@MainActor
+final class ComposerPasteContext {
+    weak var window: NSWindow?
+    var isFocused = false
+    var isSending = false
+}
+
+/// Reports the window a view is in (the composer's, for its ⌘V watcher).
+struct WindowReader: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = TrackingView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class TrackingView: NSView {
+        var onWindow: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindow?(window)
+        }
     }
 }
 

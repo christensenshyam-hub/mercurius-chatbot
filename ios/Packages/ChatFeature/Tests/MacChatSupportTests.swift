@@ -112,9 +112,9 @@ struct MacChatSupportTests {
         let event = try #require(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
             context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9))
-        #expect(!MacComposerKeys.isComposerPaste(event, composerFocused: false))
+        #expect(!MacComposerKeys.isComposerPaste(event, composerFocused: false, composerWindow: nil))
         // No window behind the event: never the composer's.
-        #expect(!MacComposerKeys.isComposerPaste(event, composerFocused: true))
+        #expect(!MacComposerKeys.isComposerPaste(event, composerFocused: true, composerWindow: nil))
     }
 }
 #endif

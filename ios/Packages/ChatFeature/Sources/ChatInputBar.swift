@@ -70,8 +70,10 @@ struct ChatInputBar: View {
     #if os(macOS)
     /// The open panel for an image file (the Mac's attach button).
     @State private var showsFilePanel = false
-    /// The ⌘V watcher that turns a pasted image into an attachment.
+    /// The ⌘V watcher that turns a pasted image into an attachment, and what
+    /// it reads when a key arrives.
     @State private var pasteMonitor: Any?
+    @State private var pasteContext = ComposerPasteContext()
     @Environment(\.isEnabled) private var isEnabled
     #endif
 
@@ -169,6 +171,9 @@ struct ChatInputBar: View {
         .onChange(of: isEnabled) { _, enabled in
             if enabled { DispatchQueue.main.async { focused = true } }
         }
+        .onChange(of: focused, initial: true) { _, isFocused in pasteContext.isFocused = isFocused }
+        .onChange(of: isSending, initial: true) { _, sending in pasteContext.isSending = sending }
+        .background(WindowReader { [pasteContext] in pasteContext.window = $0 })
         .onDisappear(perform: removePasteMonitor)
         #endif
         .onChange(of: text) { _, newText in
@@ -249,8 +254,11 @@ struct ChatInputBar: View {
     /// the field has focus. Text pastes as always.
     private func installPasteMonitor() {
         guard pasteMonitor == nil else { return }
+        let context = pasteContext
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard MacComposerKeys.isComposerPaste(event, composerFocused: focused), !isSending,
+            guard MacComposerKeys.isComposerPaste(event, composerFocused: context.isFocused,
+                                                  composerWindow: context.window),
+                  !context.isSending,
                   let data = MacImageIntake.imageData(from: .general) else { return event }
             attachLoadFailed = false
             onAttachImage(data)
