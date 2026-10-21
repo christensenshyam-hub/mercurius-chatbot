@@ -384,7 +384,10 @@ struct MacSnapshotScriptTests {
         let text = try #require(script("mac-snapshots.sh"))
         // STORE_SIZE=${STORE_SIZE:-1280x800}
         let assignment = try #require(text.split(separator: "\n").first { $0.hasPrefix("STORE_SIZE=") })
-        let fallback = try #require(assignment.split(separator: "-").last?.split(separator: "}").first)
+        // Two steps: Swift 6.0's #require can't take an optional chain that
+        // ends in a collection (CI, Xcode 16.2).
+        let tail = try #require(assignment.split(separator: "-").last)
+        let fallback = try #require(tail.split(separator: "}").first)
         let line = try #require(shellWords(text).first { $0.first == "store" })
         let arguments = ["-MacSnapshot", "/tmp"]
             + line.map { $0 == "$STORE_SIZE" ? String(fallback) : $0 }.filter { !$0.hasPrefix("$") }
