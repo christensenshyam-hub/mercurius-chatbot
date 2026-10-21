@@ -208,6 +208,17 @@ run() {
     # AUD-29 in Night: the first reply (its opening paragraphs) drops
     # mid-stream and is kept, with its failure line and Retry.
     lesson-cut)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -LessonReplayCut YES -LessonReplayShort YES -MacSnapshotDelay 8 ;;
+    # Lesson 1.1's interactive, "How a model reads “bank”" (DEBUG
+    # -NightScrollToInteractive): the replay's first reply settles with the
+    # card closing its Tokenization part, before the check. The card's top;
+    # its map, with no opening and with each opening picked (-NightTokenizer);
+    # the compact "Try it" card (-NightTokenizerCompact, as a card narrower
+    # than 440 pt starts).
+    lesson-interactive)         window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -MacSnapshotDelay 11 ;;
+    lesson-interactive-map)     window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -MacSnapshotDelay 11 ;;
+    lesson-interactive-money)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer money -MacSnapshotDelay 11 ;;
+    lesson-interactive-river)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer river -MacSnapshotDelay 11 ;;
+    lesson-interactive-compact) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -NightTokenizerCompact YES -MacSnapshotDelay 11 ;;
     lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
     lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
     # Night Studio's complete card: the replay's first reply streams in
@@ -255,7 +266,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent gate-limits gate-paused gate-under13 gate-path today today-week path path-week path-check path-mastered lesson-intro lesson lesson-top lesson-cut lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-mode-sheet chat-typing chat-failed chat-quiz unit-test unit-test-quiz unit-test-written unit-test-mastered unit-test-almost unit-test-unavailable crisis start-failure settings-general settings-privacy settings-about settings-gated help help-mac help-support"
+ALL="gate-meet gate-age gate-consent gate-limits gate-paused gate-under13 gate-path today today-week path path-week path-check path-mastered lesson-intro lesson lesson-top lesson-cut lesson-interactive lesson-interactive-map lesson-interactive-money lesson-interactive-river lesson-interactive-compact lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-mode-sheet chat-typing chat-failed chat-quiz unit-test unit-test-quiz unit-test-written unit-test-mastered unit-test-almost unit-test-unavailable crisis start-failure settings-general settings-privacy settings-about settings-gated help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL
