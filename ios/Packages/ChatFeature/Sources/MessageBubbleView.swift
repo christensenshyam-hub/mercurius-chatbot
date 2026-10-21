@@ -44,6 +44,11 @@ struct MessageBubbleView: View {
     /// blocks_v1 quiz interaction. Nil (the default) renders any [Q] block
     /// inert — snapshots and free chat unaffected.
     var quizInteraction: QuizInteraction? = nil
+    /// Lesson 1.1's interactive (`LessonInteractiveAnchor`): where this reply
+    /// holds it, nil for every other reply (the default draws exactly as
+    /// before). On the iPhone the bubble is then drawn in two around the
+    /// card (`LessonInteractiveSplit`).
+    var interactiveAfter: LessonInteractivePosition? = nil
 
     /// How a [Q] block behaves in THIS bubble.
     struct QuizInteraction {
@@ -96,7 +101,54 @@ struct MessageBubbleView: View {
         #endif
     }
 
+    /// Which of the reply's blocks a row draws: all of them, or (around
+    /// Lesson 1.1's interactive) the half before the card or the half after.
+    private enum Segment: Equatable {
+        case whole
+        case head([MessageBlock])
+        case tail([MessageBlock])
+
+        var isTail: Bool { if case .tail = self { return true } else { return false } }
+        var isHead: Bool { if case .head = self { return true } else { return false } }
+    }
+
     var body: some View {
+        #if os(iOS)
+        if message.role == .assistant, lessonStyle, let at = interactiveAfter,
+           let halves = LessonInteractiveSplit.halves(of: message.content, at: at) {
+            VStack(alignment: .leading, spacing: BrandSpacing.md) {
+                row(.head(halves.head))
+                LessonTokenizerCard()
+                    .frame(maxWidth: 560, alignment: .leading)
+                    .padding(.horizontal, BrandSpacing.lg)
+                    .id(LessonTokenizerCard.scrollID)
+                    #if DEBUG
+                    // The card's top edge, for the shots' `context` jump.
+                    .overlay(alignment: .top) {
+                        Color.clear.frame(height: 1).id(LessonTokenizerCard.topEdgeScrollID)
+                    }
+                    #endif
+                if !halves.tail.isEmpty || Self.hasStatusLine(message) {
+                    row(.tail(halves.tail))
+                }
+            }
+        } else {
+            row(.whole)
+        }
+        #else
+        row(.whole)
+        #endif
+    }
+
+    /// A failed or cut-off reply's line under it.
+    private static func hasStatusLine(_ message: ChatMessage) -> Bool {
+        switch message.status {
+        case .failed, .interrupted: return true
+        case .idle, .streaming: return false
+        }
+    }
+
+    private func row(_ segment: Segment) -> some View {
         HStack(alignment: .top, spacing: shouldShowAvatar ? BrandSpacing.sm : 0) {
             if message.role == .user { Spacer(minLength: 48) }
 
@@ -115,20 +167,23 @@ struct MessageBubbleView: View {
                         )
                         .accessibilityLabel("Attached photo")
                 }
-                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure {
+                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure
+                    && !segment.isTail {
                     presenceLine
                 }
                 // Skip an empty text bubble for an image-only user message,
                 // and for a reply that failed before any text arrived — the
                 // error line alone says what happened (AUD-29).
-                if Self.drawsBubble(message) {
-                    bubble
+                if Self.drawsBubble(message), Self.drawsBlocks(segment) {
+                    bubble(segment)
                 }
-                if case .failed(let reason) = message.status, message.role == .assistant {
-                    failureLabel(reason)
-                }
-                if message.status == .interrupted, message.role == .assistant {
-                    interruptedLabel
+                if !segment.isHead {
+                    if case .failed(let reason) = message.status, message.role == .assistant {
+                        failureLabel(reason)
+                    }
+                    if message.status == .interrupted, message.role == .assistant {
+                        interruptedLabel
+                    }
                 }
             }
 
@@ -140,7 +195,15 @@ struct MessageBubbleView: View {
         // Everything else (the student's turns, free chat, a reply still
         // streaming or one that never arrived) reads as one element (AUD-23).
         .accessibilityElement(children: Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? .contain : .combine)
-        .accessibilityLabel(Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? Text("Merc's reply") : accessibilityLabel)
+        .accessibilityLabel(Self.readsAsBlocks(message, lessonStyle: lessonStyle)
+                            ? Text(segment.isTail ? "Merc's reply, continued" : "Merc's reply") : accessibilityLabel)
+    }
+
+    /// A half around Lesson 1.1's interactive with no blocks (the card
+    /// closes the reply) draws no bubble, only its status line.
+    private static func drawsBlocks(_ segment: Segment) -> Bool {
+        if case .tail(let blocks) = segment { return !blocks.isEmpty }
+        return true
     }
 
     /// Whether VoiceOver walks this bubble block by block. A 170-210-word
@@ -186,12 +249,12 @@ struct MessageBubbleView: View {
     // MARK: - Pieces
 
     @ViewBuilder
-    private var bubble: some View {
+    private func bubble(_ segment: Segment) -> some View {
         switch message.role {
         case .user:
             userBubble
         case .assistant:
-            if lessonStyle { lessonAssistantBubble } else { assistantBubble }
+            if lessonStyle { lessonAssistantBubble(segment) } else { assistantBubble }
         }
     }
 
@@ -233,7 +296,7 @@ struct MessageBubbleView: View {
 
     /// The lesson bubble: white/elevated surface, soft shadow, 8/24 corners, and
     /// a tinted italic callout around any `[CHECK]…[/CHECK]` question.
-    private var lessonAssistantBubble: some View {
+    private func lessonAssistantBubble(_ segment: Segment) -> some View {
         Group {
             if isEmptyTyping {
                 typingIndicator
@@ -241,8 +304,14 @@ struct MessageBubbleView: View {
                 // blocks_v1: tokenize into prose + native blocks. A plain
                 // reply yields one .prose block and renders exactly as before;
                 // [CHECK] spans keep their callout; [KEY]/[EX]/[Q] become
-                // cards. Partial markers are withheld by the parser.
-                let blocks = BlockParser.parse(message.content)
+                // cards. Partial markers are withheld by the parser. Around
+                // Lesson 1.1's interactive, one half's blocks.
+                let blocks: [MessageBlock] = {
+                    switch segment {
+                    case .whole: return BlockParser.parse(message.content)
+                    case .head(let half), .tail(let half): return half
+                    }
+                }()
                 VStack(alignment: .leading, spacing: BrandSpacing.sm) {
                     ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                         blockView(block)
@@ -575,6 +644,7 @@ extension MessageBubbleView: Equatable {
             && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex
+            && lhs.interactiveAfter == rhs.interactiveAfter
     }
 }
 

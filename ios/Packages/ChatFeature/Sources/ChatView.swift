@@ -829,7 +829,11 @@ struct MessageListView: View {
                                 avatarActivity: isLive ? mercActivity : .idle,
                                 avatarIdleLife: isLive,
                                 onCheckTap: onCheckTap,
-                                quizInteraction: quizInteraction(for: message)
+                                quizInteraction: quizInteraction(for: message),
+                                // Lesson 1.1's interactive, between this
+                                // reply's blocks (`LessonInteractiveSplit`).
+                                interactiveAfter: interactive?.messageID == message.id
+                                    ? interactive?.position : nil
                             )
                             .equatable()
                             .id(message.id)
@@ -979,13 +983,14 @@ struct MessageListView: View {
             }
             #if DEBUG
             // `-NightScrollToInteractive top|map` (shots only, both
-            // platforms): once a reply settles, Lesson 1.1's interactive (or
-            // its map) at the top of the reading area.
+            // platforms; `context` on the iPhone): once a reply settles,
+            // Lesson 1.1's interactive (or its map) at the top of the
+            // reading area.
             .onChange(of: phase) { _, new in
                 guard new == .idle, lessonStyle,
                       let target = UserDefaults.standard.string(forKey: "NightScrollToInteractive") else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    scrollToInteractive(map: target == "map", proxy: proxy)
+                    scrollToInteractive(target, proxy: proxy)
                 }
             }
             #endif
@@ -1314,11 +1319,23 @@ struct MessageListView: View {
 
     #if DEBUG
     /// The interactive (or its map) to the top of the reading area, as the
-    /// Mac strip's jump does (shots only).
-    private func scrollToInteractive(map: Bool, proxy: ScrollViewProxy) {
+    /// Mac strip's jump does (shots only). On the iPhone also: `context`
+    /// (the card's top under the end of the text before it), `step2`,
+    /// `step3`, and `after` (the card's end, with what follows it).
+    private func scrollToInteractive(_ target: String, proxy: ScrollViewProxy) {
         scroll.policy.partJumped()
         #if os(macOS)
-        proxy.scrollTo(map ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID, anchor: .top)
+        proxy.scrollTo(target == "map" ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID,
+                       anchor: .top)
+        #else
+        switch target {
+        case "map": proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+        case "context": proxy.scrollTo(LessonTokenizerCard.topEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "step2": proxy.scrollTo(LessonTokenizerCard.stepScrollID(2), anchor: .top)
+        case "step3": proxy.scrollTo(LessonTokenizerCard.stepScrollID(3), anchor: .top)
+        case "after": proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .bottom)
+        default: proxy.scrollTo(LessonTokenizerCard.scrollID, anchor: .top)
+        }
         #endif
     }
     #endif
