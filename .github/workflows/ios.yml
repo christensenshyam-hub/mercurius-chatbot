@@ -251,12 +251,14 @@ jobs:
       # every harness run is: in-memory chats and session id, the local
       # server URL — nothing reaches production. 700×600 (the window's
       # minimum) fits the runner's small screen. The script fails a picture
-      # that is blank (one colour), the wrong size, or of an inactive window
-      # — so this proves the window was drawn, not only that it opened.
+      # that is blank (one colour) or the wrong size — so this proves the
+      # window was drawn, not only that it opened. ACTIVATE=NO: a headless
+      # runner has no session that can make the window key, so an inactive
+      # window is expected here (the key-window check is for local runs).
       - name: Launch smoke test
         working-directory: ios
         run: |
-          MAC_APP="$PWD/build/mac-dd/Build/Products/Debug/Mercurius.app" VARIANTS=min \
+          MAC_APP="$PWD/build/mac-dd/Build/Products/Debug/Mercurius.app" VARIANTS=min ACTIVATE=NO \
             scripts/mac-snapshots.sh "$RUNNER_TEMP/mac-smoke" gate-meet today
 
       - name: Upload the smoke-test pictures
