@@ -140,7 +140,7 @@ struct LessonTokenizerCard: View {
 
     /// The eyebrow and title, then what the card does and "Try it": on a
     /// phone the openings to tap are a screen or two down (on an SE at
-    /// Large, about 870 pt into a 1,400 pt card), so the card's first screen
+    /// Large, about 990 pt into a 1,550 pt card), so the card's first screen
     /// says there is something to try and goes there.
     private var header: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.md) {
