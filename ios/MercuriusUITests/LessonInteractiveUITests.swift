@@ -78,18 +78,16 @@ final class LessonInteractiveUITests: XCTestCase {
 
         let tryIt = app.buttons["Try it"]
         XCTAssertTrue(tryIt.waitForExistence(timeout: 10))
-        // The card's top on screen, as a student reaches it.
+        // The card's top on screen, as a student reaches it: dragged, with
+        // no fling (a swipe's momentum carried it under the SE's header).
         let window = app.windows.firstMatch.frame
-        var swipes = 0
-        while tryIt.frame.minY > window.height * 0.6 && swipes < 12 {
-            app.swipeUp(velocity: .slow)
-            swipes += 1
-        }
-        XCTAssertLessThan(tryIt.frame.maxY, window.height * 0.75, "Try it never came on screen")
+        drag(tryIt, toFraction: 0.4, in: app)
+        XCTAssertTrue(tryIt.isHittable, "Try it never came on screen: \(tryIt.frame)")
         let money = app.buttons["Start the sentence: I got my paycheck, so"]
         XCTAssertTrue(money.exists)
         let before = money.frame.minY
         XCTAssertGreaterThan(before, window.height * 0.75, "the openings were already in reach")
+        keepScreenshot("try-it-before")
 
         tryIt.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         var inReach = false
@@ -100,10 +98,39 @@ final class LessonInteractiveUITests: XCTestCase {
         }
         XCTAssertTrue(inReach, "Try it didn't bring the openings on screen: \(money.frame)")
         XCTAssertLessThan(money.frame.minY, before - 200, "Try it didn't bring the openings up")
+        keepScreenshot("try-it-after")
 
         // And they pick from there.
         money.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: money)
         waitForExpectations(timeout: 5)
+    }
+
+    /// Drags the list until `element` sits near `fraction` of the window's
+    /// height, at most 40% of the window at a time and held before release,
+    /// so nothing flings on past it.
+    @MainActor
+    private func drag(_ element: XCUIElement, toFraction fraction: CGFloat, in app: XCUIApplication) {
+        let window = app.windows.firstMatch
+        for _ in 0..<12 {
+            let height = window.frame.height
+            let delta = element.frame.midY - height * fraction
+            if abs(delta) < 30 { return }
+            let step = max(min(delta, height * 0.4), -height * 0.3)
+            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -step)),
+                        withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+    }
+
+    /// With TEST_RUNNER_TOKENIZER_SHOTS set, the screen is kept in the
+    /// result bundle (for review; nothing is compared).
+    @MainActor
+    private func keepScreenshot(_ name: String) {
+        guard ProcessInfo.processInfo.environment["TOKENIZER_SHOTS"] != nil else { return }
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
