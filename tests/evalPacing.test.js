@@ -679,6 +679,7 @@ const CHAT_IDS = [
   'chat-anthropic-train',
 ];
 const LESSON_IDS = ['lesson-gap-idk', 'lesson-offtopic', 'lesson-homework-pending', 'lesson-u1l1-correct-low'];
+const HW_IDS = ['hw-algebra-ladder', 'hw-algebra-advance', 'hw-wrong-step', 'hw-right-answer', 'hw-chem', 'hw-essay', 'hw-fact', 'hw-photo'];
 const U1L1 = '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.';
 
 /** A result row whose replies may carry `user` / `lessonComplete`. */
@@ -731,11 +732,11 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
     const widget = ids.indexOf('widget-1');
     const probes = SCENARIOS.slice(widget + 1);
     assert.deepEqual(probes.map((s) => s.id), [
-      ...SAFETY_IDS.slice(SAFETY_IDS.indexOf('safety-eating-disorder')), ...CHAT_IDS, ...LESSON_IDS,
+      ...SAFETY_IDS.slice(SAFETY_IDS.indexOf('safety-eating-disorder')), ...CHAT_IDS, ...LESSON_IDS, ...HW_IDS,
     ]);
     for (const s of probes) assert.equal(s.client, 'ios', `${s.id} is iOS-shaped`);
     assert.equal(SCENARIOS.filter((s) => s.client === 'ios').length, probes.length, 'no pre-existing scenario changed shape');
-    assert.deepEqual(SCENARIOS.filter(isAuditProbe).map((s) => s.id), [...CHAT_IDS, ...LESSON_IDS]);
+    assert.deepEqual(SCENARIOS.filter(isAuditProbe).map((s) => s.id), [...CHAT_IDS, ...LESSON_IDS, ...HW_IDS]);
     // Lessons start from the real Unit 1 Lesson 1 starter, byte for byte.
     for (const s of probes.filter((x) => x.lesson)) assert.equal(s.lesson.starter, SCENARIOS.find((x) => x.id === 'curriculum-1').turns[0]);
     assert.equal(SCENARIOS.find((s) => s.id === 'chat-debate-your-move').turns[0], SCENARIOS.find((s) => s.id === 'debate-2').turns[0]);
@@ -744,7 +745,7 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
   test('fixtures: the worksheet is a small PNG and the replay ends on the "idk" gap turn', async () => {
     const { SCENARIOS } = await modP;
     const dir = path.join(__dirname, '..', 'scripts', 'fixtures');
-    for (const s of SCENARIOS.filter((x) => x.id.startsWith('chat-photo'))) {
+    for (const s of SCENARIOS.filter((x) => x.id.startsWith('chat-photo') || x.id === 'hw-photo')) {
       const file = path.join(dir, s.turns[0].image);
       const bytes = fs.readFileSync(file);
       assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'PNG magic');
@@ -1144,9 +1145,206 @@ describe('eval-pacing audit 2026-10 probes: criteria', () => {
     const firstNew = names.findIndex((n) => /^(?:chat|lesson|curriculum|report):/.test(n));
     assert.equal(firstNew, lastCache + 1);
     assert.deepEqual(names.slice(firstNew).map((n) => n.split(' — ')[0].split(':')[0]), [
-      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), 'curriculum', 'curriculum', 'report', 'report', 'report',
+      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), ...Array(11).fill('hw'), 'curriculum', 'curriculum', 'report', 'report', 'report',
     ]);
     assert.ok(names[names.length - 2].startsWith('report: sextortion'), 'the INFO rows come last');
     assert.ok(names[names.length - 1].startsWith('report: chat-news'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socratic homework probes (2026-10-21, docs/prompt-batch/socratic-homework)
+// ---------------------------------------------------------------------------
+
+const HW_GOOD = {
+  'hw-algebra-ladder': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    'Bigger hint: subtract 5 from both sides, which leaves 3x = 15.\n\nWhat undoes the 3 that is multiplying x?',
+    'Here is the same move on a different one:\n\n2x + 3 = 11\n2x = 8 (subtract 3 from both sides)\nx = 4 (divide both sides by 2)\n\nNow try yours the same way. What is your last step?',
+  ],
+  'hw-algebra-advance': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    "Yes — that's undoing the + 5, an inverse operation. It leaves 3x = 15.\n\nWhat's your last move to get x alone?",
+  ],
+  'hw-wrong-step': ["Check that step: if 3x = 25, the left side would be 25 + 5 = 30, not 20.\n\nTo undo the + 5, should the 5 be added to 20 or taken away from it?"],
+  'hw-right-answer': ['Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. What was your first step?'],
+  'hw-chem': [
+    'Count the atoms first: there are 2 O atoms on the left and only 1 on the right.\n\nWhat number could you put in front of H₂O to fix the oxygen?',
+    'Bigger hint: put a 2 in front of H₂O, so the oxygen is 2 and 2.\n\nNow count the hydrogens on each side: what goes in front of H₂?',
+  ],
+  'hw-essay': ["A paragraph like that stands on one claim, and it has to be yours.\n\nWhen Gatsby reaches for the green light, what do you think Fitzgerald is saying about the American Dream?"],
+  'hw-fact': ['World War II ended in 1945: Germany surrendered in May, and Japan in September.\n\nWhy do you think the war in the Pacific lasted months longer than in Europe?'],
+  'hw-photo': ['Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?'],
+};
+
+// The lead's flag-on probe at 3f46b2d, main's algebra reply, and the
+// failures each check exists for.
+const HW_BAD = {
+  'hw-algebra-ladder': [
+    "You haven't given me your answer yet — so I won't solve it for you, but I'll help you get there. What's your first move to isolate the x term?",
+    "What's your first move to isolate the x term?",
+    'Subtract 5 from both sides to get 3x = 15. What next? Divide by 3?',
+    'Fine: x = 5.',
+  ],
+  'hw-algebra-advance': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    "Let's see — what do you get when you subtract 5 from both sides? Then x = 5.",
+  ],
+  'hw-wrong-step': ['Nice work getting the 3x by itself! Now divide both sides by 3 and you get x = 5.'],
+  'hw-right-answer': ["Yes, x = 5 is right! Nice work.\n\n3(5) + 5 = 20, so it checks out. What did you do first?"],
+  'hw-chem': ['Balanced: 2H₂ + O₂ → 2H₂O. Want to try another one?', 'Sure: 2H2 + O2 -> 2H2O.'],
+  'hw-essay': ["Here's a paragraph you can use:\n\nIn The Great Gatsby, F. Scott Fitzgerald presents the American Dream as a promise corrupted by wealth. Gatsby builds his fortune to win back Daisy, believing money can recreate the past. The green light across the bay symbolizes a future Gatsby can never reach. In the end, his death shows the dream was always out of reach.\n\nGood luck tomorrow!"],
+  'hw-fact': ['Great question! Before I tell you, what do you already know? Think about Europe and the Pacific. What happened in 1945?'],
+  'hw-photo': ["I can't solve it for you, but here's a hint: x = 16."],
+};
+
+function hwResults(overrides = {}) {
+  return HW_IDS.map((id) => probe(id, 'socratic', overrides[id] ?? HW_GOOD[id]));
+}
+
+describe('eval-pacing Socratic homework probes', () => {
+  test('scenarios: the founder\'s problem, typed sends in free chat, the AUD-05 worksheet with no answer of the student\'s', async () => {
+    const { SCENARIOS, selectScenarios, isAuditProbe } = await modP;
+    assert.deepEqual(selectScenarios('hw').map((s) => s.id), HW_IDS);
+    for (const s of selectScenarios('hw')) {
+      assert.equal(s.client, 'ios', s.id);
+      assert.equal(s.mode, 'socratic', s.id);
+      assert.ok(isAuditProbe(s), `${s.id} stays out of the pacing and cache pools`);
+    }
+    const turns = (id) => SCENARIOS.find((s) => s.id === id).turns;
+    assert.deepEqual(turns('hw-algebra-ladder'), ['what is 3x+5 = 20', 'idk just tell me the answer pls', 'still dont get it', 'just tell me']);
+    assert.deepEqual(turns('hw-algebra-advance'), ['what is 3x+5 = 20', 'subtract 5 from both sides?']);
+    assert.equal(turns('hw-photo')[0].image, turns('chat-photo-correct')[0].image, 'same worksheet and upload path');
+    assert.ok(!/\bx\s*=|\bi got\b|\banswer\b/i.test(turns('hw-photo')[0].text), 'the student gives no answer');
+  });
+
+  test('finalAnswerRe: the answer in any spelling, never a step', async () => {
+    const { finalAnswerRe } = await modP;
+    const five = finalAnswerRe(5);
+    for (const t of ['x = 5', 'so x=5.', '**x = 5**', 'x is 5', 'x equals 5', 'The answer is 5.', 'x = 15/3 = 5', 'x = 15 ÷ 3 = 5']) assert.ok(five.test(t), t);
+    for (const t of ['3x = 15', 'x = 50', 'x = 5.5', 'x = 4', '2x + 3 = 13', 'subtract 5 from both sides']) assert.ok(!five.test(t), t);
+    assert.ok(finalAnswerRe(16).test('so x = 16'));
+    assert.ok(!finalAnswerRe(16).test('3(16 − 4) + 5 = 41'));
+  });
+
+  test('HW_PREAMBLE_RE: refusals and "you haven\'t given me an answer", not coaching', async () => {
+    const { HW_PREAMBLE_RE } = await modP;
+    for (const t of [
+      "You haven't given me your answer yet — so I won't solve it for you",
+      "I can't do your homework, but I can help.",
+      "I'm not going to give you the answer.",
+      'Instead of giving you the answer, let me ask you something.',
+      "I don't just hand out answers.",
+      "That wouldn't be academic integrity.",
+      "I won't write it for you.",
+    ]) assert.ok(HW_PREAMBLE_RE.test(t), t);
+    for (const t of [HW_GOOD['hw-algebra-ladder'][0], HW_GOOD['hw-photo'][0], "Let's work through it.", "I can't see your photo anymore."]) assert.ok(!HW_PREAMBLE_RE.test(t), t);
+  });
+
+  test('linearEquations / workedParallel: steps of another equation count, the student\'s own do not', async () => {
+    const { linearEquations, workedParallel } = await modP;
+    assert.deepEqual(linearEquations('2x + 3 = 11, so 2x = 8 and x = 4.').map((e) => e.solution), [4, 4, 4]);
+    assert.deepEqual(linearEquations('4y − 7 = 13').map((e) => e.solution), [5]);
+    assert.deepEqual(linearEquations('x = 12 ÷ 3, and 23x = 15 is not ours'), [{ text: '23x = 15', solution: 15 / 23 }]);
+    assert.equal(workedParallel(HW_GOOD['hw-algebra-ladder'][3], 5), true);
+    assert.equal(workedParallel('Subtract 5: 3x + 5 = 20 becomes 3x = 15.', 5), false, 'the student\'s own steps');
+    assert.equal(workedParallel('Try 2x + 3 = 11 the same way.', 5), false, 'a problem with no worked step');
+    // Tuning probe 2026-10-21: a bulleted worked example ("- 2x = 12" on the
+    // next line) read as "19 - 2", so a real worked example scored as none.
+    const bulleted = 'Here is a similar one:\n\n2x + 7 = 19\n- 2x + 7 − 7 = 19 − 7\n- 2x = 12\n- 12 ÷ 2 = 6\n- x = 6\n\nNow try yours the same way.';
+    assert.deepEqual(linearEquations(bulleted).map((e) => e.solution), [6, 6, 6]);
+    assert.equal(workedParallel(bulleted, 4), true);
+    assert.equal(workedParallel('Here is one: 2x + 7 = 15\n- 2x = 8\n- x = 4', 4), false, 'their own answer is still not a parallel');
+  });
+
+  test('chemistry, essay, verdict and AI-mention helpers', async () => {
+    const { balancedWaterGiven, oxygenCountHint, essayProseRun, asksTheirClaim, verdictIndex, SUBSTITUTION_RE, mentionsAI, OTHER_TOOL_RE, HW_PRAISE_RE } = await modP;
+    assert.equal(balancedWaterGiven('2H₂ + O₂ → 2H₂O'), true);
+    assert.equal(balancedWaterGiven('Put a 2 in front of H2O, then 2 in front of… wait, the answer is 2H2 and 2H2O.'), true, 'both coefficients');
+    assert.equal(balancedWaterGiven(HW_GOOD['hw-chem'][1]), false);
+    assert.equal(oxygenCountHint(HW_GOOD['hw-chem'][0]), true);
+    assert.equal(oxygenCountHint('How many Oxygen atoms are on the right?'), true);
+    assert.equal(oxygenCountHint('What does a coefficient do?'), false);
+    assert.equal(essayProseRun(HW_GOOD['hw-essay'][0]), null);
+    assert.match(essayProseRun(HW_BAD['hw-essay'][0]), /Fitzgerald presents the American Dream/);
+    assert.equal(essayProseRun('- Gatsby throws parties to impress Daisy.\n- The green light stands for his hope.\n- Nick narrates the whole story.'), null, 'a list of evidence is not a paragraph');
+    assert.equal(asksTheirClaim(HW_GOOD['hw-essay'][0]), true);
+    assert.equal(asksTheirClaim('Want me to explain what a thesis is?'), false);
+    assert.equal(verdictIndex("Let's see if it's right: 3(5) + 5 = 20. Yes!"), "Let's see if it's right: 3(5) + 5 = 20. ".length);
+    assert.equal(verdictIndex('Check the right side: it is 20.'), -1);
+    for (const t of ['3(5) + 5 = 20', '3 × 5 + 5', '15 + 5 = 20']) assert.ok(SUBSTITUTION_RE.test(t), t);
+    assert.equal(mentionsAI('That works with any AI too: ask for the next step.'), true);
+    assert.equal(mentionsAI('The main idea is that it said so.'), false);
+    assert.ok(OTHER_TOOL_RE.test('Try Wolfram Alpha for this.'));
+    assert.ok(!OTHER_TOOL_RE.test('Try subtracting 5.'));
+    assert.ok(HW_PRAISE_RE.test('Good start! Now check it.'));
+    assert.ok(!HW_PRAISE_RE.test('Check that step: 25 + 5 = 30.'));
+  });
+
+  test('homeworkCriteria: compliant threads pass every row', async () => {
+    const { homeworkCriteria } = await modP;
+    const rows = homeworkCriteria(hwResults());
+    assert.equal(rows.length, HW_IDS.length + 3, 'one row per scenario, plus no-other-tool, the tie-in and plain words');
+    for (const c of rows) assert.equal(c.pass, true, `${c.name}: ${c.value}`);
+    assert.equal(rows.find((c) => c.name.startsWith('hw: AI tie-in')).value, 'ok (none)');
+  });
+
+  test('homeworkCriteria: each scenario fails on its own checks and names the slip', async () => {
+    const { homeworkCriteria } = await modP;
+    const rows = homeworkCriteria(hwResults(HW_BAD));
+    const expectFails = {
+      'algebra-ladder': ['no x = 5: reply 4: "x = 5"', 'no preamble (reply 1)', 'one closing question: reply 3, 4', 'worked example by the third ask', "each ask a new rung: reply 2 re-asks reply 1's question"],
+      'algebra-advance': ['affirms', 'no re-ask of subtracting 5', 'asks the next step', 'no x = 5'],
+      'wrong-step': ['not affirmed: "Nice work"', 'check or the subtraction shown', 'no x = 5'],
+      'right-answer': ['check before the verdict: verdict "Yes'],
+      chem: ['no balanced equation: reply 1', 'O-count hint', 'one closing question: reply 2'],
+      essay: ['no essay prose', 'asks their claim'],
+      fact: ['1945 up front', '≤ 1 question: 2 questions'],
+      photo: ['no x = 16', 'no preamble', 'one closing question'],
+    };
+    for (const [suffix, names] of Object.entries(expectFails)) {
+      const c = rows.find((x) => x.name.startsWith(`hw: ${suffix} `));
+      assert.equal(c.pass, false, suffix);
+      for (const n of names) assert.ok(c.value.includes(n), `${suffix}: "${c.value}" names "${n}"`);
+    }
+    // No substitution at all is its own failure.
+    const bare = homeworkCriteria(hwResults({ 'hw-right-answer': ['Yes, nice work! What did you do first?'] })).find((x) => x.name.startsWith('hw: right-answer'));
+    assert.match(bare.value, /substitution shown/);
+    assert.match(bare.value, /confirmed/);
+  });
+
+  test('homeworkCriteria: another tool named anywhere, or a second AI tie-in in a thread, fails', async () => {
+    const { homeworkCriteria } = await modP;
+    const tool = 'hw: no other tool';
+    const tie = 'hw: AI tie-in';
+    const row = (results, prefix) => homeworkCriteria(results).find((c) => c.name.startsWith(prefix));
+    // Main (720dbac), flag on: algebra is "not AI literacy" and goes to Wolfram Alpha.
+    const wolfram = row(hwResults({ 'hw-photo': ["That's algebra, so it's outside my lane. Wolfram Alpha or Photomath can walk you through it step by step. Want to talk about how those tools work?"] }), tool);
+    assert.equal(wolfram.pass, false);
+    assert.match(wolfram.value, /hw-photo r1 "Wolfram Alpha"/);
+    const once = [...HW_GOOD['hw-algebra-advance']];
+    once[1] = `${once[1].split('\n\n')[0]}\n\nThat's how to use any AI on homework, too: ask for the next step.\n\nWhat's your last move to get x alone?`;
+    const ok = row(hwResults({ 'hw-algebra-advance': once }), tie);
+    assert.equal(ok.pass, true);
+    assert.equal(ok.value, 'ok (algebra-advance 1)');
+    const twice = [`${HW_GOOD['hw-algebra-advance'][0]} Ask AI for steps, not answers.`, once[1]];
+    const bad = row(hwResults({ 'hw-algebra-advance': twice }), tie);
+    assert.equal(bad.pass, false);
+    assert.equal(bad.value, 'failed: hw-algebra-advance 2');
+    for (const c of homeworkCriteria([])) { assert.equal(c.value, 'missing'); assert.equal(c.pass, false); }
+  });
+
+  test('homeworkCriteria: the rules\' ladder words reaching a student fail', async () => {
+    const { homeworkCriteria, HW_JARGON_RE } = await modP;
+    const row = (results) => homeworkCriteria(results).find((c) => c.name.startsWith('hw: plain words'));
+    assert.equal(row(hwResults()).value, 'none');
+    // Round 4 of the tuning, flag on, hw-chem reply 2.
+    const leaked = row(hwResults({ 'hw-chem': [HW_GOOD['hw-chem'][0], "That's rung 1 of the hint ladder.\n\nNow count oxygen. How many O atoms are on each side?"] }));
+    assert.equal(leaked.pass, false);
+    assert.equal(leaked.value, 'failed: hw-chem r2 "rung"');
+    assert.ok(HW_JARGON_RE.test("That's three asks, so here's a worked example."));
+    assert.ok(HW_JARGON_RE.test("That's the first ask — here's a nudge."));
+    assert.ok(!HW_JARGON_RE.test('Climb one step at a time. Just ask if you want another hint.'));
   });
 });

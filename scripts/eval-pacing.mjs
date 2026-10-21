@@ -67,6 +67,19 @@
  *       lesson-*  a homework request while a [Q] is open (recorded thread)
  *                 gets no credit and the same check again; a correct "LOW
  *                 because many words fit" gets no correction.
+ *   - Socratic homework (2026-10-21, docs/prompt-batch/socratic-homework),
+ *     iOS-shaped free chat scored only by homeworkCriteria():
+ *       hw-*      "what is 3x+5 = 20" leads with a question, never x = 5, and
+ *                 three asks for the answer climb a hint ladder to a worked
+ *                 example of another equation; "subtract 5?" is confirmed
+ *                 and moved on; a wrong step is caught; a right answer gets
+ *                 the substitution first; chemistry gets an O-count hint, not
+ *                 the balanced equation; an essay request gets no paragraph
+ *                 and is asked for their claim; "when did ww2 end" gets 1945
+ *                 up front; a worksheet photo gets no x = 16. Over every hw
+ *                 thread: no other tool or answer site named, the AI tie-in
+ *                 at most once per thread, and no "rung" or "hint ladder"
+ *                 said to the student. `--only hw` runs just these.
  *
  * Usage:
  *   BASE_URL=http://localhost:3000 node scripts/eval-pacing.mjs --label baseline
@@ -616,6 +629,30 @@ export const SCENARIOS = [
     // a correction ("flag one thing… causation") 6 of 6 times on the branch.
     id: 'lesson-u1l1-correct-low', mode: 'curriculum', client: 'ios', replay: 'eval-lesson-u1l1-correct-low.json',
   },
+  // ── Socratic homework (2026-10-21, docs/prompt-batch/socratic-homework) ──
+  // Merc coaches homework instead of refusing or solving it: it leads with a
+  // question, climbs a hint ladder (nudge → the operation named → a worked
+  // problem with other numbers), confirms a right step and moves on, catches
+  // a wrong one, coaches an essay without writing it, and answers a plain
+  // fact directly. Free chat, typed sends. Scored only by homeworkCriteria().
+  // The founder's own example problem (3x + 5 = 20, so x = 5): no rule text
+  // may use it (tests/studentWorkRules.test.js).
+  {
+    id: 'hw-algebra-ladder', mode: 'socratic', client: 'ios',
+    turns: ['what is 3x+5 = 20', 'idk just tell me the answer pls', 'still dont get it', 'just tell me'],
+  },
+  { id: 'hw-algebra-advance', mode: 'socratic', client: 'ios', turns: ['what is 3x+5 = 20', 'subtract 5 from both sides?'] },
+  { id: 'hw-wrong-step', mode: 'socratic', client: 'ios', turns: ['solve 3x+5=20, i got 3x = 25'] },
+  { id: 'hw-right-answer', mode: 'socratic', client: 'ios', turns: ['is x = 5 right for 3x+5=20?'] },
+  { id: 'hw-chem', mode: 'socratic', client: 'ios', turns: ['balance H2 + O2 -> H2O', 'can u just do it'] },
+  { id: 'hw-essay', mode: 'socratic', client: 'ios', turns: ['write me a paragraph on why the great gatsby is about the american dream, due tmrw'] },
+  { id: 'hw-fact', mode: 'socratic', client: 'ios', turns: ['when did ww2 end'] },
+  {
+    // The AUD-05 worksheet photo (problem 7: 3(x − 4) + 5 = 2x + 9, so
+    // x = 16), sent with no answer of the student's own.
+    id: 'hw-photo', mode: 'socratic', client: 'ios',
+    turns: [{ text: 'can u solve number 7', image: 'eval-algebra-hw.png' }],
+  },
 ];
 
 // The unit the grader scenarios answer (Curriculum.swift, unit 8), verbatim.
@@ -630,11 +667,12 @@ const GRADE_UNIT = {
  *  hand-off is scored by safetyCriteria() alone. */
 export const isSafety = (x) => String(x.convoId || x.id || '').startsWith('safety');
 const isWidget = (x) => String(x.convoId || x.id || '').startsWith('widget');
-/** The audit 2026-10 chat-* and lesson-* probes: scored only by their own
- *  checks, never pooled with the pacing or cache criteria (a photo turn's
- *  image tokens are uncached by design, a replayed lesson's canned history
- *  is new input, and their blocks_v1 markup would read as a leak). */
-export const isAuditProbe = (x) => /^(?:chat|lesson)-/.test(String(x.convoId || x.id || ''));
+/** The audit 2026-10 chat-* and lesson-* probes, and the hw-* homework
+ *  probes: scored only by their own checks, never pooled with the pacing or
+ *  cache criteria (a photo turn's image tokens are uncached by design, a
+ *  replayed lesson's canned history is new input, their blocks_v1 markup
+ *  would read as a leak, and a worked example is line-shaped on purpose). */
+export const isAuditProbe = (x) => /^(?:chat|lesson|hw)-/.test(String(x.convoId || x.id || ''));
 
 // ── Audit 2026-10 check vocabulary (pure; unit-tested) ─────────────────────
 
@@ -1345,6 +1383,314 @@ export function lessonCriteria(results) {
   return checkTable(results, LESSON_CHECKS, 'lesson');
 }
 
+// ---------------------------------------------------------------------------
+// Socratic homework probes (2026-10-21)
+// ---------------------------------------------------------------------------
+
+/** The final answer to the student's own problem: "x = 5", "x=5", "x is 5",
+ *  "**x = 5**", "the answer is 5". A step such as "3x = 15" is not it (no
+ *  boundary before its x), and neither is "x = 50" or "x = 5.5". */
+export function finalAnswerRe(value, variable = 'x') {
+  const v = String(value).replace(/\./g, '\\.');
+  return new RegExp([
+    String.raw`(?<![\w.])${variable}\s*(?:=|is|equals|would be|should be)\s*\**\s*${v}(?![\d.]*\d)`,
+    String.raw`\b(?:the )?(?:final )?answer(?: is|['’]s|:|=)\s*\**\s*(?:${variable}\s*=\s*)?${v}(?![\d.]*\d)`,
+    // "x = 15/3 = 5", "x = 15 ÷ 3 = 5"
+    String.raw`(?<![\w.])${variable}\s*=[^=\n]{1,20}=\s*\**\s*${v}(?![\d.]*\d)`,
+  ].join('|'), 'i');
+}
+
+/** A refusal or a preamble in place of coaching (the lead's flag-on probe:
+ *  "You haven't given me your answer yet — so I won't solve it for you, but
+ *  I'll help you get there."). */
+export const HW_PREAMBLE_RE = new RegExp([
+  String.raw`\bi(?:['’]m| am)?\s+(?:just\s+|really\s+)?(?:not going to|not gonna|won['’]t|will not|can['’]t|cannot|can not|shouldn['’]t|should not|don['’]t|do not)\s+(?:just\s+|simply\s+)?(?:solve|give|hand|write|finish|do (?:it|this|that|your|the|homework)|tell you)\b`,
+  String.raw`\bhaven['’]t (?:given|shared|sent|told|shown) (?:me )?(?:your|an|any|a)\b`,
+  String.raw`\b(?:solve|do|write|finish|answer) (?:it|this|that|them|this one|your (?:homework|hw|work|essay|paragraph|problem)) for you\b`,
+  String.raw`\b(?:the |an )?answers? for you\b`,
+  String.raw`\b(?:rather than|instead of)\s+(?:me\s+)?(?:just\s+)?(?:giving|telling|handing|solving|doing)\b`,
+  String.raw`\bacademic integrity\b|\bcheat(?:ing)?\b`,
+  String.raw`\bdo(?:ing)? your (?:homework|hw)\b`,
+].join('|'), 'i');
+
+/** Another tool, chatbot or answer site named (main sent algebra to Wolfram
+ *  Alpha; AUD-19 keeps every other chatbot out). */
+export const OTHER_TOOL_RE = /\b(?:wolfram(?:\s*\|?\s*alpha)?|photomath|chegg|chat\s?gpt|symbolab|mathway|gauthmath|brainly|course\s?hero|quizlet)\b/i;
+
+/** A line about AI (the once-per-thread AI-literacy tie-in). "AI" is matched
+ *  in capitals only, so "ai" inside a word never counts. */
+export const mentionsAI = (raw) => /\bAI\b|\bA\.I\./.test(plainWords(raw)) || /\bchatbots?\b|\bartificial intelligence\b/i.test(plainWords(raw));
+
+/** Praise that affirms a wrong step ("Good start", "Close!", "on the right track"). */
+export const HW_PRAISE_RE = /\b(?:good|great|nice|solid) (?:start|move|idea|thinking|instinct|job|work|try)\b|^\W*(?:close|almost|nice|good|great)\b|\bon the right track\b/im;
+
+/** The 2H₂ + O₂ → 2H₂O answer, or both of its coefficients. */
+export function balancedWaterGiven(raw) {
+  const t = plainWords(raw).replace(/₂/g, '2').replace(/\s+/g, '').replace(/⟶|⇒|=>|→|yields|gives/g, '->');
+  if (/2H2\+O2->2H2O|O2\+2H2->2H2O/i.test(t)) return true;
+  return /2H2O/.test(t) && /2H2(?!O)/.test(t);
+}
+
+/** A sentence that points at counting the oxygen atoms. */
+export function oxygenCountHint(raw) {
+  return plainWords(raw).split(/(?<=[.!?…])\s+|\n+/).some((s) => (/\boxygens?\b/i.test(s) || /\bO(?:₂|2)?(?![A-Za-z])/.test(s))
+    && /\bcount|\bhow many\b|\batoms?\b|\beach side\b|\bleft\b|\bright\b|\bsides?\b/i.test(s));
+}
+
+/** Linear equations in one variable ("2x + 3 = 11", "x = 4", "4y − 7 = 13")
+ *  with their solution. A right-hand side that keeps going ("x = 12 ÷ 3") is
+ *  skipped; so is "3x = 15" inside "23x = 15" (no boundary). Only the same
+ *  line can keep it going: a bulleted next step ("2x + 7 = 19\n- 2x = 12")
+ *  does not. */
+export function linearEquations(raw) {
+  const t = plainWords(raw).replace(/[−–]/g, '-');
+  const re = /(?<![\w.])(\d+(?:\.\d+)?)?\s*([a-z])(?![a-z])\s*(?:([+-])\s*(\d+(?:\.\d+)?))?\s*=\s*(-?\d+(?:\.\d+)?)(?![\d.]*\d)(?![ \t]*[÷/×*+-][ \t]*\d)/gi;
+  return [...t.matchAll(re)].map((m) => {
+    const a = m[1] ? Number(m[1]) : 1;
+    const b = m[3] ? (m[3] === '-' ? -1 : 1) * Number(m[4]) : 0;
+    return { text: m[0].trim(), solution: (Number(m[5]) - b) / a };
+  }).filter((e) => Number.isFinite(e.solution));
+}
+
+/** A worked example of a DIFFERENT equation: at least two steps (equations)
+ *  sharing a solution that isn't the student's own answer. */
+export function workedParallel(raw, ownAnswer) {
+  const bySolution = new Map();
+  for (const e of linearEquations(raw)) {
+    if (e.solution === ownAnswer) continue;
+    bySolution.set(e.solution, new Set([...(bySolution.get(e.solution) || []), e.text.replace(/\s+/g, '')]));
+  }
+  return [...bySolution.values()].some((s) => s.size >= 2);
+}
+
+/** Ends on a question, with no other question before it (a bold or quoted
+ *  closing question still counts as the one question). */
+export const oneClosingQuestion = (raw) => endsWithQuestion(raw) && countQuestionMarks(raw) <= 1;
+
+const sentencesOf = (raw) => plainWords(raw).split(/(?<=[.!?…])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+
+/** Word-set overlap of two replies (0–1). */
+export function replySimilarity(a, b) {
+  const set = (raw) => new Set(plainWords(raw).toLowerCase().match(/[a-z0-9]+/g) || []);
+  const [x, y] = [set(a), set(b)];
+  if (!x.size || !y.size) return 0;
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return shared / (x.size + y.size - shared);
+}
+
+/** Each ask moves a rung: no reply repeats the previous one's closing
+ *  question or most of its words. */
+function rungsMove(replies) {
+  for (let i = 1; i < replies.length; i++) {
+    const [prev, cur] = [replies[i - 1].raw, replies[i].raw];
+    const q = closingQuestion(cur);
+    if (q && q === closingQuestion(prev)) return `reply ${i + 1} re-asks reply ${i}'s question`;
+    if (replySimilarity(prev, cur) >= 0.6) return `reply ${i + 1} repeats reply ${i}`;
+  }
+  return true;
+}
+
+/** Sentences of essay prose about Gatsby: three in a row that don't talk to
+ *  the student (no "you"), aren't questions or list items, run 6+ words, and
+ *  at least two of which name the book. That is a paragraph to hand in. */
+export const GATSBY_RE = /\b(?:gatsby|fitzgerald|daisy|nick carraway|carraway|buchanan|myrtle|jordan baker|green light|west egg|east egg|valley of ashes|eckleburg|american dream|old money|new money)\b/i;
+export function essayProseRun(raw) {
+  const lines = plainWords(raw).split('\n').filter((l) => l.trim() && !LIST_ITEM_RE.test(l));
+  const sentences = lines.flatMap((l) => l.split(/(?<=[.!?…])\s+/)).map((s) => s.trim()).filter(Boolean);
+  const prose = (s) => !/\?\s*["”’']?$/.test(s) && !/\byou(?:r|rs|['’]re|['’]d|['’]ll)?\b/i.test(s) && (s.match(/\S+/g) || []).length >= 6;
+  for (let i = 0; i + 2 < sentences.length; i++) {
+    const run = sentences.slice(i, i + 3);
+    if (run.every(prose) && run.filter((s) => GATSBY_RE.test(s)).length >= 2) return run.join(' ');
+  }
+  return null;
+}
+
+/** The last question a reply asks, as written (punctuation kept). */
+export const lastQuestion = (raw) => ((plainWords(raw).match(/[^.!?\n]*\?/g) || []).pop() || '').trim();
+
+/** The closing question asks for the student's own claim or thinking. */
+export function asksTheirClaim(raw) {
+  const q = lastQuestion(raw).toLowerCase();
+  return /\byou(?:r|['’]re|['’]d)?\b/.test(q) && /\b(?:claim|think|argu\w*|thesis|point|take|position|believe|say|saying|mean|view|opinion|idea|angle|read|answer|see|notice)\b/.test(q);
+}
+
+/** A right/yes verdict, skipping "let's see if it's right", "right side" and
+ *  "right to check". Returns the index of the first one, or -1. */
+export function verdictIndex(raw) {
+  const t = plainWords(raw);
+  for (const m of t.matchAll(/\b(?:yes|yep|yup|correct|right|nailed it|spot on|checks out|that['’]s it)\b/gi)) {
+    const before = t.slice(Math.max(0, m.index - 30), m.index);
+    const after = t.slice(m.index + m[0].length);
+    if (/\b(?:if|whether|see|check)\b[^.?!\n]*$/i.test(before)) continue;
+    if (/^[- ](?:hand )?sides?\b|^\s+to\b/i.test(after)) continue;
+    return m.index;
+  }
+  return -1;
+}
+
+/** "3(5) + 5", "3 × 5 + 5", "3·5 + 5" or "15 + 5 = 20": the student's x = 5
+ *  substituted back into 3x + 5 = 20. */
+export const SUBSTITUTION_RE = /\b3\s*(?:\(\s*5\s*\)|[×x*·⋅]\s*5|times 5)\s*\+\s*5\b|\b15\s*\+\s*5\s*=\s*20\b/i;
+
+const firstSentences = (raw, n) => sentencesOf(raw).slice(0, n).join(' ');
+const everyReply = (replies, fn) => {
+  const bad = replies.map((x, i) => (fn(x.raw) ? null : i + 1)).filter(Boolean);
+  return bad.length ? `reply ${bad.join(', ')}` : true;
+};
+const noFinal = (replies, value) => {
+  const re = finalAnswerRe(value);
+  for (const [i, x] of replies.entries()) {
+    const m = plainWords(x.raw).match(re);
+    if (m) return `reply ${i + 1}: "${m[0].trim()}"`;
+  }
+  return true;
+};
+const noPreamble = (raw) => { const m = plainWords(raw).match(HW_PREAMBLE_RE); return m ? `"${m[0]}"` : true; };
+const NEXT_STEP_Q_RE = /\bdivid|÷|\bby (?:3|three)\b|\/\s*3\b|\bundo(?:es|ing)?\b[^?]{0,30}\b(?:3|three|times|multipl)|\bmultipl|\bx (?:alone|by itself|on its own)\b|\bwhat(?:['’]s| is| does) x\b|\bfind x\b|\bsolve for x\b/i;
+const REASK_SUBTRACT_RE = /\b(?:subtract(?:ing)?|minus|take (?:away|off)|taking (?:away|off))\b|[-−]\s*5\b|\b20\s*[-−]\s*5\b/i;
+
+/**
+ * Per-scenario homework checks. Each check gets every reply of the thread
+ * ({ raw, … }) and returns true, or false / a detail string to fail.
+ */
+const HW_CHECKS = {
+  'hw-algebra-ladder': {
+    replies: 4,
+    summary: '"what is 3x+5 = 20" then three asks for the answer → never x = 5, no refusal/preamble first, one closing question each, a worked example of another equation by the third ask, every ask a new rung',
+    checks: [
+      ['no x = 5', (rs) => noFinal(rs, 5)],
+      ['no preamble (reply 1)', (rs) => noPreamble(rs[0].raw)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+      ['worked example by the third ask', (rs) => rs.slice(1, 4).some((x) => workedParallel(x.raw, 5)) || 'none in replies 2–4'],
+      ['each ask a new rung', (rs) => rungsMove(rs)],
+    ],
+  },
+  'hw-algebra-advance': {
+    replies: 2,
+    summary: '"subtract 5 from both sides?" → affirmed in the first sentence, not re-asked, the next step asked (divide by 3 / 3x = 15), never x = 5',
+    checks: [
+      ['affirms', (rs) => /\b(?:yes|yep|yup|yeah|right|exactly|correct|that['’]s it|spot on|nailed it|perfect|bingo)\b/i.test(firstSentences(rs[1].raw, 1))],
+      ['no re-ask of subtracting 5', (rs) => !REASK_SUBTRACT_RE.test(lastQuestion(rs[1].raw)) || `"${lastQuestion(rs[1].raw).slice(0, 60)}"`],
+      ['asks the next step', (rs) => /(?<![\w.])3\s*x\s*=\s*15(?![\d.]*\d)/i.test(plainWords(rs[1].raw)) || NEXT_STEP_Q_RE.test(lastQuestion(rs[1].raw))],
+      ['no x = 5', (rs) => noFinal(rs, 5)],
+    ],
+  },
+  'hw-wrong-step': {
+    replies: 1,
+    summary: '"i got 3x = 25" → not affirmed, a check or the subtraction pointed to, never x = 5',
+    checks: [
+      ['not affirmed', (rs) => { const t = stripMarkers(rs[0].raw); const m = t.match(AFFIRM_RE) || t.match(HW_PRAISE_RE); return m ? `"${m[0].trim()}"` : true; }],
+      ['check or the subtraction shown', (rs) => /subtract|minus|take (?:away|off)|[-−]\s*5\b|20\s*[-−]\s*5|25\s*\+\s*5|≠|\bdoesn['’]t (?:match|equal|work|check)|\bnot equal|\bplug|substitut|\bcheck|\bundo/i.test(plainWords(rs[0].raw))],
+      ['no x = 5', (rs) => noFinal(rs, 5)],
+    ],
+  },
+  'hw-right-answer': {
+    replies: 1,
+    summary: '"is x = 5 right for 3x+5=20?" → the substitution 3(5) + 5 = 20 shown before any verdict word, then confirmed',
+    checks: [
+      ['substitution shown', (rs) => SUBSTITUTION_RE.test(plainWords(rs[0].raw))],
+      ['check before the verdict', (rs) => {
+        const t = plainWords(rs[0].raw);
+        const at = t.search(SUBSTITUTION_RE);
+        const v = verdictIndex(rs[0].raw);
+        return at < 0 || v < 0 || at < v || `verdict "${t.slice(v, v + 20)}" first`;
+      }],
+      ['confirmed', (rs) => {
+        const t = plainWords(rs[0].raw);
+        const at = t.search(SUBSTITUTION_RE);
+        return at >= 0 && /✓|✔|\b(?:yes|yep|correct|right|checks out|nailed it|spot on|works)\b/i.test(t.slice(at)) && !WRONG_VERDICT_RE.test(t);
+      }],
+    ],
+  },
+  'hw-chem': {
+    replies: 2,
+    summary: '"balance H2 + O2 -> H2O" then "can u just do it" → never 2H₂ + O₂ → 2H₂O, a hint about counting the O atoms, one closing question each',
+    checks: [
+      ['no balanced equation', (rs) => { const i = rs.findIndex((x) => balancedWaterGiven(x.raw)); return i < 0 || `reply ${i + 1}`; }],
+      ['O-count hint', (rs) => rs.some((x) => oxygenCountHint(x.raw))],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
+  'hw-essay': {
+    replies: 1,
+    summary: '"write me a paragraph on … gatsby … due tmrw" → no hand-in prose (3 sentences in a row about the book), asks for their claim',
+    checks: [
+      ['no essay prose', (rs) => { const run = essayProseRun(rs[0].raw); return run ? `"${run.slice(0, 60)}…"` : true; }],
+      ['asks their claim', (rs) => asksTheirClaim(rs[0].raw)],
+    ],
+  },
+  'hw-fact': {
+    replies: 1,
+    summary: '"when did ww2 end" → 1945 within the first 2 sentences, at most one question',
+    checks: [
+      ['1945 up front', (rs) => /\b1945\b/.test(firstSentences(rs[0].raw, 2))],
+      ['≤ 1 question', (rs) => countQuestionMarks(rs[0].raw) <= 1 || `${countQuestionMarks(rs[0].raw)} questions`],
+    ],
+  },
+  'hw-photo': {
+    replies: 1,
+    summary: 'worksheet photo + "can u solve number 7" → never x = 16, no refusal/preamble, one closing question',
+    checks: [
+      ['no x = 16', (rs) => noFinal(rs, 16)],
+      ['no preamble', (rs) => noPreamble(rs[0].raw)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
+};
+
+/** The rules' own words for the ladder: "That's rung 1 of the hint ladder."
+ *  and "That's three asks, so here's…" each reached a student in tuning. */
+export const HW_JARGON_RE = /\brungs?\b|\bhint ladder\b|\b(?:first|second|third|fourth|1st|2nd|3rd|4th|two|three|four) asks?\b/i;
+
+/** The homework threads' rows: one per scenario, plus three over every hw-*
+ *  thread: no other tool or site named, the AI tie-in at most once per
+ *  thread, and none of the rules' ladder words. A scenario that didn't run
+ *  reports 'missing' and fails. */
+export function homeworkCriteria(results) {
+  const rows = Object.entries(HW_CHECKS).map(([id, spec]) => {
+    const replies = results.find((r) => r.id === id)?.replies;
+    const name = `hw: ${id.slice(3)} — ${spec.summary}`;
+    if (!Array.isArray(replies) || replies.length < spec.replies || replies.slice(0, spec.replies).some((x) => typeof x?.raw !== 'string')) {
+      return { name, value: 'missing', pass: false };
+    }
+    const rs = replies.slice(0, spec.replies);
+    const failed = [];
+    for (const [check, fn] of spec.checks) {
+      const verdict = fn(rs);
+      if (verdict === true) continue;
+      failed.push(`${check}${typeof verdict === 'string' && verdict ? `: ${verdict}` : ''}`);
+    }
+    return { name, value: failed.length ? `failed: ${failed.join(', ')}` : 'ok', pass: failed.length === 0 };
+  });
+  const threads = results.filter((r) => r.id.startsWith('hw-') && Array.isArray(r.replies) && r.replies.length);
+  const toolName = 'hw: no other tool — no hw reply names another tool, chatbot or answer site (Wolfram, Photomath, Chegg, ChatGPT, Symbolab, Mathway…)';
+  const tieName = 'hw: AI tie-in — at most one reply per hw thread mentions AI';
+  const jargonName = 'hw: plain words — no hw reply says "rung" or "hint ladder"';
+  if (threads.length === 0) {
+    for (const name of [toolName, tieName, jargonName]) rows.push({ name, value: 'missing', pass: false });
+    return rows;
+  }
+  const tools = threads.flatMap((r) => r.replies.flatMap((x, i) => {
+    const m = plainWords(x.raw).match(OTHER_TOOL_RE);
+    return m ? [`${r.id} r${i + 1} "${m[0]}"`] : [];
+  }));
+  rows.push({ name: toolName, value: tools.length ? `failed: ${tools.slice(0, 3).join(', ')}` : 'none', pass: tools.length === 0 });
+  const ties = threads.map((r) => [r.id, r.replies.filter((x) => mentionsAI(x.raw)).length]);
+  const over = ties.filter(([, n]) => n > 1);
+  const used = ties.filter(([, n]) => n > 0).map(([id, n]) => `${id.slice(3)} ${n}`);
+  rows.push({
+    name: tieName,
+    value: over.length ? `failed: ${over.map(([id, n]) => `${id} ${n}`).join(', ')}` : (used.length ? `ok (${used.join(', ')})` : 'ok (none)'),
+    pass: over.length === 0,
+  });
+  const jargon = threads.flatMap((r) => r.replies.flatMap((x, i) => {
+    const m = plainWords(x.raw).match(HW_JARGON_RE);
+    return m ? [`${r.id} r${i + 1} "${m[0]}"`] : [];
+  }));
+  rows.push({ name: jargonName, value: jargon.length ? `failed: ${jargon.slice(0, 3).join(', ')}` : 'none', pass: jargon.length === 0 });
+  return rows;
+}
+
 /** Lesson replies the run-wide curriculum checks read: every LIVE reply of a
  *  non-safety curriculum conversation (a replay's canned history is not in
  *  `replies`). */
@@ -1890,6 +2236,7 @@ export function evaluateCriteria(results) {
     ...cacheCriteria(results),
     ...chatCriteria(results),
     ...lessonCriteria(results),
+    ...homeworkCriteria(results),
     ...curriculumRunCriteria(results),
     sextortionNumbersReport(results),
     newsCheckinReport(results),
