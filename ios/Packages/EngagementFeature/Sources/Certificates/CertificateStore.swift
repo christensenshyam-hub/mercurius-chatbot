@@ -16,6 +16,11 @@ public final class CertificateStore {
     /// The name, as typed; nil when none is saved.
     public private(set) var name: String?
 
+    /// How many times `reset()` has run: a name sheet open across a reset
+    /// (the Mac's Settings window is its own window) watches it and closes,
+    /// so it can't print the erased name or write it back.
+    public private(set) var resetCount = 0
+
     private var earned: [CertificateKind: Date]
     private var completion: [CertificateKind: Date]
 
@@ -88,11 +93,13 @@ public final class CertificateStore {
         return date
     }
 
-    /// Erase the name and every date (Settings' resets).
+    /// Erase the name and every date (Settings' resets, through
+    /// `CertificateCenter.reset()`).
     public func reset() {
         name = nil
         earned = [:]
         completion = [:]
         for key in Self.allKeys { defaults.removeObject(forKey: key) }
+        resetCount += 1
     }
 }

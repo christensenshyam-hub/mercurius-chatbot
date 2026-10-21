@@ -21,10 +21,16 @@ public struct CertificateSheet: View {
     @State private var name: String
     @State private var date: Date?
     @State private var problem: String?
+    /// The store's reset count when the sheet opened: a reset since (the
+    /// Mac's Settings window erasing everything) closes the sheet.
+    @State private var openedAtReset: Int
     #if os(macOS)
     @FocusState private var nameFocused: Bool
     #else
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The share sheet's preview tile: a small picture of the certificate,
+    /// redrawn a moment after the name stops changing.
+    @State private var shareThumbnail: Image?
     #endif
 
     public init(center: CertificateCenter, kind: CertificateKind, onClose: @escaping () -> Void) {
@@ -32,13 +38,17 @@ public struct CertificateSheet: View {
         self.kind = kind
         self.onClose = onClose
         _name = State(initialValue: center.store.name ?? "")
+        _openedAtReset = State(initialValue: center.store.resetCount)
     }
+
+    /// Settings erased the name and dates while the sheet was open.
+    private var erased: Bool { center.store.resetCount != openedAtReset }
 
     /// The name as it prints.
     private var printedName: String { CertificateNameFit.normalized(name) }
 
     private var document: CertificateDocument? {
-        guard !printedName.isEmpty, let date else { return nil }
+        guard !printedName.isEmpty, let date, !erased else { return nil }
         return CertificateDocument(kind: kind, name: printedName, date: date)
     }
 
@@ -50,11 +60,21 @@ public struct CertificateSheet: View {
                 if center.justEarned == kind { center.justEarned = nil }
             }
             .onChange(of: name) { _, newValue in
+                // Never write an erased name back.
+                guard !erased else { return }
                 if newValue.count > CertificateNameFit.maxLength {
                     name = String(newValue.prefix(CertificateNameFit.maxLength))
                     return
                 }
                 center.store.setName(newValue)
+            }
+            // Settings erased everything (the Mac's Settings window can do it
+            // with this sheet open): the old name and date go, and the sheet
+            // with them.
+            .onChange(of: center.store.resetCount) { _, _ in
+                name = ""
+                date = nil
+                onClose()
             }
             .onDisappear { CertificateDocument.removeTemporaryFiles() }
     }
@@ -154,11 +174,20 @@ public struct CertificateSheet: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
         if let document {
-            ShareLink(item: document,
-                      preview: SharePreview(kind.fileName, image: Image(systemName: "doc.richtext"))) {
-                label
+            Group {
+                if let shareThumbnail {
+                    ShareLink(item: document, preview: SharePreview(kind.fileName, image: shareThumbnail)) { label }
+                } else {
+                    ShareLink(item: document, preview: SharePreview(kind.fileName)) { label }
+                }
             }
             .accessibilityHint("Shares the certificate as a PDF, or saves it to Files")
+            .task(id: CertificateThumbnail.Key(name: document.name, date: document.date)) {
+                // A moment after the last keystroke, not on every one.
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                shareThumbnail = CertificateThumbnail.image(for: document)
+            }
         } else {
             label
                 .opacity(0.5)
@@ -278,6 +307,28 @@ public struct CertificateSheet: View {
     }
     #endif
 }
+
+#if os(iOS)
+/// The share sheet's preview tile: the certificate drawn small (396 × 306
+/// px), on its paper. A symbol image there shows as a blank tile.
+@MainActor
+enum CertificateThumbnail {
+    struct Key: Equatable {
+        let name: String
+        let date: Date
+    }
+
+    static func image(for document: CertificateDocument) -> Image? {
+        let renderer = ImageRenderer(content: CertificateView(kind: document.kind, name: document.name,
+                                                              date: document.date))
+        renderer.proposedSize = ProposedViewSize(Certificate.pageSize)
+        renderer.scale = 0.5
+        renderer.isOpaque = true
+        guard let image = renderer.uiImage else { return nil }
+        return Image(uiImage: image)
+    }
+}
+#endif
 
 /// The sheet's words, in one place for the tests.
 public enum CertificateSheetCopy {

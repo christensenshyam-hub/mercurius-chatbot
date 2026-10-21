@@ -469,7 +469,7 @@ struct AppShellView: View {
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
                                   streakStore, achievementStore, progress, progressSync,
                                   reminderStore, scheduler, onConsentWithdrawn,
-                                  certificateStore = env.certificates.store] in
+                                  certificates = env.certificates] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -492,7 +492,7 @@ struct AppShellView: View {
                         sessionDeleter: apiClient,
                         onConsentWithdrawn: onConsentWithdrawn,
                         // The certificate name goes with the rest.
-                        certificateStore: certificateStore
+                        certificates: certificates
                     )
                 )
             },

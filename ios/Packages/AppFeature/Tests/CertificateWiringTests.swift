@@ -51,6 +51,25 @@ struct CertificateWiringTests {
         #expect(center.status(.deepDive)?.isEarned == false)
     }
 
+    @Test("Settings' reset takes a waiting course-complete card with it, so a later pass can't bring it back")
+    func resetClearsTheCard() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())
+        let center = CertificateCenter.make(progress: progress, defaults: freshDefaults("wiring.reset.card"))
+        for unit in MercuriusCurriculum.units {
+            center.recordingNewlyEarned { progress.markUnitMastered(unit.id) }
+        }
+        #expect(center.justEarned == .deepDive)
+        // The Mac: the check left by the sidebar, then everything erased.
+        progress.reset()
+        center.reset()
+        #expect(center.justEarned == nil)
+        #expect(center.store.name == nil)
+        // A later pass of Unit 1 shows no card.
+        center.recordingNewlyEarned { progress.markUnitMastered("unit_1") }
+        #expect(center.justEarned == nil)
+        #expect(center.masteryAccessory(open: { _ in }) == nil)
+    }
+
     @Test("Basics lessons in the shared progress store count once the seam has them")
     func basicsThroughProgressStore() {
         let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())

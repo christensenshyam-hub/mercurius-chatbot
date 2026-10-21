@@ -144,6 +144,10 @@ struct MacShellView: View {
             await env.progressSync.pullOnLaunch()
         }
         .onChange(of: env.pendingLessonId) { _, _ in presentPendingLesson() }
+        // The course-complete card belongs to the check that earned it: any
+        // way out of that check (the sidebar, ⌘1–⌘3, Learning Path, a lesson,
+        // Settings' erase) takes the card with it, not only its Done.
+        .onChange(of: shell.activeUnitTest?.id) { _, _ in env.certificates.justEarned = nil }
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT.
         .onChange(of: env.progressStore.revision) { _, _ in
@@ -822,7 +826,7 @@ func settingsSheet(
         beforeErase: { shell.beforeSettingsErase() },
         afterReset: { shell.afterSettingsReset() },
         // The certificate name goes with the rest.
-        certificateStore: env.certificates.store
+        certificates: env.certificates
     )
 }
 #endif

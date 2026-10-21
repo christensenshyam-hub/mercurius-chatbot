@@ -109,6 +109,14 @@ public final class CertificateCenter {
         return store.fixCompletionDate(kind, lastMetAt: status.lastMetAt, now: now())
     }
 
+    /// Settings' resets: the name and every date go, and so does a
+    /// course-complete card still waiting to show (a check left open on the
+    /// Mac while its Settings window erased everything).
+    public func reset() {
+        store.reset()
+        justEarned = nil
+    }
+
     /// Run a progress change (a unit check passed, a Basics lesson
     /// finished) and record any certificate it completes: its earned-at
     /// moment is stored and `justEarned` set. Returns the certificates the

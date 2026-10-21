@@ -141,6 +141,8 @@ struct CertificateStoreTests {
         for key in CertificateStore.allKeys { #expect(defaults.object(forKey: key) == nil) }
         let reloaded = CertificateStore(defaults: defaults)
         #expect(reloaded.name == nil && reloaded.completionDate(.deepDive) == nil)
+        // An open name sheet watches the count, and closes.
+        #expect(store.resetCount == 1)
     }
 
     @Test("The first earned moment and the first printed date stand")

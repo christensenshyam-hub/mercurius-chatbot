@@ -66,7 +66,8 @@ extension CertificateDocument: Transferable {
 }
 
 /// Printing, per platform: the system print panel with the PDF, landscape,
-/// on Letter, scaled to the printer's margins.
+/// on the paper the printer has (Letter as is; A4 at about 97%), scaled to
+/// its margins.
 @MainActor
 public enum CertificatePrinting {
     #if os(iOS)
@@ -90,9 +91,10 @@ public enum CertificatePrinting {
     @discardableResult
     public static func print(_ document: CertificateDocument, in window: NSWindow?) -> Bool {
         guard let data = document.pdfData(), let pdf = PDFDocument(data: data) else { return false }
-        let info = NSPrintInfo()
+        // The learner's own printer and paper (A4 stays A4): the page scales
+        // to fit whatever is loaded, centred.
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
         info.orientation = .landscape
-        info.paperSize = Certificate.pageSize
         info.topMargin = 0
         info.bottomMargin = 0
         info.leftMargin = 0
