@@ -39,6 +39,9 @@ struct NightMessageRow: View {
     /// The list's coordinate space, where part marks report their place.
     var coordinateSpace = ""
     var onPartMarkMoved: (Int, CGFloat) -> Void = { _, _ in }
+    /// Lesson 1.1: where this reply holds the interactive
+    /// (`NightInteractiveAnchor`), nil for every other reply.
+    var interactiveAfter: NightInteractivePosition?
 
     var body: some View {
         switch message.role {
@@ -58,7 +61,7 @@ struct NightMessageRow: View {
         switch style {
         case .lesson:
             return NightReplyLayout.lesson(sections: sections, firstPart: firstPart, crisis: crisis,
-                                           isStreaming: isStreaming)
+                                           isStreaming: isStreaming, interactiveAfter: interactiveAfter)
         case .chat:
             return NightReplyLayout.chat(content: message.content, isStreaming: isStreaming,
                                          yourTurn: showsYourTurn, crisis: crisis)
@@ -162,6 +165,9 @@ struct NightMessageRow: View {
                 onSelect: { index in quizInteraction?.onPick(quiz, index) },
                 routeID: message.id
             )
+        case .interactive:
+            NightInteractiveCard()
+                .id(NightInteractiveCard.scrollID)
         }
     }
 }
@@ -180,6 +186,7 @@ extension NightMessageRow: Equatable {
             && lhs.mercMood == rhs.mercMood
             && lhs.mercActivity == rhs.mercActivity
             && lhs.coordinateSpace == rhs.coordinateSpace
+            && lhs.interactiveAfter == rhs.interactiveAfter
             && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex

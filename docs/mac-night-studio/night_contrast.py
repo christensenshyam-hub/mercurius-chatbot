@@ -196,9 +196,47 @@ def nontext_uses(t, contrast):
     ] if contrast == "increased" else [])
 
 
+# The meaning sky (Lesson 1.1's interactive): night in both appearances, so
+# one set of values per contrast setting. Words sit on the panel's top and
+# bottom and under a neighbourhood's glow at its peak (NightSkyContrastTests).
+SKY = {
+    "standard": {"top": 0x0D1035, "bottom": 0x070923, "ink2": (0xFFFFFF, 0.74), "glow": 0.42,
+                 "link": 0xC7CBFF},
+    "increased": {"top": 0x05071A, "bottom": 0x05071A, "ink2": (0xDDE0F7, 1.0), "glow": 0.0,
+                  "link": 0xFFFFFF},
+}
+SKY_BANK = [0x4338CA, 0x5B32D6]
+
+
+def sky_checks(contrast):
+    """(name, ratio, minimum) for every word and mark on the sky panel."""
+    k = SKY[contrast]
+    tmin = TEXT_MIN_HC if contrast == "increased" else TEXT_MIN
+    top, bottom = rgb(k["top"]), rgb(k["bottom"])
+    grounds = [("sky top", top), ("sky bottom", bottom),
+               ("indigo glow", over(rgb(0x6366F1), k["glow"], top)),
+               ("violet glow", over(rgb(0x8B5CF6), k["glow"], top))]
+    white = (1.0, 1.0, 1.0)
+    out = []
+    for gname, g in grounds:
+        out.append((f"skyInk on {gname}", ratio(white, g), tmin))
+        out.append((f"skyInk2 on {gname}", ratio(over(rgb(k["ink2"][0]), k["ink2"][1], g), g), tmin))
+        out.append((f"link on {gname}", ratio(rgb(k["link"]), g), NONTEXT_MIN))
+    for stop in SKY_BANK:
+        out.append((f"white on bank pill {stop:06X}", ratio(white, rgb(stop)), 7.0))
+    return out
+
+
 def main():
     md = "--markdown" in sys.argv
     failures = []
+    for contrast in SKY:
+        print(f"\n## the meaning sky / {contrast}")
+        for name, r, minimum in sky_checks(contrast):
+            bad = r < minimum
+            if bad:
+                failures.append(f"sky/{contrast}: {name} = {r:.2f}")
+            print(f"    {name:48s} {r:5.2f}{' FAIL' if bad else ''}")
     for contrast, schemes in TOKENS.items():
         tmin = TEXT_MIN_HC if contrast == "increased" else TEXT_MIN
         for scheme, t in schemes.items():

@@ -138,6 +138,31 @@ enum NightPalette {
     static let heroSecondary = Quad(light: Shade(0xFFFFFF, alpha: 0.92), dark: Shade(0xFFFFFF, alpha: 0.92),
                                     lightHC: Shade(0xFFFFFF), darkHC: Shade(0xFFFFFF))
 
+    // MARK: The meaning sky (Lesson 1.1's interactive)
+
+    /// The map of meaning is always night, in both appearances: an
+    /// instrument panel inside a lit card, not a surface of its own. Flat
+    /// and deeper under HC.
+    static let skyTop = Quad(light: 0x0D1035, dark: 0x0D1035, lightHC: 0x05071A, darkHC: 0x05071A)
+    static let skyBottom = Quad(light: 0x070923, dark: 0x070923, lightHC: 0x05071A, darkHC: 0x05071A)
+    /// The words "bank" sits near, and "bank" itself: white.
+    static let skyInk = Quad(fixed: 0xFFFFFF)
+    /// The other words: white 74%, solid under HC.
+    static let skyInk2 = Quad(light: Shade(0xFFFFFF, alpha: 0.74), dark: Shade(0xFFFFFF, alpha: 0.74),
+                              lightHC: Shade(0xDDE0F7), darkHC: Shade(0xDDE0F7))
+    /// The lines from "bank" to its neighbours, and its trail (marks: 3:1).
+    static let skyLink = Quad(light: 0xC7CBFF, dark: 0xC7CBFF, lightHC: 0xFFFFFF, darkHC: 0xFFFFFF)
+    /// "bank"'s pill: the hero's first two light stops (white on each is 7:1
+    /// or better; white on `accent` would be 4.47:1).
+    static let skyBank: [Quad] = [Quad(fixed: 0x4338CA), Quad(fixed: 0x5B32D6)]
+
+    /// A neighbourhood's glow at its peak: the one "bank" sits in, and the
+    /// other. None under HC.
+    static func skyGlowAlpha(lit: Bool, _ variant: Variant) -> Double {
+        guard !variant.isIncreasedContrast else { return 0 }
+        return lit ? 0.42 : 0.16
+    }
+
     /// A lit surface's one shadow (light mode only).
     static let shadowInk = Shade(0x1B1F4B, alpha: 0.07)
     /// The hero's one shadow (light mode only).

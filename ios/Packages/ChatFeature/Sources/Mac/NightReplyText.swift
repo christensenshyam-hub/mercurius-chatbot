@@ -678,19 +678,29 @@ enum NightReplyPiece: Equatable {
     case yourTurn(String)
     /// Under the crisis guard: plain reading text, nothing styled.
     case plain(String)
+    /// Lesson 1.1's interactive ("How a model reads “bank”"), where
+    /// `NightInteractiveAnchor` puts it.
+    case interactive
 }
 
 enum NightReplyLayout {
     /// A lesson reply: its parts, numbered from `firstPart`, each after its
     /// mark (part 1 has none). Under the crisis guard every block is plain
     /// text, but the marks stay, so the count stays true.
-    static func lesson(sections: [NightSection], firstPart: Int, crisis: Bool, isStreaming: Bool) -> [NightReplyPiece] {
+    static func lesson(sections: [NightSection], firstPart: Int, crisis: Bool, isStreaming: Bool,
+                       interactiveAfter: NightInteractivePosition? = nil) -> [NightReplyPiece] {
         var pieces: [NightReplyPiece] = []
+        // Lesson 1.1's interactive goes after its block (never under the
+        // crisis guard).
+        let interactive = crisis ? nil : interactiveAfter
         for (offset, section) in sections.enumerated() {
             let number = firstPart + offset
             if number > 1 { pieces.append(.partMark(number: number, name: section.name)) }
             let lastSection = offset == sections.count - 1
             for (index, block) in section.blocks.enumerated() {
+                if index > 0, interactive == NightInteractivePosition(section: offset, afterBlock: index - 1) {
+                    pieces.append(.interactive)
+                }
                 let streamingTail = isStreaming && lastSection && index == section.blocks.count - 1
                 if crisis {
                     pieces.append(.plain(plainText(block)))
@@ -730,6 +740,10 @@ enum NightReplyLayout {
                     }
                     pieces += stem.sources.map(NightReplyPiece.source)
                 }
+            }
+            // At the end of its part.
+            if let at = interactive, at.section == offset, at.afterBlock >= section.blocks.count - 1 {
+                pieces.append(.interactive)
             }
         }
         return pieces.filter { if case .plain(let s) = $0 { return !s.isEmpty } else { return true } }

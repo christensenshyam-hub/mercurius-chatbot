@@ -37,7 +37,9 @@ struct NightCheckCard: View {
 
     /// The lesson's keys come here: this is the waiting check and the
     /// composer hasn't the keyboard.
-    private var routed: Bool { answerable && router?.activeID == routeID && !composerFocused }
+    private var routed: Bool {
+        answerable && router?.activeID == routeID && !composerFocused && router?.keysAreElsewhere != true
+    }
 
     private var gradedPick: Int? { locked ?? answeredIndex }
     private var graded: Bool { gradedPick != nil }
@@ -227,6 +229,22 @@ final class NightCheckKeyRouter {
     /// The waiting check's reply id.
     private(set) var activeID: UUID?
     @ObservationIgnored private var handler: ((NightCheckKeys.Key) -> Bool)?
+    /// Other controls in the lesson that have the keyboard (Lesson 1.1's
+    /// interactive, while one of its chips has focus): their Space, Return
+    /// and letters stay theirs, and the check doesn't wear the ring.
+    private(set) var holders: Set<UUID> = []
+
+    /// Whether a control other than the check has the lesson's keys.
+    var keysAreElsewhere: Bool { !holders.isEmpty }
+
+    /// `id` took (`true`) or let go of (`false`) the keyboard.
+    func hold(_ id: UUID, _ holds: Bool) {
+        if holds {
+            if !holders.contains(id) { holders.insert(id) }
+        } else if holders.contains(id) {
+            holders.remove(id)
+        }
+    }
 
     func register(_ id: UUID, handler: @escaping (NightCheckKeys.Key) -> Bool) {
         if activeID != id { activeID = id }
@@ -239,10 +257,12 @@ final class NightCheckKeyRouter {
         handler = nil
     }
 
-    /// Hands `key` to the waiting check; false when there is none or it
-    /// didn't take it (Return with nothing picked).
+    /// Hands `key` to the waiting check; false when there is none, it
+    /// didn't take it (Return with nothing picked), or another control has
+    /// the keyboard.
     func route(_ key: NightCheckKeys.Key) -> Bool {
-        handler?(key) ?? false
+        guard holders.isEmpty else { return false }
+        return handler?(key) ?? false
     }
 }
 

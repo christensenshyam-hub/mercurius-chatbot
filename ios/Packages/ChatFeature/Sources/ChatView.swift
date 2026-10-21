@@ -652,8 +652,14 @@ struct MessageListView: View {
     /// Night Studio, lessons: the lesson is complete, so the part strip's
     /// dashed "more may come" segment goes.
     var nightLessonComplete = false
+    /// Night Studio, lessons: the lesson's id, for Lesson 1.1's interactive
+    /// (`NightInteractiveAnchor`). Nil: no interactive.
+    var nightLessonID: String?
     @State private var nightParts = NightPartIndex()
     @State private var nightCrisis = NightCrisisIndex()
+    @State private var nightInteractiveIndex = NightInteractiveIndex()
+    /// The interactive's opening and opened state, for the whole thread.
+    @State private var nightTokenizer = NightTokenizerState()
     @State private var nightMarks = NightPartMarks()
     @State private var nightCurrentPart = 1
     #endif
@@ -776,6 +782,9 @@ struct MessageListView: View {
                                     : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                         }
 
+                        #if os(macOS)
+                        let nightInteractive = nightInteractivePlacement
+                        #endif
                         ForEach(messages) { message in
                             #if os(macOS)
                             NightMessageRow(
@@ -793,7 +802,9 @@ struct MessageListView: View {
                                 onReport: { reason in onReport(message, reason) },
                                 onCheckTap: onCheckTap,
                                 coordinateSpace: messageListSpace,
-                                onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) }
+                                onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) },
+                                interactiveAfter: nightInteractive?.messageID == message.id
+                                    ? nightInteractive?.position : nil
                             )
                             .equatable()
                             .id(message.id)
@@ -883,6 +894,8 @@ struct MessageListView: View {
                 // macOS 26: the toolbar's edge over the reader stays soft (it
                 // turned an opaque grey in a narrow window).
                 .nightSoftScrollEdge()
+                // Lesson 1.1's interactive keeps its opening for the thread.
+                .environment(nightTokenizer)
                 #endif
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
@@ -957,7 +970,26 @@ struct MessageListView: View {
                     AccessibilityNotification.Announcement(line).post()
                 }
             }
+            #if os(macOS)
+            // The interactive left the thread from above the reading place
+            // (a crisis line arrived): a reply held at its top stays there.
+            .onChange(of: nightInteractivePlacement) { old, new in
+                guard old != nil, new == nil, !scroll.policy.isFollowing,
+                      scroll.policy.didHoldCurrentReply else { return }
+                perform(.showLatestMessageTop, proxy: proxy)
+            }
+            #endif
             #if os(macOS) && DEBUG
+            // `-NightScrollToInteractive top|map` (shots only): once a reply
+            // settles, Lesson 1.1's interactive (or its map) at the top of
+            // the reading area.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle,
+                      let target = UserDefaults.standard.string(forKey: "NightScrollToInteractive") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    nightScrollToInteractive(map: target == "map", proxy: proxy)
+                }
+            }
             // `-NightScrollToPart <n>` (shots only): each time a reply
             // settles, the part strip's jump to part n.
             .onChange(of: phase) { _, new in
@@ -1271,6 +1303,29 @@ struct MessageListView: View {
         list.nightLessonComplete = complete
         return list
     }
+
+    /// This list in the lesson `id` (Lesson 1.1 holds the interactive).
+    func nightLesson(id: String) -> MessageListView {
+        var list = self
+        list.nightLessonID = id
+        return list
+    }
+
+    /// Where Lesson 1.1's interactive sits in this thread, if anywhere.
+    private var nightInteractivePlacement: NightInteractivePlacement? {
+        guard lessonStyle else { return nil }
+        return nightInteractiveIndex.placement(lessonID: nightLessonID, messages: messages,
+                                               crisisReplies: nightCrisisReplies) { nightParts.sections(for: $0) }
+    }
+
+    #if DEBUG
+    /// The interactive (or its map) to the top of the reading area, as the
+    /// strip's jump does (shots only).
+    private func nightScrollToInteractive(map: Bool, proxy: ScrollViewProxy) {
+        scroll.policy.partJumped()
+        proxy.scrollTo(map ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID, anchor: .top)
+    }
+    #endif
 
     /// The replies the crisis guard draws plainly (the thread's first crisis
     /// reply and every reply after it).
