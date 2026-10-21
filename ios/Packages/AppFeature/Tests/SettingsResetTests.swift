@@ -21,7 +21,8 @@ struct SettingsResetTests {
     private func makeSheet(
         reminderStore: ReminderStore,
         onConsentWithdrawn: (@MainActor () -> Void)? = nil,
-        afterReset: (@MainActor () -> Void)? = nil
+        afterReset: (@MainActor () -> Void)? = nil,
+        certificateStore: CertificateStore? = nil
     ) -> SettingsSheet {
         let identity = SessionIdentity(keychain: InMemoryKeychain())
         let chatStore = InMemoryChatStore()
@@ -46,7 +47,8 @@ struct SettingsResetTests {
             scheduler: NotificationScheduler(),
             sessionDeleter: nil,
             onConsentWithdrawn: onConsentWithdrawn,
-            afterReset: afterReset
+            afterReset: afterReset,
+            certificateStore: certificateStore
         )
     }
 
@@ -82,6 +84,30 @@ struct SettingsResetTests {
         }).makeModel(dismiss: {})
         #expect(await model.resetSession())
         #expect(remindersOffWhenCalled == true)
+    }
+
+    @Test("Delete my data & start over erases the certificate name and dates")
+    func deleteErasesCertificateName() async {
+        let defaults = freshDefaults("settings.certificate")
+        let certificates = CertificateStore(defaults: defaults)
+        certificates.setName("Alexandria Montgomery-Vasquez")
+        certificates.recordEarned(.deepDive, at: Date())
+        certificates.fixCompletionDate(.deepDive, lastMetAt: nil)
+        let model = makeSheet(reminderStore: remindersOn(), certificateStore: certificates).makeModel(dismiss: {})
+        #expect(await model.deleteServerDataAndStartOver())
+        #expect(certificates.name == nil)
+        #expect(certificates.earnedAt(.deepDive) == nil)
+        #expect(CertificateStore(defaults: defaults).name == nil)
+        for key in CertificateStore.allKeys { #expect(defaults.object(forKey: key) == nil) }
+    }
+
+    @Test("Reset this device only erases the certificate name too")
+    func resetErasesCertificateName() async {
+        let certificates = CertificateStore(defaults: freshDefaults("settings.certificate.reset"))
+        certificates.setName("Li Wei")
+        let model = makeSheet(reminderStore: remindersOn(), certificateStore: certificates).makeModel(dismiss: {})
+        #expect(await model.resetSession())
+        #expect(certificates.name == nil)
     }
 
     @Test("Reset this device only")

@@ -62,6 +62,9 @@ struct MacShellView: View {
     /// The DEBUG launch-argument state has been applied (once per window).
     @State private var appliedDebugState = false
 
+    /// DEBUG: a certificate shot's sheet (`CertificateDebug`).
+    @State private var debugCertificateSheet: MacCertificateDebugSheet?
+
     private var isGated: Bool { gate != nil }
 
     /// The detail column's narrowest: the chat's toolbar (mode picker,
@@ -145,7 +148,7 @@ struct MacShellView: View {
         // them into one PUT.
         .onChange(of: env.progressStore.revision) { _, _ in
             guard !isGated, Self.debugTodayDemoStreak == nil, !Self.debugCompleteDemo,
-                  Self.debugPathDemo == nil else { return }
+                  Self.debugPathDemo == nil, !Self.debugCertificateDemo else { return }
             env.progressSync.pushSoon()
         }
         .sheet(isPresented: $shell.showsProgress) {
@@ -156,6 +159,7 @@ struct MacShellView: View {
                 scheduler: scheduler,
                 gamificationStore: gamificationStore,
                 nextLessonId: env.progressStore.frontierLessonId,
+                certificates: env.certificates,
                 onDone: { shell.showsProgress = false }
             )
             .frame(minWidth: 460, idealWidth: 520, minHeight: 560, idealHeight: 680)
@@ -173,6 +177,9 @@ struct MacShellView: View {
         }
         .achievementToasts(env.achievementStore)
         .progressNudge(gamificationStore)
+        .sheet(item: $debugCertificateSheet) { sheet in
+            debugCertificateSheetView(sheet)
+        }
     }
 
     // MARK: - Detail
@@ -400,8 +407,16 @@ struct MacShellView: View {
                     }
                 },
                 onMastered: { handleUnitMastered($0) },
-                onExit: { shell.closeActivity() }
+                onExit: {
+                    // The course-complete card goes with the check (the
+                    // certificate stays in Progress ▸ Certificates).
+                    env.certificates.justEarned = nil
+                    shell.closeActivity()
+                }
             )
+            // The pass that completed the course: "Get your certificate" on
+            // the result, and its name sheet.
+            .certificateMasterySlot(env.certificates)
             // The check sets the window's title, subtitle and way back.
         } else {
             MacUnitTestUnavailable(unit: unit) { shell.closeActivity() }
@@ -410,7 +425,9 @@ struct MacShellView: View {
 
     /// The student passed a unit check (as `AppShellView.handleUnitMastered`).
     private func handleUnitMastered(_ unitId: String) {
-        env.progressStore.markUnitMastered(unitId)
+        // The eighth unit's pass completes the course: its moment is kept and
+        // the result shows "Get your certificate".
+        env.certificates.recordingNewlyEarned { env.progressStore.markUnitMastered(unitId) }
         env.lastActivityStore.touch()
         env.achievementStore.award(AchievementCatalog.unitMaster)
         recordModuleCompleted(sourceType: "unit_test", sourceId: unitId)
@@ -501,6 +518,16 @@ struct MacShellView: View {
             return AnyView(UnitTestCrisisPreviewHost(unit: unit, test: test,
                                                      via503: args.contains("-CrisisVia503")))
         }
+        if CertificateDebug.mode == .card, let last = MercuriusCurriculum.units.last,
+           let lastTest = MercuriusCurriculum.unitTest(for: last.id) {
+            // `-CertificateCardPreview`: the last unit's check passed,
+            // completing the course, with its "Get your certificate" card.
+            let env = self.env
+            return AnyView(UnitTestPreviewHost(unit: last, test: lastTest, stage: "mastered", onMastered: { _ in
+                CertificateDebug.passCourse(env: env)
+            })
+            .certificateMasterySlot(env.certificates))
+        }
         if args.contains("-UnitTestPreview") {
             return AnyView(UnitTestPreviewHost(unit: unit, test: test,
                                                stage: UserDefaults.standard.string(forKey: "UnitTestStage")))
@@ -569,6 +596,33 @@ struct MacShellView: View {
         #endif
     }
 
+    /// DEBUG: a certificate shot (`CertificateDebug`, with `-UITests`).
+    private static var debugCertificateDemo: Bool {
+        #if DEBUG
+        CertificateDebug.mode != nil
+        #else
+        false
+        #endif
+    }
+
+    @ViewBuilder
+    private func debugCertificateSheetView(_ sheet: MacCertificateDebugSheet) -> some View {
+        #if DEBUG
+        switch sheet {
+        case .certificate(let kind):
+            CertificateSheet(center: env.certificates, kind: kind, onClose: { debugCertificateSheet = nil })
+        case .list:
+            NavigationStack {
+                CertificatesListView(center: env.certificates)
+            }
+            .frame(minWidth: 460, idealWidth: 520, minHeight: 560, idealHeight: 680)
+            .tint(Night.prominent)
+        }
+        #else
+        EmptyView()
+        #endif
+    }
+
     /// DEBUG `-NightUnitTestUnavailable YES`: Unit 1's check shows the
     /// "isn't available" state (shots).
     private static var debugUnitTestUnavailable: Bool {
@@ -608,6 +662,17 @@ struct MacShellView: View {
         guard !appliedDebugState else { return }
         appliedDebugState = true
         let args = ProcessInfo.processInfo.arguments
+        if let mode = CertificateDebug.mode {
+            // The certificate shots: progress that earns them, a sample name,
+            // and the sheet, list or Progress hub open.
+            CertificateDebug.seed(mode, env: env)
+            switch mode {
+            case .sheet(let kind): debugCertificateSheet = .certificate(kind)
+            case .list: debugCertificateSheet = .list
+            case .hub: shell.showProgress()
+            case .card: break
+            }
+        }
         if Self.debugTodayDemoStreak != nil {
             seedTodayDemo()
         } else if Self.debugCompleteDemo, let lesson = MercuriusCurriculum.units.first?.lessons.first {
@@ -666,6 +731,19 @@ struct MacShellView: View {
             shell.show(.unit(unitId))
         }
         #endif
+    }
+}
+
+/// DEBUG: what a certificate shot opens over the window.
+enum MacCertificateDebugSheet: Identifiable, Hashable {
+    case certificate(CertificateKind)
+    case list
+
+    var id: String {
+        switch self {
+        case .certificate(let kind): return kind.rawValue
+        case .list: return "list"
+        }
     }
 }
 
@@ -742,7 +820,9 @@ func settingsSheet(
         // lesson closes, so nothing of the erased session stays on screen or
         // goes back to the server under the new ID.
         beforeErase: { shell.beforeSettingsErase() },
-        afterReset: { shell.afterSettingsReset() }
+        afterReset: { shell.afterSettingsReset() },
+        // The certificate name goes with the rest.
+        certificateStore: env.certificates.store
     )
 }
 #endif
