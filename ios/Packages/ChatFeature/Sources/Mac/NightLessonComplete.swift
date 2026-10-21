@@ -91,13 +91,12 @@ enum NightCompleteCopy {
     /// Where the credential comes from, in one quiet line.
     static let attribution = "Merc marked this lesson complete from your answers."
 
-    /// "Unit 1 · Lesson 1 · Complete".
+    /// "Lesson 1.1 · Complete" (the path's code for the lesson).
     static func eyebrow(unitLabel: String?, lessonNumber: Int?) -> String {
         var parts: [String] = []
-        if let unitLabel, !unitLabel.trimmingCharacters(in: .whitespaces).isEmpty {
-            parts.append(CurriculumLessonView.unitName(unitLabel))
+        if let lessonNumber {
+            parts.append("Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: lessonNumber))")
         }
-        if let lessonNumber { parts.append("Lesson \(lessonNumber)") }
         parts.append("Complete")
         return parts.joined(separator: " · ")
     }
@@ -130,9 +129,10 @@ enum NightCompleteCopy {
     }
 
     // Up next
-    static func upNextEyebrow(_ stop: LessonCompleteOverlay.NextStop) -> String {
+    static func upNextEyebrow(_ stop: LessonCompleteOverlay.NextStop, unitLabel: String?) -> String {
         switch stop {
-        case .lesson(let number, _): return "Up next · Lesson \(number)"
+        case .lesson(let number, _):
+            return "Up next · Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: number))"
         case .unitTest(let unitNumber, _): return "Up next · Unit \(displayUnit(unitNumber)) check"
         }
     }
@@ -144,9 +144,10 @@ enum NightCompleteCopy {
         }
     }
 
-    static func upNextAnnouncement(_ stop: LessonCompleteOverlay.NextStop?) -> String? {
+    static func upNextAnnouncement(_ stop: LessonCompleteOverlay.NextStop?, unitLabel: String?) -> String? {
         switch stop {
-        case .lesson(let number, let title): return "Up next: Lesson \(number), \(title)."
+        case .lesson(let number, let title):
+            return "Up next: Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: number)), \(title)."
         case .unitTest(let unitNumber, _): return "Up next: the Unit \(displayUnit(unitNumber)) check."
         case nil: return nil
         }
@@ -158,9 +159,10 @@ enum NightCompleteCopy {
 
     /// The primary button; nil when there's nothing next (then "Done for
     /// now" is the one button).
-    static func primaryTitle(_ stop: LessonCompleteOverlay.NextStop?) -> String? {
+    static func primaryTitle(_ stop: LessonCompleteOverlay.NextStop?, unitLabel: String?) -> String? {
         switch stop {
-        case .lesson(let number, _): return "Start Lesson \(number)"
+        case .lesson(let number, _):
+            return "Start Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: number))"
         case .unitTest(let unitNumber, _): return "Take the Unit \(displayUnit(unitNumber)) Check"
         case nil: return nil
         }
@@ -176,6 +178,21 @@ enum NightCompleteCopy {
     }
 }
 
+/// A lesson's code as the path, Today and the card all say it: "1.2" for
+/// Lesson 2 of "UNIT 01". Without a unit number, the lesson's own number.
+/// (The next stop the card names is always in the same unit: after a
+/// unit's last lesson it is the unit's check.)
+enum NightLessonCode {
+    static func code(unitLabel: String?, lessonNumber: Int) -> String {
+        guard let unitLabel else { return "\(lessonNumber)" }
+        let parts = unitLabel.split(separator: " ")
+        guard parts.count == 2, parts[0].uppercased() == "UNIT", let unit = Int(parts[1]) else {
+            return "\(lessonNumber)"
+        }
+        return "\(unit).\(lessonNumber)"
+    }
+}
+
 /// The `[KEY]` ideas Merc gave in a lesson's thread, in order, each once.
 enum NightKeyIdeas {
     static func collect(from messages: [ChatMessage]) -> [String] {
@@ -184,7 +201,9 @@ enum NightKeyIdeas {
         for message in messages where message.role == .assistant {
             for block in BlockParser.parse(message.content) {
                 guard case .key(let text) = block else { continue }
-                let idea = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Without its sources: a raw tag never reaches the recap.
+                let idea = NightSourceParser.strip(text, isStreaming: false).text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !idea.isEmpty, seen.insert(idea).inserted else { continue }
                 ideas.append(idea)
             }
@@ -238,8 +257,10 @@ struct NightLessonComplete: View {
         GeometryReader { geo in
             let compact = geo.size.height < 640
             ZStack {
-                // The lesson stays visible under a canvas-coloured scrim.
-                Night.canvasBottom.opacity(night.reduceTransparency ? 0.92 : 0.7)
+                // The lesson, blurred by the host, fades under a
+                // canvas-coloured scrim: one calm field. Opaque under Reduce
+                // Transparency and Increase Contrast.
+                Night.canvasBottom.opacity(night.reduceTransparency || night.increasedContrast ? 1 : 0.9)
                     .contentShape(Rectangle())
                     .onTapGesture { exit(.dismiss) }
                     .accessibilityLabel("Dismiss")
@@ -376,7 +397,7 @@ struct NightLessonComplete: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Night.accentText)
                         .accessibilityHidden(true)
-                    Text(nightInlineMarkdown(idea))
+                    Text(nightInlineMarkdown(NightTypography.curlQuotes(idea)))
                         .font(NightType.keep(16))
                         .lineSpacing(3)
                         .foregroundStyle(Night.ink)
@@ -429,7 +450,7 @@ struct NightLessonComplete: View {
 
     private func upNext(_ stop: LessonCompleteOverlay.NextStop) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            NightEyebrow(NightCompleteCopy.upNextEyebrow(stop), color: Night.ink3)
+            NightEyebrow(NightCompleteCopy.upNextEyebrow(stop, unitLabel: unitLabel), color: Night.ink3)
             Text(NightCompleteCopy.upNextTitle(stop))
                 .nightFont(.headline)
                 .foregroundStyle(Night.ink)
@@ -445,7 +466,7 @@ struct NightLessonComplete: View {
     /// the next step. With nothing next, "Done for now" is the one button.
     private var buttons: some View {
         HStack(spacing: 12) {
-            if let primary = NightCompleteCopy.primaryTitle(nextStop) {
+            if let primary = NightCompleteCopy.primaryTitle(nextStop, unitLabel: unitLabel) {
                 Button { exit(.backToLessons) } label: {
                     Text(NightCompleteCopy.doneForNow).frame(maxWidth: .infinity)
                 }
@@ -504,7 +525,7 @@ struct NightLessonComplete: View {
     /// the ring lights this lesson's arc from +0.5 s. Reduce Motion: one
     /// crossfade to the final state.
     private func arrive() {
-        if let line = NightCompleteCopy.upNextAnnouncement(nextStop) {
+        if let line = NightCompleteCopy.upNextAnnouncement(nextStop, unitLabel: unitLabel) {
             AccessibilityNotification.Announcement(line).post()
         }
         if still {

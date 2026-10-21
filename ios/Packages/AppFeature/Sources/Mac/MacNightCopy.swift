@@ -24,8 +24,9 @@ enum MacNightCopy {
         case .unitTest(let unit):
             return "Unit \(unitNumber(unit))'s lessons are done. Ready for the check?"
         case .lesson:
+            // The week card says the goal is met; this line doesn't repeat it.
             if state.week.done >= state.week.goal {
-                return "This week's goal is done — anything more is a bonus."
+                return "Your next lesson is there whenever you want it."
             }
             if !state.hasProgress && !state.resumesNext {
                 return "Your first lesson is ready when you are."
@@ -41,9 +42,11 @@ enum MacNightCopy {
 
     // MARK: The week card
 
-    /// The streak, said once and quietly: only when there is one (never a
-    /// zero), with the Mac's existing line about how it keeps going. The
-    /// daily streak does reset, so nothing here says otherwise.
+    /// The streak, said once and quietly under the greeting: only when there
+    /// is one (never a zero), with the Mac's existing line about how it
+    /// keeps going. The daily streak does reset, so nothing here says
+    /// otherwise. It counts lesson or chat days, so it isn't in the week
+    /// card, whose dots are lesson days.
     static func streakLine(_ streak: Int) -> String? {
         guard streak >= 1 else { return nil }
         let days = streak == 1 ? "1 day running." : "\(streak) days running."
@@ -58,12 +61,25 @@ enum MacNightCopy {
         return dayNames.count == 1 ? "A lesson done on \(list)." : "Lessons done on \(list)."
     }
 
+    /// The caption over the week card's seven dots: they mark the days a
+    /// lesson was finished (not the streak, which counts chats too).
+    static let lessonDaysCaption = "Lesson days"
+
     /// The whole week card for VoiceOver.
-    static func weekCardAccessibilityLabel(weekLabel: String, dayNames: [String], streak: Int) -> String {
-        [weekLabel, lessonDaysSentence(dayNames), streakLine(streak)]
-            .compactMap { $0 }
-            .joined(separator: " ")
+    static func weekCardAccessibilityLabel(weekLabel: String, dayNames: [String]) -> String {
+        "\(weekLabel) \(lessonDaysSentence(dayNames))"
     }
+
+    /// Whether the next lesson is one to continue rather than start: opened
+    /// last, or in progress. `HomeState.resumesNext`'s rule, for any lesson,
+    /// so Today and the unit page say the same word for the same lesson.
+    @MainActor
+    static func resumes(lessonId: String, progress: CurriculumProgressStore) -> Bool {
+        lessonId == progress.lastOpenedLessonId || progress.state(of: lessonId) == .inProgress
+    }
+
+    /// "1.3": a lesson's code, as the path, Today and the complete card say it.
+    static func lessonCode(unitNumber: Int, lessonNumber: Int) -> String { "\(unitNumber).\(lessonNumber)" }
 
     static let weekCardHint = "Opens your progress."
     static let progressHelp = "Your progress and achievements (⌘4)"
@@ -75,6 +91,8 @@ enum MacNightCopy {
     static func thinkAccessibilityLabel(prompt: String) -> String { "Think it through: \(prompt)" }
 
     static let thinkHint = "Opens a new chat with this question ready to send."
+    /// The card's own call to action, on its eyebrow row.
+    static let thinkAction = "Ask Merc"
     static let thinkHelp = "Open a new chat with this question in the message box. Nothing is sent until you send it."
 
     // MARK: The hero

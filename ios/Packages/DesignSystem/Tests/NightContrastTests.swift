@@ -400,24 +400,24 @@ struct NightReadingContrastTests {
         #expect(NightContrastTests.contrast(.white, rgb(NightPalette.prominent, v)) >= NightContrastTests.textMinimum)
     }
 
-    @Test("The check's discs: the picked letter, the correct check, the wrong letter", arguments: Variant.allCases)
+    @Test("The check's discs: the picked letter, the correct and the wrong letters", arguments: Variant.allCases)
     func discs(variant v: Variant) {
         let surface = rgb(NightPalette.surface, v)
         let selected = rgb(NightPalette.accent, v).over(surface, alpha: NightPalette.Tint.selected(dark: v.isDark))
+        let correct = rgb(NightPalette.success, v).over(surface, alpha: NightPalette.Tint.answer)
         let wrong = rgb(NightPalette.error, v).over(surface, alpha: NightPalette.Tint.answer)
         let raised = rgb(NightPalette.surfaceRaised, v)
         // Text (4.5:1): the picked disc's white letter on prominent; the
-        // wrong pick's letter; a resting letter in ink2 on the raised row.
+        // graded rows' letters (every row keeps its letter); a resting
+        // letter in ink2 on the raised row.
         #expect(NightContrastTests.contrast(.white, rgb(NightPalette.prominent, v)) >= 4.5)
+        #expect(NightContrastTests.contrast(rgb(NightPalette.successText, v), correct) >= 4.5)
         #expect(NightContrastTests.contrast(rgb(NightPalette.errorText, v), wrong) >= 4.5)
         #expect(NightContrastTests.contrast(rgb(NightPalette.ink2, v), raised) >= 4.5)
-        // Non-text (3:1): the correct disc's check (drawn in `surface`) on
-        // `success`; the picked row's state, its 2 pt `accentText` edge,
-        // against the row inside it and the card around it. (The disc's
-        // fill against the row is decoration: 1.7:1 in dark, and the edge
-        // and the white letter carry the state.)
-        let check = NightContrastTests.contrast(surface, rgb(NightPalette.success, v))
-        #expect(check >= 3, "check on success (\(v)) is \(NightContrastTests.ratio(check)):1")
+        // Non-text (3:1): the picked row's state, its 2 pt `accentText`
+        // edge, against the row inside it and the card around it. (The
+        // disc's fill against the row is decoration: 1.7:1 in dark, and the
+        // edge and the white letter carry the state.)
         for (name, base) in [("row", selected), ("card", surface)] {
             let edge = NightContrastTests.contrast(rgb(NightPalette.accentText, v), base)
             #expect(edge >= 3, "picked edge on the \(name) (\(v)) is \(NightContrastTests.ratio(edge)):1")

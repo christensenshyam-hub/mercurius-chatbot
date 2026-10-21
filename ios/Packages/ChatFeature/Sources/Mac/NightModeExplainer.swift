@@ -6,8 +6,8 @@ import DesignSystem
 /// §5.4): a sheet on a lit surface, the mode's name as its title, then what
 /// it's for, when to use it, and an example to try, set as the thing a
 /// student would say (the "keep" face). One prominent "Got it" (Return);
-/// Close (Escape) leaves without switching. The copy is the iPhone's,
-/// unchanged (`ModeDescription`).
+/// Close (Escape) leaves without switching. The copy is the iPhone's
+/// (`ModeDescription`), with the tutor named Merc (`NightModeCopy`).
 struct NightModeExplainer: View {
     let description: ModeDescription
     let acknowledge: () -> Void
@@ -27,7 +27,7 @@ struct NightModeExplainer: View {
                     .accessibilityLabel("\(description.title) Mode")
                     .accessibilityAddTraits(.isHeader)
 
-                    section("What it's for", text: description.purpose)
+                    section("What it's for", text: NightModeCopy.purpose(description.mode))
                     section("When to use it", text: description.whenToUse)
 
                     VStack(alignment: .leading, spacing: 10) {

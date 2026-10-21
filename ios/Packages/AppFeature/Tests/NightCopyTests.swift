@@ -48,7 +48,7 @@ struct NightCopyTests {
                 lines.append(MacTodayView.weekHeadline(state.week))
                 lines.append(MacTodayView.weekDetail(state.week))
                 lines.append(MacNightCopy.weekCardAccessibilityLabel(
-                    weekLabel: state.weekAccessibilityLabel, dayNames: ["Friday"], streak: streak))
+                    weekLabel: state.weekAccessibilityLabel, dayNames: ["Friday"]))
                 if let line = MacNightCopy.streakLine(streak) { lines.append(line) }
             }
         }
@@ -74,7 +74,8 @@ struct NightCopyTests {
             }
         }
         lines += [MacNightCopy.weekCardHint, MacNightCopy.progressHelp, MacNightCopy.thinkHint,
-                  MacNightCopy.thinkHelp, MacProgressButton.title, MacProgressButton.help]
+                  MacNightCopy.thinkHelp, MacNightCopy.thinkAction, MacNightCopy.lessonDaysCaption,
+                  MacProgressButton.title, MacProgressButton.help]
         return lines
     }
 

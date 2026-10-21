@@ -25,6 +25,11 @@ struct NightMessageRow: View {
     /// Free chat: the latest completed reply's closing question becomes the
     /// Your turn card.
     var showsYourTurn = false
+    /// The thread carried a crisis line at or before this reply
+    /// (`NightCrisisGuard.guardedReplies`): drawn as plain text.
+    var crisisThread = false
+    /// Free chat: "Merc · AI tutor" heads the thread's first reply only.
+    var showsMercLabel = false
     /// The live Merc state, on the latest reply's badge only.
     var mercMood: MercMood = .neutral
     var mercActivity: MercActivity = .idle
@@ -49,7 +54,7 @@ struct NightMessageRow: View {
     private var isEmptyTyping: Bool { message.content.isEmpty && isStreaming }
 
     private var pieces: [NightReplyPiece] {
-        let crisis = NightCrisisGuard.applies(to: message.content)
+        let crisis = crisisThread || NightCrisisGuard.applies(to: message.content)
         switch style {
         case .lesson:
             return NightReplyLayout.lesson(sections: sections, firstPart: firstPart, crisis: crisis,
@@ -64,8 +69,8 @@ struct NightMessageRow: View {
         let bareFailure = MessageBubbleView.isEmptyFailure(message)
         let readsAsBlocks = MessageBubbleView.readsAsBlocks(message, lessonStyle: true)
         return VStack(alignment: .leading, spacing: 14) {
-            if style == .chat && !bareFailure {
-                NightMercLabel(mood: mercMood, activity: mercActivity)
+            if style == .chat && showsMercLabel && !bareFailure {
+                NightMercLabel()
             }
             if isEmptyTyping {
                 NightTypingIndicator()
@@ -109,11 +114,11 @@ struct NightMessageRow: View {
     }
 
     private var collapsedLabel: Text {
-        if isStreaming { return Text("Mercurius is replying") }
+        if isStreaming { return Text("Merc is replying") }
         if case .failed(let reason) = message.status {
             return Text("Merc's reply didn't arrive. \(reason)")
         }
-        return Text("Mercurius replied: \(BlockParser.plainText(message.content))")
+        return Text("Merc replied: \(BlockParser.plainText(message.content))")
     }
 
     @ViewBuilder
@@ -129,7 +134,9 @@ struct NightMessageRow: View {
                     onPartMarkMoved(number, minY)
                 }
         case .markdown(let text), .plain(let text):
-            Markdown(text)
+            // Merc's prose with curly quotes (Lexend draws straight ones as
+            // inch marks); code and link addresses untouched.
+            Markdown(NightTypography.curlQuotes(text))
                 .nightReplyMarkdown()
                 .accessibilityElement(children: .combine)
                 .modifier(NightReportActions(enabled: reports, onReport: onReport))
@@ -152,7 +159,8 @@ struct NightMessageRow: View {
                 quiz: quiz,
                 isEnabled: quiz.isWellFormed && quizInteraction?.isEnabled == true,
                 answeredIndex: quizInteraction?.answeredIndex,
-                onSelect: { index in quizInteraction?.onPick(quiz, index) }
+                onSelect: { index in quizInteraction?.onPick(quiz, index) },
+                routeID: message.id
             )
         }
     }
@@ -167,6 +175,8 @@ extension NightMessageRow: Equatable {
             && lhs.sections == rhs.sections
             && lhs.firstPart == rhs.firstPart
             && lhs.showsYourTurn == rhs.showsYourTurn
+            && lhs.crisisThread == rhs.crisisThread
+            && lhs.showsMercLabel == rhs.showsMercLabel
             && lhs.mercMood == rhs.mercMood
             && lhs.mercActivity == rhs.mercActivity
             && lhs.coordinateSpace == rhs.coordinateSpace
@@ -186,18 +196,13 @@ enum NightRowMetrics {
 
 // MARK: - Who is speaking
 
-/// "Merc · AI tutor" above each reply in free chat, with a 20 pt badge.
-/// It doesn't name the mode: a thread's mode can change, and the label would
-/// be wrong for earlier replies.
+/// "Merc · AI tutor" over the first reply of a free chat, set as type (the
+/// concept's way): the bubble-less, left-aligned reply already says who is
+/// speaking after that. No bust: at 20 pt his face didn't read. It doesn't
+/// name the mode: a thread's mode can change.
 struct NightMercLabel: View {
-    var mood: MercMood = .neutral
-    var activity: MercActivity = .idle
-
     var body: some View {
-        HStack(spacing: 8) {
-            MercMascot(.idle, size: 20, presentation: .bust, emphasis: .badge,
-                       mood: mood, activity: activity, idleLife: false)
-                .accessibilityHidden(true)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(NightReplyCopy.merc)
                 .nightFont(.headline)
                 .foregroundStyle(Night.ink)
@@ -339,7 +344,7 @@ struct NightExampleCard: View {
                     }
                 }
             }
-            Text(nightInlineMarkdown(text))
+            Text(nightInlineMarkdown(NightTypography.curlQuotes(text)))
                 .nightFont(.body)
                 .foregroundStyle(Night.ink2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -361,7 +366,7 @@ struct NightKeyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             NightEyebrow(NightReplyCopy.keyIdea, systemImage: "key.fill")
-            Text(nightInlineMarkdown(text))
+            Text(nightInlineMarkdown(NightTypography.curlQuotes(text)))
                 .nightFont(.keep)
                 .foregroundStyle(Night.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -414,7 +419,7 @@ struct NightYourTurnCard: View {
 
     @ViewBuilder
     private func question(selectable: Bool) -> some View {
-        let label = Text(nightInlineMarkdown(text))
+        let label = Text(nightInlineMarkdown(NightTypography.curlQuotes(text)))
             .nightFont(.keep)
             .foregroundStyle(Night.ink)
             .fixedSize(horizontal: false, vertical: true)
@@ -590,14 +595,52 @@ struct NightReplyChip: View {
 #endif
 
 #if os(macOS)
-/// The mask that fades the thread into the canvas over its last 18 pt.
+/// The mask that fades the thread into the canvas over its last 18 pt and,
+/// when `top` is above zero, over its first `top` points (under a lesson's
+/// part strip).
 struct NightScrollFade: View {
+    var top: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
+            if top > 0 {
+                LinearGradient(colors: [.black.opacity(0), .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: top)
+            }
             Rectangle()
             LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
                 .frame(height: 18)
         }
+    }
+}
+
+extension View {
+    /// The window title steps aside (a narrow window, so the toolbar's
+    /// buttons keep their room). macOS 15 and later; on macOS 14 the title
+    /// stays.
+    @ViewBuilder
+    func nightHidesToolbarTitle(_ hides: Bool) -> some View {
+        if #available(macOS 15.0, *) {
+            self.toolbar(removing: hides ? .title : nil)
+        } else {
+            self
+        }
+    }
+
+    /// macOS 26 (built with Swift 6.2+): the soft scroll-edge effect at the
+    /// top, where the window's toolbar meets a scrolling reader. Earlier
+    /// systems and CI builds have no edge effect to set.
+    @ViewBuilder
+    func nightSoftScrollEdge() -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            self.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 #endif

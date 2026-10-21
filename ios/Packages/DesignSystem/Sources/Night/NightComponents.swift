@@ -293,40 +293,6 @@ public struct NightButtonLabel: View {
     }
 }
 
-/// A 30 pt circle of floating chrome with a 14 pt semibold symbol in `ink`.
-/// Always labelled for VoiceOver and with a help tag.
-public struct NightIconButton: View {
-    private let systemName: String
-    private let label: String
-    private let help: String
-    private let action: () -> Void
-    @State private var hovering = false
-
-    public init(systemName: String, label: String, help: String? = nil, action: @escaping () -> Void) {
-        self.systemName = systemName
-        self.label = label
-        self.help = help ?? label
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Night.ink)
-                .frame(width: 30, height: 30)
-                .nightChrome(in: Circle(), interactive: true)
-                .overlay { Circle().fill(Night.lumen.opacity(hovering ? NightPalette.Tint.hover : 0)) }
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .nightFocusRing(Circle())
-        .help(help)
-        .accessibilityLabel(label)
-    }
-}
-
 // MARK: - The weekly rhythm ring
 
 /// One arc per lesson in the weekly goal, with 3.5% gaps: unlit arcs in

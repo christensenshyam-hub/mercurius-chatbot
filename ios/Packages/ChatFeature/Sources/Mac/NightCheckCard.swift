@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import DesignSystem
 
 /// The lesson's [Q] check on the Mac (SPEC.md §5.3.3, D9): pick an answer,
@@ -8,9 +9,11 @@ import DesignSystem
 /// the iPhone's tap does; Merc's real follow-up then streams below. A pick
 /// alone sends nothing.
 ///
-/// From the keyboard, while the card has focus (Tab to it, or click it):
-/// A–D or 1–4 pick, ↑/↓ move the pick, Return locks it in. Typing in the
-/// composer never picks.
+/// From the keyboard: while it waits, the lesson's keys go to it (the
+/// lesson's `nightCheckKeys`: A–D or 1–4 pick, ↑/↓ move the pick, Return
+/// locks it in) unless the composer has focus, and it wears the focus ring
+/// to say so. Tab to it or click it for the same keys through SwiftUI focus.
+/// Typing in the composer never picks.
 ///
 /// The check stays where it streamed: there is no docked tray on the Mac.
 struct NightCheckCard: View {
@@ -20,6 +23,8 @@ struct NightCheckCard: View {
     /// The student's earlier answer, from the "I picked X)" turn after it.
     let answeredIndex: Int?
     let onSelect: (Int) -> Void
+    /// This card's place in the lesson's key routing (its reply's id).
+    var routeID = UUID()
 
     /// Picked, not yet locked in.
     @State private var pick: Int?
@@ -27,6 +32,12 @@ struct NightCheckCard: View {
     @State private var locked: Int?
     @FocusState private var focused: Bool
     @NightSettings private var night
+    @Environment(\.nightCheckRouter) private var router
+    @Environment(\.nightComposerFocused) private var composerFocused
+
+    /// The lesson's keys come here: this is the waiting check and the
+    /// composer hasn't the keyboard.
+    private var routed: Bool { answerable && router?.activeID == routeID && !composerFocused }
 
     private var gradedPick: Int? { locked ?? answeredIndex }
     private var graded: Bool { gradedPick != nil }
@@ -43,7 +54,7 @@ struct NightCheckCard: View {
         let shape = RoundedRectangle(cornerRadius: Night.Radius.card, style: .continuous)
         VStack(alignment: .leading, spacing: 14) {
             NightEyebrow(eyebrow, systemImage: graded ? "checkmark.circle" : "circle.dashed")
-            Text(quiz.stem)
+            Text(NightTypography.curlQuotes(quiz.stem))
                 .nightFont(.title2)
                 .foregroundStyle(Night.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -69,7 +80,7 @@ struct NightCheckCard: View {
         .focused($focused)
         .focusEffectDisabled()
         .overlay {
-            if focused && answerable {
+            if (focused || routed) && answerable {
                 shape.inset(by: -3 - night.focusRingWidth / 2)
                     .stroke(Night.focusRing, lineWidth: night.focusRingWidth)
                     .allowsHitTesting(false)
@@ -83,10 +94,41 @@ struct NightCheckCard: View {
         .animation(night.animation(Night.Motion.layout), value: locked)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Question: \(quiz.stem)")
+        // While it waits, the lesson's keys route here (when the reply
+        // settles, or the lesson opens on it), so A–D and Return reach it,
+        // not the composer.
+        .onAppear(perform: updateRoute)
+        .onChange(of: answerable) { _, _ in updateRoute() }
+        .onDisappear { router?.unregister(routeID) }
         #if DEBUG
         .onAppear(perform: applyDebugState)
         .onChange(of: isEnabled) { _, _ in applyDebugState() }
         #endif
+    }
+
+    private func updateRoute() {
+        guard let router else { return }
+        if answerable {
+            router.register(routeID) { key in handle(key) }
+        } else {
+            router.unregister(routeID)
+        }
+    }
+
+    /// A routed key: the same rules as `handleKey`.
+    private func handle(_ key: NightCheckKeys.Key) -> Bool {
+        guard answerable else { return false }
+        switch key {
+        case .option(let index):
+            guard quiz.options.indices.contains(index) else { return false }
+            choose(index)
+        case .move(let step):
+            pick = NightCheckKeys.moved(pick, by: step, optionCount: quiz.options.count)
+        case .lockIn:
+            guard pick != nil else { return false }
+            lockIn()
+        }
+        return true
     }
 
     // MARK: Picking and locking in
@@ -140,10 +182,9 @@ struct NightCheckCard: View {
         let mark = mark(of: index)
         let spoken = CheckQuizCard.optionAccessibility(index: index, option: option, pick: gradedPick,
                                                        answerIndex: quiz.answerIndex)
-        return NightAnswerRow(letter: ChatAnnouncement.letter(index), text: option, mark: mark,
+        return NightAnswerRow(letter: ChatAnnouncement.letter(index), text: NightTypography.curlQuotes(option), mark: mark,
                               isInteractive: answerable) {
             choose(index)
-            if answerable { focused = true }
         }
         .accessibilityLabel(spoken.label)
         .accessibilityValue(spoken.value ?? (mark == .picked ? "Picked, not locked in" : ""))
@@ -170,6 +211,115 @@ struct NightCheckCard: View {
 
     @MainActor static var didApplyDebugState = false
     #endif
+}
+
+// MARK: - The lesson's keys, to its waiting check
+
+/// Where a lesson's keys go while its check waits for Lock it in: the
+/// answerable check registers here, and the lesson's key watcher
+/// (`nightCheckKeys`) hands it A–D, 1–4, ↑/↓ and Return whenever the
+/// composer (or any text field) hasn't the keyboard. It doesn't depend on
+/// SwiftUI focus, which a check deep in the lesson's scroll view didn't take
+/// when asked.
+@Observable
+@MainActor
+final class NightCheckKeyRouter {
+    /// The waiting check's reply id.
+    private(set) var activeID: UUID?
+    @ObservationIgnored private var handler: ((NightCheckKeys.Key) -> Bool)?
+
+    func register(_ id: UUID, handler: @escaping (NightCheckKeys.Key) -> Bool) {
+        if activeID != id { activeID = id }
+        self.handler = handler
+    }
+
+    func unregister(_ id: UUID) {
+        guard activeID == id else { return }
+        activeID = nil
+        handler = nil
+    }
+
+    /// Hands `key` to the waiting check; false when there is none or it
+    /// didn't take it (Return with nothing picked).
+    func route(_ key: NightCheckKeys.Key) -> Bool {
+        handler?(key) ?? false
+    }
+}
+
+private struct NightCheckRouterKey: EnvironmentKey {
+    static let defaultValue: NightCheckKeyRouter? = nil
+}
+
+private struct NightComposerFocusedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// The lesson's key routing to its waiting check (nil in free chat).
+    var nightCheckRouter: NightCheckKeyRouter? {
+        get { self[NightCheckRouterKey.self] }
+        set { self[NightCheckRouterKey.self] = newValue }
+    }
+
+    /// The lesson's composer has the keyboard: its keys are the composer's.
+    var nightComposerFocused: Bool {
+        get { self[NightComposerFocusedKey.self] }
+        set { self[NightComposerFocusedKey.self] = newValue }
+    }
+}
+
+/// What the lesson's key watcher reads when a key arrives (its closure
+/// outlives the view value that installed it).
+@MainActor
+final class NightCheckKeyContext {
+    weak var window: NSWindow?
+    var router: NightCheckKeyRouter?
+    /// Off while the lesson's intro or complete card covers it.
+    var isEnabled = true
+}
+
+/// The lesson's key watcher: a key typed in the lesson's window, with no
+/// text field taking it, goes to the waiting check (`NightCheckKeys.key`).
+struct NightCheckKeyWatcher: ViewModifier {
+    let router: NightCheckKeyRouter
+    let isEnabled: Bool
+    @State private var context = NightCheckKeyContext()
+    @State private var monitor: Any?
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowReader { [context] in context.window = $0 })
+            .onChange(of: isEnabled, initial: true) { _, enabled in context.isEnabled = enabled }
+            .onAppear {
+                context.router = router
+                guard monitor == nil else { return }
+                let context = context
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    // Not into a text field, and not from the sidebar's list
+                    // (its type-to-select).
+                    guard context.isEnabled, let window = event.window, window === context.window,
+                          window.isKeyWindow, let router = context.router, router.activeID != nil,
+                          !(window.firstResponder is NSText), !(window.firstResponder is NSTableView),
+                          let key = NightCheckKeys.key(characters: event.charactersIgnoringModifiers,
+                                                       keyCode: event.keyCode,
+                                                       modifiers: event.modifierFlags)
+                    else { return event }
+                    return router.route(key) ? nil : event
+                }
+            }
+            .onDisappear {
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+            }
+    }
+}
+
+extension View {
+    /// A lesson's keys go to its waiting check (`NightCheckKeyRouter`)
+    /// while `isEnabled`.
+    func nightCheckKeys(_ router: NightCheckKeyRouter, isEnabled: Bool) -> some View {
+        modifier(NightCheckKeyWatcher(router: router, isEnabled: isEnabled))
+    }
 }
 
 /// Whether a check on screen holds a pick that isn't locked in: the lesson's

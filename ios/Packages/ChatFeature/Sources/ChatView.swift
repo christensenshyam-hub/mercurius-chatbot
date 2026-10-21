@@ -79,6 +79,11 @@ public struct ChatView: View {
     @State private var pendingModeDescription: ModeDescription?
     /// Opens the composer's image panel (⇧⌘A).
     @State private var attachTrigger = 0
+    /// Focuses the composer (Chat ▸ Write a Reply, ⌘L).
+    @State private var composerFocusTrigger = 0
+    /// The detail column's width: a narrow one folds the mode switch into a
+    /// menu (`macCompactToolbar`).
+    @State private var macDetailWidth: CGFloat = 0
     #endif
 
     public init(
@@ -215,6 +220,8 @@ public struct ChatView: View {
         .onChange(of: dismissSheetsToken) { _, _ in activeSheet = nil }
         #if os(macOS)
         .toolbar { macToolbar }
+        .nightHidesToolbarTitle(macCompactToolbar)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { macDetailWidth = $0 }
         // On iOS these hang off the header, which the Mac doesn't show.
         .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
         #if DEBUG
@@ -267,7 +274,10 @@ public struct ChatView: View {
             onRemoveAttachment: { model.clearAttachment() }
         )
         #if os(macOS)
-        return bar.withAttachTrigger(attachTrigger).macReadableColumn()
+        return bar.withAttachTrigger(attachTrigger)
+            .withFocusTrigger(composerFocusTrigger)
+            .nightPlaceholder(NightModeCopy.chatPlaceholder(messages: model.messages, mode: model.currentMode))
+            .macReadableColumn()
         #else
         return bar
         #endif
@@ -283,6 +293,13 @@ public struct ChatView: View {
         return view
     }
 
+    /// Below this detail width the mode switch folds into a pop-up menu and
+    /// the window title steps aside (at the window's 700 pt minimum the
+    /// segmented switch pushed New Chat into the toolbar's overflow).
+    static let macCompactToolbarWidth: CGFloat = 860
+
+    private var macCompactToolbar: Bool { macDetailWidth > 0 && macDetailWidth < Self.macCompactToolbarWidth }
+
     /// The window toolbar: the streak chip, the mode picker in the middle,
     /// then Explain More and New Chat.
     @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
@@ -293,13 +310,25 @@ public struct ChatView: View {
         }
         ToolbarItem(placement: .principal) {
             // Night Studio's mode switch. Same rule as the iPhone's pills:
-            // no switching mid-reply or mid-switch.
-            NightModeSwitcher(
-                current: model.currentMode,
-                isEnabled: model.modeSwitchInFlight == nil && !isSending,
-                onSelect: { requestMode($0) }
-            )
-            .fixedSize()
+            // no switching mid-reply or mid-switch. In a narrow detail column
+            // it is a pop-up menu, so New Chat and Explain More stay in the
+            // toolbar instead of its overflow.
+            Group {
+                if macCompactToolbar {
+                    NightModeMenu(
+                        current: model.currentMode,
+                        isEnabled: model.modeSwitchInFlight == nil && !isSending,
+                        onSelect: { requestMode($0) }
+                    )
+                } else {
+                    NightModeSwitcher(
+                        current: model.currentMode,
+                        isEnabled: model.modeSwitchInFlight == nil && !isSending,
+                        onSelect: { requestMode($0) }
+                    )
+                    .fixedSize()
+                }
+            }
             .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌥⌘1, ⌥⌘2, ⌥⌘3)")
         }
         ToolbarItem(placement: .primaryAction) {
@@ -334,7 +363,9 @@ public struct ChatView: View {
             canExplainMore: MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
             explainMore: { [model] in model.explainMore() },
             canAttach: !isSending,
-            attachImage: { attachTrigger += 1 }
+            attachImage: { attachTrigger += 1 },
+            canWriteReply: true,
+            writeReply: { composerFocusTrigger += 1 }
         )
     }
 
@@ -622,6 +653,7 @@ struct MessageListView: View {
     /// dashed "more may come" segment goes.
     var nightLessonComplete = false
     @State private var nightParts = NightPartIndex()
+    @State private var nightCrisis = NightCrisisIndex()
     @State private var nightMarks = NightPartMarks()
     @State private var nightCurrentPart = 1
     #endif
@@ -753,6 +785,8 @@ struct MessageListView: View {
                                 firstPart: nightPlan.starts[message.id] ?? 1,
                                 showsYourTurn: nightYourTurn && message.id == messages.last?.id
                                     && message.role == .assistant && message.status == .idle,
+                                crisisThread: nightCrisisReplies.contains(message.id),
+                                showsMercLabel: !lessonStyle && message.id == nightFirstReplyId,
                                 mercMood: message.id == focalAssistantId && !showsCoachIntro ? mercMood : .neutral,
                                 mercActivity: message.id == focalAssistantId && !showsCoachIntro ? mercActivity : .idle,
                                 quizInteraction: quizInteraction(for: message),
@@ -820,8 +854,10 @@ struct MessageListView: View {
                     .macReadableColumn()
                     .padding(.vertical, BrandSpacing.md)
                     #if os(macOS)
-                    // Clear of the bottom fade below.
+                    // Clear of the bottom fade below (and, under a lesson's
+                    // part strip, the top one).
                     .padding(.bottom, 12)
+                    .padding(.top, nightFadesTop ? 12 : 0)
                     #endif
                     // Gated like every other explicit animation in the app: under
                     // Reduce Motion the intro just disappears (its transition is
@@ -840,8 +876,13 @@ struct MessageListView: View {
                 .coordinateSpace(.named(messageListSpace))
                 #if os(macOS)
                 // Night Studio: the thread fades into the canvas over its last
-                // 18 pt instead of stopping at a hard edge (§2.8).
-                .mask { NightScrollFade() }
+                // 18 pt instead of stopping at a hard edge (§2.8), and, under a
+                // lesson's part strip, over its first 22 pt: text passes under
+                // the strip and fades rather than being sliced by it.
+                .mask { NightScrollFade(top: nightFadesTop ? 22 : 0) }
+                // macOS 26: the toolbar's edge over the reader stays soft (it
+                // turned an opaque grey in a narrow window).
+                .nightSoftScrollEdge()
                 #endif
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
@@ -1230,6 +1271,16 @@ struct MessageListView: View {
         list.nightLessonComplete = complete
         return list
     }
+
+    /// The replies the crisis guard draws plainly (the thread's first crisis
+    /// reply and every reply after it).
+    private var nightCrisisReplies: Set<UUID> { nightCrisis.guardedReplies(in: messages) }
+
+    /// The thread's first reply from Merc: the one "Merc · AI tutor" heads.
+    private var nightFirstReplyId: UUID? { messages.first(where: { $0.role == .assistant })?.id }
+
+    /// A lesson whose part strip shows: the thread fades under it.
+    private var nightFadesTop: Bool { lessonStyle && !nightPlan.parts.isEmpty }
 
     /// The lesson thread's parts so far (empty in free chat).
     private var nightPlan: NightPartPlan {

@@ -26,6 +26,9 @@ public struct ChatCommandTarget {
     /// The composer can take a photo (nothing is sending).
     public let canAttach: Bool
     public let attachImage: () -> Void
+    /// Chat ▸ Write a Reply (⌘L): the composer takes the keyboard.
+    public var canWriteReply = false
+    public var writeReply: () -> Void = {}
 }
 
 private struct ChatCommandTargetKey: FocusedValueKey {
@@ -226,6 +229,51 @@ enum MacComposerKeys {
     }
 }
 
+extension MacComposerKeys {
+    /// Whether a key typed in the composer's window should focus the
+    /// composer and go into it (a lesson's type to focus): the composer
+    /// hasn't focus, the window is key, the key is a printable character
+    /// with no ⌘, ⌃ or ⌥ (not a space, which scrolls and presses buttons,
+    /// nor an arrow or function key), and nothing else takes typing there
+    /// (a text field, or the sidebar's list and its type-to-select).
+    @MainActor
+    static func isTypeToFocus(_ event: NSEvent, composerFocused: Bool, composerWindow: NSWindow?) -> Bool {
+        guard !composerFocused, let window = event.window, window === composerWindow, window.isKeyWindow,
+              typesIntoComposer(modifiers: event.modifierFlags, characters: event.characters)
+        else { return false }
+        if let responder = window.firstResponder, responder is NSText || responder is NSTableView { return false }
+        return true
+    }
+
+    /// The key-press half of `isTypeToFocus`, testable without a window.
+    static func typesIntoComposer(modifiers: NSEvent.ModifierFlags, characters: String?) -> Bool {
+        let flags = modifiers.intersection(.deviceIndependentFlagsMask).subtracting([.shift, .capsLock])
+        guard flags.isEmpty, let characters, !characters.isEmpty else { return false }
+        return characters.unicodeScalars.allSatisfy { scalar in
+            !CharacterSet.controlCharacters.contains(scalar)
+                && !CharacterSet.whitespacesAndNewlines.contains(scalar)
+                // The function keys' private-use range (arrows, F1…).
+                && !(0xF700...0xF8FF).contains(scalar.value)
+        }
+    }
+
+    /// Puts `characters` at the end of the composer once its field editor
+    /// has focus (it arrives a moment after the focus change), never over
+    /// a draft the field selected on focus.
+    @MainActor
+    static func insertWhenFocused(_ characters: String, in window: NSWindow, attempt: Int = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0 : 0.02)) {
+            guard let editor = window.firstResponder as? NSTextView, editor.isFieldEditor else {
+                if attempt < 10 { insertWhenFocused(characters, in: window, attempt: attempt + 1) }
+                return
+            }
+            let end = NSRange(location: (editor.string as NSString).length, length: 0)
+            editor.setSelectedRange(end)
+            editor.insertText(characters, replacementRange: end)
+        }
+    }
+}
+
 /// What the composer's ⌘V watcher reads when a key arrives: a reference the
 /// view keeps current, because the watcher's closure outlives the view value
 /// that installed it.
@@ -234,6 +282,8 @@ final class ComposerPasteContext {
     weak var window: NSWindow?
     var isFocused = false
     var isSending = false
+    /// A printable key typed elsewhere in the window focuses the composer.
+    var typeToFocus = false
 }
 
 /// Reports the window a view is in (the composer's, for its ⌘V watcher).

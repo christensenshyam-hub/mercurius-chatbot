@@ -50,6 +50,14 @@ struct ChatInputBar: View {
     #if os(macOS)
     /// Increment to open the image file panel (File ▸ Attach Image…, ⇧⌘A).
     var attachTrigger: Int = 0
+    /// The field takes focus when it appears (and when it is enabled again).
+    /// A lesson turns this off: it opens on Merc's reply, and a check takes
+    /// the keyboard while it waits (`nightTypeToFocus` instead).
+    var macAutoFocus = true
+    /// With nothing else taking the keyboard, a printable key typed in the
+    /// window focuses the field and goes into it. Off while a check waits
+    /// for Lock it in (its A–D must reach the check).
+    var macTypeToFocus = false
     #endif
 
     @FocusState private var focused: Bool
@@ -178,13 +186,14 @@ struct ChatInputBar: View {
         // the composer again whenever it comes back from being disabled
         // (a lesson's intro).
         .onAppear {
-            DispatchQueue.main.async { if isEnabled { focused = true } }
+            DispatchQueue.main.async { if isEnabled && macAutoFocus { focused = true } }
             installPasteMonitor()
         }
         .onChange(of: isEnabled) { _, enabled in
-            if enabled { DispatchQueue.main.async { focused = true } }
+            if enabled && macAutoFocus { DispatchQueue.main.async { focused = true } }
         }
         .onChange(of: focused, initial: true) { _, isFocused in pasteContext.isFocused = isFocused }
+        .onChange(of: macTypeToFocus && isEnabled && !isSending, initial: true) { _, on in pasteContext.typeToFocus = on }
         .onChange(of: isSending, initial: true) { _, sending in pasteContext.isSending = sending }
         .background(WindowReader { [pasteContext] in pasteContext.window = $0 })
         .onDisappear(perform: removePasteMonitor)
@@ -378,6 +387,23 @@ struct ChatInputBar: View {
         return bar
     }
 
+    /// This bar with the host's focus trigger (Chat ▸ Write a Reply, ⌘L).
+    func withFocusTrigger(_ trigger: Int) -> ChatInputBar {
+        var bar = self
+        bar.focusTrigger = trigger
+        return bar
+    }
+
+    /// This bar for a lesson: no focus on its own; a printable key typed
+    /// with nothing else taking the keyboard focuses it, unless `enabled` is
+    /// off (a check waits for Lock it in).
+    func nightTypeToFocus(_ enabled: Bool) -> ChatInputBar {
+        var bar = self
+        bar.macAutoFocus = false
+        bar.macTypeToFocus = enabled
+        return bar
+    }
+
     private func loadPickedFile(_ result: Result<URL, Error>) {
         guard case .success(let url) = result else { return }
         attachLoadFailed = false
@@ -395,6 +421,14 @@ struct ChatInputBar: View {
         guard pasteMonitor == nil else { return }
         let context = pasteContext
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Type to focus (a lesson): the key goes into the field it focuses.
+            if context.typeToFocus,
+               MacComposerKeys.isTypeToFocus(event, composerFocused: context.isFocused, composerWindow: context.window),
+               let characters = event.characters, let window = event.window {
+                focused = true
+                MacComposerKeys.insertWhenFocused(characters, in: window)
+                return nil
+            }
             guard MacComposerKeys.isComposerPaste(event, composerFocused: context.isFocused,
                                                   composerWindow: context.window),
                   !context.isSending,

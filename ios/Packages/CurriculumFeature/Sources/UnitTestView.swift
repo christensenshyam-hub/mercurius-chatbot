@@ -71,6 +71,14 @@ public struct UnitTestView: View {
                         // Instant under Reduce Motion (§4.5).
                         withAnimation(night.reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id) }
                     }
+                    // A graded quiz opens at its top, on the score and the
+                    // next step.
+                    .onChange(of: model.quizSubmitted) { _, submitted in
+                        guard submitted else { return }
+                        withAnimation(night.reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                            proxy.scrollTo(NightUnitTestContent.topID, anchor: .top)
+                        }
+                    }
                     #endif
                 }
                 // Each phase is its own screen and opens at its top — the

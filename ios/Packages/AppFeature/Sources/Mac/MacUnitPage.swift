@@ -82,6 +82,8 @@ struct MacUnitPage: View {
         /// The unit's first unlocked lesson not yet done: lit, with its
         /// objective and the page's prominent button. `isFrontier`: it's
         /// the student's next stop on the whole path ("You're here").
+        /// `inProgress`: opened last or started (`MacNightCopy.resumes`, Today's
+        /// rule), so its button says Continue.
         case current(isFrontier: Bool, inProgress: Bool)
         /// Unlocked and not done, past the current one (progress merged out
         /// of order): it opens, without the prominent button.
@@ -144,8 +146,10 @@ struct MacUnitPage: View {
                 state = .locked(after: unit.lessons[index - 1])
             } else if !foundCurrent {
                 foundCurrent = true
+                // Continue or Start by Today's rule, so the same lesson gets
+                // the same word on both screens.
                 state = .current(isFrontier: frontier == lesson.id,
-                                 inProgress: progress.state(of: lesson.id) == .inProgress)
+                                 inProgress: MacNightCopy.resumes(lessonId: lesson.id, progress: progress))
             } else {
                 state = .open
             }
@@ -268,7 +272,7 @@ struct MacUnitPage: View {
                     .foregroundStyle(Night.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                Text(page.unit.summary)
+                Text(NightTypography.curlQuotes(page.unit.summary))
                     .nightFont(.callout)
                     .foregroundStyle(Night.ink2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -471,9 +475,11 @@ struct MacUnitPage: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 } meta: {
+                    // `ink3`, as every status here: the filled node already
+                    // says done (no third hue in the column).
                     Text("Done")
                         .nightFont(.caption)
-                        .foregroundStyle(Night.successText)
+                        .foregroundStyle(Night.ink3)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -534,7 +540,7 @@ struct MacUnitPage: View {
                         .foregroundStyle(Night.ink3)
                 }
             }
-            Text(stop.lesson.objective)
+            Text(NightTypography.curlQuotes(stop.lesson.objective))
                 .nightFont(.callout)
                 .foregroundStyle(Night.ink2)
                 .multilineTextAlignment(.leading)
@@ -574,7 +580,7 @@ struct MacUnitPage: View {
                 .nightFont(.title2)
                 .foregroundStyle(Night.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(stop.lesson.objective)
+            Text(NightTypography.curlQuotes(stop.lesson.objective))
                 .nightFont(.callout)
                 .foregroundStyle(Night.ink2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -607,9 +613,11 @@ struct MacUnitPage: View {
                     .foregroundStyle(Night.ink)
             } meta: {
                 if let note = Self.checkNote(page) {
+                    // A status, in `ink3` like the lessons' (accent is for
+                    // "You're here" only; it read as a link).
                     Text(note)
                         .nightFont(.caption)
-                        .foregroundStyle(page.check == .mastered ? Night.successText : Night.accentText)
+                        .foregroundStyle(Night.ink3)
                 }
             }
             Text(Self.checkDetail(questionCount: page.questionCount))
@@ -667,7 +675,7 @@ struct MacUnitPage: View {
                         .nightFont(.headline)
                         .foregroundStyle(Night.accentText)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(next.summary)
+                    Text(NightTypography.curlQuotes(next.summary))
                         .nightFont(.callout)
                         .foregroundStyle(Night.ink2)
                         .multilineTextAlignment(.leading)

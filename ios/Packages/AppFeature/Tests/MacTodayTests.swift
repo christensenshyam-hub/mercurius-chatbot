@@ -24,10 +24,10 @@ struct MacTodayTests {
     func freshPath() {
         let progress = store()
         let next = MacTodayView.upNext(state: HomeState.build(streak: 0, progress: progress), progress: progress)
-        #expect(next.eyebrow == "Up next · Unit 1 · Lesson 1 of \(unit1.lessons.count)")
+        #expect(next.eyebrow == "Up next · Lesson 1.1")
         #expect(next.title == unit1.lessons[0].title)
         #expect(next.detail == unit1.lessons[0].objective)
-        #expect(next.buttonTitle == "Start Lesson 1")
+        #expect(next.buttonTitle == "Start Lesson 1.1")
         #expect(next.unitProgress?.done == 0)
         #expect(next.unitProgress?.label == "0 of \(unit1.lessons.count) lessons done in Unit 1")
     }
@@ -37,11 +37,11 @@ struct MacTodayTests {
         let progress = store()
         progress.markOpened(unit1.lessons[0].id)
         let resumed = MacTodayView.upNext(state: HomeState.build(streak: 0, progress: progress), progress: progress)
-        #expect(resumed.buttonTitle == "Continue Lesson 1")
-        #expect(resumed.eyebrow == "Continue · Unit 1 · Lesson 1 of \(unit1.lessons.count)")
+        #expect(resumed.buttonTitle == "Continue Lesson 1.1")
+        #expect(resumed.eyebrow == "Continue · Lesson 1.1")
         progress.markCompleted(unit1.lessons[0].id)
         let next = MacTodayView.upNext(state: HomeState.build(streak: 0, progress: progress), progress: progress)
-        #expect(next.buttonTitle == "Start Lesson 2")
+        #expect(next.buttonTitle == "Start Lesson 1.2")
         #expect(next.unitProgress?.done == 1)
     }
 
@@ -65,14 +65,6 @@ struct MacTodayTests {
         let next = MacTodayView.upNext(state: HomeState.build(streak: 0, progress: progress), progress: progress)
         #expect(next.buttonTitle == "Review Your Lessons")
         #expect(next.unitProgress == nil)
-    }
-
-    @Test("The streak card never says 0")
-    func streakWords() {
-        #expect(MacTodayView.streakHeadline(0) == "No streak yet")
-        #expect(MacTodayView.streakHeadline(-2) == "No streak yet")
-        #expect(MacTodayView.streakHeadline(1) == "1 day")
-        #expect(MacTodayView.streakHeadline(6) == "6 days")
     }
 
     @Test("The week card counts lessons against the goal, and past it")
@@ -104,7 +96,7 @@ struct MacTodayTests {
         let progress = store()
         let next = MacTodayView.upNext(state: HomeState.build(streak: 0, progress: progress), progress: progress)
         let lesson = unit1.lessons[0]
-        #expect(next.accessibilityLabel.hasPrefix("Lesson 1: \(lesson.title)."))
+        #expect(next.accessibilityLabel.hasPrefix("Lesson 1.1: \(lesson.title)."))
         #expect(next.accessibilityLabel.contains(lesson.objective))
         #expect(next.accessibilityLabel.hasSuffix("0 of \(unit1.lessons.count) lessons done in Unit 1."))
     }
@@ -125,8 +117,11 @@ struct MacTodayTests {
         #expect(MacNightCopy.subline(HomeState.build(streak: 9, progress: progress)) == "Your next lesson is waiting.")
         progress.markCompleted(unit1.lessons[0].id)
         progress.markCompleted(unit1.lessons[1].id)
+        // The week card says "Goal met. Anything more is a bonus."; the
+        // greeting's line doesn't say it again.
         #expect(MacNightCopy.subline(HomeState.build(streak: 9, progress: progress))
-            == "This week's goal is done — anything more is a bonus.")
+            == "Your next lesson is there whenever you want it.")
+        #expect(!MacNightCopy.subline(HomeState.build(streak: 9, progress: progress)).contains("bonus"))
         for lesson in unit1.lessons { progress.markCompleted(lesson.id) }
         #expect(MacNightCopy.subline(HomeState.build(streak: 0, progress: progress))
             == "Unit 1's lessons are done. Ready for the check?")
@@ -170,17 +165,16 @@ struct MacTodayTests {
         #expect(days.filter(\.hasLesson).map(\.name) == ["Friday", "Tuesday"])
     }
 
-    @Test("VoiceOver hears which days had lessons, and the streak line")
+    @Test("VoiceOver hears which days had lessons; the streak is the header's, not the week card's")
     func weekCardSentence() {
         #expect(MacNightCopy.lessonDaysSentence([]) == "No lessons yet this week.")
         #expect(MacNightCopy.lessonDaysSentence(["Friday"]) == "A lesson done on Friday.")
         #expect(MacNightCopy.lessonDaysSentence(["Tuesday", "Thursday"]) == "Lessons done on Tuesday and Thursday.")
         let label = MacNightCopy.weekCardAccessibilityLabel(weekLabel: "This week: 1 of 2 lessons done.",
-                                                            dayNames: ["Friday"], streak: 0)
+                                                            dayNames: ["Friday"])
         #expect(label == "This week: 1 of 2 lessons done. A lesson done on Friday.")
-        let withStreak = MacNightCopy.weekCardAccessibilityLabel(weekLabel: "This week: 0 of 2 lessons done.",
-                                                                 dayNames: [], streak: 3)
-        #expect(withStreak.hasSuffix("3 days running. One lesson or chat a day keeps it going."))
+        #expect(!label.contains("running"))
+        #expect(MacNightCopy.lessonDaysCaption == "Lesson days")
     }
 
     @Test("Think it through offers one of the current mode's real prompts, the same all day")

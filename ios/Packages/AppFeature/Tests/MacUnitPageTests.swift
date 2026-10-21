@@ -65,6 +65,27 @@ struct MacUnitPageTests {
         #expect(MacUnitPage.currentEyebrow(code: "1.1", isFrontier: true) == "Lesson 1.1 · You're here")
     }
 
+    @Test("Today and the unit page say the same word and label for the same lesson")
+    func sameWordEverywhere() {
+        // The seeded week: 1.1 and 1.2 done, 1.3 opened (not yet started).
+        let progress = store()
+        progress.markCompleted(unit1.lessons[0].id)
+        progress.markCompleted(unit1.lessons[1].id)
+        progress.markOpened(unit1.lessons[2].id)
+        let today = MacTodayView.upNext(state: HomeState.build(streak: 4, progress: progress), progress: progress)
+        let page = MacUnitPage.page(unit: unit1, progress: progress)
+        guard case .current(_, let resumes) = page.lessons[2].state else {
+            Issue.record("1.3 should be current")
+            return
+        }
+        #expect(today.buttonTitle == "Continue Lesson 1.3")
+        #expect(MacUnitPage.currentButton(code: page.lessons[2].code, inProgress: resumes) == today.buttonTitle)
+        #expect(today.eyebrow == "Continue · Lesson 1.3")
+        // The predicate is HomeState's own.
+        #expect(MacNightCopy.resumes(lessonId: unit1.lessons[2].id, progress: progress)
+            == HomeState.build(streak: 0, progress: progress).resumesNext)
+    }
+
     @Test("Every lesson done: the check is open and is the page's prominent action; mastered once passed")
     func check() {
         let progress = store()

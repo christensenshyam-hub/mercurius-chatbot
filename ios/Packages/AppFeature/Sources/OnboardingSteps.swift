@@ -167,7 +167,13 @@ private struct GatePinnedCTA<Content: View>: View {
         VStack(spacing: BrandSpacing.md) {
             content()
         }
+        #if os(macOS)
+        // The step's own column (its buttons stay their own size, centred),
+        // so a pinned row lines up with the content above it.
+        .frame(maxWidth: .infinity)
+        #else
         .frame(maxWidth: 420)
+        #endif
         // Pin to ideal height: spare vertical space must go to the scroll
         // area, not into DuoButton's flexible 3D plate (see HomeView).
         .fixedSize(horizontal: false, vertical: true)
@@ -640,8 +646,13 @@ struct DisclosureStep: View {
                 .macDefaultAction()
                 .revealsOnTap(showsHint, reveal: revealSwitch)
                 .accessibilityIdentifier("onboarding.agree")
+                #if os(macOS)
+                .accessibilityHint(agreed ? "Continues to what Merc can't do"
+                                          : "Tick the box above to continue")
+                #else
                 .accessibilityHint(agreed ? "Continues to what Merc can't do"
                                           : "Turn on the switch above to continue")
+                #endif
 
             if showsHint {
                 GateRequiredControlHint(text: Self.switchHint, action: revealSwitch)
@@ -664,6 +675,35 @@ struct DisclosureStep: View {
         }
     }
 
+    #if os(macOS)
+    /// The agreement row on a Mac: a native checkbox that leads, with the
+    /// sentence as its label, so the whole sentence is the click target and
+    /// VoiceOver meets one checkbox named by it. The same words, binding and
+    /// identifier as the iPhone's switch; full width, in line with the
+    /// disclosure rows above it.
+    private var consentToggle: some View {
+        Toggle(isOn: $agreed) {
+            Text(Self.toggleText)
+                .nightFont(.body)
+                .foregroundStyle(BrandColor.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.checkbox)
+        // The native checkbox, in Night's prominent indigo.
+        .tint(Night.prominent)
+        .accessibilityIdentifier("onboarding.consentToggle")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(BrandSpacing.md)
+        // A lit row (SPEC.md §5.7).
+        .nightLit(radius: Night.Radius.row)
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                .strokeBorder(agreed || highlightsSwitch ? BrandColor.accent : BrandColor.border,
+                              lineWidth: highlightsSwitch ? 3 : (agreed ? 1.5 : 1))
+        )
+    }
+    #else
     /// The agreement row. The sentence is part of the tap target, as a
     /// checkbox label is: a SwiftUI `Toggle` only flips on its switch, and a
     /// student who taps the sentence they just read got nothing. VoiceOver
@@ -675,11 +715,7 @@ struct DisclosureStep: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: BrandSpacing.md))
         return layout {
             Text(Self.toggleText)
-                #if os(macOS)
-                .nightFont(.body)
-                #else
                 .font(BrandFont.body)
-                #endif
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -689,28 +725,19 @@ struct DisclosureStep: View {
 
             Toggle(Self.toggleText, isOn: $agreed)
                 .labelsHidden()
-                #if os(macOS)
-                // The native checkbox, in Night's prominent indigo.
-                .tint(Night.prominent)
-                #else
                 .tint(BrandColor.accent)
-                #endif
                 .accessibilityIdentifier("onboarding.consentToggle")
         }
         .padding(BrandSpacing.md)
-        #if os(macOS)
-        // A lit row (SPEC.md §5.7).
-        .nightLit(radius: Night.Radius.row)
-        #else
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
-        #endif
         .overlay(
             RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
                 .strokeBorder(agreed || highlightsSwitch ? BrandColor.accent : BrandColor.border,
                               lineWidth: highlightsSwitch ? 3 : (agreed ? 1.5 : 1))
         )
     }
+    #endif
 
     private func revealSwitch() {
         revealRequest += 1

@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import AppKit
 import Testing
 @testable import ChatFeature
 
@@ -174,14 +175,18 @@ struct NightPartsTests {
 @Suite("Night: sources")
 struct NightSourceTests {
 
-    @Test("Production's raw tag: the title without quotes, the domain, the path kept for the link")
+    @Test("Production's raw tag: the title without quotes, the domain; the chip opens the domain, never the model's path")
     func rawTag() throws {
         let source = try #require(NightSourceParser.parseTag(
             #""On the Dangers of Stochastic Parrots" — dl.acm.org/doi/10.1145/3442188.3445922"#))
         #expect(source.label == "On the Dangers of Stochastic Parrots")
         #expect(source.domain == "dl.acm.org")
         #expect(source.path == "/doi/10.1145/3442188.3445922")
-        #expect(source.url?.absoluteString == "https://dl.acm.org/doi/10.1145/3442188.3445922")
+        // AUD-38: model-written paths are often invented (two runs, two
+        // made-up CourtListener dockets), so the server drops them too.
+        #expect(source.url?.absoluteString == "https://dl.acm.org")
+        let docket = try #require(NightSourceParser.parseTag("Mata v. Avianca — courtlistener.com/docket/63107798/mata-v-avianca"))
+        #expect(docket.url?.absoluteString == "https://courtlistener.com")
     }
 
     @Test("Every separator the server accepts, a scheme and www, label-only and address-only tags")
@@ -208,7 +213,7 @@ struct NightSourceTests {
         #expect(NightSourceParser.parseTag("   ") == nil)
     }
 
-    @Test("PR #46's plain forms: a line of its own, after a sentence, mid-sentence, label only")
+    @Test("PR #46's plain forms: a line of its own, after a sentence, mid-sentence; a label alone stays prose")
     func rewrittenForms() {
         let standalone = NightSourceParser.extract(from: "Source: On the Dangers of Stochastic Parrots (dl.acm.org)")
         #expect(standalone.text.isEmpty)
@@ -222,13 +227,113 @@ struct NightSourceTests {
         #expect(inline.text == "Attention links distant words in one step.")
         #expect(inline.sources == [NightSource(label: "Attention Is All You Need", domain: "arxiv.org", path: nil)])
 
+        // Without a domain its end can't be told from prose (the server's
+        // own REWRITTEN_SOURCE_RE doesn't match it either): it reads as
+        // written, never as a chip.
         let labelOnly = NightSourceParser.extract(from: "Source: Pew Research survey on AI")
-        #expect(labelOnly.text.isEmpty)
-        #expect(labelOnly.sources == [NightSource(label: "Pew Research survey on AI", domain: nil, path: nil)])
+        #expect(labelOnly.text == "Source: Pew Research survey on AI")
+        #expect(labelOnly.sources.isEmpty)
+        let trailingLabelOnly = NightSourceParser.extract(from: "Most teens use chatbots. Source: Pew Research")
+        #expect(trailingLabelOnly.text == "Most teens use chatbots. Source: Pew Research")
+        #expect(trailingLabelOnly.sources.isEmpty)
 
         let inlineLabelOnly = NightSourceParser.extract(from: "Most teens use chatbots (Source: Pew Research).")
         #expect(inlineLabelOnly.text == "Most teens use chatbots.")
         #expect(inlineLabelOnly.sources.first?.domain == nil)
+    }
+
+    @Test("Prose that says \"Source:\" is never a chip: PR #46's rewrite as a subject, a checklist, a question")
+    func sourceInProse() {
+        // PR #46's own documented output for a tag at a line's start (fix/
+        // server-2026-10 docs/server-batch/04-review-fixes.md).
+        let rewrite = "Source: Gender Shades (gendershades.org) backs your bias data; I'm not disputing the disparity exists."
+        #expect(NightSourceParser.extract(from: rewrite).text == rewrite)
+        #expect(NightSourceParser.extract(from: rewrite).sources.isEmpty)
+
+        // An AI-literacy checklist.
+        let checklist = "Before you trust a claim, run three checks:\n\nSource: who made this, and what do they gain?\nEvidence: what backs it up?\nContext: what's missing?"
+        let segments = NightSourceParser.segments(checklist, isStreaming: false)
+        #expect(segments == [.markdown(checklist)])
+        let bold = "**Who made it?** Source: a company that sells the tool."
+        #expect(NightSourceParser.extract(from: bold).sources.isEmpty)
+        #expect(NightSourceParser.extract(from: bold).text == bold)
+
+        // A closing question that says "Source:" is still the Your turn card.
+        let question = "Think about where it came from.\n\nThink about the origin. Source: who benefits if you believe it?"
+        let pieces = NightReplyLayout.chat(content: question, isStreaming: false, yourTurn: true, crisis: false)
+        #expect(pieces.contains(.yourTurn("Think about the origin. Source: who benefits if you believe it?")))
+        #expect(!pieces.contains { if case .source = $0 { return true } else { return false } })
+
+        // VoiceOver never hears a false citation: no chip, no "Source Merc cited".
+        #expect(!pieces.contains { if case .source = $0 { return true } else { return false } })
+    }
+
+    @Test("Mid-stream, a line that looks like a citation's end waits for the line to end")
+    func streamingPlainForms() {
+        let partial = "Bias is measurable.\n\nSource: Gender Shades (gendershades.org)"
+        #expect(NightSourceParser.segments(partial, isStreaming: true) == [.markdown("Bias is measurable."),
+                                                                           .markdown("Source: Gender Shades (gendershades.org)")]
+            || NightSourceParser.segments(partial, isStreaming: true)
+                == [.markdown("Bias is measurable.\n\nSource: Gender Shades (gendershades.org)")])
+        #expect(!NightSourceParser.segments(partial, isStreaming: true).contains { if case .source = $0 { return true } else { return false } })
+        // Once the line ends (or the reply does), it is the chip.
+        #expect(NightSourceParser.segments(partial + "\n", isStreaming: true).contains(
+            .source(NightSource(label: "Gender Shades", domain: "gendershades.org", path: nil))))
+        #expect(NightSourceParser.segments(partial, isStreaming: false).contains(
+            .source(NightSource(label: "Gender Shades", domain: "gendershades.org", path: nil))))
+    }
+
+    @Test("A tag wrapped as a Markdown link takes its link with it (today's production replies)")
+    func markdownLinkTags() throws {
+        // fix/server-2026-10 docs/evals/pacing-server-2026-10-branch-flag-off-rerun-debate.json:1108
+        let first = "**Rebuttal angle:** Your strongest attack is accuracy bias — Joy Buolamwini's Gender Shades study ([SOURCE: Gender Shades — gendershades.org](http://gendershades.org)) showed error rates up to 34% higher for darker-skinned women, meaning the technology can harm the innocent."
+        let one = NightSourceParser.extract(from: first)
+        #expect(!one.text.contains("http"))
+        #expect(!one.text.contains("()"))
+        #expect(one.text.contains("Gender Shades study showed error rates"))
+        #expect(one.sources == [NightSource(label: "Gender Shades", domain: "gendershades.org", path: nil)])
+
+        // …:1148, the tag as the sentence's subject: its title stays in the sentence.
+        let second = "[SOURCE: Gender Shades — gendershades.org](http://gendershades.org) backs your bias data; I'm not disputing the disparity exists."
+        let two = NightSourceParser.extract(from: second)
+        #expect(two.text == "Gender Shades backs your bias data; I'm not disputing the disparity exists.")
+        #expect(two.sources.first?.domain == "gendershades.org")
+
+        // The link's host fills in a tag without a domain; look-alikes stay.
+        #expect(NightSourceParser.extract(from: "See [SOURCE: Gender Shades](https://www.gendershades.org/).").sources
+            == [NightSource(label: "Gender Shades", domain: "gendershades.org", path: nil)])
+        #expect(NightSourceParser.extract(from: "Done [SOURCE: X — x.org] (see above).").text == "Done (see above).")
+        #expect(NightSourceParser.extract(from: "Done [SOURCE: X — x.org](2018).").text.contains("(2018)"))
+        #expect(NightSourceParser.plainText(second)
+            == "Source: Gender Shades (gendershades.org) backs your bias data; I'm not disputing the disparity exists.")
+
+        // Mid-stream, the link is held until its ")" arrives.
+        #expect(NightSourceParser.withholdingPartialTag("Study [SOURCE: X — x.org](http://x.o") == "Study [SOURCE: X — x.org]")
+        #expect(NightSourceParser.withholdingPartialTag("Study [SOURCE: X — x.org] (see") == "Study [SOURCE: X — x.org] (see")
+    }
+
+    @Test("Tags inside [EX], [KEY], [CHECK] and a check's question leave the card and follow it as chips")
+    func tagsInCards() {
+        let reply = "[EX]Amazon's hiring model penalised résumés that mentioned women's colleges [SOURCE: Reuters — reuters.com/article/amazon-ai].[/EX]\n\n[KEY][SOURCE: Gender Shades — gendershades.org] shows the gap.[/KEY]\n\n[Q]\nWhich study measured it? [SOURCE: Gender Shades — gendershades.org]\nA) Gender Shades\nB) None\nANS: A\n[/Q]"
+        let sections = NightParts.sections(of: reply, isStreaming: false)
+        let pieces = NightReplyLayout.lesson(sections: sections, firstPart: 1, crisis: false, isStreaming: false)
+        for piece in pieces {
+            switch piece {
+            case .example(let t), .key(let t), .openQuestion(let t), .markdown(let t):
+                #expect(!t.contains("[SOURCE"), "\(t)")
+            case .quiz(let quiz):
+                #expect(!quiz.stem.contains("[SOURCE"))
+                #expect(quiz.options == ["Gender Shades", "None"])
+            default: continue
+            }
+        }
+        #expect(pieces.contains(.example("Amazon's hiring model penalised résumés that mentioned women's colleges.")))
+        #expect(pieces.filter { if case .source = $0 { return true } else { return false } }.count == 3)
+        // The complete card's recap and the crisis guard's plain text, too.
+        let messages = [ChatMessage(role: .assistant, content: reply)]
+        #expect(NightKeyIdeas.collect(from: messages) == ["Gender Shades shows the gap."])
+        let plain = NightReplyLayout.lesson(sections: sections, firstPart: 1, crisis: true, isStreaming: false)
+        #expect(plain.contains(.plain("Source: Gender Shades (gendershades.org) shows the gap.")))
     }
 
     @Test("A source with no address is an inert citation; the chip shows the domain only")
@@ -394,6 +499,26 @@ struct NightYourTurnTests {
         #expect(!text.contains("[SOURCE"))
     }
 
+    @Test("The guard covers the rest of the thread: a follow-up without the numbers is no Your turn card")
+    func crisisThread() {
+        let before = ChatMessage(role: .assistant, content: "Tokens are pieces of words. What do you think a token is?")
+        let crisis = ChatMessage(role: .assistant, content: "I'm really glad you told me. You can call or text 988 any time.")
+        let student = ChatMessage(role: .user, content: "ok")
+        let followUp = ChatMessage(role: .assistant, content: "That sounds really heavy, and I'm glad you're still talking with me.\n\nIs there an adult at school or at home you'd feel okay telling tonight?")
+        let thread = [before, ChatMessage(role: .user, content: "I don't want to be here anymore"), crisis, student, followUp]
+        let guarded = NightCrisisGuard.guardedReplies(in: thread)
+        #expect(guarded == [crisis.id, followUp.id])
+        // The follow-up alone wouldn't trip the guard…
+        #expect(!NightCrisisGuard.applies(to: followUp.content))
+        // …but in this thread it is drawn plainly: one run of text, no card.
+        let pieces = NightReplyLayout.chat(content: followUp.content, isStreaming: false, yourTurn: true,
+                                           crisis: guarded.contains(followUp.id))
+        #expect(pieces.count == 1)
+        #expect(!pieces.contains { if case .yourTurn = $0 { return true } else { return false } })
+        // A thread with no crisis line guards nothing.
+        #expect(NightCrisisGuard.guardedReplies(in: [before, student]).isEmpty)
+    }
+
     @Test("The guard matches whole words only")
     func crisisWords() {
         #expect(NightCrisisGuard.applies(to: "Call 988."))
@@ -467,6 +592,40 @@ struct NightCheckKeysTests {
         #expect(NightCheckKeys.optionIndex(forKey: "ab", optionCount: 4) == nil)
         #expect(NightCheckKeys.optionIndex(forKey: "\r", optionCount: 4) == nil)
         #expect(NightCheckKeys.optionIndex(forKey: "é", optionCount: 4) == nil)
+    }
+
+    @Test("The lesson's keys for a waiting check: A–D, 1–4, ↑/↓, Return; never with ⌘, ⌃ or ⌥")
+    func routedKeys() {
+        #expect(NightCheckKeys.key(characters: "b", keyCode: 11, modifiers: []) == .option(1))
+        #expect(NightCheckKeys.key(characters: "B", keyCode: 11, modifiers: [.shift]) == .option(1))
+        #expect(NightCheckKeys.key(characters: "3", keyCode: 20, modifiers: []) == .option(2))
+        #expect(NightCheckKeys.key(characters: "\r", keyCode: 36, modifiers: []) == .lockIn)
+        #expect(NightCheckKeys.key(characters: "\u{3}", keyCode: 76, modifiers: [.numericPad]) == .lockIn)
+        #expect(NightCheckKeys.key(characters: "\u{F700}", keyCode: 126, modifiers: [.function, .numericPad]) == .move(-1))
+        #expect(NightCheckKeys.key(characters: "\u{F701}", keyCode: 125, modifiers: [.function, .numericPad]) == .move(1))
+        #expect(NightCheckKeys.key(characters: "e", keyCode: 14, modifiers: []) == nil)
+        #expect(NightCheckKeys.key(characters: "a", keyCode: 0, modifiers: [.command]) == nil)
+        #expect(NightCheckKeys.key(characters: "\r", keyCode: 36, modifiers: [.command]) == nil)
+        #expect(NightCheckKeys.key(characters: "a", keyCode: 0, modifiers: [.option]) == nil)
+    }
+
+    @Test("The router hands keys to the one waiting check, and lets go of it")
+    @MainActor
+    func router() {
+        let router = NightCheckKeyRouter()
+        #expect(!router.route(.lockIn), "no check waits")
+        let first = UUID()
+        var got: [NightCheckKeys.Key] = []
+        router.register(first) { key in got.append(key); return key != .lockIn }
+        #expect(router.activeID == first)
+        #expect(router.route(.option(0)))
+        #expect(!router.route(.lockIn), "the card can decline (nothing picked yet)")
+        #expect(got == [.option(0), .lockIn])
+        router.unregister(UUID())
+        #expect(router.activeID == first, "another card's unregister doesn't take it away")
+        router.unregister(first)
+        #expect(router.activeID == nil)
+        #expect(!router.route(.option(1)))
     }
 
     @Test("↑/↓ move the pick and stop at the ends; the first press picks an end")

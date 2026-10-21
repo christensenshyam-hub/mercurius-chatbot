@@ -117,4 +117,31 @@ struct MacChatSupportTests {
         #expect(!MacComposerKeys.isComposerPaste(event, composerFocused: true, composerWindow: nil))
     }
 }
+
+/// A lesson's type to focus: which key presses go into the composer.
+@Suite("Mac chat: type to focus")
+struct MacTypeToFocusTests {
+    @Test("Printable keys with no ⌘, ⌃ or ⌥ go into the composer; shift and caps lock are fine")
+    func printable() {
+        #expect(MacComposerKeys.typesIntoComposer(modifiers: [], characters: "h"))
+        #expect(MacComposerKeys.typesIntoComposer(modifiers: [.shift], characters: "H"))
+        #expect(MacComposerKeys.typesIntoComposer(modifiers: [.capsLock], characters: "?"))
+        #expect(MacComposerKeys.typesIntoComposer(modifiers: [], characters: "é"))
+    }
+
+    @Test("Shortcuts, space, Return, Tab, Escape, arrows and function keys don't")
+    func notTyping() {
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [.command], characters: "l"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [.control], characters: "a"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [.option], characters: "∂"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: " "))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: "\r"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: "\t"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: "\u{1B}"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [.function, .numericPad], characters: "\u{F700}"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: "\u{F704}"))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: nil))
+        #expect(!MacComposerKeys.typesIntoComposer(modifiers: [], characters: ""))
+    }
+}
 #endif

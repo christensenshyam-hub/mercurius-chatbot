@@ -286,6 +286,19 @@ public extension View {
         #endif
     }
 
+    /// A window title bar with no toolbar of its own (the first-run gate):
+    /// the canvas runs up under it, as in the shell, instead of a neutral
+    /// band with a hairline. macOS 15 and later hide the bar's background;
+    /// macOS 14 paints it the canvas colour.
+    @ViewBuilder
+    func nightCanvasTitleBar() -> some View {
+        if #available(macOS 15.0, *) {
+            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            nightToolbarFallback()
+        }
+    }
+
     private func nightToolbarFallback() -> some View {
         toolbarBackground(Night.canvasTop, for: .windowToolbar)
             .toolbarBackground(.visible, for: .windowToolbar)

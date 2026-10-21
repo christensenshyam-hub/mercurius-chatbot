@@ -74,11 +74,13 @@ struct NightLessonCompleteTests {
 
     // MARK: Lines
 
-    @Test("The eyebrow names the unit and lesson in title case")
+    @Test("The eyebrow names the lesson by the path's code")
     func eyebrow() {
-        #expect(NightCompleteCopy.eyebrow(unitLabel: "UNIT 01", lessonNumber: 1) == "Unit 1 · Lesson 1 · Complete")
+        #expect(NightCompleteCopy.eyebrow(unitLabel: "UNIT 01", lessonNumber: 1) == "Lesson 1.1 · Complete")
         #expect(NightCompleteCopy.eyebrow(unitLabel: nil, lessonNumber: 3) == "Lesson 3 · Complete")
         #expect(NightCompleteCopy.eyebrow(unitLabel: " ", lessonNumber: nil) == "Complete")
+        #expect(NightLessonCode.code(unitLabel: "UNIT 08", lessonNumber: 5) == "8.5")
+        #expect(NightLessonCode.code(unitLabel: "CURRICULUM", lessonNumber: 5) == "5")
     }
 
     @Test("The week row: the count, and a stopping cue true at any hour")
@@ -102,17 +104,19 @@ struct NightLessonCompleteTests {
     func nextStop() {
         let lesson = LessonCompleteOverlay.NextStop.lesson(number: 2, title: "Training data and where knowledge comes from")
         let check = LessonCompleteOverlay.NextStop.unitTest(unitNumber: "01", unitTitle: "How AI Actually Works")
-        #expect(NightCompleteCopy.upNextEyebrow(lesson) == "Up next · Lesson 2")
+        let unit = "UNIT 01"
+        // The same label as the path's and Today's: "Lesson 1.2", never "Lesson 2".
+        #expect(NightCompleteCopy.upNextEyebrow(lesson, unitLabel: unit) == "Up next · Lesson 1.2")
         #expect(NightCompleteCopy.upNextTitle(lesson) == "Training data and where knowledge comes from")
-        #expect(NightCompleteCopy.upNextEyebrow(check) == "Up next · Unit 1 check")
+        #expect(NightCompleteCopy.upNextEyebrow(check, unitLabel: unit) == "Up next · Unit 1 check")
         #expect(NightCompleteCopy.upNextTitle(check) == "How AI Actually Works")
-        #expect(NightCompleteCopy.primaryTitle(lesson) == "Start Lesson 2")
-        #expect(NightCompleteCopy.primaryTitle(check) == "Take the Unit 1 Check")
-        #expect(NightCompleteCopy.primaryTitle(nil) == nil)
-        #expect(NightCompleteCopy.upNextAnnouncement(lesson)
-                == "Up next: Lesson 2, Training data and where knowledge comes from.")
-        #expect(NightCompleteCopy.upNextAnnouncement(check) == "Up next: the Unit 1 check.")
-        #expect(NightCompleteCopy.upNextAnnouncement(nil) == nil)
+        #expect(NightCompleteCopy.primaryTitle(lesson, unitLabel: unit) == "Start Lesson 1.2")
+        #expect(NightCompleteCopy.primaryTitle(check, unitLabel: unit) == "Take the Unit 1 Check")
+        #expect(NightCompleteCopy.primaryTitle(nil, unitLabel: unit) == nil)
+        #expect(NightCompleteCopy.upNextAnnouncement(lesson, unitLabel: unit)
+                == "Up next: Lesson 1.2, Training data and where knowledge comes from.")
+        #expect(NightCompleteCopy.upNextAnnouncement(check, unitLabel: unit) == "Up next: the Unit 1 check.")
+        #expect(NightCompleteCopy.upNextAnnouncement(nil, unitLabel: unit) == nil)
     }
 
     // MARK: Honest copy
@@ -134,8 +138,11 @@ struct NightLessonCompleteTests {
                      NightCompleteCopy.eyebrow(unitLabel: "UNIT 01", lessonNumber: 1),
                      NightCompleteCopy.credential(objective: "Understand tokenization and next-token prediction.") ?? ""]
         for stop in stops {
-            lines += [NightCompleteCopy.primaryTitle(stop), NightCompleteCopy.upNextAnnouncement(stop)].compactMap { $0 }
-            if let stop { lines += [NightCompleteCopy.upNextEyebrow(stop), NightCompleteCopy.upNextTitle(stop)] }
+            lines += [NightCompleteCopy.primaryTitle(stop, unitLabel: "UNIT 01"),
+                      NightCompleteCopy.upNextAnnouncement(stop, unitLabel: "UNIT 01")].compactMap { $0 }
+            if let stop {
+                lines += [NightCompleteCopy.upNextEyebrow(stop, unitLabel: "UNIT 01"), NightCompleteCopy.upNextTitle(stop)]
+            }
         }
         for done in 0...4 {
             lines += [NightCompleteCopy.weekHeadline(done: done, goal: 2), NightCompleteCopy.weekDetail(done: done, goal: 2)]

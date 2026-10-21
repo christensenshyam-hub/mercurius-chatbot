@@ -133,8 +133,15 @@ struct NightModeSwitcher: View {
                 .frame(height: 24)
                 .background {
                     if selected {
-                        Capsule().fill(Night.prominent)
-                            .matchedGeometryEffect(id: "selected-mode", in: space)
+                        if night.reduceMotion {
+                            // Under Reduce Motion the capsule doesn't travel:
+                            // each segment's own fades in place.
+                            Capsule().fill(Night.prominent)
+                                .transition(.opacity)
+                        } else {
+                            Capsule().fill(Night.prominent)
+                                .matchedGeometryEffect(id: "selected-mode", in: space)
+                        }
                     } else if hovered == mode && isEnabled {
                         Capsule().fill(Night.lumen.opacity(Night.Tint.hover * 2))
                     }
@@ -149,6 +156,31 @@ struct NightModeSwitcher: View {
         .accessibilityLabel(mode.displayName)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityHint(isEnabled ? "Switches the chat to \(mode.displayName)" : "Available when Merc has finished replying")
+    }
+}
+
+/// The mode switch in a narrow window: a native pop-up menu ("Socratic ▾")
+/// with the same modes and the same rule, so New Chat and Explain More keep
+/// their room in the toolbar.
+struct NightModeMenu: View {
+    let current: ChatMode
+    let isEnabled: Bool
+    let onSelect: (ChatMode) -> Void
+
+    var body: some View {
+        Picker("Mode", selection: Binding(get: { current }, set: { mode in
+            guard isEnabled, mode != current else { return }
+            onSelect(mode)
+        })) {
+            ForEach(ChatMode.allCases) { mode in
+                Text(mode.displayName).tag(mode)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .fixedSize()
+        .disabled(!isEnabled)
+        .accessibilityLabel("Mode")
     }
 }
 

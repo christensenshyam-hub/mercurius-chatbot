@@ -13,9 +13,10 @@ import PersistenceKit
 /// - **Up next**, the hero: the next stop named, with its objective and the
 ///   unit's meter, Merc inside the card, and one button that opens it
 ///   (Return). It is the only gradient fill in the app.
-/// - **This week**: the weekly goal's ring, the week's seven days (a dot for
-///   each day a lesson was finished), and the streak in one quiet line —
-///   only when there is one. The card opens Progress.
+/// - **This week**: the weekly goal's ring and the week's seven days under
+///   "Lesson days" (a dot for each day a lesson was finished). The card
+///   opens Progress. The streak is one quiet line under the greeting — only
+///   when there is one — since it counts chat days too.
 /// - **Think it through**: one of the current mode's real starter prompts.
 ///   It opens a new chat with the prompt in the composer, not sent.
 /// - **Recent chats**, and the iPhone Home's one-time weekly-nudge offer.
@@ -103,6 +104,14 @@ struct MacTodayView: View {
                 .nightFont(.callout)
                 .foregroundStyle(Night.ink2)
                 .fixedSize(horizontal: false, vertical: true)
+            // The streak, quietly, where it isn't read against the week's
+            // lesson dots (it counts chat days too).
+            if let streakLine = MacNightCopy.streakLine(state.streak) {
+                Text(streakLine)
+                    .nightFont(.caption)
+                    .foregroundStyle(Night.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -118,7 +127,7 @@ struct MacTodayView: View {
                         .nightFont(.title)
                         .foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(next.detail)
+                    Text(NightTypography.curlQuotes(next.detail))
                         .nightFont(.body)
                         .foregroundStyle(Night.heroSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -212,8 +221,10 @@ struct MacTodayView: View {
         case .lesson(let lesson):
             let unit = MercuriusCurriculum.unit(containingLesson: lesson.id)
             let unitNumber = unit.map { Int($0.number) ?? 0 } ?? 0
-            let place = unit.map { "Unit \(unitNumber) · Lesson \(lesson.number) of \($0.lessons.count)" }
-                ?? "Lesson \(lesson.number)"
+            // The path's code ("Lesson 1.3"), as the unit page and the
+            // complete card say it; "3 of 4" is the meter's caption only.
+            let code = unit == nil ? "\(lesson.number)"
+                : MacNightCopy.lessonCode(unitNumber: unitNumber, lessonNumber: lesson.number)
             let unitProgress = unit.map { unit -> UpNext.UnitProgress in
                 let done = progress.completedCount(in: unit)
                 let segments = unit.lessons.map { candidate -> UpNext.UnitProgress.Segment in
@@ -225,15 +236,16 @@ struct MacTodayView: View {
                                            segments: segments)
             }
             let title = lesson.title
+            let resumes = MacNightCopy.resumes(lessonId: lesson.id, progress: progress)
             return UpNext(
-                eyebrow: "\(state.resumesNext ? "Continue" : "Up next") · \(place)",
+                eyebrow: "\(resumes ? "Continue" : "Up next") · Lesson \(code)",
                 title: title,
                 detail: lesson.objective,
                 unitProgress: unitProgress,
-                buttonTitle: state.resumesNext ? "Continue Lesson \(lesson.number)" : "Start Lesson \(lesson.number)",
+                buttonTitle: resumes ? "Continue Lesson \(code)" : "Start Lesson \(code)",
                 symbol: "play.fill",
                 accessibilityLabel: MacNightCopy.heroAccessibilityLabel(
-                    lead: "Lesson \(lesson.number)", title: title, detail: lesson.objective,
+                    lead: "Lesson \(code)", title: title, detail: lesson.objective,
                     progress: unitProgress?.label)
             )
         case .unitTest(let unit):
@@ -276,12 +288,12 @@ struct MacTodayView: View {
     @ViewBuilder
     private func cards(sideBySide: Bool, now: Date) -> some View {
         if sideBySide {
+            // Each card its own height, top-aligned: Think it through has
+            // less to say than the week, and no empty room to say it in.
             HStack(alignment: .top, spacing: Self.cardSpacing) {
                 weekCard(now: now)
                 thinkCard(now: now)
             }
-            // Both cards as tall as the taller one.
-            .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: Self.cardSpacing) {
                 weekCard(now: now)
@@ -294,7 +306,6 @@ struct MacTodayView: View {
         let days = Self.weekDays(weekStart: state.week.weekStart,
                                  completions: Self.completionDates(progress: progress, since: state.week.weekStart),
                                  now: now, calendar: .current)
-        let streakLine = MacNightCopy.streakLine(state.streak)
         return Button(action: onShowProgress) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 16) {
@@ -316,16 +327,15 @@ struct MacTodayView: View {
                 Rectangle()
                     .fill(Night.hairline)
                     .frame(height: 1)
-                weekDaysRow(days)
-                if let streakLine {
-                    Text(streakLine)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(MacNightCopy.lessonDaysCaption)
                         .nightFont(.caption)
                         .foregroundStyle(Night.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
+                    weekDaysRow(days)
                 }
             }
             .padding(Night.Space.card)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .nightLit()
         }
         .buttonStyle(NightCardButtonStyle())
@@ -334,8 +344,7 @@ struct MacTodayView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(MacNightCopy.weekCardAccessibilityLabel(
             weekLabel: state.weekAccessibilityLabel,
-            dayNames: days.filter(\.hasLesson).map(\.name),
-            streak: state.streak))
+            dayNames: days.filter(\.hasLesson).map(\.name)))
         .accessibilityHint(MacNightCopy.weekCardHint)
         .accessibilityAddTraits(.isButton)
     }
@@ -374,29 +383,33 @@ struct MacTodayView: View {
         let prompt = Self.thinkPrompt(mode: chatMode, on: now, calendar: .current)
         return Button { onThinkItThrough(prompt) } label: {
             VStack(alignment: .leading, spacing: 12) {
-                NightEyebrow(MacNightCopy.thinkEyebrow(modeName: chatMode.displayName),
-                             systemImage: "questionmark.bubble")
-                Text("“\(prompt)”")
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    NightEyebrow(MacNightCopy.thinkEyebrow(modeName: chatMode.displayName),
+                                 systemImage: "questionmark.bubble")
+                        .layoutPriority(1)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) {
+                        Text(MacNightCopy.thinkAction)
+                        Image(systemName: "arrow.right")
+                    }
+                    .nightFont(.calloutStrong)
+                    .foregroundStyle(Night.accentText)
+                    .fixedSize()
+                    .accessibilityHidden(true)
+                }
+                Text("“\(NightTypography.curlQuotes(prompt))”")
                     .nightFont(.keep)
                     .foregroundStyle(Night.ink)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(ModeDescription.description(for: chatMode).purpose)
+                Text(NightModeCopy.purpose(chatMode))
                     .nightFont(.callout)
                     .foregroundStyle(Night.ink2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                HStack {
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Night.accentText)
-                        .accessibilityHidden(true)
-                }
             }
             .padding(Night.Space.card)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .nightLit()
         }
         .buttonStyle(NightCardButtonStyle())
@@ -417,16 +430,6 @@ struct MacTodayView: View {
     static func weekDetail(_ week: WeeklyPlan) -> String {
         if week.done >= week.goal { return "Goal met. Anything more is a bonus." }
         return "Goal: \(week.goal) lessons a week."
-    }
-
-    /// Never a "0": a streak not yet started is said in words (Progress and
-    /// the older Today used it; kept for them).
-    static func streakHeadline(_ streak: Int) -> String {
-        switch streak {
-        case ..<1: return "No streak yet"
-        case 1: return "1 day"
-        default: return "\(streak) days"
-        }
     }
 
     /// One of the mode's real starter prompts, the same all day: picked by

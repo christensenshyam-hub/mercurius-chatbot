@@ -317,7 +317,7 @@ Fixed sizes (a Mac has no Dynamic Type). Nothing a student reads is under 12 pt,
 | `NightPrimaryButton` | Capsule, min height 36 (large 44 on Today's hero and the complete card), `headline` white on `prominent`; hover `prominentHover`; pressed `prominentPressed`; disabled: `surfaceRaised` fill, `ink3` label. Takes `.keyboardShortcut(.defaultAction)` where the screen says so. **One per screen.** |
 | `NightSecondaryButton` | Capsule, same heights, `headline` `ink` on floating chrome (§2.8). |
 | `NightTextButton` | No fill; `headline` `accentText`; hover underlines. For "Learning Path", "See progress", "Not now". |
-| `NightIconButton` | 30 pt circle of floating chrome, a 14 pt semibold SF Symbol in `ink`. Always `.accessibilityLabel` + `.help`. |
+| ~~`NightIconButton`~~ | Not built as a shared component (fix pass): its two uses draw their own 30 pt circle, the composer's attach button (inside the field, with hover) and the complete card's Share (a `ShareLink`). Each has its `.accessibilityLabel` and `.help`. |
 | `NightEyebrow` | `eyebrow` style, optional leading SF Symbol at 11 pt bold, 6 pt gap. |
 | `NightRhythmRing` | The concept's ring: one arc per lesson in the weekly goal, 3.5% gaps, unlit `hairline`, lit `progressLight`, no glow. Hidden from VoiceOver (its card speaks). |
 | `NightMercLamp` | `MercMascot` with the radial lamp behind it; `idleLife` off under Reduce Motion; hidden from VoiceOver. |
@@ -381,7 +381,7 @@ Everything from PR #47 stays (Return sends, Shift-Return breaks a line, Escape l
 |---|---|---|
 | ⌘4 | View ▸ Progress (the Progress sheet) | Anywhere past the gate; off while gated or erasing, like the other shell commands |
 | Return | The screen's one prominent button | Today (Up next), the unit page (the current lesson), the lesson intro, the complete card, each gate step (as now) |
-| A–D, 1–4, ↑, ↓ | Pick an answer on the lesson's check card | Only while the check card has focus (Tab to it, or click it). Never while the composer has focus, so typing "B" still types. |
+| A–D, 1–4, ↑, ↓, Return | Pick an answer on the lesson's check card, then lock it in | While the check waits, the lesson's keys go to it (`NightCheckKeyRouter`; the card wears the focus ring to say so), and when it has focus (Tab, a click). Never while the composer, or any text field, has the keyboard, so typing "B" there still types. (Fix pass: a lesson opens on Merc's reply, not on a focused composer; a printable key typed with no check waiting focuses the composer and goes into it; Chat ▸ Write a Reply, ⌘L, focuses it any time.) |
 | Return | Lock it in | While the focused check card has a pick |
 | Tab / ⇧Tab | Composer ↔ the open check card | Lesson |
 
@@ -405,8 +405,7 @@ Window sizes: **1280 × 800** gives a 240 pt sidebar and a detail of about 1040 
 - Nothing else changes: the sections, New Chat row, Delete key, context menu and fold rule stay.
 
 **Toolbar items:**
-- Learning path and Chat: the streak chip is replaced by a standard toolbar button (the system draws it; glass on macOS 26) with `chart.bar.xaxis`, label "Progress", help "Progress and achievements (⌘4)" (D8).
-- Today: the same Progress button.
+- Every screen past the gate: the streak chip is replaced by a standard toolbar button (the system draws it; glass on macOS 26) with `chart.bar.xaxis`, label "Progress", help "Progress and achievements (⌘4)" (D8). Fix pass: it is a trailing `.primaryAction`, in the same place on every screen (lessons and the unit check too); the leading slot is a lesson's or check's way back only.
 - Lessons, unit checks and Support keep their title, subtitle and back button.
 
 **Carries over:** the concept's canvas, the tint, the idea that chrome floats and content is lit.
@@ -563,7 +562,7 @@ The speech bubble and its tail go. "Not now" stays in the toolbar.
   - VoiceOver: "Key idea: …" (as now).
 - **[CHECK] open question**: the Your turn card (§5.4) in `keep`. It's Merc's question to the student.
 - **[Q] check** (inline, where it streamed; **no docked tray** on the Mac): a lit card, radius `card`, padding 18.
-  - Eyebrow "Check · your turn first" with `circle.dashed`; after lock-in, "Check · answered".
+  - Eyebrow "Your turn first" with `circle.dashed`; after lock-in, "Answered" (fix pass: the strip and the part's mark already say "Check").
   - The stem in `title2` `ink`.
   - Answer rows, 8 pt apart:
     - min height 44; radius `row`; padding 14 × 10;
@@ -607,7 +606,7 @@ The speech bubble and its tail go. "Not now" stays in the toolbar.
 
 ### 5.4 Chat
 
-Screen: `ChatView`'s Mac branch. Toolbar (unchanged in function): the native segmented mode picker (macOS 26 draws it as glass), Explain More, New Chat; the Progress button replaces the streak chip (D8). The picker stays native: it's the Mac's own control, keyboard- and VoiceOver-correct, and sized by the system (the judges' 44 pt pill fix is about a phone's custom pills).
+Screen: `ChatView`'s Mac branch. Toolbar (unchanged in function): the mode switch, Explain More, New Chat; the Progress button replaces the streak chip (D8). Fix pass: below 860 pt of detail width the switch is a native pop-up menu ("Socratic ▾") and the "Chat" title steps aside (macOS 15+), so New Chat and Explain More never fall into the toolbar's overflow at the window's 700 pt minimum. The picker stays native: it's the Mac's own control, keyboard- and VoiceOver-correct, and sized by the system (the judges' 44 pt pill fix is about a phone's custom pills).
 
 **1280 × 800:** the 620 pt column on the canvas (pool 1, no stars), the composer pinned at the bottom.
 
@@ -621,16 +620,16 @@ Screen: `ChatView`'s Mac branch. Toolbar (unchanged in function): the native seg
   - Text in `body` `ink`. Attached photos inside the card, as now.
   - VoiceOver: "You: …".
 - **Source chip** (from `[SOURCE: …]`, in chat and lessons):
-  - **Parsing** is a Mac-only pass over the reply's prose blocks (`MessageBlock` and iOS untouched). It handles both server formats: `[SOURCE: Title — domain/path]` (server.js:1074) and `[SOURCE: brief label]` (server.js:478). The tag is removed from the prose.
+  - **Parsing** is a Mac-only pass over the reply's prose blocks and the text of its [KEY], [EX], [CHECK] cards and a check's question (`MessageBlock` and iOS untouched; a card's chips follow the card). It handles both server formats: `[SOURCE: Title — domain/path]` (server.js:1074) and `[SOURCE: brief label]` (server.js:478), with a Markdown link the model sometimes wraps around the tag (`[SOURCE: …](http://…)`, taken with it, its host filling in a missing domain, as `lib/sourceTags.js` does). The tag is removed from the prose; a tag used as a sentence's subject leaves its title in the sentence. Of PR #46's plain forms only the full shapes count: `(Source: label[, domain])`, and `Source: label (domain)` as a whole line or closing a line after a sentence. A label-only `Source: …` stays prose (its end can't be told from prose), and mid-stream a line's plain form waits for the line to end (fix pass).
   - **Look:** a lit row, radius `row`, padding 12: `doc.text.magnifyingglass` in `accentText` on a `lumen` 14% 32 pt square; the title in `headline` `ink`; under it, `caption` `ink3` "Cited by Merc · dl.acm.org" (or "Cited by Merc" with no domain).
-  - **When it opens:** only when there's a domain and `https://<domain/path>` passes `ReplyLinkPolicy.allows`. Then it shows a trailing `arrow.up.right`, the pointing hand, and help "Merc picked this source. Open it and check that it says what Merc says." Otherwise it's an inert citation: no arrow, no hover.
+  - **When it opens:** only when there's a domain and `https://<domain>` passes `ReplyLinkPolicy.allows`. The path the model wrote is never opened: the audit found invented deep links (AUD-38), and the server's rewrite drops it too (fix pass). Then it shows a trailing `arrow.up.right`, the pointing hand, and help "Merc picked this source. Open it and check that it says what Merc says." Otherwise it's an inert citation: no arrow, no hover.
   - **Never** a favicon or anything else fetched.
   - VoiceOver: "Source Merc cited: On the Dangers of Stochastic Parrots, dl.acm.org. Opens in your browser."
 - **The Your turn card:** the latest reply only, once it has completed, when its last paragraph ends in "?" and is 400 characters or fewer (and the crisis guard doesn't apply). That paragraph moves out of the prose into a lit card with the `lumen` wash: eyebrow "Your turn" with `arrow.turn.down.right`, the question in `keep` 18 `ink`. Earlier replies keep their question as plain prose. VoiceOver: header, "Your turn: …".
 - **The reply chips** under the latest reply: the real ones, "Explain more" and "Quiz me", as floating-chrome capsules (32 pt, `calloutStrong` `ink`, leading symbol), with hover. Their behaviour is unchanged.
 - **The composer** (`ChatInputBar`'s Mac branch):
   - A floating-chrome capsule, min height 40.
-  - Leading: the attach button as a 30 pt `NightIconButton` (`photo.badge.plus`).
+  - Leading: the attach button, a 30 pt circle inside the field (`photo.badge.plus`, `ink2`, lumen under the pointer).
   - The field in `body` `ink`, placeholder in `ink3`.
   - Trailing: the send button, a 30 pt `prominent` circle with a white `arrow.up`. Disabled: a `hairline` fill with an `ink3` arrow. Stop: the same circle with `stop.fill`.
   - The boundary is `fieldStroke` (≥ 3:1, §2.3).
@@ -705,9 +704,9 @@ New inputs, each with a default so the iOS call sites don't change:
   4. `body` `ink2`: the lesson title, centred.
   5. **Key ideas from this lesson** (only if there are any): a `headline` `ink2` label, then up to 3 rows: a `key.fill` in `accentText`, then the text in `keep` 16 `ink`. More than 3: the last 3, and "+1 more in the lesson" in `caption` `ink3`.
   6. **The week row** (a `surfaceRaised` well): `NightRhythmRing` 44 pt filling from the old count to the new one, `headline` "1 of 2 this week", and `callout` `ink2` "One more meets this week's goal. Or stop here for today." (at or past the goal: "Weekly goal met. Anything more is a bonus."). Shown only when `weekDone` and `weekGoal` are passed in.
-  7. **Up next:** eyebrow `ink3` "Up next · Lesson 2", then `headline` `ink` with the title. For a unit check: "Up next · Unit 1 check". At the end of the path the row isn't shown.
-  8. **Buttons**, side by side: `NightSecondaryButton` "Done for now" (it does what "Back to lessons" does today: closes the lesson) and `NightPrimaryButton` "Start Lesson 2" (or "Take the Unit 1 Check" / "Back to your path"), Return.
-  9. **Share** (the existing `LessonShareCard` path, unchanged) as a `NightIconButton` (`square.and.arrow.up`, label "Share") in the card's top-trailing corner.
+  7. **Up next:** eyebrow `ink3` "Up next · Lesson 1.2" (the path's code, fix pass), then `headline` `ink` with the title. For a unit check: "Up next · Unit 1 check". At the end of the path the row isn't shown.
+  8. **Buttons**, side by side: `NightSecondaryButton` "Done for now" (it does what "Back to lessons" does today: closes the lesson) and `NightPrimaryButton` "Start Lesson 1.2" (or "Take the Unit 1 Check" / "Back to your path"), Return.
+  9. **Share** (the existing `LessonShareCard` path, unchanged) as a 30 pt chrome circle (`square.and.arrow.up`, label "Share") in the card's top-trailing corner.
 - **The timeline:**
   - the card rises 12 pt and fades in (`milestone`);
   - +0.15 s, Merc celebrates and the bloom opens;
@@ -803,16 +802,16 @@ Every line of new or changed UI text. "Kept" means existing product copy used as
 | "Every lesson is previewable" | "Opens after Lesson 3" on locked rows | Lessons unlock in order (`isLessonUnlocked`). |
 | "Unit 01 checkpoint · 5 questions, then defend your thinking in a few sentences." | "Unit 1 check · 5 questions, then one written answer Merc grades." | Kept from the Mac's `MacTodayView.upNext`; matches the real check. |
 | "pinned source" | "Cited by Merc · {domain}" + help "Merc picked this source. Open it and check that it says what Merc says." | The model chooses the citation; it isn't verified. |
-| "Merc · Socratic · AI tutor" | "Merc · AI tutor" | The mode can change mid-thread. |
+| "Merc · Socratic · AI tutor" | "Merc · AI tutor", over a thread's first reply only, as type (no bust) | The mode can change mid-thread; the bubble-less reply already says who speaks. The tutor is "Merc" on every Mac screen ("Ask Merc…", "Merc asks questions back…", "graded by Merc"); "Mercurius" is the app's name only. |
 | "Give me a hint" | "Explain more", "Quiz me" (kept) | No hint feature exists. |
 | "Continue lesson" | "Start Lesson 3 →" / "Continue Lesson 3 →" (kept) | |
 | "Hi there." | `HomeState.opener` with "." ("Good evening.") | Kept wording, calmer punctuation. |
-| (subline) | first lesson: "Your first lesson is ready when you are."; resuming or later: "Your next lesson is waiting."; goal met: "This week's goal is done — anything more is a bonus."; unit check next: "Unit 1's lessons are done. Ready for the check?"; path done: "You've finished the whole path. Chat with Merc any time to go deeper." | All from `HomeState.greeting`, minus its opener. The "keep your streak alive!" line is not used. |
+| (subline) | first lesson: "Your first lesson is ready when you are."; resuming or later: "Your next lesson is waiting."; goal met: "Your next lesson is there whenever you want it." (fix pass: the week card already says the goal is met); unit check next: "Unit 1's lessons are done. Ready for the check?"; path done: "You've finished the whole path. Chat with Merc any time to go deeper." | All from `HomeState.greeting`, minus its opener. The "keep your streak alive!" line is not used. |
 | "Two lessons a week is the whole plan." | "Goal: 2 lessons a week." (kept `weekDetail`) | No new promise. |
 | "Weekly goal met" / "1 of 2 lessons" | kept (`weekHeadline`) | |
 | "Think it through · Socratic" + a recorded student question | "Think it through · {current mode}" + a prompt from `ModePromptProvider` + `ModeDescription.purpose` | Real prompts, real mode, no auto-send. |
 | "Merc asks questions back. You do the reasoning." | `ModeDescription.purpose` (kept) | Existing copy. |
-| "Check · your turn first" / "Lock it in" / "Or answer in your own words…" | kept | All true of the Mac's check. |
+| "Your turn first" (was "Check · your turn first") / "Lock it in" / "Or answer in your own words…" | kept | All true of the Mac's check. |
 | "Next beat" + canned feedback ("Exactly right — …") | nothing; Merc's real reply streams | The concept's feedback was a recording. |
 | "Lesson complete" + "You can now explain tokenization and next-token prediction." | "Lesson complete" + the lesson's title | Asserted, not shown (educator). |
 | "One more meets your weekly goal — or call it a night." | "One more meets this week's goal. Or stop here for today." | Same stopping cue, true at any hour. |
@@ -864,7 +863,7 @@ A new string goes into the module's copy enum (§1.1) and §8.2's `NightCopyTest
 | `NightPaletteMappingTests` | `BrandColor`'s Mac mapping table (§2.2) points at the right `NightPalette` entries; `BrandPalette` is unchanged |
 | `NightPartsTests` | Counting across replies, whitespace sections, streaming (a section counts once its first character arrives), naming (Check, bold term, ≤ 32 characters, none), no total anywhere |
 | `NightTokenChipTests` | The recorded example yields `un / believ / able`; a mismatch, a single piece, or no "token" word yields nothing; curly quotes |
-| `NightSourceTests` | Both server formats; the tag leaves the prose; `ReplyLinkPolicy` decides tappability; no domain → inert |
+| `NightSourceTests` | Both server formats; the tag leaves the prose; link-wrapped tags and tags in cards; prose that says "Source:" stays prose; the chip opens the domain only; `ReplyLinkPolicy` decides tappability; no domain → inert |
 | `NightYourTurnTests` | Latest completed reply only; a "?" ending; 400 characters; the crisis guard (`988`, `741741`) turns it off |
 | `NightCheckLockInTests` | A pick doesn't send; Lock it in sends "I picked B) …" once; letter keys pick only when the card has focus; Escape is refused with an uncommitted pick |
 | `MacTodayTests` (extended) | The subline table (§6); the streak line never shows a zero; the week's day dots and their VoiceOver sentence |

@@ -2,7 +2,7 @@
 import SwiftUI
 import DesignSystem
 
-/// The toolbar's Progress button on Today, the learning path and the chat
+/// The toolbar's Progress button, trailing on every screen past the gate
 /// (SPEC.md D8): a standard toolbar button — the system draws it, as glass
 /// on macOS 26 — in place of the streak's flame and count, which Night
 /// Studio keeps off the chrome. The streak stays on Today, as one quiet

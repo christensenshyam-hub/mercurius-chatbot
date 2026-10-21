@@ -17,12 +17,14 @@ struct MacLessonChromeTests {
     }
 
     #if os(macOS)
-    @Test("The window's subtitle places the lesson in its unit, in title case")
+    @Test("The window's subtitle names the lesson by the path's code, in title case")
     func subtitle() {
         #expect(CurriculumLessonView.macSubtitle(unitLabel: "UNIT 01", lessonNumber: 2, totalInUnit: 4)
-            == "Unit 1 · Lesson 2 of 4")
+            == "Unit 1 · Lesson 1.2")
         #expect(CurriculumLessonView.macSubtitle(unitLabel: "UNIT 03", lessonNumber: 1, totalInUnit: 0)
-            == "Unit 3 · Lesson 1")
+            == "Unit 3 · Lesson 3.1")
+        #expect(CurriculumLessonView.macSubtitle(unitLabel: "CURRICULUM", lessonNumber: 4, totalInUnit: 0)
+            == "Curriculum · Lesson 4")
     }
 
     @Test("Escape leaves a lesson only when nothing would be lost")

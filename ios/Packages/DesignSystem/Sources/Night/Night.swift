@@ -97,8 +97,6 @@ public enum Night {
         public static let gutter: CGFloat = 24
         /// Between sections.
         public static let section: CGFloat = 24
-        /// Inside a stack.
-        public static let stack: CGFloat = 12
         /// Inside a lit card.
         public static let card: CGFloat = 20
         /// Inside the hero.

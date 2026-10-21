@@ -66,7 +66,7 @@ struct EmptyChatView: View {
                         .nightFont(.title)
                         .foregroundStyle(Night.ink)
                         .accessibilityAddTraits(.isHeader)
-                    Text(ModeDescription.description(for: nightModeValue).purpose)
+                    Text(NightModeCopy.purpose(nightModeValue))
                         .nightFont(.callout)
                         .foregroundStyle(Night.ink2)
                         .multilineTextAlignment(.center)

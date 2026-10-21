@@ -78,6 +78,8 @@ public struct CurriculumLessonView: View {
     @State private var attachTrigger = 0
     /// A check on screen holds a pick that isn't locked in (Escape keeps it).
     @State private var nightUncommittedPick = false
+    /// Where the lesson's keys go while its check waits.
+    @State private var nightCheckRouter = NightCheckKeyRouter()
     #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -217,15 +219,31 @@ public struct CurriculumLessonView: View {
                 #if os(macOS)
                 .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
                 .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
+                // A waiting check takes the lesson's keys, unless the
+                // composer has the keyboard.
+                .environment(\.nightCheckRouter, nightCheckRouter)
+                .environment(\.nightComposerFocused, composerFocused)
                 #endif
 
                 // Clean, fixed composer — nothing tucked behind it.
                 composer
+                    #if os(macOS)
+                    // Under the complete card the composer steps away, so the
+                    // card never sits on its ring (the card is centred in the
+                    // whole lesson).
+                    .opacity(showCelebration ? 0 : 1)
+                    #endif
             }
             // The intro and the celebration cover the lesson: VoiceOver and a
             // keyboard must not reach (or send from) what's underneath.
             .accessibilityHidden(showIntro || showCelebration)
             .disabled(showIntro)
+            #if os(macOS)
+            // Under the complete card the lesson reads as one calm field, not
+            // as clipped words around the card.
+            .blur(radius: showCelebration ? 8 : 0)
+            .disabled(showCelebration)
+            #endif
 
             if showCelebration {
                 LessonCompleteOverlay(
@@ -338,11 +356,15 @@ public struct CurriculumLessonView: View {
         #endif
         #if os(macOS)
         .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
+        .nightCheckKeys(nightCheckRouter, isEnabled: !showIntro && !showCelebration)
         .focusedSceneValue(\.chatCommandTarget, commandTarget)
         .navigationTitle(title)
         .navigationSubtitle(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
                                              totalInUnit: totalInUnit))
         .toolbar { macToolbar }
+        // The canvas runs up under the title bar at every width (in a
+        // narrow window the lesson's bar turned an opaque grey).
+        .nightCanvasTitleBar()
         .onAppear {
             // Settings' erasure stops a reply this lesson is still
             // receiving, before the server delete (`onRegisterStop`).
@@ -404,10 +426,11 @@ public struct CurriculumLessonView: View {
             && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// "Unit 1 · Lesson 2 of 4", the window's subtitle under the lesson's
-    /// title (the iPhone's eyebrow, in title case).
+    /// "Unit 1 · Lesson 1.2", the window's subtitle under the lesson's title
+    /// and the intro's eyebrow: the lesson's code as the path, Today and the
+    /// complete card say it ("2 of 4" is the unit meter's only).
     static func macSubtitle(unitLabel: String, lessonNumber: Int, totalInUnit: Int) -> String {
-        "\(unitName(unitLabel)) · \(place(lessonNumber: lessonNumber, totalInUnit: totalInUnit))"
+        "\(unitName(unitLabel)) · Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: lessonNumber))"
     }
     #endif
 
@@ -446,7 +469,11 @@ public struct CurriculumLessonView: View {
         // While Merc's check waits for an answer, the composer is the other
         // way to answer (§5.3.3).
         let checkOpen = NightCheckKeys.hasAnswerableCheck(messages: model.messages, isIdle: model.phase == .idle)
+        // The lesson opens on Merc's reply, not on a focused composer; a
+        // key typed then goes into it. While a check waits, its A–D and
+        // Return are the check's (Tab, a click or ⌘L reach the composer).
         return bar.withAttachTrigger(attachTrigger)
+            .nightTypeToFocus(!checkOpen)
             .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder : "Type your answer…")
             .macReadableColumn()
         #else
@@ -469,7 +496,9 @@ public struct CurriculumLessonView: View {
                 && MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
             explainMore: { [model] in model.explainMore() },
             canAttach: !covered && !isSending,
-            attachImage: { attachTrigger += 1 }
+            attachImage: { attachTrigger += 1 },
+            canWriteReply: !covered,
+            writeReply: { inputFocusTrigger += 1 }
         )
     }
     #endif
@@ -678,11 +707,6 @@ public struct CurriculumLessonView: View {
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
         }
         .accessibilityLabel("Continue. Start the lesson.")
-        #if os(macOS)
-        .buttonStyle(.plain)
-        .keyboardShortcut(.defaultAction)
-        .help("Start the lesson (Return)")
-        #endif
     }
 
     private var introSpeechBubble: some View {

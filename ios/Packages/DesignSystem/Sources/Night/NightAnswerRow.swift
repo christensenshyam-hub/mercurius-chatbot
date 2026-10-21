@@ -12,8 +12,8 @@ import SwiftUI
 /// |---|---|---|
 /// | rest | `surfaceRaised` | `ink3` ring, `ink2` letter |
 /// | picked | `accent` 10% / 20%, 2 pt `accentText` edge | white letter on `prominent` |
-/// | correct | `success` 14%, 2 pt `success` edge | a check on `success`; a filled check mark when it was the pick, an outlined one when it wasn't |
-/// | wrong | `error` 14%, 2 pt `error` edge | `errorText` letter in an `errorText` ring; a filled cross |
+/// | correct | `success` 14%, 2 pt `success` edge | `successText` letter in a `successText` ring; one trailing check, filled when it was the pick, outlined when it wasn't |
+/// | wrong | `error` 14%, 2 pt `error` edge | `errorText` letter in an `errorText` ring; one trailing filled cross |
 /// | other | `surfaceRaised` | as rest, the option in `ink2` |
 ///
 /// Under Increase Contrast a resting row gets a 1.5 pt `hairline` edge.
@@ -119,9 +119,10 @@ public struct NightAnswerRow: View {
         }
     }
 
-    /// The 26 pt letter disc. Picked: the letter in white on `prominent`
-    /// (7.9:1; white on `accent` would be 4.47:1). Correct: a check on
-    /// `success`. Wrong: the letter in `errorText` in an `errorText` ring.
+    /// The 26 pt letter disc: every row keeps its letter. Picked: the letter
+    /// in white on `prominent` (7.9:1; white on `accent` would be 4.47:1).
+    /// Graded: the letter in its grade's text colour, in a ring of it (the
+    /// one mark is the trailing check or cross).
     @ViewBuilder private var disc: some View {
         ZStack {
             switch mark {
@@ -129,10 +130,8 @@ public struct NightAnswerRow: View {
                 Circle().fill(Night.prominent)
                 discLetter(color: .white)
             case .correct:
-                Circle().fill(Night.success)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(Night.surface)
+                Circle().strokeBorder(Night.successText, lineWidth: 1.5)
+                discLetter(color: Night.successText)
             case .wrong:
                 Circle().strokeBorder(Night.errorText, lineWidth: 1.5)
                 discLetter(color: Night.errorText)

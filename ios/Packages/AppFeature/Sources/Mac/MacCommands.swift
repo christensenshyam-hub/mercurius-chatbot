@@ -8,7 +8,7 @@ import NetworkingKit
 /// - File: New Chat (⌘N) in place of New Window — the app is one window —
 ///   and Attach Image… (⇧⌘A).
 /// - Chat: Socratic / Debate / Discussion (⌥⌘1 / ⌥⌘2 / ⌥⌘3), Retry (⌘R),
-///   Explain More (⇧⌘E). The modes are on only while the free chat shows:
+///   Explain More (⇧⌘E), Write a Reply (⌘L: the composer takes the keyboard). The modes are on only while the free chat shows:
 ///   a lesson has no mode, and switching from one would close it.
 /// - View: Today / Learning Path / Chat (⌘1 / ⌘2 / ⌘3, the sidebar's
 ///   destinations, as in Mail or Finder) and Progress (⌘4, the Progress
@@ -62,6 +62,12 @@ public struct MacCommands: Commands {
             Button("Explain More") { target?.explainMore() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(shell.commandsBlocked || target?.canExplainMore != true)
+            Divider()
+            // The composer takes the keyboard (a lesson leaves it unfocused
+            // while you read, or while a check waits for Lock it in).
+            Button("Write a Reply") { target?.writeReply() }
+                .keyboardShortcut(Self.writeReplyKey)
+                .disabled(shell.commandsBlocked || target?.canWriteReply != true)
         }
 
         SidebarCommands()
@@ -93,6 +99,9 @@ public struct MacCommands: Commands {
             }
         }
     }
+
+    /// ⌘L: Chat ▸ Write a Reply.
+    static let writeReplyKey = KeyboardShortcut("l", modifiers: .command)
 
     /// ⌥⌘1 Socratic, ⌥⌘2 Debate, ⌥⌘3 Discussion — the toolbar's order.
     static func modeKey(_ mode: ChatMode) -> KeyEquivalent {

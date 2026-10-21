@@ -97,6 +97,16 @@ struct MacShellView: View {
                 // Night Studio's toolbar: the system's glass on macOS 26,
                 // the canvas colour before it (SPEC.md §2.8).
                 .nightToolbarBackground()
+                // Progress, in the same trailing place on every screen past
+                // the gate (the leading slot is a lesson's or check's way
+                // back only). ⌘4 does the same from the View menu.
+                .toolbar {
+                    if !isGated {
+                        ToolbarItem(placement: .primaryAction) {
+                            MacProgressButton { shell.showProgress() }
+                        }
+                    }
+                }
         }
         // Night's prominent indigo for the system controls (7.9:1 under
         // white, where `accent` was 4.47:1).
@@ -182,6 +192,9 @@ struct MacShellView: View {
                 // (SPEC.md §5.7). Drawn, not fetched: nothing here may
                 // reach the network before consent.
                 .background(NightCanvas(pools: .indigo, stars: false))
+                // The canvas runs up under the title bar, as in the shell.
+                .nightCanvasTitleBar()
+                // Kept for the Window menu (the bar shows it, too).
                 .navigationTitle("Welcome to Mercurius")
         } else if let debugPreview = debugDetailPreview {
             debugPreview
@@ -231,17 +244,12 @@ struct MacShellView: View {
             chatMode: shell.currentChatMode,
             onThinkItThrough: { shell.newChat(draft: $0) }
         )
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                MacProgressButton { shell.showProgress() }
-            }
-        }
     }
 
     /// A unit's page of the path, in Night Studio (`MacUnitPage`): its
     /// cover, the thread of its lessons and check, and the next unit. The
     /// iPhone pins its stats bar above the path (with a Home button); on
-    /// the Mac Progress is a toolbar button, as in the chat, and Today is a
+    /// the Mac Progress is a toolbar button on every screen, and Today is a
     /// sidebar row.
     @ViewBuilder
     private func unitPath(_ unitId: String) -> some View {
@@ -253,11 +261,6 @@ struct MacShellView: View {
                 onStartUnitTest: { shell.openUnitTest($0) },
                 onOpenUnit: { shell.show(.unit($0)) }
             )
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    MacProgressButton { shell.showProgress() }
-                }
-            }
         } else {
             CurriculumView(
                 progress: env.progressStore,
@@ -265,11 +268,6 @@ struct MacShellView: View {
                 onStartLesson: { shell.openLesson($0) },
                 onStartUnitTest: { shell.openUnitTest($0) }
             )
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    MacProgressButton { shell.showProgress() }
-                }
-            }
         }
     }
 
@@ -279,13 +277,11 @@ struct MacShellView: View {
             model: model,
             apiClient: env.apiClient,
             sessionIdentity: env.sessionIdentity,
-            achievementStore: env.achievementStore,
+            achievementStore: env.achievementStore
             // No Settings or Home buttons in the chat: Settings is ⌘, and
-            // Today is a sidebar row. Progress goes in the toolbar (Night
-            // Studio keeps the streak's number off the chrome).
-            headerAccessory: { [shell] in
-                AnyView(MacProgressButton { shell.showProgress() })
-            }
+            // Today is a sidebar row. Progress is the shell's trailing
+            // toolbar button, as on every screen (Night Studio keeps the
+            // streak's number off the chrome).
         )
         .macChrome(onNewChat: { shell.newChat() }, modeRequest: $shell.modeRequest)
         // No subtitle: the toolbar's mode picker already says the mode, and

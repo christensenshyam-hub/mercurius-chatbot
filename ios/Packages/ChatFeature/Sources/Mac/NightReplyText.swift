@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import AppKit
 import CoreGraphics
 import NetworkingKit
 
@@ -250,21 +251,21 @@ struct NightSource: Equatable, Hashable {
     let label: String
     /// "dl.acm.org", nil when the tag had no address.
     let domain: String?
-    /// The address's path ("/doi/10.1145/…"), raw tags only.
+    /// The address's path ("/doi/10.1145/…"), raw tags only. Kept for the
+    /// record, never opened: the model often invents it (AUD-38).
     let path: String?
 
     /// What the chip's title says.
     var title: String { label.isEmpty ? (domain ?? "") : label }
 
-    /// Where the chip opens: `https://<domain><path>`, only when that passes
-    /// `ReplyLinkPolicy` (https, a host, no credentials). Nil keeps the chip
-    /// an inert citation.
+    /// Where the chip opens: `https://<domain>` only, when that passes
+    /// `ReplyLinkPolicy` (https, a host, no credentials). The path the model
+    /// wrote is dropped, as the server's own rewrite drops it: the audit
+    /// found invented deep links (two runs, two made-up CourtListener
+    /// dockets). Nil keeps the chip an inert citation.
     var url: URL? {
         guard let domain else { return nil }
-        guard let url = URL(string: "https://\(domain)\(path ?? "")"), ReplyLinkPolicy.allows(url) else {
-            return URL(string: "https://\(domain)").flatMap { ReplyLinkPolicy.allows($0) ? $0 : nil }
-        }
-        return url
+        return URL(string: "https://\(domain)").flatMap { ReplyLinkPolicy.allows($0) ? $0 : nil }
     }
 
     /// The plain-text form, as the server's rewrite writes it (for a reply
@@ -298,14 +299,19 @@ enum NightSourceParser {
     private static let labelSpaceScheme = regex(#"^(.*\S)\s+https?://(?:www\.)?("# + host + #")(?::\d{2,5})?([/?#]\S*)?$"#)
     private static let hostOnly = regex("^" + host + "$")
 
-    /// "Source: label (domain)" as a whole line.
-    private static let standaloneWithDomain = regex(#"^Source:\s+(.+?)\s*\(("# + host + #")\)\s*$"#)
-    /// "… sentence. Source: label (domain)" at a line's end.
-    private static let trailingWithDomain = regex(#"([.!?…:]["'”’)*_]*)[ \t]+Source:\s+([^\n]+?)\s*\(("# + host + #")\)[ \t]*$"#)
-    /// "… sentence. Source: label" at a line's end (no address).
-    private static let trailingLabelOnly = regex(#"([.!?…:]["'”’)*_]*)[ \t]+Source:\s+([^\n]{1,120}?)[ \t]*$"#)
+    /// "Source: label (domain)" as a whole line, the domain closing it.
+    private static let standaloneWithDomain = regex(#"^Source:\s+([^\n]{1,240}?)\s*\(("# + host + #")\)\s*$"#)
+    /// "… sentence. Source: label (domain)" with the domain closing the
+    /// line. The label can't hold a question mark: a question is prose.
+    private static let trailingWithDomain = regex(#"([.!?…:]["'”’)*_]*)[ \t]+Source:\s+([^\n?]{1,240}?)\s*\(("# + host + #")\)[ \t]*$"#)
     /// "(Source: label, domain)" or "(Source: label)" anywhere.
     private static let inline = regex(#"\(Source:\s+((?:[^()\n]|\([^()\n]*\))*?)\)"#)
+    /// A Markdown link's destination right after a raw tag's "]": "(http://
+    /// d.org)". The server's LINK_DEST_RE (lib/sourceTags.js): an address,
+    /// no spaces, optional angle brackets. Group 1: the host.
+    private static let linkDestination = regex(#"^\(<?(?:https?://)?(?:www\.)?("# + host + #")(?::\d{2,5})?(?:[/?#][^\s()]*)?>?\)$"#)
+    /// The longest link destination taken with a tag, "(" through ")".
+    static let maxLinkLength = 300
 
     private static func regex(_ pattern: String) -> NSRegularExpression {
         // The patterns are constants; a typo is a programming error the
@@ -318,7 +324,18 @@ enum NightSourceParser {
     /// A raw tag's inside ("\"Title\" — dl.acm.org/doi/…") as a source. Nil
     /// for an empty tag. Mirrors the server's `parseSourceTag`
     /// (lib/sourceTags.js), keeping the path for the chip's link.
-    static func parseTag(_ inner: String) -> NightSource? {
+    static func parseTag(_ inner: String, fallbackDomain: String? = nil) -> NightSource? {
+        guard let parsed = parseTagInner(inner) else {
+            return fallbackDomain.map { NightSource(label: "", domain: $0, path: nil) }
+        }
+        // A Markdown link around the tag lends its host to a tag without one.
+        if parsed.domain == nil, let fallbackDomain {
+            return NightSource(label: parsed.label, domain: fallbackDomain, path: nil)
+        }
+        return parsed
+    }
+
+    private static func parseTagInner(_ inner: String) -> NightSource? {
         let text = inner.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
@@ -391,13 +408,19 @@ enum NightSourceParser {
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { segments.append(.markdown(text)) }
             pending = []
         }
-        let paragraphs = paragraphs(of: isStreaming ? withholdingPartialTag(prose) : prose)
-        for paragraph in paragraphs {
+        let source = isStreaming ? withholdingPartialTag(prose) : prose
+        let paragraphs = paragraphs(of: source)
+        // Mid-stream, the last line may still go on past what looks like a
+        // citation's end ("Source: X (x.org) backs …"): its plain forms wait
+        // for the line to end.
+        let lastLineOpen = isStreaming && !source.hasSuffix("\n")
+        for (index, paragraph) in paragraphs.enumerated() {
             if NightParts.isFence(Substring(paragraph)) {
                 pending.append(paragraph)
                 continue
             }
-            let (text, sources) = extract(from: paragraph)
+            let (text, sources) = extract(from: paragraph,
+                                          lastLineOpen: lastLineOpen && index == paragraphs.count - 1)
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { pending.append(text) }
             if !sources.isEmpty {
                 flush()
@@ -411,14 +434,46 @@ enum NightSourceParser {
     /// The prose with every source as the server's plain text ("Source:
     /// label (domain)"), for a reply shown plainly.
     static func plainText(_ prose: String) -> String {
+        replacingRawTags(in: prose) { source, _ in source?.plainText ?? "" }
+    }
+
+    /// A card's text (a [KEY], [EX], [CHECK] or a check's question) without
+    /// its sources, and the sources, to follow the card as chips. Text with
+    /// nothing that could be a source comes back exactly as it was.
+    static func strip(_ text: String, isStreaming: Bool) -> (text: String, sources: [NightSource]) {
+        guard text.contains("[") || text.contains("Source:") else { return (text, []) }
+        var kept: [String] = []
+        var sources: [NightSource] = []
+        for segment in segments(text, isStreaming: isStreaming) {
+            switch segment {
+            case .markdown(let run): kept.append(run)
+            case .source(let source): sources.append(source)
+            }
+        }
+        if sources.isEmpty && !isStreaming { return (text, []) }
+        return (kept.joined(separator: "\n\n"), sources)
+    }
+
+    /// Every raw tag in `text` (with a Markdown link wrapped around it, as
+    /// the model sometimes writes it: "[SOURCE: X — x.org](http://x.org)")
+    /// replaced by `replacement` of its source (nil for an empty tag) and
+    /// whether the tag is a sentence's subject: it opens a sentence and the
+    /// sentence goes on in lower case ("[SOURCE: X — x.org] backs your
+    /// data"). A look-alike that never closes stays as written.
+    private static func replacingRawTags(in text: String,
+                                         with replacement: (NightSource?, _ isSubject: Bool) -> String) -> String {
         var out = ""
-        var rest = Substring(prose)
+        var rest = Substring(text)
         while let open = rest.range(of: openTag) {
             out += rest[..<open.lowerBound]
             let afterOpen = rest[open.upperBound...]
             if let close = closingBracket(in: afterOpen) {
-                if let source = parseTag(String(afterOpen[..<close])) { out += source.plainText }
-                rest = afterOpen[afterOpen.index(after: close)...]
+                let afterClose = afterOpen[afterOpen.index(after: close)...]
+                let link = linkAfterTag(afterClose)
+                let after = afterClose.dropFirst(link?.length ?? 0)
+                let isSubject = opensSentence(before: out) && continuesInLowercase(after)
+                out += replacement(parseTag(String(afterOpen[..<close]), fallbackDomain: link?.host), isSubject)
+                rest = after
             } else {
                 out += rest[open]
                 rest = afterOpen
@@ -427,39 +482,72 @@ enum NightSourceParser {
         return out + rest
     }
 
+    /// The text so far ends where a sentence may start: nothing on its line
+    /// yet, or the end of a sentence (closing quotes or emphasis allowed).
+    private static func opensSentence(before text: String) -> Bool {
+        let line = text.split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
+        var core = line.trimmingCharacters(in: .whitespaces)
+        while let last = core.last, "\"'”’)*_".contains(last) { core.removeLast() }
+        guard let last = core.last else { return true }
+        return ".!?…:".contains(last)
+    }
+
+    /// The text after a tag goes on with a lower-case word on the same line.
+    private static func continuesInLowercase(_ text: Substring) -> Bool {
+        guard let first = text.drop(while: { $0 == " " || $0 == "\t" }).first else { return false }
+        return first.isLowercase
+    }
+
+    /// The Markdown link destination right after a tag's "]": "(" at once,
+    /// an address with no space or "(", and ")" within `maxLinkLength`
+    /// (the server's `linkAfter`). Its length and host, or nil.
+    static func linkAfterTag(_ text: Substring) -> (length: Int, host: String)? {
+        guard text.first == "(" else { return nil }
+        var length = 0
+        for (offset, c) in text.enumerated() {
+            if offset >= maxLinkLength { return nil }
+            if c == ")" {
+                length = offset + 1
+                break
+            }
+            if offset > 0 && (c.isWhitespace || c == "(") { return nil }
+        }
+        guard length > 0, let m = match(linkDestination, String(text.prefix(length))), let host = m[0] else {
+            return nil
+        }
+        return (length, host.lowercased())
+    }
+
     /// One paragraph's text without its sources, and the sources in order.
-    static func extract(from paragraph: String) -> (text: String, sources: [NightSource]) {
+    /// Only the forms the server writes count, in their full shape: a raw
+    /// tag; "(Source: label[, domain])"; and "Source: label (domain)" as a
+    /// whole line or closing a line after a sentence. Prose that merely
+    /// says "Source:" (a checklist, a question, PR #46's rewrite used as a
+    /// sentence's subject) stays prose. `lastLineOpen`: the paragraph's
+    /// last line is still streaming, so its line-end forms wait.
+    static func extract(from paragraph: String, lastLineOpen: Bool = false) -> (text: String, sources: [NightSource]) {
         var sources: [NightSource] = []
 
-        // Raw tags, anywhere.
-        var text = ""
-        var rest = Substring(paragraph)
-        while let open = rest.range(of: openTag) {
-            text += rest[..<open.lowerBound]
-            let afterOpen = rest[open.upperBound...]
-            if let close = closingBracket(in: afterOpen) {
-                if let source = parseTag(String(afterOpen[..<close])) { sources.append(source) }
-                rest = afterOpen[afterOpen.index(after: close)...]
-            } else {
-                text += rest[open]
-                rest = afterOpen
-            }
+        // Raw tags, anywhere. A tag used as a sentence's subject leaves its
+        // title in the sentence ("Gender Shades backs your data"); its chip
+        // still follows.
+        let text = replacingRawTags(in: paragraph) { found, isSubject in
+            guard let found else { return "" }
+            sources.append(found)
+            return isSubject ? found.title : ""
         }
-        text += rest
 
         // The server's plain-text forms, line by line.
         var lines: [String] = []
-        for rawLine in text.components(separatedBy: "\n") {
-            var line = rawLine
-            line = takeInline(from: line, into: &sources)
-            if let m = match(standaloneWithDomain, line.trimmingCharacters(in: .whitespaces)),
-               let found = source(label: m[0] ?? "", domain: m[1], path: nil) {
-                sources.append(found)
+        let rawLines = text.components(separatedBy: "\n")
+        for (index, rawLine) in rawLines.enumerated() {
+            var line = takeInline(from: rawLine, into: &sources)
+            if lastLineOpen && index == rawLines.count - 1 {
+                lines.append(line)
                 continue
             }
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("Source: "), !trimmed.contains("(Source:"),
-               let found = source(label: String(trimmed.dropFirst("Source: ".count)), domain: nil, path: nil) {
+            if let m = match(standaloneWithDomain, line.trimmingCharacters(in: .whitespaces)),
+               let found = source(label: m[0] ?? "", domain: m[1], path: nil) {
                 sources.append(found)
                 continue
             }
@@ -490,28 +578,21 @@ enum NightSourceParser {
     private static func takeTrailing(from line: String, into sources: inout [NightSource]) -> String {
         let ns = line as NSString
         let whole = NSRange(location: 0, length: ns.length)
-        if let m = trailingWithDomain.firstMatch(in: line, range: whole),
-           let found = source(label: ns.substring(with: m.range(at: 2)), domain: ns.substring(with: m.range(at: 3)), path: nil) {
-            sources.append(found)
-            return ns.substring(to: m.range.location) + ns.substring(with: m.range(at: 1))
-        }
-        if let m = trailingLabelOnly.firstMatch(in: line, range: whole) {
-            let label = ns.substring(with: m.range(at: 2))
-            // One short citation, not another sentence of prose.
-            if !label.contains(". "), let found = source(label: label, domain: nil, path: nil) {
-                sources.append(found)
-                return ns.substring(to: m.range.location) + ns.substring(with: m.range(at: 1))
-            }
-        }
-        return line
+        guard let m = trailingWithDomain.firstMatch(in: line, range: whole) else { return line }
+        let label = ns.substring(with: m.range(at: 2))
+        // One citation, not another sentence of prose.
+        guard !label.contains(". "), !label.contains("! "),
+              let found = source(label: label, domain: ns.substring(with: m.range(at: 3)), path: nil) else { return line }
+        sources.append(found)
+        return ns.substring(to: m.range.location) + ns.substring(with: m.range(at: 1))
     }
 
     /// Collapses what a removed tag leaves behind: doubled spaces, a space
     /// before punctuation, empty parentheses.
     static func tidy(_ text: String) -> String {
         var out = text
-        for (pattern, replacement) in [(#"[ \t]{2,}"#, " "), (#" +([.,;:!?)])"#, "$1"), (#"\( +"#, "("),
-                                        (#"\(\s*\)"#, ""), (#"[ \t]+\n"#, "\n"), (#"[ \t]+$"#, "")] {
+        for (pattern, replacement) in [(#"\(\s*\)"#, ""), (#"[ \t]{2,}"#, " "), (#" +([.,;:!?)])"#, "$1"),
+                                        (#"\( +"#, "("), (#"[ \t]+\n"#, "\n"), (#"[ \t]+$"#, "")] {
             out = out.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
         }
         return out
@@ -535,6 +616,15 @@ enum NightSourceParser {
     static func withholdingPartialTag(_ text: String) -> String {
         if let open = text.range(of: openTag, options: .backwards) {
             let afterOpen = text[open.upperBound...]
+            // A closed tag whose Markdown link is still arriving: hold the
+            // "(…" until its ")" says whether it is the tag's link.
+            if let close = closingBracket(in: afterOpen) {
+                let afterClose = afterOpen[afterOpen.index(after: close)...]
+                if afterClose.first == "(", !afterClose.contains(")"), afterClose.count < maxLinkLength,
+                   !afterClose.dropFirst().contains(where: { $0.isWhitespace || $0 == "(" }) {
+                    return String(text[..<afterClose.startIndex])
+                }
+            }
             let unterminated = !afterOpen.contains("]") && !afterOpen.contains("\n") && !afterOpen.contains("[")
                 && text.distance(from: open.lowerBound, to: text.endIndex) < maxTagLength
             if unterminated { return String(text[..<open.lowerBound]) }
@@ -610,18 +700,35 @@ enum NightReplyLayout {
                 case .prose(let text):
                     pieces += NightSourceParser.segments(MessageBubbleView.stripCheckTokens(text),
                                                          isStreaming: streamingTail).map(piece)
-                case .key(let text): pieces.append(.key(text))
-                case .example(let text): pieces.append(.example(text))
-                case .check(let text): pieces.append(.openQuestion(text))
+                // A card's sources follow it as chips: raw tags inside
+                // [KEY], [EX], [CHECK] and a check's question never show.
+                case .key(let text):
+                    let card = NightSourceParser.strip(text, isStreaming: streamingTail)
+                    if !card.text.isEmpty { pieces.append(.key(card.text)) }
+                    pieces += card.sources.map(NightReplyPiece.source)
+                case .example(let text):
+                    let card = NightSourceParser.strip(text, isStreaming: streamingTail)
+                    if !card.text.isEmpty { pieces.append(.example(card.text)) }
+                    pieces += card.sources.map(NightReplyPiece.source)
+                case .check(let text):
+                    let card = NightSourceParser.strip(text, isStreaming: streamingTail)
+                    if !card.text.isEmpty { pieces.append(.openQuestion(card.text)) }
+                    pieces += card.sources.map(NightReplyPiece.source)
                 case .quiz(let quiz):
+                    let stem = NightSourceParser.strip(quiz.stem, isStreaming: streamingTail)
                     if quiz.isComplete && !quiz.isWellFormed {
                         // The pre-blocks degradation: the interior as an
                         // open question.
-                        pieces.append(.openQuestion(([quiz.stem] + quiz.options).filter { !$0.isEmpty }
+                        pieces.append(.openQuestion(([stem.text] + quiz.options).filter { !$0.isEmpty }
                             .joined(separator: " ")))
                     } else {
-                        pieces.append(.quiz(quiz))
+                        // Only the question's words change; the options
+                        // (what "I picked B) …" sends) are the reply's own.
+                        var shown = quiz
+                        if !stem.text.isEmpty { shown.stem = stem.text }
+                        pieces.append(.quiz(shown))
                     }
+                    pieces += stem.sources.map(NightReplyPiece.source)
                 }
             }
         }
@@ -660,10 +767,10 @@ enum NightReplyLayout {
     static func plainText(_ block: MessageBlock) -> String {
         switch block {
         case .prose(let text): return NightSourceParser.plainText(MessageBubbleView.stripCheckTokens(text))
-        case .key(let text), .example(let text), .check(let text): return text
+        case .key(let text), .example(let text), .check(let text): return NightSourceParser.plainText(text)
         case .quiz(let quiz):
             let options = quiz.options.enumerated().map { "\(ChatAnnouncement.letter($0.offset))) \($0.element)" }
-            return ([quiz.stem] + options).filter { !$0.isEmpty }.joined(separator: "\n\n")
+            return ([NightSourceParser.plainText(quiz.stem)] + options).filter { !$0.isEmpty }.joined(separator: "\n\n")
         }
     }
 }
@@ -705,6 +812,14 @@ enum NightYourTurn {
         return (paragraphs.joined(separator: "\n\n"), question, inlineSources + trailing)
     }
 
+    /// The thread's latest reply is Merc's, settled, and ends on the Your
+    /// turn card (the mode asks, and the crisis guard doesn't hold it).
+    static func latestReplyAsks(_ messages: [ChatMessage], mode: ChatMode) -> Bool {
+        guard modes.contains(mode), let last = messages.last, last.role == .assistant, last.status == .idle,
+              !NightCrisisGuard.guardedReplies(in: messages).contains(last.id) else { return false }
+        return split(MessageBubbleView.stripCheckTokens(last.content)) != nil
+    }
+
     static func isQuestion(_ paragraph: String) -> Bool {
         guard !paragraph.isEmpty, paragraph.count <= maxLength else { return false }
         let starts = ["#", ">", "- ", "* ", "+ ", "|", "```", "~~~", "["]
@@ -725,6 +840,37 @@ enum NightCrisisGuard {
     /// serif, no wash. Calm beats styled.
     static func applies(to reply: String) -> Bool {
         reply.range(of: #"\b988\b|\b741741\b"#, options: .regularExpression) != nil
+    }
+
+    /// The thread's replies drawn plainly: once a reply in the thread carried
+    /// a crisis line, it and every reply after it. Merc's follow-ups there
+    /// rarely repeat the numbers, but the safety core says not to resume
+    /// tutoring, so no Your turn card, chip or card frames them either. A
+    /// new thread starts clear.
+    static func guardedReplies(in messages: [ChatMessage]) -> Set<UUID> {
+        guard let first = messages.firstIndex(where: { $0.role == .assistant && applies(to: $0.content) }) else {
+            return []
+        }
+        return Set(messages[first...].filter { $0.role == .assistant }.map(\.id))
+    }
+}
+
+/// `NightCrisisGuard.guardedReplies`, worked out once per change of the
+/// thread (the list asks for every row, on every streamed delta).
+@MainActor
+final class NightCrisisIndex {
+    private var ids: [UUID] = []
+    private var lengths: [Int] = []
+    private var cached: Set<UUID> = []
+
+    func guardedReplies(in messages: [ChatMessage]) -> Set<UUID> {
+        let newIds = messages.map(\.id)
+        let newLengths = messages.map { $0.content.utf8.count }
+        if newIds == ids && newLengths == lengths { return cached }
+        ids = newIds
+        lengths = newLengths
+        cached = NightCrisisGuard.guardedReplies(in: messages)
+        return cached
     }
 }
 
@@ -823,6 +969,33 @@ enum NightTokenLine {
 // MARK: - The check from the keyboard
 
 enum NightCheckKeys {
+    /// A key the lesson hands its waiting check.
+    enum Key: Equatable {
+        /// A–D or 1–4: that option (the card checks it exists).
+        case option(Int)
+        /// ↑ (−1) or ↓ (+1).
+        case move(Int)
+        /// Return (or Enter): lock the pick in.
+        case lockIn
+    }
+
+    /// The check's key for a key press with no ⌘, ⌃ or ⌥: A–D / 1–4, the
+    /// up and down arrows, Return and Enter. Nil for anything else (it goes
+    /// on to the window as usual).
+    static func key(characters: String?, keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Key? {
+        let flags = modifiers.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.shift, .capsLock, .function, .numericPad])
+        guard flags.isEmpty else { return nil }
+        switch keyCode {
+        case 36, 76: return .lockIn          // Return, Enter
+        case 126: return .move(-1)           // ↑
+        case 125: return .move(1)            // ↓
+        default: break
+        }
+        guard let characters, let index = optionIndex(forKey: characters, optionCount: 4) else { return nil }
+        return .option(index)
+    }
+
     /// The option a key picks: A–D (either case) or 1–4, within the
     /// question's options. Nil for anything else.
     static func optionIndex(forKey characters: String, optionCount: Int) -> Int? {
@@ -851,6 +1024,32 @@ enum NightCheckKeys {
         return BlockParser.parse(last.content).contains {
             if case .quiz(let quiz) = $0 { return quiz.isWellFormed } else { return false }
         }
+    }
+}
+
+// MARK: - Who the tutor is
+
+/// The tutor is Merc on every Mac screen; "Mercurius" is the app's name only
+/// (the window title, Settings, the consent text). The iPhone's shared
+/// strings that call the tutor "Mercurius" are overridden here, for the Mac
+/// only (`ModeDescription` itself is unchanged).
+public enum NightModeCopy {
+    /// What a mode is for, in the tutor's own name.
+    public static func purpose(_ mode: ChatMode) -> String {
+        switch mode {
+        case .socratic: return "Merc asks questions back instead of handing you the answer."
+        case .debate: return "Merc argues back. You take a side, he pushes the other."
+        case .discussion: return "Merc treats you as an intellectual peer — exploring ideas together, not teaching you."
+        }
+    }
+
+    /// The free chat's composer: "Ask Merc…", or "Your answer…" when Merc's
+    /// latest reply ends on the Your turn card.
+    static let askPlaceholder = "Ask Merc…"
+    static let answerPlaceholder = "Your answer…"
+
+    static func chatPlaceholder(messages: [ChatMessage], mode: ChatMode) -> String {
+        NightYourTurn.latestReplyAsks(messages, mode: mode) ? answerPlaceholder : askPlaceholder
     }
 }
 
@@ -888,9 +1087,10 @@ enum NightReplyCopy {
         "\(match.word) becomes \(match.pieces.count) tokens: \(match.pieces.joined(separator: ", "))."
     }
 
-    // The check
-    static let checkOpen = "Check · your turn first"
-    static let checkAnswered = "Check · answered"
+    // The check. The strip ("Part 3 · Check") and the part's mark already
+    // name it, so the card's eyebrow says what to do, not "Check" again.
+    static let checkOpen = "Your turn first"
+    static let checkAnswered = "Answered"
     static let checkInert = "Check"
     static let lockIn = "Lock it in"
     static func lockInAccessibility(letter: String) -> String { "Lock in answer \(letter)" }

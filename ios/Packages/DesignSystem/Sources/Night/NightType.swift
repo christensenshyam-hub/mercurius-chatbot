@@ -107,6 +107,94 @@ public enum NightType {
     }
 }
 
+/// Night's typographic pass for prose the app draws (Merc's replies, the
+/// curriculum's lines): straight quotes become curly ones, which Lexend
+/// draws as quotes rather than inch marks. Code is left alone: fenced
+/// blocks, `inline code`, and Markdown link destinations stay byte for
+/// byte. Never applied to what the student typed.
+public enum NightTypography {
+    public static func curlQuotes(_ text: String) -> String {
+        guard text.contains("\"") || text.contains("'") else { return text }
+        var lines: [String] = []
+        var inFence = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.drop { $0 == " " }
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                inFence.toggle()
+                lines.append(String(line))
+            } else {
+                lines.append(inFence ? String(line) : curlLine(Array(line)))
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func curlLine(_ chars: [Character]) -> String {
+        var out = ""
+        // The last character that decides a quote's side; emphasis marks
+        // ("*", "_") are looked through.
+        var previous: Character?
+        var index = 0
+        while index < chars.count {
+            let c = chars[index]
+            // `code`: copied as it is, to the run of backticks that closes it.
+            if c == "`" {
+                var run = 0
+                while index + run < chars.count, chars[index + run] == "`" { run += 1 }
+                var close = index + run
+                var found = false
+                while close < chars.count {
+                    if chars[close] == "`" {
+                        var closing = 0
+                        while close + closing < chars.count, chars[close + closing] == "`" { closing += 1 }
+                        if closing == run {
+                            found = true
+                            close += closing
+                            break
+                        }
+                        close += closing
+                    } else {
+                        close += 1
+                    }
+                }
+                let end = found ? close : index + run
+                out += String(chars[index..<end])
+                previous = chars[end - 1]
+                index = end
+                continue
+            }
+            // "](destination)": the address stays as written.
+            if c == "(", index > 0, chars[index - 1] == "]", let close = chars[index...].firstIndex(of: ")") {
+                out += String(chars[index...close])
+                previous = ")"
+                index = close + 1
+                continue
+            }
+            switch c {
+            case "\"":
+                out.append(opens(after: previous) ? "“" : "”")
+            case "'":
+                if let previous, previous.isLetter || previous.isNumber {
+                    out.append("’")
+                } else {
+                    out.append(opens(after: previous) ? "‘" : "’")
+                }
+            default:
+                out.append(c)
+            }
+            if c != "*" && c != "_" { previous = c }
+            index += 1
+        }
+        return out
+    }
+
+    /// A quote opens at the start, after a space, or after an opening mark.
+    private static func opens(after previous: Character?) -> Bool {
+        guard let previous else { return true }
+        return previous.isWhitespace || "([{—–-/“‘".contains(previous)
+    }
+}
+
 public extension View {
     /// A Night type role: its face, size, tracking and line spacing.
     func nightFont(_ role: NightType.Role) -> some View {

@@ -19,7 +19,7 @@ enum NightUnitTestCopy {
     /// Was "WRITTEN DEFENSE".
     static let writtenAnswer = "Written answer"
     static func writtenLead(score: Int, total: Int) -> String {
-        "Nice — \(score)/\(total) on the quiz. One written question left, graded by Mercurius."
+        "Nice — \(score)/\(total) on the quiz. One written question left, graded by Merc."
     }
     static let writtenPlaceholder = "Type your answer here…"
     static let grading = "Grading your answer…"
@@ -98,15 +98,24 @@ struct NightUnitTestContent: View {
 
     // MARK: Quiz
 
+    /// The header's id: a graded quiz scrolls back to it.
+    static let topID = "night-unit-test-top"
+
     private var quizPhase: some View {
         VStack(alignment: .leading, spacing: Night.Space.section) {
             header
-            VStack(alignment: .leading, spacing: 8) {
-                Text(NightUnitTestCopy.instructions(total: model.mcqTotal, needed: model.mcqCorrectNeeded))
-                    .nightFont(.body)
-                    .foregroundStyle(Night.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !model.quizSubmitted {
+                .id(Self.topID)
+            if model.quizSubmitted {
+                // Graded: the score and the next step lead, where the
+                // instructions were (and the button is repeated at the foot,
+                // after the answers).
+                quizResult(commandReturn: true)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NightUnitTestCopy.instructions(total: model.mcqTotal, needed: model.mcqCorrectNeeded))
+                        .nightFont(.body)
+                        .foregroundStyle(Night.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Label(NightUnitTestCopy.instructionsKeyboard, systemImage: "keyboard")
                         .nightFont(.caption)
                         .foregroundStyle(Night.ink3)
@@ -119,15 +128,9 @@ struct NightUnitTestContent: View {
             }
 
             if model.quizSubmitted {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(NightUnitTestCopy.score(model.mcqScore, of: model.mcqTotal))
-                        .nightFont(.title2)
-                        .monospacedDigit()
-                        .foregroundStyle(Night.ink)
-                    primary(model.mcqPassed ? NightUnitTestCopy.continueToWritten : NightUnitTestCopy.seeResults,
-                            commandReturn: true) {
-                        model.continueAfterQuiz()
-                    }
+                primary(model.mcqPassed ? NightUnitTestCopy.continueToWritten : NightUnitTestCopy.seeResults,
+                        commandReturn: false) {
+                    model.continueAfterQuiz()
                 }
             } else {
                 primary(model.submitTitle, enabled: model.allAnswered, commandReturn: true) {
@@ -141,6 +144,20 @@ struct NightUnitTestContent: View {
         }
         .onAppear {
             if !model.quizSubmitted { focusedQuestion.wrappedValue = model.questions.first?.id }
+        }
+    }
+
+    /// "You got 4 of 5 correct." and the next step (⌘Return).
+    private func quizResult(commandReturn: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(NightUnitTestCopy.score(model.mcqScore, of: model.mcqTotal))
+                .nightFont(.title2)
+                .monospacedDigit()
+                .foregroundStyle(Night.ink)
+            primary(model.mcqPassed ? NightUnitTestCopy.continueToWritten : NightUnitTestCopy.seeResults,
+                    commandReturn: commandReturn) {
+                model.continueAfterQuiz()
+            }
         }
     }
 
