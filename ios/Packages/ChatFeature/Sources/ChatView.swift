@@ -653,6 +653,10 @@ struct MessageListView: View {
     /// Lesson 1.1's interactive: the opening picked (and the Mac's opened
     /// card, the iPhone's shown map), for the whole thread.
     @State private var tokenizer = TokenizerState()
+    #if os(iOS)
+    /// The iPhone card's "Try it": its step 4 to the top of the reading area.
+    @State private var interactiveJump = LessonInteractiveJump()
+    #endif
 
     #if os(macOS)
     /// Night Studio, free chat: the latest completed reply's closing
@@ -901,6 +905,19 @@ struct MessageListView: View {
                 #endif
                 // Lesson 1.1's interactive keeps its opening for the thread.
                 .environment(tokenizer)
+                #if os(iOS)
+                // Its "Try it" jumps to its openings: a move of the
+                // student's own, as the Mac strip's jump to a part is.
+                .environment(\.lessonInteractiveJump, interactiveJump)
+                .onAppear {
+                    interactiveJump.perform = { animated in
+                        scroll.policy.partJumped()
+                        withAnimation(animated ? .smooth(duration: 0.45) : nil) {
+                            proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+                        }
+                    }
+                }
+                #endif
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
                 })

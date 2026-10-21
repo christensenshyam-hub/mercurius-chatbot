@@ -18,13 +18,18 @@ import DesignSystem
 /// sends, stores and tokenises nothing; the opening picked lives in the
 /// lesson's `TokenizerState`, so a reply's re-render never resets it.
 ///
+/// - Its first screen says what it does and has "Try it", which brings step
+///   4's openings up (on an SE they are a screen or two down).
 /// - Dynamic Type through AX5: the map's labels grow as far as its width
 ///   allows (`TokenizerMapScale`); past xLarge the card also says where
 ///   "bank" is in words, and at the accessibility sizes the map starts
 ///   folded behind "Show the map". Decoration goes first (the step numbers'
-///   discs, the arrow), never a word.
+///   discs, the arrows), never a word. A panel under 300 pt (a 320 pt
+///   window) gets the 300 pt map, scaled down.
 /// - Openings are 44 pt or taller; a pick gives a selection haptic and
-///   VoiceOver hears the finished sentence and where "bank" went.
+///   VoiceOver hears the finished sentence and where "bank" went. A pick
+///   moves only "bank" and its lines: the chips and step 4's lines keep
+///   their size in every state.
 /// - Reduce Motion: "bank" crossfades to its new place. Increase Contrast:
 ///   no glows or stars, solid edges, the HC values. Reduce Transparency:
 ///   every wash and edge solid, no glows.
@@ -49,7 +54,12 @@ struct LessonTokenizerCard: View {
     @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.lessonInteractiveJump) private var jump
     @State private var local = TokenizerState()
+    /// "Try it" moves VoiceOver to step 4's title, where the jump went.
+    @AccessibilityFocusState private var focusedStep: Int?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.accessibilitySwitchControlEnabled) private var switchControl
     @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 11
     @ScaledMetric(relativeTo: .headline) private var stepDisc: CGFloat = 26
 
@@ -63,6 +73,23 @@ struct LessonTokenizerCard: View {
     private var large: Bool { typeSize.isAccessibilitySize }
 
     static let padding: CGFloat = BrandSpacing.lg
+    /// The card's own space, where the map panel reports its frame
+    /// (`PanelFrameKey`).
+    static let coordinateSpace = "lesson-tokenizer-card"
+
+    /// The map panel's frame in the card (`coordinateSpace`), for the layout
+    /// tests: a pick must move "bank" and its lines, never the panel.
+    struct PanelFrameKey: PreferenceKey {
+        static var defaultValue: CGRect? { nil }
+        static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+            value = value ?? nextValue()
+        }
+    }
+
+    /// Every state step 4's lines are drawn for: before a pick, then each
+    /// opening. They are all laid out, one shown, so a pick never changes
+    /// the step's height and the map below stays put.
+    private static let contexts: [TokenizerContext?] = [nil] + TokenizerContext.allCases.map { Optional($0) }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: BrandRadius.xl, style: .continuous)
@@ -78,6 +105,7 @@ struct LessonTokenizerCard: View {
         }
         .padding(Self.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .coordinateSpace(.named(Self.coordinateSpace))
         .background { cardBackground(shape) }
         .overlay(shape.strokeBorder(sky.edge, lineWidth: 1))
         // The lesson bubble's soft shadow, in light mode only: in dark the
@@ -110,26 +138,85 @@ struct LessonTokenizerCard: View {
 
     // MARK: Header and steps
 
+    /// The eyebrow and title, then what the card does and "Try it": on a
+    /// phone the openings to tap are a screen or two down (on an SE at
+    /// Large, about 870 pt into a 1,400 pt card), so the card's first screen
+    /// says there is something to try and goes there.
     private var header: some View {
-        VStack(alignment: .leading, spacing: BrandSpacing.xs) {
-            HStack(spacing: BrandSpacing.xs) {
-                if !large {
-                    Image(systemName: "hand.tap")
-                        .font(.system(size: eyebrowSize, weight: .bold))
+        VStack(alignment: .leading, spacing: BrandSpacing.md) {
+            VStack(alignment: .leading, spacing: BrandSpacing.xs) {
+                HStack(spacing: BrandSpacing.xs) {
+                    if !large {
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: eyebrowSize, weight: .bold))
+                    }
+                    Text(TokenizerCopy.eyebrow.uppercased())
+                        .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
+                        .tracking(1.2)
                 }
-                Text(TokenizerCopy.eyebrow.uppercased())
-                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
-                    .tracking(1.2)
+                .foregroundStyle(sky.accentText)
+                Text(TokenizerCopy.title)
+                    .font(BrandFont.roundedTitle3)
+                    .foregroundStyle(sky.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .foregroundStyle(sky.accentText)
-            Text(TokenizerCopy.title)
-                .font(BrandFont.roundedTitle3)
-                .foregroundStyle(sky.ink)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(TokenizerCopy.cardAccessibility)
+            .accessibilityAddTraits(.isHeader)
+            Text(TokenizerCopy.compactLine)
+                .font(.callout)
+                .foregroundStyle(sky.ink2)
                 .fixedSize(horizontal: false, vertical: true)
+            tryIt
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(TokenizerCopy.cardAccessibility)
-        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// "Try it ↓": step 4 to the top of the reading area, through the
+    /// lesson list (`LessonInteractiveJump`), and VoiceOver on to that
+    /// step's title.
+    private var tryIt: some View {
+        Button(action: jumpToOpenings) {
+            pillLabel {
+                HStack(spacing: BrandSpacing.xs + 2) {
+                    Text(TokenizerCopy.tryIt)
+                    // The arrow says where; at the accessibility sizes the
+                    // words and the hint carry it.
+                    if !large {
+                        Image(systemName: "arrow.down")
+                            .font(.system(.footnote, weight: .bold))
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(TokenizerCopy.tryItJumpHint)
+    }
+
+    private func jumpToOpenings() {
+        jump?(animated: !reduceMotion)
+        // VoiceOver goes where the jump went: step 4's title, then its
+        // openings.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 150 : 550))
+            focusedStep = 4
+        }
+    }
+
+    /// The card's two plain buttons ("Try it", "Show the map"): 44 pt or
+    /// taller, a raised capsule with a lit edge.
+    private func pillLabel<Label: View>(@ViewBuilder _ label: () -> Label) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return label()
+            .font(.system(.callout, design: .rounded, weight: .semibold))
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(sky.accentText)
+            .padding(.horizontal, BrandSpacing.lg)
+            .padding(.vertical, BrandSpacing.sm)
+            .frame(minHeight: 44)
+            .background(sky.raised, in: shape)
+            .overlay(shape.strokeBorder(sky.increasedContrast ? sky.hairline : sky.lumenWash(0.45), lineWidth: 1))
+            .contentShape(shape)
     }
 
     private func step<Content: View>(_ number: Int, _ title: String,
@@ -138,8 +225,9 @@ struct LessonTokenizerCard: View {
             Group {
                 if large {
                     // No disc at the accessibility sizes: it would squeeze
-                    // the title. The number stays, in the line.
-                    Text("\(number) \u{00B7} \(title)")
+                    // the title. "Step 2: …", VoiceOver's own line: a "·"
+                    // here read as the tokens' space dot just below it.
+                    Text(TokenizerCopy.stepLine(number, title))
                         .font(BrandFont.roundedHeadline)
                         .foregroundStyle(sky.ink)
                 } else {
@@ -161,6 +249,7 @@ struct LessonTokenizerCard: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(TokenizerCopy.stepAccessibility(number, title))
             .accessibilityAddTraits(.isHeader)
+            .modifier(StepFocus(focus: $focusedStep, number: number, active: voiceOver || switchControl))
             content()
         }
     }
@@ -230,13 +319,10 @@ struct LessonTokenizerCard: View {
                     ViewThatFits(in: .horizontal) {
                         numbersLine(count: 8)
                         numbersLine(count: 5)
-                        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
-                            HStack(spacing: BrandSpacing.sm) {
-                                TokenChip(token: TokenizerInteractive.bank, isFollowed: true, sky: sky)
-                                arrow.rotationEffect(.degrees(90))
-                            }
-                            NumberList(count: 5, sky: sky)
-                        }
+                        numbersColumn(count: 5)
+                        // A 320 pt window: four values and "…" on one line
+                        // (with five, "…" wrapped onto a line of its own).
+                        numbersColumn(count: 4)
                     }
                 }
             }
@@ -252,6 +338,16 @@ struct LessonTokenizerCard: View {
             arrow
             NumberList(count: count, sky: sky)
                 .fixedSize()
+        }
+    }
+
+    private func numbersColumn(count: Int) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            HStack(spacing: BrandSpacing.sm) {
+                TokenChip(token: TokenizerInteractive.bank, isFollowed: true, sky: sky)
+                arrow.rotationEffect(.degrees(90))
+            }
+            NumberList(count: count, sky: sky)
         }
     }
 
@@ -279,17 +375,15 @@ struct LessonTokenizerCard: View {
             finishedSentence
                 .padding(.top, BrandSpacing.xs)
                 .id(Self.sentenceScrollID)
-                // The words change at once: animated, the old and the new
-                // sentence overlapped for a moment. The map is what moves.
-                .transaction { $0.animation = nil }
             if TokenizerMapScale.saysMapInWords(at: typeSize) {
-                Text(TokenizerCopy.mapInWords(state.context))
-                    .font(.callout)
-                    .foregroundStyle(sky.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transaction { $0.animation = nil }
-                    // VoiceOver hears the map's own line (or, folded, this).
-                    .accessibilityHidden(showsMap)
+                everyState { context in
+                    Text(TokenizerCopy.mapInWords(context))
+                        .font(.callout)
+                        .foregroundStyle(sky.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // VoiceOver hears the map's own line (or, folded, this).
+                .accessibilityHidden(showsMap)
             }
             if !TokenizerMapScale.showsMapInline(at: typeSize) {
                 foldToggle
@@ -297,6 +391,12 @@ struct LessonTokenizerCard: View {
             if showsMap {
                 MeaningMapFrame(typeSize: typeSize) {
                     MeaningSkyPanel(context: state.context, typeSize: typeSize, sky: sky, reduceMotion: reduceMotion)
+                }
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: PanelFrameKey.self,
+                                               value: geo.frame(in: .named(Self.coordinateSpace)))
+                    }
                 }
                 .id(Self.panelScrollID)
                 .transition(.opacity)
@@ -327,22 +427,46 @@ struct LessonTokenizerCard: View {
         }
     }
 
+    /// A line of step 4 drawn for every state, the current one shown: it
+    /// is as tall as its longest version, so a pick (which can wrap the
+    /// sentence onto a second line on an SE) never moves the map below.
+    /// The words change at once: animated, the old and the new overlapped
+    /// for a moment. "bank" is what moves.
+    private func everyState<Line: View>(@ViewBuilder _ line: @escaping (TokenizerContext?) -> Line) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Self.contexts, id: \.self) { context in
+                let shown = context == state.context
+                line(context)
+                    .opacity(shown ? 1 : 0)
+                    .accessibilityHidden(!shown)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transaction { $0.animation = nil }
+    }
+
     /// "… I went to the bank" and, once picked, the context before it.
     private var finishedSentence: some View {
+        everyState { context in
+            sentence(context)
+        }
+    }
+
+    private func sentence(_ context: TokenizerContext?) -> some View {
         var opening: AttributedString
-        if let context = state.context {
+        if let context {
             opening = AttributedString(context.opening + " ")
             opening.foregroundColor = sky.accentText
         } else {
             opening = AttributedString("\u{2026} ")
             opening.foregroundColor = sky.ink3
         }
-        var rest = AttributedString(TokenizerInteractive.sentence + (state.context == nil ? "" : "."))
+        var rest = AttributedString(TokenizerInteractive.sentence + (context == nil ? "" : "."))
         rest.foregroundColor = sky.ink
         return Text(opening + rest)
             .font(BrandFont.subheading)
             .fixedSize(horizontal: false, vertical: true)
-            .accessibilityLabel(state.context?.sentence ?? TokenizerInteractive.sentence)
+            .accessibilityLabel(context?.sentence ?? TokenizerInteractive.sentence)
     }
 
     /// "Show the map" / "Hide the map", at the accessibility sizes.
@@ -351,17 +475,9 @@ struct LessonTokenizerCard: View {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { state.showsFoldedMap.toggle() }
         } label: {
             // Only ever at the accessibility sizes: the words, no icon.
-            Text(state.showsFoldedMap ? TokenizerCopy.hideMap : TokenizerCopy.showMap)
-                .font(.system(.callout, design: .rounded, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(sky.accentText)
-                .padding(.horizontal, BrandSpacing.lg)
-                .padding(.vertical, BrandSpacing.sm)
-                .frame(minHeight: 44)
-                .background(sky.raised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(sky.increasedContrast ? sky.hairline : sky.lumenWash(0.45), lineWidth: 1))
-                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            pillLabel {
+                Text(state.showsFoldedMap ? TokenizerCopy.hideMap : TokenizerCopy.showMap)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityHint(state.showsFoldedMap ? "" : TokenizerCopy.showMapHint)
@@ -407,6 +523,35 @@ private enum DebugAutoPick {
 }
 #endif
 
+/// The lesson list's jump to the card's step 4, for "Try it". It goes
+/// through the list's scroll policy as a move of the student's own
+/// (`MessageScrollPolicy.partJumped`): a reply still streaming its check is
+/// no longer followed, and "Jump to latest" offers the way back. One
+/// instance for the list's life, so handing it down never re-renders a
+/// bubble.
+@MainActor
+final class LessonInteractiveJump {
+    /// Set by the list once its scroll view is there.
+    var perform: ((_ animated: Bool) -> Void)?
+
+    func callAsFunction(animated: Bool) {
+        perform?(animated)
+    }
+}
+
+private struct LessonInteractiveJumpKey: EnvironmentKey {
+    static var defaultValue: LessonInteractiveJump? { nil }
+}
+
+extension EnvironmentValues {
+    /// The lesson list's jump to Lesson 1.1's interactive (nil outside a
+    /// lesson list, where "Try it" does nothing).
+    var lessonInteractiveJump: LessonInteractiveJump? {
+        get { self[LessonInteractiveJumpKey.self] }
+        set { self[LessonInteractiveJumpKey.self] = newValue }
+    }
+}
+
 /// The iPhone shots' accessibility overrides, DEBUG only (simctl sets
 /// Increase Contrast, not Reduce Motion or Reduce Transparency):
 /// `-NightTokenizerReduceMotion YES`, `-NightTokenizerReduceTransparency
@@ -425,6 +570,24 @@ private enum DebugAccessibility {
 }
 
 // MARK: - Pieces
+
+/// A step's title can take VoiceOver's focus (for "Try it"), only while an
+/// assistive technology that has focus is on: `ImageRenderer` draws a view
+/// that can take focus as empty space, so the layout tests' renders would
+/// lose the titles.
+private struct StepFocus: ViewModifier {
+    var focus: AccessibilityFocusState<Int?>.Binding
+    let number: Int
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content.accessibilityFocused(focus, equals: number)
+        } else {
+            content
+        }
+    }
+}
 
 /// A token as machine text, its leading space drawn as a dot. The token the
 /// map follows ("·bank") is lit: white on "bank"'s indigo.
@@ -560,8 +723,11 @@ private struct NumberList: View {
     }
 }
 
-/// A way the student can start the sentence: 44 pt or taller, indigo with a
-/// check once picked. Its words wrap rather than leave the card.
+/// A way the student can start the sentence: 44 pt or taller, with a ring
+/// that fills with a check once picked (indigo then). The ring is always
+/// there, the same size either way, so a pick never moves the words (a check
+/// that appeared beside them slid them over, and was drawn on the "I" for a
+/// moment). Its words wrap rather than leave the card.
 private struct OpeningChip: View {
     let context: TokenizerContext
     let isSelected: Bool
@@ -571,18 +737,16 @@ private struct OpeningChip: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        // At the accessibility sizes the check sits over the words, which
-        // get the whole width (beside them it broke "paycheck," apart).
+        // At the accessibility sizes the ring sits over the words, which get
+        // the whole width (beside them it broke "paycheck," apart).
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: BrandSpacing.xxs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: BrandSpacing.xs + 2))
         Button(action: onChoose) {
             layout {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(.footnote, weight: .bold))
-                        .accessibilityHidden(true)
-                }
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.white : sky.ink2)
+                    .accessibilityHidden(true)
                 Text(context.chipTitle)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -601,6 +765,8 @@ private struct OpeningChip: View {
                 }
             }
             .contentShape(shape)
+            // The chip's own change is quick, whatever "bank" does.
+            .animation(.easeOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(TokenizerCopy.chipAccessibility(context))
@@ -612,14 +778,14 @@ private struct OpeningChip: View {
 // MARK: - The map of meaning
 
 /// The map's panel: as wide as it is offered, as tall as `MeaningMap` says
-/// for that width at the labels' size, worked out in one layout pass.
+/// for that width at the labels' size (under 300 pt, the 300 pt map's
+/// height scaled down with it), worked out in one layout pass.
 private struct MeaningMapFrame: Layout {
     let typeSize: DynamicTypeSize
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 343
-        let scale = TokenizerMapScale.labelScale(for: typeSize, panelWidth: width)
-        return CGSize(width: width, height: MeaningMap.height(forWidth: width, scale: scale))
+        return CGSize(width: width, height: TokenizerMapScale.panelHeight(forPanelWidth: width, typeSize: typeSize))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -632,7 +798,9 @@ private struct MeaningMapFrame: Layout {
 /// The meaning sky on the iPhone: four words in two neighbourhoods,
 /// "bank"'s starting ring between them, and "bank" itself with lines to the
 /// words it lands near. Positions and label frames are `MeaningMap`'s, at
-/// the labels' size for this text size and width (`TokenizerMapScale`). Moving "bank" animates its
+/// the labels' size for this text size and width (`TokenizerMapScale`).
+/// A panel under 300 pt gets the 300 pt map scaled down to fit, so every
+/// rule the geometry tests hold still holds. Moving "bank" animates its
 /// place and its lines; under Reduce Motion the moved state crossfades in.
 private struct MeaningSkyPanel: View {
     let context: TokenizerContext?
@@ -643,7 +811,10 @@ private struct MeaningSkyPanel: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
         GeometryReader { geo in
-            let size = geo.size
+            let panel = geo.size
+            let fit = TokenizerMapScale.fitScale(forPanelWidth: max(panel.width, 1))
+            let size = CGSize(width: TokenizerMapScale.drawnWidth(forPanelWidth: panel.width),
+                              height: panel.height / fit)
             let scale = TokenizerMapScale.labelScale(for: typeSize, panelWidth: size.width)
             ZStack(alignment: .topLeading) {
                 skyFill
@@ -667,6 +838,8 @@ private struct MeaningSkyPanel: View {
                 }
             }
             .frame(width: size.width, height: size.height)
+            .scaleEffect(fit, anchor: .topLeading)
+            .frame(width: panel.width, height: panel.height, alignment: .topLeading)
         }
         .clipShape(shape)
         .overlay(shape.strokeBorder(Color.white.opacity(sky.increasedContrast ? 0.55 : 0.14), lineWidth: 1))
