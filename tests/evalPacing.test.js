@@ -729,12 +729,13 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
     const { SCENARIOS, isAuditProbe } = await modP;
     const ids = SCENARIOS.map((s) => s.id);
     const widget = ids.indexOf('widget-1');
-    const probes = SCENARIOS.slice(widget + 1);
+    // The Basics scenarios (2026-10) come after the probes; their own test covers them.
+    const probes = SCENARIOS.slice(widget + 1).filter((s) => !s.id.startsWith('basics'));
     assert.deepEqual(probes.map((s) => s.id), [
       ...SAFETY_IDS.slice(SAFETY_IDS.indexOf('safety-eating-disorder')), ...CHAT_IDS, ...LESSON_IDS,
     ]);
     for (const s of probes) assert.equal(s.client, 'ios', `${s.id} is iOS-shaped`);
-    assert.equal(SCENARIOS.filter((s) => s.client === 'ios').length, probes.length, 'no pre-existing scenario changed shape');
+    assert.equal(SCENARIOS.filter((s) => s.client === 'ios' && !s.id.startsWith('basics')).length, probes.length, 'no pre-existing scenario changed shape');
     assert.deepEqual(SCENARIOS.filter(isAuditProbe).map((s) => s.id), [...CHAT_IDS, ...LESSON_IDS]);
     // Lessons start from the real Unit 1 Lesson 1 starter, byte for byte.
     for (const s of probes.filter((x) => x.lesson)) assert.equal(s.lesson.starter, SCENARIOS.find((x) => x.id === 'curriculum-1').turns[0]);
@@ -1143,10 +1144,257 @@ describe('eval-pacing audit 2026-10 probes: criteria', () => {
     const lastCache = names.findLastIndex((n) => n.startsWith('cache:'));
     const firstNew = names.findIndex((n) => /^(?:chat|lesson|curriculum|report):/.test(n));
     assert.equal(firstNew, lastCache + 1);
-    assert.deepEqual(names.slice(firstNew).map((n) => n.split(' — ')[0].split(':')[0]), [
+    // Basics rows (2026-10) are appended after these; they have their own test.
+    const lastAudit = names.findIndex((n) => n.startsWith('basics:'));
+    assert.deepEqual(names.slice(firstNew, lastAudit).map((n) => n.split(' — ')[0].split(':')[0]), [
       ...Array(8).fill('chat'), ...Array(4).fill('lesson'), 'curriculum', 'curriculum', 'report', 'report', 'report',
     ]);
-    assert.ok(names[names.length - 2].startsWith('report: sextortion'), 'the INFO rows come last');
-    assert.ok(names[names.length - 1].startsWith('report: chat-news'));
+    assert.ok(names[lastAudit - 2].startsWith('report: sextortion'), 'the audit INFO rows come last among the audit rows');
+    assert.ok(names[lastAudit - 1].startsWith('report: chat-news'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Basics track (2026-10): scenarios, the live learner, the metrics and the
+// criteria, on fixture replies written the way the guide asks.
+// ---------------------------------------------------------------------------
+const B_Q1 = '[Q]\nWhich is the best description of an AI chatbot?\nA) A person at the company typing answers to you\nB) A computer program that writes answers by guessing what words fit best\nC) A big library of facts that looks up the right answer every time\nANS: B\n[/Q]';
+const B_Q3 = '[Q]\nWhich one is safe to type into a chatbot?\nA) "Is Rosebud1952 a strong password?"\nB) "How do I make a strong password I can remember?"\nC) The code your bank texted you a minute ago, so it can explain it\nANS: B\n[/Q]';
+const B_Q4 = "[Q]\nA call sounds exactly like your grandson. He's crying, says he's in jail, and asks you to buy gift cards and keep it secret. What do you do first?\nA) Buy the gift cards so he's safe\nB) Hang up and call him, or his parents, on a number you already know\nC) Ask the caller for a phone number to call him back\nANS: B\n[/Q]";
+
+const BASICS_GOOD = {
+  'basics-b1l1': [
+    ['opener', "You can't break anything here, and there are no silly questions. If something goes wrong, we start again.\n\nType in the box at the bottom, or tap the microphone on your keyboard and talk. Then tap the arrow to send.\n\n[KEY]An AI chatbot is a computer program you talk to by typing or speaking.[/KEY]\n\nIt writes back in everyday words. No one is typing back to you.\n\nTry asking me: \"Are you a real person?\""],
+    ['practice', "No. I'm Merc, a chatbot in a learning app. No one is typing back to you.\n\nPracticing on me works the same way as ChatGPT, Claude, Gemini or Copilot.\n\nNow ask me anything you're curious about."],
+    ['practice', `Basil likes a sunny window and warm air. Water it when the top of the soil feels dry.\n\nPinch off the top leaves often. That helps it grow full.\n\nA chatbot learned from a huge amount of writing. It guesses, word by word, what fits best.\n\nTap the answer you think is right. There's no grade.\n\n${B_Q1}`],
+    ['tap', "Yes. It's a program that guesses what words fit best.\n\nYou asked about your basil in your own words, and that's how to get good help.\n\nThe postcard rule: if you wouldn't write it on a postcard, don't type it into a chatbot.\n\nTry this today: Ask a chatbot one thing you've wondered about this week.\n\n[LESSON_COMPLETE]"],
+  ],
+  'basics-b2l3': [
+    ['opener', "Last time, you asked a chatbot to say something in plain words.\n\n[KEY]The postcard rule: if you wouldn't write it on a postcard, don't type it into a chatbot.[/KEY]\n\nNever share these:\n- Passwords and PINs\n- One-time codes (the code a company texts you)\n- Bank or card numbers\n- Social Security, Medicare or other ID numbers\n- Medical records\n\nA general detail, like \"I'm allergic to nuts\", is fine.\n\nTry asking me: \"My bank charged me twice. What should I do?\""],
+    ['practice', `Call the number on the back of your card. Tell them about the double charge.\n\nAsk them to reverse the extra charge. Write down the date and the name of the person you spoke with.\n\nNotice that you didn't need your account number to get good help.\n\nYour chats are usually saved. Look for the settings or privacy option to control this.\n\n${B_Q3}`],
+    ['tap', "Right. You can get help with passwords without typing one.\n\nYou kept your account number out, and the help was still good.\n\nIf you wouldn't write it on a postcard, don't type it into a chatbot.\n\nTry this today: Next time you ask a chatbot for help, leave out names and numbers.\n\n[LESSON_COMPLETE]"],
+  ],
+  'basics-b2l4': [
+    ['opener', "Last time, you learned the postcard rule.\n\n[KEY]Don't trust the voice.[/KEY]\n\nAI can copy a voice from a short recording. Scammers use it to sound like a relative in trouble.\n\n[EX]In 2023, an Arizona mother got a call. Her 15-year-old daughter was safe the whole time.[/EX]\n\nTry asking me: \"Write a text asking my family to pick a code word.\""],
+    ['practice', "Here's a text you could send:\n\n> Hi everyone. Can we pick a family code word? It helps us check a call is really one of us.\n\nDon't tell me the actual code word. Keep that for your family.\n\nNow try: \"Make it short and friendly.\""],
+    ['practice', `> Hi all! Let's pick a family code word, just in case.\n\nShorter and warmer, with the same idea.\n\nIf a call sounds like family and asks for money, hang up and call back. Call the person from your contacts, or on a number you already know.\n\n${B_Q4}`],
+    ['tap', "Yes. Hang up, then call back on a number you know.\n\nYou wrote a code-word text you can send today.\n\nDon't trust the voice. Hang up, then call back on a number you know.\n\nTry this today: Send the code-word text to your family.\n\n[LESSON_COMPLETE]"],
+  ],
+};
+BASICS_GOOD['basics-b2l4-wrong'] = [
+  ...BASICS_GOOD['basics-b2l4'].slice(0, 3),
+  ['tap', `Not quite. A number the caller gives you goes back to the scammer.\n\nThink of a letter that says to call a number on it. You'd call the number you already have instead.\n\n${B_Q4}`, true],
+  ['tap', BASICS_GOOD['basics-b2l4'][3][1]],
+];
+
+function basicsResults(table = BASICS_GOOD) {
+  const usage = (i) => ({ input_tokens: 80, output_tokens: 200, cache_read_input_tokens: i === 0 ? 0 : 12000 + 300 * i, cache_creation_input_tokens: i === 0 ? 12000 : 300 });
+  return Object.entries(table).map(([id, rows]) => ({
+    id, mode: 'basics', sessionId: `s-${id}`,
+    replies: rows.map(([kind, raw, wrong], i) => ({
+      user: `u${i}`, kind, ...(wrong ? { wrong: true } : {}), responseMode: kind === 'tap' ? 'balanced' : 'concise', raw, metrics: null, usage: usage(i),
+    })),
+  }));
+}
+
+describe('eval-pacing Basics track', () => {
+  test('scenarios: four basics-* lessons in the iOS wire shape with the canonical [BASICS: …] starters', async () => {
+    const { SCENARIOS, BASICS_STARTERS, BASICS_TAG_RE, selectScenarios, isBasics } = await modP;
+    const basics = SCENARIOS.filter((s) => s.id.startsWith('basics'));
+    assert.deepEqual(basics.map((s) => s.id), ['basics-b1l1', 'basics-b2l3', 'basics-b2l4', 'basics-b2l4-wrong']);
+    for (const s of basics) {
+      assert.equal(s.mode, 'basics');
+      assert.match(s.lesson.starter, BASICS_TAG_RE);
+      assert.deepEqual(s.capabilities, ['blocks_v1', 'platform_ios']);
+      assert.ok(isBasics(s));
+    }
+    assert.equal(BASICS_STARTERS.b1l1, '[BASICS: Unit 1, Lesson 1] Teach me what an AI chatbot is, in plain words. Keep it short, then let me try one.');
+    assert.deepEqual(selectScenarios('basics').map((s) => s.id), basics.map((s) => s.id));
+    assert.equal(basics.find((s) => s.id === 'basics-b2l4-wrong').wrongFirst, true);
+  });
+
+  test('basicsLearnerTurn: tap a [Q], else the practice line, else a fallback; a pause offer gets "keep going"', async () => {
+    const { basicsLearnerTurn } = await modP;
+    const state = { fallbacks: ['How do I keep basil alive?'] };
+    assert.deepEqual(basicsLearnerTurn(BASICS_GOOD['basics-b1l1'][0][1], state), { text: 'Are you a real person?', responseMode: 'concise', kind: 'practice' });
+    assert.deepEqual(basicsLearnerTurn(BASICS_GOOD['basics-b2l4'][1][1], state), { text: 'Make it short and friendly.', responseMode: 'concise', kind: 'practice' });
+    assert.deepEqual(basicsLearnerTurn(BASICS_GOOD['basics-b1l1'][1][1], state), { text: 'How do I keep basil alive?', responseMode: 'concise', kind: 'practice' });
+    assert.equal(basicsLearnerTurn('A plain reply.', state).kind, 'continue', 'fallbacks used up');
+    const tap = basicsLearnerTurn(BASICS_GOOD['basics-b1l1'][2][1], state);
+    assert.deepEqual(tap, { text: 'I picked B) A computer program that writes answers by guessing what words fit best', responseMode: 'balanced', kind: 'tap', wrong: false });
+    const pause = basicsLearnerTurn("That's a good place to stop. Want to keep going, or pick up later? I'll save your place.", {});
+    assert.deepEqual(pause, { text: "Let's keep going.", responseMode: 'concise', kind: 'continue' });
+    // b2_l1's lead-in, bold and curly quotes all still read as a practice line.
+    assert.equal(basicsLearnerTurn('Ask me a real question. If nothing comes to mind, try asking me: “What’s a good card game for 4 people, ages 8 to 80?”', {}).text, 'What’s a good card game for 4 people, ages 8 to 80?');
+    assert.equal(basicsLearnerTurn('**Try asking me:** "Gift ideas."', {}).text, 'Gift ideas.');
+    // wrongFirst: the first tap is wrong, every later one right.
+    const w = { wrongFirst: true };
+    const q4 = `Idea.\n\n${B_Q4}`;
+    assert.deepEqual(basicsLearnerTurn(q4, w), { text: 'I picked C) Ask the caller for a phone number to call him back', responseMode: 'balanced', kind: 'tap', wrong: true });
+    assert.equal(basicsLearnerTurn(q4, w).text, "I picked B) Hang up and call him, or his parents, on a number you already know");
+    // A [Q] with no ANS line can't be a card: the learner answers in words, with the lesson's known answer.
+    const noAns = q4.replace('ANS: B\n', '');
+    assert.deepEqual(basicsLearnerTurn(noAns, { rightAnswer: 'B' }), { text: 'I picked B) Hang up and call him, or his parents, on a number you already know', responseMode: 'balanced', kind: 'tap', wrong: false });
+    assert.deepEqual(basicsLearnerTurn(noAns, { rightAnswer: 'B', wrongFirst: true }).text, 'I picked C) Ask the caller for a phone number to call him back');
+  });
+
+  test('plain-language metrics: syllables, Flesch–Kincaid, prose without the [Q] card', async () => {
+    const { syllableCount, fleschKincaidGrade, textCounts, basicsProse } = await modP;
+    assert.equal(syllableCount('chatbot'), 2);
+    assert.equal(syllableCount('computer'), 3);
+    assert.equal(syllableCount('AI'), 2, 'an acronym is read letter by letter');
+    assert.equal(syllableCount('PIN'), 1);
+    assert.equal(syllableCount('simple'), 2);
+    assert.equal(syllableCount('typed'), 1);
+    assert.ok(Math.abs(fleschKincaidGrade('The cat sat on the mat.') - -1.45) < 0.01);
+    assert.ok(fleschKincaidGrade('Information technology professionals collaborate extensively on organizational infrastructure.') > 20);
+    assert.deepEqual(textCounts('- Passwords and PINs\n- Bank or card numbers'), { words: 7, sentences: 2, syllables: 9 }, 'each bullet is a sentence');
+    const prose = basicsProse(`Tap one. [KEY]A key idea.[/KEY]\n\n${B_Q1}`);
+    assert.ok(!prose.includes('library') && !prose.includes('ANS'), 'the [Q] card is not counted');
+    assert.ok(prose.includes('A key idea.'));
+    for (const rows of Object.values(BASICS_GOOD)) {
+      for (const [, raw] of rows) assert.ok(fleschKincaidGrade(basicsProse(raw)) <= 7, raw.slice(0, 40));
+    }
+  });
+
+  test('basicsMaxParagraphSentences: "U.S." and "a.m." do not end sentences', async () => {
+    const { basicsMaxParagraphSentences, maxParagraphSentences } = await modP;
+    const ex = '[EX]In 2023, an Arizona mother got a call. Her daughter was safe the whole time. A voice asked for help. The mother later told the U.S. Senate about it.[/EX]';
+    assert.equal(maxParagraphSentences(ex), 5, 'the shared counter splits "U.S."');
+    assert.equal(basicsMaxParagraphSentences(ex), 4);
+    assert.equal(basicsMaxParagraphSentences('Call at 8 a.m. on Monday. Then wait.'), 2);
+  });
+
+  test('unexplainedJargon: the listed terms, unless explained in the same sentence', async () => {
+    const { unexplainedJargon } = await modP;
+    assert.deepEqual(unexplainedJargon('It predicts the next token.'), ['token']);
+    assert.deepEqual(unexplainedJargon('Chatbots hallucinate sometimes. An LLM writes text. Neural nets and parameters.'), ['hallucination', 'LLM', 'parameters', 'neural']);
+    assert.deepEqual(unexplainedJargon('Prompt engineering helps. Model weights too.'), ['prompt engineering', 'model weights']);
+    assert.deepEqual(unexplainedJargon('A token is a piece of a word.'), []);
+    assert.deepEqual(unexplainedJargon('On the news, people call this a "hallucination".'), []);
+    assert.deepEqual(unexplainedJargon('Tokens (small pieces of words) matter.'), []);
+    assert.deepEqual(unexplainedJargon(`Plain words only.\n\n${B_Q1}`), []);
+  });
+
+  test('basicsEnding: one thing to do at the end, no other question', async () => {
+    const { basicsEnding } = await modP;
+    for (const rows of Object.values(BASICS_GOOD)) {
+      for (const [kind, raw] of rows) {
+        if (raw.includes('[LESSON_COMPLETE]')) continue;
+        assert.equal(basicsEnding(raw, { practiceReply: kind === 'practice' }), true, raw.slice(0, 60));
+      }
+    }
+    assert.equal(basicsEnding("That's a good place to stop. Want to keep going, or pick up later? I'll save your place."), true);
+    assert.equal(basicsEnding('Idea one.\n\nWhat would you like to ask?'), true);
+    assert.equal(basicsEnding('Does that make sense? Here is more.\n\nTry asking me: "Gift ideas."'), 'a question before the end');
+    assert.equal(basicsEnding('Here is the idea. Ready?\n\nWhat do you think? Or not?'), 'a question before the end');
+    assert.equal(basicsEnding('Here is the idea.\n\nWhat do you think? Or not?'), 'more than one closing question');
+    assert.equal(basicsEnding('Here is the idea.\n\nThat is all.'), 'no check, practice line or closing question at the end');
+    assert.equal(basicsEnding(`${B_Q1}\n\nAnything else?`), 'the [Q] check is not the last thing');
+    assert.equal(basicsEnding(`Ready to try?\n\n${B_Q1}`), 'a question before the end');
+    // A practice answer's own task text may hold a question; the ending is still checked.
+    assert.equal(basicsEnding('Hi all. Can we pick a code word?\n\nNow try: "Make it short."', { practiceReply: true }), true);
+  });
+
+  test('basicsCriteria: the guide-shaped lessons pass every row', async () => {
+    const { basicsCriteria } = await modP;
+    const rows = basicsCriteria(basicsResults());
+    assert.equal(rows.length, 12);
+    for (const r of rows) assert.equal(r.pass, true, `${r.name}: ${r.value}`);
+    assert.match(rows.find((r) => r.name.startsWith('basics: [LESSON_COMPLETE]')).value, /b1l1 at reply 4; b2l3 at reply 3; b2l4 at reply 4/);
+    assert.match(rows.find((r) => r.name.startsWith('basics: safety lesson')).value, /wrong pick at 4, completed at 5/);
+    assert.ok(rows.at(-1).reportOnly, 'the banned-word row is INFO');
+    assert.match(rows.at(-1).value, /^2\/\d+: b2l4 t3 "just", b2l4-wrong t3 "just"$/, 'it finds the "just" outside quotes (b2l4-wrong shares the reply)');
+  });
+
+  test('basicsCriteria: each row fails on the reply that breaks it, and says why', async () => {
+    const { basicsCriteria } = await modP;
+    const clone = () => JSON.parse(JSON.stringify(BASICS_GOOD));
+    const fails = (table, prefix) => {
+      const r = basicsCriteria(basicsResults(table)).find((x) => x.name.startsWith(prefix));
+      assert.equal(r.pass, false, `${prefix} should fail`);
+      return r.value;
+    };
+    let t = clone();
+    for (const row of t['basics-b1l1']) {
+      row[1] = row[1].replace(/^(.*?\.)/, 'Underneath, a transformer architecture computes probability distributions over its vocabulary using billions of parameters, which are learned during pretraining on internet-scale corpora, and then it samples a continuation autoregressively.');
+    }
+    t['basics-b1l1'][0][1] = t['basics-b1l1'][0][1].replace('It writes back in everyday words.', 'It uses parameters.');
+    assert.match(fails(t, 'basics: plain language'), /^b1l1 \d+\.\d/);
+    assert.match(fails(t, 'basics: no unexplained jargon'), /b1l1 parameters@1/);
+    t = clone();
+    t['basics-b2l3'][1][1] = t['basics-b2l3'][1][1].replace('Ask them to reverse the extra charge.', 'Ask them to reverse it. Be calm. Be clear. Be kind. Be patient.');
+    assert.match(fails(t, 'basics: ≤ 4 sentences'), /b2l3 max [5-9]/);
+    t = clone();
+    t['basics-b2l3'][1][1] = t['basics-b2l3'][1][1].replace('ANS: B\n', '');
+    assert.match(fails(t, 'basics: every [Q] card'), /b2l3 reply 2: malformed \[Q\]/);
+    t = clone();
+    t['basics-b1l1'][2][1] = t['basics-b1l1'][2][1].replace(B_Q1, '[CHECK]Which is the best description of an AI chatbot?[/CHECK]');
+    assert.match(fails(t, 'basics: every [Q] card'), /b1l1 reply 3: \[CHECK\] used/);
+    t = clone();
+    t['basics-b2l4'][0][1] = t['basics-b2l4'][0][1].replace(/Try asking me: .*$/, 'Let me know when you are ready.');
+    assert.match(fails(t, 'basics: a "Try asking me"'), /b2l4 none/);
+    t = clone();
+    t['basics-b1l1'][0][1] = t['basics-b1l1'][0][1].replace('No one is typing back to you.', 'Does that make sense?');
+    assert.match(fails(t, 'basics: every reply ends'), /b1l1 reply 1: a question before the end/);
+    t = clone();
+    t['basics-b2l3'][0][1] += '\n\n[LESSON_COMPLETE]';
+    assert.match(fails(t, 'basics: [LESSON_COMPLETE]'), /b2l3 completed on the first reply/);
+    t = clone();
+    t['basics-b1l1'][2][1] += '\n\n[LESSON_COMPLETE]';
+    assert.match(fails(t, 'basics: [LESSON_COMPLETE]'), /b1l1 completed at reply 3 before the check was answered/);
+    t = clone();
+    t['basics-b2l3'][2][1] = t['basics-b2l3'][2][1].replace('[LESSON_COMPLETE]', '');
+    assert.match(fails(t, 'basics: [LESSON_COMPLETE]'), /b2l3 never completed in 3 replies/);
+    t = clone();
+    t['basics-b2l4-wrong'][3][1] += '\n\n[LESSON_COMPLETE]';
+    assert.match(fails(t, 'basics: safety lesson'), /completed by reply 4 \(the wrong pick\)/);
+    t = clone();
+    for (const row of t['basics-b2l4']) row[1] = row[1].replace(/hang up and call back\. /gi, '').replace(/Hang up, then call back on a number you know\./g, 'Be careful.');
+    assert.match(fails(t, 'basics: the fake-call lesson'), /missing: hang up/);
+    t = clone();
+    for (const row of t['basics-b2l3']) row[1] = row[1].replace('- Passwords and PINs\n', '').replace('with passwords without typing one', 'safely');
+    assert.match(fails(t, 'basics: the privacy lesson'), /missing: passwords$/, 'the [Q] card\'s "password" does not count');
+    t = clone();
+    delete t['basics-b2l4-wrong'];
+    assert.match(fails(t, 'basics: safety lesson'), /^missing: basics-b2l4-wrong$/);
+  });
+
+  test('basicsCacheCriterion: reads the guide from turn 2, reads back each turn across typed and tapped turns, n/a without usage', async () => {
+    const { basicsCacheCriterion } = await modP;
+    const ok = basicsCacheCriterion(basicsResults());
+    assert.equal(ok.pass, true, ok.value);
+    const cold = basicsResults();
+    cold[0].replies[2].usage = { ...cold[0].replies[2].usage, cache_read_input_tokens: 300 };
+    const bad = basicsCacheCriterion(cold);
+    assert.equal(bad.pass, false);
+    assert.match(bad.value, /basics-b1l1 t3 read=300/);
+    const none = basicsResults().map((r) => ({ ...r, replies: r.replies.map((x) => ({ ...x, usage: null })) }));
+    assert.equal(basicsCacheCriterion(none).value, 'n/a (server did not expose usage)');
+  });
+
+  test('evaluateCriteria: basics replies never enter the pacing or cache pools; the Basics rows come last', async () => {
+    const { evaluateCriteria, computeMetrics } = await modP;
+    const withMetrics = (r) => ({ ...r, replies: r.replies.map((x) => ({ ...x, metrics: computeMetrics(x.raw) })) });
+    const small = { input_tokens: 60, output_tokens: 100, cache_read_input_tokens: 8000, cache_creation_input_tokens: 0 };
+    const results = [
+      withMetrics(convo('socratic-1', 'socratic', ['Close — it predicts tokens. What do you think happens next?'], { usage: small })),
+      ...basicsResults().map(withMetrics),
+    ];
+    // A Basics reply that would break every pooled row if it were pooled.
+    results[1].replies[0].raw += '\n\nThere are three things to do. One. Two. Three. Four. Five. Six. Seven';
+    results[1].replies[0].usage = { ...small, input_tokens: 5000, cache_read_input_tokens: 0 };
+    const criteria = evaluateCriteria(results);
+    const byPrefix = (p) => criteria.find((c) => c.name.startsWith(p));
+    assert.equal(byPrefix('preview hits').value, 0);
+    assert.equal(byPrefix('truncations').value, 0);
+    assert.equal(byPrefix('blocks: zero marker leak').pass, true);
+    assert.equal(byPrefix('cache: every turn sends').pass, true);
+    assert.equal(byPrefix('cache: turns 3+ read back').value, 'no turn 3+ in this run');
+    const names = criteria.map((c) => c.name);
+    const firstBasics = names.findIndex((n) => n.startsWith('basics:'));
+    assert.ok(names[firstBasics - 1].startsWith('report: chat-news'), 'the Basics rows follow every earlier row');
+    assert.equal(names.slice(firstBasics).length, 12);
+    assert.ok(names.at(-1).startsWith('report: basics'));
   });
 });

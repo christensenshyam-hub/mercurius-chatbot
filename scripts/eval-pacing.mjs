@@ -285,6 +285,16 @@ export const LESSON_CONTRACT = " When I have clearly demonstrated proficiency at
 // Curriculum.swift starters, verbatim (Unit 1 Lesson 1 is curriculum-1's opener).
 const U1L1_STARTER = '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.';
 
+/** Basics opener tags, as the clients must send them. */
+export const BASICS_TAG_RE = /^\[BASICS:\s*Unit\s*\d+[\s,·•\-–—/|:;]*Lesson\s*\d+[^\]]*\]/;
+
+// basics.json starters, with the canonical [BASICS: …] tag the server routes.
+export const BASICS_STARTERS = Object.freeze({
+  b1l1: '[BASICS: Unit 1, Lesson 1] Teach me what an AI chatbot is, in plain words. Keep it short, then let me try one.',
+  b2l3: '[BASICS: Unit 2, Lesson 3] Teach me what I should never share with an AI chatbot, and why. Then let me practice asking for help safely.',
+  b2l4: '[BASICS: Unit 2, Lesson 4] Teach me about AI voice-clone and family emergency scams, and exactly what to do if I get one of those calls. Then help me make a plan.',
+});
+
 /**
  * One iOS-shaped /api/chat body (pure; unit-tested). `visible` is the thread
  * the app shows — user and assistant turns, no opener, no tags. With a
@@ -615,6 +625,32 @@ export const SCENARIOS = [
     // Review 2026-10-19: a correct "LOW because many words fit" answer drew
     // a correction ("flag one thing… causation") 6 of 6 times on the branch.
     id: 'lesson-u1l1-correct-low', mode: 'curriculum', client: 'ios', replay: 'eval-lesson-u1l1-correct-low.json',
+  },
+
+  // ── Basics track (2026-10) ────────────────────────────────────────────────
+  // The iOS wire shape with a live learner (runBasicsScenario): the hidden
+  // [BASICS: …] opener + completion contract, then each learner turn computed
+  // from Merc's last reply (basicsLearnerTurn). Scored only by
+  // basicsCriteria(); `--only basics` runs just these.
+  {
+    id: 'basics-b1l1', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b1l1 }, rightAnswer: 'B', fallbacks: ['How do I keep basil alive on a windowsill?'], maxTurns: 7,
+  },
+  {
+    // The privacy lesson (a safety lesson: the check must be answered right).
+    id: 'basics-b2l3', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b2l3 }, rightAnswer: 'B', fallbacks: ['What if a website asks for my birthday?'], maxTurns: 7,
+  },
+  {
+    // The scam lesson: fake calls that sound like family (a safety lesson).
+    id: 'basics-b2l4', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b2l4 }, rightAnswer: 'B', fallbacks: ["What if I can't reach anyone in my family?"], maxTurns: 7,
+  },
+  {
+    // Same lesson; the first tap picks the trap answer. It must not complete
+    // until the learner picks the right one.
+    id: 'basics-b2l4-wrong', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b2l4 }, rightAnswer: 'B', fallbacks: ["What if I can't reach anyone in my family?"], maxTurns: 8, wrongFirst: true,
   },
 ];
 
@@ -1345,6 +1381,365 @@ export function lessonCriteria(results) {
   return checkTable(results, LESSON_CHECKS, 'lesson');
 }
 
+// ---------------------------------------------------------------------------
+// Basics track (2026-10): adult-beginner lessons, `[BASICS: Unit N, Lesson M]`
+// ---------------------------------------------------------------------------
+//
+// basics-* conversations run in the iOS wire shape with a LIVE learner: after
+// the hidden opener, each learner turn is computed from Merc's last reply
+// (basicsLearnerTurn): tap the [Q] check when there is one, otherwise send
+// the "Now try:" / "Try asking me:" practice line, otherwise a scripted
+// fallback (a question of their own, or "keep going" after a pause offer).
+// The conversation stops at [LESSON_COMPLETE] or after `maxTurns` learner
+// turns. These replies are scored ONLY by basicsCriteria() and never enter
+// any pool above, so every pre-existing row measures exactly what it did.
+
+/** Basics conversations (and their replies, once tagged with convoId). */
+export const isBasics = (x) => String(x.convoId || x.id || '').startsWith('basics');
+
+// The practice prompts the guide asks Merc to end on (lib/basicsGuide):
+// `Try asking me: "…"`, `Now try: "…"`, and b1_l1's `Now ask me anything…`.
+const PRACTICE_LINE_RE = /\b(?:try asking me|now try(?: adding| asking| this)?)\b\**\s*:?\s*\**\s*["“]([^"”\n]{2,})["”]/gi;
+const NOW_ASK_RE = /(?:^|\n)[ \t*_]*now ask me\b[^\n]*$/i;
+const PAUSE_OFFER_RE = /good place to stop/i;
+
+/** The quoted text of the LAST practice line in a reply, or null. */
+export function practiceLine(raw) {
+  const all = [...String(raw ?? '').replace(/\[Q\][\s\S]*?(?:\[\/Q\]|$)/g, ' ').matchAll(PRACTICE_LINE_RE)];
+  return all.length ? all[all.length - 1][1].trim() : null;
+}
+
+/** A well-formed [Q] check in the reply (the iOS card). */
+const hasQuiz = (raw) => {
+  const m = [...String(raw ?? '').matchAll(/\[Q\]\n?([\s\S]*?)\[\/Q\]/g)].pop();
+  return Boolean(m && parseQuizInterior(m[1]).wellFormed);
+};
+
+/**
+ * The next learner turn (pure; unit-tested). `state` carries the scenario's
+ * `fallbacks` (typed questions of the learner's own), `wrongFirst` (a safety
+ * lesson's first tap picks a wrong answer) and what has happened so far; it
+ * is updated in place. Returns { text, responseMode, kind } where kind is
+ * 'tap' (a [Q] pick: 'balanced', like CheckQuizCard), 'practice' (a typed
+ * practice message: 'concise', like send()) or 'continue'.
+ */
+export function basicsLearnerTurn(lastReply, state = {}) {
+  state.fallbacks = state.fallbacks || [];
+  state.used = state.used || 0;
+  if (hasQuiz(lastReply)) {
+    const wrong = Boolean(state.wrongFirst) && !state.pickedWrong;
+    if (wrong) state.pickedWrong = true;
+    return { text: pickFromQuiz(lastReply, { wrong }), responseMode: 'balanced', kind: 'tap', wrong };
+  }
+  // A [Q] the app could not turn into a card (no ANS line, say): the learner
+  // reads the options and answers in words, picking the lesson's known right
+  // answer (`state.rightAnswer`) or, for wrongFirst, the next letter.
+  const loose = [...String(lastReply ?? '').matchAll(/\[Q\]([\s\S]*?)(?:\[\/Q\]|$)/g)].pop();
+  const options = loose ? [...loose[1].matchAll(/^\s*([A-C])\)\s*(.+?)\s*$/gm)].map((m) => [m[1], m[2]]) : [];
+  if (options.length >= 2) {
+    const wrong = Boolean(state.wrongFirst) && !state.pickedWrong;
+    if (wrong) state.pickedWrong = true;
+    const right = Math.max(0, options.findIndex(([l]) => l === (state.rightAnswer || 'A')));
+    const [letter, option] = options[wrong ? (right + 1) % options.length : right];
+    return { text: `I picked ${letter}) ${option}`, responseMode: 'balanced', kind: 'tap', wrong };
+  }
+  const line = practiceLine(lastReply);
+  if (line) return { text: line, responseMode: 'concise', kind: 'practice' };
+  if (PAUSE_OFFER_RE.test(String(lastReply)) && !NOW_ASK_RE.test(String(lastReply))) {
+    return { text: "Let's keep going.", responseMode: 'concise', kind: 'continue' };
+  }
+  if (state.used < state.fallbacks.length) {
+    return { text: state.fallbacks[state.used++], responseMode: 'concise', kind: 'practice' };
+  }
+  return { text: 'Okay. What should I do next?', responseMode: 'concise', kind: 'continue' };
+}
+
+// ── Plain language ─────────────────────────────────────────────────────────
+
+/** The prose a learner reads: no [Q] card (its words come verbatim from the
+ *  reviewed curriculum), no markers, no code. */
+export function basicsProse(raw) {
+  return stripMarkers(String(raw ?? '').replace(/\[Q\][\s\S]*?(?:\[\/Q\]|$)/g, '\n\n').replace(/```[\s\S]*?(?:```|$)/g, ' '))
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/[*_`#]+/g, '');
+}
+
+// Acronyms read letter by letter (AI = "A-I"); PIN is read as a word.
+const SPOKEN_AS_WORD = new Set(['PIN', 'PINS', 'NASA', 'SHIP']);
+
+/** Syllables in one word: the usual vowel-group heuristic (silent final -e,
+ *  -es and -ed folded), letter-by-letter acronyms, digits as 2. */
+export function syllableCount(word) {
+  const raw = String(word ?? '').replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+  if (!raw) return 0;
+  if (/^\d[\d.,:/$%]*$/.test(raw)) return 2;
+  if (/^[A-Z]{2,5}s?$/.test(raw) && !SPOKEN_AS_WORD.has(raw.toUpperCase())) return raw.replace(/s$/, '').length;
+  return raw.split(/[-–—/]/).reduce((n, part) => {
+    let w = part.toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return n;
+    if (w.length <= 3) return n + 1;
+    w = w.replace(/(?:[^laeiouy]es|[^laeiouy]ed|[^laeiouy]e)$/, '').replace(/^y/, '');
+    const groups = w.match(/[aeiouy]{1,2}/g);
+    return n + Math.max(1, groups ? groups.length : 1);
+  }, 0);
+}
+
+/** { words, sentences, syllables } of prose. Every non-empty line ends a
+ *  sentence (a bullet or a heading is one), as does . ! ? … before a space. */
+export function textCounts(prose) {
+  let words = 0;
+  let sentences = 0;
+  let syllables = 0;
+  for (const line of String(prose ?? '').split('\n')) {
+    const t = line.replace(/^\s*(?:[-*+•]|\d+[.)])\s+/, '').trim();
+    const tokens = t.match(/[A-Za-z0-9$][A-Za-z0-9'’.,:/$%\-–]*/g) || [];
+    if (tokens.length === 0) continue;
+    words += tokens.length;
+    syllables += tokens.reduce((n, w) => n + syllableCount(w), 0);
+    const ends = (t.match(/[.!?…]+(?=[\s"'”’)*\]]+\S)/g) || []).length;
+    sentences += ends + 1;
+  }
+  return { words, sentences, syllables };
+}
+
+/** Flesch–Kincaid grade level: 0.39·(words/sentence) + 11.8·(syllables/word) − 15.59. */
+export function fleschKincaidGrade(prose) {
+  const { words, sentences, syllables } = typeof prose === 'object' && prose ? prose : textCounts(prose);
+  if (!words || !sentences) return 0;
+  return 0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59;
+}
+
+/** The jargon the Basics guide bans unless it is explained right there. */
+export const BASICS_JARGON = Object.freeze([
+  ['token', /\btokens?\b/i],
+  ['LLM', /\bLLMs?\b|\blarge language models?\b/i],
+  ['model weights', /\bmodel weights?\b/i],
+  ['parameters', /\bparameters?\b/i],
+  ['neural', /\bneural\b/i],
+  ['prompt engineering', /\bprompt engineering\b/i],
+  ['hallucination', /\bhallucinat\w*/i],
+]);
+// The term is explained in its own sentence: "…, which means …", "is when",
+// "people call this a …", "(…)", or a colon / dash right after it.
+const EXPLAINED_RE = /\b(?:means?|meaning|is when|are when|is what|are what|is called|are called|call(?:s|ed)? (?:this|that|it)|which is|that is,|in other words|stands for|short for)\b/i;
+
+/** Jargon terms used without an explanation in the same sentence. */
+export function unexplainedJargon(raw) {
+  const prose = basicsProse(raw);
+  const sentences = prose.split(/(?<=[.!?…])\s+|\n+/).filter((s) => s.trim());
+  const bad = new Set();
+  for (const s of sentences) {
+    for (const [name, re] of BASICS_JARGON) {
+      const m = re.exec(s);
+      if (!m) continue;
+      const after = s.slice(m.index + m[0].length, m.index + m[0].length + 12);
+      // "…, which means", "(a piece of a word)", ": …", "— …", "is a …"
+      if (EXPLAINED_RE.test(s) || /^["”’]?\s*(?:\(|:|—|–| - |(?:is|are) (?:a|an|when)\b)/.test(after)) continue;
+      bad.add(name);
+    }
+  }
+  return [...bad];
+}
+
+/** Banned voice words (lib/basicsGuide VOICE), outside quoted text. */
+export const BASICS_BANNED_RE = /\b(?:just|simply|easy|easily|obviously|of course|as you know|everyone knows|quickly|in seconds)\b/i;
+
+// ── Shape ──────────────────────────────────────────────────────────────────
+
+/** Questions Merc asks in its own words: "?" outside quotes, bold, italics,
+ *  blockquotes, list items and the [Q] card. */
+function ownQuestions(text) {
+  const kept = String(text ?? '')
+    .split('\n')
+    .filter((l) => !/^\s*>/.test(l) && !LIST_ITEM_RE.test(l))
+    .join('\n');
+  return countQuestionMarks(kept);
+}
+
+/**
+ * "Ends with one thing to do" (pure; unit-tested). A reply ends with exactly
+ * one of: the [Q] check (nothing after it), a practice line ("Try asking me:
+ * …", "Now try: …", "Now ask me …"), the pause offer, or one closing
+ * question. Merc's own prose asks no other question — except a practice
+ * answer (`practiceReply`), whose task text (a note, a text message) may
+ * legitimately hold one. Returns true, or a string naming the problem.
+ */
+export function basicsEnding(raw, { practiceReply = false } = {}) {
+  const text = String(raw ?? '').replace(/\[LESSON_COMPLETE\]/g, '').trim();
+  const quiz = /\[Q\][\s\S]*?\[\/Q\]\s*$/.exec(text);
+  if (/\[Q\]/.test(text) && !quiz) return 'the [Q] check is not the last thing';
+  const body = (quiz ? text.slice(0, quiz.index) : text).trim();
+  const paras = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const last = paras.length ? paras[paras.length - 1] : '';
+  const earlier = paras.slice(0, quiz ? paras.length : -1).join('\n\n');
+  if (!practiceReply && ownQuestions(stripMarkers(earlier)) > 0) return 'a question before the end';
+  if (quiz) return true;
+  if (practiceLine(last) || NOW_ASK_RE.test(last) || PAUSE_OFFER_RE.test(last)) return true;
+  const asks = ownQuestions(stripMarkers(last));
+  if (asks === 1 && endsWithQuestion(last)) return true;
+  return asks > 1 ? 'more than one closing question' : 'no check, practice line or closing question at the end';
+}
+
+/** The learner turn each reply answered, and where the lesson completed. */
+function basicsTimeline(convo) {
+  const replies = Array.isArray(convo?.replies) ? convo.replies : [];
+  const done = replies.findIndex((x) => completes(x.raw, x));
+  return { replies, done };
+}
+
+/** Completion only after practice + check (and, with `rightOnly`, the right
+ *  pick): true, or a string naming the problem. */
+export function basicsCompletion(convo, { rightOnly = false } = {}) {
+  const { replies, done } = basicsTimeline(convo);
+  if (replies.length === 0) return 'missing';
+  if (done < 0) return `never completed in ${replies.length} replies`;
+  const before = replies.slice(0, done + 1);
+  const practiced = before.some((x, i) => i > 0 && x.kind === 'practice');
+  const taps = before.filter((x) => x.kind === 'tap');
+  if (done === 0) return 'completed on the first reply';
+  if (!practiced) return `completed at reply ${done + 1} with no practice`;
+  if (taps.length === 0) return `completed at reply ${done + 1} before the check was answered`;
+  if (rightOnly && replies[done].wrong) return `completed at reply ${done + 1} on a wrong pick`;
+  if (replies.slice(done + 1).some((x) => completes(x.raw, x))) return 'completed twice';
+  return true;
+}
+
+const BASICS_PLAIN_IDS = ['basics-b1l1', 'basics-b2l3', 'basics-b2l4'];
+const BASICS_ALL_IDS = [...BASICS_PLAIN_IDS, 'basics-b2l4-wrong'];
+export const BASICS_FK_MAX = 7;
+
+// "U.S. Senate", "8 a.m." are not sentence ends (the shared countSentences
+// splits them; the Basics row should not fail a 4-sentence card on that).
+const ABBREV_RE = /\b(?:U\.S|U\.K|a\.m|p\.m|e\.g|i\.e|Dr|Mr|Mrs|Ms|St|vs|etc)\./g;
+export function basicsMaxParagraphSentences(raw) {
+  return maxParagraphSentences(String(raw ?? '').replace(ABBREV_RE, (m) => m.replace(/\./g, '')));
+}
+export const BASICS_PARAGRAPH_MAX = 4;
+
+/** One row per Basics criterion, each over the conversations it names. */
+export function basicsCriteria(results) {
+  const convo = (id) => results.find((r) => r.id === id);
+  const all = results.filter((r) => isBasics(r) && Array.isArray(r.replies));
+  const rows = [];
+  const row = (name, ids, perConvo) => {
+    const parts = ids.map((id) => [id, convo(id)]);
+    if (parts.some(([, c]) => !c || !c.replies?.length)) {
+      rows.push({ name, value: `missing: ${parts.filter(([, c]) => !c || !c.replies?.length).map(([id]) => id).join(', ')}`, pass: false });
+      return;
+    }
+    const verdicts = parts.map(([id, c]) => [id.replace(/^basics-/, ''), perConvo(c)]);
+    const failed = verdicts.filter(([, v]) => v.pass === false);
+    rows.push({ name, value: verdicts.map(([id, v]) => `${id} ${v.value}`).join('; '), pass: failed.length === 0 });
+  };
+  const allIds = BASICS_ALL_IDS;
+
+  row(`basics: plain language — Flesch–Kincaid grade ≤ ${BASICS_FK_MAX} over each lesson's reply prose ([Q] card excluded)`, BASICS_PLAIN_IDS, (c) => {
+    const per = c.replies.map((x) => fleschKincaidGrade(basicsProse(x.raw)));
+    const total = c.replies.map((x) => textCounts(basicsProse(x.raw))).reduce((a, b) => ({
+      words: a.words + b.words, sentences: a.sentences + b.sentences, syllables: a.syllables + b.syllables,
+    }), { words: 0, sentences: 0, syllables: 0 });
+    const grade = fleschKincaidGrade(total);
+    return { pass: grade <= BASICS_FK_MAX, value: `${grade.toFixed(1)} (replies ${per.map((g) => g.toFixed(1)).join('/')})` };
+  });
+  row('basics: no unexplained jargon (token, LLM, model weights, parameters, neural, prompt engineering, hallucination)', BASICS_PLAIN_IDS, (c) => {
+    const hits = c.replies.flatMap((x, i) => unexplainedJargon(x.raw).map((t) => `${t}@${i + 1}`));
+    return { pass: hits.length === 0, value: hits.length ? hits.join(',') : 'none' };
+  });
+  row(`basics: ≤ ${BASICS_PARAGRAPH_MAX} sentences per paragraph (every reply)`, allIds, (c) => {
+    const worst = Math.max(0, ...c.replies.map((x) => basicsMaxParagraphSentences(x.raw)));
+    return { pass: worst <= BASICS_PARAGRAPH_MAX, value: `max ${worst}` };
+  });
+  row('basics: a "Try asking me" practice line in the first reply', allIds, (c) => {
+    const line = practiceLine(c.replies[0].raw);
+    return { pass: Boolean(line), value: line ? `"${line.slice(0, 40)}"` : 'none' };
+  });
+  row('basics: every [Q] card is well-formed (ANS line included), no [CHECK] for a blocks_v1 client', allIds, (c) => {
+    const bad = c.replies.flatMap((x, i) => {
+      const v = validateBlocks(x.raw);
+      const problems = [...v.problems, ...(v.checkCount ? ['[CHECK] used'] : [])];
+      return problems.length ? [`reply ${i + 1}: ${problems[0]}`] : [];
+    });
+    return { pass: bad.length === 0, value: bad.length ? bad.slice(0, 2).join(', ') : 'ok' };
+  });
+  row('basics: every reply ends with one thing to do (the check, a practice line or one closing question), no other question', allIds, (c) => {
+    const bad = c.replies
+      .map((x, i) => [i, completes(x.raw, x) ? true : basicsEnding(x.raw, { practiceReply: i > 0 && x.kind === 'practice' })])
+      .filter(([, v]) => v !== true);
+    return { pass: bad.length === 0, value: bad.length ? bad.map(([i, v]) => `reply ${i + 1}: ${v}`).join(', ') : 'ok' };
+  });
+  row('basics: [LESSON_COMPLETE] only after the practice and the check, exactly once', BASICS_PLAIN_IDS, (c) => {
+    const v = basicsCompletion(c);
+    return { pass: v === true, value: v === true ? `at reply ${basicsTimeline(c).done + 1}` : v };
+  });
+  row('basics: safety lesson — a wrong pick never completes; the right pick then does', ['basics-b2l4-wrong'], (c) => {
+    const wrongAt = c.replies.findIndex((x) => x.kind === 'tap' && x.wrong);
+    if (wrongAt < 0) return { pass: false, value: 'no wrong pick was made' };
+    if (c.replies.slice(0, wrongAt + 1).some((x) => completes(x.raw, x))) return { pass: false, value: `completed by reply ${wrongAt + 1} (the wrong pick)` };
+    const v = basicsCompletion(c, { rightOnly: true });
+    return { pass: v === true, value: v === true ? `wrong pick at ${wrongAt + 1}, completed at ${basicsTimeline(c).done + 1}` : v };
+  });
+  row('basics: the fake-call lesson says hang up and call back on a number you already know', ['basics-b2l4'], (c) => {
+    const prose = c.replies.map((x) => basicsProse(x.raw)).join('\n\n');
+    const missing = [
+      ['hang up', /\bhang(?:ing)? up\b/i],
+      ['call back', /\bcall\w*\s+(?:\w+\s+){0,4}back\b|\bcall (?:them|him|her|the person|your \w+)\b/i],
+      ['a number you know', /\bnumbers? (?:that )?you (?:already )?(?:know|trust|have)\b|\bknown number\b|\byour contacts\b/i],
+    ].filter(([, re]) => !re.test(prose)).map(([n]) => n);
+    return { pass: missing.length === 0, value: missing.length ? `missing: ${missing.join(', ')}` : 'ok' };
+  });
+  row('basics: the privacy lesson lists passwords, bank or card numbers and ID numbers as never-share', ['basics-b2l3'], (c) => {
+    const prose = c.replies.map((x) => basicsProse(x.raw)).join('\n\n');
+    const missing = [
+      ['passwords', /\bpasswords?\b/i],
+      ['bank/card numbers', /\b(?:bank|card|account)(?: or card)? (?:\w+ )?numbers?\b|\bbank or card\b/i],
+      ['ID numbers', /\bID numbers?\b|\bSocial Security\b|\bMedicare (?:or other )?(?:ID )?numbers?\b/i],
+    ].filter(([, re]) => !re.test(prose)).map(([n]) => n);
+    return { pass: missing.length === 0, value: missing.length ? `missing: ${missing.join(', ')}` : 'ok' };
+  });
+  rows.push(basicsCacheCriterion(all));
+  rows.push(basicsBannedWordsReport(all));
+  return rows;
+}
+
+/** Basics prompt caching: turns 2+ read the cached guide (≥ 5,000 tokens),
+ *  turns 3+ read back what the previous turn wrote — typed turns and [Q] taps
+ *  alike, since the Basics dynamic block never varies with responseMode —
+ *  and no turn sends more than 1,000 uncached input tokens. */
+export function basicsCacheCriterion(convos) {
+  const name = 'basics: cache — turns 2+ read ≥ 5,000 cached tokens, turns 3+ read back the previous turn, ≤ 1,000 uncached input';
+  const turns = convos.flatMap((r) => r.replies.map((x, i) => ({ ...x, convoId: r.id, turn: i + 1, prev: r.replies[i - 1] })));
+  if (turns.length === 0) return { name, value: 'missing', pass: false };
+  if (!turns.some((x) => x.usage && typeof x.usage === 'object')) return { name, value: 'n/a (server did not expose usage)', pass: true };
+  const problems = [];
+  for (const x of turns) {
+    const u = usageOf(x);
+    if (x.turn >= 2 && u.read < 5000) problems.push(`${x.convoId} t${x.turn} read=${u.read}`);
+    if (x.turn >= 3 && (x.responseMode || 'concise') !== 'deep') {
+      const p = usageOf(x.prev);
+      if (u.read < p.read + p.write || u.read <= p.read) problems.push(`${x.convoId} t${x.turn} read=${u.read} expected≥${p.read + p.write}`);
+    }
+    if (u.input > 1000) problems.push(`${x.convoId} t${x.turn} uncached=${u.input}`);
+  }
+  const minRead = Math.min(...turns.filter((x) => x.turn >= 2).map((x) => usageOf(x).read));
+  return {
+    name,
+    value: problems.length ? `${problems.length} problem(s): ${problems.slice(0, 3).join(', ')}` : `ok over ${turns.length} turns (min turn-2+ read ${minRead})`,
+    pass: problems.length === 0,
+  };
+}
+
+/** INFO: the guide's banned voice words in Merc's own prose (not gated). */
+export function basicsBannedWordsReport(convos) {
+  const name = 'report: basics — banned voice words (just, simply, easy, …) outside quotes (not gated)';
+  const replies = convos.flatMap((r) => r.replies.map((x, i) => ({ ...x, convoId: r.id, turn: i + 1 })));
+  if (replies.length === 0) return { name, value: 'missing', pass: true, reportOnly: true };
+  const hits = replies
+    .map((x) => [x, basicsProse(x.raw).replace(/"[^"\n]*"|“[^”\n]*”/g, ' ').match(BASICS_BANNED_RE)])
+    .filter(([, m]) => m)
+    .map(([x, m]) => `${x.convoId.replace(/^basics-/, '')} t${x.turn} "${m[0]}"`);
+  return { name, value: hits.length ? `${hits.length}/${replies.length}: ${hits.slice(0, 4).join(', ')}` : `0/${replies.length}`, pass: true, reportOnly: true };
+}
+
 /** Lesson replies the run-wide curriculum checks read: every LIVE reply of a
  *  non-safety curriculum conversation (a replay's canned history is not in
  *  `replies`). */
@@ -1475,7 +1870,7 @@ const usageOf = (x) => ({
 export function historyReadBackCriterion(results) {
   const name = 'cache: turns 3+ read back the previous turn (read ≥ prev read + prev write)';
   const all = results
-    .filter((r) => !isSafety(r) && !isAuditProbe(r) && Array.isArray(r.replies))
+    .filter((r) => !isSafety(r) && !isAuditProbe(r) && !isBasics(r) && Array.isArray(r.replies))
     .flatMap((r) => r.replies.map((x, i) => ({ ...x, convoId: r.id, turn: i + 1, prev: r.replies[i - 1] })));
   if (!all.some((x) => x.usage && typeof x.usage === 'object')) {
     return { name, value: 'n/a (server did not expose usage)', pass: true };
@@ -1504,7 +1899,7 @@ export function historyReadBackCriterion(results) {
 export function uncachedInputCriterion(results, max = 1000) {
   const name = `cache: every turn sends ≤ ${max.toLocaleString('en-US')} uncached input tokens`;
   const turns = results
-    .filter((r) => !isSafety(r) && !isAuditProbe(r) && Array.isArray(r.replies))
+    .filter((r) => !isSafety(r) && !isAuditProbe(r) && !isBasics(r) && Array.isArray(r.replies))
     .flatMap((r) => r.replies.map((x, i) => ({ ...x, convoId: r.id, turn: i + 1 })));
   if (!turns.some((x) => x.usage && typeof x.usage === 'object')) {
     return { name, value: 'n/a (server did not expose usage)', pass: true };
@@ -1745,8 +2140,52 @@ async function runIosScenario(baseUrl, scenario, delayMs) {
   return { id: scenario.id, mode: scenario.mode, sessionId, replies };
 }
 
+/**
+ * A Basics lesson with a live learner (the `basics-*` scenarios): the iOS
+ * wire shape (iosChatBody, plus the scenario's capabilities), the hidden
+ * opener first, then one learner turn per reply from basicsLearnerTurn,
+ * until [LESSON_COMPLETE] or `maxTurns` learner turns. Each reply records
+ * the kind of learner turn it answered ('opener' | 'practice' | 'tap' |
+ * 'continue') and, for a tap, whether the pick was deliberately wrong.
+ */
+async function runBasicsScenario(baseUrl, scenario, delayMs) {
+  const sessionId = newSessionId();
+  const lessonStarter = scenario.lesson.starter;
+  const maxTurns = scenario.maxTurns ?? 7;
+  const state = { fallbacks: [...(scenario.fallbacks || [])], wrongFirst: Boolean(scenario.wrongFirst), rightAnswer: scenario.rightAnswer };
+  const visible = [];
+  const replies = [];
+  let step = { kind: 'opener', responseMode: 'balanced' };
+  for (;;) {
+    const turnNo = replies.length + 1;
+    if (step.kind !== 'opener') visible.push({ role: 'user', content: step.text });
+    const body = iosChatBody({ sessionId, visible, lessonStarter, responseMode: step.responseMode });
+    if (scenario.capabilities) body.capabilities = [...scenario.capabilities];
+    const { text: reply, usage, lessonComplete } = await streamWithRetry(baseUrl, body, delayMs, turnNo);
+    visible.push({ role: 'assistant', content: reply });
+    replies.push({
+      user: step.kind === 'opener' ? lessonStarter : step.text,
+      kind: step.kind,
+      ...(step.wrong ? { wrong: true } : {}),
+      responseMode: step.responseMode,
+      raw: reply,
+      metrics: computeMetrics(reply),
+      usage,
+      lessonComplete,
+    });
+    const done = completes(reply, { lessonComplete });
+    const cacheNote = usage ? `, cache_read=${usage.cache_read_input_tokens ?? 0}` : '';
+    process.stderr.write(`    turn ${turnNo} ${step.kind} ok (${reply.length} chars${cacheNote}${done ? ', lessonComplete' : ''})\n`);
+    await sleep(delayMs);
+    if (done || replies.length > maxTurns) break;
+    step = basicsLearnerTurn(reply, state);
+  }
+  return { id: scenario.id, mode: scenario.mode, sessionId, replies };
+}
+
 async function runScenario(baseUrl, scenario, delayMs) {
   if (scenario.route === 'grade') return runGrade(baseUrl, scenario, delayMs);
+  if (scenario.mode === 'basics') return runBasicsScenario(baseUrl, scenario, delayMs);
   if (scenario.client === 'ios') return runIosScenario(baseUrl, scenario, delayMs);
   const sessionId = newSessionId();
   if (scenario.mode === 'debate' || scenario.mode === 'discussion') {
@@ -1795,7 +2234,8 @@ export function evaluateCriteria(results) {
   // airiness, blocks leak).
   // The audit 2026-10 chat-*/lesson-* probes are scored by their own
   // criteria (appended last), never pooled here.
-  const paced = results.filter((r) => !isSafety(r) && !isWidget(r) && !isAuditProbe(r));
+  // basics-* (2026-10) are scored by basicsCriteria() only, like the audit probes.
+  const paced = results.filter((r) => !isSafety(r) && !isWidget(r) && !isAuditProbe(r) && !isBasics(r));
   const convo = (prefix) => paced.filter((r) => r.id.startsWith(prefix));
   const allReplies = paced
     .flatMap((r) => r.replies.map((x) => ({ ...x, convoId: r.id, mode: r.mode })))
@@ -1893,6 +2333,7 @@ export function evaluateCriteria(results) {
     ...curriculumRunCriteria(results),
     sextortionNumbersReport(results),
     newsCheckinReport(results),
+    ...basicsCriteria(results),
   ];
   return criteria;
 }
