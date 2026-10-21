@@ -1,6 +1,6 @@
 # Printable course certificates
 
-Branch `feat/certificate`, stacked on `feat/mac-night-studio` (PR #48). Written 2026-10-21 with Xcode 26.4 / Swift 6.3. Not pushed.
+Branch `feat/certificate`, stacked on `feat/mac-night-studio` (PR #48). Written 2026-10-21 with Xcode 26.4 / Swift 6.3, then revised after a design and code review. Not pushed. The PR description is `PR.md`.
 
 The founder asked for "a printable certificate after they complete all the advanced courses… make it look good". They chose **B · Laurel** from the Claude Design canvas, and asked for a simpler **AI Basics** certificate for the beginner course too. The designs are the source of truth:
 - `design/Laurel.dc.html`: the Deep dive certificate;
@@ -58,6 +58,7 @@ Every text baseline lands on Chrome's, and `CertificateLayoutTests` pins them:
 | the paragraph | 419.188, 446.734 | 454.188, 483.188 |
 | the unit lines | 481.281, 502.281 | — |
 | the date / DATE | 679 / 712 | 679 / 712 |
+| the signature label | 712 | 712 (one line; see below) |
 | the footer | 740 | 740 |
 
 Text goes by its baseline and the centre of its line box, letter-spacing included, as CSS centres it. SwiftUI's `tracking` also adds space after the last character, as Chrome's `letter-spacing` does.
@@ -70,7 +71,8 @@ Text goes by its baseline and the centre of its line box, letter-spacing include
 **The result** (`compare/`):
 - **At 96 dpi** against Chrome at 1×, every line's ink box is within 1 px.
 - **At 150 dpi** the overlays show fringes of up to about 2 px (1 pt), because Chrome lays out in device pixels at a 1.5625 scale factor and rounds each line box there. The PDF follows the CSS layout itself.
-- **The frame, the rules, the seal and the mark** match to the pixel at both resolutions.
+- **The frame, the rules, the seal and the mark** match to the pixel at both resolutions, except AI Basics' two bottom columns, which are deliberately 40 px wider (below).
+- **The paper:** the design's page is #FDFDFB; the PDF leaves its page unpainted (below), so the app's half of each side-by-side is white.
 
 Files in `compare/`:
 - `deepDive-side.png`, `basics-side.png`: the design | the app's PDF, at 150 dpi;
@@ -91,23 +93,22 @@ Re-make all of it with `docs/certificate/tools/make-compare.sh`.
 4. **Long names.** The design sets the name at 72 px on one line inside the 864 px column, as `text-wrap: balance` would. Past that the rule is (`CertificateNameFit`):
    - a name that fits at 72 px stays there;
    - one just over shrinks a little on one line, down to 57.5 px;
-   - longer names break onto two balanced lines, up to 57 px on the Deep dive and 64 px on AI Basics, which keeps at least 24 px above the seal;
-   - a break at a space beats one inside a double-barrelled name unless the hyphen sets it 10% larger;
+   - longer names break onto two balanced lines, up to 57 px on the Deep dive and 64 px on AI Basics, which keeps at least 16 px between the paragraph block and the seal;
+   - the two lines sit 1.12 em apart, not the design's 1.05. At 1.05 an accented capital on line 2 (Á, Ö and Å reach 0.79–0.82 em) runs into a g or y on line 1 (0.28 em down); at 1.12 even Å clears it;
+   - a break at a space always beats one inside a double-barrelled name, so "Montgomery-Vasquez" stays whole and both certificates break a name alike. A hyphen breaks only when every space break would set the name under 48 px;
+   - a line never ends on a lowercase particle (de, los, van, von, der, da, bin, al, y…): "Maria Fernanda de los Santos / Rodríguez-Ochoa", not "Maria Fernanda de los / Santos Rodríguez-Ochoa". A name typed all in lowercase breaks at any space;
    - one unbreakable word shrinks on its line;
    - input is capped at 80 characters.
 
    A one-line name keeps the design's 75.6 px line box, so a slightly smaller name doesn't move the rest of the page. Two lines push the paragraph down, as CSS would.
 
-   Samples are in `shots/`:
+   Samples are made in `shots/` (local, not committed):
    - "Li Wei" (`-short`);
    - "Alexandria Montgomery-Vasquez": one line at 72 px, as in the design;
-   - a 44-character name (`-long`);
-   - a 61-character name (`-60`).
-
-### Kept as designed, worth a look
-
-- **AI Basics' signature label wraps.** "INSTRUCTOR OR FAMILY / MEMBER" is wider than the design's 250 px column at 14 px with 0.12em tracking, so Chrome wraps it. The signature line then sits 18 px higher than the date line. The PDF reproduces this exactly, because it is what the founder approved.
-- **The fix is one line in `CertificateCopy.signatureLabel`**, if they'd rather have one line: for example "Instructor or family", or a slightly tighter tracking.
+   - "Maria Fernanda de los Santos Rodríguez-Ochoa", 44 characters (`-long`);
+   - "Christopher Alexander Montgomery-Vasquez de la Fuente Ramírez", 61 characters (`-60`).
+5. **AI Basics' date and signature columns are 290 px, not 250.** "INSTRUCTOR OR FAMILY MEMBER" is 274.8 px at 14 px with 0.12em tracking, so in the design's 250 px column Chrome wraps it after "Family", and the signature rule rides 18 px higher than the date rule. On paper that reads as a mistake. At 290 px the label sits on one line with 7.6 px to spare each side, both rules line up at 691 px, and each column still stands 72 px clear of the seal. The words, size and tracking are the design's; the Deep dive's columns are unchanged.
+6. **The PDF leaves the paper unpainted.** The design's page is #FDFDFB. Printed, a 1% tint comes out as a sparse dot pattern that ends in a hard edge at the printer's margin, so the paper colour comes from the paper. On screen (the sheet's preview, the list, the card) the certificate keeps its #FDFDFB.
 
 ## Fonts
 
@@ -139,7 +140,8 @@ Re-make all of it with `docs/certificate/tools/make-compare.sh`.
 - draws the frame, the rules, the ornament and the seal's rings as vectors, and the seal's words as text;
 - embeds the mark once, as the original 470 × 415 image (about 730 dpi at its printed size). There is no other image.
 - **iPhone printing:** `UIPrintInteractionController`, landscape.
-- **Mac printing:** `NSPrintOperation` on a `PDFDocument`, Letter landscape, scaled to the printer's margins.
+- **Mac printing:** `NSPrintOperation` on a `PDFDocument`, landscape, on the paper the learner's printer is set to (Letter as is; A4 at about 97%), scaled to fit and centred.
+- **The share sheet's preview tile** (iPhone) is the certificate itself, drawn small (396 × 306 px) a moment after the name stops changing.
 - **Sharing:** the share sheet gets the PDF as a temporary file named "Mercurius Certificate - AI Literacy Course.pdf". The file name has no learner's name in it. The file is removed when the sheet closes.
 
 ## Eligibility and the date
@@ -159,7 +161,8 @@ Re-make all of it with `docs/certificate/tools/make-compare.sh`.
 
 - **Where the name lives:** `UserDefaults` (`com.mayoailiteracy.mercurius.certificate.name`, a private suite under `-UITests`), with the earned and printed dates beside it.
 - **Where it goes:** only onto the page, the print panel, the share sheet or a file the learner picks. No networking code can reach it: `NetworkingKit` sits below `EngagementFeature`, and the store is never passed to it. It isn't logged, and the PDF's metadata doesn't carry it.
-- **How it's erased:** "Delete my data & start over", "Reset this device only" and both consent withdrawals run `SettingsSheet`'s local wipe, which now calls `CertificateStore.reset()`. `SettingsResetTests` checks this.
+- **How it's erased:** "Delete my data & start over", "Reset this device only" and both consent withdrawals run `SettingsSheet`'s local wipe, which now calls `CertificateCenter.reset()`: the name, every date and any course-complete card still waiting. `SettingsResetTests` checks this.
+- **A sheet open across a reset** (possible on the Mac, where Settings is its own window) closes: it watches `CertificateStore.resetCount`, never writes the erased name back, and the Mac's reset also closes the Progress sheet it sits on.
 - **Copy left alone:** Settings' wording ("erases your chats, lessons, streak and progress") is unchanged. Whether to add "and the name on your certificate" is the founder's call.
 
 ## Mac
@@ -169,7 +172,7 @@ Re-make all of it with `docs/certificate/tools/make-compare.sh`.
   - an eyebrow ("AI LITERACY COURSE") and a display title;
   - a Night field;
   - a bottom bar with a text button, a secondary button and the one prominent button.
-- **The card** is a `nightLit` card with a secondary button. The check's Done stays the one prominent button.
+- **The card** is a `nightLit` card with a secondary button. The check's Done stays the one prominent button. It goes whenever the check does, by any way out (the sidebar, ⌘1–⌘3, Learning Path, a lesson, Settings), not only by its Done (`.onChange(of: shell.activeUnitTest?.id)` in `MacShellView`).
 - **Two new entitlements**, in `project.yml`, the entitlements file and `MacReleaseConfigTests`:
   - `com.apple.security.print`: a sandboxed app can't print without it;
   - `files.user-selected.read-write` instead of `read-only`, for Save as PDF… to write where the learner picks. Picking a photo still works.
@@ -210,63 +213,64 @@ All of them run in `swift test`.
 
 - **`DesignSystemTests/CertificateTests.swift`:**
   - **Fonts:** registered with the expected PostScript names; `wght` 600 and 400; the licences present.
-  - **Layout:** every baseline above, for both kinds; the Basics label; two-line names clear the seal and the column.
-  - **Name fit, with a fake measure:** short, slightly long, long, hyphen preference, unbreakable, bounds for 10–80 characters, normalization.
-  - **Name fit, with the real font:** "Li Wei" and "Alexandria Montgomery-Vasquez" stay at 72 px; 44–61-character names stay at 54 px or larger.
+  - **Layout:** every baseline above, for both kinds; AI Basics' 290 px columns, its one-line label and both rules at 691 px; each signature label inside its column and clear of the seal; two-line names clear the seal and the column, at 57 and 64 px too; two lines 1.12 em apart, with the real font's g and Å not touching.
+  - **Name fit, with a fake measure:** short, slightly long, long, particles kept with their surname, a lowercase name, a space break beating a larger hyphen break, a hyphen as the last resort, unbreakable, bounds for 10–80 characters, normalization.
+  - **Name fit, with the real font:** "Li Wei" and "Alexandria Montgomery-Vasquez" stay at 72 px; 44–61-character names stay at 54 px or larger on both kinds; both kinds set "Christopher Alexander / Montgomery-Vasquez de la Fuente Ramírez" alike; "de los Santos" stays on one line.
   - **The seal's run:** 345 px.
   - **Copy:** the US date; the VoiceOver summary.
-  - **PDF:** one page; a 792 × 612 media box; text with the name, the title, the date and the footer; a two-line name; the four faces embedded; the 470 × 415 mark the only image.
+  - **PDF:** one page; a 792 × 612 media box; text with the name, the title, the date and the footer; a two-line name; the four faces embedded; the 470 × 415 mark the only image; no paper fill (the page's corners and open paper are transparent, the border is ink).
   - An opt-in `CertificateShots` test writes the PDFs for `shots/`.
 - **`EngagementFeatureTests/CertificateTests.swift`:**
   - **Eligibility:** Deep dive none, partial and complete; Basics with injected ids, none, partial and complete, with its date; the date rule.
-  - **The store:** the name normalized; only its own key written, to the given defaults, never `.standard`; reset erases everything; the first dates stand.
+  - **The store:** the name normalized; only its own key written, to the given defaults, never `.standard`; reset erases everything and counts itself (`resetCount`, which an open sheet watches); the first dates stand.
   - **The center:** the seam; the eighth mastery as the moment; a certificate earned elsewhere; Basics through the seam; the hub row's summary; the sheet's privacy copy.
 - **`AppFeatureTests`:**
-  - **`CertificateWiringTests`:** the curriculum's units against the copy; the seam off in this build; mastery through the real progress store; Basics ids in the shared store.
-  - **`SettingsResetTests`:** "Delete my data" and "Reset this device only" erase the name.
+  - **`CertificateWiringTests`:** the curriculum's units against the copy; the seam off in this build; mastery through the real progress store; a reset takes a waiting card with it, so a later pass can't bring it back; Basics ids in the shared store.
+  - **`SettingsResetTests`:** "Delete my data" and "Reset this device only" erase the name and dates, and clear a waiting card.
+  - **`MacShellModelTests`:** a reset from the Settings window closes the Progress sheet (and a certificate sheet over it).
   - **`MacReleaseConfigTests`:** the new entitlements.
 
-## Verification (2026-10-21, Xcode 26.4 / Swift 6.3)
+## Verification (2026-10-21, Xcode 26.4 / Swift 6.3, after the review fixes)
 
 | Check | Result |
 |---|---|
-| `swift test --scratch-path /private/tmp/merc-cert-spm` | 1236 tests in 187 suites passed, `ArchitectureTests` included |
+| `swift test --scratch-path /private/tmp/merc-cert-spm` | 1247 tests in 187 suites passed, `ArchitectureTests` included |
 | `ios/scripts/ci-compat-lint.py` | 0 findings |
-| iOS build, simulator "Lab D 16PM", derived data `/private/tmp/merc-cert-ios-dd` | BUILD SUCCEEDED, with no warnings in the changed files |
-| iOS `xcodebuild test` with CI's flags, Lab D | **TEST SUCCEEDED**: 3 XCTest unit, 3 Swift Testing and 25 UI tests, with no failures and no retries |
+| iOS build, simulator "Lab D 16PM", derived data `/private/tmp/merc-cert-ios-dd` (clean) | BUILD SUCCEEDED, with no warnings in the changed files |
+| iOS `xcodebuild test` with CI's flags, Lab D | **TEST SUCCEEDED**: 31 of 31 (3 XCTest unit, 3 Swift Testing, 25 UI), no failures, no retries |
 | Snapshot comparison with recording off (`SIM=<Lab D> DD=/private/tmp/merc-cert-ios-dd scripts/ios-unchanged-check.sh`) | "iOS unchanged": the same 23 results as the baseline (11 pass, the same 12 already-stale references fail with identical pixels) |
 | Mac Debug build into `/private/tmp/merc-cert-mac-dd` | BUILD SUCCEEDED |
-| Mac shots, copied app `com.mayoailiteracy.mercurius.native.macnscert1`, `ACTIVATE=NO` | all ok; the founder's Mercurius was running before and after; the copy never came to the front |
+| Mac Release, universal (CI's job), same derived data | BUILD SUCCEEDED; `mac-bundle-check.sh … release` ok (arm64 + x86_64); the four fonts, both licences and the mark are in the bundle |
+| Mac shots, copied app `com.mayoailiteracy.mercurius.native.macnscert1`, `ACTIVATE=NO` | all 10 ok; the founder's Mercurius was running before and after; the copy never came to the front |
+| iPhone share sheet, tapped on Lab D (a scratch XCUITest runner, launched by bundle id) | the preview tile shows the certificate, not a blank square |
 
-- **Snapshot comparisons:** none changed. No `ViewSnapshotTests` case renders the Progress hub or a passed unit check, so no reference covers the new UI. `__Snapshots__` is untouched, and no record run was made.
-- **The copied-app script:** `mac-copy-snapshots.sh` now leaves iOS Simulator apps out of its "still running" check. They are also called Mercurius, and other worktrees' UI tests relaunched them mid-run, which the script reported as a Mercurius that had gone.
+- **Snapshot comparisons:** none changed. No `ViewSnapshotTests` case renders the Progress hub, a passed unit check or the certificate, so no reference covers the new UI. `__Snapshots__` is untouched, and no record run was made.
+- **Not run:** the Mac print and save panels at run time (the founder is using the Mac app, so the GUI wasn't driven), and CI's macOS 14 / Xcode 16.2 runtime.
+- **The copied-app script:** `mac-copy-snapshots.sh` leaves iOS Simulator apps out of its "still running" check. They are also called Mercurius, and other worktrees' UI tests relaunched them mid-run, which the script reported as a Mercurius that had gone.
 
 ## Screenshots
 
-**`shots/` (the PDFs):**
-- `certificate-deepDive.pdf` and `certificate-basics.pdf`, with the sample name and date, each with a `-150dpi.png` and `.inspect.txt` (fonts, images, text);
-- the same for the name samples `-short`, `-long` and `-60`.
+**Committed:**
+- `key-shots/` (JPEG, at most 1800 px, q85): both certificates from the app's PDF at 150 dpi, the two design | app comparisons, the iPhone name sheet and the Mac name sheet;
+- `samples/certificate-deepDive.pdf` and `samples/certificate-basics.pdf`: the app's PDFs with the sample name and date (about 180 KB each);
+- `compare/`: the full-size comparisons and overlays.
 
-**`shots/ios/`** (iPhone 16 Pro Max at half size):
-- the name sheet: `sheet-deepDive`, `-dark`, `-xxxl` (the largest standard size), `-ax3` and `-ax3-dark` (AX3 = Accessibility Extra Large); `sheet-basics`;
-- the Certificates list: `list`, `list-dark`, `list-ax3`;
-- the Progress hub: `hub`;
-- the course-complete card: `card`, `card-dark`.
-
-**`shots/mac/`** (copied app, half size):
-- the sheets: `certificate-sheet`, `certificate-sheet-basics` (with `-dark`);
-- `certificate-list` and `certificate-hub` (with `-dark`);
-- `certificate-card` (with `-dark`).
+**Local only** (`shots/`, gitignored; `tools/make-compare.sh` re-makes the PDFs):
+- `certificate-deepDive.pdf` and `certificate-basics.pdf`, with the sample name and date, each with a `-150dpi.png` and `.inspect.txt` (fonts, images, text); the same for the name samples `-short`, `-long` and `-60`;
+- `ios/` (iPhone 16 Pro Max at half size): the name sheet (`sheet-deepDive`, `-dark`, `-xxxl`, `-ax3`, `-ax3-dark`; `sheet-basics`), the Certificates list (`list`, `-dark`, `-ax3`), the Progress hub (`hub`) and the course-complete card (`card`, `-dark`);
+- `mac/` (copied app): `certificate-sheet`, `certificate-sheet-basics`, `certificate-list`, `certificate-hub` and `certificate-card`, each with `-dark`.
 
 Re-take the Mac shots with:
 ```bash
-N=cert1 SRC_APP=… COPY_DIR=… VARIANTS="light dark" \
-  scripts/mac-copy-snapshots.sh <dir> certificate-sheet certificate-sheet-basics certificate-list certificate-hub certificate-card
+N=cert1 SRC_APP=/private/tmp/merc-cert-mac-dd/Build/Products/Debug/Mercurius.app COPY_DIR=/private/tmp/merc-cert-copies \
+  VARIANTS="light dark" scripts/mac-copy-snapshots.sh <dir> \
+  certificate-sheet certificate-sheet-basics certificate-list certificate-hub certificate-card
 ```
 
 ## For the founder
 
-1. **AI Basics' signature label** wraps onto two lines, as the design does; the signature line then sits higher than the date line. Keep it, or make it one line?
+1. **AI Basics' bottom columns are 40 px wider than the design** (290 px, not 250), so "INSTRUCTOR OR FAMILY MEMBER" sits on one line and the signature rule lines up with the date rule. The design's wrap put the signature line 18 px higher. Revert is one line (`CertificateLayout.columnWidth`) if the design's wrap is wanted.
 2. **Settings' "Delete my data" wording** doesn't mention the certificate name, although the name is erased. Add "and the name on your certificate"?
 3. **Mac App Review** will see two new entitlements: printing, and user-selected read-write.
 4. **App size:** about 3.5 MB more, for the fonts.
+5. **"Stays on this device"** is true of Mercurius: the name never reaches its servers. Like progress, it is in the device's own iCloud or computer backup (UserDefaults), which is the student's Apple backup, not Mercurius's.

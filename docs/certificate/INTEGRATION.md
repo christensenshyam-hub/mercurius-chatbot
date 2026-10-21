@@ -59,7 +59,9 @@ The tests that cover this:
    if let card = env.certificates.masteryAccessory(open: { kind in sheet = kind }) { card }
    ```
 
-   Present `CertificateSheet(center: env.certificates, kind: .basics, onClose: …)` from the same view. `.certificateMasterySlot(env.certificates)` does both when the view reads `\.unitMasteryAccessory`. Clear `env.certificates.justEarned` when that view closes, as `unitTestDismissed` does.
+   Present `CertificateSheet(center: env.certificates, kind: .basics, onClose: …)` from the same view. `.certificateMasterySlot(env.certificates)` does both when the view reads `\.unitMasteryAccessory`. Clear `env.certificates.justEarned` whenever that view goes, by any way out:
+   - iPhone: in the cover's `onDismiss`, as `unitTestDismissed` does;
+   - Mac: on a change of the open lesson, as `MacShellView` does for the check (`.onChange(of: shell.activeUnitTest?.id)`). The sidebar, ⌘1–⌘3 and Settings all close it without its own Done.
 
 ## If Basics keeps its own progress store
 
@@ -76,5 +78,5 @@ If Basics completions don't go into `CurriculumProgressStore`, change `Certifica
 - [ ] Progress ▸ Certificates lists AI Basics with "N of 18 lessons finished" and what's left.
 - [ ] Finishing the 18th lesson shows "You finished AI Basics" and opens the sheet.
 - [ ] Its PDF prints "AI BASICS", the date of the 18th lesson, and "Instructor or family member".
-- [ ] "Delete my data & start over" erases the name: `SettingsSheet` already calls `CertificateStore.reset()`.
+- [ ] "Delete my data & start over" erases the name: `SettingsSheet` already calls `CertificateCenter.reset()`.
 - [ ] Remove `CertificateDebug.demoBasicsLessons` once real lessons exist. It's DEBUG-only and used only for screenshots.
