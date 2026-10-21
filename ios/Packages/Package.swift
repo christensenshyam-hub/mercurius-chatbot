@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
         .library(name: "PersistenceKit", targets: ["PersistenceKit"]),
+        .library(name: "LessonInteractives", targets: ["LessonInteractives"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
@@ -67,6 +68,26 @@ let package = Package(
             path: "PersistenceKit/Tests"
         ),
 
+        // MARK: LessonInteractives
+        //
+        // The lesson interactives' content, logic, copy and views (every
+        // card but Lesson 1.1's, which stays in ChatFeature for now), plus
+        // the registry that says which lesson holds which card. DesignSystem
+        // only: no NetworkingKit, no PersistenceKit, so a card can't send or
+        // store anything (DependencyGraphTests enforces it; NoIOTests scans
+        // the sources). Where a card sits in a thread is ChatFeature's
+        // (LessonInteractiveAnchor). See docs/interactives/FRAMEWORK.md.
+        .target(
+            name: "LessonInteractives",
+            dependencies: ["DesignSystem"],
+            path: "LessonInteractives/Sources"
+        ),
+        .testTarget(
+            name: "LessonInteractivesTests",
+            dependencies: ["LessonInteractives"],
+            path: "LessonInteractives/Tests"
+        ),
+
         // MARK: ChatFeature
         .target(
             name: "ChatFeature",
@@ -74,13 +95,14 @@ let package = Package(
                 "DesignSystem",
                 "NetworkingKit",
                 "PersistenceKit",
+                "LessonInteractives",
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             path: "ChatFeature/Sources"
         ),
         .testTarget(
             name: "ChatFeatureTests",
-            dependencies: ["ChatFeature"],
+            dependencies: ["ChatFeature", "LessonInteractives"],
             path: "ChatFeature/Tests"
         ),
 
@@ -144,13 +166,14 @@ let package = Package(
                 "SettingsFeature",
                 "EngagementFeature",
                 "MercuriusActivity",
+                "LessonInteractives",
             ],
             path: "AppFeature/Sources"
         ),
         .testTarget(
             name: "AppFeatureTests",
             dependencies: ["AppFeature", "ChatFeature", "CurriculumFeature", "EngagementFeature",
-                           "NetworkingKit", "PersistenceKit", "SettingsFeature"],
+                           "NetworkingKit", "PersistenceKit", "SettingsFeature", "LessonInteractives"],
             path: "AppFeature/Tests"
         ),
 

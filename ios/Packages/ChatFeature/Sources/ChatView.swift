@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 
 /// The root chat screen. Owns the view model and composes the message
 /// list, input bar, and empty state.
@@ -645,14 +646,17 @@ struct MessageListView: View {
     @State private var showsJumpPill = false
     @State private var coachHiddenForTyping = false
 
-    /// Lessons: the lesson's id, for Lesson 1.1's interactive
-    /// (`LessonInteractiveAnchor`). Nil: no interactive.
+    /// Lessons: the lesson's id, for its interactive (the registry's,
+    /// placed by `LessonInteractiveAnchor`). Nil: no interactive.
     var lessonID: String?
     @State private var crisisIndex = LessonCrisisIndex()
     @State private var interactiveIndex = LessonInteractiveIndex()
     /// Lesson 1.1's interactive: the opening picked (and the Mac's opened
     /// card, the iPhone's shown map), for the whole thread.
     @State private var tokenizer = TokenizerState()
+    /// Every other card: what the student has done with it, for the whole
+    /// thread (in memory only).
+    @State private var interactives = InteractiveStateStore()
 
     #if os(macOS)
     /// Night Studio, free chat: the latest completed reply's closing
@@ -804,7 +808,8 @@ struct MessageListView: View {
                                 coordinateSpace: messageListSpace,
                                 onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) },
                                 interactiveAfter: interactive?.messageID == message.id
-                                    ? interactive?.position : nil
+                                    ? interactive?.position : nil,
+                                interactiveCard: interactive?.cardRef ?? .tokenizer
                             )
                             .equatable()
                             .id(message.id)
@@ -830,10 +835,11 @@ struct MessageListView: View {
                                 avatarIdleLife: isLive,
                                 onCheckTap: onCheckTap,
                                 quizInteraction: quizInteraction(for: message),
-                                // Lesson 1.1's interactive, between this
+                                // The lesson's interactive, between this
                                 // reply's blocks (`LessonInteractiveSplit`).
                                 interactiveAfter: interactive?.messageID == message.id
-                                    ? interactive?.position : nil
+                                    ? interactive?.position : nil,
+                                interactiveCard: interactive?.cardRef ?? .tokenizer
                             )
                             .equatable()
                             .id(message.id)
@@ -899,8 +905,10 @@ struct MessageListView: View {
                 // turned an opaque grey in a narrow window).
                 .nightSoftScrollEdge()
                 #endif
-                // Lesson 1.1's interactive keeps its opening for the thread.
+                // Lesson 1.1's interactive keeps its opening for the thread,
+                // and every other card its state.
                 .environment(tokenizer)
+                .environment(interactives)
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
                 })
@@ -982,6 +990,17 @@ struct MessageListView: View {
                 perform(.showLatestMessageTop, proxy: proxy)
             }
             #if DEBUG
+            // `-InteractiveScroll top|reveal|after` (shots only, both
+            // platforms): once a reply settles, the lesson's card's top,
+            // its reveal or its end.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle, let target = InteractiveLaunchOptions.current.scroll else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    scroll.policy.partJumped()
+                    proxy.scrollTo(InteractiveScrollID.id(for: target),
+                                   anchor: target == .reveal ? .top : UnitPoint(x: 0.5, y: 0.45))
+                }
+            }
             // `-NightScrollToInteractive top|map` (shots only, both
             // platforms; `context` on the iPhone): once a reply settles,
             // Lesson 1.1's interactive (or its map) at the top of the
@@ -1292,22 +1311,23 @@ struct MessageListView: View {
         .accessibilityLabel(title)
     }
 
-    // MARK: Lesson 1.1's interactive (both platforms)
+    // MARK: The lesson's interactive (both platforms)
 
-    /// This list in the lesson `id` (Lesson 1.1 holds the interactive).
+    /// This list in the lesson `id` (the registry says which lessons hold
+    /// an interactive: `InteractiveRegistry`).
     func lesson(id: String) -> MessageListView {
         var list = self
         list.lessonID = id
         return list
     }
 
-    /// Where Lesson 1.1's interactive sits in this thread, if anywhere. The
+    /// Where the lesson's interactive sits in this thread, if anywhere. The
     /// Mac reads the parts its strip already split; the iPhone splits them
-    /// here, only in Lesson 1.1 and only until the card has its place (the
-    /// index keeps it).
+    /// here, only in a lesson with a card and only until the card has its
+    /// place (the index keeps it).
     private var interactivePlacement: LessonInteractivePlacement? {
-        guard lessonStyle, TokenizerInteractive.belongs(toLesson: lessonID) else { return nil }
-        return interactiveIndex.placement(lessonID: lessonID, messages: messages,
+        guard lessonStyle, let spec = InteractiveRegistry.spec(forLesson: lessonID) else { return nil }
+        return interactiveIndex.placement(spec: spec, messages: messages,
                                           crisisReplies: crisisIndex.guardedReplies(in: messages)) { message in
             #if os(macOS)
             nightParts.sections(for: message)

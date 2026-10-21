@@ -99,6 +99,20 @@
       }
     },
     {
+      "name" : "LessonInteractives",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "LessonInteractives"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
       "name" : "ChatFeature",
       "settings" : [
 
@@ -328,6 +342,52 @@
             "DesignSystem",
             null
           ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "LessonInteractives",
+      "packageAccess" : true,
+      "path" : "LessonInteractives/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "LessonInteractives",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "LessonInteractivesTests",
+      "packageAccess" : true,
+      "path" : "LessonInteractives/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
         },
         {
           "byName" : [
@@ -338,6 +398,12 @@
         {
           "byName" : [
             "PersistenceKit",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "LessonInteractives",
             null
           ]
         },
@@ -369,6 +435,12 @@
         {
           "byName" : [
             "ChatFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "LessonInteractives",
             null
           ]
         }
@@ -656,6 +728,12 @@
             "MercuriusActivity",
             null
           ]
+        },
+        {
+          "byName" : [
+            "LessonInteractives",
+            null
+          ]
         }
       ],
       "exclude" : [
@@ -713,6 +791,12 @@
         {
           "byName" : [
             "SettingsFeature",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "LessonInteractives",
             null
           ]
         }

@@ -4,6 +4,7 @@ import AppKit
 import DesignSystem
 import MarkdownUI
 import NetworkingKit
+import LessonInteractives
 
 /// One turn of a chat or lesson on the Mac, in Night Studio (SPEC.md §5.3,
 /// §5.4): Merc's reply is type on the page (no bubble), the student's turns
@@ -39,9 +40,12 @@ struct NightMessageRow: View {
     /// The list's coordinate space, where part marks report their place.
     var coordinateSpace = ""
     var onPartMarkMoved: (Int, CGFloat) -> Void = { _, _ in }
-    /// Lesson 1.1: where this reply holds the interactive
+    /// Where this reply holds the lesson's interactive
     /// (`LessonInteractiveAnchor`), nil for every other reply.
     var interactiveAfter: LessonInteractivePosition?
+    /// Which card that is, and whether it opens spoiled (Lesson 1.1's by
+    /// default, the one card there was before the registry).
+    var interactiveCard: LessonInteractiveCardRef = .tokenizer
 
     var body: some View {
         switch message.role {
@@ -166,8 +170,13 @@ struct NightMessageRow: View {
                 routeID: message.id
             )
         case .interactive:
-            NightInteractiveCard()
-                .id(NightInteractiveCard.scrollID)
+            if interactiveCard.id == .tokenizer {
+                NightInteractiveCard()
+                    .id(NightInteractiveCard.scrollID)
+            } else {
+                LessonInteractiveCardView(card: interactiveCard)
+                    .lessonInteractiveScrollMarks()
+            }
         }
     }
 }
@@ -187,6 +196,7 @@ extension NightMessageRow: Equatable {
             && lhs.mercActivity == rhs.mercActivity
             && lhs.coordinateSpace == rhs.coordinateSpace
             && lhs.interactiveAfter == rhs.interactiveAfter
+            && lhs.interactiveCard == rhs.interactiveCard
             && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex

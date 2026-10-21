@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import NetworkingKit
+import LessonInteractives
 
 /// DEBUG `-LessonReplay`: a lesson whose replies are the first three turns
 /// of a real recorded Unit 1, Lesson 1 session
@@ -19,15 +20,42 @@ import NetworkingKit
 /// - `-LessonReplayNetwork <scenario>`: no replies; every request goes
 ///   through the real `APIClient` and gets a failure production or a school
 ///   network sends (see `NetworkScenario`).
+///
+/// Only Unit 1, Lesson 1 was recorded. Any other lesson replays authored
+/// stub replies that say they are stubs (`InteractiveStubReplies`), shaped
+/// so the lesson's interactive lands where its anchor rule puts it:
+/// `-Interactive <slug>` implies `-LessonReplay` for the card's lesson.
 enum LessonReplay {
     static var isRequested: Bool {
-        ProcessInfo.processInfo.arguments.contains("-LessonReplay")
+        ProcessInfo.processInfo.arguments.contains("-LessonReplay") || InteractiveLaunchOptions.current.card != nil
     }
 
+    /// The replies lesson `lessonID` replays: the recording for Unit 1,
+    /// Lesson 1 (and when no lesson is named), else the stubs.
+    static func replies(forLesson lessonID: String?) -> [String] {
+        guard let lessonID, lessonID != "u1_l1" else { return replies }
+        return InteractiveStubReplies.replies(forLesson: lessonID,
+                                              spoiled: InteractiveLaunchOptions.current.stubSpoiled)
+    }
+
+    /// `-Interactive <slug>`: how many of Merc's replies the replay answers
+    /// its own checks to reach, so the card's reply arrives with no tap
+    /// (simctl can't tap). Nil: the replay waits for the student as usual.
+    static func repliesToReach(lessonID: String) -> Int? {
+        guard let id = InteractiveLaunchOptions.current.card, let spec = InteractiveRegistry.spec(for: id),
+              spec.lessonID == lessonID, spec.anchor.repliesToReach > 1 else { return nil }
+        return spec.anchor.repliesToReach
+    }
+
+    /// What the replay answers a stub check with (option A, the stubs'
+    /// answer), as a tap on it sends.
+    static let stubAnswer = "I picked A) A stand-in for Merc\u{2019}s reply"
+
     @MainActor
-    static func makeModel() -> ChatViewModel {
+    static func makeModel(lessonID: String? = nil) -> ChatViewModel {
         let args = ProcessInfo.processInfo.arguments
         let replay = LessonReplayClient(
+            replies: replies(forLesson: lessonID),
             cutFirstReply: args.contains("-LessonReplayCut"),
             failFirstReplyEmpty: args.contains("-LessonReplayFailEmpty"),
             short: args.contains("-LessonReplayShort"),
@@ -138,9 +166,10 @@ enum LessonReplay {
     ]
 }
 
-/// Streams `LessonReplay.replies` — the Nth reply for a request that already
-/// carries N of Merc's turns.
+/// Streams `replies` (the lesson's: `LessonReplay.replies(forLesson:)`) —
+/// the Nth reply for a request that already carries N of Merc's turns.
 private struct LessonReplayClient: ChatStreaming {
+    let replies: [String]
     let cutFirstReply: Bool
     let failFirstReplyEmpty: Bool
     var short = false
@@ -153,7 +182,7 @@ private struct LessonReplayClient: ChatStreaming {
         imageId: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         let turn = messages.filter { $0.role == "assistant" }.count
-        let recorded = LessonReplay.replies[min(turn, LessonReplay.replies.count - 1)]
+        let recorded = replies[min(turn, replies.count - 1)]
         let reply = short
             ? recorded.components(separatedBy: "\n\n").prefix(2).joined(separator: "\n\n")
             : recorded

@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 
 /// A curriculum lesson in its OWN window — distinct from the three chat modes,
 /// and not a tab. It owns a **persisted but non-hydrating** `ChatViewModel`
@@ -162,8 +163,9 @@ public struct CurriculumLessonView: View {
             achievementStore: achievementStore
         ))
         #if DEBUG
-        // `-LessonReplay`: recorded replies, no network (see LessonReplay).
-        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel()) }
+        // `-LessonReplay`: recorded replies (stubs for a lesson with no
+        // recording), no network (see LessonReplay).
+        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel(lessonID: lessonId)) }
         #endif
     }
 
@@ -224,6 +226,8 @@ public struct CurriculumLessonView: View {
                 // A waiting check takes the lesson's keys, unless the
                 // composer has the keyboard.
                 .environment(\.nightCheckRouter, nightCheckRouter)
+                // The lesson's interactive holds Return through it too.
+                .environment(\.interactiveKeyRouter, nightCheckRouter)
                 .environment(\.nightComposerFocused, composerFocused)
                 #endif
 
@@ -345,6 +349,19 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if DEBUG
+        // `-Interactive <slug>` with a card past the first reply (a stub
+        // replay): each stub check is answered as a tap would, until the
+        // card's reply has arrived (simctl can't tap).
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, let target = LessonReplay.repliesToReach(lessonID: lessonId),
+                  let last = model.messages.last, last.role == .assistant, last.status == .idle,
+                  model.messages.filter({ $0.role == .assistant }).count < target else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                model.sendQuickReply(LessonReplay.stubAnswer)
+            }
+        }
+        #endif
         #if DEBUG && os(macOS)
         // `-NightCompleteAfterReply YES` (shots only): the complete card once
         // the replay's first reply is in, so it recaps that reply's [KEY]
