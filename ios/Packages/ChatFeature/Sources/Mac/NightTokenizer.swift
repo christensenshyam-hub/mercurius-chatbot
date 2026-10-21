@@ -154,7 +154,9 @@ enum NightMeaningMap {
         return words
             .map { word -> (String, CGFloat) in
                 let q = scaled(word.point, in: size)
-                return (word.text, hypot(q.x - p.x, q.y - p.y))
+                // Explicit Doubles: no Double/CGFloat overload choice for
+                // CI's Swift 6.0 to find ambiguous.
+                return (word.text, CGFloat(hypot(Double(q.x - p.x), Double(q.y - p.y))))
             }
             .sorted { $0.1 < $1.1 }
             .prefix(count)

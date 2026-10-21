@@ -64,7 +64,9 @@ struct NightInteractivePlacementTests {
             Issue.record("the piece before the interactive is \(drawn[index - 1])")
         }
         #expect(drawn[index + 1] == .partMark(number: 3, name: "Check"))
-        let quiz = try #require(drawn.firstIndex { if case .quiz = $0 { return true } else { return false } })
+        // Outside the macro: Swift 6.0's #require is fussy about closures.
+        let quizIndex = drawn.firstIndex { if case .quiz = $0 { return true } else { return false } }
+        let quiz = try #require(quizIndex)
         #expect(index < quiz, "the check never comes first")
     }
 
