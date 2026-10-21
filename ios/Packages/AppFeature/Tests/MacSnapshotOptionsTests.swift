@@ -179,8 +179,11 @@ struct MacSnapshotOptionsTests {
         #expect(rgb(0, 99) == sidebar)
         #expect(rgb(199, 0) == detail)
         #expect(rgb(199, 99) == detail)
-        // Every pixel is opaque.
-        #expect(stride(from: 3, to: bytes.count, by: 4).allSatisfy { bytes[$0] == 255 })
+        // The picture is opaque: it carries no alpha channel at all. (Not a
+        // per-pixel read-back: on macOS 14 CoreGraphics copies the skipped
+        // byte of a noneSkipLast image through unchanged, so the read-back's
+        // alpha bytes aren't 255 there even though the PNG has no alpha.)
+        #expect([.none, .noneSkipLast, .noneSkipFirst].contains(flat.alphaInfo))
     }
 
     // MARK: The harness's checks on its own picture
