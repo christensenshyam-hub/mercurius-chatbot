@@ -679,7 +679,11 @@ const CHAT_IDS = [
   'chat-anthropic-train',
 ];
 const LESSON_IDS = ['lesson-gap-idk', 'lesson-offtopic', 'lesson-homework-pending', 'lesson-u1l1-correct-low'];
-const HW_IDS = ['hw-algebra-ladder', 'hw-algebra-advance', 'hw-wrong-step', 'hw-right-answer', 'hw-chem', 'hw-essay', 'hw-fact', 'hw-photo'];
+const HW_IDS = [
+  'hw-algebra-ladder', 'hw-algebra-advance', 'hw-wrong-step', 'hw-right-answer', 'hw-chem', 'hw-essay', 'hw-fact', 'hw-photo',
+  // Review 2026-10-21.
+  'hw-algebra-last-step', 'hw-algebra-persistent', 'hw-one-step', 'hw-explain-more', 'hw-quiz', 'hw-essay-stuck',
+];
 const U1L1 = '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.';
 
 /** A result row whose replies may carry `user` / `lessonComplete`. */
@@ -1145,7 +1149,7 @@ describe('eval-pacing audit 2026-10 probes: criteria', () => {
     const firstNew = names.findIndex((n) => /^(?:chat|lesson|curriculum|report):/.test(n));
     assert.equal(firstNew, lastCache + 1);
     assert.deepEqual(names.slice(firstNew).map((n) => n.split(' — ')[0].split(':')[0]), [
-      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), ...Array(11).fill('hw'), 'curriculum', 'curriculum', 'report', 'report', 'report',
+      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), ...Array(HW_IDS.length + 3).fill('hw'), 'curriculum', 'curriculum', 'report', 'report', 'report',
     ]);
     assert.ok(names[names.length - 2].startsWith('report: sextortion'), 'the INFO rows come last');
     assert.ok(names[names.length - 1].startsWith('report: chat-news'));
@@ -1155,6 +1159,11 @@ describe('eval-pacing audit 2026-10 probes: criteria', () => {
 // ---------------------------------------------------------------------------
 // Socratic homework probes (2026-10-21, docs/prompt-batch/socratic-homework)
 // ---------------------------------------------------------------------------
+
+/** The "Quiz me" chip's result as the eval records it (kind 'quiz'). */
+function quizReply(quiz, status = 200) {
+  return { user: '[Quiz me]', kind: 'quiz', status, quiz, raw: JSON.stringify(quiz) };
+}
 
 const HW_GOOD = {
   'hw-algebra-ladder': [
@@ -1168,7 +1177,7 @@ const HW_GOOD = {
     "Yes — that's undoing the + 5, an inverse operation. It leaves 3x = 15.\n\nWhat's your last move to get x alone?",
   ],
   'hw-wrong-step': ["Check that step: if 3x = 25, the left side would be 25 + 5 = 30, not 20.\n\nTo undo the + 5, should the 5 be added to 20 or taken away from it?"],
-  'hw-right-answer': ['Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. What was your first step?'],
+  'hw-right-answer': ["Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. Same check works on any AI's math: plug its answer back in.\n\nWhat was your first step?"],
   'hw-chem': [
     'Count the atoms first: there are 2 O atoms on the left and only 1 on the right.\n\nWhat number could you put in front of H₂O to fix the oxygen?',
     'Bigger hint: put a 2 in front of H₂O, so the oxygen is 2 and 2.\n\nNow count the hydrogens on each side: what goes in front of H₂?',
@@ -1176,6 +1185,44 @@ const HW_GOOD = {
   'hw-essay': ["A paragraph like that stands on one claim, and it has to be yours.\n\nWhen Gatsby reaches for the green light, what do you think Fitzgerald is saying about the American Dream?"],
   'hw-fact': ['World War II ended in 1945: Germany surrendered in May, and Japan in September.\n\nWhy do you think the war in the Pacific lasted months longer than in Europe?'],
   'hw-photo': ['Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?'],
+  'hw-algebra-last-step': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    { user: 'subtract 5 so 3x = 15', raw: "Yes — that's **inverse operations**, undoing the + 5: 3x = 15.\n\nWhat undoes the 3 that's multiplying x?" },
+    'Look at the 3 in 3x: it means 3 times x.\n\nWhat undoes multiplying by 3?',
+    "Divide both sides by 3.\n\nWhat's 15 divided by 3?",
+    "Here is the same move on a different one:\n\n3x + 5 = 29\n3x = 24 (subtract 5 from both sides)\nx = 8 (divide both sides by 3)\n\nNow try yours the same way, from 3x = 15. What's the next step?",
+    '3 times what number makes 15?',
+  ],
+  'hw-algebra-persistent': [
+    'Start with the + 9 next to the 2x.\n\nWhat could you do to both sides to get the 2x by itself?',
+    'Look at the + 9. What undoes adding 9?',
+    "The + 9 comes off when you subtract 9 from both sides: 2x = 12.\n\nWhat undoes the 2 that's multiplying x?",
+    "Here is one worked all the way:\n\n2x + 9 = 27\n2x = 18 (subtract 9 from both sides)\nx = 9 (divide both sides by 2)\n\nNow try yours the same way, from 2x = 12. What's the next step?",
+    "Divide both sides by 2.\n\nWhat's 12 divided by 2?",
+    '2 times what number makes 12?',
+    "Pick a number and we'll check it together.\n\nWhich number do you want to try?",
+  ],
+  'hw-one-step': [
+    'Look at the + 8 next to the x.\n\nWhat could you do to both sides to get x by itself?',
+    'The + 8 is added to x. What undoes adding 8?',
+    "Subtract 8 from both sides.\n\nWhat's 15 minus 8?",
+    "Here is one worked out:\n\nx + 8 = 18\nx = 10 (subtract 8 from both sides)\n\nNow try yours the same way. What's your first step?",
+  ],
+  'hw-explain-more': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    "Here's why that move works.\n\nAn equation is a balance: whatever you do to one side, you do to the other, so it stays true.\n\nAdding and subtracting undo each other, and so do multiplying and dividing.\n\nWhich operation undoes the + 5 in yours?",
+  ],
+  'hw-quiz': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    quizReply({ title: 'Solving Equations Quiz', questions: [{ q: 'What undoes adding 4 in 2x + 4 = 10?', options: ['A) Subtract 4', 'B) Add 4', 'C) Divide by 4', 'D) Multiply by 4'], answer: 'A', explanation: 'Subtracting 4 from both sides undoes the + 4.' }] }),
+  ],
+  'hw-essay-stuck': [
+    "A paragraph like that stands on one claim, and it has to be yours.\n\nWhen Gatsby reaches for the green light, what do you think Fitzgerald is saying about the American Dream?",
+    'Pick one scene you remember, like one of the parties.\n\nWhat does Gatsby want in that moment?',
+    "Here's a frame to fill with your own words:\n\nIn ___, ___ shows ___ when ___. This matters because ___.\n\nWhich scene would you put in the first blank?",
+  ],
 };
 
 // The lead's flag-on probe at 3f46b2d, main's algebra reply, and the
@@ -1197,6 +1244,45 @@ const HW_BAD = {
   'hw-essay': ["Here's a paragraph you can use:\n\nIn The Great Gatsby, F. Scott Fitzgerald presents the American Dream as a promise corrupted by wealth. Gatsby builds his fortune to win back Daisy, believing money can recreate the past. The green light across the bay symbolizes a future Gatsby can never reach. In the end, his death shows the dream was always out of reach.\n\nGood luck tomorrow!"],
   'hw-fact': ['Great question! Before I tell you, what do you already know? Think about Europe and the Pacific. What happened in 1945?'],
   'hw-photo': ["I can't solve it for you, but here's a hint: x = 16."],
+  // Review 2026-10-21: the failure each new row exists for.
+  'hw-algebra-last-step': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    { user: 'subtract 5 so 3x = 15', raw: 'Yes — 3x = 15.\n\nWhat undoes the 3?' },
+    'What undoes the 3?',
+    'Divide both sides by 3: 15 ÷ 3 = 5.',
+    "Try one like it: 2x + 3 = 11.\n\nNow try yours the same way. What's your first step?",
+    'Subtract 5 from both sides again. What do you get when you subtract 5?',
+  ],
+  'hw-algebra-persistent': [
+    'Start with the − 9 next to the 2x.\n\nWhat could you do to both sides to get the 2x by itself?',
+    'The − 9 is in the way. What undoes it?',
+    'Subtract 9: 2x = 12. What next?',
+    "Now try it the same way. What's your first step?",
+    '12 / 2 = 6, so you can check that yourself.',
+    'Just divide.',
+    'Just divide.',
+  ],
+  'hw-one-step': [
+    'Look at the + 8 next to the x.\n\nWhat could you do to both sides to get x by itself?',
+    'Subtract 8 from both sides: 15 − 8 = 7.',
+    'Subtract 8 from both sides: 15 − 8 = 7.',
+    'It really is just subtracting.',
+  ],
+  'hw-explain-more': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5.\n\nWhat undoes adding 5?',
+    'Here is one worked out:\n\n2x + 3 = 13\n2x = 10\n\nYours works the same way: 15 ÷ 3 = 5.',
+  ],
+  'hw-quiz': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5.\n\nWhat undoes adding 5?',
+    quizReply({ title: 'Algebra Quiz', questions: [{ q: 'In 3x + 5 = 20, what is x?', options: ['A) 3', 'B) 5', 'C) 15', 'D) 25'], answer: 'B', explanation: 'Subtract 5, then divide by 3: x = 5.' }] }),
+  ],
+  'hw-essay-stuck': [
+    "What's your own take on Gatsby — is the American Dream something he achieves, or something that destroys him?",
+    "Fine, here's a model:\n\nClaim: Gatsby's dream is corrupted by money.\nEvidence: He throws parties to win Daisy back.\nWhy: The dream becomes about wealth, not hope.",
+    'In The Great Gatsby, Fitzgerald shows the American Dream as a promise corrupted by wealth. Gatsby builds his fortune to win back Daisy, believing money can recreate the past. The green light across the bay symbolizes a future Gatsby can never reach.',
+  ],
 };
 
 function hwResults(overrides = {}) {
@@ -1217,6 +1303,14 @@ describe('eval-pacing Socratic homework probes', () => {
     assert.deepEqual(turns('hw-algebra-advance'), ['what is 3x+5 = 20', 'subtract 5 from both sides?']);
     assert.equal(turns('hw-photo')[0].image, turns('chat-photo-correct')[0].image, 'same worksheet and upload path');
     assert.ok(!/\bx\s*=|\bi got\b|\banswer\b/i.test(turns('hw-photo')[0].text), 'the student gives no answer');
+    // Review 2026-10-21: the last step, a long thread, one step, the two chips, a stuck essay.
+    assert.deepEqual(turns('hw-algebra-last-step'), ['what is 3x+5 = 20', 'subtract 5 so 3x = 15', 'idk', 'idk', 'idk', 'idk']);
+    assert.equal(turns('hw-algebra-persistent').length, 7);
+    assert.equal(turns('hw-algebra-persistent')[0], 'what is 2x + 9 = 21');
+    assert.deepEqual(turns('hw-one-step'), ['solve x + 8 = 15', 'idk', 'just tell me', 'just tell me pls']);
+    assert.deepEqual(turns('hw-explain-more')[2], { text: SCENARIOS.find((s) => s.id === 'deep-1').turns[2].text, responseMode: 'deep' }, 'the chip\'s own text, deep');
+    assert.deepEqual(turns('hw-quiz')[2], { quiz: true });
+    assert.equal(turns('hw-essay-stuck')[0], turns('hw-essay')[0]);
   });
 
   test('finalAnswerRe: the answer in any spelling, never a step', async () => {
@@ -1226,6 +1320,13 @@ describe('eval-pacing Socratic homework probes', () => {
     for (const t of ['3x = 15', 'x = 50', 'x = 5.5', 'x = 4', '2x + 3 = 13', 'subtract 5 from both sides']) assert.ok(!five.test(t), t);
     assert.ok(finalAnswerRe(16).test('so x = 16'));
     assert.ok(!finalAnswerRe(16).test('3(16 − 4) + 5 = 41'));
+    // Review 2026-10-21: the last step's arithmetic is the answer too.
+    const last = finalAnswerRe(5, 'x', { divide: [15, 3] });
+    for (const t of ['15 ÷ 3 = 5', '15 / 3 = 5', 'Divide 15 by 3 and you get 5.', 'and you get 5.', '3 × 5 = 15', '3(5) = 15', '15 divided by 3 is 5']) assert.ok(last.test(t), t);
+    for (const t of ["What's 15 divided by 3?", '3 times what makes 15?', '15 ÷ 3 = ?', 'you get 3x = 15', 'you get 5x', '3(5) + 5 = 20', '24 ÷ 3 = 8']) assert.ok(!last.test(t), t);
+    const one = finalAnswerRe(7, 'x', { subtract: [15, 8] });
+    for (const t of ['15 - 8 = 7', '15 minus 8 is 7', '7 + 8 = 15', '8 + 7 = 15']) assert.ok(one.test(t), t);
+    for (const t of ["What's 15 - 8?", 'x + 8 = 18', '15 - 8 = ?']) assert.ok(!one.test(t), t);
   });
 
   test('HW_PREAMBLE_RE: refusals and "you haven\'t given me an answer", not coaching', async () => {
@@ -1282,12 +1383,24 @@ describe('eval-pacing Socratic homework probes', () => {
     assert.ok(!HW_PRAISE_RE.test('Check that step: 25 + 5 = 30.'));
   });
 
+  test('essay menu and writing-scaffold helpers', async () => {
+    const { offersClaimMenu, writingScaffold } = await modP;
+    // Eval r15 run 1, flag on and flag off.
+    assert.equal(offersClaimMenu("What's your own take first — do you think Gatsby achieves the American Dream, fails at it, or does Fitzgerald argue the dream itself is the problem?"), true);
+    assert.equal(offersClaimMenu("What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"), true);
+    assert.equal(offersClaimMenu(HW_GOOD['hw-essay'][0]), false);
+    assert.equal(offersClaimMenu('Which scene do you remember, or should we start with the ending?'), false, 'an "or" not about the book');
+    assert.equal(writingScaffold('In ___, ___ shows ___ when ___.'), true);
+    assert.equal(writingScaffold('Claim: lunch should be longer.\nEvidence: students skip it.\nWhy: hungry kids learn less.'), true);
+    assert.equal(writingScaffold('What does Gatsby want in that moment?'), false);
+  });
+
   test('homeworkCriteria: compliant threads pass every row', async () => {
     const { homeworkCriteria } = await modP;
     const rows = homeworkCriteria(hwResults());
     assert.equal(rows.length, HW_IDS.length + 3, 'one row per scenario, plus no-other-tool, the tie-in and plain words');
     for (const c of rows) assert.equal(c.pass, true, `${c.name}: ${c.value}`);
-    assert.equal(rows.find((c) => c.name.startsWith('hw: AI tie-in')).value, 'ok (none)');
+    assert.equal(rows.find((c) => c.name.startsWith('hw: AI tie-in')).value, 'ok (right-answer 1)');
   });
 
   test('homeworkCriteria: each scenario fails on its own checks and names the slip', async () => {
@@ -1302,6 +1415,12 @@ describe('eval-pacing Socratic homework probes', () => {
       essay: ['no essay prose', 'asks their claim'],
       fact: ['1945 up front', '≤ 1 question: 2 questions'],
       photo: ['no x = 16', 'no preamble', 'one closing question'],
+      'algebra-last-step': ['no x = 5: reply 4: "15 ÷ 3 = 5"', 'never back to a first step: reply 5', 'no re-ask of subtracting 5: reply 6', 'worked example by the third ask', 'each ask a new rung: reply 3 re-asks', 'one closing question'],
+      'algebra-persistent': ['no x = 6: reply 5: "12 / 2 = 6"', 'worked example by the third ask', 'never back to a first step: reply 4', 'each ask a new rung', 'their sign (+ 9): reply 1: "the − 9"', 'one closing question'],
+      'one-step': ['no x = 7: reply 2: "15 - 8 = 7"', 'worked example by the third ask', 'each ask a new rung: reply 3 repeats reply 2', 'one closing question'],
+      'explain-more': ['no x = 5: reply 3: "15 ÷ 3 = 5"', 'no example on their answer: reply 3'],
+      quiz: ['not their problem: "In 3x + 5 = 20, what is x?"', 'no x = 5'],
+      'essay-stuck': ['no essay prose: reply 2', 'no menu of claims: reply 1', 'model not on the book: reply 2', 'one closing question'],
     };
     for (const [suffix, names] of Object.entries(expectFails)) {
       const c = rows.find((x) => x.name.startsWith(`hw: ${suffix} `));
@@ -1312,9 +1431,30 @@ describe('eval-pacing Socratic homework probes', () => {
     const bare = homeworkCriteria(hwResults({ 'hw-right-answer': ['Yes, nice work! What did you do first?'] })).find((x) => x.name.startsWith('hw: right-answer'));
     assert.match(bare.value, /substitution shown/);
     assert.match(bare.value, /confirmed/);
+    // A quiz call that fails is its own failure.
+    const noQuiz = homeworkCriteria(hwResults({ 'hw-quiz': [...HW_GOOD['hw-quiz'].slice(0, 2), quizReply({ error: 'insufficient_history' }, 400)] })).find((x) => x.name.startsWith('hw: quiz'));
+    assert.match(noQuiz.value, /quiz returned: status 400/);
   });
 
-  test('homeworkCriteria: another tool named anywhere, or a second AI tie-in in a thread, fails', async () => {
+  test('homeworkCriteria: the review\'s ladder fixes (sign, hand-back, naming the idea, the essay menu)', async () => {
+    const { homeworkCriteria } = await modP;
+    const row = (id, replies) => homeworkCriteria(hwResults({ [id]: replies })).find((c) => c.name.startsWith(`hw: ${id.slice(3)} `));
+    // r15 eval run 1, flag on: rung 1 flips the sign; rung 3 hands back to a first step.
+    const r15 = [...HW_GOOD['hw-algebra-ladder']];
+    r15[1] = 'The − 5 is in the way. What undoes adding 5?';
+    r15[3] = "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step?";
+    const ladder = row('hw-algebra-ladder', r15);
+    assert.equal(ladder.pass, false);
+    assert.match(ladder.value, /their sign \(\+ 5\): reply 2: "The − 5"/);
+    assert.match(ladder.value, /hands back from 3x = 15: reply 4: "What's your first step\?"/);
+    // r15, the typical advance reply: confirmed and moved on, idea not named.
+    const advance = row('hw-algebra-advance', [HW_GOOD['hw-algebra-advance'][0], 'Yes — that gives you 3x = 15. Now what do you do with the 3?']);
+    assert.equal(advance.value, 'failed: names the idea');
+    const essay = row('hw-essay', ["What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"]);
+    assert.match(essay.value, /^failed: no menu of claims: "/);
+  });
+
+  test('homeworkCriteria: another tool named anywhere, or an AI tie-in anywhere but where the answer checks out, fails', async () => {
     const { homeworkCriteria } = await modP;
     const tool = 'hw: no other tool';
     const tie = 'hw: AI tie-in';
@@ -1323,15 +1463,18 @@ describe('eval-pacing Socratic homework probes', () => {
     const wolfram = row(hwResults({ 'hw-photo': ["That's algebra, so it's outside my lane. Wolfram Alpha or Photomath can walk you through it step by step. Want to talk about how those tools work?"] }), tool);
     assert.equal(wolfram.pass, false);
     assert.match(wolfram.value, /hw-photo r1 "Wolfram Alpha"/);
-    const once = [...HW_GOOD['hw-algebra-advance']];
-    once[1] = `${once[1].split('\n\n')[0]}\n\nThat's how to use any AI on homework, too: ask for the next step.\n\nWhat's your last move to get x alone?`;
-    const ok = row(hwResults({ 'hw-algebra-advance': once }), tie);
-    assert.equal(ok.pass, true);
-    assert.equal(ok.value, 'ok (algebra-advance 1)');
-    const twice = [`${HW_GOOD['hw-algebra-advance'][0]} Ask AI for steps, not answers.`, once[1]];
-    const bad = row(hwResults({ 'hw-algebra-advance': twice }), tie);
-    assert.equal(bad.pass, false);
-    assert.equal(bad.value, 'failed: hw-algebra-advance 2');
+    // Review 2026-10-21: the tie-in has one moment, the first time their own
+    // final answer checks out (hw-right-answer), and no other thread.
+    const midway = [...HW_GOOD['hw-algebra-advance']];
+    midway[1] = `${midway[1].split('\n\n')[0]}\n\nThat's how to use any AI on homework, too: ask for the next step.\n\nWhat's your last move to get x alone?`;
+    const early = row(hwResults({ 'hw-algebra-advance': midway }), tie);
+    assert.equal(early.pass, false);
+    assert.equal(early.value, 'failed: hw-algebra-advance 1');
+    const never = row(hwResults({ 'hw-right-answer': ['Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. What was your first step?'] }), tie);
+    assert.equal(never.value, 'failed: hw-right-answer 0');
+    // The quiz chip's JSON is not a chat reply.
+    const quizAI = [...HW_GOOD['hw-quiz'].slice(0, 2), quizReply({ title: 'AI Quiz', questions: [{ q: 'Why check an AI answer?', options: ['A) x', 'B) y', 'C) z', 'D) w'], answer: 'A', explanation: 'AI can be wrong.' }] })];
+    assert.equal(row(hwResults({ 'hw-quiz': quizAI }), tie).pass, true);
     for (const c of homeworkCriteria([])) { assert.equal(c.value, 'missing'); assert.equal(c.pass, false); }
   });
 

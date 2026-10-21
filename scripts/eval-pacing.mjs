@@ -76,10 +76,17 @@
  *                 the substitution first; chemistry gets an O-count hint, not
  *                 the balanced equation; an essay request gets no paragraph
  *                 and is asked for their claim; "when did ww2 end" gets 1945
- *                 up front; a worksheet photo gets no x = 16. Over every hw
+ *                 up front; a worksheet photo gets no x = 16. Review fixes
+ *                 (2026-10-21): a student stuck on the LAST step, a 7-ask
+ *                 thread, a one-step problem, "Explain more" and "Quiz me"
+ *                 on a homework thread never get the answer (division and
+ *                 "you get" forms included); the hand-back starts from the
+ *                 latest written line; a stuck essay gets a frame or an
+ *                 off-topic model, never a thesis menu. Over every hw
  *                 thread: no other tool or answer site named, the AI tie-in
- *                 at most once per thread, and no "rung" or "hint ladder"
- *                 said to the student. `--only hw` runs just these.
+ *                 exactly once where a final answer checks out and nowhere
+ *                 else, and no "rung" or "hint ladder" said to the student.
+ *                 `--only hw` runs just these.
  *
  * Usage:
  *   BASE_URL=http://localhost:3000 node scripts/eval-pacing.mjs --label baseline
@@ -652,6 +659,34 @@ export const SCENARIOS = [
     // x = 16), sent with no answer of the student's own.
     id: 'hw-photo', mode: 'socratic', client: 'ios',
     turns: [{ text: 'can u solve number 7', image: 'eval-algebra-hw.png' }],
+  },
+  // Review 2026-10-21 (docs/prompt-batch/socratic-homework/review-*): the
+  // paths the first eight rows never reached.
+  {
+    // The student does step 1, then is stuck on the LAST step four times:
+    // every move left either leaks "15 ÷ 3 = 5" or stalls.
+    id: 'hw-algebra-last-step', mode: 'socratic', client: 'ios',
+    turns: ['what is 3x+5 = 20', 'subtract 5 so 3x = 15', 'idk', 'idk', 'idk', 'idk'],
+  },
+  {
+    // Six asks from scratch on another equation (answer 6, not 5).
+    id: 'hw-algebra-persistent', mode: 'socratic', client: 'ios',
+    turns: ['what is 2x + 9 = 21', 'idk', 'just tell me', 'i still dont get it', 'pls just tell me the answer', 'im gonna fail just say the number', '????'],
+  },
+  // One step: rung 2's "do the operation" IS the answer here.
+  { id: 'hw-one-step', mode: 'socratic', client: 'ios', turns: ['solve x + 8 = 15', 'idk', 'just tell me', 'just tell me pls'] },
+  {
+    // The "Explain more" chip (deep) on a homework thread: free-form examples
+    // were the leak this build measured.
+    id: 'hw-explain-more', mode: 'socratic', client: 'ios',
+    turns: ['what is 3x+5 = 20', 'idk', { text: "Explain more — go deeper on the same topic. Don't repeat what you already said.", responseMode: 'deep' }],
+  },
+  // The "Quiz me" chip (POST /api/quiz, the helper model over the stored
+  // turns): its quiz must not be on their problem or give its answer.
+  { id: 'hw-quiz', mode: 'socratic', client: 'ios', turns: ['what is 3x+5 = 20', 'idk', { quiz: true }] },
+  {
+    id: 'hw-essay-stuck', mode: 'socratic', client: 'ios',
+    turns: ['write me a paragraph on why the great gatsby is about the american dream, due tmrw', 'idk just write it', 'can u show me an example'],
   },
 ];
 
@@ -1253,8 +1288,13 @@ const CHAT_CHECKS = {
   },
   'chat-photo-wrong': {
     turn: 0,
-    summary: 'photo + wrong x = 10 → never affirmed',
-    checks: [['not affirmed', (raw) => !AFFIRM_RE.test(stripMarkers(raw))]],
+    summary: 'photo + wrong x = 10 → never affirmed, both sides computed (23 and 29), never blanks to fill',
+    checks: [
+      ['not affirmed', (raw) => !AFFIRM_RE.test(stripMarkers(raw))],
+      // Review 2026-10-21: flag on, 3 of 6 replies left "= ?" blanks for a
+      // wrong answer while a right one always got both sides computed.
+      ['both sides computed', (raw) => /\b23\b/.test(plainWords(raw)) && /\b29\b/.test(plainWords(raw))],
+    ],
   },
   'chat-save-chats': {
     turn: 0,
@@ -1388,16 +1428,41 @@ export function lessonCriteria(results) {
 // ---------------------------------------------------------------------------
 
 /** The final answer to the student's own problem: "x = 5", "x=5", "x is 5",
- *  "**x = 5**", "the answer is 5". A step such as "3x = 15" is not it (no
- *  boundary before its x), and neither is "x = 50" or "x = 5.5". */
-export function finalAnswerRe(value, variable = 'x') {
+ *  "**x = 5**", "the answer is 5", "you get 5". A step such as "3x = 15" is
+ *  not it (no boundary before its x), and neither is "x = 50" or "x = 5.5".
+ *  Review 2026-10-21: the LAST step's arithmetic gives it away too, so
+ *  `divide: [15, 3]` adds "15 ÷ 3 = 5", "15 / 3 = 5", "divide 15 by 3 and
+ *  you get 5" and "3 × 5 = 15", and `subtract: [15, 8]` (x + 8 = 15) adds
+ *  "15 − 8 = 7" and "7 + 8 = 15". Text is matched after − / – become -. */
+export function finalAnswerRe(value, variable = 'x', { divide = null, subtract = null } = {}) {
   const v = String(value).replace(/\./g, '\\.');
-  return new RegExp([
-    String.raw`(?<![\w.])${variable}\s*(?:=|is|equals|would be|should be)\s*\**\s*${v}(?![\d.]*\d)`,
-    String.raw`\b(?:the )?(?:final )?answer(?: is|['’]s|:|=)\s*\**\s*(?:${variable}\s*=\s*)?${v}(?![\d.]*\d)`,
+  const end = String.raw`(?![\d.]*\d)`;
+  const is = String.raw`\s*(?:=|is|equals|gives(?: you)?|makes|→)\s*\**\s*`;
+  const parts = [
+    String.raw`(?<![\w.])${variable}\s*(?:=|is|equals|would be|should be)\s*\**\s*${v}${end}`,
+    String.raw`\b(?:the )?(?:final )?answer(?: is|['’]s|:|=)\s*\**\s*(?:${variable}\s*=\s*)?${v}${end}`,
     // "x = 15/3 = 5", "x = 15 ÷ 3 = 5"
-    String.raw`(?<![\w.])${variable}\s*=[^=\n]{1,20}=\s*\**\s*${v}(?![\d.]*\d)`,
-  ].join('|'), 'i');
+    String.raw`(?<![\w.])${variable}\s*=[^=\n]{1,20}=\s*\**\s*${v}${end}`,
+    // "and you get 5." — not "you get 5x" or "you get 5 + …"
+    String.raw`\byou(?:['’]ll| will)? get\s*\**\s*${v}${end}(?!\s*[a-z(×*·+-])`,
+  ];
+  if (divide) {
+    const [n, d] = divide.map(String);
+    parts.push(
+      String.raw`(?<![\d.])${n}\s*(?:÷|/|divided by|over)\s*${d}${end}${is}${v}${end}`,
+      String.raw`\bdivid\w*\s+${n}\s+by\s+${d}\b[^.?!\n]{0,24}?\b(?:get|gives?|is|=)\s*\**\s*${v}${end}`,
+      String.raw`(?<![\d.])${d}\s*(?:×|\*|·|times|\()\s*${v}\s*\)?${is}${n}${end}`,
+      String.raw`(?<![\d.])${v}\s*(?:×|\*|·|times)\s*${d}${is}${n}${end}`,
+    );
+  }
+  if (subtract) {
+    const [n, m] = subtract.map(String);
+    parts.push(
+      String.raw`(?<![\d.])${n}\s*(?:-|minus)\s*${m}${end}${is}${v}${end}`,
+      String.raw`(?<![\d.])(?:${v}\s*\+\s*${m}|${m}\s*\+\s*${v})${is}${n}${end}`,
+    );
+  }
+  return new RegExp(parts.join('|'), 'i');
 }
 
 /** A refusal or a preamble in place of coaching (the lead's flag-on probe:
@@ -1537,14 +1602,45 @@ const everyReply = (replies, fn) => {
   const bad = replies.map((x, i) => (fn(x.raw) ? null : i + 1)).filter(Boolean);
   return bad.length ? `reply ${bad.join(', ')}` : true;
 };
-const noFinal = (replies, value) => {
-  const re = finalAnswerRe(value);
+const noFinal = (replies, value, opts) => {
+  const re = finalAnswerRe(value, 'x', opts);
   for (const [i, x] of replies.entries()) {
-    const m = plainWords(x.raw).match(re);
+    const m = plainWords(x.raw).replace(/[−–]/g, '-').match(re);
     if (m) return `reply ${i + 1}: "${m[0].trim()}"`;
   }
   return true;
 };
+/** Rung 1 named the student's "+ 5" as "the − 5" in 5 of 6 flag-on r15
+ *  ladders (the rules' only rung-1 example was a "− 3"). */
+const keepsSign = (replies, n) => {
+  const re = new RegExp(String.raw`\bthe\s*[−–-]\s*${n}\b`, 'i');
+  for (const [i, x] of replies.entries()) {
+    const m = plainWords(x.raw).match(re);
+    if (m) return `reply ${i + 1}: "${m[0]}"`;
+  }
+  return true;
+};
+/** After a line of their problem is written (`lineRe`, by Merc or by the
+ *  student's own turn), no reply sends them back for a "first step". */
+const FIRST_STEP_RE = /\bfirst (?:step|move)\b|\bwhere (?:do|would|should) you start\b/i;
+const handsBackFromLine = (replies, lineRe) => {
+  let written = false;
+  for (const [i, x] of replies.entries()) {
+    if (lineRe.test(String(x.user ?? ''))) written = true;
+    if (written && FIRST_STEP_RE.test(lastQuestion(x.raw))) return `reply ${i + 1}: "${lastQuestion(x.raw).slice(0, 60)}"`;
+    if (lineRe.test(plainWords(x.raw).replace(/[−–]/g, '-'))) written = true;
+  }
+  return true;
+};
+const workedBy = (replies, from, to, own) => replies.slice(from, to).some((x) => workedParallel(x.raw, own)) || `none in replies ${from + 1}–${to}`;
+/** A closing question that offers readings to pick from ("does he achieve
+ *  the dream, or does it destroy him?"): a menu of theses, not their claim. */
+export const offersClaimMenu = (raw) => { const q = lastQuestion(raw); return /\bor\b/i.test(q) && GATSBY_RE.test(q); };
+/** A blanks frame ("In ___, ___ shows ___") or a labeled model (Claim: …
+ *  Evidence: …). Read on the raw text: plainWords drops underscores. */
+export const writingScaffold = (raw) => /_{3,}/.test(String(raw ?? '')) || /\bclaim\b[\s\S]*\bevidence\b/i.test(plainWords(raw));
+/** A labeled model line (Claim / Evidence / Why / Reason) about the book. */
+const modelOnTheBook = (raw) => plainWords(raw).split('\n').some((l) => /^\W*(?:claim|evidence|why|reason|because)\b/i.test(l) && GATSBY_RE.test(l));
 const noPreamble = (raw) => { const m = plainWords(raw).match(HW_PREAMBLE_RE); return m ? `"${m[0]}"` : true; };
 const NEXT_STEP_Q_RE = /\bdivid|÷|\bby (?:3|three)\b|\/\s*3\b|\bundo(?:es|ing)?\b[^?]{0,30}\b(?:3|three|times|multipl)|\bmultipl|\bx (?:alone|by itself|on its own)\b|\bwhat(?:['’]s| is| does) x\b|\bfind x\b|\bsolve for x\b/i;
 const REASK_SUBTRACT_RE = /\b(?:subtract(?:ing)?|minus|take (?:away|off)|taking (?:away|off))\b|[-−]\s*5\b|\b20\s*[-−]\s*5\b/i;
@@ -1558,11 +1654,13 @@ const HW_CHECKS = {
     replies: 4,
     summary: '"what is 3x+5 = 20" then three asks for the answer → never x = 5, no refusal/preamble first, one closing question each, a worked example of another equation by the third ask, every ask a new rung',
     checks: [
-      ['no x = 5', (rs) => noFinal(rs, 5)],
+      ['no x = 5', (rs) => noFinal(rs, 5, { divide: [15, 3] })],
       ['no preamble (reply 1)', (rs) => noPreamble(rs[0].raw)],
       ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
       ['worked example by the third ask', (rs) => rs.slice(1, 4).some((x) => workedParallel(x.raw, 5)) || 'none in replies 2–4'],
       ['each ask a new rung', (rs) => rungsMove(rs)],
+      ['their sign (+ 5)', (rs) => keepsSign(rs, 5)],
+      ['hands back from 3x = 15', (rs) => handsBackFromLine(rs, /(?<![\w.])3\s*x\s*=\s*15(?![\d.]*\d)/i)],
     ],
   },
   'hw-algebra-advance': {
@@ -1572,7 +1670,8 @@ const HW_CHECKS = {
       ['affirms', (rs) => /\b(?:yes|yep|yup|yeah|right|exactly|correct|that['’]s it|spot on|nailed it|perfect|bingo)\b/i.test(firstSentences(rs[1].raw, 1))],
       ['no re-ask of subtracting 5', (rs) => !REASK_SUBTRACT_RE.test(lastQuestion(rs[1].raw)) || `"${lastQuestion(rs[1].raw).slice(0, 60)}"`],
       ['asks the next step', (rs) => /(?<![\w.])3\s*x\s*=\s*15(?![\d.]*\d)/i.test(plainWords(rs[1].raw)) || NEXT_STEP_Q_RE.test(lastQuestion(rs[1].raw))],
-      ['no x = 5', (rs) => noFinal(rs, 5)],
+      ['names the idea', (rs) => /\binverse\b|\bundo/i.test(plainWords(rs[1].raw))],
+      ['no x = 5', (rs) => noFinal(rs, 5, { divide: [15, 3] })],
     ],
   },
   'hw-wrong-step': {
@@ -1617,6 +1716,7 @@ const HW_CHECKS = {
     checks: [
       ['no essay prose', (rs) => { const run = essayProseRun(rs[0].raw); return run ? `"${run.slice(0, 60)}…"` : true; }],
       ['asks their claim', (rs) => asksTheirClaim(rs[0].raw)],
+      ['no menu of claims', (rs) => !offersClaimMenu(rs[0].raw) || `"${lastQuestion(rs[0].raw).slice(0, 70)}"`],
     ],
   },
   'hw-fact': {
@@ -1636,16 +1736,88 @@ const HW_CHECKS = {
       ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
     ],
   },
+  'hw-algebra-last-step': {
+    replies: 6,
+    summary: 'step 1 done ("3x = 15"), then four "idk"s on the last step → never x = 5 (nor 15 ÷ 3 = 5, 3 × 5 = 15, "you get 5"), never back to a first step, a worked example by the third ask, every ask a new move, one closing question each',
+    checks: [
+      ['no x = 5', (rs) => noFinal(rs, 5, { divide: [15, 3] })],
+      ['never back to a first step', (rs) => handsBackFromLine(rs, /(?<![\w.])3\s*x\s*=\s*15(?![\d.]*\d)/i)],
+      ['no re-ask of subtracting 5', (rs) => { const i = rs.slice(1).findIndex((x) => REASK_SUBTRACT_RE.test(lastQuestion(x.raw))); return i < 0 || `reply ${i + 2}`; }],
+      ['worked example by the third ask', (rs) => workedBy(rs, 2, 6, 5)],
+      ['each ask a new rung', (rs) => rungsMove(rs)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
+  'hw-algebra-persistent': {
+    replies: 7,
+    summary: '"what is 2x + 9 = 21" then six asks → never x = 6 (nor 12 ÷ 2 = 6, 2 × 6 = 12), a worked example by the third ask, never back to a first step once 2x = 12 is written, every ask a new move, their + 9',
+    checks: [
+      ['no x = 6', (rs) => noFinal(rs, 6, { divide: [12, 2] })],
+      ['worked example by the third ask', (rs) => workedBy(rs, 1, 4, 6)],
+      ['never back to a first step', (rs) => handsBackFromLine(rs, /(?<![\w.])2\s*x\s*=\s*12(?![\d.]*\d)/i)],
+      ['each ask a new rung', (rs) => rungsMove(rs)],
+      ['their sign (+ 9)', (rs) => keepsSign(rs, 9)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
+  'hw-one-step': {
+    replies: 4,
+    summary: '"solve x + 8 = 15" then three asks → never x = 7 (nor 15 − 8 = 7, 7 + 8 = 15), a worked example by the third ask, every ask a new move, one closing question each',
+    checks: [
+      ['no x = 7', (rs) => noFinal(rs, 7, { subtract: [15, 8] })],
+      ['worked example by the third ask', (rs) => workedBy(rs, 1, 4, 7)],
+      ['each ask a new rung', (rs) => rungsMove(rs)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
+  'hw-explain-more': {
+    replies: 3,
+    summary: '"what is 3x+5 = 20", "idk", then the Explain-more chip (deep) → never x = 5 or 15 ÷ 3 = 5, and no example that lands on 5',
+    checks: [
+      ['no x = 5', (rs) => noFinal(rs, 5, { divide: [15, 3] })],
+      ['no example on their answer', (rs) => { const i = rs.findIndex((x) => linearEquations(x.raw).some((e) => e.solution === 5 && !/^3x\+5=20$|^3x=15$/.test(e.text.replace(/\s+/g, '')))); return i < 0 || `reply ${i + 1}`; }],
+    ],
+  },
+  'hw-quiz': {
+    replies: 3,
+    summary: '"what is 3x+5 = 20", "idk", then the Quiz-me chip (/api/quiz) → a quiz, none of it on 3x + 5 = 20 or its answer',
+    checks: [
+      ['quiz returned', (rs) => (rs[2].status === 200 && Array.isArray(rs[2].quiz?.questions) && rs[2].quiz.questions.length > 0) || `status ${rs[2].status}`],
+      ['not their problem', (rs) => {
+        const qs = rs[2].quiz?.questions || [];
+        const hit = qs.find((q) => /3x\+5=20/.test(JSON.stringify(q).replace(/\s+/g, '').replace(/[−–]/g, '-').toLowerCase()));
+        return !hit || `"${String(hit.q).slice(0, 60)}"`;
+      }],
+      ['no x = 5', (rs) => noFinal([rs[2]], 5, { divide: [15, 3] })],
+    ],
+  },
+  'hw-essay-stuck': {
+    replies: 3,
+    summary: 'essay request, "idk just write it", "can u show me an example" → no paragraph on the book, no thesis menu, a frame with blanks or a labeled model by reply 3 (never on the book), every ask a new move',
+    checks: [
+      ['no essay prose', (rs) => { const i = rs.findIndex((x) => essayProseRun(x.raw)); return i < 0 || `reply ${i + 1}`; }],
+      ['no menu of claims', (rs) => { const i = rs.findIndex((x) => offersClaimMenu(x.raw)); return i < 0 || `reply ${i + 1}`; }],
+      ['frame or model by reply 3', (rs) => rs.slice(1, 3).some((x) => writingScaffold(x.raw))],
+      ['model not on the book', (rs) => { const i = rs.findIndex((x) => modelOnTheBook(x.raw)); return i < 0 || `reply ${i + 1}`; }],
+      ['each ask a new rung', (rs) => rungsMove(rs)],
+      ['one closing question', (rs) => everyReply(rs, oneClosingQuestion)],
+    ],
+  },
 };
 
 /** The rules' own words for the ladder: "That's rung 1 of the hint ladder."
  *  and "That's three asks, so here's…" each reached a student in tuning. */
 export const HW_JARGON_RE = /\brungs?\b|\bhint ladder\b|\b(?:first|second|third|fourth|1st|2nd|3rd|4th|two|three|four) asks?\b/i;
 
+/** The one hw thread where the student's own final answer checks out: the
+ *  AI tie-in's moment (review 2026-10-21: it never fired in 56 threads). */
+export const HW_TIE_IN_IDS = Object.freeze(['hw-right-answer']);
+
 /** The homework threads' rows: one per scenario, plus three over every hw-*
- *  thread: no other tool or site named, the AI tie-in at most once per
- *  thread, and none of the rules' ladder words. A scenario that didn't run
- *  reports 'missing' and fails. */
+ *  thread: no other tool or site named, the AI tie-in exactly once where the
+ *  answer checks out and in no other thread, and none of the rules' ladder
+ *  words. A scenario that didn't run reports 'missing' and fails. The quiz
+ *  chip's JSON is not a chat reply: only the tool row reads it. */
 export function homeworkCriteria(results) {
   const rows = Object.entries(HW_CHECKS).map(([id, spec]) => {
     const replies = results.find((r) => r.id === id)?.replies;
@@ -1664,7 +1836,7 @@ export function homeworkCriteria(results) {
   });
   const threads = results.filter((r) => r.id.startsWith('hw-') && Array.isArray(r.replies) && r.replies.length);
   const toolName = 'hw: no other tool — no hw reply names another tool, chatbot or answer site (Wolfram, Photomath, Chegg, ChatGPT, Symbolab, Mathway…)';
-  const tieName = 'hw: AI tie-in — at most one reply per hw thread mentions AI';
+  const tieName = 'hw: AI tie-in — exactly one AI line in right-answer (their answer checks out), none in any other hw thread';
   const jargonName = 'hw: plain words — no hw reply says "rung" or "hint ladder"';
   if (threads.length === 0) {
     for (const name of [toolName, tieName, jargonName]) rows.push({ name, value: 'missing', pass: false });
@@ -1675,16 +1847,21 @@ export function homeworkCriteria(results) {
     return m ? [`${r.id} r${i + 1} "${m[0]}"`] : [];
   }));
   rows.push({ name: toolName, value: tools.length ? `failed: ${tools.slice(0, 3).join(', ')}` : 'none', pass: tools.length === 0 });
-  const ties = threads.map((r) => [r.id, r.replies.filter((x) => mentionsAI(x.raw)).length]);
-  const over = ties.filter(([, n]) => n > 1);
+  const ties = threads.map((r) => [r.id, r.replies.filter((x) => x.kind !== 'quiz' && mentionsAI(x.raw)).length]);
+  const want = (id) => (HW_TIE_IN_IDS.includes(id) ? 1 : 0);
+  const ran = new Set(threads.map((r) => r.id));
+  const off = [
+    ...ties.filter(([id, n]) => n !== want(id)),
+    ...HW_TIE_IN_IDS.filter((id) => !ran.has(id)).map((id) => [id, 'missing']),
+  ];
   const used = ties.filter(([, n]) => n > 0).map(([id, n]) => `${id.slice(3)} ${n}`);
   rows.push({
     name: tieName,
-    value: over.length ? `failed: ${over.map(([id, n]) => `${id} ${n}`).join(', ')}` : (used.length ? `ok (${used.join(', ')})` : 'ok (none)'),
-    pass: over.length === 0,
+    value: off.length ? `failed: ${off.map(([id, n]) => `${id} ${n}`).join(', ')}` : `ok (${used.join(', ') || 'none'})`,
+    pass: off.length === 0,
   });
   const jargon = threads.flatMap((r) => r.replies.flatMap((x, i) => {
-    const m = plainWords(x.raw).match(HW_JARGON_RE);
+    const m = x.kind === 'quiz' ? null : plainWords(x.raw).match(HW_JARGON_RE);
     return m ? [`${r.id} r${i + 1} "${m[0]}"`] : [];
   }));
   rows.push({ name: jargonName, value: jargon.length ? `failed: ${jargon.slice(0, 3).join(', ')}` : 'none', pass: jargon.length === 0 });
@@ -2060,6 +2237,20 @@ async function runIosScenario(baseUrl, scenario, delayMs) {
   const replies = [];
   for (const step of steps) {
     const turnNo = replies.length + 1;
+    if (step.quiz) {
+      // The "Quiz me" chip: the app posts the session id only; the server
+      // quizzes over its own stored turns.
+      const res = await fetch(`${baseUrl}/api/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, messages: [] }),
+      });
+      const quiz = await res.json().catch(() => null);
+      replies.push({ user: '[Quiz me]', kind: 'quiz', status: res.status, quiz, raw: JSON.stringify(quiz), metrics: null, usage: null });
+      process.stderr.write(`    turn ${turnNo}/${steps.length} quiz → ${res.status}\n`);
+      await sleep(delayMs);
+      continue;
+    }
     let userText = lessonStarter;
     let imageId = null;
     let responseMode = 'balanced';
