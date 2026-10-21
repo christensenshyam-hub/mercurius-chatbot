@@ -14,26 +14,35 @@ public struct CertificateView: View {
     private let kind: CertificateKind
     private let name: String
     private let dateText: String?
+    private let paintsPaper: Bool
 
     /// - Parameters:
     ///   - name: the learner's name; empty shows "Your Name" faintly (the
     ///     sheet's preview before anything is typed).
     ///   - date: the completion date, or nil for a blank line over "Date".
-    public init(kind: CertificateKind, name: String, date: Date?) {
-        self.init(kind: kind, name: name, dateText: date.map { CertificateCopy.dateText($0) })
+    ///   - paintsPaper: fill the page with the paper's #FDFDFB (on screen).
+    ///     The PDF leaves it out: printed, the paper is the paper, and a
+    ///     printer turns a 1% tint into a dot pattern that ends in a hard
+    ///     edge at its margins.
+    public init(kind: CertificateKind, name: String, date: Date?, paintsPaper: Bool = true) {
+        self.init(kind: kind, name: name, dateText: date.map { CertificateCopy.dateText($0) },
+                  paintsPaper: paintsPaper)
     }
 
-    public init(kind: CertificateKind, name: String, dateText: String?) {
+    public init(kind: CertificateKind, name: String, dateText: String?, paintsPaper: Bool = true) {
         self.kind = kind
         self.name = name
         self.dateText = dateText
+        self.paintsPaper = paintsPaper
     }
 
     public var body: some View {
         let layout = CertificateLayout.make(kind: kind, name: name, dateText: dateText)
         CertificatePage {
-            Certificate.Ink.paper
-                .certificatePlacement(.fill)
+            if paintsPaper {
+                Certificate.Ink.paper
+                    .certificatePlacement(.fill)
+            }
             CertificateFrame(kind: kind)
                 .certificatePlacement(.fill)
             CertificateMark()

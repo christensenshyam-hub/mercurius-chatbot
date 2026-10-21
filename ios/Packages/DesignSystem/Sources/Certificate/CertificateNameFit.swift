@@ -58,9 +58,9 @@ public struct CertificateNameFit: Equatable, Sendable {
         }
         // Two lines: the break that lets the name set largest, the more
         // balanced pair winning a tie, as CSS `text-wrap: balance` would set
-        // it. A break after a hyphen splits a double-barrelled surname, so
-        // it is taken only when it sets the name clearly larger (by more
-        // than `hyphenBreakMargin`) than the best break at a space.
+        // it. A break after a hyphen splits a double-barrelled surname (it
+        // reads as another name), so it is taken only when no break at a
+        // space sets the name at `spaceBreakFloor` or more.
         var bestAtSpace: (split: Split, size: CGFloat, widest: CGFloat)?
         var bestAtHyphen: (split: Split, size: CGFloat, widest: CGFloat)?
         for split in breakOpportunities(in: name) {
@@ -75,7 +75,7 @@ public struct CertificateNameFit: Equatable, Sendable {
         let best: (split: Split, size: CGFloat, widest: CGFloat)?
         switch (bestAtSpace, bestAtHyphen) {
         case let (space?, hyphen?):
-            best = hyphen.size > space.size * (1 + hyphenBreakMargin) ? hyphen : space
+            best = space.size < spaceBreakFloor && hyphen.size > space.size ? hyphen : space
         case let (space?, nil):
             best = space
         case let (nil, hyphen):
@@ -91,9 +91,12 @@ public struct CertificateNameFit: Equatable, Sendable {
         return CertificateNameFit(lines: [name], sizePx: oneLine)
     }
 
-    /// How much larger a break after a hyphen must set the name than the
-    /// best break at a space (10%).
-    static let hyphenBreakMargin: CGFloat = 0.1
+    /// A break at a space that sets the name at least this large (two
+    /// thirds of the design size) always beats a break after a hyphen, so
+    /// the Deep dive and AI Basics break a name alike. Only a name whose
+    /// every space break leaves a line far too long (a long hyphenated run)
+    /// breaks at a hyphen instead.
+    static let spaceBreakFloor: CGFloat = 48
 
     struct Split: Equatable {
         let first: String
@@ -104,16 +107,30 @@ public struct CertificateNameFit: Equatable, Sendable {
 
     /// Every place a name may break: at a space (the space goes), or after a
     /// hyphen (it stays at the end of the first line), as a browser breaks.
+    ///
+    /// A space break whose first line ends on a lowercase word is left out:
+    /// that word is a particle (de, los, van, von, der, da, bin, al, y…) and
+    /// belongs with the surname after it ("Maria Fernanda de los" /
+    /// "Santos…" strands it). If that leaves no space break at all (a name
+    /// typed in lowercase), every space break is back in.
     static func breakOpportunities(in name: String) -> [Split] {
-        var splits: [Split] = []
+        var atSpaces: [Split] = []
+        var atParticles: [Split] = []
+        var atHyphens: [Split] = []
         let chars = Array(name)
         for i in chars.indices where i > 0 && i < chars.count - 1 {
             if chars[i] == " " {
-                splits.append(Split(first: String(chars[..<i]), second: String(chars[(i + 1)...]), atHyphen: false))
+                let split = Split(first: String(chars[..<i]), second: String(chars[(i + 1)...]), atHyphen: false)
+                if split.first.split(separator: " ").last?.first?.isLowercase == true {
+                    atParticles.append(split)
+                } else {
+                    atSpaces.append(split)
+                }
             } else if chars[i] == "-" || chars[i] == "\u{2010}" {
-                splits.append(Split(first: String(chars[...i]), second: String(chars[(i + 1)...]), atHyphen: true))
+                atHyphens.append(Split(first: String(chars[...i]), second: String(chars[(i + 1)...]), atHyphen: true))
             }
         }
+        let splits = (atSpaces.isEmpty ? atParticles : atSpaces) + atHyphens
         return splits.filter {
             !$0.first.trimmingCharacters(in: .whitespaces).isEmpty
                 && !$0.second.trimmingCharacters(in: .whitespaces).isEmpty

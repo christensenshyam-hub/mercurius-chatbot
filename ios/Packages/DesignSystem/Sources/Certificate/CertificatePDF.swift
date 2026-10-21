@@ -6,18 +6,19 @@ import SwiftUI
 /// landscape): `CertificateView` drawn by `ImageRenderer` straight into a
 /// Core Graphics PDF context, so the text stays text (selectable, with the
 /// bundled fonts embedded as subsets) and the mark is the original 470 ×
-/// 415 px image (about 730 dpi at its printed size).
+/// 415 px image (about 730 dpi at its printed size). The page itself is
+/// left unpainted: the paper colour comes from the paper.
 ///
 /// Nothing here leaves the device: the data goes to the print panel, the
 /// share sheet or a file the learner picks.
 @MainActor
 public enum CertificatePDF {
     public static func data(kind: CertificateKind, name: String, date: Date?) -> Data? {
-        data(for: CertificateView(kind: kind, name: name, date: date), kind: kind)
+        data(for: CertificateView(kind: kind, name: name, date: date, paintsPaper: false), kind: kind)
     }
 
     public static func data(kind: CertificateKind, name: String, dateText: String?) -> Data? {
-        data(for: CertificateView(kind: kind, name: name, dateText: dateText), kind: kind)
+        data(for: CertificateView(kind: kind, name: name, dateText: dateText, paintsPaper: false), kind: kind)
     }
 
     private static func data(for view: CertificateView, kind: CertificateKind) -> Data? {

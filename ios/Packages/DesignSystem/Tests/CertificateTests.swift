@@ -89,7 +89,7 @@ struct CertificateLayoutTests {
         #expect(layout.nameRule.minY == 382.1875)
     }
 
-    @Test("AI Basics' baselines are the design's, its signature label on two lines")
+    @Test("AI Basics' baselines are the design's; its signature label sits on one line")
     func basics() {
         let layout = CertificateLayout.make(kind: .basics, name: "Alexandria Montgomery-Vasquez",
                                             dateText: "October 21, 2026")
@@ -100,10 +100,30 @@ struct CertificateLayoutTests {
         #expect(near(baseline(layout, .name), 388.594))
         #expect(near(baseline(layout, .paragraph, 0), 454.188))
         #expect(near(baseline(layout, .paragraph, 1), 483.188))
+        #expect(near(baseline(layout, .date), 679))
+        #expect(near(baseline(layout, .footer), 740))
         #expect(layout.ornament == nil)
-        #expect(layout.signatureRule.minY == 673)
         #expect(layout.lines.filter { $0.role == .units }.isEmpty)
-        #expect(layout.lines.filter { $0.role == .label }.map { $0.text } == ["DATE", "INSTRUCTOR OR FAMILY", "MEMBER"])
+        // AI Basics' columns are 290 px (the design's 250 px wraps the
+        // label after "Family"), so both rules line up at 691.
+        #expect(layout.dateRule == CGRect(x: 96, y: 691, width: 290, height: 1))
+        #expect(layout.signatureRule == CGRect(x: 670, y: 691, width: 290, height: 1))
+        #expect(layout.seal == CGRect(x: 458, y: 576, width: 140, height: 140))
+        #expect(layout.lines.filter { $0.role == .label }.map { $0.text } == ["DATE", "INSTRUCTOR OR FAMILY MEMBER"])
+        // The signature label and the date label share a baseline.
+        let labels = layout.lines.filter { $0.role == .label }
+        #expect(labels.count == 2 && labels[0].baseline == labels[1].baseline)
+    }
+
+    @Test("Each signature label fits its column on one line, clear of the seal", arguments: CertificateKind.allCases)
+    func signatureLabelFits(kind: CertificateKind) throws {
+        let layout = CertificateLayout.make(kind: kind, name: "Li Wei", dateText: "October 21, 2026")
+        let label = try #require(layout.lines.last { $0.role == .label })
+        let width = CertificateType.width(label.text, face: .body, px: label.sizePx, trackingPx: label.trackingPx)
+        #expect(width <= layout.signatureRule.width, "\(label.text): \(width) px in \(layout.signatureRule.width)")
+        #expect(layout.signatureRule.minY == layout.dateRule.minY)
+        #expect(layout.dateRule.maxX <= layout.seal.minX - 48)
+        #expect(layout.signatureRule.minX >= layout.seal.maxX + 48)
     }
 
     @Test("Two lines of name push the page down but never into the seal", arguments: CertificateKind.allCases)
@@ -117,6 +137,38 @@ struct CertificateLayoutTests {
             let width = CertificateType.width(line.text, face: .displayItalic, px: line.sizePx)
             #expect(width <= CertificateNameFit.maxWidth)
         }
+    }
+
+    @Test("The largest two-line names (57 px, 64 px) still clear the seal", arguments: CertificateKind.allCases)
+    func largestTwoLineName(kind: CertificateKind) {
+        // Two short words that each fit the column at any size, but not
+        // together on one line at 57.5 px or more: two lines at the cap.
+        let name = "Bartholomew-Maximilian Featherstonehaugh-Cholmondeley"
+        let layout = CertificateLayout.make(kind: kind, name: name, dateText: nil)
+        #expect(layout.name.lines.count == 2)
+        #expect(layout.name.sizePx == (kind == .deepDive ? 57 : 64))
+        #expect(layout.slack >= CertificateLayout.minimumSlack)
+    }
+
+    @Test("Two lines of name sit 1.12 em apart, so accents clear descenders", arguments: CertificateKind.allCases)
+    func twoLineLeading(kind: CertificateKind) throws {
+        let layout = CertificateLayout.make(kind: kind, name: "Maria Fernanda de los Santos Rodríguez-Ochoa",
+                                            dateText: nil)
+        let names = layout.lines.filter { $0.role == .name }
+        try #require(names.count == 2)
+        let gap = names[1].baseline - names[0].baseline
+        #expect(gap >= 1.12 * layout.name.sizePx - 1)
+        // Line 1's deepest descender (g, y) and line 2's tallest accented
+        // capital (Å) don't meet, with the real font's ink.
+        let font = CertificateType.ctFont(.displayItalic, points: layout.name.sizePx)
+        func ink(_ text: String) -> CGRect {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(
+                string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
+            return CTLineGetImageBounds(line, nil)
+        }
+        let descender = -ink("gy").minY
+        let accent = ink("ÅÖÁ").maxY
+        #expect(gap - descender - accent > 0, "\(gap) px between baselines; g \(descender), Å \(accent)")
     }
 
     @Test("No date leaves the line over \"Date\" blank")
@@ -173,17 +225,47 @@ struct CertificateNameFitTests {
 
     @Test("A long name breaks onto two balanced lines at a space")
     func long() {
-        let name = "Maria Fernanda de los Santos Rodriguez-Ochoa" // 44
-        let result = fit(name)
-        #expect(result.lines == ["Maria Fernanda de los", "Santos Rodriguez-Ochoa"])
+        let result = fit("Alexandria Catherine Montgomery Vasquez") // 39
+        #expect(result.lines == ["Alexandria Catherine", "Montgomery Vasquez"])
         #expect(result.sizePx == 57)
     }
 
-    @Test("A break at a space beats one inside a double-barrelled name of about the same size")
-    func preferSpace() {
-        let result = fit("Christopher Alexander Montgomery-Vasquez de la Fuente Ramirez")
+    @Test("A line never ends on a lowercase particle: de los Santos stays together")
+    func particles() {
+        // 30 px a character: "Maria Fernanda de los" / "Santos Rodriguez-Ochoa"
+        // would be the most balanced, but strands "de los".
+        let result = fit("Maria Fernanda de los Santos Rodriguez-Ochoa")
+        #expect(result.lines == ["Maria Fernanda de los Santos", "Rodriguez-Ochoa"])
+        #expect(result.sizePx == 57)
+        let van = fit("Johanna Cornelia Elisabeth van der Berg-Smit")
+        #expect(van.lines.count == 2)
+        #expect(!["van", "der"].contains(van.lines[0].split(separator: " ").last.map(String.init) ?? ""))
+    }
+
+    @Test("A name typed all in lowercase still breaks at a space")
+    func lowercaseName() {
+        let result = fit("maria fernanda de los santos rodriguez ochoa")
         #expect(result.lines.count == 2)
+        #expect(result.sizePx >= 54)
+    }
+
+    @Test("A break at a space beats one inside a double-barrelled name, even a smaller one")
+    func preferSpace() {
+        // The hyphen would set it at 57 (the cap), the space at 55.5: the
+        // space still wins, so the surname stays whole.
+        let result = fit("Christopher Alexander Montgomery-Vasquez de la Fuente Ramirez", maxTwoLine: 64)
+        #expect(result.lines == ["Christopher Alexander", "Montgomery-Vasquez de la Fuente Ramirez"])
         #expect(!result.lines[0].hasSuffix("-"))
+    }
+
+    @Test("A hyphen breaks only when every space break would set the name too small")
+    func hyphenAsLastResort() {
+        // "Jo" / the 45-character rest sets at 46 px (under 48); after the
+        // second hyphen, both halves fit at the 57 px cap.
+        let result = fit("Jo Abcdefghijklmn-Opqrstuvwxyzab-Cdefghijklmnop")
+        #expect(result.lines.count == 2)
+        #expect(result.lines[0].hasSuffix("-"))
+        #expect(result.sizePx == 57)
     }
 
     @Test("One unbreakable word shrinks to fit its line")
@@ -217,16 +299,36 @@ struct CertificateNameFitTests {
         }
     }
 
-    @Test("Names up to about 60 characters keep at least 54 px with the real font")
-    func sixtyCharacters() {
+    @Test("Names up to about 60 characters keep at least 54 px with the real font", arguments: CertificateKind.allCases)
+    func sixtyCharacters(kind: CertificateKind) {
         let names = [
             "Maria Fernanda de los Santos Rodríguez-Ochoa",
             "Christopher Alexander Montgomery-Vasquez de la Fuente Ramírez",
             "Oluwaseun Adebayo-Okonkwo Chukwuemeka Nnamdi Eze-Obi"
         ]
         for name in names {
-            let layout = CertificateLayout.make(kind: .deepDive, name: name, dateText: nil)
+            let layout = CertificateLayout.make(kind: kind, name: name, dateText: nil)
             #expect(layout.name.sizePx >= 54, "\(name): \(layout.name)")
+        }
+    }
+
+    @Test("With the real font, both certificates keep a hyphenated surname whole")
+    func hyphenatedSurnameRealFont() {
+        let name = "Christopher Alexander Montgomery-Vasquez de la Fuente Ramírez"
+        let deepDive = CertificateLayout.make(kind: .deepDive, name: name, dateText: nil).name
+        let basics = CertificateLayout.make(kind: .basics, name: name, dateText: nil).name
+        #expect(deepDive.lines == ["Christopher Alexander", "Montgomery-Vasquez de la Fuente Ramírez"])
+        #expect(basics == deepDive)
+    }
+
+    @Test("With the real font, de los Santos stays on one line")
+    func particlesRealFont() {
+        for kind in CertificateKind.allCases {
+            let fit = CertificateLayout.make(kind: kind, name: "Maria Fernanda de los Santos Rodríguez-Ochoa",
+                                             dateText: nil).name
+            #expect(fit.lines.count == 2)
+            #expect(fit.lines.contains { $0.contains("de los Santos") }, "\(kind): \(fit.lines)")
+            #expect(fit.sizePx == (kind == .deepDive ? 57 : 64))
         }
     }
 }
@@ -282,8 +384,31 @@ struct CertificatePDFTests {
     @Test("A two-line name is in the text too")
     func twoLines() throws {
         let text = try pdf(.deepDive, "Maria Fernanda de los Santos Rodríguez-Ochoa").page(at: 0)?.string ?? ""
-        #expect(text.contains("Maria Fernanda de los"))
-        #expect(text.contains("Santos Rodríguez-Ochoa"))
+        #expect(text.contains("Maria Fernanda de los Santos"))
+        #expect(text.contains("Rodríguez-Ochoa"))
+    }
+
+    @Test("The PDF leaves the paper unpainted: no tint for a printer to dither", arguments: CertificateKind.allCases)
+    func noPaperFill(kind: CertificateKind) throws {
+        let data = try #require(CertificatePDF.data(kind: kind, name: "Li Wei", dateText: "October 21, 2026"))
+        let provider = try #require(CGDataProvider(data: data as CFData))
+        let page = try #require(CGPDFDocument(provider)?.page(at: 1))
+        // The page at 1 px a point on a transparent bitmap: outside the frame
+        // (the corners, the margin) and in the open paper nothing is drawn.
+        let context = try #require(CGContext(
+            data: nil, width: 792, height: 612, bitsPerComponent: 8, bytesPerRow: 792 * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.drawPDFPage(page)
+        let pixels = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        // A bitmap's first row in memory is the top of the page.
+        func alpha(x: Int, yFromTop: Int) -> UInt8 { pixels[(yFromTop * 792 + x) * 4 + 3] }
+        #expect(alpha(x: 4, yFromTop: 4) == 0)
+        #expect(alpha(x: 396, yFromTop: 10) == 0)
+        #expect(alpha(x: 787, yFromTop: 607) == 0)
+        #expect(alpha(x: 100, yFromTop: 200) == 0)
+        // …while the ink is there: the outer border at 30 pt in.
+        #expect(alpha(x: 396, yFromTop: 30) > 0)
     }
 
     @Test("The text is vector with the four faces embedded; the mark is the full-size image")

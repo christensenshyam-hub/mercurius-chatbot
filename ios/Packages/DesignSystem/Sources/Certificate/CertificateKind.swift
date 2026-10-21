@@ -88,8 +88,9 @@ public enum CertificateCopy {
         case .deepDive:
             return ["Teacher or club advisor"]
         case .basics:
-            // The design's 250 px column wraps this label after "Family".
-            return ["Instructor or family", "member"]
+            // One line, in AI Basics' 290 px column
+            // (`CertificateLayout.columnWidth`).
+            return ["Instructor or family member"]
         }
     }
 

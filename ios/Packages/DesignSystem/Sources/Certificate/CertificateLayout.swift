@@ -77,7 +77,8 @@ public struct CertificateLayout: Equatable, Sendable {
     public let ornament: CGRect?
     /// The gold rule under the name (440 × 1).
     public let nameRule: CGRect
-    /// The navy rules over "Date" and the signature label (250 × 1).
+    /// The navy rules over "Date" and the signature label (250 × 1 on the
+    /// Deep dive, 290 × 1 on AI Basics).
     public let dateRule: CGRect
     public let signatureRule: CGRect
     /// The seal (140 × 140) and its mark (62 × 55 at 39, 43 inside it).
@@ -93,10 +94,21 @@ public struct CertificateLayout: Equatable, Sendable {
     static let contentRight: CGFloat = 960
     static let contentBottom: CGFloat = 744
     static let centerX: CGFloat = 528
-    static let columnWidth: CGFloat = 250
+    /// The date and signature columns: the design's 250 px on the Deep dive.
+    /// AI Basics' are 290 px, so "INSTRUCTOR OR FAMILY MEMBER" (274.8 px at
+    /// 14 px with 0.12em) sits on one line and both rules line up; in a
+    /// 250 px column it wraps after "Family" and its rule rides 18 px higher
+    /// than the date's. 72 px still separate each column from the seal.
+    static func columnWidth(_ kind: CertificateKind) -> CGFloat {
+        kind == .basics ? 290 : 250
+    }
+    /// Two lines of name sit 1.12 em apart, not the design's 1.05: at 1.05
+    /// an accented capital on line 2 (Á, Ö, Å reach 0.79–0.82 em) runs into
+    /// a g or y on line 1 (0.28 em down). The design only ever sets one line.
+    static let twoLineHeight: CGFloat = 1.12
     /// The smallest gap left between the paragraph block and the seal when a
     /// two-line name pushes the stack down.
-    static let minimumSlack: CGFloat = 24
+    static let minimumSlack: CGFloat = 16
 
     /// - Parameters:
     ///   - name: the learner's name as typed (normalized here). Empty shows
@@ -110,7 +122,7 @@ public struct CertificateLayout: Equatable, Sendable {
         // The room under the stack with a one-line name decides how big two
         // lines may get.
         let baseSlack = slack(kind: kind, nameBlockHeight: oneLineHeight)
-        let maxTwoLineSize = ((oneLineHeight + baseSlack - minimumSlack) / 2 / 1.05).rounded(.down)
+        let maxTwoLineSize = ((oneLineHeight + baseSlack - minimumSlack) / 2 / twoLineHeight).rounded(.down)
         let fit = CertificateNameFit.fit(shown, maxTwoLineSize: maxTwoLineSize) {
             CertificateType.width($0, face: .displayItalic, px: CertificateNameFit.designSize)
         }
@@ -119,10 +131,10 @@ public struct CertificateLayout: Equatable, Sendable {
 
     /// The height of the name's block: the design's one line box (75.6 px)
     /// for one line, whatever its size, so a slightly smaller name doesn't
-    /// move the rest of the page; 1.05 × size per line for two.
+    /// move the rest of the page; 1.12 × size per line for two.
     static func nameBlockHeight(_ fit: CertificateNameFit) -> CGFloat {
         if fit.lines.count <= 1 { return Certificate.layoutUnit(1.05 * CertificateNameFit.designSize) }
-        return CGFloat(fit.lines.count) * Certificate.layoutUnit(1.05 * fit.sizePx)
+        return CGFloat(fit.lines.count) * Certificate.layoutUnit(twoLineHeight * fit.sizePx)
     }
 
     static func slack(kind: CertificateKind, nameBlockHeight: CGFloat) -> CGFloat {
@@ -188,10 +200,10 @@ public struct CertificateLayout: Equatable, Sendable {
             add(fit.lines.first ?? "", .displayItalic, fit.sizePx, role: isPlaceholder ? .namePlaceholder : .name,
                 lineTop: nameTop, lineHeight: CertificateNameFit.designSize * 1.05)
         } else {
-            let lineHeight = Certificate.layoutUnit(1.05 * fit.sizePx)
+            let lineHeight = Certificate.layoutUnit(twoLineHeight * fit.sizePx)
             for (i, text) in fit.lines.enumerated() {
                 add(text, .displayItalic, fit.sizePx, role: isPlaceholder ? .namePlaceholder : .name,
-                    lineTop: nameTop + CGFloat(i) * lineHeight, lineHeight: 1.05 * fit.sizePx)
+                    lineTop: nameTop + CGFloat(i) * lineHeight, lineHeight: twoLineHeight * fit.sizePx)
             }
         }
         y = nameTop + nameHeight
@@ -236,6 +248,7 @@ public struct CertificateLayout: Equatable, Sendable {
         // (14 px, 0.12em, one line or more), aligned to the row's bottom.
         let labelLine = CertificateType.normalLineHeight(.body, px: 14)
         let valueLine = CertificateType.normalLineHeight(.body, px: 20)
+        let columnWidth = Self.columnWidth(kind)
         func column(centerX: CGFloat, value: String?, label: [String]) -> CGRect {
             let labelTop = rowBottom - CGFloat(label.count) * labelLine
             for (i, text) in label.enumerated() {
