@@ -1321,7 +1321,8 @@ struct MessageListView: View {
     /// The interactive (or its map) to the top of the reading area, as the
     /// Mac strip's jump does (shots only). On the iPhone also: `context`
     /// (the card's top under the end of the text before it), `step2`,
-    /// `step3`, and `after` (the card's end, with what follows it).
+    /// `step3`, `openings`, `sentence`, `panel` (the map), and `after` (the
+    /// card's end, with what follows it).
     private func scrollToInteractive(_ target: String, proxy: ScrollViewProxy) {
         scroll.policy.partJumped()
         #if os(macOS)
@@ -1333,7 +1334,10 @@ struct MessageListView: View {
         case "context": proxy.scrollTo(LessonTokenizerCard.topEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
         case "step2": proxy.scrollTo(LessonTokenizerCard.stepScrollID(2), anchor: .top)
         case "step3": proxy.scrollTo(LessonTokenizerCard.stepScrollID(3), anchor: .top)
-        case "after": proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .bottom)
+        case "after": proxy.scrollTo(LessonTokenizerCard.bottomEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "openings": proxy.scrollTo(LessonTokenizerCard.openingsScrollID, anchor: .top)
+        case "sentence": proxy.scrollTo(LessonTokenizerCard.sentenceScrollID, anchor: .top)
+        case "panel": proxy.scrollTo(LessonTokenizerCard.panelScrollID, anchor: .top)
         default: proxy.scrollTo(LessonTokenizerCard.scrollID, anchor: .top)
         }
         #endif

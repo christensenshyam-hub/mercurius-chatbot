@@ -34,8 +34,13 @@ struct LessonTokenizerCard: View {
     static let scrollID = "lesson-interactive"
     static let mapScrollID = "lesson-interactive-map"
     static func stepScrollID(_ number: Int) -> String { "lesson-interactive-step-\(number)" }
+    /// Step 4's parts, for the shots' jumps.
+    static let openingsScrollID = "lesson-interactive-openings"
+    static let sentenceScrollID = "lesson-interactive-sentence"
+    static let panelScrollID = "lesson-interactive-panel"
     #if DEBUG
     static let topEdgeScrollID = "lesson-interactive-top-edge"
+    static let bottomEdgeScrollID = "lesson-interactive-bottom-edge"
     #endif
 
     @Environment(TokenizerState.self) private var shared: TokenizerState?
@@ -175,7 +180,7 @@ struct LessonTokenizerCard: View {
             .padding(.vertical, BrandSpacing.md)
             .padding(.horizontal, BrandSpacing.lg)
             // The student's bubble's hues, a step deeper so white reads at
-            // 5.7:1 or better on the night card.
+            // 5.5:1 or better on the night card.
             .background(LinearGradient(colors: [BrandColor.accentDark, BrandColor.mercViolet],
                                        startPoint: .topLeading, endPoint: .bottomTrailing), in: shape)
             .overlay {
@@ -270,13 +275,19 @@ struct LessonTokenizerCard: View {
                 .foregroundStyle(sky.ink2)
                 .accessibilityHidden(true)
             openings
+                .id(Self.openingsScrollID)
             finishedSentence
                 .padding(.top, BrandSpacing.xs)
+                .id(Self.sentenceScrollID)
+                // The words change at once: animated, the old and the new
+                // sentence overlapped for a moment. The map is what moves.
+                .transaction { $0.animation = nil }
             if TokenizerMapScale.saysMapInWords(at: typeSize) {
                 Text(TokenizerCopy.mapInWords(state.context))
                     .font(.callout)
                     .foregroundStyle(sky.ink2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .transaction { $0.animation = nil }
                     // VoiceOver hears the map's own line (or, folded, this).
                     .accessibilityHidden(showsMap)
             }
@@ -287,6 +298,7 @@ struct LessonTokenizerCard: View {
                 MeaningMapFrame(typeSize: typeSize) {
                     MeaningSkyPanel(context: state.context, typeSize: typeSize, sky: sky, reduceMotion: reduceMotion)
                 }
+                .id(Self.panelScrollID)
                 .transition(.opacity)
                 Text(TokenizerCopy.sketch)
                     .font(BrandFont.caption)
@@ -637,6 +649,7 @@ private struct MeaningSkyPanel: View {
                 skyFill
                 constellations(size)
                 startRing(size)
+                startCaption(size, scale: scale)
                 if reduceMotion {
                     moving(size, scale: scale)
                         .id(context)
@@ -725,12 +738,22 @@ private struct MeaningSkyPanel: View {
             .position(p)
     }
 
+    /// The start's caption, shown in every state. It never moves, so it
+    /// isn't part of the crossfade under Reduce Motion.
+    private func startCaption(_ size: CGSize, scale: CGFloat) -> some View {
+        let caption = MeaningMap.startCaptionFrame(in: size, scale: scale)
+        return Text(MeaningMap.startCaption)
+            .font(captionFont(scale: scale))
+            .foregroundStyle(sky.skyInk2)
+            .fixedSize()
+            .position(x: caption.midX, y: caption.midY)
+    }
+
     /// What moves with the opening: the trail from the start and the lines
-    /// to the neighbours; and the start's caption (shown in every state).
+    /// to the neighbours.
     private func moving(_ size: CGSize, scale: CGFloat) -> some View {
         let bankPoint = MeaningMap.scaled(MeaningMap.bank(context), in: size)
         let start = MeaningMap.scaled(MeaningMap.start, in: size)
-        let caption = MeaningMap.startCaptionFrame(in: size, scale: scale)
         return ZStack(alignment: .topLeading) {
             MeaningMapLines(from: bankPoint, to: [start])
                 .stroke(sky.skyLink.opacity(context == nil ? 0 : 0.7),
@@ -743,11 +766,6 @@ private struct MeaningSkyPanel: View {
                     .shadow(color: sky.lit ? sky.lumen.opacity(0.8) : .clear, radius: 4)
                     .opacity(context == group ? 1 : 0)
             }
-            Text(MeaningMap.startCaption)
-                .font(captionFont(scale: scale))
-                .foregroundStyle(sky.skyInk2)
-                .fixedSize()
-                .position(x: caption.midX, y: caption.midY)
         }
     }
 

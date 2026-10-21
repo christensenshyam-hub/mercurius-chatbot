@@ -123,9 +123,13 @@ struct MessageBubbleView: View {
                     .padding(.horizontal, BrandSpacing.lg)
                     .id(LessonTokenizerCard.scrollID)
                     #if DEBUG
-                    // The card's top edge, for the shots' `context` jump.
+                    // The card's edges, for the shots' `context` and `after`
+                    // jumps.
                     .overlay(alignment: .top) {
                         Color.clear.frame(height: 1).id(LessonTokenizerCard.topEdgeScrollID)
+                    }
+                    .overlay(alignment: .bottom) {
+                        Color.clear.frame(height: 1).id(LessonTokenizerCard.bottomEdgeScrollID)
                     }
                     #endif
                 if !halves.tail.isEmpty || Self.hasStatusLine(message) {
