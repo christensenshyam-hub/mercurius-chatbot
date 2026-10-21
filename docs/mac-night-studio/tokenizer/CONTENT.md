@@ -1,9 +1,9 @@
 # "How a model reads “bank”": the content
 
-**What this is:** every line a student sees or hears in Lesson 1.1's interactive on the Mac, every factual claim it makes, the source for each claim, and a checklist for the teacher who reviews it.
-**Where it shows:** Unit 1, Lesson 1 ("What happens when you type a prompt"), on the Mac only, as a card at the end of the lesson part that holds Merc's first example (in the recorded lesson, the "Tokenization" part), before the check.
-**The code:** `ios/Packages/ChatFeature/Sources/Mac/NightTokenizer.swift` (`NightTokenizerCopy` holds every line below; `NightTokenizerTests` holds them to the rules in the last section) and `NightTokenizerCard.swift` (the views).
-**Screenshots:** `docs/mac-night-studio/key-shots/tokenizer-*.jpg` (the card, the map before a pick, each opening). The full set of 37 (light, dark, 700 pt, Increase Contrast, Reduce Transparency, Reduce Motion, the compact card, and the lesson's own states with the card in place) is kept outside the repo.
+**What this is:** every line a student sees or hears in Lesson 1.1's interactive on the Mac and the iPhone, every factual claim it makes, the source for each claim, and a checklist for the teacher who reviews it.
+**Where it shows:** Unit 1, Lesson 1 ("What happens when you type a prompt"), on the Mac and the iPhone, as a card at the end of the lesson part that holds Merc's first example (in the recorded lesson, the "Tokenization" part), before the check.
+**The code:** one source for both platforms. `ios/Packages/ChatFeature/Sources/Tokenizer/TokenizerInteractive.swift` (`TokenizerCopy` holds every line below; `TokenizerInteractiveTests` holds them to the rules in the last section) and `LessonInteractive.swift` (where the card goes). The views: the Mac's `Mac/NightTokenizerCard.swift`, the iPhone's `Tokenizer/LessonTokenizerCard.swift`.
+**Screenshots:** the Mac's `docs/mac-night-studio/key-shots/tokenizer-*.jpg` (the card, the map before a pick, each opening; the full set of 37 is kept outside the repo). The iPhone's `docs/ios-tokenizer/key-shots/` (the 16 Pro Max in light and dark, the SE at AX3 and AX5, where the card sits, a dark contact sheet, Reduce Motion, and the motion clip; the full set, an SE and a 16 Pro Max from Large to AX5 in every state, is kept outside the repo).
 
 The card is a picture the app draws. It sends nothing, stores nothing and changes nothing in the prompt or the lesson. It never cuts up the student's own text: there is no faithful tokenizer for the model Mercurius uses that could run on the device (claim C9), so the sentence is fixed.
 
@@ -64,7 +64,19 @@ Picking a chip moves "bank" from its starting ring toward loan and deposit, or t
 
 **How the steps connect.** Step 3's note says the numbers "work like map coordinates", so step 4's "The numbers land in a map of meaning" follows from it, and "thousands of numbers" (step 3) and "thousands of dimensions" (step 4) read as the same fact. The accuracy note then says the numbers themselves shift, which is what the student sees when "bank" moves.
 
-### The compact card (a card narrower than 440 pt: a 700 pt window with the sidebar open)
+### The iPhone at large text sizes
+
+The iPhone draws the same lines. Its map's labels grow with the student's text as far as the map has room (an SE's map keeps the Mac's label size; a 16 Pro Max's grows to xLarge's), so from xxLarge up the card also says where "bank" is in words, under the finished sentence. At the accessibility sizes the map starts folded, with those words in its place.
+
+| Where | Text |
+|---|---|
+| The map in words (xxLarge and up), before a pick | On the map, “bank” starts between two groups of words: loan and deposit, and shore and water. |
+| … after a pick | On the map, “bank” is now near loan and deposit. / On the map, “bank” is now near shore and water. |
+| The fold (accessibility sizes) | Show the map / Hide the map |
+
+At the accessibility sizes the card drops what is only decoration (the step numbers' discs, the arrow in step 3, the bars over the numbers, which then read as a line, "0.12, −0.08, 0.31, −0.27, 0.05, …", and the icons), never a word.
+
+### The compact card (Mac only: a card narrower than 440 pt, a 700 pt window with the sidebar open)
 
 | Where | Text |
 |---|---|
@@ -72,7 +84,7 @@ Picking a chip moves "bank" from its starting ring toward loan and deposit, or t
 | Line | See “I went to the bank” become tokens, then numbers, then a place on a map of meaning. |
 | Button | Try it |
 
-### Hover help
+### Hover help (Mac only)
 
 | Where | Text |
 |---|---|
@@ -95,7 +107,9 @@ Picking a chip moves "bank" from its starting ring toward loan and deposit, or t
 | The map, before a pick | Map of meaning, a 2-D sketch drawn by hand. bank starts between two groups of words: loan and deposit, and shore and water. |
 | The map, after a pick | Map of meaning, a 2-D sketch drawn by hand. With “I got my paycheck, so” before it, bank is near loan and deposit. (… “I wanted to go fishing, so” …, bank is near shore and water.) |
 | Announced on a pick | The finished sentence, then the map's line, e.g. "I got my paycheck, so I went to the bank. Map of meaning, a 2-D sketch drawn by hand. With “I got my paycheck, so” before it, bank is near loan and deposit." |
-| Try it (compact) | Try it. Hint: Opens the interactive here, in the lesson |
+| Try it (compact, Mac) | Try it. Hint: Opens the interactive here, in the lesson |
+| Show the map (iPhone, accessibility sizes) | Show the map. Hint: Shows the map of meaning, a 2-D sketch drawn by hand |
+| The map in words (iPhone, xxLarge and up) | Read as text while the map is folded; while the map shows, VoiceOver hears the map's own line instead |
 
 ---
 
@@ -134,6 +148,7 @@ Picking a chip moves "bank" from its starting ring toward loan and deposit, or t
 - **A cut-off reply never gets it, even after a reopen.** A reply cut off mid-part that the student answered instead of retrying (AUD-29) is saved and comes back from storage looking complete. So a reply with anything after it must show that the example's part ended (a later part, or a check after the example) before the card goes there. One honest limit: after the app restarts, a complete first reply whose example ends the reply, with no check after it, looks the same as a cut one, so the card then goes to the next reply instead. That shape is rare in Lesson 1.1, whose replies close with a check.
 - **Never in a thread with a crisis line** (a reply with 988 or 741741), before, beside or after it.
 - **Merc's lesson text is generated each time.** In a live lesson, Merc's example may not mention "bank" at all, so the card introduces its own sentence (step 1) and stands on its own.
+- **On the iPhone** the reply's bubble is drawn in two around the card, which takes the row's whole width: the bubble up to the card, the card, then the rest of the reply in a second bubble. Where the card stands at the end of a part, the part's dividing rule isn't drawn (the card divides them); nothing else in the reply changes, and the reply's text (what Copy, Report and VoiceOver read) is untouched. The check's tap-to-answer works as before: a tap grades and sends "I picked B) …".
 - **The lesson's check is untouched:** a pick sends nothing; the check's Lock it in, its keys and "I picked B) …" work as before.
   - A click on a chip picks it without keeping the keyboard, so A–D, the arrows and Return go on answering the check below it.
   - A chip reached with Tab keeps Return (Return picks the chip and never locks in the check from there). A–D, 1–4 and the arrows still answer the check, and once the check has a pick (from a key or a click) the chip lets go of the keyboard, so Return locks the pick in.
@@ -167,3 +182,4 @@ Please tick each, or note a change.
 
 **Accessibility**
 - [ ] The VoiceOver lines in §1 describe what a sighted student sees, including the map's state ("bank is near loan and deposit").
+- [ ] On the iPhone at large text sizes, "On the map, “bank” is now near loan and deposit." says enough in place of the folded map.
