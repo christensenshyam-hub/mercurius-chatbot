@@ -34,6 +34,11 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     assert.ok(text.includes("checking a student's own answer is allowed"));
     assert.ok(text.includes('before any verdict word'));
     assert.ok(text.includes('never default to "not quite right"'));
+    // Review 2026-10-21: flag on left "= ?" blanks for a wrong answer, and
+    // the change of format gave the verdict away.
+    assert.ok(text.includes('compute both sides yourself, exactly as you would for a right answer'));
+    assert.ok(text.includes('never blanks for them to fill'));
+    assert.ok(text.includes('if they already showed their steps, offer one step up instead'));
     assert.ok(text.includes('only check an answer the student gave'), 'a bare "solve this" must not get a check that leaks the answer');
   });
 
@@ -73,12 +78,15 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     assert.ok(text.includes('one new concrete example or everyday analogy'));
     assert.ok(text.includes('stop adding theory'));
     assert.ok(text.includes("never adds a statistic, number, study or date that isn't in the source library, not even hedged"));
+    // Review 2026-10-21: the chip's deep mode asked for free-form examples.
+    assert.ok(text.includes('on a homework problem, "explain more" goes deeper on the idea behind the step they\'re on'));
+    assert.ok(text.includes('never work their problem past the step the conversation has reached, and never give its final answer'));
   });
 
   test('AUD-43: no coaching jargon, and current news names where to check', () => {
     // "rung" and "hint ladder" (2026-10-21): "That's rung 1 of the hint
     // ladder." reached a student once in tuning.
-    for (const word of ['rep', 'beat', 'micro-concept', 'load-bearing', 'rung', 'hint ladder']) {
+    for (const word of ['rep', 'beat', 'micro-concept', 'load-bearing', 'rung', 'hint ladder', 'first ask', 'second ask']) {
       assert.ok(text.includes(`"${word}"`), `PLAIN WORDS should ban "${word}"`);
     }
     // Naming a phrase the prompts don't otherwise use primes it: listing
@@ -87,6 +95,9 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     assert.ok(!text.includes('weak joint'));
     assert.ok(text.includes('name where to check'));
     assert.ok(text.includes("don't ask them where they would look"));
+    // Review 2026-10-21: "Subtracting 3 is undone by adding 3" in a
+    // 5x − 2 = 18 thread came from the rules' own example.
+    assert.ok(text.includes("never carry a number or sign from these instructions' examples into a reply"));
   });
 
   test('homework coaching (2026-10-21): lead with the question, no preamble, never the final answer', () => {
@@ -111,17 +122,23 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     const rungs = hw.split('\n').filter((l) => /^ {2}\d\. /.test(l));
     assert.equal(rungs.length, 3);
     assert.match(rungs[0], /A nudge that points at exactly where the next move happens/);
+    // Review 2026-10-21: with only "Look at the − 3" as its example, flag-on
+    // rung 1 called the student's + 5 "the − 5" in 5 of 6 r15 ladders.
+    assert.match(rungs[0], /Name their term with the sign it has in THEIR problem: for a \+ 2, "Look at the \+ 2\. What undoes adding 2\?"; for a − 3, "Look at the − 3\. What undoes subtracting 3\?"/);
     assert.match(rungs[1], /names the inverse operation and does it/);
     // Tuning: with "Add 3 to both sides: 4x = 28" as the example, replies to
     // a "+ 5" problem opened "Add 5 to both sides — wait, the opposite". The
     // example now starts from the student's term and names both directions.
     assert.match(rungs[1], /starting from their term \(a \+ 2 comes off by subtracting 2, a − 3 by adding 3\)/);
     assert.match(rungs[1], /"The − 3 comes off when you add 3 to both sides: 4x = 28\./);
+    // Review 2026-10-21: on a one-step problem (x + 8 = 15, a triangle's
+    // area) "names the operation and does it" IS the answer.
+    assert.match(rungs[1], /If that operation is the last step, don't do it \(see the last step, below\)\./);
     // Tuning 2026-10-21: without "never the next step of theirs" the model
     // spent rung 3 on their own next step; a free "parallel problem" kept
     // landing on the student's own answer (2x + 3 = 13 for 3x + 5 = 20, both
     // x = 5), which gives it away.
-    assert.match(rungs[2], /Always a worked example, never the next step of theirs: their own left side with a new right side, solved in full\./);
+    assert.match(rungs[2], /Always a worked example, never the next step of theirs\./);
     // Tuning: led by "Their own left side…", rung 3 often became their own
     // next step ("Divide both sides by 5: 5x ÷ 5 = 20 ÷ 5"); "Always a worked
     // example" leads again.
@@ -134,25 +151,42 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     // built mechanically from theirs: same left side, their right side plus
     // 3 times the number multiplying x. Its answer is theirs + 3, so it can
     // never be theirs, and the model never has to pick or announce a number.
-    assert.match(rungs[2], /Copy their left side exactly as they wrote it, add 3 times the number multiplying x to their right side, and solve that example step by step, one step per line\./);
+    // Review 2026-10-21: the construction is for linear equations only; on
+    // x² − 5x + 6 = 0 it gives an example with no real roots.
+    assert.match(rungs[2], /For a one-variable linear equation, build it from theirs: copy their left side exactly as they wrote it, add 3 times the number multiplying x to their right side, and solve that example step by step, one step per line\./);
+    assert.match(rungs[2], /Anything else \(a quadratic, a system, a formula or word problem, a reaction\) gets the same kind of problem with small, clean numbers \(whole-number roots for factoring\): work out its answer first and change the numbers if it equals theirs\./);
+    // "5x = 33… wait, let me redo that cleanly" (r15 probe, flag off).
+    assert.match(rungs[2], /Solve the example silently before you write it, and write only clean lines, never a correction mid-reply\./);
     assert.match(rungs[2], /A new right side always gives a new answer; a new left side or a stock example can land on their answer and give it away, so never change their left side\./);
     assert.match(rungs[2], /Never say how you built it\./);
     assert.match(rungs[2], /For 4x − 3 = 25, work 4x − 3 = 37 \(4x = 40, then x = 10\)/);
-    assert.match(rungs[2], /A problem that isn't an equation gets the same kind of problem with different numbers and a different answer\./);
     assert.ok(!/comes out to \d/.test(rungs[2]), 'no announced answer to copy');
     // The CHECK bullet's own example (2x + 5 = 13, answer 4) became the flag-on
     // parallel for 3x + 5 = 20; every equation in the rules is now 4x − 3 = 25.
     assert.ok(!/2x \+ 5 = 13/.test(STUDENT_WORK_RULES));
-    assert.match(rungs[2], /Now try yours the same way/);
+    // Review 2026-10-21: "Now try yours the same way. What's your first
+    // step?" after rung 2 had already written 3x = 15 (27 of 30 r15 ladders).
+    assert.match(rungs[2], /Then hand theirs back from where it stands, never from the start: if the thread already has a written line of their problem, yours or theirs, start from the latest one \("Now try yours the same way, from 4x = 28\. What's the next step\?"\); only when none is written yet, "Now try yours the same way\. What's your first step\?"/);
     assert.ok(hw.includes('never refuse, never stall and never ask the same thing again'));
     assert.ok(hw.includes('the 1st ask gets rung 1, the 2nd rung 2, the 3rd rung 3, however small your earlier hints were'), 'the rung is counted from the thread');
     assert.ok(hw.includes('"still don\'t get it"'), 'a bare "still don\'t get it" is an ask too');
-    assert.ok(hw.includes('The last step is always theirs: never write the final answer'));
+    // Review 2026-10-21: from the 4th ask on a two-step equation only the last
+    // step was left, and the rules both required one more step and forbade it.
+    assert.ok(hw.includes('however they ask: the last step is always theirs.'), 'in the header bullet');
+    assert.ok(hw.includes('if more than one step of theirs is left, do the next one and ask for the one after; if only the last step is left, use the last-step moves below'));
+    assert.ok(hw.includes('- The last step. No rung and no reply ever does it or writes its result, not even as "28 ÷ 4 = 7", "4 × 7 = 28", "you get 7" or "so x = …".'));
+    assert.ok(hw.includes('name the operation and ask for the bare arithmetic ("Divide both sides by 4. What\'s 28 divided by 4?"'));
+    assert.ok(hw.includes('then make it smaller ("4 times what makes 28?"); then "Pick a number and we\'ll check it together."; then another worked example with a new right side.'));
+    assert.ok(hw.includes('make a different move each time and never repeat your previous reply'));
     assert.ok(hw.includes('Confirm and advance.') && hw.includes('ask about the NEXT step'));
-    assert.ok(hw.includes("Never ask what their step gives or what's left on each side"));
+    assert.ok(hw.includes("Otherwise never ask what their step gives or what's left on each side"));
+    // Review 2026-10-21: 1 of 22 advance replies named the idea.
+    assert.ok(hw.includes('that names the idea in bold, once (**inverse operations**'));
+    assert.ok(hw.includes("If the line their step gives is the final answer, don't write it"));
     // Tuning: "Close — but check the sign" kept opening wrong-step replies.
     assert.ok(hw.includes('open with the check itself, not a reaction'));
-    assert.ok(hw.includes('never call any part of it right or good, not even "close"'));
+    assert.ok(hw.includes('never praise or soften it (no "close", "good try" or "almost")'));
+    assert.ok(hw.includes('you may say as a plain fact which line still checks out before the one that breaks'));
     // …and an example reply that opens with a visible check.
     assert.ok(hw.includes('"Check it: if 4x = 22, then 4x − 3 = 19, not 25. What undoes subtracting 3?"'));
     assert.ok(hw.includes('CHECK BEFORE ANY VERDICT'));
@@ -162,12 +196,22 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
 
   test('homework coaching: essays coached not written, facts answered, one AI tie-in, no other tool', () => {
     const hw = between(STUDENT_WORK_RULES, 'HOMEWORK COACHING\n', '\n\nCHECK BEFORE ANY VERDICT');
-    assert.ok(hw.includes('ask for THEIR claim first'));
+    assert.ok(hw.includes('Ask for THEIR claim first with an open question, and don\'t offer positions to choose from'));
+    // Review 2026-10-21: the essay opener offered 2–3 ready-made readings.
+    assert.ok(hw.includes('a menu of theses they didn\'t build'));
+    assert.ok(hw.includes('ask about one moment in the text they remember'));
+    // …and writing gets its own ladder, whose model is never on a text.
+    assert.ok(hw.includes('When a writing student is stuck or asks you to write it, climb the same way'));
+    assert.ok(hw.includes('give a frame with blanks and no content ("In ___, ___ shows ___ when ___. This matters because ___.")'));
+    assert.ok(hw.includes('a short model on an everyday, non-school topic'));
+    assert.ok(hw.includes('Never model on a book, poem, historical event or the assignment\'s theme.'));
     assert.ok(hw.includes('Never write a thesis, sentences or a paragraph they could hand in, not even a "sample" on their topic.'));
     assert.ok(hw.includes('comment on text the student wrote and suggest improvements'));
     assert.ok(hw.includes('A plain fact question') && hw.includes('answer it in the first sentence, then ask one thinking question about the topic itself'));
-    assert.ok(hw.includes('AI tie-in: at most once in a conversation'));
-    assert.ok(hw.includes('never a second time'));
+    // Review 2026-10-21: an optional "at most once" fired in 0 of 56
+    // right-answer threads; it now has one fixed moment.
+    assert.ok(hw.includes('AI tie-in: once per conversation, the first time their own final answer checks out'));
+    assert.ok(hw.includes('Never in an opener, a hint or an error reply, and never a second time.'));
     assert.ok(text.includes('never send the student to another chatbot, ai tool, app or answer website'));
     assert.ok(text.includes("and don't name one"));
     // Naming a tool in a ban primes it (see the PLAIN WORDS test below).
@@ -178,6 +222,8 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     // scripts/eval-pacing.mjs hw-*: 3x + 5 = 20 (x = 5), H2 + O2 → H2O,
     // Gatsby, WW2's 1945. An example with those would teach to the eval.
     assert.ok(!/3x\s*\+\s*5|\bx\s*=\s*5\b|\b15\s*÷\s*3\b|H[2₂]\s*\+\s*O[2₂]|2\s*H[2₂]O|gatsby|1945/i.test(STUDENT_WORK_RULES));
+    // …nor the review rows' (2x + 9 = 21, x + 8 = 15, 3x = 15, 12 ÷ 2).
+    assert.ok(!/2x\s*\+\s*9|x\s*\+\s*8\s*=|3x\s*=\s*15|\b12\s*÷\s*2\b|american dream/i.test(STUDENT_WORK_RULES));
     // Tuning: with 5x − 4 = 21 (answer 5) as the running example, the model's
     // parallel kept landing on answer 5 too; the example's answer is now 7.
     assert.ok(STUDENT_WORK_RULES.includes('"what is 4x − 3 = 25"'));
@@ -236,6 +282,11 @@ describe('legacy (flag off): qualityPrefix carries the shared rules', () => {
 
   test('EXPAND_MODE_NOTE bounds a repeated Explain more', () => {
     const n = EXPAND_MODE_NOTE.toLowerCase();
+    // Review 2026-10-21: the flag-off deep note is the last text the model
+    // reads, so it carries the homework bound itself (and lessons share it).
+    assert.ok(n.includes('on a homework problem the student is solving, go deeper on the idea behind the step they\'re on, never further into their problem'));
+    assert.ok(n.includes('never give their final answer'));
+    assert.ok(!n.includes('homework coaching'), 'self-contained: lessons have no HOMEWORK COACHING section');
     assert.ok(n.includes('under about 300 words'));
     assert.ok(n.includes('one new concrete example or everyday analogy'));
     assert.ok(n.includes('a second tap in a row'));
@@ -306,6 +357,10 @@ describe('v2 (flag on): mercurius-v2.md gets the same rules', () => {
     // smaller sub-question instead of climbing; the pointer now comes first.
     assert.ok(socratic.trimStart().startsWith('On a homework problem, skip this list and climb the hint ladder in <student_work> instead'));
     assert.ok(socratic.includes('never its final answer'));
+    assert.ok(socratic.includes('then hands theirs back from its latest written line'));
+    assert.ok(socratic.includes('the last step is always theirs'));
+    const deep = between(UNIFIED_PROMPT, 'deep (the learner tapped "Explain more"):', '</response_mode_contract>');
+    assert.ok(deep.includes('or one on a homework problem follows EXPLAIN MORE in <student_work>'));
     assert.ok(MODE_RULES.socratic.includes('on a homework problem, follow HOMEWORK COACHING below and never give its final answer'));
     // The integrity redirect and its few-shot no longer model a refusal preamble.
     const integrity = between(UNIFIED_PROMPT, '<academic_integrity>', '</academic_integrity>');
@@ -314,6 +369,14 @@ describe('v2 (flag on): mercurius-v2.md gets the same rules', () => {
     const shot = between(UNIFIED_PROMPT, '<example mode="ACADEMIC_INTEGRITY">', '</example>').split('Assistant:')[1];
     assert.ok(!/\b(?:should not|won['’]t|can['’]t|cannot)\b/i.test(shot), 'the reply coaches instead of refusing');
     assert.ok(shot.trim().endsWith('?'));
+  });
+
+  test("review 2026-10-21: the Quiz-me helper never quizzes the student's own homework problem", () => {
+    // The chip shows after two student turns ("what is 3x+5 = 20", "idk"),
+    // and the quiz screen reveals the correct option and its explanation.
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'server.js'), 'utf8');
+    const quiz = between(src, 'const QUIZ_PROMPT = `', '`;');
+    assert.ok(quiz.includes("If the conversation is about the student's own homework problem (an equation, a worksheet question, an essay), never use that problem or its answer in any question, option, answer or explanation. Quiz the method on a new problem with a different answer."));
   });
 
   test('AUD-05/19: checking an answer and other subjects are on the Allowed list', () => {

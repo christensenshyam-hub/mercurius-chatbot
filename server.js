@@ -501,6 +501,7 @@ Rules:
 - Keep question text under 20 words each
 - Keep explanations under 25 words each
 - Base questions ONLY on the actual conversation — do not invent topics
+- If the conversation is about the student's own homework problem (an equation, a worksheet question, an essay), never use that problem or its answer in any question, option, answer or explanation. Quiz the method on a new problem with a different answer.
 - If conversation is too short, generate 2 questions instead
 - Return ONLY the JSON object, nothing else`;
 
