@@ -33,10 +33,12 @@ let package = Package(
             name: "DesignSystem",
             path: "DesignSystem/Sources",
             // Reading-font candidates for the tutor's replies (Lexend,
-            // Atkinson Hyperlegible + their OFL licenses). Registered at
-            // runtime by BrandFontRegistrar — no UIAppFonts/project.yml
+            // Atkinson Hyperlegible) and the certificate's faces (Cormorant
+            // Garamond, EB Garamond), each with its OFL license. Registered
+            // at runtime by BrandFontRegistrar — no UIAppFonts/project.yml
             // involvement, so the generated app target stays untouched.
-            resources: [.copy("Fonts")]
+            // CertificateArt holds the mark the certificate prints.
+            resources: [.copy("Fonts"), .copy("CertificateArt")]
         ),
         .testTarget(
             name: "DesignSystemTests",
