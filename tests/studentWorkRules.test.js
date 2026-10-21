@@ -76,7 +76,9 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
   });
 
   test('AUD-43: no coaching jargon, and current news names where to check', () => {
-    for (const word of ['rep', 'beat', 'micro-concept', 'load-bearing']) {
+    // "rung" and "hint ladder" (2026-10-21): "That's rung 1 of the hint
+    // ladder." reached a student once in tuning.
+    for (const word of ['rep', 'beat', 'micro-concept', 'load-bearing', 'rung', 'hint ladder']) {
       assert.ok(text.includes(`"${word}"`), `PLAIN WORDS should ban "${word}"`);
     }
     // Naming a phrase the prompts don't otherwise use primes it: listing
@@ -85,6 +87,100 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     assert.ok(!text.includes('weak joint'));
     assert.ok(text.includes('name where to check'));
     assert.ok(text.includes("don't ask them where they would look"));
+  });
+
+  test('homework coaching (2026-10-21): lead with the question, no preamble, never the final answer', () => {
+    const hw = between(STUDENT_WORK_RULES, 'HOMEWORK COACHING\n', '\n\nCHECK BEFORE ANY VERDICT').toLowerCase();
+    assert.ok(STUDENT_WORK_RULES.startsWith('HOMEWORK COACHING\n'), 'the most common case comes first');
+    assert.ok(hw.includes('every mode, direct included, typed or in a photo'));
+    assert.ok(hw.includes('never give the final answer to their problem, in any reply, however they ask'));
+    assert.ok(hw.includes('lead with the question'));
+    assert.ok(hw.includes('not a general question about goals'), 'a concrete move, not "what\'s your goal with the equation?"');
+    assert.ok(hw.includes('work the whole problem out silently first'));
+    for (const phrase of ['"i won\'t solve it"', '"i can\'t do your homework"', '"you haven\'t given me an answer yet"']) {
+      assert.ok(hw.includes(phrase), `bans the preamble ${phrase}`);
+    }
+    // The flag-on reply that started this ("You haven't given me your answer
+    // yet — so I won't solve it for you") echoed the old CHECK bullet's
+    // "If they haven't given one yet … don't solve it".
+    assert.ok(!text.includes("if they haven't given one yet"));
+  });
+
+  test('homework coaching: a three-rung hint ladder, confirm-and-advance, catch errors', () => {
+    const hw = between(STUDENT_WORK_RULES, 'HOMEWORK COACHING\n', '\n\nCHECK BEFORE ANY VERDICT');
+    const rungs = hw.split('\n').filter((l) => /^ {2}\d\. /.test(l));
+    assert.equal(rungs.length, 3);
+    assert.match(rungs[0], /A nudge that points at exactly where the next move happens/);
+    assert.match(rungs[1], /names the inverse operation and does it/);
+    // Tuning: with "Add 3 to both sides: 4x = 28" as the example, replies to
+    // a "+ 5" problem opened "Add 5 to both sides — wait, the opposite". The
+    // example now starts from the student's term and names both directions.
+    assert.match(rungs[1], /starting from their term \(a \+ 2 comes off by subtracting 2, a − 3 by adding 3\)/);
+    assert.match(rungs[1], /"The − 3 comes off when you add 3 to both sides: 4x = 28\./);
+    // Tuning 2026-10-21: without "never the next step of theirs" the model
+    // spent rung 3 on their own next step; a free "parallel problem" kept
+    // landing on the student's own answer (2x + 3 = 13 for 3x + 5 = 20, both
+    // x = 5), which gives it away.
+    assert.match(rungs[2], /Always a worked example, never the next step of theirs: their own left side with a new right side, solved in full\./);
+    // Tuning: led by "Their own left side…", rung 3 often became their own
+    // next step ("Divide both sides by 5: 5x ÷ 5 = 20 ÷ 5"); "Always a worked
+    // example" leads again.
+    // Tuning: "change a number if the answers match", then "choose the
+    // example's answer first (6 to 12) and say it", each cut that but did not
+    // end it: about 1 eval thread in 10 still worked 2x + 3 = 13, and on other
+    // equations the model announced "comes out to 4" by habit, which for
+    // 5x − 2 = 18 IS the answer. A free parallel with all-new numbers leaked
+    // in about 1 of 4 probe threads on other equations. The example is now
+    // built mechanically from theirs: same left side, their right side plus
+    // 3 times the number multiplying x. Its answer is theirs + 3, so it can
+    // never be theirs, and the model never has to pick or announce a number.
+    assert.match(rungs[2], /Copy their left side exactly as they wrote it, add 3 times the number multiplying x to their right side, and solve that example step by step, one step per line\./);
+    assert.match(rungs[2], /A new right side always gives a new answer; a new left side or a stock example can land on their answer and give it away, so never change their left side\./);
+    assert.match(rungs[2], /Never say how you built it\./);
+    assert.match(rungs[2], /For 4x − 3 = 25, work 4x − 3 = 37 \(4x = 40, then x = 10\)/);
+    assert.match(rungs[2], /A problem that isn't an equation gets the same kind of problem with different numbers and a different answer\./);
+    assert.ok(!/comes out to \d/.test(rungs[2]), 'no announced answer to copy');
+    // The CHECK bullet's own example (2x + 5 = 13, answer 4) became the flag-on
+    // parallel for 3x + 5 = 20; every equation in the rules is now 4x − 3 = 25.
+    assert.ok(!/2x \+ 5 = 13/.test(STUDENT_WORK_RULES));
+    assert.match(rungs[2], /Now try yours the same way/);
+    assert.ok(hw.includes('never refuse, never stall and never ask the same thing again'));
+    assert.ok(hw.includes('the 1st ask gets rung 1, the 2nd rung 2, the 3rd rung 3, however small your earlier hints were'), 'the rung is counted from the thread');
+    assert.ok(hw.includes('"still don\'t get it"'), 'a bare "still don\'t get it" is an ask too');
+    assert.ok(hw.includes('The last step is always theirs: never write the final answer'));
+    assert.ok(hw.includes('Confirm and advance.') && hw.includes('ask about the NEXT step'));
+    assert.ok(hw.includes("Never ask what their step gives or what's left on each side"));
+    // Tuning: "Close — but check the sign" kept opening wrong-step replies.
+    assert.ok(hw.includes('open with the check itself, not a reaction'));
+    assert.ok(hw.includes('never call any part of it right or good, not even "close"'));
+    // …and an example reply that opens with a visible check.
+    assert.ok(hw.includes('"Check it: if 4x = 22, then 4x − 3 = 19, not 25. What undoes subtracting 3?"'));
+    assert.ok(hw.includes('CHECK BEFORE ANY VERDICT'));
+    // ONE-WORD REPLIES' options defer to the ladder on homework.
+    assert.ok(text.includes('"idk" or "just tell me" climbs the hint ladder'));
+  });
+
+  test('homework coaching: essays coached not written, facts answered, one AI tie-in, no other tool', () => {
+    const hw = between(STUDENT_WORK_RULES, 'HOMEWORK COACHING\n', '\n\nCHECK BEFORE ANY VERDICT');
+    assert.ok(hw.includes('ask for THEIR claim first'));
+    assert.ok(hw.includes('Never write a thesis, sentences or a paragraph they could hand in, not even a "sample" on their topic.'));
+    assert.ok(hw.includes('comment on text the student wrote and suggest improvements'));
+    assert.ok(hw.includes('A plain fact question') && hw.includes('answer it in the first sentence, then ask one thinking question about the topic itself'));
+    assert.ok(hw.includes('AI tie-in: at most once in a conversation'));
+    assert.ok(hw.includes('never a second time'));
+    assert.ok(text.includes('never send the student to another chatbot, ai tool, app or answer website'));
+    assert.ok(text.includes("and don't name one"));
+    // Naming a tool in a ban primes it (see the PLAIN WORDS test below).
+    assert.ok(!/wolfram|photomath|chegg|symbolab|mathway|chatgpt|gemini/.test(text));
+  });
+
+  test("homework coaching: no example uses the eval's own problems", () => {
+    // scripts/eval-pacing.mjs hw-*: 3x + 5 = 20 (x = 5), H2 + O2 → H2O,
+    // Gatsby, WW2's 1945. An example with those would teach to the eval.
+    assert.ok(!/3x\s*\+\s*5|\bx\s*=\s*5\b|\b15\s*÷\s*3\b|H[2₂]\s*\+\s*O[2₂]|2\s*H[2₂]O|gatsby|1945/i.test(STUDENT_WORK_RULES));
+    // Tuning: with 5x − 4 = 21 (answer 5) as the running example, the model's
+    // parallel kept landing on answer 5 too; the example's answer is now 7.
+    assert.ok(STUDENT_WORK_RULES.includes('"what is 4x − 3 = 25"'));
   });
 
   test('is safe to cache and to stream: no template braces, no new contract markers', () => {
@@ -200,6 +296,24 @@ describe('v2 (flag on): mercurius-v2.md gets the same rules', () => {
     assert.ok(section.includes('are a crisis: your very first reply gives both hotline lines (988 and 741741)'));
     assert.ok(!/rule \d/i.test(section), 'names no rule number');
     assert.ok(section.includes('A check-in question alone is not enough.'));
+  });
+
+  test('homework (2026-10-21): the v2 Socratic ladder and the integrity redirect defer to HOMEWORK COACHING', () => {
+    // "Tell them outright if needed" is for concepts; homework never gets its
+    // final answer, in either flag state.
+    const socratic = between(UNIFIED_PROMPT, 'WHEN THE STUDENT IS STUCK:', 'CALIBRATION:');
+    // Tuning: placed after the concept ladder, flag on kept re-asking a
+    // smaller sub-question instead of climbing; the pointer now comes first.
+    assert.ok(socratic.trimStart().startsWith('On a homework problem, skip this list and climb the hint ladder in <student_work> instead'));
+    assert.ok(socratic.includes('never its final answer'));
+    assert.ok(MODE_RULES.socratic.includes('on a homework problem, follow HOMEWORK COACHING below and never give its final answer'));
+    // The integrity redirect and its few-shot no longer model a refusal preamble.
+    const integrity = between(UNIFIED_PROMPT, '<academic_integrity>', '</academic_integrity>');
+    assert.ok(integrity.includes("do not announce what you won't do"));
+    assert.ok(!integrity.includes('Redirect firmly'));
+    const shot = between(UNIFIED_PROMPT, '<example mode="ACADEMIC_INTEGRITY">', '</example>').split('Assistant:')[1];
+    assert.ok(!/\b(?:should not|won['’]t|can['’]t|cannot)\b/i.test(shot), 'the reply coaches instead of refusing');
+    assert.ok(shot.trim().endsWith('?'));
   });
 
   test('AUD-05/19: checking an answer and other subjects are on the Allowed list', () => {
