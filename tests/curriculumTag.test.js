@@ -456,3 +456,129 @@ describe('normalizeReplayedHistory', () => {
     for (let i = 0; i < once.length; i++) assert.equal(twice[i], once[i], `index ${i} same reference`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The Basics track (2026-10): its own tag, its own ids, and never the other
+// track's guide.
+// ---------------------------------------------------------------------------
+describe('Basics tag', () => {
+  const {
+    BASICS_TAG_PREFIX,
+    hasBasicsPrefix,
+    tagTrack,
+    parseBasicsTag,
+    basicsLessonId,
+    lessonTrack,
+    lessonMetaFromMessages,
+    stripLessonTag,
+  } = require('../lib/curriculumTag');
+
+  const B_OPENER = '[BASICS: Unit 2, Lesson 3] Teach me what I should never share with an AI chatbot, and why.' + CONTRACT;
+  const B_ALIAS = '[CURRICULUM: Basics Unit 2, Lesson 4] Teach me about AI voice-clone scams.' + CONTRACT;
+
+  test('the canonical form and the alias both parse to the Basics numbers', () => {
+    assert.equal(BASICS_TAG_PREFIX, '[BASICS:');
+    assert.deepEqual(parseBasicsTag(B_OPENER), { unit: 2, lesson: 3, raw: '[BASICS: Unit 2, Lesson 3]' });
+    assert.deepEqual(parseBasicsTag(B_ALIAS), { unit: 2, lesson: 4, raw: '[CURRICULUM: Basics Unit 2, Lesson 4]' });
+    assert.deepEqual(parseBasicsTag('[BASICS: Unit 05 · Lesson 04]'), { unit: 5, lesson: 4, raw: '[BASICS: Unit 05 · Lesson 04]' });
+    assert.deepEqual(parseBasicsTag('[BASICS:Unit1-Lesson1] hi'), { unit: 1, lesson: 1, raw: '[BASICS:Unit1-Lesson1]' });
+  });
+
+  test('ids are b{unit}_l{lesson}, every lesson of the 5-unit track', () => {
+    const counts = [3, 4, 3, 4, 4];
+    let n = 0;
+    counts.forEach((lessons, i) => {
+      for (let l = 1; l <= lessons; l++) {
+        const meta = lessonMetaFromMessages([user(`[BASICS: Unit ${i + 1}, Lesson ${l}] Teach me.`)], 'basics');
+        assert.equal(meta.lessonId, `b${i + 1}_l${l}`);
+        assert.equal(basicsLessonId(i + 1, l), `b${i + 1}_l${l}`);
+        n += 1;
+      }
+    });
+    assert.equal(n, 18);
+  });
+
+  test('a Basics tag never parses as Deep dive, and a Deep-dive tag never parses as Basics', () => {
+    assert.equal(parseCurriculumTag(B_ALIAS), null, 'the alias starts with [CURRICULUM: but has no u id');
+    assert.equal(parseCurriculumTag(B_OPENER), null);
+    assert.equal(lessonIdFromMessages([user(B_ALIAS)]), null);
+    assert.equal(parseBasicsTag(OPENER_U1L3), null);
+    assert.equal(lessonMetaFromMessages([user(OPENER_U1L3)], 'basics').lessonId, null);
+    assert.equal(lessonMetaFromMessages([user(B_OPENER)], 'deep').lessonId, null);
+  });
+
+  test('tagTrack: the loose checks, Basics first so the alias is Basics', () => {
+    assert.equal(tagTrack(B_OPENER), 'basics');
+    assert.equal(tagTrack(B_ALIAS), 'basics');
+    assert.equal(tagTrack('[BASICS: anything]'), 'basics', 'loose: a malformed Basics tag is still Basics');
+    assert.equal(tagTrack(OPENER_U1L3), 'deep');
+    assert.equal(tagTrack('[CURRICULUM: something odd]'), 'deep');
+    assert.equal(tagTrack('[CURRICULUM: Basicsville Unit 1, Lesson 1]'), 'deep', 'the alias needs the whole word');
+    for (const no of ['hello', ' [BASICS: Unit 1, Lesson 1]', '[basics: Unit 1, Lesson 1]', '[Basics: Unit 1, Lesson 1]', '', null, undefined, 7, ['[BASICS:']]) {
+      assert.equal(tagTrack(no), null, JSON.stringify(no));
+      assert.equal(hasBasicsPrefix(no), false, JSON.stringify(no));
+    }
+  });
+
+  test('lessonTrack: the most recent tagged user turn decides; assistants and multimodal turns never do', () => {
+    const iosBasics = [user(B_OPENER), assistant('Last time…'), user('[BASICS: Unit 2, Lesson 3] My bank charged me twice.')];
+    assert.equal(lessonTrack(iosBasics), 'basics');
+    assert.equal(lessonTrack([user(OPENER_U1L3), assistant('…'), user('[CURRICULUM: Unit 1, Lesson 3] tokens')]), 'deep');
+    // A widget thread that moves from a Deep-dive lesson to a Basics one follows the new one, and back.
+    assert.equal(lessonTrack([user(OPENER_U1L3), assistant('…'), user(B_OPENER)]), 'basics');
+    assert.equal(lessonTrack([user(B_OPENER), assistant('…'), user(OPENER_U1L3)]), 'deep');
+    assert.equal(lessonTrack([user(B_OPENER), assistant('…'), user('plain follow-up')]), 'basics', 'an untagged later turn keeps the track');
+    assert.equal(lessonTrack([user('hi'), assistant('[BASICS: Unit 1, Lesson 1]')]), null);
+    assert.equal(lessonTrack([{ role: 'user', content: [{ type: 'text', text: B_OPENER }] }]), null);
+    assert.equal(lessonTrack([user('hi')]), null);
+    assert.equal(lessonTrack(undefined), null);
+  });
+
+  test('lessonTrack is "deep" exactly when the old isCurriculumThread rule was true, for threads with no Basics tag', () => {
+    const threads = [
+      [user(OPENER_U1L3)],
+      [user('hi'), assistant('…'), user('[CURRICULUM: Unit 3, Lesson 2] x')],
+      [user('[CURRICULUM: odd]')],
+      [user('hi')],
+      [user('Hello [CURRICULUM: Unit 1, Lesson 3]')],
+      [assistant('[CURRICULUM: Unit 1, Lesson 1]'), user('hi')],
+      [],
+    ];
+    for (const t of threads) assert.equal(lessonTrack(t) === 'deep', isCurriculumThread(t), JSON.stringify(t));
+  });
+
+  test('lessonMetaFromMessages: the FIRST strict tag of the asked track; null ids when none parses; null for an unknown track', () => {
+    const wire = [user('[BASICS: Unit 3, Lesson 1] Teach me.'), assistant('…'), user('[BASICS: Unit 3, Lesson 2] Teach me.')];
+    assert.deepEqual(lessonMetaFromMessages(wire, 'basics'), { track: 'basics', unit: 3, lesson: 1, lessonId: 'b3_l1' });
+    assert.deepEqual(lessonMetaFromMessages([user('[BASICS: intro]')], 'basics'), { track: 'basics', unit: null, lesson: null, lessonId: null });
+    assert.deepEqual(lessonMetaFromMessages([user(OPENER_U1L3)], 'deep'), { track: 'deep', unit: 1, lesson: 3, lessonId: 'u1_l3' });
+    assert.equal(lessonMetaFromMessages([user(B_OPENER)], 'other'), null);
+    assert.deepEqual(lessonMetaFromMessages(undefined, 'basics'), { track: 'basics', unit: null, lesson: null, lessonId: null });
+  });
+
+  test('stripLessonTag strips one leading tag of either track', () => {
+    assert.equal(stripLessonTag('[BASICS: Unit 1, Lesson 1] hi there'), 'hi there');
+    assert.equal(stripLessonTag('[CURRICULUM: Basics Unit 1, Lesson 1]   hi'), 'hi');
+    assert.equal(stripLessonTag('[CURRICULUM: Unit 1, Lesson 1] hi'), 'hi');
+    assert.equal(stripLessonTag('[BASICS: no close'), '[BASICS: no close');
+    assert.equal(stripLessonTag('hi [BASICS: Unit 1, Lesson 1]'), 'hi [BASICS: Unit 1, Lesson 1]');
+    assert.equal(stripLessonTag(5), 5);
+  });
+
+  test('normalizeReplayedHistory strips the iOS re-tag of a Basics opener, byte-stable across turns', () => {
+    const TAG_B = '[BASICS: Unit 2, Lesson 3]';
+    const turn2 = [user(B_OPENER), assistant('A'), user(`${TAG_B} My bank charged me twice.`)];
+    const turn3 = [user(B_OPENER), assistant('A'), user('My bank charged me twice.'), assistant('B'), user(`${TAG_B} I picked B) How do I make a strong password?`)];
+    const n2 = normalizeReplayedHistory(turn2);
+    const n3 = normalizeReplayedHistory(turn3);
+    assert.equal(n2[0].content, B_OPENER, 'the opener keeps its tag');
+    assert.equal(n2[2].content, 'My bank charged me twice.');
+    assert.deepEqual(n3.slice(0, 3), n2.slice(0, 3), 'the shared prefix is identical');
+    // The alias opener: its re-tag is stripped too.
+    const alias = normalizeReplayedHistory([user(B_ALIAS), assistant('A'), user('[CURRICULUM: Basics Unit 2, Lesson 4] Write a text.')]);
+    assert.equal(alias[2].content, 'Write a text.');
+    // A Deep-dive tag on a later turn of a Basics thread is a different tag: it survives.
+    const mixed = normalizeReplayedHistory([user(B_OPENER), assistant('A'), user(OPENER_U1L3)]);
+    assert.equal(mixed[2].content, OPENER_U1L3);
+  });
+});

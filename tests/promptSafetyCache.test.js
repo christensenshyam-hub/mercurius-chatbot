@@ -38,6 +38,15 @@ const { APP_FACTS, APP_FACTS_TAGGED } = require('../lib/appFacts');
 const ROOT = path.join(__dirname, '..');
 const STUB = path.join(__dirname, 'fixtures', 'stubClubFeeds.js');
 const OPENER_TAG = '[CURRICULUM: Unit 1, Lesson 1]';
+const BASICS_TAG = '[BASICS: Unit 1, Lesson 1]';
+const { BASICS_PROMPT, BASICS_BLOCKS_APPENDIX } = require('../lib/basicsGuide');
+// server.js CURRICULUM_PROMPT's first line, read from the source (the
+// constant is not exported).
+const DEEP_GUIDE_FIRST_LINE = (() => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = src.indexOf('const CURRICULUM_PROMPT = `') + 'const CURRICULUM_PROMPT = `'.length;
+  return src.slice(start, src.indexOf('\n', start));
+})();
 
 const servers = {};
 
@@ -285,6 +294,9 @@ for (const flag of ['on', 'off']) {
       { name: 'socratic (widget, club_v1)', mode: 'socratic', text: 'What is a token?', capabilities: ['club_v1'] },
       { name: 'lesson (prose)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.` },
       { name: 'lesson (blocks_v1)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.`, capabilities: ['blocks_v1'] },
+      { name: 'Basics lesson (prose)', lesson: true, basics: true, text: `${BASICS_TAG} Teach me what an AI chatbot is, in plain words.` },
+      { name: 'Basics lesson (blocks_v1)', lesson: true, basics: true, text: `${BASICS_TAG} Teach me what an AI chatbot is, in plain words.`, capabilities: ['blocks_v1', 'platform_ios'] },
+      { name: 'Basics lesson (alias tag)', lesson: true, basics: true, text: '[CURRICULUM: Basics Unit 1, Lesson 1] Teach me what an AI chatbot is.' },
     ];
     for (const v of variants) {
       test(v.name, async () => {
@@ -307,6 +319,70 @@ for (const flag of ['on', 'off']) {
         assert.equal(countOf(staticText, APP_FACTS), 1, 'the facts appear exactly once');
         assert.equal(countOf(staticText, safety), 1, 'the safety core appears exactly once');
         for (const block of call.system.slice(1)) assert.ok(!block.text.includes(APP_FACTS), 'never in the dynamic block');
+        // Each lesson track gets its own guide and never the other's.
+        if (v.basics) {
+          assert.ok(staticText.startsWith(BASICS_PROMPT), 'the Basics guide opens the prefix');
+          assert.ok(!staticText.includes(DEEP_GUIDE_FIRST_LINE), 'no Deep-dive guide');
+          assert.equal(staticText.includes(BASICS_BLOCKS_APPENDIX), Boolean(v.capabilities), 'card rules only for blocks_v1');
+        } else {
+          assert.ok(!staticText.includes(BASICS_PROMPT.slice(0, 200)), 'no Basics guide');
+          if (v.lesson) assert.ok(staticText.startsWith(DEEP_GUIDE_FIRST_LINE), 'the Deep-dive guide opens a Deep-dive lesson');
+        }
+      });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 1c. Lesson routing (Basics, 2026-10): the most recent lesson tag picks the
+//     guide, so a Basics lesson never falls into the Deep-dive guide and a
+//     Deep-dive lesson never into the Basics one — whichever came first.
+// ---------------------------------------------------------------------------
+for (const flag of ['on', 'off']) {
+  describe(`lesson routing by track (USE_UNIFIED_PROMPT ${flag})`, () => {
+    const server = () => servers[flag];
+    const cases = [
+      { name: 'Basics opener alone', basics: true, thread: (n) => [{ role: 'user', content: `${BASICS_TAG} Teach me (${n}).` }] },
+      { name: 'Deep-dive opener alone', basics: false, thread: (n) => [{ role: 'user', content: `${OPENER_TAG} Teach me (${n}).` }] },
+      {
+        name: 'a Deep-dive thread that moves on to a Basics lesson (widget)',
+        basics: true,
+        thread: (n) => [
+          { role: 'user', content: `${OPENER_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: `${BASICS_TAG} Teach me what a chatbot is.` },
+        ],
+      },
+      {
+        name: 'a Basics thread that moves on to a Deep-dive lesson (widget)',
+        basics: false,
+        thread: (n) => [
+          { role: 'user', content: `${BASICS_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: `${OPENER_TAG} Teach me about tokens.` },
+        ],
+      },
+      {
+        name: 'a Basics thread whose later turns are untagged stays Basics',
+        basics: true,
+        thread: (n) => [
+          { role: 'user', content: `${BASICS_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: 'Are you a real person?' },
+        ],
+      },
+    ];
+    for (const c of cases) {
+      test(c.name, async () => {
+        const n = nonce();
+        await chatSse(server(), { sessionId: sid(), messages: c.thread(n) });
+        const [call] = captured(server(), n);
+        assert.ok(call, 'the model was called');
+        const staticText = call.system[0].text;
+        assert.equal(staticText.startsWith(BASICS_PROMPT), c.basics, 'Basics guide');
+        assert.equal(staticText.startsWith(DEEP_GUIDE_FIRST_LINE), !c.basics, 'Deep-dive guide');
+        assert.ok(staticText.endsWith(SAFETY_CORE), 'the safety core is LAST either way');
+        assert.equal(call.max_tokens, 2048, 'both tracks get the lesson token budget');
       });
     }
   });
@@ -376,6 +452,36 @@ for (const flag of ['on', 'off']) {
       assertByteStable(calls);
       assertReadsBack(usages, 3);
       assert.ok(usages[4].cache_read_input_tokens > usages[2].cache_read_input_tokens);
+    });
+
+    test('Basics lesson, iOS wire shape: typed turns and [Q] taps share one prefix, so every turn reads back the last', async () => {
+      const n = nonce();
+      const s = sid();
+      const opener = { role: 'user', content: `${BASICS_TAG} Teach me what an AI chatbot is (${n}).` };
+      const visible = [];
+      const usages = [];
+      // concise = a typed send(), balanced = the opener and a [Q] tap.
+      const modes = ['balanced', 'concise', 'concise', 'balanced', 'concise'];
+      for (let t = 1; t <= 5; t++) {
+        if (t > 1) visible.push({ role: 'user', content: t === 4 ? 'I picked B) A computer program' : `practice ${t}: Are you a real person?` });
+        const wire = visible.slice();
+        wire.unshift(opener);
+        const last = wire.length - 1;
+        if (last > 0 && !wire[last].content.startsWith('[BASICS')) wire[last] = { role: 'user', content: `${BASICS_TAG} ${wire[last].content}` };
+        const complete = await chatSse(server(), { sessionId: s, messages: wire, responseMode: modes[t - 1], capabilities: ['blocks_v1', 'platform_ios'] });
+        usages.push(complete.usage);
+        visible.push({ role: 'assistant', content: complete.reply });
+      }
+      const calls = captured(server(), n);
+      assert.equal(calls.length, 5);
+      for (const call of calls) {
+        assert.ok(call.system[0].text.startsWith(BASICS_PROMPT));
+        assert.equal(call.system.filter((b) => b.cache_control).length, 1, 'only the static block is cached');
+        assert.match(call.system[1].text, /^## BASICS RUNTIME NOTE\nToday's date: \d{4}-\d{2}-\d{2}\.\nDevice: iPhone or iPad/);
+      }
+      for (const call of calls.slice(1)) assert.deepEqual(messageBreakpoints(call.messages), [call.messages.length - 2]);
+      assertByteStable(calls);
+      assertReadsBack(usages, 3);
     });
 
     test('free chat: the same, and the app dynamic block carries no breakpoint', async () => {
