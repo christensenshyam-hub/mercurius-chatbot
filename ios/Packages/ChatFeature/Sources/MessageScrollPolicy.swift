@@ -223,14 +223,14 @@ struct CoachCardPresence: Equatable, Sendable {
     }
 }
 
-#if os(macOS)
 extension MessageScrollPolicy {
-    /// The lesson's part strip moved the list (a click on a part): a move of
-    /// the student's own, so a streaming reply is no longer followed (the
-    /// next delta would pull them back down). The pill offers the way back.
+    /// The lesson's part strip moved the list (a click on a part, on the
+    /// Mac; on both platforms, the DEBUG jump to Lesson 1.1's interactive):
+    /// a move of the student's own, so a streaming reply is no longer
+    /// followed (the next delta would pull them back down). The pill offers
+    /// the way back.
     mutating func partJumped() {
         isFollowing = false
         didHoldCurrentReply = true
     }
 }
-#endif
