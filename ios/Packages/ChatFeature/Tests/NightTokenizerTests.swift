@@ -35,6 +35,14 @@ private func firstReply(upTo marker: String) -> String {
     return String(text[..<range.lowerBound])
 }
 
+@MainActor
+private func ask(_ index: NightInteractiveIndex, _ messages: [ChatMessage]) -> NightInteractivePlacement? {
+    index.placement(lessonID: lesson, messages: messages,
+                    crisisReplies: NightCrisisGuard.guardedReplies(in: messages)) { message in
+        NightParts.sections(of: message.content, isStreaming: message.status == .streaming)
+    }
+}
+
 private func pieces(_ message: ChatMessage, at position: NightInteractivePosition?,
                     crisis: Bool = false) -> [NightReplyPiece] {
     NightReplyLayout.lesson(sections: NightParts.sections(of: message.content,
@@ -217,11 +225,58 @@ struct NightInteractivePlacementTests {
     }
 
     @Test("A first reply without an example settles it: a later example doesn't move the card")
+    @MainActor
     func doesNotMove() throws {
         let first = reply("Let's start.\n\n**Tokens** are pieces of text.")
         let later = reply(LessonReplay.replies[1])
-        #expect(placement([first])?.messageID == first.id)
-        #expect(placement([first, student("ok"), later])?.messageID == first.id)
+        let memory = NightInteractiveMemory()
+        let index = NightInteractiveIndex(memory: memory)
+        #expect(ask(index, [first])?.messageID == first.id)
+        #expect(ask(index, [first, student("ok"), later])?.messageID == first.id)
+        // Reopened in the same run of the app (a new list, the thread
+        // rebuilt from storage): the same place.
+        let reopened = NightInteractiveIndex(memory: memory)
+        #expect(ask(reopened, [first, student("ok"), later])?.messageID == first.id)
+    }
+
+    @Test("A cut reply the student answered comes back from storage as .idle: it doesn't take the card")
+    func rebuiltCutReply() throws {
+        // Cut mid-part (AUD-29), answered instead of retried, saved, and
+        // rebuilt on reopen with `.idle` like every stored reply.
+        let cut = reply(firstReply(upTo: "That's how the model"), .idle)
+        let answer = student("I think it's a chunk of text")
+        let next = reply(LessonReplay.replies[1])
+        let found = try #require(placement([cut, answer, next]))
+        #expect(found.messageID == next.id, "the live thread put it in the next reply too")
+        // The app was killed while the next reply streamed: the thread ends
+        // on the student's turn, and the cut reply still doesn't take it.
+        #expect(placement([cut, answer]) == nil)
+        // A reply with anything after it shows its part ended by a later
+        // part or a check: the recorded reply does.
+        let whole = reply(LessonReplay.replies[0])
+        #expect(placement([whole, student("I picked B)"), next])?.messageID == whole.id)
+        // Without an example, an earlier reply needs a check to sit before.
+        let plain = reply("Let's start.\n\n**Tokens** are pieces")
+        #expect(placement([plain, student("ok"), next])?.messageID == next.id)
+    }
+
+    @Test("A kept place goes when its reply goes (Retry) or a crisis line arrives")
+    @MainActor
+    func keptPlace() throws {
+        let index = NightInteractiveIndex(memory: NightInteractiveMemory())
+        let opener = student("Start the lesson")
+        let cut = reply(firstReply(upTo: "A) A full sentence"), .failed(reason: "Connection lost."))
+        #expect(ask(index, [opener, cut])?.messageID == cut.id)
+        // Retry replaces the cut reply: the new one decides, once its part is in.
+        let again = reply(LessonReplay.replies[0])
+        #expect(ask(index, [opener, again])?.messageID == again.id)
+        // A crisis line later in the thread: no card, wherever it was.
+        let crisisReply = reply("You can call or text 988 any time, day or night.")
+        let thread = [opener, again, student("I feel awful"), crisisReply]
+        #expect(index.placement(lessonID: lesson, messages: thread,
+                                crisisReplies: NightCrisisGuard.guardedReplies(in: thread)) {
+            NightParts.sections(of: $0.content, isStreaming: $0.status == .streaming)
+        } == nil)
     }
 
     @Test("Never in a thread that carried a crisis line, wherever it was")
@@ -246,8 +301,9 @@ struct NightInteractivePlacementTests {
     func reopened() {
         let thread = [reply(LessonReplay.replies[0]), student("I picked B)"), reply(LessonReplay.replies[1])]
         let live = placement(thread)
-        // The same thread loaded again: new view, new index.
-        let index = NightInteractiveIndex()
+        // The same thread loaded again in a new run of the app: new view,
+        // new index, nothing remembered.
+        let index = NightInteractiveIndex(memory: NightInteractiveMemory())
         let reopened = index.placement(lessonID: lesson, messages: thread,
                                        crisisReplies: NightCrisisGuard.guardedReplies(in: thread)) {
             NightParts.sections(of: $0.content, isStreaming: $0.status == .streaming)
@@ -259,7 +315,7 @@ struct NightInteractivePlacementTests {
     @Test("The index works it out again when the thread changes, and only then")
     @MainActor
     func indexCache() {
-        let index = NightInteractiveIndex()
+        let index = NightInteractiveIndex(memory: NightInteractiveMemory())
         var calls = 0
         func ask(_ messages: [ChatMessage]) -> NightInteractivePlacement? {
             index.placement(lessonID: lesson, messages: messages, crisisReplies: []) { message in
@@ -339,7 +395,11 @@ struct NightTokenizerContentTests {
 
 @Suite("Night: the map of meaning")
 struct NightMeaningMapTests {
-    static let widths: [CGFloat] = [390, 440, 520, 580]
+    /// The map panel's widths: a card opened from "Try it" in a 700 pt
+    /// window with the sidebar open (about 350; 300 with a wide sidebar) up
+    /// to a 1280 pt window's reading column.
+    static let widths: [CGFloat] = [300, 320, 350, 390, 440, 460, 520, 580, 640]
+    static let contexts: [NightTokenizerContext?] = [nil] + NightTokenizerContext.allCases.map { Optional($0) }
 
     static func size(_ width: CGFloat) -> CGSize {
         CGSize(width: width, height: NightMeaningMap.height(forWidth: width))
@@ -372,8 +432,7 @@ struct NightMeaningMapTests {
     func labels(width: CGFloat) {
         let size = Self.size(width)
         let panel = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
-        let contexts: [NightTokenizerContext?] = [nil] + NightTokenizerContext.allCases.map { Optional($0) }
-        for context in contexts {
+        for context in Self.contexts {
             let frames = NightMeaningMap.labelFrames(context, in: size)
             for (name, frame) in frames {
                 #expect(panel.contains(frame), "\(name) leaves the panel at \(width) (\(String(describing: context)))")
@@ -402,6 +461,63 @@ struct NightMeaningMapTests {
                 }
             }
         }
+    }
+
+    @Test("No line runs through bank's pill, in any state", arguments: widths)
+    func pillClear(width: CGFloat) {
+        let size = Self.size(width)
+        for context in Self.contexts {
+            let pill = NightMeaningMap.pillFrame(context, in: size)
+            for line in NightMeaningMap.lines(context, in: size) {
+                let gap = Self.clearance(of: line, fromCapsule: pill)
+                #expect(gap >= 3, "\(line.name) comes within \(gap) pt of the pill at \(width) (\(String(describing: context)))")
+            }
+        }
+    }
+
+    @Test("By the river the pill sits over its dot; elsewhere under it")
+    func pillSide() {
+        let size = Self.size(390)
+        for context in Self.contexts {
+            let dot = NightMeaningMap.scaled(NightMeaningMap.bank(context), in: size)
+            let pill = NightMeaningMap.pillFrame(context, in: size)
+            if context == .river { #expect(pill.maxY < dot.y) } else { #expect(pill.minY > dot.y) }
+        }
+    }
+
+    @Test("No line runs through a word's label or the start's caption", arguments: widths)
+    func linesClearOfLabels(width: CGFloat) {
+        let size = Self.size(width)
+        for context in Self.contexts {
+            let labels = NightMeaningMap.labelFrames(context, in: size).filter { $0.0 != "bank pill" }
+            for line in NightMeaningMap.lines(context, in: size) {
+                for (name, frame) in labels where !line.ends.contains(name) {
+                    let hit = (0...200).contains { step in
+                        frame.contains(Self.point(on: line, at: CGFloat(step) / 200))
+                    }
+                    #expect(!hit, "\(line.name) crosses \(name) at \(width) (\(String(describing: context)))")
+                }
+            }
+        }
+    }
+
+    static func point(on line: NightMeaningMap.Line, at t: CGFloat) -> CGPoint {
+        CGPoint(x: line.from.x + (line.to.x - line.from.x) * t, y: line.from.y + (line.to.y - line.from.y) * t)
+    }
+
+    /// The nearest a line comes to a capsule drawn in `frame` (negative:
+    /// through it). Explicit Doubles, for CI's Swift 6.0.
+    static func clearance(of line: NightMeaningMap.Line, fromCapsule frame: CGRect) -> Double {
+        let radius = Double(frame.height) / 2
+        let ax = Double(frame.minX) + radius, bx = Double(frame.maxX) - radius, cy = Double(frame.midY)
+        var nearest = Double.greatestFiniteMagnitude
+        for step in 0...400 {
+            let p = point(on: line, at: CGFloat(step) / 400)
+            let x = min(max(Double(p.x), ax), bx)
+            let distance = hypot(Double(p.x) - x, Double(p.y) - cy) - radius
+            nearest = min(nearest, distance)
+        }
+        return nearest
     }
 
     @Test("The panel is shorter in a narrow card")
@@ -449,6 +565,9 @@ struct NightTokenizerCopyTests {
         #expect(note.contains("later layers"))
         // Before, not after or "around": the model reads left to right.
         #expect(note.contains("words before it"))
+        // The numbers themselves shift (and so "bank" moves on the map):
+        // not a fixed list with the meaning coming from somewhere else.
+        #expect(note.contains("those numbers shift"))
         #expect(NightTokenizerCopy.startPrompt == "Start the sentence:")
     }
 
@@ -456,9 +575,14 @@ struct NightTokenizerCopyTests {
     func labels() {
         #expect(NightTokenizerCopy.idNote.contains("illustrative"))
         #expect(NightTokenizerCopy.idNote.contains("depend on the model’s tokenizer"))
+        // They are GPT-4's real IDs (cl100k_base), and the note says whose.
+        #expect(NightTokenizerCopy.idNote.contains("GPT-4’s tokenizer"))
+        #expect(NightTokenizer.tokens.map(\.id) == [40, 4024, 311, 279, 6201])
         #expect(NightTokenizerCopy.listLabel == "a list of numbers")
         #expect(NightTokenizerCopy.listNote.contains("thousands of numbers"))
-        #expect(NightTokenizerCopy.sketch == "A 2-D sketch: the real space has thousands of dimensions.")
+        // Step 3 to step 4: each number is a coordinate on the map.
+        #expect(NightTokenizerCopy.listNote.contains("map coordinates"))
+        #expect(NightTokenizerCopy.sketch == "A 2-D sketch, drawn by hand: the real space has thousands of dimensions.")
         #expect(NightTokenizerCopy.spaceNote.contains("space"))
         #expect(NightTokenizerCopy.steps == ["You type", "It’s cut into tokens",
                                              "Each token becomes a list of numbers",
@@ -474,7 +598,8 @@ struct NightTokenizerCopyTests {
             #expect(summary.contains("2-D sketch"))
         }
         #expect(NightTokenizerCopy.mapSummary(.money)
-                == "Map of meaning, a 2-D sketch. With “I got my paycheck, so” before it, bank is near loan and deposit.")
+                == "Map of meaning, a 2-D sketch drawn by hand. With “I got my paycheck, so” before it, "
+                    + "bank is near loan and deposit.")
         #expect(NightTokenizerCopy.pickedAnnouncement(.money)
                 == "I got my paycheck, so I went to the bank. " + NightTokenizerCopy.mapSummary(.money))
     }
@@ -483,7 +608,7 @@ struct NightTokenizerCopyTests {
     func steps() {
         #expect(NightTokenizerCopy.tokensAccessibility
                 == "I went to the bank, cut into 5 tokens: I, space went, space to, space the, space bank. "
-                    + "Their IDs, illustrative: 40, 4024, 311, 279, 6201.")
+                    + "Their IDs, illustrative, from GPT-4’s tokenizer: 40, 4024, 311, 279, 6201.")
         #expect(NightTokenizerCopy.numbersAccessibility.hasPrefix("The token space bank becomes a list of numbers."))
         #expect(NightTokenizerCopy.numbersAccessibility.contains("minus 0.08"))
         #expect(NightTokenizerCopy.numbersAccessibility.hasSuffix("and thousands more."))
@@ -497,7 +622,7 @@ struct NightTokenizerCopyTests {
 @MainActor
 struct NightTokenizerKeyTests {
 
-    @Test("While an opening has the keyboard, the waiting check doesn't take the lesson's keys")
+    @Test("While an opening has the keyboard, Return is its own; A–D and the arrows still answer the check")
     func holdsKeys() {
         let router = NightCheckKeyRouter()
         let check = UUID()
@@ -508,15 +633,38 @@ struct NightTokenizerKeyTests {
         let card = UUID()
         router.hold(card, true)
         #expect(router.keysAreElsewhere)
-        #expect(!router.route(.option(0)), "B stays with the focused opening")
         #expect(!router.route(.lockIn), "Return picks the opening, never locks in the check")
-        #expect(got == [.option(1)])
+        #expect(router.route(.option(0)), "B still answers the check: the openings don't use it")
+        #expect(router.route(.move(1)))
+        #expect(got == [.option(1), .option(0), .move(1)])
 
         router.hold(card, false)
         #expect(!router.keysAreElsewhere)
-        #expect(router.route(.move(1)))
-        #expect(got == [.option(1), .move(1)])
+        #expect(router.route(.lockIn))
+        #expect(got == [.option(1), .option(0), .move(1), .lockIn])
         #expect(router.activeID == check, "the check stays registered throughout")
+    }
+
+    @Test("A pick on the check takes the keys back: holders let go, so Return locks it in")
+    func checkPickReleases() {
+        let router = NightCheckKeyRouter()
+        var got: [NightCheckKeys.Key] = []
+        router.register(UUID()) { key in
+            got.append(key)
+            // As the check does: a pick tells the router.
+            if case .option = key { router.checkPicked() }
+            return true
+        }
+        let opening = UUID(), tryIt = UUID()
+        router.hold(opening, true)
+        router.hold(tryIt, true)
+        let before = router.checkPicks
+        #expect(!router.route(.lockIn))
+        #expect(router.route(.option(1)), "B, typed with an opening focused (or a click on B)")
+        #expect(!router.keysAreElsewhere, "every holder let go")
+        #expect(router.checkPicks == before + 1, "the card watches this and drops the opening's focus")
+        #expect(router.route(.lockIn), "Return now locks B in")
+        #expect(got == [.option(1), .lockIn])
     }
 
     @Test("Holding is per control and idempotent")

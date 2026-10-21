@@ -45,8 +45,11 @@ enum NightTokenizer {
     static let sentence = "I went to the bank"
 
     /// The sentence's tokens, as a subword tokenizer of the GPT kind cuts
-    /// it: each space goes with the word after it. The IDs come from the
-    /// Field Notes concept and are shown as illustrative only.
+    /// it: each space goes with the word after it. The IDs are GPT-4's
+    /// (OpenAI's cl100k_base: "I" 40, "Ġwent" 4024, "Ġto" 311, "Ġthe" 279,
+    /// "Ġbank" 6201, checked against huggingface.co/Xenova/gpt-4's
+    /// tokenizer.json). The card calls them illustrative because Mercurius
+    /// runs on Claude, whose tokenizer is different and not public.
     static let tokens: [Token] = [
         Token(text: "I", leadingSpace: false, id: 40),
         Token(text: "went", leadingSpace: true, id: 4024),
@@ -119,7 +122,7 @@ enum NightMeaningMap {
 
     static let words: [Word] = [
         Word(text: "loan", point: CGPoint(x: 0.13, y: 0.36), group: .money, side: .below),
-        Word(text: "deposit", point: CGPoint(x: 0.33, y: 0.17), group: .money, side: .trailing),
+        Word(text: "deposit", point: CGPoint(x: 0.29, y: 0.15), group: .money, side: .trailing),
         Word(text: "shore", point: CGPoint(x: 0.64, y: 0.82), group: .river, side: .leading),
         Word(text: "water", point: CGPoint(x: 0.87, y: 0.58), group: .river, side: .above),
     ]
@@ -134,8 +137,15 @@ enum NightMeaningMap {
         switch context {
         case nil: return start
         case .money: return CGPoint(x: 0.25, y: 0.46)
-        case .river: return CGPoint(x: 0.76, y: 0.62)
+        case .river: return CGPoint(x: 0.68, y: 0.56)
         }
+    }
+
+    /// Whether "bank"'s pill sits above its dot: by the river its
+    /// neighbours are below and beside it, so the pill goes above, clear of
+    /// the lines to them (below, the shore–water line ran through it).
+    static func pillAbove(_ context: NightTokenizerContext?) -> Bool {
+        context == .river
     }
 
     /// The panel's height for a card this wide.
@@ -168,7 +178,7 @@ enum NightMeaningMap {
     static let wordCharWidth: CGFloat = 7.9
     static let wordHeight: CGFloat = 16
     static let labelGap: CGFloat = 9
-    static let dotGap: CGFloat = 22
+    static let dotGap: CGFloat = 24
     static let pillSize = CGSize(width: 58, height: 24)
     static let startCaption = "where \u{201C}bank\u{201D} starts"
     static let startCaptionSize = CGSize(width: 128, height: 16)
@@ -187,29 +197,61 @@ enum NightMeaningMap {
         }
     }
 
-    /// "bank"'s pill, centred under its dot.
+    /// "bank"'s pill, centred under its dot (over it by the river).
     static func pillFrame(_ context: NightTokenizerContext?, in size: CGSize) -> CGRect {
         let p = scaled(bank(context), in: size)
-        return CGRect(x: p.x - pillSize.width / 2, y: p.y + dotGap - pillSize.height / 2,
+        let centreY = pillAbove(context) ? p.y - dotGap : p.y + dotGap
+        return CGRect(x: p.x - pillSize.width / 2, y: centreY - pillSize.height / 2,
                       width: pillSize.width, height: pillSize.height)
     }
 
     /// The start ring's caption, above the ring, clear of "bank"'s trail
-    /// (which leaves the ring sideways or downward). Shown once "bank" has
-    /// moved off it.
+    /// (which leaves the ring sideways or downward). Always shown: before a
+    /// pick it says the ring is where "bank"'s first numbers put it (not
+    /// where the model puts "bank" in "I went to the bank"); after, it is
+    /// where "bank" moved from.
     static func startCaptionFrame(in size: CGSize) -> CGRect {
         let p = scaled(start, in: size)
         let s = startCaptionSize
         return CGRect(x: p.x - s.width / 2, y: p.y - startRingRadius - 6 - s.height, width: s.width, height: s.height)
     }
 
-    /// Every label on the panel in this state: the words, the pill and, once
-    /// "bank" has moved, the start's caption.
+    /// Every label on the panel in this state: the words, the pill and the
+    /// start's caption.
     static func labelFrames(_ context: NightTokenizerContext?, in size: CGSize) -> [(String, CGRect)] {
         var frames = words.map { ($0.text, labelFrame($0, in: size)) }
         frames.append(("bank pill", pillFrame(context, in: size)))
-        if context != nil { frames.append(("start caption", startCaptionFrame(in: size))) }
+        frames.append(("start caption", startCaptionFrame(in: size)))
         return frames
+    }
+
+    /// A line drawn on the panel in this state, between two points.
+    struct Line: Sendable {
+        let name: String
+        let from: CGPoint
+        let to: CGPoint
+        /// The words at its ends (their labels sit at the ends, so the line
+        /// may meet them there).
+        let ends: [String]
+    }
+
+    /// Every line on the panel in this state: each neighbourhood's line,
+    /// and once "bank" has moved, its lines to its neighbours and its trail
+    /// from the start.
+    static func lines(_ context: NightTokenizerContext?, in size: CGSize) -> [Line] {
+        var lines: [Line] = NightTokenizerContext.allCases.map { group in
+            let pair = words.filter { $0.group == group }
+            return Line(name: "\(group) neighbourhood", from: scaled(pair[0].point, in: size),
+                        to: scaled(pair[1].point, in: size), ends: pair.map(\.text))
+        }
+        guard let context else { return lines }
+        let b = scaled(bank(context), in: size)
+        for word in words where word.group == context {
+            lines.append(Line(name: "bank to \(word.text)", from: b, to: scaled(word.point, in: size),
+                              ends: [word.text]))
+        }
+        lines.append(Line(name: "trail", from: scaled(start, in: size), to: b, ends: []))
+        return lines
     }
 }
 
@@ -239,19 +281,27 @@ struct NightInteractivePlacement: Equatable, Sendable {
 /// - A reply cut off before the example's part finished, or one that
 ///   failed before any text, is passed over: the next reply decides (a
 ///   Retry replaces the cut reply and decides again).
+/// - "Complete" counts as proof that a part finished only for the thread's
+///   last message. A cut reply the student answered instead of retrying
+///   (AUD-29) is saved, and comes back from storage as `.idle` like any
+///   other reply, so a reply with anything after it has to show its part
+///   ended: a later part, or a check after the example (or, with no
+///   example, a check to sit before).
 /// - Never in a thread that has carried a crisis line (988 or 741741):
 ///   not in, after or before that reply.
 /// - Only in Lesson 1.1, and only in lessons (the list asks only for them).
 ///
-/// The rule reads the thread and nothing else, so a reopened thread puts
-/// the card where it was.
+/// The rule reads the thread and nothing else. `NightInteractiveIndex`
+/// keeps its first answer for the thread, so the card never moves while
+/// the lesson is open or when it is reopened in the same run of the app.
 enum NightInteractiveAnchor {
     static func placement(lessonID: String?, messages: [ChatMessage], crisisReplies: Set<UUID>,
                           sections: (ChatMessage) -> [NightSection]) -> NightInteractivePlacement? {
         guard NightTokenizer.belongs(toLesson: lessonID), crisisReplies.isEmpty else { return nil }
+        let last = messages.last?.id
         for message in messages where message.role == .assistant {
             let parts = sections(message)
-            let complete = message.status == .idle
+            let complete = message.status == .idle && message.id == last
             if let example = firstExample(in: parts) {
                 if let position = afterExamplePart(parts, example: example, replyComplete: complete) {
                     return NightInteractivePlacement(messageID: message.id, position: position)
@@ -264,7 +314,7 @@ enum NightInteractiveAnchor {
             case .streaming:
                 return nil
             case .idle:
-                if let position = fallback(parts) {
+                if let position = fallback(parts, replyComplete: complete) {
                     return NightInteractivePlacement(messageID: message.id, position: position)
                 }
             case .failed, .interrupted:
@@ -299,7 +349,9 @@ enum NightInteractiveAnchor {
     }
 
     /// A complete reply without an example: its end, before its first check.
-    static func fallback(_ parts: [NightSection]) -> NightInteractivePosition? {
+    /// An earlier reply (`replyComplete` false) needs a check to sit before:
+    /// without one, its end may be where it was cut off.
+    static func fallback(_ parts: [NightSection], replyComplete: Bool = true) -> NightInteractivePosition? {
         guard let last = parts.indices.last, !parts[last].blocks.isEmpty else { return nil }
         for (s, part) in parts.enumerated() {
             if let q = part.blocks.firstIndex(where: isQuiz) {
@@ -308,6 +360,7 @@ enum NightInteractiveAnchor {
                 break
             }
         }
+        guard replyComplete else { return nil }
         return NightInteractivePosition(section: last, afterBlock: parts[last].blocks.count - 1)
     }
 
@@ -317,8 +370,26 @@ enum NightInteractiveAnchor {
     }
 }
 
+/// Where the card went in each thread during this run of the app, by the
+/// thread's first message (its id survives a reopen). Kept in memory
+/// only: nothing is stored.
+@MainActor
+final class NightInteractiveMemory {
+    static let shared = NightInteractiveMemory()
+    private var placements: [UUID: NightInteractivePlacement] = [:]
+
+    subscript(thread: UUID) -> NightInteractivePlacement? {
+        get { placements[thread] }
+        set { placements[thread] = newValue }
+    }
+}
+
 /// `NightInteractiveAnchor.placement`, worked out once per change of the
-/// thread (the list asks on every streamed delta).
+/// thread (the list asks on every streamed delta), and kept: once the card
+/// has a place it stays there while its reply is in the thread (a Retry
+/// replaces the reply, and the rule decides again), including when the
+/// lesson is reopened in the same run of the app (`NightInteractiveMemory`).
+/// A crisis line still removes it.
 @MainActor
 final class NightInteractiveIndex {
     private struct Key: Equatable {
@@ -327,9 +398,19 @@ final class NightInteractiveIndex {
         let status: ChatMessage.Status
     }
 
+    private let memory: NightInteractiveMemory
     private var lessonID: String?
     private var keys: [Key]?
     private var cached: NightInteractivePlacement?
+
+    init() {
+        memory = .shared
+    }
+
+    /// Tests: a memory of their own.
+    init(memory: NightInteractiveMemory) {
+        self.memory = memory
+    }
 
     func placement(lessonID: String?, messages: [ChatMessage], crisisReplies: Set<UUID>,
                    sections: (ChatMessage) -> [NightSection]) -> NightInteractivePlacement? {
@@ -338,9 +419,20 @@ final class NightInteractiveIndex {
         if keys == self.keys, lessonID == self.lessonID { return cached }
         self.keys = keys
         self.lessonID = lessonID
-        cached = NightInteractiveAnchor.placement(lessonID: lessonID, messages: messages,
-                                                  crisisReplies: crisisReplies, sections: sections)
+        cached = resolve(lessonID: lessonID, messages: messages, crisisReplies: crisisReplies, sections: sections)
         return cached
+    }
+
+    private func resolve(lessonID: String?, messages: [ChatMessage], crisisReplies: Set<UUID>,
+                         sections: (ChatMessage) -> [NightSection]) -> NightInteractivePlacement? {
+        guard crisisReplies.isEmpty, let thread = messages.first?.id else { return nil }
+        if let kept = memory[thread], messages.contains(where: { $0.id == kept.messageID }) {
+            return kept
+        }
+        let found = NightInteractiveAnchor.placement(lessonID: lessonID, messages: messages,
+                                                     crisisReplies: crisisReplies, sections: sections)
+        if let found { memory[thread] = found }
+        return found
     }
 }
 
@@ -407,18 +499,25 @@ enum NightTokenizerCopy {
     static let steps = [step1, step2, step3, step4]
 
     static let spaceNote = "A dot marks a space: it travels with the word after it."
-    static let idNote = "The numbers under the tokens are illustrative IDs. Real IDs depend on the model\u{2019}s tokenizer."
+    static let idNote = "The numbers under the tokens are illustrative IDs, from GPT-4\u{2019}s tokenizer. "
+        + "IDs depend on the model\u{2019}s tokenizer, so other models can number them differently."
 
     static let listLabel = "a list of numbers"
     static let listMore = "+ thousands more"
-    static let listNote = "Illustrative values. In a real model, each token\u{2019}s list has thousands of numbers, learned in training."
+    /// "Like map coordinates": the link from step 3's list to step 4's map.
+    static let listNote = "Illustrative values. A real model\u{2019}s list has thousands of numbers, learned in training, "
+        + "and they work like map coordinates."
 
     static let startPrompt = "Start the sentence:"
-    static let sketch = "A 2-D sketch: the real space has thousands of dimensions."
+    /// "Drawn by hand": the app runs a real model, so the map says its
+    /// places weren't computed by one.
+    static let sketch = "A 2-D sketch, drawn by hand: the real space has thousands of dimensions."
     /// The accuracy rule, in two short sentences: the token's own numbers
-    /// are fixed; the later layers, reading the words before it, shift the
-    /// meaning. ("Before", not "around": the model reads left to right.)
-    static let howItMoves = "The token \u{201C}bank\u{201D} always starts with the same list of numbers. Then the model\u{2019}s later layers read the words before it, which shifts what \u{201C}bank\u{201D} means."
+    /// are where it starts; the later layers mix in the words before it, and
+    /// its numbers shift (so it moves on the map). ("Before", not "around":
+    /// the model reads left to right.)
+    static let howItMoves = "The token \u{201C}bank\u{201D} always starts with the same list of numbers. "
+        + "Then the model\u{2019}s later layers mix in the words before it, and those numbers shift."
 
     // The compact card
     static let compactLine = "See \u{201C}I went to the bank\u{201D} become tokens, then numbers, then a place on a map of meaning."
@@ -440,7 +539,7 @@ enum NightTokenizerCopy {
         let list = tokens.map(\.spoken).joined(separator: ", ")
         let ids = tokens.map { String($0.id) }.joined(separator: ", ")
         return "\(NightTokenizer.sentence), cut into \(tokens.count) tokens: \(list). "
-            + "Their IDs, illustrative: \(ids)."
+            + "Their IDs, illustrative, from GPT-4\u{2019}s tokenizer: \(ids)."
     }
 
     static var numbersAccessibility: String {
@@ -454,15 +553,17 @@ enum NightTokenizerCopy {
         return number < 0 ? "minus \(text)" : text
     }
 
+    static let mapIntro = "Map of meaning, a 2-D sketch drawn by hand."
+
     /// The map in words, for VoiceOver: what the picture shows.
     static func mapSummary(_ context: NightTokenizerContext?) -> String {
         switch context {
         case nil:
-            return "Map of meaning, a 2-D sketch. bank starts between two groups of words: "
+            return "\(mapIntro) bank starts between two groups of words: "
                 + "loan and deposit, and shore and water."
         case .some(let context):
             let near = context.neighbours.joined(separator: " and ")
-            return "Map of meaning, a 2-D sketch. With \u{201C}\(context.opening)\u{201D} before it, "
+            return "\(mapIntro) With \u{201C}\(context.opening)\u{201D} before it, "
                 + "bank is near \(near)."
         }
     }

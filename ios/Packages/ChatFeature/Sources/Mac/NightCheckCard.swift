@@ -125,7 +125,7 @@ struct NightCheckCard: View {
             guard quiz.options.indices.contains(index) else { return false }
             choose(index)
         case .move(let step):
-            pick = NightCheckKeys.moved(pick, by: step, optionCount: quiz.options.count)
+            setPick(NightCheckKeys.moved(pick, by: step, optionCount: quiz.options.count))
         case .lockIn:
             guard pick != nil else { return false }
             lockIn()
@@ -137,7 +137,15 @@ struct NightCheckCard: View {
 
     private func choose(_ index: Int) {
         guard answerable, quiz.options.indices.contains(index) else { return }
+        setPick(index)
+    }
+
+    /// A new pick, by a key or a click: the check has the student's
+    /// attention, so a control holding the lesson's keys (Lesson 1.1's
+    /// interactive) lets go, and Return locks this pick in.
+    private func setPick(_ index: Int?) {
         pick = index
+        router?.checkPicked()
     }
 
     private func lockIn() {
@@ -155,10 +163,10 @@ struct NightCheckCard: View {
             lockIn()
             return .handled
         case .upArrow:
-            pick = NightCheckKeys.moved(pick, by: -1, optionCount: quiz.options.count)
+            setPick(NightCheckKeys.moved(pick, by: -1, optionCount: quiz.options.count))
             return .handled
         case .downArrow:
-            pick = NightCheckKeys.moved(pick, by: 1, optionCount: quiz.options.count)
+            setPick(NightCheckKeys.moved(pick, by: 1, optionCount: quiz.options.count))
             return .handled
         default:
             guard let index = NightCheckKeys.optionIndex(forKey: press.characters,
@@ -230,9 +238,14 @@ final class NightCheckKeyRouter {
     private(set) var activeID: UUID?
     @ObservationIgnored private var handler: ((NightCheckKeys.Key) -> Bool)?
     /// Other controls in the lesson that have the keyboard (Lesson 1.1's
-    /// interactive, while one of its chips has focus): their Space, Return
-    /// and letters stay theirs, and the check doesn't wear the ring.
+    /// interactive, while one of its chips has focus from the keyboard):
+    /// Return stays theirs, and the check doesn't wear the ring. A–D, 1–4
+    /// and ↑/↓ still answer the check (the chips don't use them).
     private(set) var holders: Set<UUID> = []
+    /// Counts the waiting check's picks (a key or a click). A holder
+    /// watches it and lets go of the keyboard, so Return then locks the
+    /// pick in.
+    private(set) var checkPicks = 0
 
     /// Whether a control other than the check has the lesson's keys.
     var keysAreElsewhere: Bool { !holders.isEmpty }
@@ -244,6 +257,12 @@ final class NightCheckKeyRouter {
         } else if holders.contains(id) {
             holders.remove(id)
         }
+    }
+
+    /// The waiting check got a pick: every holder lets go.
+    func checkPicked() {
+        if !holders.isEmpty { holders.removeAll() }
+        checkPicks += 1
     }
 
     func register(_ id: UUID, handler: @escaping (NightCheckKeys.Key) -> Bool) {
@@ -258,10 +277,11 @@ final class NightCheckKeyRouter {
     }
 
     /// Hands `key` to the waiting check; false when there is none, it
-    /// didn't take it (Return with nothing picked), or another control has
-    /// the keyboard.
+    /// didn't take it (Return with nothing picked), or it is Return while
+    /// another control has the keyboard (Return picks that control; it
+    /// never locks in the check from there).
     func route(_ key: NightCheckKeys.Key) -> Bool {
-        guard holders.isEmpty else { return false }
+        if key == .lockIn, !holders.isEmpty { return false }
         return handler?(key) ?? false
     }
 }

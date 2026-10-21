@@ -12,15 +12,20 @@ import DesignSystem
 /// stored or tokenised. The opening the student picks lives in the lesson's
 /// `NightTokenizerState`, so a reply's re-render never resets it.
 ///
-/// - Keyboard: Tab reaches each opening; Space or Return picks it. While an
-///   opening has focus the lesson's check doesn't take the keys.
+/// - Keyboard: Tab reaches each opening (and "Try it"); Space or Return
+///   picks it. While an opening has focus from the keyboard, Return is its
+///   own, not the lesson's check's; A–D and the arrows still answer the
+///   check, and a pick there takes the keys back. A click picks an opening
+///   without keeping the keyboard, so the check's keys keep working.
 /// - VoiceOver: each step is a header with a spoken summary; the map reads
 ///   as one sentence ("bank is near loan and deposit"), and a pick says the
 ///   finished sentence and where "bank" went.
 /// - Reduce Motion: "bank" crossfades to its new place instead of moving.
 /// - Increase Contrast: no glows or stars, solid edges, the HC tokens.
 /// - Narrower than 440 pt (a 700 pt window with the sidebar open) it starts
-///   as a compact "Try it" card that opens in place.
+///   as a compact "Try it" card that opens in place: VoiceOver moves to the
+///   card's title, and the keyboard (when it opened it) to the first
+///   opening.
 struct NightInteractiveCard: View {
     static let scrollID = "night-interactive"
     static let mapScrollID = "night-interactive-map"
@@ -31,7 +36,12 @@ struct NightInteractiveCard: View {
     @State private var local = NightTokenizerState()
     @State private var width: CGFloat = 0
     @State private var keyHolder = UUID()
+    @State private var tryItKeyHolder = UUID()
     @FocusState private var focusedOpening: NightTokenizerContext?
+    @FocusState private var tryItFocused: Bool
+    @AccessibilityFocusState private var titleHasVoiceOver: Bool
+    /// "Try it" was pressed: where focus goes once the full card is there.
+    @State private var focusOnOpen: (voiceOver: Bool, keyboard: Bool) = (false, false)
 
     private var state: NightTokenizerState { shared ?? local }
 
@@ -55,12 +65,23 @@ struct NightInteractiveCard: View {
         } action: { newWidth in
             width = newWidth
         }
-        // An opening with the keyboard keeps it: the lesson's waiting check
-        // doesn't take Space, Return or the letters meanwhile.
+        // An opening with the keyboard keeps Return: the lesson's waiting
+        // check doesn't lock in from it meanwhile.
         .onChange(of: focusedOpening) { _, opening in router?.hold(keyHolder, opening != nil) }
-        .onDisappear { router?.hold(keyHolder, false) }
+        .onChange(of: tryItFocused) { _, focused in router?.hold(tryItKeyHolder, focused) }
+        // The check got a pick (a letter, an arrow or a click): it has the
+        // student's attention, so the opening lets go of the keyboard.
+        .onChange(of: router?.checkPicks) { _, _ in
+            if focusedOpening != nil { focusedOpening = nil }
+            if tryItFocused { tryItFocused = false }
+        }
+        .onDisappear {
+            router?.hold(keyHolder, false)
+            router?.hold(tryItKeyHolder, false)
+        }
+        // The title (a header) names the card: no label here, or VoiceOver
+        // says it twice.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(NightTokenizerCopy.cardAccessibility)
     }
 
     // MARK: The compact card
@@ -73,18 +94,33 @@ struct NightInteractiveCard: View {
                 .foregroundStyle(Night.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             // A lit capsule, not glass: glass chrome floats over the
-            // canvas; this sits inside a card.
-            Button {
-                withAnimation(night.animation(Night.Motion.layout)) { state.expanded = true }
-            } label: {
-                Label(NightTokenizerCopy.tryIt, systemImage: "hand.tap")
-            }
-            .buttonStyle(NightInlineCapsuleStyle())
-            .nightFocusRing(Capsule())
-            .help(NightTokenizerCopy.tryItHint)
-            .accessibilityHint(NightTokenizerCopy.tryItHint)
+            // canvas; this sits inside a card. In the Tab loop whatever the
+            // Full Keyboard Access setting, like the openings.
+            NightTryItControl(focus: $tryItFocused) { open(fromKeyboard: $0) }
         }
         .padding(Night.Space.card)
+    }
+
+    /// Opens the compact card in place. The control that was pressed goes,
+    /// so VoiceOver moves to the card's title and, when the keyboard opened
+    /// it, the keyboard moves to the first opening (a click shows no ring).
+    private func open(fromKeyboard: Bool) {
+        focusOnOpen = (true, fromKeyboard)
+        // "Try it" goes: it lets go of the keyboard (and of Return) first.
+        if tryItFocused { tryItFocused = false }
+        router?.hold(tryItKeyHolder, false)
+        withAnimation(night.animation(Night.Motion.layout)) { state.expanded = true }
+    }
+
+    /// The full card is on screen after "Try it": move focus into it.
+    private func focusAfterOpening() {
+        guard focusOnOpen.voiceOver else { return }
+        let keyboard = focusOnOpen.keyboard
+        focusOnOpen = (false, false)
+        DispatchQueue.main.async {
+            titleHasVoiceOver = true
+            if keyboard { focusedOpening = NightTokenizerContext.allCases.first }
+        }
     }
 
     // MARK: The card
@@ -99,6 +135,7 @@ struct NightInteractiveCard: View {
                 .id(Self.mapScrollID)
         }
         .padding(Night.Space.card)
+        .onAppear(perform: focusAfterOpening)
     }
 
     private var header: some View {
@@ -112,6 +149,7 @@ struct NightInteractiveCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(NightTokenizerCopy.cardAccessibility)
         .accessibilityAddTraits(.isHeader)
+        .accessibilityFocused($titleHasVoiceOver)
     }
 
     private func step<Content: View>(_ number: Int, _ title: String,
@@ -430,7 +468,12 @@ private struct NightOpeningChip: View {
         }
         .contentShape(shape)
         .onHover { hovering = $0 }
-        .onTapGesture(perform: onChoose)
+        .onTapGesture {
+            onChoose()
+            // A click picks without keeping the keyboard (a click focuses an
+            // `.edit` view): the check's A–D and Return keep working.
+            if focus.wrappedValue != nil { focus.wrappedValue = nil }
+        }
         .focusable(true, interactions: .edit)
         .focused(focus, equals: context)
         .focusEffectDisabled()
@@ -455,34 +498,53 @@ private struct NightOpeningChip: View {
     }
 }
 
-/// A capsule inside a lit card: `surfaceRaised` with an `ink3` edge (solid
-/// under Increase Contrast), `accentText` label, Night's hover and press.
-private struct NightInlineCapsuleStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        NightInlineCapsule(configuration: configuration)
-    }
-}
-
-private struct NightInlineCapsule: View {
-    let configuration: ButtonStyleConfiguration
+/// "Try it": a capsule inside a lit card (`surfaceRaised` with an `ink3`
+/// edge, solid under Increase Contrast; an `accentText` label; Night's
+/// hover). In the Tab loop whatever the Full Keyboard Access setting, as
+/// the openings are, with Night's ring; Space or Return opens the card.
+private struct NightTryItControl: View {
+    var focus: FocusState<Bool>.Binding
+    /// `true`: opened from the keyboard.
+    let onOpen: (Bool) -> Void
     @NightSettings private var night
     @State private var hovering = false
 
     var body: some View {
         let shape = Capsule()
-        configuration.label
+        Label(NightTokenizerCopy.tryIt, systemImage: "hand.tap")
             .nightFont(.headline)
             .foregroundStyle(Night.accentText)
             .padding(.horizontal, 16)
             .frame(minHeight: 36)
             .background {
                 shape.fill(Night.surfaceRaised)
-                shape.fill(configuration.isPressed ? Night.ink.opacity(0.08)
-                           : Night.lumen.opacity(hovering ? Night.Tint.hover : 0))
+                shape.fill(Night.lumen.opacity(hovering ? Night.Tint.hover : 0))
             }
             .overlay(shape.strokeBorder(night.increasedContrast ? Night.hairline : Night.ink3.opacity(0.5), lineWidth: 1))
             .contentShape(shape)
             .onHover { hovering = $0 }
+            .onTapGesture { onOpen(false) }
+            .focusable(true, interactions: .edit)
+            .focused(focus)
+            .focusEffectDisabled()
+            .overlay {
+                if focus.wrappedValue {
+                    shape.inset(by: -3 - night.focusRingWidth / 2)
+                        .stroke(Night.focusRing, lineWidth: night.focusRingWidth)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .onKeyPress(keys: [.space, .return], phases: .down) { _ in
+                onOpen(true)
+                return .handled
+            }
+            .help(NightTokenizerCopy.tryItHint)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(NightTokenizerCopy.tryIt)
+            .accessibilityHint(NightTokenizerCopy.tryItHint)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onOpen(false) }
     }
 }
 
@@ -574,8 +636,8 @@ struct NightMeaningSkyView: View {
             .position(p)
     }
 
-    /// What moves with the opening: the trail from the start, the lines to
-    /// the neighbours and the start's caption.
+    /// What moves with the opening: the trail from the start and the lines
+    /// to the neighbours; and the start's caption (shown in every state).
     private func moving(_ size: CGSize) -> some View {
         let bankPoint = NightMeaningMap.scaled(NightMeaningMap.bank(context), in: size)
         let start = NightMeaningMap.scaled(NightMeaningMap.start, in: size)
@@ -597,7 +659,6 @@ struct NightMeaningSkyView: View {
                 .foregroundStyle(NightSky.ink2)
                 .fixedSize()
                 .position(x: caption.midX, y: caption.midY)
-                .opacity(context == nil ? 0 : 1)
         }
     }
 
