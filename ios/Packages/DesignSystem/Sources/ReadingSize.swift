@@ -69,13 +69,13 @@ public enum ReadingSize: String, CaseIterable, Sendable, Codable {
 public extension View {
     /// Raise the Dynamic Type size to at least `size`'s floor. A larger
     /// system size is kept as it is.
-    @ViewBuilder
+    ///
+    /// One modifier for every size (`.standard` is the range from the
+    /// smallest size up, which changes nothing), never two branches: the
+    /// wrapped view keeps its identity when the size changes, so its state
+    /// (the Text size panel's `expanded`, a lesson's chat) survives a pick.
     func readingSizeFloor(_ size: ReadingSize) -> some View {
-        if let floor = size.minimumDynamicTypeSize {
-            dynamicTypeSize(floor...)
-        } else {
-            self
-        }
+        dynamicTypeSize(size.minimumDynamicTypeSize.map { $0... } ?? (DynamicTypeSize.xSmall...))
     }
 }
 

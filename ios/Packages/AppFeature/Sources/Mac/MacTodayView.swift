@@ -18,7 +18,8 @@ import PersistenceKit
 ///   opens Progress. The streak is one quiet line under the greeting — only
 ///   when there is one — since it counts chat days too.
 /// - **Think it through**: one of the current mode's real starter prompts.
-///   It opens a new chat with the prompt in the composer, not sent.
+///   It opens a new chat with the prompt in the composer, not sent. Neither
+///   it nor the week shows on Basics (`showsCards`).
 /// - **Recent chats**, and the iPhone Home's one-time weekly-nudge offer.
 ///
 /// Everything here is read from the on-device stores; nothing in this view
@@ -304,12 +305,16 @@ struct MacTodayView: View {
 
     // MARK: - The week and Think it through
 
+    /// Whether Today shows the week and Think it through. Not on Basics: it
+    /// has no weekly goal (BEGINNER_GUIDE §2.5), and Think it through opens
+    /// the free chat, whose Socratic tutor asks questions back instead of
+    /// answering, which is not what Basics teaches (review 2026-10-22).
+    static func showsCards(track: CurriculumTrack) -> Bool { track == .deepDive }
+
     @ViewBuilder
     private func cards(sideBySide: Bool, now: Date) -> some View {
-        if state.track == .basics {
-            // Basics has no weekly goal (BEGINNER_GUIDE §2.5): Think it
-            // through alone.
-            thinkCard(now: now)
+        if !Self.showsCards(track: state.track) {
+            EmptyView()
         } else if sideBySide {
             // Each card its own height, top-aligned: Think it through has
             // less to say than the week, and no empty room to say it in.

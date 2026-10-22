@@ -4,8 +4,9 @@ import CurriculumFeature
 import EngagementFeature
 import PersistenceKit
 
-/// The last screen of the full first-run flow: where to start, the reminder
-/// switches, and the way into the free chat.
+/// The last screen of the full first-run flow: where to start, one plain
+/// reminder switch ("Remind me to practice"; no streak switch), and the way
+/// into the free chat.
 ///
 /// Two equal choices (BEGINNER_GUIDE §2.1): "I'm new to AI: start with the
 /// Basics" and "Take the Deep dive", each a full-width button that remembers
@@ -43,11 +44,15 @@ struct YourPathStep: View {
                 .background(BrandColor.surface, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
                 #endif
 
+                // One plain switch, no streak: it sits next to the Basics
+                // choice, and Basics has no streak (review 2026-10-22). The
+                // daily streak reminder is in the Progress hub.
                 RemindersSection(
                     store: reminderStore,
                     scheduler: scheduler,
                     streakStore: streakStore,
-                    nextLessonId: MercuriusCurriculum.units.first?.lessons.first?.id
+                    nextLessonId: MercuriusCurriculum.units.first?.lessons.first?.id,
+                    plain: true
                 )
 
                 BrandButton("Just chat instead", style: .ghost, action: onJustChat)

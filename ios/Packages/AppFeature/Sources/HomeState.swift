@@ -42,7 +42,7 @@ struct HomeState: Equatable {
         return HomeState(
             track: track,
             streak: track == .basics ? 0 : max(streak, 0),
-            week: WeeklyPlan.compute(progress: progress, now: now, calendar: calendar),
+            week: WeeklyPlan.compute(progress: progress, track: track, now: now, calendar: calendar),
             next: next,
             resumesNext: resumesNext,
             hasProgress: completed > 0,
@@ -84,6 +84,11 @@ struct HomeState: Equatable {
             return "Review your lessons"
         }
     }
+
+    /// Basics' second Home button: the path, not the free chat (whose
+    /// Socratic tutor asks questions back instead of answering).
+    static let basicsSecondaryTitle = "All Basics lessons"
+    static let basicsSecondaryHint = "Opens the list of Basics lessons"
 
     var primaryActionHint: String {
         switch next {

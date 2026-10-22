@@ -117,6 +117,12 @@ actor StubProgressRemote: ProgressSyncing {
         }
         return remote
     }
+
+    /// The server is updated: it knows Basics and holds `remote`.
+    func update(remote: ProgressSnapshotDTO, refusesBasics: Bool) {
+        self.remote = remote
+        self.refusesBasics = refusesBasics
+    }
 }
 
 extension ProgressItemDTO {

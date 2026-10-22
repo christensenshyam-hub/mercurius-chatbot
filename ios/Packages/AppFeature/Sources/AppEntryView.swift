@@ -166,9 +166,12 @@ struct AppEntryView: View {
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
             .onAppear {
                 // Every re-plan reads this week's lessons, so the weekly
-                // nudges skip a week whose goal is met (AUD-36).
-                scheduler.weekProgress = { [progress = env.progressStore] in
-                    Self.weekProgress(WeeklyPlan.compute(progress: progress))
+                // nudges skip a week whose goal is met (AUD-36). It counts
+                // the course the learner follows, read at each re-plan, so
+                // a Basics learner's lessons count (and the Deep dive's
+                // don't count for them).
+                scheduler.weekProgress = { [progress = env.progressStore, tracks = env.trackStore] in
+                    Self.weekProgress(WeeklyPlan.compute(progress: progress, track: tracks.track))
                 }
                 #if os(iOS) || os(macOS)
                 // Before this, a reminder tapped at cold launch is held by
@@ -343,6 +346,10 @@ struct AppEntryView: View {
                 onStartNext: { startNext(state.next) },
                 onStartChat: {
                     entryTab = .chat
+                    hasEnteredApp = true
+                },
+                onOpenLessons: {
+                    entryTab = .curriculum
                     hasEnteredApp = true
                 },
                 showsReminderCard: ReminderCardStore.shows(

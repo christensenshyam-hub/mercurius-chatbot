@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import DesignSystem
+import SwiftUI
 @testable import CurriculumFeature
 
 /// The Basics course's data, its ids and opener tags, its own progress, and
@@ -317,5 +318,12 @@ struct BasicsCurriculumTests {
         #expect(ReadingSize.largest.offersChoice(atFlooredSize: .xxxLarge))
         #expect(!ReadingSize.largest.offersChoice(atFlooredSize: .accessibility1))
         #expect(!ReadingSize.larger.offersChoice(atFlooredSize: .xxxLarge))
+    }
+
+    @Test("The Basics path is \"Lessons\", not the school word \"Curriculum\" (review 2026-10-22)")
+    func pathTitle() {
+        #expect(CurriculumView<EmptyView>.title(unitId: nil, track: .basics) == "Lessons")
+        #expect(CurriculumView<EmptyView>.title(unitId: nil, track: .deepDive) == "Curriculum")
+        #expect(CurriculumView<EmptyView>.title(unitId: "unit_1", track: .deepDive) == CurriculumView<EmptyView>.title(unitId: "unit_1"))
     }
 }

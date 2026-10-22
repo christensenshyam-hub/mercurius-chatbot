@@ -70,7 +70,7 @@ public struct CurriculumView<TopBar: View>: View {
         .readingSizeFloor(track == .basics ? tracks.basicsReadingSize : .standard)
         .background(BrandColor.background.ignoresSafeArea())
 #if os(iOS)
-        .navigationTitle(Self.title(unitId: unitId))
+        .navigationTitle(Self.title(unitId: unitId, track: track))
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
@@ -110,6 +110,13 @@ public struct CurriculumView<TopBar: View>: View {
 }
 
 extension CurriculumView {
+    /// The whole path's title for a course: "Lessons" on Basics (plain
+    /// words, review 2026-10-22), "Curriculum" on the Deep dive as before.
+    static func title(unitId: String?, track: CurriculumTrack) -> String {
+        if track == .basics, unitId == nil { return BasicsPathCopy.title }
+        return title(unitId: unitId)
+    }
+
     /// "Curriculum" for the whole path; "Unit 1 · <title>" for one unit.
     static func title(unitId: String?) -> String {
         guard let unitId, let unit = MercuriusCurriculum.unit(withId: unitId) else { return "Curriculum" }

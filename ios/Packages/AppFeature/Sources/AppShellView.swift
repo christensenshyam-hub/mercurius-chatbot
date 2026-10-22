@@ -214,8 +214,10 @@ struct AppShellView: View {
                 .tabItem { Label("New Chat", systemImage: "square.and.pencil") }
                 .tag(Tab.newChat)
 
+            // "Lessons" for a Basics learner (plain words, review
+            // 2026-10-22); the Deep dive keeps "Curriculum".
             curriculumTab
-                .tabItem { Label("Curriculum", systemImage: "book") }
+                .tabItem { Label(trackStore.track == .basics ? BasicsPathCopy.title : "Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
         }
         .tint(BrandColor.accent)

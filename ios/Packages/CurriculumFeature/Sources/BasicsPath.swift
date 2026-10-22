@@ -3,7 +3,10 @@ import DesignSystem
 
 /// The words on Basics' path (BEGINNER_GUIDE §2.1, §2.5): progress as lessons
 /// finished, in words, never a streak or a percentage.
-enum BasicsPathCopy {
+public enum BasicsPathCopy {
+    /// The path's title and its tab, in place of "Curriculum".
+    public static let title = "Lessons"
+
     static func finished(done: Int, total: Int) -> String {
         switch done {
         case 0: return "\(total) short lessons. Start with the first one."

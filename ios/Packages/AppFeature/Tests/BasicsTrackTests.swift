@@ -191,4 +191,48 @@ struct BasicsTrackTests {
         #expect(!CurriculumProgressSync.isRefusal(StubFailure()))
         #expect(CurriculumProgressSync.isRefusal(APIError.invalidRequest(reason: nil)))
     }
+
+    @Test("The refusal is remembered: later pulls and pushes send the Deep dive alone, and an unchanged snapshot goes up once (review 2026-10-22)")
+    func refusalRemembered() async throws {
+        let store = makeStore()
+        store.markCompleted("b1_l1")
+        store.markCompleted("u1_l1")
+        let remote = StubProgressRemote(refusesBasics: true)
+        let sync = CurriculumProgressSync(progress: store, remote: remote, sessionId: { "sid-1" },
+                                          debounce: .milliseconds(20), pullInterval: .zero)
+        for _ in 0..<3 { await sync.pullOnLaunch() }
+        var puts = await remote.puts
+        #expect(puts.map { $0.items.map(\.id) } == [["b1_l1", "u1_l1"], ["u1_l1"]],
+                "one refused PUT and one Deep-dive PUT, then nothing for an unchanged snapshot")
+
+        // A new Deep-dive lesson goes up without the Basics ids (no new 400).
+        store.markCompleted("u1_l2")
+        sync.pushSoon()
+        #expect(await eventually(timeout: .seconds(30)) { await remote.puts.count == 3 })
+        puts = await remote.puts
+        #expect(puts.last?.items.map(\.id) == ["u1_l1", "u1_l2"])
+
+        // A Basics-only change has nothing this server takes: no request.
+        store.markCompleted("b1_l2")
+        sync.pushSoon()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(await remote.puts.count == 3)
+    }
+
+    @Test("A pull that shows a Basics id clears the refusal: the full push goes again")
+    func refusalClears() async throws {
+        let store = makeStore()
+        store.markCompleted("b1_l1")
+        let remote = StubProgressRemote(refusesBasics: true)
+        let sync = CurriculumProgressSync(progress: store, remote: remote, sessionId: { "sid-1" }, pullInterval: .zero)
+        await sync.pullOnLaunch()
+        await sync.pullOnLaunch()
+        #expect(await remote.puts.map { $0.items.map(\.id) } == [["b1_l1"]], "refused once; nothing else to send, then nothing")
+
+        // The server ships Basics and now holds b1_l1.
+        await remote.update(remote: ProgressSnapshotDTO(curriculumVersion: 1, lessons: [.lesson("b1_l1")]), refusesBasics: false)
+        store.markCompleted("b1_l2")
+        await sync.pullOnLaunch()
+        #expect(await remote.puts.map { $0.items.map(\.id) } == [["b1_l1"], ["b1_l1", "b1_l2"]])
+    }
 }

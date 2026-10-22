@@ -15,7 +15,10 @@ import SettingsFeature
 ///
 /// - **The next stop** ("Start Lesson 1", "Continue · Lesson 3: …", "Take the
 ///   Unit 1 check") — opens it directly, over the learning path.
-/// - **Chat with Merc** — opens the free Discussion chat (Chat tab).
+/// - **Chat with Merc** — opens the free Discussion chat (Chat tab). On
+///   Basics it is **All Basics lessons** instead (the path): the free chat
+///   is the student-focused Socratic tutor, which asks questions back, and
+///   that is not what Basics teaches a chatbot does (review 2026-10-22).
 ///
 /// Above them, "This week · 1 of 2" tracks the weekly goal. Installs that
 /// finished onboarding before the weekly nudges existed get a one-time card
@@ -32,6 +35,8 @@ struct HomeView: View {
     private let state: HomeState
     private let onStartNext: () -> Void
     private let onStartChat: () -> Void
+    /// Basics' second button: the list of Basics lessons.
+    private let onOpenLessons: () -> Void
     private let showsReminderCard: Bool
     private let onAcceptReminders: () -> Void
     private let onDismissReminderCard: () -> Void
@@ -40,6 +45,7 @@ struct HomeView: View {
         state: HomeState,
         onStartNext: @escaping () -> Void,
         onStartChat: @escaping () -> Void,
+        onOpenLessons: @escaping () -> Void = {},
         showsReminderCard: Bool = false,
         onAcceptReminders: @escaping () -> Void = {},
         onDismissReminderCard: @escaping () -> Void = {}
@@ -47,6 +53,7 @@ struct HomeView: View {
         self.state = state
         self.onStartNext = onStartNext
         self.onStartChat = onStartChat
+        self.onOpenLessons = onOpenLessons
         self.showsReminderCard = showsReminderCard
         self.onAcceptReminders = onAcceptReminders
         self.onDismissReminderCard = onDismissReminderCard
@@ -240,8 +247,14 @@ struct HomeView: View {
                 .accessibilityHint(state.primaryActionHint)
                 .accessibilityIdentifier("home.nextStop")
 
-            DuoButton("Chat with Merc", style: .secondary, action: onStartChat)
-                .accessibilityHint("Opens a free-form conversation with the tutor")
+            if state.track == .basics {
+                DuoButton(HomeState.basicsSecondaryTitle, style: .secondary, action: onOpenLessons)
+                    .accessibilityHint(HomeState.basicsSecondaryHint)
+                    .accessibilityIdentifier("home.allLessons")
+            } else {
+                DuoButton("Chat with Merc", style: .secondary, action: onStartChat)
+                    .accessibilityHint("Opens a free-form conversation with the tutor")
+            }
         }
         // Cap the CTA width on larger devices (iPad) so the buttons
         // don't stretch across the entire screen.

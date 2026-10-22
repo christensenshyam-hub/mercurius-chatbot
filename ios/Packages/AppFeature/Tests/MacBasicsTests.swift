@@ -109,5 +109,11 @@ struct MacBasicsTests {
                                        progress: progress)
         #expect(done.title == "You've finished the Basics")
     }
+
+    @Test("Today on Basics shows no Think it through (the Socratic free chat) and no week (review 2026-10-22)")
+    func todayHasNoSocraticCard() {
+        #expect(!MacTodayView.showsCards(track: .basics))
+        #expect(MacTodayView.showsCards(track: .deepDive), "the Deep dive's Today is unchanged")
+    }
 }
 #endif

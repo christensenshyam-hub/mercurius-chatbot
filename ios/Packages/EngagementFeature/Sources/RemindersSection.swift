@@ -6,6 +6,11 @@ import PersistenceKit
 /// and the daily streak reminder (+ its time). Each switch turns on only its
 /// own reminder, through `ReminderEnabler`, which asks for notification
 /// permission on enable.
+///
+/// `plain` is the first-run "Your path" form (review 2026-10-22): one switch
+/// in plain words for the weekly nudges, "Remind me to practice", and no
+/// streak switch, since it sits next to the Basics choice and Basics has no
+/// streak. The daily streak reminder stays in the Progress hub.
 /// Self-contained in EngagementFeature so it doesn't pull SettingsFeature
 /// into the dependency.
 public struct RemindersSection: View {
@@ -17,6 +22,8 @@ public struct RemindersSection: View {
     private let streakStore: StreakStore?
     /// The lesson a tapped reminder opens; `nil` opens the app as usual.
     private let nextLessonId: String?
+    /// One plain weekly switch, no streak switch (onboarding).
+    private let plain: Bool
 
     @Environment(\.scenePhase) private var scenePhase
     /// Whether iOS currently lets Mercurius post notifications. A switch only
@@ -35,12 +42,24 @@ public struct RemindersSection: View {
         store: ReminderStore,
         scheduler: NotificationScheduler,
         streakStore: StreakStore? = nil,
-        nextLessonId: String? = nil
+        nextLessonId: String? = nil,
+        plain: Bool = false
     ) {
         self.store = store
         self.scheduler = scheduler
         self.streakStore = streakStore
         self.nextLessonId = nextLessonId
+        self.plain = plain
+    }
+
+    /// The words on the switches.
+    enum Copy {
+        static let weeklyTitle = "Weekly nudges (Wed & Sun)"
+        static let weeklyDetail = "Sunday at 6 PM and Wednesday at 7 PM. None once you've done two lessons that week."
+        static let dailyTitle = "Daily streak reminder"
+        static let dailyDetail = "Only while you have a streak going."
+        static let plainTitle = "Remind me to practice"
+        static let plainDetail = "Twice a week: Sunday at 6 PM and Wednesday at 7 PM."
     }
 
     public var body: some View {
@@ -49,13 +68,15 @@ public struct RemindersSection: View {
                 .font(BrandFont.subheading)
                 .foregroundStyle(BrandColor.text)
 
-            toggle(.weekly, title: "Weekly nudges (Wed & Sun)",
-                   detail: "Sunday at 6 PM and Wednesday at 7 PM. None once you've done two lessons that week.")
+            if plain {
+                toggle(.weekly, title: Copy.plainTitle, detail: Copy.plainDetail)
+            } else {
+                toggle(.weekly, title: Copy.weeklyTitle, detail: Copy.weeklyDetail)
 
-            toggle(.daily, title: "Daily streak reminder",
-                   detail: "Only while you have a streak going.")
+                toggle(.daily, title: Copy.dailyTitle, detail: Copy.dailyDetail)
+            }
 
-            if store.enabled && authorized {
+            if !plain && store.enabled && authorized {
                 DatePicker(
                     "Time",
                     selection: Binding(get: { timeAsDate() }, set: { setTime($0) }),
