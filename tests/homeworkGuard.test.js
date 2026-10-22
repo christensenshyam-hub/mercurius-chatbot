@@ -130,6 +130,10 @@ describe('findLeak: the red team\'s routes to the answer', () => {
       'Like this: 2x + 3 = 13. 2x = 10. **x = ?**. Check: 2(?) + 3 = 13 ✓, and 15 ÷ 3 = ? − so?',
     );
     assert.equal(g.redactLeaks('Like this: 3x + 5 = 29 → 3x = 24 → x = 8', p), 'Like this: 3x + 5 = 29 → 3x = 24 → x = 8');
+    // The line their own step in words gives is their check, not an example.
+    const wrongOp = g.studentProblems([{ role: 'user', content: 'what is 2x + 9 = 21' }, { role: 'assistant', content: 'What first?' }, { role: 'user', content: 'add 9 to both sides' }]);
+    assert.equal(g.findLeak('Check it: adding 9 to both sides gives 2x + 18 = 30, and the + 9 is still there.', wrongOp), null);
+    assert.equal(g.findLeak('Like this: 2x + 5 = 17, so 2x = 12 and x = 6.', wrongOp).name, 'example');
     // A code example on their answer (4x − 7 = 21; 3x − 5 = 16 is also x = 7)
     // can't be fixed by replacing a value: its line goes (red-team run on 594cd6a).
     assert.equal(g.dropExampleLines('# Solving 3x - 5 = 16\nx = (16 + 5) / 3\nRun it on yours.', problemsOf('solve 4x - 7 = 21')), 'x = (16 + 5) / 3\nRun it on yours.');
