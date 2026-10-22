@@ -39,17 +39,66 @@ final class PageWithASecretCardLayoutTests: XCTestCase {
             .padding(Self.margin)
     }
 
+    /// ImageRenderer draws nothing (a blank image of the right size) past
+    /// about 8,000 px, which the AX5 runs reach; a taller card is drawn in
+    /// slices this tall, each the card's own layout moved up and clipped.
+    private static let sliceHeight = 6000
+
     private func render(_ state: InteractiveDebugState, size: DynamicTypeSize, width: CGFloat) throws -> CGImage {
-        let renderer = ImageRenderer(content: try card(state, size: size, width: width))
-        renderer.scale = 1
-        renderer.isOpaque = false
-        let image = try XCTUnwrap(renderer.cgImage, "the card didn't render at \(size), \(width) pt, \(state)")
-        if let dir = ProcessInfo.processInfo.environment["PAGE_SECRET_RENDER_DIR"] {
-            let name = "page-\(Int(width))-\(size)-\(state.rawValue).png"
-            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
-            try? UIImage(cgImage: image).pngData()?.write(to: url)
+        try renders(state, size: size, width: width).full
+    }
+
+    /// The whole render (its size is right even when it is too tall to
+    /// draw) and the pictures to check: the whole, or its slices.
+    private func renders(_ state: InteractiveDebugState, size: DynamicTypeSize,
+                         width: CGFloat) throws -> (full: CGImage, pictures: [CGImage]) {
+        func draw<V: View>(_ view: V) throws -> CGImage {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 1
+            renderer.isOpaque = false
+            return try XCTUnwrap(renderer.cgImage, "the card didn't render at \(size), \(width) pt, \(state)")
         }
-        return image
+        let full = try draw(try card(state, size: size, width: width))
+        var pictures = [full]
+        if full.height > Self.sliceHeight + 1000 {
+            pictures = []
+            for top in stride(from: 0, to: full.height, by: Self.sliceHeight) {
+                let slice = min(Self.sliceHeight, full.height - top)
+                pictures.append(try draw(try card(state, size: size, width: width)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .offset(y: -CGFloat(top))
+                    .frame(height: CGFloat(slice), alignment: .top)
+                    .clipped()))
+            }
+        }
+        if let dir = ProcessInfo.processInfo.environment["PAGE_SECRET_RENDER_DIR"] {
+            for (index, picture) in pictures.enumerated() {
+                let suffix = pictures.count > 1 ? "-\(index + 1)" : ""
+                let url = URL(fileURLWithPath: dir)
+                    .appendingPathComponent("page-\(Int(width))-\(size)-\(state.rawValue)\(suffix).png")
+                try? UIImage(cgImage: picture).pngData()?.write(to: url)
+            }
+        }
+        return (full, pictures)
+    }
+
+    /// The opaque pixels inside the card's own band: none means a blank
+    /// render, which would check nothing.
+    private func drawnPixels(in image: CGImage, width: CGFloat) -> Int {
+        let w = image.width, h = image.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var drawn = 0
+        for y in stride(from: 0, to: h, by: 4) {
+            for x in stride(from: Int(Self.margin) + 2, to: Int(Self.margin + width) - 2, by: 4)
+            where data[(y * w + x) * 4 + 3] > 200 {
+                drawn += 1
+            }
+        }
+        return drawn
     }
 
     /// The opaque pixels outside the card's own frame (alpha above 40).
@@ -75,11 +124,16 @@ final class PageWithASecretCardLayoutTests: XCTestCase {
         for width in Self.widths {
             for size in Self.sizes {
                 for state in Self.states {
-                    let image = try render(state, size: size, width: width)
-                    XCTAssertEqual(CGFloat(image.width), width + 2 * Self.margin,
+                    let drawn = try renders(state, size: size, width: width)
+                    XCTAssertEqual(CGFloat(drawn.full.width), width + 2 * Self.margin,
                                    "the card (\(state)) at \(size) asked for more than \(width) pt")
-                    XCTAssertEqual(strayPixels(in: image, width: width), 0,
-                                   "something of the card (\(state)) at \(size), \(width) pt, lands outside it")
+                    for (index, picture) in drawn.pictures.enumerated() {
+                        XCTAssertGreaterThan(drawnPixels(in: picture, width: width), 0,
+                                             "the card (\(state)) at \(size), \(width) pt, slice \(index + 1) drew nothing")
+                        XCTAssertEqual(strayPixels(in: picture, width: width), 0,
+                                       "something of the card (\(state)) at \(size), \(width) pt, slice \(index + 1), "
+                                       + "lands outside it")
+                    }
                 }
             }
         }
@@ -201,13 +255,23 @@ final class PageWithASecretCardLayoutTests: XCTestCase {
         // the email) in it; the hidden line's box; the search field.
         let content = InteractiveLayout.contentWidth(cardWidth: 343)
         let row = content - PageMetrics.stepInset
-        let well = row - 2 * PageMetrics.phoneWellPadding
+        let well = row - 2 * PageMetrics.phoneWellPadding(usesTables: true)
+        let paper = well - 2 * PageMetrics.paperPadding(usesTables: true)
         let hiddenBox = well - 2 * PageMetrics.hiddenBoxPadding
         let search = row - 2 * PageMetrics.searchPadding
+        let caption = UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: traits)
         let page = PageWithASecretContent.page
         var checks: [(String, UIFont, CGFloat)] = []
+        // The agent's view and the address bar (its tag in words).
         for line in [page.address, page.siteName, page.title] + page.visibleLines {
             checks.append((line, callout, well))
+        }
+        checks.append((PageWithASecretCopy.pageTag, caption, well))
+        // The page as you see it, inside its own padding.
+        checks.append((page.siteName, rounded, paper))
+        checks.append((page.title, rounded, paper))
+        for line in page.visibleLines {
+            checks.append((line, callout, paper))
         }
         checks.append((page.hiddenLine, callout, hiddenBox))
         checks.append((PageWithASecretContent.search, callout, search))

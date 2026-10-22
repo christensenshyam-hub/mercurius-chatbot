@@ -565,7 +565,9 @@ struct PageSearchField: View {
     @Environment(\.interactiveTheme) private var theme
 
     var body: some View {
-        let shape = Capsule()
+        // A capsule, or at the accessibility sizes (where the words take
+        // three lines) a rounded box, so it doesn't swell into an oval.
+        let shape = RoundedRectangle(cornerRadius: theme.usesTables ? 12 : 999, style: .continuous)
         HStack(spacing: 8) {
             if !theme.usesTables {
                 Image(systemName: "magnifyingglass")
@@ -614,7 +616,7 @@ struct PageEmailDraft: View {
             PageLines(lines: email.lines, style: .plain)
                 .accessibilityHidden(true)
         }
-        .padding(theme.platform == .phone ? PageMetrics.phoneWellPadding : 14)
+        .padding(theme.platform == .phone ? PageMetrics.phoneWellPadding(theme) : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.wellEdge, lineWidth: 1))
@@ -671,7 +673,7 @@ struct PageWebPanel: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Copy.pageAccessibility(state.view, saysHidden: state.canSwitchView))
         }
-        .padding(phone ? PageMetrics.phoneWellPadding : 12)
+        .padding(phone ? PageMetrics.phoneWellPadding(theme) : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.wellEdge, lineWidth: 1))
@@ -696,13 +698,22 @@ struct PageWebPanel: View {
                     .foregroundStyle(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(Copy.pageTag)
-                .interactiveText(.caption)
-                .foregroundStyle(theme.ink2)
-                .fixedSize()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .overlay(Capsule().strokeBorder(theme.wellEdge, lineWidth: 1))
+            if theme.usesTables {
+                // Words only: the capsule is decoration, and at AX5 on an SE
+                // a capsule that can't wrap is wider than the page.
+                Text(Copy.pageTag)
+                    .interactiveText(.caption)
+                    .foregroundStyle(theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(Copy.pageTag)
+                    .interactiveText(.caption)
+                    .foregroundStyle(theme.ink2)
+                    .fixedSize()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .overlay(Capsule().strokeBorder(theme.wellEdge, lineWidth: 1))
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(PageWithASecretContent.page.address), \(Copy.pageTag)")
@@ -757,9 +768,12 @@ struct PagePaper: View {
         let page = PageWithASecretContent.page
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         VStack(alignment: .leading, spacing: 6) {
+            // At the accessibility sizes the callout (as the page's other
+            // words), so "Whiskwren" fits an SE's page whole.
             Text(page.siteName)
-                .interactiveText(.heading)
+                .interactiveText(theme.usesTables ? .calloutStrong : .heading)
                 .foregroundStyle(PagePaperStyle.brand.color)
+                .fixedSize(horizontal: false, vertical: true)
             Rectangle()
                 .fill(PagePaperStyle.brand.color.opacity(0.35))
                 .frame(height: 1)
@@ -784,7 +798,7 @@ struct PagePaper: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
         }
-        .padding(12)
+        .padding(PageMetrics.paperPadding(theme))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PagePaperStyle.paper.color, in: shape)
         // One layer: the card's light-mode shadow (the shell's) would
@@ -843,8 +857,14 @@ struct PageAgentText: View {
 enum PageMetrics {
     /// A step's leading bar and the gap after it.
     static let stepInset: CGFloat = 13
-    /// The page panel's and the email's padding on the iPhone.
-    static let phoneWellPadding: CGFloat = BrandSpacing.md
+    /// The page panel's and the email's padding on the iPhone (less at
+    /// the accessibility sizes, where every point of an SE's width is a
+    /// letter).
+    static func phoneWellPadding(usesTables: Bool) -> CGFloat { usesTables ? BrandSpacing.sm : BrandSpacing.md }
+    static func phoneWellPadding(_ theme: InteractiveTheme) -> CGFloat { phoneWellPadding(usesTables: theme.usesTables) }
+    /// The made-up page's own padding (both platforms).
+    static func paperPadding(usesTables: Bool) -> CGFloat { usesTables ? 8 : 12 }
+    static func paperPadding(_ theme: InteractiveTheme) -> CGFloat { paperPadding(usesTables: theme.usesTables) }
     /// The hidden line's dashed box.
     static let hiddenBoxPadding: CGFloat = 10
     /// The search field's sides.
