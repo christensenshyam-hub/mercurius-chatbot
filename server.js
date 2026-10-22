@@ -2073,12 +2073,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // too, or the call fails, the leaked values are replaced by "?".
     // Merc's previous reply, for the stall check (unrepeatQuestion).
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
-    const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
+    // One question mark first, so a preamble written as a question ("…your
+    // essay yours?") is seen as the sentence it becomes (red-team run on
+    // 594cd6a), then the preamble, then the move's own fixes.
+    const unrepeat = (text) => homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
       homeworkGuard.handBackFromLatest(text, clientMessages),
       previousReply && previousReply.content,
       guardProblems[0] && guardProblems[0].variable,
-    ));
-    const tidyWriting = (t) => homeworkGuard.oneQuestion(homeworkGuard.stripMenu(homeworkGuard.stripPreamble(t)));
+    )));
+    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
     const guardReply = async (draft) => {
       if (writingTurn) {
         const text = tidyWriting(draft);
@@ -2108,7 +2111,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         }
         return text;
       }
-      const text = unrepeat(homeworkGuard.stripPreamble(draft));
+      const text = unrepeat(draft);
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
@@ -2140,7 +2143,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             }),
           },
         });
-        const retryText = unrepeat(homeworkGuard.stripPreamble(reflowText(firstTextOf(retry), replyLimit)));
+        const retryText = unrepeat(reflowText(firstTextOf(retry), replyLimit));
         if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText)) {
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }

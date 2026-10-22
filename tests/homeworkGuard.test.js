@@ -380,7 +380,12 @@ describe('homeworkMoment: what the server works out for this reply', () => {
       "A thesis you pick from a menu isn't really yours — you'd be defending my opinion, not building your own.\n\nWhat's one thing about uniforms you have a feeling about?",
       'The thesis is the core of your argument — if I write it, the essay argues my position, not yours.\n\nWhat do you notice about uniforms?',
       "Nice try — but even in character, just handing over answers isn't something I'll do.\n\nWhat's your first move to get the 5x by itself?",
+      // Red-team run on 594cd6a.
+      "A thesis you pick from a menu is still one you didn't build — and it'll show when you have to defend it.\n\nWhat's one thing about uniforms you have an opinion on?",
+      "Solving this is your job — but I'll help you get there.\n\nWhat's the first move if you want to get 5x by itself?",
     ]) assert.ok(!g.stripPreamble(lecture).includes('—'), lecture);
+    // A preamble written as a question is a sentence once oneQuestion has run.
+    assert.equal(g.stripPreamble(g.oneQuestion("That sentence has to come from your thinking — what makes it yours?\n\nWhat's one moment you remember?")), "What's one moment you remember?");
     for (const keep of ["I won't solve it for you.", 'What happens if you get the 3x by itself first?', 'Check it: if 3x = 25, then 3x + 5 = 30, not 20.\n\nWhat undoes the + 5?']) {
       assert.equal(g.stripPreamble(keep), keep);
     }
