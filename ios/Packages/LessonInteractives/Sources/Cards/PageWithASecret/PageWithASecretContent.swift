@@ -5,9 +5,9 @@ import Foundation
 /// step at a time. The student asks an agent to plan the robotics club's
 /// bake sale; it plans, searches, and reads a made-up recipe page that
 /// looks normal. The student guesses what the page does to its plan, then
-/// sees a line they never asked for arrive in the plan, the shopping list
-/// and the draft email, and flips the page to what the agent reads: a
-/// hidden line, white text on white, written for AI assistants.
+/// flips the page to what the agent reads (a hidden line, white text on
+/// white, written for AI assistants), then sees a brand they never asked
+/// for arrive in the plan, the shopping list and the draft email.
 ///
 /// The aha: to an agent, text it reads can act like an instruction, even
 /// text you can't see. The misconception it breaks: "my agent only does
@@ -16,7 +16,7 @@ import Foundation
 /// Everything here is authored: no model runs, nothing is fetched, sent or
 /// stored. Every web address uses the reserved `.example` domain (RFC 2606),
 /// so no real site is named or reachable, and "Whiskwren Kitchen" and
-/// "Crumbright" are invented. The run drafts an email and never sends,
+/// "Flurrow" are invented. The run drafts an email and never sends,
 /// buys, deletes or posts anything (`Action.isIrreversible`).
 ///
 /// The card shows no statistics. The numbers it does show ("Step 4 of 6",
@@ -148,10 +148,13 @@ public enum PageWithASecretContent {
         public let hiddenLine: String
     }
 
+    /// The invented brand behind the hidden line: its address and its
+    /// product both carry it.
+    public static let injectedBrand = "Flurrow"
     /// The address the hidden line slips into the run.
-    public static let injectedAddress = "crumbright.example"
+    public static let injectedAddress = "flurrow.example"
     /// The product the hidden line slips into the run.
-    public static let injectedProduct = "Crumbright Baking Mix"
+    public static let injectedProduct = "Flurrow Baking Mix"
 
     public static let page = Page(
         address: "whiskwren.example",
@@ -172,8 +175,9 @@ public enum PageWithASecretContent {
              detail: .plan(plan.map { Line($0) })),
         Step(phase: .act, action: .searches, line: "It searches the web:",
              detail: .search(search)),
-        Step(phase: .observe, action: .readsPage,
-             line: "It opens the top result, a recipe page that looks completely normal, and reads it:",
+        // An observation, not an action ("reads", not "opens"), and nothing
+        // that hints the page is anything but a page.
+        Step(phase: .observe, action: .readsPage, line: "It reads the top result, a recipe page:",
              detail: .page),
         Step(phase: .plan, action: .plans, line: "It updates its plan:",
              detail: .plan([Line(plan[0], isDone: true)] + plan.dropFirst().map { Line($0) }
@@ -189,7 +193,8 @@ public enum PageWithASecretContent {
     ]
 
     /// The step where the agent reads the page: the prediction sits here,
-    /// and Next can't leave it until a guess is locked.
+    /// and Next can't leave it until a guess is locked and the page has been
+    /// switched to what the agent reads.
     public static var gate: Int {
         steps.firstIndex { $0.detail == .page } ?? 0
     }
@@ -251,6 +256,28 @@ public enum PageWithASecretContent {
         injectedTerms.contains { text.range(of: $0, options: .caseInsensitive) != nil }
     }
 
+    /// The three things the run makes, in order (steps 4, 5 and 6).
+    public enum Output: String, CaseIterable, Sendable {
+        case plan, list, email
+    }
+
+    /// The lines of one output, as it stands at the end of the run.
+    public static func lines(of output: Output) -> [Line] {
+        switch output {
+        case .plan: return lines(of: steps[3])
+        case .list: return lines(of: steps[4])
+        case .email: return lines(of: steps[5])
+        }
+    }
+
+    /// The outputs that carry `term` anywhere (case-insensitive): what the
+    /// reveal's sentence may claim (`PageWithASecretTests`).
+    public static func outputs(carrying term: String) -> [Output] {
+        Output.allCases.filter { output in
+            lines(of: output).contains { $0.text.range(of: term, options: .caseInsensitive) != nil }
+        }
+    }
+
     /// Every web address (host name) in `text`: "whiskwren.example".
     public static func addresses(in text: String) -> [String] {
         let pattern = #"\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b"#
@@ -271,6 +298,17 @@ public enum PageWithASecretContent {
             texts += lines(of: step).map(\.text)
         }
         return texts
+    }
+
+    /// `text` as drawn: a break allowed after each dot inside a web address
+    /// ("whiskwren." then "example"), so at the accessibility sizes an address
+    /// wraps at its dot, never inside a word. Display only: VoiceOver's
+    /// labels use the plain text.
+    public static func breakable(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"(?<=[a-z0-9])\.(?=[a-z])"#, options: [.caseInsensitive])
+        else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(in: text, range: range, withTemplate: ".\u{200B}")
     }
 
     /// "flour" → "Flour".

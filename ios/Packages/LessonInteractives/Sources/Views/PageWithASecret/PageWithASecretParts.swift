@@ -356,15 +356,41 @@ struct PageRunLog: View {
                          title: PageWithASecretCopy.choice) { guess in
                 if state.lock(guess) {
                     InteractiveAccessibility.announce(
-                        "\(InteractiveShellCopy.lockedValue): \(PageWithASecretCopy.choice(guess)).")
+                        "\(InteractiveShellCopy.lockedValue): \(PageWithASecretCopy.choice(guess)). "
+                        + PageWithASecretCopy.switchPromptSpoken)
                 }
             }
-        } else {
-            Text(PageWithASecretCopy.spoiledLead)
-                .interactiveText(.callout)
-                .foregroundStyle(theme.ink2)
+            if state.mustSwitch {
+                PageSwitchPrompt(text: PageWithASecretCopy.switchPrompt)
+                    .transition(theme.transition())
+            }
+        } else if state.mustSwitch {
+            PageSwitchPrompt(text: PageWithASecretCopy.spoiledLead)
+        }
+    }
+}
+
+/// What to do once the guess is locked (or in spoiled mode): switch the
+/// page to what the agent reads. Next waits for it. Accent words, with an
+/// arrow up to the toggle that goes at the accessibility sizes.
+struct PageSwitchPrompt: View {
+    let text: String
+    @Environment(\.interactiveTheme) private var theme
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if !theme.usesTables {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: theme.platform == .phone ? 13 : 12, weight: .bold))
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+                .interactiveText(.calloutStrong)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .foregroundStyle(theme.accentText)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(PageWithASecretCopy.switchPromptSpoken)
     }
 }
 
@@ -384,7 +410,7 @@ struct PageStepRow<Extra: View>: View {
     private var step: PageWithASecretContent.Step { PageWithASecretContent.steps[index] }
 
     /// The bar's width and the gap after it.
-    private let inset: CGFloat = 13
+    private let inset = PageMetrics.stepInset
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
@@ -453,7 +479,7 @@ struct PageLines: View {
     }
 
     private func row(_ index: Int, _ line: PageWithASecretContent.Line) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: PageMetrics.markerSpacing) {
             if style != .plain {
                 Group {
                     if line.isDone {
@@ -482,7 +508,7 @@ struct PageLines: View {
     }
 
     @ViewBuilder private func lineText(_ line: PageWithASecretContent.Line) -> some View {
-        let words = Text(line.text)
+        let words = Text(PageWithASecretContent.breakable(line.text))
             .interactiveText(line.isNew ? .calloutStrong : .callout)
             .foregroundStyle(line.isNew ? theme.ink : (line.isDone ? theme.ink2 : theme.ink))
             .fixedSize(horizontal: false, vertical: true)
@@ -547,11 +573,11 @@ struct PageSearchField: View {
                     .foregroundStyle(theme.ink2)
             }
             Text(words)
-                .interactiveText(.machine)
+                .interactiveText(theme.pageMachineRole)
                 .foregroundStyle(theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, PageMetrics.searchPadding)
         .padding(.vertical, 8)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.wellEdge, lineWidth: 1))
@@ -588,7 +614,7 @@ struct PageEmailDraft: View {
             PageLines(lines: email.lines, style: .plain)
                 .accessibilityHidden(true)
         }
-        .padding(theme.platform == .phone ? BrandSpacing.md : 14)
+        .padding(theme.platform == .phone ? PageMetrics.phoneWellPadding : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.wellEdge, lineWidth: 1))
@@ -599,12 +625,13 @@ struct PageEmailDraft: View {
 
 // MARK: - The page
 
-/// The made-up recipe page the agent opened, with the card's one control:
-/// "What you see | What the agent reads". Off until a guess is locked (it
-/// would answer the prediction).
+/// The made-up recipe page the agent read, with the card's one control:
+/// "You see | The agent reads" ("What you see", "What the agent reads" to
+/// VoiceOver). Not drawn until a guess is locked: before that the page is
+/// just a page, as a student would meet it.
 ///
-/// - What you see: the page as a browser draws it, in its own white
-///   styling. The hidden line is there, white on white: a gap.
+/// - You see: the page as a browser draws it, in its own white styling.
+///   The hidden line is there, white on white, small and fixed in size.
 /// - What the agent reads: the page's text, as text, with the hidden line
 ///   in a dashed box tagged HIDDEN (a shape and words, not only colour),
 ///   lit in lumen when the card is lit.
@@ -619,13 +646,17 @@ struct PageWebPanel: View {
         let shape = RoundedRectangle(cornerRadius: phone ? BrandRadius.lg : 12, style: .continuous)
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
             addressBar
-            InteractiveSegmented(state.canSwitchView ? Copy.toggleName
-                                                     : "\(Copy.toggleName). \(InteractiveShellCopy.guessFirst)",
-                                 options: PageWithASecretContent.PageView.allCases, selection: state.view,
-                                 isEnabled: state.canSwitchView, title: Copy.viewName) { view in
-                if state.show(view) {
-                    InteractiveAccessibility.announce(Copy.pageAccessibility(view, saysHidden: true))
+            // Not drawn before the guess: a toggle to "what the agent
+            // reads" would tell the student it reads something else.
+            if state.canSwitchView {
+                InteractiveSegmented(Copy.toggleName, options: PageWithASecretContent.PageView.allCases,
+                                     selection: state.view, title: Copy.viewName,
+                                     accessibilityTitle: Copy.viewNameSpoken) { view in
+                    if state.show(view) {
+                        InteractiveAccessibility.announce(Copy.pageAccessibility(view, saysHidden: true))
+                    }
                 }
+                .transition(theme.transition())
             }
             ZStack(alignment: .topLeading) {
                 if state.view == .youSee {
@@ -640,10 +671,11 @@ struct PageWebPanel: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Copy.pageAccessibility(state.view, saysHidden: state.canSwitchView))
         }
-        .padding(phone ? BrandSpacing.md : 12)
+        .padding(phone ? PageMetrics.phoneWellPadding : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.wellEdge, lineWidth: 1))
+        .animation(theme.animation(InteractiveMotion.change), value: state.canSwitchView)
     }
 
     /// The address and "made-up page": side by side, or stacked at the
@@ -659,8 +691,8 @@ struct PageWebPanel: View {
                         .font(.system(size: theme.platform == .phone ? 12 : 11, weight: .semibold))
                         .foregroundStyle(theme.ink2)
                 }
-                Text(PageWithASecretContent.page.address)
-                    .interactiveText(.machine)
+                Text(PageWithASecretContent.breakable(PageWithASecretContent.page.address))
+                    .interactiveText(theme.pageMachineRole)
                     .foregroundStyle(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -686,6 +718,8 @@ enum PagePaperStyle {
     static let ink = Shade(0x2B2118)
     static let muted = Shade(0x5B4636)
     static let brand = Shade(0x8A4A12)
+    /// The hidden line's fixed size, in points.
+    static let hiddenSize: CGFloat = 9
 
     struct Shade: Equatable {
         let hex: UInt32
@@ -739,9 +773,13 @@ struct PagePaper: View {
                     .foregroundStyle(PagePaperStyle.muted.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // White text on white: there, and invisible.
+            // White text on white: there, and invisible. Small and fixed (it
+            // doesn't grow with Dynamic Type): at the accessibility sizes a
+            // growing invisible line would be a blank block taller than an
+            // SE's screen, and before the guess any big gap is a hint. Its
+            // words are never lost: the agent's view and VoiceOver say them.
             Text(page.hiddenLine)
-                .interactiveText(.caption)
+                .font(.system(size: PagePaperStyle.hiddenSize))
                 .foregroundStyle(PagePaperStyle.paper.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
@@ -768,8 +806,8 @@ struct PageAgentText: View {
         let box = RoundedRectangle(cornerRadius: 8, style: .continuous)
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(([page.siteName, page.title] + page.visibleLines).enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .interactiveText(.machine)
+                Text(PageWithASecretContent.breakable(line))
+                    .interactiveText(theme.pageMachineRole)
                     .foregroundStyle(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -778,12 +816,12 @@ struct PageAgentText: View {
                     .interactiveText(.eyebrow)
                     .foregroundStyle(theme.accentText)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(page.hiddenLine)
-                    .interactiveText(.machine)
+                Text(PageWithASecretContent.breakable(page.hiddenLine))
+                    .interactiveText(theme.pageMachineRole)
                     .foregroundStyle(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(10)
+            .padding(PageMetrics.hiddenBoxPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.wash(0.16), in: box)
             .overlay(box.strokeBorder(theme.increasedContrast ? theme.accentText : theme.lumen,
@@ -797,4 +835,29 @@ struct PageAgentText: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+/// The run's paddings, named so the iPhone's AX5 word-fit test
+/// (`PageWithASecretCardLayoutTests`) measures the room each line really
+/// has on an SE.
+enum PageMetrics {
+    /// A step's leading bar and the gap after it.
+    static let stepInset: CGFloat = 13
+    /// The page panel's and the email's padding on the iPhone.
+    static let phoneWellPadding: CGFloat = BrandSpacing.md
+    /// The hidden line's dashed box.
+    static let hiddenBoxPadding: CGFloat = 10
+    /// The search field's sides.
+    static let searchPadding: CGFloat = 14
+    /// Between a plan or list line's number (or bullet) and its words.
+    static let markerSpacing: CGFloat = 8
+}
+
+extension InteractiveTheme {
+    /// The page's machine text (the address, the search, the agent's view):
+    /// monospaced, except at the accessibility sizes, where a monospaced
+    /// line holds 8 or 9 characters on an SE and "assistants:" would break
+    /// inside the word. There the agent's view keeps its dashed box and
+    /// tag, and the text is the proportional callout.
+    var pageMachineRole: InteractiveTextRole { usesTables ? .callout : .machine }
 }

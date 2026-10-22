@@ -7,14 +7,18 @@ import Observation
 /// Held by the lesson's `InteractiveStateStore`, so a reply's re-render
 /// never resets it. Never `Codable`, never stored or sent.
 ///
-///     step 1 Plan → 2 Act → 3 Observe (the page) ─guess─▶ 4 Plan → 5 Act → 6 Observe ⇒ reveal
+///     step 1 Plan → 2 Act → 3 Observe (the page) ─guess─▶ ─switch─▶ 4 Plan → 5 Act → 6 Observe ⇒ reveal
 ///
-/// - Next walks the run. It can't leave step 3 until a guess is locked.
-/// - The toggle ("What you see | What the agent reads") is off until the
-///   guess is locked.
+/// - Next walks the run. It can't leave step 3 until a guess is locked AND
+///   the page has been switched to what the agent reads at least once: the
+///   hidden line is the evidence the reveal points to, so no student
+///   reaches the reveal without having seen it.
+/// - The toggle ("You see | The agent reads") isn't drawn until the guess
+///   is locked (it would hint that the agent reads something else).
 /// - Reaching step 6 reveals: the guess beside what happened.
 /// - Spoiled mode (the tutor already named the idea): no guess; the card
-///   opens at the page with the toggle on.
+///   opens at the page with the toggle on, and Next still waits for the
+///   switch.
 @Observable
 @MainActor
 public final class PageWithASecretState {
@@ -34,9 +38,7 @@ public final class PageWithASecretState {
         let isSpoiled = spoiled || debug == .spoiled
         let count = Content.steps.count
         machine = PredictReveal(choices: Content.Guess.allCases, showMeAfter: 1, spoiled: isSpoiled)
-        steps = isSpoiled
-            ? StepThrough(count: count, start: Content.gate)
-            : StepThrough(count: count, gate: Content.gate)
+        steps = StepThrough(count: count, start: isSpoiled ? Content.gate : 0, gate: Content.gate)
         apply(debug)
     }
 
@@ -45,9 +47,14 @@ public final class PageWithASecretState {
     /// The prediction is on screen: at the page, with no guess yet.
     public var asksNow: Bool { machine.canLock && steps.index == Content.gate }
 
-    /// The toggle works (and VoiceOver says the hidden line): once a guess
-    /// is locked, or from the start in spoiled mode.
+    /// The toggle is drawn and works (and VoiceOver says the hidden line):
+    /// once a guess is locked, or from the start in spoiled mode.
     public var canSwitchView: Bool { machine.canExplore }
+
+    /// The page still has to be switched to what the agent reads before
+    /// Next can leave it: the card says so under the chips (or as the
+    /// spoiled lead) and in its summary.
+    public var mustSwitch: Bool { canSwitchView && !hasReadAgentView }
 
     public var revealLines: InteractiveRevealLines {
         machine.revealLines(guessText: PageWithASecretCopy.choice, result: PageWithASecretCopy.result)
@@ -55,7 +62,8 @@ public final class PageWithASecretState {
 
     public var progress: PageWithASecretProgress {
         PageWithASecretProgress(step: steps.index, view: view, guess: machine.spoiled ? nil : machine.guess,
-                                canLock: machine.canLock, revealed: machine.isRevealed)
+                                canLock: machine.canLock, revealed: machine.isRevealed,
+                                mustSwitch: mustSwitch && steps.index == Content.gate)
     }
 
     /// What VoiceOver says for the step just reached ("Step 4 of 6: Plan.
@@ -66,12 +74,12 @@ public final class PageWithASecretState {
 
     // MARK: What the student does
 
-    /// Locks the guess and opens the gate. False once a guess is locked, in
-    /// spoiled mode, or before the page.
+    /// Locks the guess and draws the toggle (Next still waits for the
+    /// switch). False once a guess is locked, in spoiled mode, or before the
+    /// page.
     @discardableResult
     public func lock(_ guess: Content.Guess) -> Bool {
         guard steps.index == Content.gate, machine.lock(guess) else { return false }
-        steps.openGate()
         return true
     }
 
@@ -91,12 +99,15 @@ public final class PageWithASecretState {
     }
 
     /// Switches the page's view. False (and nothing changes) before a guess
-    /// is locked.
+    /// is locked. The first switch to what the agent reads opens the gate.
     @discardableResult
     public func show(_ newView: Content.PageView) -> Bool {
         guard canSwitchView, newView != view else { return false }
         view = newView
-        if newView == .agentReads { hasReadAgentView = true }
+        if newView == .agentReads {
+            hasReadAgentView = true
+            steps.openGate()
+        }
         machine.recordMove()
         return true
     }
@@ -108,8 +119,8 @@ public final class PageWithASecretState {
         while steps.index < Content.gate { next() }
         lock(Content.Guess.allCases[0])
         guard debug != .predicted else { return }
-        next()
         show(.agentReads)
+        next()
         guard debug == .revealed else { return }
         while !steps.isLast { next() }
     }

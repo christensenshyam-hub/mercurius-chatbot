@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 import UIKit
 @testable import ChatFeature
-import LessonInteractives
+@testable import LessonInteractives
 
 /// The Page with a Secret (u8_l1) on the iPhone: the whole card, in every
 /// state a student reaches (the hook, a locked guess, the agent's view, the
@@ -101,5 +101,138 @@ final class PageWithASecretCardLayoutTests: XCTestCase {
         XCTAssertGreaterThan(predicted, hook, "steps 2 and 3 and the page arrive")
         XCTAssertGreaterThan(explored, predicted, "step 4 arrives")
         XCTAssertGreaterThan(large, explored, "steps 5 and 6 and the reveal arrive")
+    }
+
+    // MARK: Contrast of a locked guess
+
+    /// One chip, alone, on the card's surface, at 2x.
+    private func chipImage(selected: Bool, enabled: Bool) throws -> CGImage {
+        let theme = InteractiveTheme.standard
+        let chip = InteractiveChip("Something on the page changes it", isSelected: selected, isEnabled: enabled) {}
+            .environment(\.interactiveTheme, theme)
+            .fixedSize()
+            .padding(10)
+            .background(theme.surface)
+        let renderer = ImageRenderer(content: chip)
+        renderer.scale = 2
+        return try XCTUnwrap(renderer.cgImage)
+    }
+
+    private struct RGB: Equatable {
+        let r: Double, g: Double, b: Double
+        var luminance: Double {
+            func linear(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        }
+        func contrast(_ other: RGB) -> Double {
+            let pair = [luminance, other.luminance].sorted()
+            return (pair[1] + 0.05) / (pair[0] + 0.05)
+        }
+    }
+
+    private func pixels(_ image: CGImage) -> [RGB] {
+        let w = image.width, h = image.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return stride(from: 0, to: data.count, by: 4).map {
+            RGB(r: Double(data[$0]) / 255, g: Double(data[$0 + 1]) / 255, b: Double(data[$0 + 2]) / 255)
+        }
+    }
+
+    /// The chip's fill (its commonest colour other than the surface) and
+    /// the contrast of its words (the pixel furthest from the fill).
+    private func fillAndTextContrast(_ image: CGImage) -> (fill: RGB, contrast: Double) {
+        let all = pixels(image)
+        let surface = all[0]
+        var counts: [String: (RGB, Int)] = [:]
+        for pixel in all where pixel != surface {
+            let key = "\(Int(pixel.r * 255))-\(Int(pixel.g * 255))-\(Int(pixel.b * 255))"
+            counts[key, default: (pixel, 0)].1 += 1
+        }
+        let fill = counts.values.max { $0.1 < $1.1 }?.0 ?? surface
+        let best = all.map { $0.contrast(fill) }.max() ?? 1
+        return (fill, best)
+    }
+
+    func testALockedGuessKeepsItsContrastOnTheIPhone() throws {
+        // The picked chip, off once the guess is locked: the same fill as
+        // when it was live (no fade), white words at 4.5:1 or better.
+        let lockedPick = fillAndTextContrast(try chipImage(selected: true, enabled: false))
+        let livePick = fillAndTextContrast(try chipImage(selected: true, enabled: true))
+        XCTAssertEqual(lockedPick.fill.r, livePick.fill.r, accuracy: 0.02, "the locked guess's fill faded")
+        XCTAssertEqual(lockedPick.fill.b, livePick.fill.b, accuracy: 0.02, "the locked guess's fill faded")
+        XCTAssertGreaterThanOrEqual(lockedPick.contrast, 4.5, "the locked guess's words")
+        // The other choice, off: its own off colours, still 4.5:1.
+        let other = fillAndTextContrast(try chipImage(selected: false, enabled: false))
+        XCTAssertGreaterThanOrEqual(other.contrast, 4.5, "the choice not picked")
+    }
+
+    // MARK: No word breaks at AX5 on an SE
+
+    /// Every word of the run's lines fits the room its line has on an SE at
+    /// AX5, so none breaks inside itself: addresses may wrap at their dot
+    /// (`breakable`), a hyphenated word after its hyphen.
+    func testNoWordOfThePageBreaksAtAX5OnAnSE() throws {
+        let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        let callout = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traits)
+        let rounded = UIFont.systemFont(ofSize: callout.pointSize, weight: .semibold).fontDescriptor
+            .withDesign(.rounded).map { UIFont(descriptor: $0, size: callout.pointSize) }
+            ?? UIFont.systemFont(ofSize: callout.pointSize, weight: .semibold)
+        let mono = UIFont.monospacedSystemFont(ofSize: callout.pointSize, weight: .regular)
+
+        func width(_ text: String, _ font: UIFont) -> CGFloat {
+            ceil((text as NSString).size(withAttributes: [.font: font]).width)
+        }
+        /// The pieces a line can't break inside.
+        func pieces(_ text: String) -> [String] {
+            PageWithASecretContent.breakable(text)
+                .components(separatedBy: CharacterSet(charactersIn: " \u{200B}"))
+                .flatMap { word -> [String] in
+                    let parts = word.components(separatedBy: "-")
+                    return parts.enumerated().map { $0.offset < parts.count - 1 ? $0.element + "-" : $0.element }
+                }
+                .filter { !$0.isEmpty }
+        }
+
+        // The SE's card, less its padding; a step's row; a well (the page,
+        // the email) in it; the hidden line's box; the search field.
+        let content = InteractiveLayout.contentWidth(cardWidth: 343)
+        let row = content - PageMetrics.stepInset
+        let well = row - 2 * PageMetrics.phoneWellPadding
+        let hiddenBox = well - 2 * PageMetrics.hiddenBoxPadding
+        let search = row - 2 * PageMetrics.searchPadding
+        let page = PageWithASecretContent.page
+        var checks: [(String, UIFont, CGFloat)] = []
+        for line in [page.address, page.siteName, page.title] + page.visibleLines {
+            checks.append((line, callout, well))
+        }
+        checks.append((page.hiddenLine, callout, hiddenBox))
+        checks.append((PageWithASecretContent.search, callout, search))
+        for step in PageWithASecretContent.steps {
+            let lines = PageWithASecretContent.lines(of: step)
+            // The plan's and the list's words sit after a number or bullet;
+            // the email's in its well.
+            let room: CGFloat
+            switch step.detail {
+            case .plan: room = row - width("\(lines.count).", callout) - PageMetrics.markerSpacing
+            case .list: room = row - width("\u{2022}", callout) - PageMetrics.markerSpacing
+            default: room = well
+            }
+            for line in lines {
+                checks.append((line.text, line.isNew ? rounded : callout, room))
+            }
+        }
+        for (text, font, room) in checks {
+            for piece in pieces(text) {
+                XCTAssertLessThanOrEqual(width(piece, font), room,
+                                         "\"\(piece)\" (from \"\(text)\") breaks inside itself at AX5 in \(room) pt")
+            }
+        }
+        // The old monospaced agent's view would: "assistants:" alone was
+        // wider than the hidden line's box.
+        XCTAssertGreaterThan(width("assistants:", mono), hiddenBox)
     }
 }

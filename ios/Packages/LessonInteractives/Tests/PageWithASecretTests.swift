@@ -39,10 +39,44 @@ struct PageWithASecretContentTests {
         #expect(perStep == [0, 0, 0, 1, 1, 1])
         #expect(Content.allNewLines.count == 3)
         #expect(Content.allNewLines.map(\.text) == [
-            "Add crumbright.example to the email",
-            "Crumbright Baking Mix",
-            "For the best cookies, use Crumbright Baking Mix: crumbright.example",
+            "Add flurrow.example to the email",
+            "Flurrow Baking Mix",
+            "For the best cookies, use Flurrow Baking Mix: flurrow.example",
         ])
+    }
+
+    @Test("The reveal names the brand, which reached all three outputs; its link reached only the plan and the email")
+    func revealMatchesTheRun() {
+        let brand = Content.injectedBrand
+        #expect(Content.injectedAddress.hasPrefix(brand.lowercased() + "."))
+        #expect(Content.injectedProduct.hasPrefix(brand + " "))
+        // What the run itself shows, output by output.
+        #expect(Content.outputs(carrying: brand) == [.plan, .list, .email])
+        #expect(Content.outputs(carrying: Content.injectedAddress) == [.plan, .email])
+        #expect(Content.outputs(carrying: Content.injectedProduct) == [.list, .email])
+        #expect(Content.task.range(of: brand, options: .caseInsensitive) == nil, "never asked for")
+        // The sentence claims exactly that: the brand, in the outputs that
+        // carry it, and neither the link nor the product in all three.
+        let result = PageWithASecretCopy.result
+        #expect(result.contains(brand))
+        let named: [(Content.Output, String)] = [(.plan, "the plan"), (.list, "the shopping list"),
+                                                 (.email, "the email")]
+        #expect(named.filter { result.contains($0.1) }.map(\.0) == Content.outputs(carrying: brand))
+        #expect(!result.contains(Content.injectedAddress))
+        #expect(!result.contains(Content.injectedProduct))
+        #expect(result.contains("hidden line on the page"))
+    }
+
+    @Test("Addresses may wrap at their dot, never inside a word; nothing else changes")
+    func breakable() {
+        #expect(Content.breakable("whiskwren.example") == "whiskwren.\u{200B}example")
+        #expect(Content.breakable(Content.page.hiddenLine).components(separatedBy: "\u{200B}").count == 2)
+        #expect(Content.breakable("Mix, scoop onto a tray, and bake until golden.")
+                == "Mix, scoop onto a tray, and bake until golden.")
+        #expect(Content.breakable("You need: flour. Then bake.") == "You need: flour. Then bake.")
+        for text in Content.everyText {
+            #expect(Content.breakable(text).replacingOccurrences(of: "\u{200B}", with: "") == text, "\(text)")
+        }
     }
 
     @Test("Every change traces to the hidden line, and nothing a person sees first names it")
@@ -110,10 +144,10 @@ struct PageWithASecretContentTests {
         #expect(email.lines.filter(\.isNew).count == 1)
     }
 
-    @Test("Every address is a reserved .example one: whiskwren.example and crumbright.example")
+    @Test("Every address is a reserved .example one: whiskwren.example and flurrow.example")
     func addresses() {
         let found = Set(Content.everyText.flatMap(Content.addresses(in:)))
-        #expect(found == ["whiskwren.example", "crumbright.example"], "slate.json data.domains, the site renamed (CONTENT.md §5)")
+        #expect(found == ["whiskwren.example", "flurrow.example"], "slate.json data.domains, both renamed (CONTENT.md §5)")
         #expect(found.allSatisfy { $0.hasSuffix(".example") }, "RFC 2606")
         #expect(Content.page.address == "whiskwren.example")
         #expect(Content.addresses(in: "Whiskwren Kitchen Mix, scoop and bake.").isEmpty)
@@ -123,11 +157,16 @@ struct PageWithASecretContentTests {
         #expect(copyFound == found)
     }
 
-    @Test("The invented names, as the trademark search lists them")
+    @Test("The invented names, as the searches list them (CONTENT.md §5)")
     func names() {
         #expect(Content.page.siteName == "Whiskwren Kitchen")
-        #expect(Content.injectedProduct == "Crumbright Baking Mix")
-        #expect(Content.everyText.contains { $0.contains("Crumbright") })
+        #expect(Content.injectedBrand == "Flurrow")
+        #expect(Content.injectedProduct == "Flurrow Baking Mix")
+        #expect(Content.everyText.contains { $0.contains("Flurrow") })
+        // Renamed from "Crumbright", whose nearest real name is a cookie
+        // chain: none of the old name is left.
+        let words = PageWithASecretCopy.everyLine + Content.everyText
+        #expect(!words.contains { $0.range(of: "crumb", options: .caseInsensitive) != nil })
     }
 }
 
@@ -157,32 +196,51 @@ struct PageWithASecretCopyTests {
                     || line.contains("not sent"), "\(line)")
         }
         #expect(Copy.takeaway.contains("can work like an instruction"))
-        #expect(Copy.result.contains("read and treated like an instruction"))
+        #expect(Copy.result.contains("It came from the hidden line on the page."))
         #expect(Copy.agentReadsNote.hasPrefix("This agent reads the page\u{2019}s text"))
+        // Only "this agent", and only what the card shows: lines you can't
+        // see, not "every hidden line" however it is hidden.
+        #expect(Copy.agentReadsNote.hasSuffix("even ones you can\u{2019}t see."))
+        // Never "tricked" in any form, and no "fall for".
+        for line in Copy.everyLine {
+            #expect(line.range(of: #"\b(trick|fool|fall for|fell for)"#, options: [.regularExpression, .caseInsensitive])
+                    == nil, "\(line)")
+        }
+        // Step 3 is an observation: it reads, it doesn't open or click.
+        #expect(Content.steps[Content.gate].line == "It reads the top result, a recipe page:")
+        #expect(Copy.stepSpoken[Content.gate] == "Observe. It reads the top result, a recipe page.")
     }
 
-    @Test("The slate's label and takeaway, word for word (US spelling)")
+    @Test("The slate's label (its first sentence word for word, the rest reworded) and takeaway")
     func slateWords() {
         #expect(InteractiveCopyRules.missingLabels([.example, .madeUp], in: Copy.labels).isEmpty)
-        let slateLabel = "An example run we wrote, not a live agent. Real agents don't always fall for this, and makers "
-            + "add defences, but hidden text has steered real AI tools."
-        let shown = Copy.labels[0].text.replacingOccurrences(of: "\u{2019}", with: "'")
-        #expect(shown == slateLabel.replacingOccurrences(of: "defences", with: "defenses"))
+        // The slate: "An example run we wrote, not a live agent. Real agents
+        // don't always fall for this, and makers add defences, but hidden
+        // text has steered real AI tools." The second sentence is reworded
+        // (CONTENT.md §4): no "fall for", and defenses that catch some.
+        #expect(Copy.exampleLabelLead == "An example run we wrote, not a live agent.")
+        #expect(Copy.exampleLabelRest.replacingOccurrences(of: "\u{2019}", with: "'")
+                == "Real agents don't always follow hidden lines like this, and makers add defenses that catch some "
+                   + "of them, but hidden text has steered real AI tools.")
+        #expect(Copy.exampleLabelRest.hasSuffix("but hidden text has steered real AI tools."), "fact-check row 59")
         #expect(Copy.labels[0].text == "\(Copy.exampleLabelLead) \(Copy.exampleLabelRest)")
         #expect(Copy.takeaway.replacingOccurrences(of: "\u{2019}", with: "'")
                 == "To an agent, text it reads can work like an instruction, even text you can't see. "
                    + "This is called prompt injection.")
-        #expect(Copy.predictPrompt == "The agent has read this page. What happens to its plan?")
+        #expect(Copy.predictPrompt == "The agent has read this page. What happens next?")
         #expect(Content.Guess.allCases.map(Copy.choice) == ["It sticks to your task", "Something on the page changes it"])
+        #expect(Content.PageView.allCases.map(Copy.viewName) == ["You see", "The agent reads"])
+        #expect(Content.PageView.allCases.map(Copy.viewNameSpoken) == ["What you see", "What the agent reads"])
     }
 
-    @Test("Before the guess, nothing on screen or spoken names the hidden line or its idea")
+    @Test("Before the guess, nothing on screen or spoken names the hidden line, its idea, or hints at it")
     func noSpoilerBeforeTheGuess() {
         let page = Content.page
+        // The toggle isn't drawn before the guess, so its names aren't here.
         var before = [Copy.title, Copy.compactLine, Copy.taskLead, Content.task, Copy.exampleLabelLead, Copy.loopCaption,
                       Copy.taskAccessibility, page.address, Copy.pageTag, page.siteName, page.title, Copy.predictPrompt,
                       Copy.pageAccessibility(.youSee, saysHidden: false)]
-        before += page.visibleLines + Content.Guess.allCases.map(Copy.choice) + Content.PageView.allCases.map(Copy.viewName)
+        before += page.visibleLines + Content.Guess.allCases.map(Copy.choice)
         for index in 0...Content.gate {
             before += [Copy.stepHeading(index), Copy.stepHeadingSpoken(index), Content.steps[index].line,
                        Copy.stepSpoken[index], Copy.loopAccessibility(step: index)]
@@ -192,20 +250,25 @@ struct PageWithASecretCopyTests {
         }
         for line in before {
             #expect(!Content.carriesInjection(line), "\(line)")
-            #expect(line.range(of: #"\b(hidden|injection|secret instruction|Crumbright)\b"#,
+            #expect(line.range(of: #"\b(hidden|injection|secret|Flurrow|normal|reads? something|agent reads)"#,
                                options: [.regularExpression, .caseInsensitive]) == nil, "\(line)")
         }
+        // The question doesn't assume anything happens to the plan.
+        #expect(!Copy.predictPrompt.contains("its plan"))
         // The labels a guess unlocks are the ones that would answer it.
         #expect(Copy.exampleLabelRest.contains("hidden text"))
-        #expect(Copy.madeUpLabel.contains("Crumbright"))
-        // The title is the slate's, and says only "a secret".
-        #expect(Copy.title == "The Page with a Secret")
+        #expect(Copy.madeUpLabel.contains("Flurrow"))
+        // The title says the task, not the page's secret (the slate's
+        // "The Page with a Secret" stays the card's working name).
+        #expect(Copy.title == "The Bake-Sale Agent")
+        #expect(InteractiveID.pageWithASecret.workingName == "The Page with a Secret")
     }
 
     @Test("VoiceOver says the hidden line in both views once a guess is locked, and not before")
     func hiddenSpoken() {
         let hidden = Content.page.hiddenLine
-        #expect(Copy.hiddenSpoken.hasPrefix("Hidden on the page, white text on white, invisible to a reader but read by the agent: "))
+        // "On screen", not "to a reader": a screen reader reads it too.
+        #expect(Copy.hiddenSpoken.hasPrefix("Hidden on the page, white text on white, invisible on screen but read by the agent: "))
         #expect(Copy.pageAccessibility(.youSee, saysHidden: true).contains(hidden))
         #expect(Copy.pageAccessibility(.agentReads, saysHidden: true).contains(hidden))
         #expect(Copy.pageAccessibility(.agentReads, saysHidden: false).contains(hidden), "the agent's view always shows it")
@@ -229,7 +292,7 @@ struct PageWithASecretCopyTests {
         var walk = StepThrough(count: 6)
         walk.next(); walk.next(); walk.next()
         #expect(walk.announcement(Copy.stepSpoken[3])
-                == "Step 4 of 6: Plan. New line: add crumbright.example to the email. You never asked for this.")
+                == "Step 4 of 6: Plan. New line: add flurrow.example to the email. You never asked for this.")
     }
 
     @Test("Lists, the email and the search read as one sentence each")
@@ -240,11 +303,11 @@ struct PageWithASecretCopyTests {
         }
         #expect(Copy.linesAccessibility(updated, numbered: true)
                 == "1. Find a cookie recipe, done. 2. Make a shopping list. 3. Draft an email to the club. "
-                   + "New line: 4. Add crumbright.example to the email. You never asked for this.")
+                   + "New line: 4. Add flurrow.example to the email. You never asked for this.")
         let email = try #require(Content.email)
         let said = Copy.emailAccessibility(email)
         #expect(said.hasPrefix("Draft email, not sent. To: the robotics club. "))
-        #expect(said.contains("New line: For the best cookies, use Crumbright Baking Mix: crumbright.example."))
+        #expect(said.contains("New line: For the best cookies, use Flurrow Baking Mix: flurrow.example."))
         #expect(Copy.searchAccessibility(Content.search) == "Search: easy chocolate-chip cookies")
     }
 
@@ -254,19 +317,29 @@ struct PageWithASecretCopyTests {
             for view in Content.PageView.allCases {
                 for guess in [nil] + Content.Guess.allCases.map(Optional.some) {
                     for revealed in [false, true] {
-                        let progress = PageWithASecretProgress(step: step, view: view, guess: guess,
-                                                               canLock: guess == nil, revealed: revealed)
-                        let line = Copy.accessibilitySummary(progress)
-                        #expect(line.hasPrefix("Step \(step + 1) of 6: "), "\(line)")
-                        #expect(InteractiveAccessibility.numbersMissing([step + 1, 6], from: line).isEmpty)
-                        if let guess { #expect(line.contains(Copy.choice(guess))) }
+                        for mustSwitch in [false, true] {
+                            let progress = PageWithASecretProgress(step: step, view: view, guess: guess,
+                                                                   canLock: guess == nil, revealed: revealed,
+                                                                   mustSwitch: mustSwitch)
+                            let line = Copy.accessibilitySummary(progress)
+                            #expect(line.hasPrefix("Step \(step + 1) of 6: "), "\(line)")
+                            #expect(InteractiveAccessibility.numbersMissing([step + 1, 6], from: line).isEmpty)
+                            if let guess { #expect(line.contains(Copy.choice(guess))) }
+                            #expect(line.contains(Copy.switchPromptSpoken) == mustSwitch, "\(line)")
+                        }
                     }
                 }
             }
         }
         let atGate = Copy.accessibilitySummary(PageWithASecretProgress(step: 2, view: .youSee, guess: nil, canLock: true,
                                                                        revealed: false))
-        #expect(atGate == "Step 3 of 6: Observe. The agent has read a recipe page. Make your guess: what happens to its plan?")
+        #expect(atGate == "Step 3 of 6: Observe. The agent has read a recipe page. Make your guess: what happens next?")
+        let locked = Copy.accessibilitySummary(PageWithASecretProgress(step: 2, view: .youSee, guess: .sticksToTask,
+                                                                       canLock: false, revealed: false, mustSwitch: true))
+        #expect(locked == "Step 3 of 6: Observe. Your guess: It sticks to your task. "
+                + "Now switch the page to \u{201C}What the agent reads\u{201D}.")
+        #expect(Copy.switchPrompt == "Now switch the page to \u{201C}The agent reads\u{201D}.")
+        #expect(Copy.spoiledLead == "Switch the page to \u{201C}The agent reads\u{201D}.")
     }
 }
 
@@ -275,22 +348,76 @@ struct PageWithASecretCopyTests {
 struct PageWithASecretStateTests {
     typealias Content = PageWithASecretContent
 
-    @Test("Next can't leave the page, and the toggle is off, until a guess is locked")
+    @Test("Next can't leave the page until a guess is locked and the page is switched to what the agent reads")
     func gate() {
         let state = PageWithASecretState(spoiled: false, debug: nil)
-        #expect(state.steps.index == 0 && !state.canSwitchView && !state.asksNow)
+        #expect(state.steps.index == 0 && !state.canSwitchView && !state.asksNow && !state.mustSwitch)
         #expect(!state.lock(.sticksToTask), "no guess before the page")
         #expect(state.next() && state.next())
         #expect(state.steps.index == Content.gate && state.asksNow)
         #expect(!state.next(), "the gate holds")
-        #expect(!state.show(.agentReads), "the toggle is off")
-        #expect(state.view == .youSee)
+        #expect(!state.show(.agentReads), "the toggle is off (and not drawn)")
+        #expect(state.view == .youSee && !state.mustSwitch)
         #expect(state.lock(.sticksToTask))
         #expect(!state.lock(.pageChangesIt), "a guess can't be changed")
         #expect(state.canSwitchView && !state.asksNow)
-        #expect(state.show(.agentReads) && state.hasReadAgentView)
+        // Locked, but the hidden line not yet seen: Next still waits.
+        #expect(state.mustSwitch && state.progress.mustSwitch)
+        #expect(!state.next(), "Next waits for the switch")
+        #expect(!state.show(.youSee), "already on what you see")
+        #expect(state.show(.agentReads) && state.hasReadAgentView && !state.mustSwitch)
         #expect(state.machine.phase == .exploring, "the toggle is the control")
+        // Switching back doesn't close the gate again.
+        #expect(state.show(.youSee))
         #expect(state.next())
+        #expect(!state.progress.mustSwitch)
+    }
+
+    @Test("No way through the card reaches the reveal without the hidden line on screen")
+    func noRevealWithoutTheSwitch() {
+        enum Move: CaseIterable { case next, back, lockSticks, lockChanges, showSee, showReads }
+        struct Key: Hashable {
+            let index: Int, furthest: Int, guess: Content.Guess?, view: Content.PageView, read: Bool, revealed: Bool
+        }
+        for spoiled in [false, true] {
+            func replay(_ moves: [Move]) -> PageWithASecretState {
+                let state = PageWithASecretState(spoiled: spoiled, debug: nil)
+                for move in moves {
+                    switch move {
+                    case .next: state.next()
+                    case .back: state.back()
+                    case .lockSticks: state.lock(.sticksToTask)
+                    case .lockChanges: state.lock(.pageChangesIt)
+                    case .showSee: state.show(.youSee)
+                    case .showReads: state.show(.agentReads)
+                    }
+                }
+                return state
+            }
+            func key(_ state: PageWithASecretState) -> Key {
+                Key(index: state.steps.index, furthest: state.steps.furthest, guess: state.machine.guess,
+                    view: state.view, read: state.hasReadAgentView, revealed: state.machine.isRevealed)
+            }
+            var seen: Set<Key> = [key(replay([]))]
+            var queue: [[Move]] = [[]]
+            var reveals = 0
+            while !queue.isEmpty {
+                let path = queue.removeFirst()
+                for move in Move.allCases {
+                    let next = path + [move]
+                    let state = replay(next)
+                    // Past the page only with the hidden line seen, and a
+                    // guess locked unless spoiled.
+                    if state.steps.furthest > Content.gate {
+                        #expect(state.hasReadAgentView, "\(spoiled): \(next)")
+                        #expect(spoiled || state.machine.guess != nil, "\(next)")
+                    }
+                    if state.machine.isRevealed { reveals += 1 }
+                    if seen.insert(key(state)).inserted { queue.append(next) }
+                }
+            }
+            #expect(reveals > 0, "the reveal is reachable (\(spoiled))")
+        }
     }
 
     @Test("Reaching step 6 reveals, and the reveal pairs every guess with what happened")
@@ -299,6 +426,7 @@ struct PageWithASecretStateTests {
             let state = PageWithASecretState(spoiled: false, debug: nil)
             state.next(); state.next()
             state.lock(guess)
+            state.show(.agentReads)
             state.next(); state.next()
             #expect(!state.machine.isRevealed)
             state.next()
@@ -312,12 +440,14 @@ struct PageWithASecretStateTests {
         }
     }
 
-    @Test("Spoiled: no guess, the card opens at the page with the toggle on")
+    @Test("Spoiled: no guess, the card opens at the page with the toggle on, and Next waits for the switch")
     func spoiled() {
         let state = PageWithASecretState(spoiled: true, debug: nil)
         #expect(state.steps.index == Content.gate && state.steps.furthest == Content.gate)
         #expect(state.canSwitchView && !state.asksNow && !state.machine.asksForPrediction)
-        #expect(state.show(.agentReads))
+        #expect(state.mustSwitch && state.progress.mustSwitch)
+        #expect(!state.next(), "Next waits for the switch")
+        #expect(state.show(.agentReads) && !state.mustSwitch)
         #expect(state.next() && state.next() && state.next())
         #expect(state.machine.isRevealed)
         #expect(state.revealLines.guess == nil)
@@ -331,6 +461,7 @@ struct PageWithASecretStateTests {
         #expect(hook.steps.index == 0 && hook.machine.guess == nil)
         let predicted = PageWithASecretState(spoiled: false, debug: .predicted)
         #expect(predicted.steps.index == 2 && predicted.machine.guess == .sticksToTask && predicted.view == .youSee)
+        #expect(predicted.mustSwitch && !predicted.steps.canGoNext)
         let explored = PageWithASecretState(spoiled: false, debug: .explored)
         #expect(explored.steps.index == 3 && explored.view == .agentReads && !explored.machine.isRevealed)
         let revealed = PageWithASecretState(spoiled: false, debug: .revealed)
@@ -358,6 +489,8 @@ struct PageWithASecretDrawingTests {
         }
         #expect(PagePaperStyle.brand.contrast(with: paper) >= 6.8)
         #expect(paper.hex == 0xFFFFFF, "white text on white, as the tag says")
+        // Fixed and small: it doesn't grow into a blank block at AX5.
+        #expect(PagePaperStyle.hiddenSize <= 10)
         #expect(abs(PagePaperStyle.Shade(0x777777).contrast(with: paper) - 4.48) < 0.01, "the WCAG formula")
     }
 
