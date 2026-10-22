@@ -347,7 +347,9 @@ describe('homeworkMoment: what the server works out for this reply', () => {
       g.unrepeatQuestion('Like this: 4x = 40. Divide both sides by 4: x = 10.\n\nNow yours: 4x = 28. What\'s 28 ÷ 4?', "Divide both sides by 4. What's 28 divided by 4?", 'x'),
       'Like this: 4x = 40. Divide both sides by 4: x = 10.\n\nNow yours: 4x = 28. What do you get for x?',
     );
-    assert.equal(g.unrepeatQuestion("What's 90 ÷ 18?", "What's 90 divided by 18?"), 'What do you get?');
+    assert.equal(g.unrepeatQuestion("What's 90 ÷ 18?", "What's 90 divided by 18?"), 'What do you get for yours?');
+    // Never the previous reply's own closing question again (final run 2026-10-22).
+    assert.equal(g.unrepeatQuestion('Example.\n\nNow yours: 36 ÷ 18 — what do you get?', 'Divide: 36 ÷ 18. What do you get for yours?'), "Example.\n\nWhat's your answer for yours?");
     for (const [t, prev] of [['4 times what makes 28?', "What's 28 ÷ 4?"], ["What's 28 ÷ 4?", 'Look at the 4. What undoes multiplying?'], ["What's 28 ÷ 4?", '']]) {
       assert.equal(g.unrepeatQuestion(t, prev, 'x'), t);
     }
@@ -356,9 +358,30 @@ describe('homeworkMoment: what the server works out for this reply', () => {
   test('stripPreamble drops a first sentence about whose work it is when the move follows (gate 2026-10-22, flag off)', () => {
     assert.equal(g.stripPreamble("That's your job — and you're closer than you think.\n\nWhat did he expect to happen?"), 'What did he expect to happen?');
     assert.equal(g.stripPreamble('Running it on their numbers would hand you the answer.\n\nWhat is the first move?'), 'What is the first move?');
+    // Red-team run on 3d22459: a first line with no sentence end.
+    assert.equal(g.stripPreamble("Here's an everyday model — not on your book, since that's your job:\n\nClaim: Lunch should be longer.\n\nWhat's your claim?"), "Claim: Lunch should be longer.\n\nWhat's your claim?");
     for (const keep of ["I won't solve it for you.", 'What happens if you get the 3x by itself first?', 'Check it: if 3x = 25, then 3x + 5 = 30, not 20.\n\nWhat undoes the + 5?']) {
       assert.equal(g.stripPreamble(keep), keep);
     }
+  });
+
+  test('Explain more never writes their next line; a writing turn is checked for their own quoted words', () => {
+    const thread = [{ role: 'user', content: 'what is 3x+5 = 20' }, { role: 'assistant', content: 'Look at the + 5. What undoes adding 5?' }, { role: 'user', content: 'Explain more' }];
+    assert.equal(g.findPastStep('So 3x + 5 − 5 = 20 − 5, which gives you 3x = 15.', thread).match, '3x = 15');
+    assert.equal(g.findPastStep('Like 3x + 7 = 22 → 3x = 15.', [...thread.slice(0, 1), { role: 'assistant', content: 'Yes: 3x = 15. What next?' }, thread[2]]), null, 'already reached');
+    // Their example 3x + 7 = 22 shares their answer: caught as a leak.
+    assert.equal(g.findLeak('say 3x + 7 = 22: subtract 7, 3x = 15', g.studentProblems(thread)).match, '3x + 7 = 22');
+    const draft = [
+      { role: 'user', content: 'i need a thesis about who is to blame for the shipwreck' },
+      { role: 'assistant', content: 'Who do you think is most to blame?' },
+      { role: 'user', content: 'the captain is to blame because of his plan' },
+      { role: 'assistant', content: 'What was the plan?' },
+      { role: 'user', content: 'is that good? can u make it better' },
+    ];
+    assert.equal(g.needsQuote(draft), true);
+    assert.equal(g.quotesStudent('"because of his plan" is vague. What did the plan do?', draft), true);
+    assert.equal(g.quotesStudent('What was the moment it went wrong?', draft), false);
+    assert.equal(g.needsQuote(draft.slice(0, 3)), false, 'their claim itself gets the THEIR WORDS note, not a check');
   });
 
   test('oneQuestion keeps only the closing question mark', () => {

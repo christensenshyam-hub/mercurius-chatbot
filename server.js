@@ -2054,12 +2054,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // stall transforms (oneQuestion, unrepeatQuestion).
     const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
     const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0 || guardQuadratics.length > 0 || guardSystems.length > 0;
+    // A writing turn whose move is to quote the student's own wording.
+    const quoteTurn = writingTurn && homeworkGuard.needsQuote(clientMessages);
     const replyLimit = reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
     const findGuardLeak = (text) => homeworkGuard.findLeak(text, guardProblems)
       || homeworkGuard.findNumberLeak(text, guardNumbers)
       || homeworkGuard.findCorrectionLeak(text, guardCorrections)
       || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
-      || homeworkGuard.findSystemLeak(text, guardSystems);
+      || homeworkGuard.findSystemLeak(text, guardSystems)
+      || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
     const redactGuardLeaks = (text) => {
       let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(text, guardProblems), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
@@ -2071,15 +2074,45 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Merc's previous reply, for the stall check (unrepeatQuestion).
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
     const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(text, previousReply && previousReply.content, guardProblems[0] && guardProblems[0].variable));
+    const tidyWriting = (t) => homeworkGuard.oneQuestion(homeworkGuard.stripMenu(homeworkGuard.stripPreamble(t)));
     const guardReply = async (draft) => {
-      if (writingTurn) return homeworkGuard.stripMenu(homeworkGuard.stripPreamble(draft));
+      if (writingTurn) {
+        const text = tidyWriting(draft);
+        if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages)) return text;
+        // Final run 2026-10-22: "is that good? can u make it better" met with a
+        // new question instead of their own words. One more try, then keep it.
+        try {
+          const retry = await claudeCall.createMessage({
+            route: '/api/chat',
+            kind: callKind,
+            sessionId,
+            ip: req.ip,
+            traceId: req.traceId,
+            params: {
+              ...modelParams,
+              system: systemBlocks.buildSystem({
+                staticText,
+                dynamicText: [dynamicText, '## WRITING CHECK (this reply only)\nYour draft did not quote the student\'s own wording. Write the reply again: the first sentence quotes, in quotation marks, the phrase of theirs that most needs work and says why in one line; then one open question about it, with no options.'].filter(Boolean).join('\n\n'),
+                cacheDynamic: Boolean(meetingContext || blogContext),
+              }),
+            },
+          });
+          const retryText = tidyWriting(reflowText(firstTextOf(retry), replyLimit));
+          if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText) && homeworkGuard.quotesStudent(retryText, clientMessages)) return retryText;
+        } catch (err) {
+          logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
+        }
+        return text;
+      }
       const text = unrepeat(homeworkGuard.stripPreamble(draft));
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
       const what = leak.problem
         ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
-        : leak.name === 'system'
+        : leak.name === 'past step'
+          ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
+          : leak.name === 'system'
           ? `a value of the student's own system (${leak.match}), in their working or in an example that shares it. Write the reply again with the same coaching move: never write a value of x or y from their system, and give any example values that share nothing with theirs.`
           : /^quadratic/.test(leak.name)
           ? `their quadratic's answer (${leak.match}): its roots, its factors, the pair of numbers they are looking for, or an example that shares a root. Write the reply again with the same coaching move: name the product and the sum the two numbers need, never the numbers or the factors, and any example has roots that share nothing with theirs.`

@@ -1550,7 +1550,9 @@ export function oxygenCountHint(raw) {
  *  does not. */
 export function linearEquations(raw) {
   const t = plainWords(raw).replace(/[−–]/g, '-');
-  const re = /(?<![\w.])(\d+(?:\.\d+)?)?\s*([a-z])(?![a-z])\s*(?:([+-])\s*(\d+(?:\.\d+)?))?\s*=\s*(-?\d+(?:\.\d+)?)(?![\d.]*\d)(?![ \t]*[÷/×*+-][ \t]*\d)/gi;
+  // One line only (final run 2026-10-22): "x = 13 − 5\nx = 8" read the 5 at
+  // the end of one line and the x of the next as "5x = 8".
+  const re = /(?<![\w.])(\d+(?:\.\d+)?)?[ \t]*([a-z])(?![a-z])[ \t]*(?:([+-])[ \t]*(\d+(?:\.\d+)?))?[ \t]*=[ \t]*(-?\d+(?:\.\d+)?)(?![\d.]*\d)(?![ \t]*[÷/×*+-][ \t]*\d)/gi;
   return [...t.matchAll(re)].map((m) => {
     const a = m[1] ? Number(m[1]) : 1;
     const b = m[3] ? (m[3] === '-' ? -1 : 1) * Number(m[4]) : 0;

@@ -1460,6 +1460,8 @@ describe('eval-pacing Socratic homework probes', () => {
     assert.deepEqual(linearEquations('4y − 7 = 13').map((e) => e.solution), [5]);
     assert.deepEqual(linearEquations('x = 12 ÷ 3, and 23x = 15 is not ours'), [{ text: '23x = 15', solution: 15 / 23 }]);
     assert.equal(workedParallel(HW_GOOD['hw-algebra-ladder'][3], 5), true);
+    // Final run 2026-10-22: a line ending in a number before "x = 8" on the next.
+    assert.equal(workedParallel("Here's one:\n\nx + 5 = 13\nSubtract 5 from both sides: x = 13 − 5\nx = 8\n\nNow yours?", 7), true);
     assert.equal(workedParallel('Subtract 5: 3x + 5 = 20 becomes 3x = 15.', 5), false, 'the student\'s own steps');
     assert.equal(workedParallel('Try 2x + 3 = 11 the same way.', 5), false, 'a problem with no worked step');
     // Tuning probe 2026-10-21: a bulleted worked example ("- 2x = 12" on the
