@@ -4,7 +4,7 @@ Branch `feat/basics-clients`, on top of `feat/mac-night-studio` (PR #48: the iPh
 
 The founder asked for "a separate 'easy' curriculum that can just teach people the basics of how to use AI … (think of a grandma wanting to learn how to use ChatGPT)." The server half is `feat/basics-server` (`docs/basics/SERVER.md` there). This branch is the client half: the Basics course in the iPhone app and the Mac app, beside the existing course, which the apps now call **Deep dive** where the two sit side by side.
 
-**Ship order: the server first.** A server without `feat/basics-server` (production today) answers a `[BASICS: …]` opener as free chat, and its progress route refuses `b` ids. The apps cope with the second (see Progress), but a Basics lesson only teaches on a server that has the Basics guide. The server branch's A/B gate has not run yet. The Anthropic credit balance ran out three minutes into it; see SERVER.md for the commands.
+**Ship order: the server first.** A server without `feat/basics-server` (production today) answers a `[BASICS: …]` opener as free chat, and its progress route refuses `b` ids. The apps cope with the second (see Progress), but a Basics lesson only teaches on a server that has the Basics guide. On the server branch every gated Basics row passes a live 3-run gate in both flag states, and every non-Basics request is byte-identical to its base (SERVER.md, "Gate").
 
 ## Defaults chosen (the founder can change any of these)
 
@@ -21,12 +21,12 @@ The founder asked for "a separate 'easy' curriculum that can just teach people t
 
 | Where | What |
 |---|---|
-| Onboarding, "Your path" | Two pinned, full-width, equal buttons, "I'm new to AI: start with the Basics" and "Take the Deep dive"; above them a line on what each course is, the reminder switches (off unless turned on) and "Just chat instead". A button remembers the choice and opens that course's first lesson. The first build had the two courses as tappable cards in the scrolling part; at AX3 and AX5 the Deep-dive card was below the fold and only "Just chat instead" was pinned, which broke AUD-12 (`testFirstRunGateCompletesAtLargestTextSize` caught it), so the choices became the step's pinned CTA. |
+| Onboarding, "Your path" | Two pinned, full-width, equal buttons, "I'm new to AI: start with the Basics" and "Take the Deep dive"; above them a line on what each course is, one plain reminder switch, "Remind me to practice" (twice a week; off unless turned on; no streak switch here), and "Just chat instead". A button remembers the choice and opens that course's first lesson. The first build had the two courses as tappable cards in the scrolling part; at AX3 and AX5 the Deep-dive card was below the fold and only "Just chat instead" was pinned, which broke AUD-12 (`testFirstRunGateCompletesAtLargestTextSize` caught it), so the choices became the step's pinned CTA. |
 | Path (Curriculum tab) | A two-segment switch, "Basics \| Deep dive", across the top (44 pt, labelled, remembered). Basics' path has no unit checks, a plain top bar with only Home (no streak bar), a header that says lessons finished in words, and Text size. Its path-side Merc says calmer lines ("Take your time."). |
-| Home | The chosen course's next lesson: "Start the Basics", then "Continue Basics: What chatbots are good at". For Basics no streak greeting and no week ring; "You've finished 1 Basics lesson." instead. |
+| Home | The chosen course's next lesson: "Start the Basics", then "Continue Basics: What chatbots are good at". For Basics no streak greeting and no week ring; "You've finished 1 Basics lesson." instead. The second button is "All Basics lessons" (the path), not "Chat with Merc": the free chat is the Socratic tutor, which asks questions back. The Lessons tab is called "Lessons" (not "Curriculum") for a Basics learner. |
 | Text size | The first Basics screen offers "Want the words bigger?" with A / A+ / A++, each drawn at the size it gives. It is a floor: the learner's own larger system size always wins. After that, Text size on the Basics header opens the same choice. Basics lessons and the Basics path use it; the Deep dive is untouched. |
 | A Basics lesson | The existing lesson screen with: an intro that says the objective in the learner's words and "One small step at a time. You can stop whenever you like, and I'll save your place."; a labelled "‹ Lessons" back button at the top left; "Type your message here"; the reply's practice line (`Try asking me: "…"`) as a chip that fills the box without sending; Copy on Merc's replies (press and hold), before Report. |
-| After a Basics lesson | "Lesson complete", then **Try this today** (the curriculum's line, with Copy when it quotes a message, for example "What could go wrong?"), then "Next: \<lesson\>" and "That's enough for today", and "Your place is saved." No share card, no "Nailed it!". After a unit's last lesson it carries on to the next unit (there is no check). |
+| After a Basics lesson | "Lesson complete", then **Try this today** (the curriculum's line, with Copy when it quotes a message, for example "What could go wrong?"), then "Next: \<lesson\>" and "That's enough for today", and "Your place is saved." No share card, no "Nailed it!". After a unit's last lesson it carries on to the next unit (there is no check). When it doesn't all fit (the larger text sizes), the two choices and "Your place is saved." are pinned to the bottom of the sheet and only the headline and Try this today scroll; at accessibility sizes Merc stays off the sheet so he never covers text. |
 
 ### Mac
 
@@ -35,15 +35,15 @@ The founder asked for "a separate 'easy' curriculum that can just teach people t
 | Sidebar | Two folding sections, **Basics** and **Deep dive**, each listing its units with lessons done; the learner's own course first. Basics' units have no mastery seal. |
 | A Basics unit page | Night Studio's unit page, without the check: "Basics · Unit 01 · In progress", "1 of 3 lessons done", the thread ending at the last lesson, and the next Basics unit. |
 | The course follows what opens | Opening a Basics unit or lesson makes Basics the course Today and View ▸ Learning Path (⌘2) lead into; a Deep-dive one switches back. Today and the chats leave it alone. |
-| Today | For Basics: "Basics · Up next · Lesson 1.1", "All Basics lessons", no streak line and no week card (Think it through takes the row). |
-| A Basics lesson | The same lesson additions as the iPhone (plain intro, practice chip, "Type your message here"). The complete card shows Try this today, "That's enough for today" and "Start Lesson 1.2", with no week ring and no share. |
+| Today | For Basics: "Basics · Up next · Lesson 1.1", "All Basics lessons", no streak line, no week card and no Think it through (it opens the Socratic free chat). |
+| A Basics lesson | The same lesson additions as the iPhone (plain intro, practice chip, "Type your message here"). The check card's heading is "Pick one" (the Deep dive's is "Your turn first"). The complete card shows Try this today, "That's enough for today" and "Start Lesson 1.2", with no week ring and no share; its key ideas leave out any that point back into the chat ("…just like this one"). |
 
 ## The server contract, as the apps send it
 
 - **Opener.** Each Basics starter begins at index 0 with `[BASICS: Unit N, Lesson M]`, then the curriculum's starter text, then the completion contract the Deep dive appends. The alias in the curriculum file (`[CURRICULUM: Basics …]`) is never sent. `docs/basics/basics.json` is the curriculum file with its tags rewritten to the canonical form, and a test holds the Swift data (`BasicsCurriculum.swift`) to it word for word.
 - **Follow-up turns.** `[opener, …thread]`, with the last user turn re-tagged by the existing legacy-server bridge. Fixed here: the bridge checked only for `[CURRICULUM`, so on a Basics lesson's first request it would have tagged the opener twice, and that request's opener would have differed from every later one's (a history-cache miss). `ChatViewModel.carriesLessonTag` now knows both tags; Deep-dive bytes are unchanged.
 - **Ids.** Lessons `b1_l1` … `b5_l4`; units `basics_1` … `basics_5`. `CurriculumTrack.of(id:)` tells the two courses apart by shape.
-- **Progress.** One store, one sync, one list. A push sends `b` and `u` ids together under `MercuriusCurriculum.version` (1), never a separate number. A pull merges both; every count, frontier and "next" is per course (`totalCompleted(in:)`, `frontier(in:)`), and the weekly plan still counts only the Deep dive. If a server refuses the push with a 400 (what one from before Basics does for a `b` id), the sync retries once with the Deep dive's ids alone, so the Deep dive keeps syncing.
+- **Progress.** One store, one sync, one list. A push sends `b` and `u` ids together under `MercuriusCurriculum.version` (1), never a separate number. A pull merges both; every count, frontier and "next" is per course (`totalCompleted(in:)`, `frontier(in:)`), and so is the weekly plan (`WeeklyPlan.compute(progress:track:)`): the weekly nudges read the course the learner follows, so a Basics learner's lessons count toward the week's goal and its wording. If a server refuses the push with a 400 (what one from before Basics does for a `b` id), the sync retries once with the Deep dive's ids alone, so the Deep dive keeps syncing. The refusal is remembered for that session id until the next launch, or until a pull shows a `b` id: later pushes send the Deep dive's ids alone, and a snapshot that went up that way counts as synced, so an unchanged one is never sent again (no 400 on every launch).
 - **Capabilities.** Every chat request now declares the device beside `blocks_v1`: `platform_ios` or `platform_mac`. Only the Basics guide reads it (b1_l1's "tap the microphone on your keyboard" becomes "type … then click the arrow" on a Mac). Production's schema accepts any well-formed token, and nothing else on the server reads it.
 - **Completion.** Unchanged: `lessonComplete: true` (or the inline marker) completes the lesson.
 
@@ -68,9 +68,45 @@ The founder asked for "a separate 'easy' curriculum that can just teach people t
 - `-SeedCompleted b1_l1,b1_l2` (with `-UITests`, whose progress suite is emptied at launch and never synced) counts lessons as done.
 - `ios/scripts/mac-snapshots.sh` has `basics-today`, `basics-path`, `basics-intro`, `basics-lesson`, `basics-lesson-check` and `basics-lesson-complete`.
 
+## Review fixes (2026-10-22)
+
+A UX review (a 72-year-old beginner's live lessons on the server branch, plus all 80 iPhone and 28 Mac shots) and a code review found these on the client side. Each is fixed here, with a test where one can hold it.
+
+| Finding | Fix |
+|---|---|
+| Basics learners were steered into the Socratic free chat: Mac Today's "Think it through · Socratic" card, and Home's "Chat with Merc". | Mac Today on Basics shows no Think it through (`MacTodayView.showsCards`). Home's second button on Basics is "All Basics lessons" (the path). No Basics screen names a mode; a test holds the Basics words free of "Socratic" and "streak". |
+| At AX3 the end-of-lesson choices were below the fold, and Merc covered text. | When the Basics sheet doesn't fit, "Next", "That's enough for today" and "Your place is saved." are pinned to its bottom, never squeezed, and only the headline and Try this today scroll (`ViewThatFits`). At accessibility sizes Merc stays off the Basics sheet. A sheet shorter than its cap now sits on the bottom edge (it used to float mid-screen once it stopped filling the cap). The Deep dive's sheet is unchanged. |
+| "Your path" offered "Daily streak reminder" and "Weekly nudges" next to the Basics choice. | One plain switch, "Remind me to practice" ("Twice a week: Sunday at 6 PM and Wednesday at 7 PM."), and no streak switch (`RemindersSection(plain:)`). The daily streak reminder stays in the Progress hub. |
+| The weekly plan counted only Deep-dive lessons, so a Basics learner always read as 0 this week. | `WeeklyPlan.compute(progress:track:)` counts the chosen course; Home and the reminder planner pass it. |
+| The pre-Basics server fallback sent two PUTs (one refused) on every pull and push. | The refusal is remembered per session id until the next launch or a pull that shows a `b` id; Deep-dive-only pushes then, and an unchanged snapshot is not sent again. |
+| `readingSizeFloor` switched between two view branches, resetting state on a size pick. | One `dynamicTypeSize(range)` modifier for every size; a test fails if the type ever becomes `_ConditionalContent`. |
+| The practice chip's `text.cursor` icon read as "AI" before the quote. | A pencil. |
+| The Mac check card said "YOUR TURN FIRST". | "Pick one" on Basics (`NightReplyCopy.checkOpenBasics`). The "Tap" in Merc's line before the check is the server's; the server branch now says "Click" for the Mac and the web. |
+| The completion card's key ideas included "…just like this one". | Basics leaves out a key idea that points back into the chat (`NightKeyIdeas.pointsBack`). The server branch also tells Merc that [KEY] must stand on its own, and removes "just". |
+| The path's title and tab said "Curriculum". | "Lessons" for a Basics learner; the Deep dive keeps "Curriculum". |
+| The snapshot tests never drew the tracked path the app shows. | `testCurriculumTrackedDeepDive` and `testCurriculumTrackedBasics` added, with **no reference images**: recording is the founder's job. Until recorded, these two fail with "no reference" when the snapshot class runs (CI skips it). |
+
+Not changed: the tab bar at AX3 (iOS's own glass bar; see Not done).
+
+### Verification of the review fixes
+
+All on this branch's final code, 2026-10-22.
+
+| Check | Result |
+|---|---|
+| `swift test --parallel` (`ios/Packages`, ArchitectureTests included) | 1,242 tests in 185 suites passed: the first build's 1,233 plus 9 (weekly plan per course, the remembered refusal (2), the reading-size identity and floor (2), the plain reminder words, Mac Today on Basics, standalone key ideas, the Lessons title). |
+| CI lint, `ios/scripts/ci-compat-lint.py` | 0 findings. |
+| iOS build for testing, Lab B, derived data `/private/tmp/merc-basics-ios-dd`, after `xcodegen generate` | Succeeded (the new snapshot tests compile). |
+| iOS tests, CI's flags (`-skip-testing` ViewSnapshotTests, PerformanceTests, AppStoreScreenshots; retries on; recording forced off) | MercuriusTests 3 of 3 and MercuriusUITests 26 of 26 passed, 29 test cases with no failure and no retry, including `testFirstRunCanStartTheBasics` and the AUD-12 `testFirstRunGateCompletesAtLargestTextSize`. |
+| Mac Debug build, `/private/tmp/merc-basics-mac-dd` | Succeeded. |
+| Mac shots, `mac-copy-snapshots.sh` (copy `macns31`, ad hoc, never activated), light and dark | basics-today, basics-lesson, basics-lesson-check, basics-lesson-complete, gate-path: all ok. The script's only complaint was "a Mercurius running before is gone": those were the Lab B simulator's app processes this session relaunched for the iPhone shots. The founder's Mercurius (PID 83916) ran before and after. |
+| iPhone shots, Lab B, by DEBUG launch arguments | Your path (Large light, AX3 dark), Home on Basics (Large light and dark), the Basics path, the intro, the practice chip, the check (AX3 dark), and the completion at Large light, AX3 light and AX3 dark. Kept in `.claude/worktrees/basics-shared/shots/review-fixes-2026-10-22/`. |
+
+The key shots 01–04 and 06 were retaken on this code; 07 is new.
+
 ## Verification
 
-All on the final code of this branch, 2026-10-21.
+All on the code of this branch as first built, 2026-10-21.
 
 | Check | Result |
 |---|---|
@@ -101,12 +137,13 @@ At AX3 the text-size offer is absent. That is by design: the system size is alre
 
 | File | What |
 |---|---|
-| `01-iphone-track-choice.jpg` | "Your path": Large light, AX3 dark |
-| `02-iphone-basics-path-home.jpg` | The Basics path (Large light) and Home (Large dark) |
-| `03-iphone-basics-lesson.jpg` | The intro with "Want the words bigger?", the first reply with the practice chip, the check at AX3 dark |
-| `04-iphone-basics-complete.jpg` | The completion (Large light) and Try this today with Copy (AX3 dark) |
+| `01-iphone-track-choice.jpg` | "Your path" with the one plain reminder switch: Large light, AX3 dark (2026-10-22) |
+| `02-iphone-basics-path-home.jpg` | The Basics path, titled "Lessons" (Large light), and Home with "All Basics lessons" (Large dark) (2026-10-22) |
+| `03-iphone-basics-lesson.jpg` | The intro with "Want the words bigger?", the first reply with the pencil practice chip, the check at AX3 dark (2026-10-22) |
+| `04-iphone-basics-complete.jpg` | The completion: Large light (sized to fit, on the bottom edge) and AX3 dark (choices pinned, Merc off the sheet) (2026-10-22) |
 | `05-mac-basics-sidebar-path.jpg` | The Mac sidebar's Basics section and a Basics unit page |
-| `06-mac-basics-lesson.jpg` | A Basics lesson on the Mac, with the practice chip |
+| `06-mac-basics-lesson.jpg` | A Basics lesson on the Mac, with the pencil practice chip (2026-10-22) |
+| `07-mac-basics-today-check.jpg` | Mac Today on Basics with no Think it through, and the check card's "Pick one" (2026-10-22) |
 
 ## Not done, and why
 
@@ -115,12 +152,13 @@ At AX3 the text-size offer is absent. That is by design: the system size is alre
 - **"Say that more simply" and "I'm stuck" buttons** (BEGINNER_GUIDE §2.3) need a new server nudge; "Explain more" means "go deeper".
 - **The printable completion and "Who to call" cards** (curriculum §6) are the certificate work's.
 - **The web widgets** don't offer Basics.
-- **Reminders** keep their existing copy (opt-in, as before). A Basics learner who turns them on gets a lesson link into Basics, but the daily reminder is still the streak one.
+- **Reminders** keep their existing notification text (opt-in, as before). A Basics learner who turns on "Remind me to practice" gets the weekly nudges with a lesson link into Basics, and the nudge skips a week whose goal is met by Basics lessons. The daily streak reminder is off the first-run screen; it is still in the Progress hub for Deep-dive learners.
 - **The App Store review prompt** still counts Basics completions toward its 3rd and 10th.
 - **The recorded replay is the phone's.** The chip's hint says "Click" on a Mac, but the replayed session was recorded with `platform_ios`, so the Mac shots show "tap the microphone" in Merc's first reply. Live, the server words it for a Mac.
 - **Return on the Mac's "Your path".** Return used to start Lesson 1. With two equal choices neither is the default, so Return now does nothing there and the learner clicks one. Founder question 1 below would settle it.
-- **The model still says "just" sometimes.** The recorded reply in the shots has "just like this one" and "just by asking". The apps' own Basics words are held free of it by a test, but the server's guide doesn't fully stop the model (SERVER.md: about 1 reply in 4).
-- **At AX3 and above the completion sheet scrolls.** Like the Deep dive's, it is capped at 86% of the screen; "Next" can sit below "Try this today" until the learner scrolls.
+- **The recorded replay predates the server's clean-up.** The recorded reply in the shots has "just like this one" and "just by asking". The server now removes "just" and "simply" from Basics replies (`lib/basicsVoice.js` on `feat/basics-server`), so a live lesson won't show them; the replay is the old recording.
+- **The tab bar at AX3.** It is iOS's own tab bar: its labels don't grow with the text (iOS shows them large on a long press), and the path's text shows through its glass while scrolling. The path rests above it. Making it solid is a system-wide design change, not done here.
+- **The Deep dive's completion sheet at AX3** still scrolls with its buttons inside it, as before (the pinned choices are Basics only, so the Deep dive's screens are unchanged).
 
 ## Founder questions this branch adds
 
