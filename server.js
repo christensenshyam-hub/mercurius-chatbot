@@ -2073,7 +2073,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // too, or the call fails, the leaked values are replaced by "?".
     // Merc's previous reply, for the stall check (unrepeatQuestion).
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
-    const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(text, previousReply && previousReply.content, guardProblems[0] && guardProblems[0].variable));
+    const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
+      homeworkGuard.handBackFromLatest(text, clientMessages),
+      previousReply && previousReply.content,
+      guardProblems[0] && guardProblems[0].variable,
+    ));
     const tidyWriting = (t) => homeworkGuard.oneQuestion(homeworkGuard.stripMenu(homeworkGuard.stripPreamble(t)));
     const guardReply = async (draft) => {
       if (writingTurn) {

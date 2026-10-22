@@ -405,6 +405,21 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.equal(g.needsQuote(draft.slice(0, 3)), false, 'their claim itself gets the THEIR WORDS note, not a check');
   });
 
+  test('handBackFromLatest asks from the line the thread has reached (final hw run 2026-10-22)', () => {
+    const th = [
+      { role: 'user', content: 'what is 2x + 9 = 21' },
+      { role: 'assistant', content: "Subtract 9 from both sides: 2x = 12. What's 12 divided by 2?" },
+      { role: 'user', content: 'i still dont get it' },
+    ];
+    assert.equal(
+      g.handBackFromLatest("Here's one:\n\n3x + 5 = 29\n3x = 24\nx = 8\n\nNow try yours the same way, starting from 2x + 9 = 21 — what's your first step?", th),
+      "Here's one:\n\n3x + 5 = 29\n3x = 24\nx = 8\n\nNow yours, from 2x = 12: what do you get for x?",
+    );
+    const keep = "Now try yours — you're at 2x = 12. What's x?";
+    assert.equal(g.handBackFromLatest(keep, th), keep);
+    assert.equal(g.handBackFromLatest('Now yours: 2x + 9 = 21. What first?', th.slice(0, 1)), 'Now yours: 2x + 9 = 21. What first?', 'nothing written yet');
+  });
+
   test('oneQuestion keeps only the closing question mark', () => {
     assert.equal(g.oneQuestion('How many moles are in 90 g of water?\n90 ÷ 18 = 5 mol.\n\nNow yours: how many moles is your 36 g?'), 'How many moles are in 90 g of water.\n90 ÷ 18 = 5 mol.\n\nNow yours: how many moles is your 36 g?');
     assert.equal(g.oneQuestion('What undoes the 4?'), 'What undoes the 4?');
