@@ -51,7 +51,8 @@ struct RegistryTests {
             (.grownFromStatic, "u6_l1", .firstExample, [], 2),
             (.doubtDial, "u6_l4", .firstExample, [], 1),
             (.predictTheExam, "u7_l1", .firstExample, ["17%", "48%", "Bastani"], 2),
-            (.pageWithASecret, "u8_l1", .firstExample, ["hidden text", "prompt injection", "Guardian"], 1),
+            (.pageWithASecret, "u8_l1", .firstExample, ["hidden text", "prompt injection", "The Guardian", "injection",
+                                                         "hidden instruction", "instructions hidden", "hijack"], 1),
         ]
         #expect(expected.count == InteractiveID.allCases.count)
         for (id, lesson, anchor, spoilers, wave) in expected {
