@@ -303,8 +303,38 @@ public struct PatchRun: Equatable, Sendable {
     public var laps: Int { events.filter(\.finishedLap).count }
     /// It finished the race (3 laps).
     public var finished: Bool { laps >= PatchTrack.laps }
-    /// The route as a lead-in and a loop, for the picture's numbered arrows.
+    /// The route as a lead-in and a loop, for the picture's tagged legs.
     public var legs: RouteLegs { RouteLegs.of(plan.nodes) }
+
+    /// The stretch the route runs both ways (rule A: over the line), which
+    /// a still draws with a double-headed arrow and the crossing count;
+    /// nil when every stretch is run one way.
+    public var shuttle: (from: Int, to: Int)? {
+        for leg in legs.drawn {
+            let pairs = Array(zip(leg, leg.dropFirst()))
+            if let pair = pairs.first(where: { pair in pairs.contains { $0.0 == pair.1 && $0.1 == pair.0 } }) {
+                return (pair.0, pair.1)
+            }
+        }
+        return nil
+    }
+
+    /// Where and when the run earned its points, for the pops drawn while
+    /// it plays: the line for a crossing or a lap, the star for a hit.
+    /// Rule B pays every stretch by its length, so it has none (its points
+    /// climb as the boat moves).
+    public var pops: [PatchPop] {
+        guard rule != .metres else { return [] }
+        return plan.steps.enumerated().compactMap { index, step in
+            guard step.reward > 0 else { return nil }
+            if events[index].hitStar {
+                let star = PatchTrack.waypoints[step.edge.to]
+                return PatchPop(tick: step.endTick, points: step.reward, x: star.x, y: star.y, atLine: false)
+            }
+            return PatchPop(tick: step.endTick, points: step.reward, x: PatchTrack.finishLine.x,
+                            y: PatchTrack.finishLine.y, atLine: true)
+        }
+    }
 
     /// The count the rule pays for (targets, crossings, metres or laps).
     public var paidCount: Int {
@@ -378,6 +408,30 @@ public struct PatchRun: Equatable, Sendable {
         guard let edge else { return -Double.pi / 2 }
         let a = PatchTrack.waypoints[edge.from], b = PatchTrack.waypoints[edge.to]
         return atan2(b.y - a.y, b.x - a.x)
+    }
+}
+
+/// Points a move earned, popped on the track where it earned them ("+100"
+/// at the line, "+10" at a star) for a moment after `tick`.
+public struct PatchPop: Equatable, Sendable {
+    /// How long a pop shows, in ticks of the race clock (0.6 s of a run).
+    public static let ticks = 6.0
+
+    /// The tick the move ended (when the points were earned).
+    public let tick: Int
+    public let points: Int
+    /// Where, in metres: the finish line's middle or the star.
+    public let x: Double
+    public let y: Double
+    /// At the finish line (a crossing or a lap), not a star.
+    public let atLine: Bool
+
+    /// How far through its moment the pop is at `tick` (0 just earned, 1
+    /// gone), or nil when it isn't showing.
+    public func progress(at tick: Double) -> Double? {
+        let elapsed = tick - Double(self.tick)
+        guard elapsed >= 0, elapsed < Self.ticks else { return nil }
+        return elapsed / Self.ticks
     }
 }
 

@@ -46,9 +46,23 @@ struct LaunchOptionsTests {
 
     @Test("Scroll ids: one per target, all distinct")
     func scrollIDs() {
-        let ids = InteractiveScrollTarget.allCases.map(InteractiveScrollID.id(for:)) + [InteractiveScrollID.card]
+        let ids = InteractiveScrollTarget.allCases.map(InteractiveScrollID.id(for:))
+            + [InteractiveScrollID.card, InteractiveScrollID.stage, InteractiveScrollID.panel]
         #expect(Set(ids).count == ids.count)
         #expect(InteractiveScrollID.id(for: .reveal) == InteractiveScrollID.reveal)
+    }
+
+    @Test("The scroll action: nothing outside a lesson; equal by its key, so a host's re-render doesn't redraw the card")
+    @MainActor
+    func scrollAction() {
+        var asked: [String] = []
+        let lesson = InteractiveScrollAction(key: "lesson-list") { id, animated in asked.append("\(id) \(animated)") }
+        let again = InteractiveScrollAction(key: "lesson-list") { _, _ in }
+        #expect(lesson == again && lesson != .none)
+        lesson(InteractiveScrollID.stage, animated: true)
+        #expect(asked == ["\(InteractiveScrollID.stage) true"])
+        InteractiveScrollAction.none(InteractiveScrollID.stage, animated: false)
+        #expect(EnvironmentValues().interactiveScrollIntoView == .none)
     }
 }
 

@@ -58,7 +58,7 @@ ios/Packages/LessonInteractives/            (DesignSystem only: no network, no s
       InteractiveID.swift          every card: slug, working name
       InteractiveSpec.swift        InteractiveSpec, InteractiveAnchorRule, InteractiveTerms (spoiler/mention matching)
       InteractiveRegistry.swift    the table: lesson → card, anchor, spoilers, wave, enabled
-      InteractiveLaunchOptions.swift   DEBUG launch arguments; InteractiveScrollID
+      InteractiveLaunchOptions.swift   DEBUG launch arguments; InteractiveScrollID (card, top, reveal, after, stage, panel)
       PredictReveal.swift          the predict → reveal machine; InteractiveRevealLines
       InteractiveCopy.swift        InteractiveShellCopy, InteractiveLabel, InteractiveCopyRules
       InteractiveLayout.swift      InteractiveLayout, InteractiveMotion, InteractiveAccessibility
@@ -153,6 +153,7 @@ struct LessonInteractivePlacement { messageID, position (section, afterBlock), c
 - the tokenizer is drawn by `LessonTokenizerCard` / `NightInteractiveCard`, exactly as before;
 - every other card is drawn by `LessonInteractiveCardView`, which calls `InteractiveCardViews.card(InteractiveCardContext(spec, spoiled, store))`. The store is the lesson list's `InteractiveStateStore`, which lives only in memory and starts fresh on a new lesson screen.
 - The card carries the scroll ids `InteractiveScrollID.card` / `.top` / `.after`, and the card marks `.reveal` itself.
+- **Bringing a part into view.** The list hands every card `\.interactiveScrollIntoView` (`InteractiveScrollAction`, on both platforms; the DEBUG gallery has one too). A card whose control can sit a screen away from where its result shows (Patch the Reward: the chips are about 900 pt below the track) marks the part with `.interactiveScrollMark(InteractiveScrollID.stage)` (or `.panel`, `.reveal`: the id with a little room above and below, so the part lands clear of the Mac's edge fades) and calls `scrollIntoView(id, animated: !theme.reduceMotion)` when the student sets something off there. The list scrolls the least that shows the whole part (nothing when it already shows) and counts it as the student's own move (`MessageScrollPolicy.partJumped()`: a streaming reply stops being followed). Call it only after a tap, never on its own timer, and not at all where the parts can't share a screen (the accessibility sizes: show the result where the student tapped instead).
 
 ---
 
@@ -177,7 +178,8 @@ struct LessonInteractivePlacement { messageID, position (section, afterBlock), c
 |---|---|
 | `InteractiveCardShell(id:title:accessibilityTitle:summary:compactLine:content:)` | the eyebrow and title (a header whose value is `summary`), the frame, the theme. On the iPhone, Lesson 1.1's night-sky island; on the Mac, Night's lit card and the compact "Try it" below 440 pt (VoiceOver goes to the title, the keyboard to the first control) |
 | `PredictChips(prompt, machine:, title:, onLock:)` | the question (a header) and 2–4 chips; one tap locks the guess; a selection haptic |
-| `RevealBox(lines, takeaway:)` | "You guessed / What happened", one VoiceOver element. Mark it `.id(InteractiveScrollID.reveal)` and announce `lines.spoken` |
+| `RevealBox(lines, takeaway:)` | "You guessed / What happened", one VoiceOver element. Mark it (or the group it opens) `.id(InteractiveScrollID.reveal)` or `.interactiveScrollMark(InteractiveScrollID.reveal)`, and announce `lines.spoken` |
+| `InteractiveScrollAction` (`\.interactiveScrollIntoView`) | asks the lesson's list to bring a marked part of the card into view after a tap (§3, Drawing); does nothing outside a lesson |
 | `CounterTiles(tiles, comparison:)` | printed counts and "=/≠"; a text table at AX sizes; `CounterTiles.summary(_:)` is the sentence to announce |
 | `StopControl(name, stops:, selection:, isEnabled:, value:, decreaseLabel:, increaseLabel:, onSelect:)` | a stops track (44 pt marks), or two step buttons at AX sizes; one adjustable VoiceOver element; ←/→ on the Mac while focused; a haptic |
 | `InteractiveSegmented(name, options:, selection:, title:, onSelect:)` | a 2–3-way toggle (←/→ on the Mac) |

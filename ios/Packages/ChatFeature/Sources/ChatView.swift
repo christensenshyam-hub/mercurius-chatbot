@@ -909,6 +909,19 @@ struct MessageListView: View {
                 // and every other card its state.
                 .environment(tokenizer)
                 .environment(interactives)
+                // A card brings a part of itself into view (Patch the
+                // Reward's track while a run plays, out of sight above the
+                // chip the student tapped): the least scroll that shows it,
+                // counted as the student's own move.
+                .environment(\.interactiveScrollIntoView,
+                             InteractiveScrollAction(key: "lesson-list") { [scroll] id, animated in
+                                 scroll.policy.partJumped()
+                                 if animated {
+                                     withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
+                                 } else {
+                                     proxy.scrollTo(id, anchor: nil)
+                                 }
+                             })
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
                 })

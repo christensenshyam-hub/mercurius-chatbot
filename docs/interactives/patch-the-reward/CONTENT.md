@@ -9,7 +9,7 @@
 - `…/PatchTheRewardCopy.swift`: every line below. `…/PatchTheRewardState.swift`: the guesses and runs (in memory only).
 - `Sources/Views/PatchTheReward/` (the track picture and the card's parts), `Views/Phone/PatchTheRewardPhoneCard.swift`, `Views/Mac/NightPatchTheRewardCard.swift`.
 - Tests: `Tests/RoutePlannerTests.swift`, `Tests/PatchTheRewardTests.swift` (every number below is re-derived there), `ios/MercuriusUITests/PatchTheRewardUITests.swift`.
-**Screenshots:** `shots/` next to this file (not committed).
+**Screenshots:** `shots/` next to this file (not committed; the first build's in `shots/2026-10-21/`). Two key shots are committed: `docs/interactives/key-shots/patch-the-reward-*.jpg`.
 
 The card is a picture the app draws and a computation it does on the device. It sends nothing, stores nothing, runs no model and changes nothing in the prompt or the lesson. Every route it shows was worked out by exact arithmetic over authored toy data, and is the same on every device, every time.
 
@@ -26,33 +26,35 @@ The card is a picture the app draws and a computation it does on the device. It 
 | Eyebrow | INTERACTIVE |
 | Title | Patch the Reward |
 | Hook | You’re training a boat to win a race. You can only tell it one thing: what earns points. |
-| Under the hook | A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 star targets that come back after they’re hit. |
+| Under the hook | A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, where the boat goes fastest, and 3 star targets that come back after they’re hit. |
 
 ### The track (a picture)
 
 Seen from above, on night water (the same in light and dark): the loop's channel; a chequered finish line on its near bend with the word **finish** beside it; gates **1**, **2** and **3** (a dashed bar across the channel and a numbered disc on the island side); the side lagoon off the far bend with **3 stars** in a small ring and open water around them; the boat.
 - Before a rule runs: the boat waits on the start line, pointing the way the race runs.
-- While a run plays: the boat moves along its route with its wake (lit on the Mac); a star is drawn as a dashed outline for the 4 ticks it is gone.
-- After a run (and at once under Reduce Motion or VoiceOver): the route as a line with arrows and the boat where the run ended, with every star shown (a still shows the track as set). A route with a way in and a loop has its legs numbered in order on white squares (the gates are indigo discs): **1** the way in, **2** the loop it then repeats. A route that is one loop (A, C) needs no number. Where a route runs a stretch both ways (rule A, over the line), it is drawn as two lanes with arrows each way, and, because that stretch is shorter than the boat that ends the run on it, a double-headed arrow beside it, on the loop's outer side.
+- While a run plays: the boat moves along its route with its wake (lit on the Mac); a star is drawn as a dashed outline for the 4 ticks it is gone. The points each paid move earns pop where they are earned and float up, fading, for 6 ticks: **+100** up the channel from the finish line (rule A's crossings, one every 2 ticks, so they stream; rule C's laps), **+10** above a star (the 2016-style rule). Rule B has none: it pays every stretch by its length, so its points climb with every metre. Each pop is the rule's own reward for that move (`PatchRun.pops`, tested); nothing pops under Reduce Motion, where runs don't play.
+- After a run (and at once under Reduce Motion, VoiceOver or the accessibility text sizes): the route as a line with arrows and the boat where the run ended, with every star shown (a still shows the track as set). A route with a way in and a loop has its legs tagged in words on white tags (the gates are numbered indigo discs, so the two never read alike): **in** on the way in (on the island, above "finish"), **loop** on the loop it then repeats (beside whichever of its stretches leaves the tag clearest of the route, stars, gates and boat). A route that is one loop (A, C) needs no tag. Where a route runs a stretch both ways (rule A, over the line), it is drawn as two lanes with arrows each way, and, because that stretch is shorter than the boat that ends the run on it, a double-headed arrow beside it on the island, where there is room (26 pt long on the iPhone), with **finish** moved over **×30** (the run's crossing count, `PatchTheRewardCopy.shuttleTag`, tested) to its right.
 
 At the accessibility text sizes (iPhone), the picture keeps its width but its labels don't grow, so a line under it says what it shows: "The boat waits on the start line.", "The boat is running rule A." while a run plays, or the route's sentence (the VoiceOver table below lists them; VoiceOver hears it once, in the picture's label).
 
 Under the track, two counters: **Points** and **Laps** ("0 of 3"). They count up as a run plays and show where the shown run ended.
 
+**The order.** iPhone (and a Mac card narrower than 520 pt): the hook; the track and its counters; the picked rule's panel (the run, its guess, its result), right under the track so a run and its result share a screen; once all three patches have run, the reveal and the takeaway, right after the last patch's result; the toy label; the rules. Mac at full width: the hook; the track and its counters; the toy label; the panel beside the rules; the reveal.
+
 ### Labels (on the canvas, never footnotes)
 
 | Where | Kind | Text |
 |---|---|---|
-| Under the track, always | toy | A toy we built, not the real game. The boat takes the best-scoring route for your rule, which a computer worked out ahead of time. The 2016 agent learned its loop by trial and error. In the toy, the boat is fastest on the lagoon’s open water. |
+| Always. iPhone: between the panel and the rules, so it is passed on the way to every chip and guess. Mac (wide): under the track | toy | A toy we built, not the real game. The boat takes the best-scoring route for your rule, which a computer worked out ahead of time. The 2016 agent learned its loop by trial and error. In the toy, the boat is fastest on the lagoon’s open water. |
 | After the reveal | made up | Loopholes A and B are made up for this toy. DeepMind researchers keep a public list of dozens of real cases of the same kind. |
 
-The first label is the slate's, word for word, plus one sentence: rule B's result depends on the toy's speeds, and the slate makes that part of the label. The second shows only after the reveal, because before it, "A and B are loopholes" would give the predictions away.
+The first label is the slate's, word for word, plus one sentence: rule B's result depends on the toy's speeds, and the slate makes that part of the label. The same fact is in the track line under the hook ("where the boat goes fastest"), where students read before they guess; the label is grey and long. On the iPhone the label sits below the panel, not between the track and it, so the first button comes after about 70 words, not 120, and a run's result sits right under the track. The second label shows only after the reveal, because before it, "A and B are loopholes" would give the predictions away.
 
 ### 1 · The 2016-style rule (no prediction: the tutor has just told this story)
 
 | Where | Text |
 |---|---|
-| Before it runs | First, a rule like the one in 2016: +10 points per target hit. |
+| Before it runs | First, a rule like the one a game-playing AI got in 2016: +10 points per target hit. |
 | Button | Play it |
 | While it runs | 2016 · +10 per target hit, and a **Skip to the result** button |
 | After (What happened) | It hit 26 targets, circling the stars, and finished 0 laps. |
@@ -73,8 +75,8 @@ The first label is the slate's, word for word, plus one sentence: rule B's resul
 | Patch | What happened | Under it |
 |---|---|---|
 | A | It crossed the line 30 times, back and forth, and finished 0 laps. | Crossing the line isn’t finishing a lap. It isn’t cheating. It’s scoring. |
-| B | It moved 1,114 metres, round and round the open lagoon, and finished 0 laps. | Moving isn’t racing. It isn’t cheating. It’s scoring. |
-| C | It went through gates 1, 2 and 3 in order and finished 3 laps. | It finished once the rule spelled out what a lap is. |
+| B | It moved 1,114 metres, round and round the open lagoon where it’s fastest, and finished 0 laps. | Moving isn’t racing. It isn’t cheating. It’s scoring. |
+| C | It went through gates 1, 2 and 3 in order and finished 3 laps. | It finished once the rule spelled out what a lap is. Add a shortcut between the gates, and even this rule would have a gap. |
 
 The guess is shown as **It finishes** / **It won’t finish**. A guess can't be changed once made; a tried rule's chip, picked again, shows its result, and picked once more plays it again.
 
@@ -84,8 +86,7 @@ The guess is shown as **It finishes** / **It won’t finish**. A guess can't be 
 |---|---|
 | You guessed | It would finish for 2 of the 3 rules (or "none of the 3 rules", "1 of the 3 rules", "all 3 rules") |
 | What happened | It finished for 1 of them: rule C. |
-| Under it | It isn’t cheating. It’s scoring. |
-| Takeaway | Nothing was broken: the boat did exactly what each rule paid for. Paying for laps worked here because a lap is easy to count. “Be helpful” or “be honest” isn’t. |
+| Takeaway | Nothing was broken: the boat did exactly what each rule paid for. Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. “Be helpful” or “be honest” can’t be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps. |
 | Label | Loopholes A and B are made up for this toy. … (above) |
 
 **Spoiled mode** (never reached in a lesson, since the card has no spoiler terms; DEBUG `-InteractiveState spoiled` shows it): no guesses; a patch runs when its chip is picked; the results have no "You guessed", and the reveal says "It finished for 1 of the 3 rules: rule C."
@@ -106,9 +107,9 @@ The guess is shown as **It finishes** / **It won’t finish**. A guess can't be 
 | … a patch waiting for its guess | Rule A: plus 100 per finish-line crossing. Will it finish now? Make your guess. |
 | … a run playing | The boat is running. Rule A: plus 100 per finish-line crossing. |
 | … after a run | the run's sentence (next row), then "2 of 3 patches left to try." (after the 2016-style rule: "Now patch the rule: pick A, B or C.") |
-| … revealed | You predicted it would finish for 2 of 3 rules. It finished for 1 of 3: rule C. It isn’t cheating. It’s scoring. |
-| A run's sentence (also announced when a run ends, with the line under its result; after the third patch, with the reveal) | The 2016-style rule: plus 10 per target hit. The boat hit 26 targets, circling the stars in the lagoon, and finished 0 laps. 260 points. / Rule A: plus 100 per finish-line crossing. The boat crossed the line 30 times, back and forth, and finished 0 laps. 3000 points. / Rule B: plus 1 per metre moved. The boat moved 1114 metres, round and round the lagoon’s open water, and finished 0 laps. 1114 points. / Rule C: plus 100 per full lap through gates 1, 2 and 3 in order. The boat went through gates 1, 2 and 3 in order and finished 3 laps. 300 points. |
-| The track (one image) | The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 star targets. Then: The boat waits on the start line. / The boat is running rule A. / Its route: past gates 1 and 2 into the lagoon, then round and round the 3 stars. / Its route: back and forth over the finish line. / Its route: past gates 1 and 2 into the lagoon, then round and round its open water. / Its route: 3 laps, through gates 1, 2 and 3 in order each time. |
+| … revealed | You predicted it would finish for 2 of 3 rules. It finished for 1 of 3: rule C. |
+| A run's sentence (also announced when a run ends, with the line under its result; after the third patch, with the reveal) | The 2016-style rule: plus 10 per target hit. The boat hit 26 targets, circling the stars in the lagoon, and finished 0 laps. 260 points. / Rule A: plus 100 per finish-line crossing. The boat crossed the line 30 times, back and forth, and finished 0 laps. 3000 points. / Rule B: plus 1 per metre moved. The boat moved 1114 metres, round and round the lagoon’s open water, where it’s fastest, and finished 0 laps. 1114 points. / Rule C: plus 100 per full lap through gates 1, 2 and 3 in order. The boat went through gates 1, 2 and 3 in order and finished 3 laps. 300 points. |
+| The track (one image) | The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water, where the boat goes fastest, and 3 star targets. Then: The boat waits on the start line. / The boat is running rule A. / Its route: past gates 1 and 2 into the lagoon, then round and round the 3 stars. / Its route: back and forth over the finish line, 30 times. / Its route: past gates 1 and 2 into the lagoon, then round and round its open water. / Its route: 3 laps, through gates 1, 2 and 3 in order each time. |
 | The counters (one element) | Points: 260. Laps: 0 of 3. |
 | A rule's chip (a button; "selected" when picked) | Rule A: plus 100 per finish-line crossing. (once tried: "… Tried: 0 laps.") Hint: Shows this rule on the track. Before the 2016-style rule has run, a patch's chip is dimmed and its value says "Play the 2016 rule first." |
 | Will it finish now? (a header), Yes / No (buttons) | Yes. Hint: Locks in your guess. It can’t be changed after. |
@@ -139,7 +140,7 @@ Every number on the card is toy data, re-derived by the code from the authored t
 | Stretch | Metres | Ticks | Speed (m a tick) |
 |---|---|---|---|
 | The loop (18 stretches) | 13 each | 1 | 13 |
-| Over the finish line, either way | 8 | 2 | 4 (the boat turns round) |
+| Over the finish line, either way | 8 | 2 | 4 (a tuning choice, below) |
 | Loop → lagoon mouth (at the far bend) | 17 | 1 | 17 |
 | Lagoon mouth → back onto the loop | 8 | 1 | 8 |
 | Lagoon mouth → star 1 | 17 | 1 | 17 |
@@ -163,7 +164,7 @@ Every number on the card is toy data, re-derived by the code from the authored t
 
 Tuning notes (what had to be true for each optimum to be unique):
 - The stars' ring takes 2 ticks a stretch, and leaving the ring for the mouth takes 2 ticks: with a 1-tick exit, "leave and come straight back" tied with "stay in the ring" (the first draft had 256 tied routes for the 2016-style rule).
-- 3 laps fill the clock exactly, so rule C has no spare tick for a detour.
+- 3 laps fill the clock exactly, so rule C has no spare tick for a detour. That is why the stretch over the line takes 2 ticks (in every lap, not only when rule A turns the boat round): with a 1-tick line a lap is 19 ticks, 3 laps end at tick 57, and rule C has 20 tied routes (rule A would make 60 crossings, 6,000 points). Checked 2026-10-22 with the planner on that variant.
 - From each open-water point the next open-water stretch is the longest move, so rule B never darts elsewhere at the end.
 
 This is a planner, not a learner. The 2016 agent learned its loop by trial and error; the label says so, and the teacher note in §6 explains it.
@@ -186,6 +187,10 @@ Derivations (each checked in `PatchRunTests.numbers`):
 
 Cross-checks (`PatchRunTests.racingVersusLoopholes`): the 3-lap race route would score 0 under the 2016-style rule, 300 under A (3 crossings) and 726 under B (726 m), all less than the loophole; and every loophole route scores 0 under C.
 
+**The real game differed here.** In CoastRunners the targets were laid out along the route, so racing scored too, and OpenAI reports the circling agent scored on average about 20% more than human players. The toy puts every target in the lagoon, so racing scores 0 under the 2016-style rule, to make the gap plain. (Teacher note in §6.)
+
+**The pops** (`PatchRunTests.pops`): one per thing the rule pays for, each worth what one is worth, adding up to the run's points: 26 × +10 at the stars (the first at tick 10), 30 × +100 at the line (from tick 2), 3 × +100 at the line (ticks 20, 40, 60); none for B.
+
 The reveal's "You guessed" count is the student's own guesses (how many of A, B, C they said would finish); it is held in memory only.
 
 ---
@@ -194,17 +199,18 @@ The reveal's "You guessed" count is the student's own guesses (how many of A, B,
 
 | # | Claim (as the card makes it) | Status | Source |
 |---|---|---|---|
-| C1 | In 2016 an AI agent playing CoastRunners got lots of points and didn't finish ("Like the real 2016 CoastRunners agent: lots of points, no finish.") | True; in the guide (fact-check row 33, High). The agent scored more by circling and hitting the same reward targets, never finishing the race. "Catching fire" (Medium) is left off the card. The game isn't OpenAI's; the agent was, and the card names neither. | OpenAI, "Faulty reward functions in the wild", 2016-12-21, <https://openai.com/index/faulty-reward-functions/> (the page blocks fetching; confirmed through mirrors, row 33). DeepMind's specification-gaming post describes the same boat. |
+| C1 | In 2016 an AI agent playing CoastRunners got lots of points and didn't finish ("Like the real 2016 CoastRunners agent: lots of points, no finish.") | True; in the guide (fact-check row 33, High). The agent scored more by circling an isolated lagoon and hitting the same 3 targets as they came back, never finishing the race. "Catching fire" is left off the card (it adds nothing to the point). It is in OpenAI's own post, so it is High, not Medium as row 33 says ("from secondary coverage"); row 33 lives in the guide's fact-check doc on the prompts branch and should be upgraded there. The game isn't OpenAI's; the agent was. The card names the game (CoastRunners) but neither its maker nor OpenAI. | OpenAI, "Faulty reward functions in the wild", 2016-12-21, <https://openai.com/index/faulty-reward-functions/> (the page blocks fetching; read 2026-10-22 in a 2017 web-archive copy of blog.openai.com/faulty-reward-functions: the lagoon, the 3 targets, catching fire, about 20% above human players, no finish). DeepMind's specification-gaming post describes the same boat. |
 | C2 | The 2016 agent learned its loop by trial and error (the label). | True: it was a reinforcement-learning agent trained on the game's score. | As C1. |
-| C3 | "A rule like the one in 2016: +10 points per target hit." | A simplification, labelled: the 2016 agent was rewarded by the game's score, which rose as it hit targets. "+10" is our toy number, and the card says "a rule like", not "the rule". | As C1; the toy label. |
-| C4 | DeepMind researchers keep a public list of dozens of real cases of the same kind (after the reveal). | True; in the guide (row 35, High): about 60 examples in 2020. | Krakovna et al., DeepMind, "Specification gaming: the flip side of AI ingenuity", 2020-04-21, <https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/>. |
-| C5 | Loopholes A and B are made up for this toy, of the same kind as documented cases. | Ours, labelled "made up". They are toy loopholes, not documented incidents. | — |
+| C3 | "A rule like the one a game-playing AI got in 2016: +10 points per target hit." | A simplification, labelled: the 2016 agent was rewarded by the game's score, which rose as it hit targets. Nobody wrote a target rule: the game's score paid for targets, not for progress round the course, and the researchers assumed the score would track finishing. That assumption was the gap (teacher note, §6). "+10" is our toy number, and the card says "a rule like", not "the rule". DeepMind's 2020 post calls the targets a shaping reward. The line names the case without relying on the tutor's telling (the tutor's first example may be another case). | As C1; the toy label. |
+| C4 | DeepMind researchers keep a public list of dozens of real cases of the same kind (after the reveal). | True; in the guide (row 35, High): about 60 examples in 2020. The list is still kept: about 90 entries on 2026-10-22, some added in 2026, so the present tense holds. | Krakovna et al., DeepMind, "Specification gaming: the flip side of AI ingenuity", 2020-04-21, <https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/>; the list itself, linked from Krakovna's 2018 post (its public CSV, read 2026-10-22). |
+| C5 | Loopholes A and B are made up for this toy, of the same kind as documented cases. | Ours, labelled "made up". They are toy loopholes, not documented incidents. Real cases of the same kind on the public list: **Soccer** (a robot rewarded for touching the ball learned to get to it and vibrate against it, like A's back and forth over the line) and **Bicycle** (an agent rewarded for progress toward a goal, and not penalised for moving away, learned to ride in circles, like B's laps of the lagoon). | The list (C4): its "Soccer" and "Bicycle" rows. |
 | C6 | Every route, count and score on the card. | Toy arithmetic, re-derived in the tests (§2). | `PatchTheRewardTests`. |
-| C7 | "Paying for laps worked here because a lap is easy to count. 'Be helpful' or 'be honest' isn't." | A judgement the lesson makes (the slate's takeaway): a goal that can be counted exactly can be paid for exactly; values like helpfulness can't be counted that way. "Here" keeps it to this toy. | Guide U5L1 Teach: "the difficulty of encoding human values in a loss function". |
+| C7 | "Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. 'Be helpful' or 'be honest' can't be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps." | A judgement the lesson makes. Reworded after review (2026-10-22): the first wording ("because a lap is easy to count") fell apart against A and B, whose crossings and metres are just as easy to count. What C did differently is pay for the goal itself, spelled out exactly (gates 1, 2, 3 in order, then the line forwards); A and B paid for stand-ins. A value has no exact spelling, so any rule for it pays for a stand-in. "Here" keeps it to this toy. This supersedes the slate's §5 takeaway (SLATE.md and slate.json were updated to match). | Guide U5L1 Teach: "the difficulty of encoding human values in a loss function". |
+| C8 | C's second line: "Add a shortcut between the gates, and even this rule would have a gap." | A toy hypothetical (the teacher note's, now on the card): with a shortcut from one gate to the next, "a full lap through gates 1, 2, 3 in order" pays without racing the loop. It shows the careful rule worked for this track, not once and for all, against the slate's second misconception ("just write the goal more carefully once and it's fixed"). | — |
 
 **What this card does NOT say, on purpose:**
 - that the boat (or any AI) wants, cheats, tricks, lies or is lazy, or that anything was broken: the copy says what each rule "paid for" and that the boat "scored" (the copy test bans the intent words everywhere on this card);
-- that rule C is a perfect rule (see the teacher note);
+- that rule C is a perfect rule: C's own second line says a shortcut would open a gap;
 - that reward design is hopeless: one patch works;
 - that A and B happened in the real game, or that "+10" is the game's real scoring;
 - that the toy boat learned anything: it is a planner, and the label says so;
@@ -221,19 +227,20 @@ The reveal's "You guessed" count is the student's own guesses (how many of A, B,
 - **Once per thread**, never into text that is still streaming, never in a cut-off reply, never in a thread with a crisis line; reopened in the same run, the same place (all the framework's placement rules, `InteractivePlacementTests`).
 - **Spoilers:** none (the slate's row). A tutor reply that happened to describe a patch would not switch on the spoiled mode; the predictions would still be asked. See open question Q1 (§8).
 - **State:** the lesson's `InteractiveStateStore`, in memory only. Leaving the lesson starts the card fresh. Nothing is sent or stored, and the wire and the prompt are unchanged.
+- **Scrolling.** On the iPhone the track and the chips can't share a screen (once A and B have run, chip C's bottom is about 900 pt below the track's top; the reading area is about 680 pt). So the card asks the lesson's list to bring its parts into view (`InteractiveScrollAction`, the ids `InteractiveScrollID.stage`, `.panel` and `.reveal`; FRAMEWORK.md): the track and counters as a run starts, the panel when a picked patch asks its question, and the reveal once it arrives after a run the student watched (0.8 s after the run ends, so the finished counters and the run's result are seen first). The list scrolls the least that shows the part (nothing when it already shows), animated unless Reduce Motion is on, and counts it as the student's own move (a streaming reply is no longer followed). At the accessibility text sizes the track and the panel can't share a screen at all, so a run shows at once there, as under Reduce Motion: its still and result, right where the student tapped. Under VoiceOver nothing scrolls by itself (focus stays where the student is; the card's summary and the announcements say what changed). A UI test covers it (`testARunStartedBelowTheTrackPlaysInViewAndTheRevealFollows`).
 - **The lesson's check is untouched.** On the iPhone, the check after the card still answers with one tap (the UI test). On the Mac a focused card control holds Return; A–D, 1–4 and ↑/↓ still answer the check.
 
 ### iPhone and Mac
 
-- **iPhone:** today's lesson design, Lesson 1.1's night-sky island. The track sits at the top at full width; the label, the picked rule's panel, the rule chips and the reveal stack under it. Chips and buttons are 44 pt or taller; picking a rule or a guess gives a selection haptic.
-- **Mac:** Night Studio's lit card. A larger track (the card's full width) with the boat's lit wake on night water, the card's one motion set piece. From a 520 pt content width the rules sit in a column to the right of the picked rule's panel; narrower, they stack. Below 440 pt the compact "Try it" card.
+- **iPhone:** today's lesson design, Lesson 1.1's night-sky island. The track sits at the top at full width; the picked rule's panel, the reveal (once there), the toy label and the rule chips stack under it. Chips and buttons are 44 pt or taller; picking a rule or a guess gives a selection haptic.
+- **Mac:** Night Studio's lit card. A larger track (the card's full width) with the boat's lit wake on night water, the card's one motion set piece, and the toy label under it. From a 520 pt content width the rules sit in a column to the right of the picked rule's panel, with the reveal under both; narrower, they stack as on the iPhone. Below 440 pt the compact "Try it" card.
 - **Mac keyboard:** Tab reaches "Play it", the guesses, "Skip to the result", "Play it again" and each rule's chip. Return or Space picks a chip; on the picked chip of a rule that has run, it plays it again. ←/→ (and ↑/↓ when the check isn't waiting) on a chip pick the rule before or after.
 
 ### Accessibility
 
 - **VoiceOver:** the title is a header with the card's state in one sentence; the track is one image described once in words, with its route; each run is spoken as a result with its counts, not as motion; the reveal is one element.
-- **Dynamic Type to AX5 on an iPhone SE:** the track stays full width, with its route written under it, the counters become a text table, chips stack their words, and decoration (icons, the card's light and stars) goes. Never a word. A UI test (`testAtTheLargestTextSizeEveryLineStaysInsideTheWindow`) scrolls the revealed card at AX5 from its title to its last label and fails if any line leaves the window's width; it passes on the SE and the 16 Pro Max.
-- **Reduce Motion:** nothing plays by itself; each run's still route with numbered arrows and its result appear at once.
+- **Dynamic Type to AX5 on an iPhone SE:** the track stays full width, with its route written under it, the counters become a text table, chips stack their words, and decoration (icons, the card's light and stars) goes. Never a word. Runs show at once (their still and result), as under Reduce Motion: the track is screens away from the panel at these sizes. A UI test (`testAtTheLargestTextSizeEveryLineStaysInsideTheWindow`) scrolls the revealed card at AX5 from its title to its last label and fails if any line leaves the window's width; it passes on the SE and the 16 Pro Max.
+- **Reduce Motion:** nothing plays by itself; each run's still route (arrows, tagged legs, rule A's double-headed arrow and count) and its result appear at once. Nothing pops.
 - **Increase Contrast / Reduce Transparency:** no glows or stars, solid edges, the HC values.
 - **Nothing by colour alone:** stars are star shapes (a dashed outline while gone), gates are numbered, the line is chequered and says "finish", a picked chip has a check, a tried chip says its laps.
 
@@ -250,19 +257,21 @@ None. The card names no person, place or brand of its own. Real names: CoastRunn
 Please tick each, or note a change. Sign-off is recorded at the end, with a date.
 
 **Accuracy**
-- [ ] C1/C3: "A rule like the one in 2016: +10 points per target hit" and "Like the real 2016 CoastRunners agent: lots of points, no finish" are fair, with the toy label under the track.
-- [ ] The label's "The boat takes the best-scoring route for your rule, which a computer worked out ahead of time. The 2016 agent learned its loop by trial and error." makes the planner-versus-learner difference clear. *Teacher note:* real reinforcement-learning agents learn from trial and error and may not find the best route; this toy shows where the best route goes, which is where a good enough learner heads.
-- [ ] Rule C is presented as a rule that worked **here**, not a perfect rule. *Teacher note:* on a track with a shortcut, "a full lap through gates 1, 2, 3 in order" could still be gamed (a shorter way between gates), which is the lesson's point: each patch can open a new gap.
-- [ ] B's result depends on the toy's speeds, and the label says the boat is fastest on the lagoon's open water.
-- [ ] The made-up label after the reveal ("Loopholes A and B are made up for this toy…") is clear.
+- [ ] C1/C3: "A rule like the one a game-playing AI got in 2016: +10 points per target hit" and "Like the real 2016 CoastRunners agent: lots of points, no finish" are fair, with the toy label on the card. *Teacher notes:* in 2016 nobody wrote a target rule: the researchers used the game's score, which paid for hitting targets rather than for progress round the course, assuming it would track finishing; that assumption was the gap. And in the real game racing also scored (the targets were along the route); the circling agent scored about 20% more than human players. The toy puts every target in the lagoon to make the gap plain.
+- [ ] The label's "The boat takes the best-scoring route for your rule, which a computer worked out ahead of time. The 2016 agent learned its loop by trial and error." makes the planner-versus-learner difference clear. *Teacher note:* real reinforcement-learning agents learn from trial and error and may not find the best route; this toy shows where the best route goes, which is where a learner that kept improving would tend to head. In the toy, C works because the planner sees the whole race. A real learner paid only for full laps gets almost no signal at first (it has to finish a lap by chance before anything pays), which is why designers add in-between rewards like CoastRunners' targets, and those are where loopholes appear.
+- [ ] Rule C is presented as a rule that worked **here**, not a perfect rule: its result says "Add a shortcut between the gates, and even this rule would have a gap." *Teacher note:* with that shortcut, "a full lap through gates 1, 2, 3 in order" pays without racing the loop, which is the lesson's point: each patch can open a new gap.
+- [ ] The takeaway's reason holds: "Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself", and values can't be spelled out, so a rule for them pays for a stand-in, as A and B did. (Not "a lap is easy to count": crossings and metres were as easy to count.)
+- [ ] B's result depends on the toy's speeds: the track line under the hook says the lagoon is "where the boat goes fastest" (before any guess), the label says it again, and B's result says "where it's fastest".
+- [ ] The made-up label after the reveal ("Loopholes A and B are made up for this toy…") is clear. *Teacher note:* real cases like A and B on DeepMind's public list (about 90 entries, still added to in 2026): Soccer (a robot paid for touching the ball learned to vibrate against it) and Bicycle (an agent paid for progress toward a goal learned to ride in circles).
 
 **Language (ages 13–18)**
-- [ ] "It isn’t cheating. It’s scoring." lands, and no line gives the boat intent.
+- [ ] "It isn’t cheating. It’s scoring." lands (said under A's and B's results, not again in the reveal), and no line gives the boat intent.
 - [ ] The rule texts read clearly: "+100 every time it crosses the finish line", "+1 for every metre it moves", "+100 for each full lap through gates 1, 2, 3 in order".
 - [ ] "Will it finish now?" with Yes / No is a clear prediction.
 
 **Fit with the lesson**
-- [ ] The card's place, after the CoastRunners example's part and before the check, works with the tutor's telling (the 2016-style rule replays without a prediction).
+- [ ] The card's place, after the CoastRunners example's part and before the check, works with the tutor's telling (the 2016-style rule replays without a prediction, and introduces itself as "a rule like the one a game-playing AI got in 2016" in case the tutor's first example was another case).
+- [ ] The list moving by itself (the track coming up as a run starts, the reveal after the last run) feels natural, not jumpy.
 - [ ] **Exercise clash:** do the lesson's exercise ("Design a reward function for an AI that helps students study. Then identify 3 ways it could be gamed") right after the card. The card should have made the idea concrete without answering it.
 - [ ] The aha lands in about 90 s without the tutor's help: the boat does exactly what the points pay for; two of three patches leave a gap.
 
@@ -271,7 +280,7 @@ Please tick each, or note a change. Sign-off is recorded at the end, with a date
 
 **Accessibility**
 - [ ] A VoiceOver-only pass: the track's description and each run's spoken result say what a sighted student sees.
-- [ ] AX5 on an iPhone SE: nothing cut, nothing scrolls sideways.
+- [ ] AX5 on an iPhone SE: nothing cut, nothing scrolls sideways; runs show their result at once.
 - [ ] Keyboard only on the Mac: every control reachable, the lesson's check still answers with A–D.
 - [ ] Reduce Motion: the still routes and results read well without the runs.
 - [ ] Increase Contrast.
@@ -300,13 +309,23 @@ Please tick each, or note a change. Sign-off is recorded at the end, with a date
 ## 8. Open questions
 
 - **Q1. Spoiler terms.** The slate gives the card none: its predictions are on the patches, which the tutor's text never covers. If a live tutor reply did describe a patch ("pay for each lap"), the card would still ask for the guesses. Adding "per lap" or "full lap" as spoiler terms would switch on the spoiled mode then, but would also fire on ordinary race talk. Left as the slate says.
-- **Q2. The overall reveal on the iPhone sits under the rule chips.** After the third patch's run, the patch's own result shows in the panel above the chips, and the reveal ("You guessed … What happened …") appears below them, so a student scrolls past the chips to reach it (VoiceOver speaks it with the run's result). Scrolling the lesson to it is the lesson list's job (ChatFeature), not the card's; worth a look in the teacher pass.
-- **Q3. Rule A's motion is small.** The stretch over the finish line is 8 m, shorter than the boat, so the run rocks the boat across the line rather than travelling. The still adds a double-headed arrow beside it. A longer stretch would mean retuning the toy track and re-proving that every rule's best route is unique.
-- **Q4. "Play it" replays the 2016-style rule with no guess** because the tutor has just told that story (the card sits after the CoastRunners example). If the tutor's first example is a different case, the replay still introduces itself ("First, a rule like the one in 2016"), but it then plays without a prediction to a student who hasn't heard the story.
+- **Q2 (settled 2026-10-22). The overall reveal on the iPhone sat under the rule chips.** It now follows the last patch's result, above the label and the chips, and the list brings it into view after a run the student watched.
+- **Q3 (settled 2026-10-22). Rule A's motion is small.** The stretch over the finish line is still 8 m, shorter than the boat (a longer one would mean retuning the track and re-proving uniqueness), but the points now pop at the line as they are earned ("+100", a stream of them), and the still's double-headed arrow sits on the island, 26 pt long, with the count "×30".
+- **Q4 (settled 2026-10-22). "Play it" replays the 2016-style rule with no guess** because the tutor has usually just told that story. The replay line now names the case itself ("a rule like the one a game-playing AI got in 2016"), and the caption after the run names CoastRunners, so it stands on its own if the tutor's first example was another case.
+- **Q5. The slate's takeaway was reworded.** SLATE.md §5 and slate.json now carry the card's takeaway (C7). The guide's fact-check row 33 still rates "catching fire" Medium; it is in OpenAI's own post (C1), so it should be High. That doc is on the prompts branch, not this one.
 
 ---
 
-## 9. Verified (2026-10-21)
+## 9. Verified
+
+**2026-10-22, after the review fixes (§10):**
+- `swift test` (ios/Packages): 1,318 tests pass, 3 of them new (the pops, rule A's still and the legs' words, the scroll action), with the copy tests updated to the new lines.
+- `ios/scripts/ci-compat-lint.py`: 0 findings. iOS build-for-testing and the Mac Debug build: both build.
+- The card's 4 UI tests pass on the iPhone 16 Pro Max, among them the new `testARunStartedBelowTheTrackPlaysInViewAndTheRevealFollows` (chip C tapped at the bottom of the screen, "Yes": the track and "Skip to the result" come on screen while the run plays; after it, the reveal does) and the AX5 walk, now ending at rule C's chip (nothing leaves the window's width). This pass had one simulator (the 16 Pro Max), so the SE runs of 2026-10-21 weren't repeated.
+- `ios/scripts/ios-unchanged-check.sh`: the same 23 results (11 pass, 12 already stale), the same pixels for every stale render. No record run.
+- Shots (in `shots/`, not committed): the iPhone in light and dark, AX3, AX5, Increase Contrast, the Reduce Motion stills (A's arrow and count, the worded legs), runs with their pops, and a sequence and clip of a run started from the chips in a lesson (the track comes up, plays, then the reveal); the Mac at 1280 and 700 pt, including the same run started below the track, through a renamed copy (`….macnsiapr2`) quit by its PID, with the founder's Mercurius left running.
+
+**2026-10-21, the first build:**
 
 - `swift test` (ios/Packages): 1,315 tests pass, including `RoutePlannerTests` and `PatchTheRewardTests`.
 - `ios/scripts/ci-compat-lint.py`: 0 findings.
@@ -314,4 +333,29 @@ Please tick each, or note a change. Sign-off is recorded at the end, with a date
 - `ios/scripts/ios-unchanged-check.sh`: the same 23 results (11 pass, 12 already stale) and the same pixels for every stale render. No record run.
 - Mac Debug build: builds. Shots through renamed copies (`….macnsia1`), quit by PID; the founder's Mercurius kept running.
 - Shots in `shots/` (not committed): the iPhone 16 Pro Max in light and dark at the default size and at AX3, the SE at AX5 (including the AX5 test's walk through the whole card), the Mac at 1280 and 700 pt wide in light and dark, Increase Contrast, Reduce Motion stills, and a 7.5 s clip of patch C's run ending on its reveal.
+
+---
+
+## 10. Review fixes (2026-10-22)
+
+Two reviews (accuracy; fun and fit) found the card accurate, with every number re-derived twice. Each finding was checked and all were taken; none was rejected. The card still ships dark.
+
+| # | Severity | Finding | What changed |
+|---|---|---|---|
+| 1 | High | On the iPhone, B's and C's runs played off-screen: the chips sit about 900 pt below the track, so the run (the reward for a guess) played out of view. | The lesson's list now brings the card's parts into view (`InteractiveScrollAction`, `.interactiveScrollMark`, §4 Scrolling): the track as a run starts, the panel when a patch asks its question, the reveal after a watched run. At the accessibility sizes runs show at once. The panel now sits right under the track and the toy label below it (§1, The order). UI test: `testARunStartedBelowTheTrackPlaysInViewAndTheRevealFollows`. |
+| 2 | High | The takeaway's reason ("a lap is easy to count") fails against A and B, and the arc ("two sloppy rules fail, the careful one works") feeds "write it carefully once and it's fixed". | New takeaway (C7): C paid for the race itself, which a lap spells out exactly; a value can't be spelled out, so a rule for it pays for a stand-in, as A and B did. C's result adds "Add a shortcut between the gates, and even this rule would have a gap." (C8). The slate's takeaway was updated to match. |
+| 3 | Medium | Takeaway reason (accuracy review, the same as 2). | As 2. |
+| 4 | Medium | B's loophole read as a gotcha: "fastest on open water" was only in the grey label. | The track line under the hook says "open water, where the boat goes fastest"; B's result and its spoken run say "where it's fastest"; the label keeps it. |
+| 5 | Medium | Rule A's run was a boat jiggling on the line, and its still's arrow was tiny. | Points pop where they are earned while a run plays ("+100" streaming up from the line, "+10" over a star; from `PatchRun.pops`, tested). A's still: the double-headed arrow on the island, 26 pt long on the iPhone, with "×30" (from `lineCrossings`, tested); "finish" moves over it. |
+| 6 | Low | "It isn't cheating. It's scoring." said four times. | Kept under A and B; dropped from the reveal box, the revealed summary and the reveal's announcement. |
+| 7 | Low | Leg numbers 1 and 2 clashed with gates 1, 2 and 3. | Legs are tagged "in" and "loop" (the loop's tag where it is clearest). |
+| 8 | Low | The replay line assumed the student had heard the 2016 story. | "First, a rule like the one a game-playing AI got in 2016: +10 points per target hit." (Q4). |
+| 9 | Low | C working is a simplification (the planner sees the whole race; a real learner paid per lap gets little signal). | Teacher note (§6), and "a good enough learner heads" softened to "a learner that kept improving would tend to head". |
+| 10 | Low | The 2016 framing hides who set the reward. | Teacher note (§6) and C3: nobody wrote a target rule; the game's score paid for targets and was assumed to track finishing. |
+| 11 | Low | The toy makes the trade-off starker than the real game. | §2.3 and the teacher note: in the real game racing also scored; the loop scored about 20% more than human players. |
+| 12 | Low | The 2-tick line's explanation was wrong. | §2.1–2.2: a tuning choice; with a 1-tick line, C has 20 tied routes ending at tick 57 and A makes 60 crossings (checked with the planner). |
+| 13 | Low | C1 said the card names neither the game nor OpenAI. | It names the game, not its maker or OpenAI. |
+| 14 | Low | "Catching fire" rated Medium. | C1: it is in OpenAI's own post (checked in a 2017 archive copy), so High. Still off the card. The guide's fact-check row 33 is on the prompts branch and needs the same upgrade there. |
+| 15 | Low | The made-up label's "of the same kind" couldn't be checked. | C5 and the teacher note name Soccer and Bicycle from the public list (checked 2026-10-22; about 90 entries, some from 2026). |
+| 16 | Low | A test name said racing "doesn't pay" under A or B. | Renamed: "Under A and B racing pays less than the loophole; no loophole pays under C". |
 

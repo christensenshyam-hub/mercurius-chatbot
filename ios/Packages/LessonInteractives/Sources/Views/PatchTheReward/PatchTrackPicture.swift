@@ -9,10 +9,13 @@ import DesignSystem
 ///
 /// - Playing (`live`): the boat moves along its planned route, with its
 ///   wake (lit on the Mac: the card's one motion set piece); a star goes
-///   dim for the ticks it is gone.
+///   dim for the ticks it is gone; the points a move earns pop where it
+///   earns them ("+100" over the line, "+10" over a star) and float away.
 /// - Still (a run's end, Reduce Motion, VoiceOver): the whole route as a
-///   line with arrows, its legs numbered in order (1: the way in, 2: the
-///   loop it then repeats), and the boat where the run ended.
+///   line with arrows, its legs tagged in order ("in": the way in, "loop":
+///   the loop it then repeats), and the boat where the run ended. A
+///   stretch run both ways (rule A, over the line) gets a double-headed
+///   arrow on the infield with its count ("×30").
 ///
 /// One VoiceOver element: the track in words, then the route.
 /// Decoration (light, glows) goes under Increase Contrast and Reduce
@@ -48,8 +51,11 @@ struct PatchTrackPicture: View {
             }
             Canvas { context, size in
                 let map = TrackMap(size: size)
+                // A still of a route that shuttles over the line: its arrow
+                // and count sit by the line, so "finish" makes room.
+                let shuttle = live ? nil : run?.shuttle
                 drawWater(&context, map, sky)
-                drawFinishLine(&context, map, sky)
+                drawFinishLine(&context, map, sky, makingRoom: shuttle != nil)
                 drawGates(&context, map, sky)
                 // A still shows the track as set (every star there); a run
                 // shows the stars it has hit going dim.
@@ -59,8 +65,13 @@ struct PatchTrackPicture: View {
                         drawWake(&context, map, sky, frame)
                     } else {
                         drawRoute(&context, map, sky, run)
+                        if let shuttle {
+                            drawShuttle(&context, map, sky, from: shuttle.from, to: shuttle.to,
+                                        tag: PatchTheRewardCopy.shuttleTag(run))
+                        }
                     }
                     drawBoat(&context, map, sky, x: frame.x, y: frame.y, heading: frame.heading)
+                    if live { drawPops(&context, map, sky, run.pops, tick: tick) }
                 } else {
                     let start = PatchTrack.waypoints[PatchTrack.start]
                     drawBoat(&context, map, sky, x: start.x, y: start.y, heading: -Double.pi / 2)
@@ -158,7 +169,11 @@ struct PatchTrackPicture: View {
 
     // MARK: The finish line and the gates
 
-    private func drawFinishLine(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard) {
+    /// The chequered line across the channel, and "finish" beside it on the
+    /// island (`makingRoom`: moved clear of rule A's double-headed arrow,
+    /// half a line up, with the count under it).
+    private func drawFinishLine(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard,
+                                makingRoom: Bool) {
         let centre = map.point(PatchTrack.finishLine.x, PatchTrack.finishLine.y)
         let width = map.length(PatchTrack.channelWidth) + 2
         let square = max(2.5, (width / 6).rounded(.down))
@@ -176,8 +191,24 @@ struct PatchTrackPicture: View {
         let label = context.resolve(Text(PatchTheRewardCopy.finishMark)
             .font(.system(size: 11 * map.glyph, weight: .semibold, design: .rounded))
             .foregroundStyle(sky.skyInk))
-        let x = centre.x + map.length(PatchTrack.channelWidth / 2) + 4
-        context.draw(label, at: CGPoint(x: x, y: centre.y), anchor: .leading)
+        if makingRoom {
+            let spot = Self.shuttleLabelSpot(map, line: centre)
+            context.draw(label, at: CGPoint(x: spot.x, y: spot.y - 7 * map.glyph), anchor: .leading)
+        } else {
+            let x = centre.x + map.length(PatchTrack.channelWidth / 2) + 4
+            context.draw(label, at: CGPoint(x: x, y: centre.y), anchor: .leading)
+        }
+    }
+
+    /// Rule A's still, by the line on the island: the double-headed arrow
+    /// just inside the channel's inner edge, then the words ("finish" over
+    /// the count) to its right. Where the words start, level with the line.
+    private static func shuttleLabelSpot(_ map: TrackMap, line: CGPoint) -> CGPoint {
+        CGPoint(x: shuttleArrowX(map, line: line) + 7 * map.glyph, y: line.y)
+    }
+
+    private static func shuttleArrowX(_ map: TrackMap, line: CGPoint) -> CGFloat {
+        line.x + map.length(PatchTrack.channelWidth / 2) + 4 * map.glyph + 2
     }
 
     private func drawGates(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard) {
@@ -270,66 +301,111 @@ struct PatchTrackPicture: View {
             for (index, arrow) in arrows.enumerated() where index % every == every / 2 {
                 context.fill(Self.arrowHead(at: arrow.0, angle: arrow.1, size: 5 * map.glyph), with: .color(sky.skyLink))
             }
-            // A stretch run both ways (rule A, over the line) is shorter
-            // than the boat, which ends the run on it: a double-headed
-            // arrow beside it says "back and forth here".
-            if let shuttle = pairs.first(where: { pair in pairs.contains { $0.0 == pair.1 && $0.1 == pair.0 } }) {
-                drawShuttle(&context, map, sky, from: shuttle.0, to: shuttle.1)
-            }
-            // With a way in and a loop, the legs are numbered in order, by
-            // each leg's first stretch: 1 on the way in (on the island
-            // side, above the line's "finish"), 2 on the loop (outside it).
+            // With a way in and a loop, the legs are tagged in order, by
+            // each leg's first stretch: "in" on the way in (on the island
+            // side, above the line's "finish"), "loop" on the loop (outside
+            // it). Words, not numbers: the gates are numbered.
             guard legs.count > 1, !arrows.isEmpty else { continue }
-            let anchor = arrows[0]
-            let distance = 9 * map.glyph + 4
-            let normal = CGPoint(x: -sin(anchor.1) * distance, y: cos(anchor.1) * distance)
-            let one = CGPoint(x: anchor.0.x + normal.x, y: anchor.0.y + normal.y)
-            let other = CGPoint(x: anchor.0.x - normal.x, y: anchor.0.y - normal.y)
-            let points = leg.map { map.point($0) }
-            let centroid = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count),
-                                   y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
+            let words = number == 0 ? PatchTheRewardCopy.legIn : PatchTheRewardCopy.legLoop
+            let tag = resolvedTag(&context, map, sky, words)
+            drawTag(&context, sky, tag, at: tagSpot(map, leg: leg, number: number, legs: legs, arrows: arrows,
+                                                    size: tag.size, end: run.frame(at: Double(PatchTrack.clockTicks))))
+        }
+    }
+
+    /// Where a leg's tag goes. Beside a stretch, off it by the tag's own
+    /// reach (so a wide tag clears a steep stretch too). The way in: by its
+    /// first stretch, on the side nearer the picture's middle (the island,
+    /// above "finish"). The loop: by whichever of its stretches, on either
+    /// side, leaves the tag farthest from everything else drawn (the route,
+    /// the stars, the gates, the boat), inside the picture.
+    private func tagSpot(_ map: TrackMap, leg: [Int], number: Int, legs: [[Int]], arrows: [(CGPoint, CGFloat)],
+                         size: CGSize, end: PatchFrame) -> CGPoint {
+        func candidates(_ arrow: (CGPoint, CGFloat)) -> [CGPoint] {
+            let unit = CGPoint(x: -sin(arrow.1), y: cos(arrow.1))
+            let distance = abs(unit.x) * size.width / 2 + abs(unit.y) * size.height / 2 + 4 * map.glyph
+            return [CGPoint(x: arrow.0.x + unit.x * distance, y: arrow.0.y + unit.y * distance),
+                    CGPoint(x: arrow.0.x - unit.x * distance, y: arrow.0.y - unit.y * distance)]
+        }
+        func gap(_ p: CGPoint, _ q: CGPoint) -> CGFloat { hypot(p.x - q.x, p.y - q.y) }
+        guard number > 0 else {
             let middle = CGPoint(x: map.length(PatchTrack.bounds.maxX - PatchTrack.bounds.minX) / 2,
                                  y: map.length(PatchTrack.bounds.maxY - PatchTrack.bounds.minY) / 2)
-            func gap(_ p: CGPoint, _ q: CGPoint) -> CGFloat { hypot(p.x - q.x, p.y - q.y) }
-            let isLoop = leg.first == leg.last
-            let place = isLoop
-                ? (gap(one, centroid) >= gap(other, centroid) ? one : other)
-                : (gap(one, middle) <= gap(other, middle) ? one : other)
-            drawBadge(&context, map, sky, number + 1, near: place)
+            let sides = candidates(arrows[0])
+            return gap(sides[0], middle) <= gap(sides[1], middle) ? sides[0] : sides[1]
         }
+        // What the tag must keep clear of, as points: the route every few
+        // points along each stretch, the stars, the gates' discs, the boat.
+        var obstacles: [CGPoint] = PatchTrack.stars.map { map.point($0) }
+        obstacles += PatchTrack.gates.keys.sorted().map { map.point($0) }
+        obstacles.append(map.point(end.x, end.y))
+        for drawn in legs {
+            for (from, to) in zip(drawn, drawn.dropFirst()) {
+                let a = map.point(from), b = map.point(to)
+                let steps = max(1, Int(gap(a, b) / 3))
+                for step in 0...steps {
+                    let t = CGFloat(step) / CGFloat(steps)
+                    obstacles.append(CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+                }
+            }
+        }
+        let width = map.length(PatchTrack.bounds.maxX - PatchTrack.bounds.minX)
+        let height = map.length(PatchTrack.bounds.maxY - PatchTrack.bounds.minY)
+        var best = candidates(arrows[0])[0]
+        var bestClearance = -CGFloat.infinity
+        for spot in arrows.flatMap(candidates) {
+            let rect = CGRect(x: spot.x - size.width / 2, y: spot.y - size.height / 2,
+                              width: size.width, height: size.height)
+            guard rect.minX >= 2, rect.minY >= 2, rect.maxX <= width - 2, rect.maxY <= height - 2 else { continue }
+            // Clearance from the tag's edge, not its centre.
+            let clearance = obstacles.map { point -> CGFloat in
+                let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+                let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+                return hypot(dx, dy)
+            }.min() ?? 0
+            if clearance > bestClearance + 0.5 {
+                best = spot
+                bestClearance = clearance
+            }
+        }
+        return best
     }
 
-    private func drawBadge(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard, _ number: Int,
-                           near point: CGPoint) {
-        // A rounded square (the gates are discs), white with dark words.
-        let size = 15 * map.glyph
-        let rect = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
-        context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(sky.skyInk))
-        let text = context.resolve(Text("\(number)")
+    /// A leg's tag, resolved and measured: a white rounded rectangle with
+    /// dark words (the gates are indigo discs with numbers, so the two
+    /// never read alike).
+    private func resolvedTag(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard,
+                             _ words: String) -> (text: GraphicsContext.ResolvedText, size: CGSize) {
+        let text = context.resolve(Text(words)
             .font(.system(size: 10 * map.glyph, weight: .heavy, design: .rounded))
             .foregroundStyle(sky.skyBottom))
-        context.draw(text, at: point, anchor: .center)
+        let measured = text.measure(in: CGSize(width: 200, height: 50))
+        let height = 15 * map.glyph
+        return (text, CGSize(width: max(height, measured.width + 8 * map.glyph), height: height))
     }
 
-    /// A double-headed arrow along the stretch `from`–`to`, a little longer
-    /// than it, beside it on the side away from the loop's middle (the
-    /// boat's hull, where the run ends, covers the stretch itself).
+    private func drawTag(_ context: inout GraphicsContext, _ sky: NightSkyCard,
+                         _ tag: (text: GraphicsContext.ResolvedText, size: CGSize), at point: CGPoint) {
+        let rect = CGRect(x: point.x - tag.size.width / 2, y: point.y - tag.size.height / 2,
+                          width: tag.size.width, height: tag.size.height)
+        context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(sky.skyInk))
+        context.draw(tag.text, at: point, anchor: .center)
+    }
+
+    /// Rule A's still: the stretch over the line is shorter than the boat,
+    /// which ends the run on it, so a double-headed arrow beside it, on the
+    /// island where there is room (at least 24 pt long on the iPhone), says
+    /// "back and forth here", with the crossing count (`tag`, "×30") under
+    /// the moved "finish".
     private func drawShuttle(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard, from: Int,
-                             to: Int) {
+                             to: Int, tag: String) {
         let a = map.point(from), b = map.point(to)
         let angle = atan2(b.y - a.y, b.x - a.x)
-        let mid = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
-        let middle = map.point((PatchTrack.loopWestCentre.x + PatchTrack.loopEastCentre.x) / 2,
-                               PatchTrack.loopWestCentre.y)
-        var normal = CGPoint(x: -sin(angle), y: cos(angle))
-        if normal.x * (middle.x - mid.x) + normal.y * (middle.y - mid.y) > 0 {
-            normal = CGPoint(x: -normal.x, y: -normal.y)
-        }
-        // Clear of the hull (half its beam) by a small gap.
-        let distance = 4 * map.glyph + 3
-        let centre = CGPoint(x: mid.x + normal.x * distance, y: mid.y + normal.y * distance)
-        let half = max(hypot(b.x - a.x, b.y - a.y) * 0.8, 9 * map.glyph + 4)
+        let line = map.point(PatchTrack.finishLine.x, PatchTrack.finishLine.y)
+        let x = Self.shuttleArrowX(map, line: line)
+        let half = max(hypot(b.x - a.x, b.y - a.y) * 0.75, 13 * map.glyph)
         let along = CGPoint(x: cos(angle) * half, y: sin(angle) * half)
+        let centre = CGPoint(x: x, y: (a.y + b.y) / 2)
         let start = CGPoint(x: centre.x - along.x, y: centre.y - along.y)
         let end = CGPoint(x: centre.x + along.x, y: centre.y + along.y)
         var shaft = Path()
@@ -339,6 +415,34 @@ struct PatchTrackPicture: View {
         let size = 5 * map.glyph
         context.fill(Self.arrowHead(at: end, angle: angle, size: size), with: .color(sky.skyLink))
         context.fill(Self.arrowHead(at: start, angle: angle + CGFloat.pi, size: size), with: .color(sky.skyLink))
+        let count = context.resolve(Text(tag)
+            .font(.system(size: 11 * map.glyph, weight: .bold, design: .rounded))
+            .foregroundStyle(sky.skyInk))
+        let spot = Self.shuttleLabelSpot(map, line: line)
+        context.draw(count, at: CGPoint(x: spot.x, y: spot.y + 7 * map.glyph), anchor: .leading)
+    }
+
+    /// While a run plays: each move's points where it earned them, for a
+    /// moment ("+100" rising up the channel from the line, "+10" from a
+    /// star), fading as they rise. Rule B has none (its points climb with
+    /// every metre).
+    private func drawPops(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard, _ pops: [PatchPop],
+                          tick: Double) {
+        for pop in pops {
+            guard let progress = pop.progress(at: tick) else { continue }
+            let origin = map.point(pop.x, pop.y)
+            // Clear of the boat: above the line's stretch (the boat rocks
+            // over it), above a star.
+            let clearance = pop.atLine ? map.length(PatchTrack.channelWidth) + 6 * map.glyph : 13 * map.glyph
+            // Fast enough that one crossing's "+100" clears the last (a
+            // crossing every 2 ticks): a stream of points off the line.
+            let rise = 7.5 * map.glyph * CGFloat(progress * PatchPop.ticks)
+            let alpha = progress < 0.5 ? 1 : 1 - (progress - 0.5) * 2
+            let text = context.resolve(Text(PatchTheRewardCopy.pop(pop.points))
+                .font(.system(size: 11 * map.glyph, weight: .heavy, design: .rounded))
+                .foregroundStyle(sky.skyInk.opacity(theme.increasedContrast ? 1 : alpha)))
+            context.draw(text, at: CGPoint(x: origin.x, y: origin.y - clearance - rise), anchor: .center)
+        }
     }
 
     static func arrowHead(at point: CGPoint, angle: CGFloat, size: CGFloat) -> Path {

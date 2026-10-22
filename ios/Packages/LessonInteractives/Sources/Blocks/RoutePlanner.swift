@@ -98,7 +98,7 @@ public struct RouteLegs: Equatable, Sendable {
         self.loopPasses = loopPasses
     }
 
-    /// The legs that are drawn, numbered from 1 in this order.
+    /// The legs that are drawn, in this order (the way in, then the loop).
     public var drawn: [[Int]] { [lead, loop].filter { $0.count >= 2 } }
 
     /// `nodes` as a lead-in and the shortest loop it then repeats (at least

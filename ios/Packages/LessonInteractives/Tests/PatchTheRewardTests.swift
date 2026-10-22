@@ -118,7 +118,7 @@ struct PatchRunTests {
         return total
     }
 
-    @Test("Racing doesn't pay under A or B, and no loophole pays under C")
+    @Test("Under A and B racing pays less than the loophole; no loophole pays under C")
     func racingVersusLoopholes() {
         let race = PatchTheRewardContent.run(.orderedLaps).plan.nodes
         #expect(Self.score(race, .targets) == 0)
@@ -144,6 +144,52 @@ struct PatchRunTests {
             state = move.state
         }
         #expect(state.laps == 0 && state.nextGate == 1)
+    }
+
+    @Test("The pops: each paid move's points, where and when it earned them; none for rule B")
+    func pops() {
+        for rule in [PatchRule.targets, .finishLine, .orderedLaps] {
+            let run = PatchTheRewardContent.run(rule)
+            // One pop per thing the rule pays for, each worth what one is
+            // worth, adding up to the run's points.
+            #expect(run.pops.count == run.paidCount, "\(rule)")
+            #expect(run.pops.allSatisfy { $0.points == rule.pointsEach }, "\(rule)")
+            #expect(run.pops.map(\.points).reduce(0, +) == run.points, "\(rule)")
+            #expect(run.pops.map(\.tick) == run.pops.map(\.tick).sorted())
+        }
+        // The 2016-style rule's pops are on the stars; A's and C's on the line.
+        let targets = PatchTheRewardContent.run(.targets).pops
+        #expect(targets.allSatisfy { pop in
+            !pop.atLine && PatchTrack.stars.contains { PatchTrack.waypoints[$0].x == pop.x && PatchTrack.waypoints[$0].y == pop.y }
+        })
+        #expect(targets.first?.tick == 10 && targets.count == 26)
+        let line = PatchTheRewardContent.run(.finishLine).pops
+        #expect(line.allSatisfy { $0.atLine && $0.x == PatchTrack.finishLine.x && $0.y == PatchTrack.finishLine.y })
+        #expect(line.count == 30 && line.first?.tick == 2)
+        #expect(PatchTheRewardContent.run(.orderedLaps).pops.map(\.tick) == [20, 40, 60])
+        // B pays every stretch by its length: its points climb, no pops.
+        #expect(PatchTheRewardContent.run(.metres).pops.isEmpty)
+        // A pop shows for 6 ticks after its move, then is gone.
+        let first = line[0]
+        #expect(first.progress(at: 1.9) == nil && first.progress(at: 2) == 0)
+        #expect(first.progress(at: 5) == 0.5 && first.progress(at: 8) == nil)
+        #expect(PatchTheRewardCopy.pop(100) == "+100" && PatchTheRewardCopy.pop(10) == "+10")
+    }
+
+    @Test("Rule A's still: the stretch it shuttles over is the line, and its tag is its crossing count")
+    func shuttle() {
+        let line = PatchTheRewardContent.run(.finishLine)
+        let shuttle = line.shuttle
+        #expect(shuttle.map { Set([$0.from, $0.to]) } == Set([PatchTrack.lineForward.from, PatchTrack.lineForward.to]))
+        #expect(PatchTheRewardCopy.shuttleTag(line) == "\u{00D7}\(line.lineCrossings)")
+        #expect(PatchTheRewardCopy.shuttleTag(line) == "\u{00D7}30")
+        for rule in [PatchRule.targets, .metres, .orderedLaps] {
+            #expect(PatchTheRewardContent.run(rule).shuttle == nil, "\(rule)")
+        }
+        // The legs are tagged in words, not numbers (the gates are numbered).
+        #expect(PatchTheRewardCopy.legIn == "in" && PatchTheRewardCopy.legLoop == "loop")
+        #expect(PatchTheRewardContent.run(.targets).legs.drawn.count == 2)
+        #expect(PatchTheRewardContent.run(.finishLine).legs.drawn.count == 1)
     }
 
     @Test("A star goes for 4 ticks after it's hit, then comes back")
@@ -215,6 +261,11 @@ struct PatchTheRewardCopyTests {
         #expect(PatchTheRewardCopy.goal == "Patch the rule so the boat finishes the race.")
         // The stars are the targets the 2016-style rule pays for (the slate's "3 star targets").
         #expect(PatchTheRewardCopy.trackLine.contains("3 star targets"))
+        // Rule B's guess is fair only if the lagoon's speed is read before it,
+        // where students read (not only in the grey label).
+        #expect(PatchTheRewardCopy.trackLine.contains("open water, where the boat goes fastest"))
+        // The replay stands on its own if the tutor's first example was another case.
+        #expect(PatchTheRewardCopy.replayRule == "First, a rule like the one a game-playing AI got in 2016: +10 points per target hit.")
         #expect(PatchTheRewardCopy.predictPrompt == "Will it finish now?")
         #expect(PatchTheRewardCopy.scoring == "It isn\u{2019}t cheating. It\u{2019}s scoring.")
         #expect(PatchTheRewardCopy.replayCaption == "Like the real 2016 CoastRunners agent: lots of points, no finish.")
@@ -223,15 +274,27 @@ struct PatchTheRewardCopyTests {
         #expect(PatchTheRewardCopy.rule(.orderedLaps) == "+100 for each full lap through gates 1, 2, 3 in order")
         #expect(PatchTheRewardCopy.caption(.finishLine).hasPrefix("Crossing the line isn\u{2019}t finishing a lap."))
         #expect(PatchTheRewardCopy.caption(.metres).hasPrefix("Moving isn\u{2019}t racing."))
-        #expect(PatchTheRewardCopy.caption(.orderedLaps) == "It finished once the rule spelled out what a lap is.")
+        #expect(PatchTheRewardCopy.caption(.orderedLaps)
+                == "It finished once the rule spelled out what a lap is. Add a shortcut between the gates, and even this rule would have a gap.")
         #expect(PatchTheRewardCopy.takeaway.hasPrefix("Nothing was broken: the boat did exactly what each rule paid for."))
+        // Why C worked is that it paid for the race itself (a lap spelled
+        // out exactly), not that a lap is easy to count: crossings and
+        // metres are as easy to count, and those rules failed.
+        #expect(PatchTheRewardCopy.takeaway.contains("Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself."))
+        #expect(!PatchTheRewardCopy.takeaway.contains("easy to count"))
+        #expect(PatchTheRewardCopy.takeaway.hasSuffix("so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps."))
+        // "It isn't cheating. It's scoring." is said under A and B only.
+        #expect(PatchTheRewardCopy.caption(.finishLine).hasSuffix(PatchTheRewardCopy.scoring))
+        #expect(PatchTheRewardCopy.caption(.metres).hasSuffix(PatchTheRewardCopy.scoring))
+        #expect(!PatchTheRewardCopy.caption(.orderedLaps).contains(PatchTheRewardCopy.scoring))
+        #expect(!PatchTheRewardCopy.takeaway.contains(PatchTheRewardCopy.scoring))
     }
 
     @Test("Every number in a line is the run's own")
     func numbersInLines() {
         #expect(PatchTheRewardCopy.result(.targets) == "It hit 26 targets, circling the stars, and finished 0 laps.")
         #expect(PatchTheRewardCopy.result(.finishLine) == "It crossed the line 30 times, back and forth, and finished 0 laps.")
-        #expect(PatchTheRewardCopy.result(.metres) == "It moved 1,114 metres, round and round the open lagoon, and finished 0 laps.")
+        #expect(PatchTheRewardCopy.result(.metres) == "It moved 1,114 metres, round and round the open lagoon where it\u{2019}s fastest, and finished 0 laps.")
         #expect(PatchTheRewardCopy.result(.orderedLaps) == "It went through gates 1, 2 and 3 in order and finished 3 laps.")
         #expect(PatchTheRewardCopy.spokenRun(.finishLine)
                 == "Rule A: plus 100 per finish-line crossing. The boat crossed the line 30 times, back and forth, and finished 0 laps. 3000 points.")
@@ -250,7 +313,7 @@ struct PatchTheRewardCopyTests {
         #expect(PatchTheRewardCopy.trackCaption(nil, playing: false) == "The boat waits on the start line.")
         #expect(PatchTheRewardCopy.trackCaption(.targets, playing: true) == "The boat is running the 2016-style rule.")
         #expect(PatchTheRewardCopy.trackCaption(.finishLine, playing: true) == "The boat is running rule A.")
-        #expect(PatchTheRewardCopy.trackCaption(.finishLine, playing: false) == "Its route: back and forth over the finish line.")
+        #expect(PatchTheRewardCopy.trackCaption(.finishLine, playing: false) == "Its route: back and forth over the finish line, 30 times.")
         for rule in PatchRule.allCases {
             for playing in [false, true] {
                 #expect(PatchTheRewardCopy.pictureAccessibility(rule, playing: playing)
@@ -279,7 +342,7 @@ struct PatchTheRewardCopyTests {
             #expect(InteractiveAccessibility.numbersMissing([run.paidCount, run.laps, run.points], from: line).isEmpty)
         }
         let revealed = PatchTheRewardCopy.accessibilitySummary(.revealed(guesses: 2, spoiled: false))
-        #expect(revealed.hasPrefix("You predicted it would finish for 2 of 3 rules. It finished for 1 of 3: rule C."))
+        #expect(revealed == "You predicted it would finish for 2 of 3 rules. It finished for 1 of 3: rule C.")
         #expect(!PatchTheRewardCopy.accessibilitySummary(.revealed(guesses: 0, spoiled: true)).contains("You predicted"))
     }
 }

@@ -13,7 +13,9 @@ public enum PatchTheRewardCopy {
     // MARK: The hook
 
     public static let hook = "You\u{2019}re training a boat to win a race. You can only tell it one thing: what earns points."
-    public static let trackLine = "A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 star targets that come back after they\u{2019}re hit."
+    /// The lagoon's speed is here as well as in the toy label: rule B's
+    /// guess is a fair one only if the student has read it.
+    public static let trackLine = "A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, where the boat goes fastest, and 3 star targets that come back after they\u{2019}re hit."
 
     // MARK: Labels (on the canvas)
 
@@ -31,7 +33,8 @@ public enum PatchTheRewardCopy {
 
     // MARK: The 2016 rule
 
-    public static let replayRule = "First, a rule like the one in 2016: +10 points per target hit."
+    /// Stands on its own: the tutor's first example may be another case.
+    public static let replayRule = "First, a rule like the one a game-playing AI got in 2016: +10 points per target hit."
     public static let playReplay = "Play it"
     public static let playReplayHint = "Runs the boat under this rule"
     public static let replayCaption = "Like the real 2016 CoastRunners agent: lots of points, no finish."
@@ -46,7 +49,11 @@ public enum PatchTheRewardCopy {
     public static let pickHint = "Shows this rule on the track"
     public static let pickFirst = "Play the 2016 rule first."
     public static let scoring = "It isn\u{2019}t cheating. It\u{2019}s scoring."
-    public static let takeaway = "Nothing was broken: the boat did exactly what each rule paid for. Paying for laps worked here because a lap is easy to count. \u{201C}Be helpful\u{201D} or \u{201C}be honest\u{201D} isn\u{2019}t."
+    /// Why C worked (it paid for the race itself, which a lap spells out
+    /// exactly), and why that doesn't carry over to values: a rule for them
+    /// pays for a stand-in, as A and B did. Not "a lap is easy to count":
+    /// crossings and metres are as easy to count, and those rules failed.
+    public static let takeaway = "Nothing was broken: the boat did exactly what each rule paid for. Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. \u{201C}Be helpful\u{201D} or \u{201C}be honest\u{201D} can\u{2019}t be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps."
 
     // Counters
     public static let pointsTile = "Points"
@@ -125,7 +132,7 @@ public enum PatchTheRewardCopy {
         case .finishLine:
             return "It crossed the line \(run.lineCrossings) times, back and forth, and finished \(run.laps) laps."
         case .metres:
-            return "It moved \(grouped(run.metres)) metres, round and round the open lagoon, and finished \(run.laps) laps."
+            return "It moved \(grouped(run.metres)) metres, round and round the open lagoon where it\u{2019}s fastest, and finished \(run.laps) laps."
         case .orderedLaps:
             return "It went through gates 1, 2 and 3 in order and finished \(run.laps) laps."
         }
@@ -137,9 +144,12 @@ public enum PatchTheRewardCopy {
         case .targets: return replayCaption
         case .finishLine: return "Crossing the line isn\u{2019}t finishing a lap. " + scoring
         case .metres: return "Moving isn\u{2019}t racing. " + scoring
-        case .orderedLaps: return "It finished once the rule spelled out what a lap is."
+        case .orderedLaps: return "It finished once the rule spelled out what a lap is. " + shortcutGap
         }
     }
+
+    /// C's second line: "careful once" doesn't close every gap.
+    public static let shortcutGap = "Add a shortcut between the gates, and even this rule would have a gap."
 
     /// A run in one sentence for VoiceOver (the slate's form): "Rule A:
     /// plus 100 per finish-line crossing. The boat crossed the line 30
@@ -153,7 +163,7 @@ public enum PatchTheRewardCopy {
         case .finishLine:
             did = "The boat crossed the line \(run.lineCrossings) times, back and forth, and finished \(run.laps) laps."
         case .metres:
-            did = "The boat moved \(run.metres) metres, round and round the lagoon\u{2019}s open water, and finished \(run.laps) laps."
+            did = "The boat moved \(run.metres) metres, round and round the lagoon\u{2019}s open water, where it\u{2019}s fastest, and finished \(run.laps) laps."
         case .orderedLaps:
             did = "The boat went through gates 1, 2 and 3 in order and finished \(run.laps) laps."
         }
@@ -163,14 +173,15 @@ public enum PatchTheRewardCopy {
     // MARK: The picture
 
     /// The track, once, in words (VoiceOver; the picture's label).
-    public static let trackDescription = "The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 star targets."
+    public static let trackDescription = "The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water, where the boat goes fastest, and 3 star targets."
 
     /// The route drawn on the track, in words.
     public static func route(_ rule: PatchRule?) -> String {
         guard let rule else { return "The boat waits on the start line." }
         switch rule {
         case .targets: return "Its route: past gates 1 and 2 into the lagoon, then round and round the 3 stars."
-        case .finishLine: return "Its route: back and forth over the finish line."
+        case .finishLine:
+            return "Its route: back and forth over the finish line, \(PatchTheRewardContent.run(.finishLine).lineCrossings) times."
         case .metres: return "Its route: past gates 1 and 2 into the lagoon, then round and round its open water."
         case .orderedLaps: return "Its route: 3 laps, through gates 1, 2 and 3 in order each time."
         }
@@ -197,6 +208,23 @@ public enum PatchTheRewardCopy {
     /// "The finish line" under the picture's chequered line; the gates'
     /// numbers are drawn in their discs.
     public static let finishMark = "finish"
+
+    /// The tags on a route's two legs (a still): the way in, then the loop
+    /// it repeats. Words, not numbers: the gates are numbered.
+    public static let legIn = "in"
+    public static let legLoop = "loop"
+
+    /// Beside the double-headed arrow on rule A's still: how many times the
+    /// run crossed the line ("\u{00D7}30").
+    public static func shuttleTag(_ run: PatchRun) -> String {
+        "\u{00D7}\(run.lineCrossings)"
+    }
+
+    /// The points a move earned, popped where it earned them while a run
+    /// plays ("+100" at the line, "+10" at a star).
+    public static func pop(_ points: Int) -> String {
+        "+\(points)"
+    }
 
     // MARK: The reveal
 
@@ -237,7 +265,7 @@ public enum PatchTheRewardCopy {
             let finished = PatchTheRewardContent.finishingPatches.count
             let total = PatchRule.patches.count
             let lead = spoiled ? "" : "You predicted it would finish for \(guesses) of \(total) rules. "
-            return lead + "It finished for \(finished) of \(total): \(PatchTheRewardContent.finishingPatches.map { "rule \(name($0))" }.joined(separator: " and ")). " + scoring
+            return lead + "It finished for \(finished) of \(total): \(PatchTheRewardContent.finishingPatches.map { "rule \(name($0))" }.joined(separator: " and "))."
         }
     }
 
@@ -253,7 +281,10 @@ public enum PatchTheRewardCopy {
     public static var everyLine: [String] {
         var lines = [title, compactLine, hook, trackLine, replayRule, playReplay, playReplayHint, replayCaption, goal,
                      predictPrompt, skip, skipHint, playAgain, pickHint, pickFirst, scoring, takeaway, pointsTile,
-                     lapsTile, trackDescription, finishMark, overallResult(spoiled: false), overallResult(spoiled: true)]
+                     lapsTile, trackDescription, finishMark, legIn, legLoop, shortcutGap,
+                     shuttleTag(PatchTheRewardContent.run(.finishLine)), overallResult(spoiled: false),
+                     overallResult(spoiled: true)]
+        lines += PatchRule.allCases.flatMap { PatchTheRewardContent.run($0).pops.map { pop($0.points) } }
         lines += labels.map(\.text)
         lines += (0...PatchRule.patches.count).map(overallGuess)
         lines += (0...PatchTrack.laps).map(lapsValue)

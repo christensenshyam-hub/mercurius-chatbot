@@ -1,12 +1,26 @@
 import SwiftUI
 import DesignSystem
 
-/// Patch the Reward's content, in the order both platforms show it: the
-/// hook, the track and its counters (the stage), its label, what the picked
-/// rule is doing (the panel: play, guess, the run, its result), the rules
-/// (the one control), then the reveal and the takeaway. The iPhone stacks
-/// it all; the Mac puts the rules beside the panel when the card is wide
-/// (`wide`). Every word is `PatchTheRewardCopy`'s.
+/// Patch the Reward's content: the hook, the track and its counters (the
+/// stage), what the picked rule is doing (the panel: play, guess, the run,
+/// its result), the toy label, the rules (the one control), and once all
+/// three patches have run, the reveal and the takeaway.
+///
+/// - Stacked (the iPhone, a narrow Mac card): the panel sits right under
+///   the stage, so a run and its result share a screen; the reveal follows
+///   the panel (the last patch's result, then the reveal); the label comes
+///   before the rules, so it is passed on the way to every guess.
+/// - Wide (the Mac): the label under the stage, the rules beside the panel,
+///   the reveal under both.
+///
+/// A run plays on the stage, but the student starts it from the panel or a
+/// chip that may sit a screen below it: the lesson's list brings the stage
+/// into view as the run starts (`InteractiveScrollAction`), the panel when
+/// a picked patch asks its question, and the reveal when it arrives after a
+/// run the student watched. At the accessibility text sizes the stage and
+/// the panel can't share a screen, so a run shows at once there, as under
+/// Reduce Motion: its still and result, where the student tapped. Every
+/// word is `PatchTheRewardCopy`'s.
 struct PatchTheRewardBody: View {
     let state: PatchTheRewardState
     /// The Mac at full width: the rules table to the right of the panel.
@@ -15,18 +29,28 @@ struct PatchTheRewardBody: View {
     let lit: Bool
 
     @Environment(\.interactiveTheme) private var theme
+    @Environment(\.interactiveScrollIntoView) private var scrollIntoView
     #if os(iOS)
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     #endif
 
     /// Runs play out on the track, unless Reduce Motion is on (then a run's
-    /// still and its result show at once) or VoiceOver is (the result is
-    /// spoken at once instead of after a silent run).
+    /// still and its result show at once), VoiceOver is (the result is
+    /// spoken at once instead of after a silent run), or the text is at an
+    /// accessibility size (the stage is screens away from the panel).
     private var animated: Bool {
         #if os(iOS)
-        return InteractiveMotion.autoplays(reduceMotion: theme.reduceMotion) && !voiceOver
+        return InteractiveMotion.autoplays(reduceMotion: theme.reduceMotion) && !voiceOver && !theme.usesTables
         #else
         return InteractiveMotion.autoplays(reduceMotion: theme.reduceMotion)
+        #endif
+    }
+
+    private var voiceOverRunning: Bool {
+        #if os(iOS)
+        return voiceOver
+        #else
+        return false
         #endif
     }
 
@@ -41,50 +65,94 @@ struct PatchTheRewardBody: View {
                     .foregroundStyle(theme.ink2)
             }
             .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: theme.rowSpacing) {
-                PatchStage(state: state, lit: lit)
-                LabelLine(PatchTheRewardCopy.toyLabel)
-            }
             if wide {
+                VStack(alignment: .leading, spacing: theme.rowSpacing) {
+                    stage
+                    LabelLine(PatchTheRewardCopy.toyLabel)
+                }
                 HStack(alignment: .top, spacing: theme.sectionSpacing) {
-                    PatchPanel(state: state, animated: animated)
+                    panel
                         .frame(maxWidth: .infinity, alignment: .leading)
                     PatchRuleList(state: state, animated: animated)
                         .frame(width: 236, alignment: .leading)
                 }
+                reveal
             } else {
-                PatchPanel(state: state, animated: animated)
+                stage
+                panel
+                reveal
+                LabelLine(PatchTheRewardCopy.toyLabel)
                 PatchRuleList(state: state, animated: animated)
-            }
-            if let reveal = state.overallReveal {
-                VStack(alignment: .leading, spacing: theme.rowSpacing) {
-                    RevealBox(reveal, takeaway: PatchTheRewardCopy.scoring)
-                        .id(InteractiveScrollID.reveal)
-                    Text(PatchTheRewardCopy.takeaway)
-                        .interactiveText(.body)
-                        .foregroundStyle(theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    LabelLine(PatchTheRewardCopy.madeUpLabel)
-                }
-                .transition(theme.transition())
             }
         }
         .animation(theme.animation(InteractiveMotion.change), value: state.isRevealed)
-        .onChange(of: state.finishedRuns) { _, _ in announceRun() }
+        .onChange(of: state.finishedRuns) { _, _ in runEnded() }
+        // A run started: the stage into view (the student may have tapped
+        // its chip or guess a screen below it).
+        .onChange(of: state.playing?.id) { _, id in
+            guard id != nil else { return }
+            scrollIntoView(InteractiveScrollID.stage, animated: !theme.reduceMotion)
+        }
+        // A picked patch asks its question in the panel, above the chips
+        // (not under VoiceOver, whose focus stays on the chip and which
+        // hears the question in the card's summary).
+        .onChange(of: state.awaitsGuess ? state.selected : nil) { _, rule in
+            guard rule != nil, !voiceOverRunning else { return }
+            scrollIntoView(InteractiveScrollID.panel, animated: !theme.reduceMotion)
+        }
         #if DEBUG
         .task { await state.debugAutoRun(animated: animated) }
         #endif
     }
 
-    /// Says what the run did (and, after the third patch, the reveal).
-    private func announceRun() {
+    private var stage: some View {
+        PatchStage(state: state, lit: lit)
+            .interactiveScrollMark(InteractiveScrollID.stage)
+    }
+
+    private var panel: some View {
+        PatchPanel(state: state, animated: animated)
+            .interactiveScrollMark(InteractiveScrollID.panel)
+    }
+
+    /// The reveal, once all three patches have run: the guesses beside
+    /// what happened, the takeaway and the made-up label. "It isn't
+    /// cheating. It's scoring." isn't said again here: A's and B's results
+    /// carry it.
+    @ViewBuilder private var reveal: some View {
+        if let reveal = state.overallReveal {
+            VStack(alignment: .leading, spacing: theme.rowSpacing) {
+                RevealBox(reveal)
+                Text(PatchTheRewardCopy.takeaway)
+                    .interactiveText(.body)
+                    .foregroundStyle(theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                LabelLine(PatchTheRewardCopy.madeUpLabel)
+            }
+            .interactiveScrollMark(InteractiveScrollID.reveal)
+            .transition(theme.transition())
+        }
+    }
+
+    /// A run ended: say what it did (and, after the third patch, the
+    /// reveal); after a run the student watched on the stage, bring the
+    /// reveal into view a beat later (the finished counters and the run's
+    /// result are seen first, and the reveal has been laid out).
+    private func runEnded() {
         guard let rule = state.lastFinished else { return }
         var line = PatchTheRewardCopy.spokenRun(rule) + " " + PatchTheRewardCopy.caption(rule)
-        if let reveal = state.overallReveal, state.revealedOnRun == state.finishedRuns {
+        let bringsReveal = state.overallReveal != nil && state.revealedOnRun == state.finishedRuns
+        if bringsReveal, let reveal = state.overallReveal {
             line += " " + reveal.spoken
-            if !line.contains(PatchTheRewardCopy.scoring) { line += " " + PatchTheRewardCopy.scoring }
         }
         InteractiveAccessibility.announce(line)
+        guard bringsReveal, animated else { return }
+        let scroll = scrollIntoView
+        let smooth = !theme.reduceMotion
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            scroll(InteractiveScrollID.reveal, animated: smooth)
+        }
     }
 }
 

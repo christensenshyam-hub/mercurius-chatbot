@@ -8,6 +8,8 @@ import XCTest
 ///   guess and runs, the reveal pairs the guesses with what happened, and
 ///   the lesson's check after the card still answers by tap.
 /// - A run plays on the track and "Skip to the result" ends it.
+/// - A run started from a chip far below the track plays in view, and the
+///   reveal comes into view when the last run ends.
 /// - At AX5 every line stays inside the window.
 ///
 /// The shared controls show up twice in the UI test tree (a button inside
@@ -119,10 +121,11 @@ final class PatchTheRewardUITests: XCTestCase {
     }
 
     /// The largest text size (AX5), every state on at once (revealed): a
-    /// student scrolling the card from its title to the made-up label never
-    /// meets a word outside the window's width (nothing scrolls sideways,
-    /// nothing is cut off at the side). Set TEST_RUNNER_PATCH_SHOTS_DIR to
-    /// keep a screenshot of each screen (for review; nothing is compared).
+    /// student scrolling the card from its title to its last rule (the
+    /// reveal sits under the last run's result, the rules last) never meets
+    /// a word outside the window's width (nothing scrolls sideways, nothing
+    /// is cut off at the side). Set TEST_RUNNER_PATCH_SHOTS_DIR to keep a
+    /// screenshot of each screen (for review; nothing is compared).
     @MainActor
     func testAtTheLargestTextSizeEveryLineStaysInsideTheWindow() throws {
         let app = XCUIApplication()
@@ -138,7 +141,8 @@ final class PatchTheRewardUITests: XCTestCase {
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 20), "the card never showed")
         let window = app.windows.firstMatch.frame
-        let last = element(app, labelContains: "Loopholes A and B are made up for this toy.")
+        // Rule C's chip, the card's last control ("… Tried: 3 laps.").
+        let last = element(app, labelContains: "Tried: 3 laps")
         let shots = ProcessInfo.processInfo.environment["PATCH_SHOTS_DIR"]
         var checked = Set<String>()
         // One snapshot of the tree per screen (querying each text would
@@ -161,10 +165,42 @@ final class PatchTheRewardUITests: XCTestCase {
             if last.exists && last.frame.minY >= window.minY && last.frame.maxY <= window.maxY { break }
             drag(app, up: true, span: 0.6)
         }
-        XCTAssertTrue(last.exists && last.frame.maxY <= window.maxY, "never scrolled to the card's last label")
+        XCTAssertTrue(last.exists && last.frame.maxY <= window.maxY, "never scrolled to the card's last rule")
         // The walk saw the card's words, not just its title.
         XCTAssertTrue(checked.contains { $0.hasPrefix("You\u{2019}re training a boat") }, "\(checked)")
+        XCTAssertTrue(checked.contains { $0.hasPrefix("Nothing was broken") }, "\(checked)")
         XCTAssertTrue(checked.contains { $0.hasPrefix("Patch the rule so the boat finishes") }, "\(checked)")
+    }
+
+    /// The chips sit far below the track: a run started from one plays in
+    /// view (the lesson brings the track up as it starts), with the panel's
+    /// Skip under it, and the reveal comes into view when the last run ends.
+    @MainActor
+    func testARunStartedBelowTheTrackPlaysInViewAndTheRevealFollows() {
+        let app = launch(["-InteractiveState", "explored"])
+        let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
+        XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
+        let window = app.windows.firstMatch.frame
+        func onScreen(_ element: XCUIElement) -> Bool {
+            let frame = element.frame
+            return element.exists && frame.minY >= window.minY + window.height * 0.05
+                && frame.maxY <= window.minY + window.height * 0.88
+        }
+        tap(app.buttons["Rule C: plus 100 per full lap through gates 1, 2 and 3 in order."].firstMatch, in: app)
+        tap(app.buttons["Yes"].firstMatch, in: app)
+        let track = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "The toy track")).firstMatch
+        let skip = app.buttons["Skip to the result"].firstMatch
+        XCTAssertTrue(skip.waitForExistence(timeout: 5), "the run didn't play")
+        // Give the scroll its moment, well inside the 6 s run.
+        let inView = expectation(for: NSPredicate { _, _ in onScreen(track) && onScreen(skip) }, evaluatedWith: track)
+        wait(for: [inView], timeout: 3)
+        XCTAssertTrue(track.label.contains("The boat is running rule C."), track.label)
+        skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let reveal = element(app, labelContains: "It finished for 1 of them: rule C.")
+        XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal never showed")
+        let revealInView = expectation(for: NSPredicate { _, _ in onScreen(reveal) }, evaluatedWith: reveal)
+        wait(for: [revealInView], timeout: 3)
     }
 
     @MainActor
