@@ -13,6 +13,7 @@ public enum InteractiveCardViews {
         .tokenizer,
 
         .doubtDial,
+        .pageWithASecret,
     ]
 
     /// The card's view, with its context (spec, spoiled, the lesson's state).
@@ -33,7 +34,7 @@ public enum InteractiveCardViews {
             DoubtDialPhoneCard(context)
 
         case .pageWithASecret:
-            InteractivePlaceholderCard(context)
+            PageWithASecretPhoneCard(context)
 
         case .citationThatWasnt:
             InteractivePlaceholderCard(context)
@@ -62,7 +63,7 @@ public enum InteractiveCardViews {
             NightDoubtDialCard(context)
 
         case .pageWithASecret:
-            InteractivePlaceholderCard(context)
+            NightPageWithASecretCard(context)
 
         case .citationThatWasnt:
             InteractivePlaceholderCard(context)

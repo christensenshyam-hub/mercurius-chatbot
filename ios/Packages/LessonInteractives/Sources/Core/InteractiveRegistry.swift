@@ -24,8 +24,9 @@ public enum InteractiveRegistry {
 
         InteractiveSpec(id: .doubtDial, lessonID: "u6_l4", anchor: .firstExample, wave: 1, enabled: false),
 
+        // Spoilers: the slate's three, refined (`PageWithASecretContent.spoilers`).
         InteractiveSpec(id: .pageWithASecret, lessonID: "u8_l1", anchor: .firstExample,
-                        spoilers: ["hidden text", "prompt injection", "Guardian"], wave: 1, enabled: false),
+                        spoilers: PageWithASecretContent.spoilers, wave: 1, enabled: false),
 
         // Wave 2: after the guide-line batch (D2) and the placement decision (D1).
         InteractiveSpec(id: .twoTestsOneLine, lessonID: "u2_l2", anchor: .teachReply(2),

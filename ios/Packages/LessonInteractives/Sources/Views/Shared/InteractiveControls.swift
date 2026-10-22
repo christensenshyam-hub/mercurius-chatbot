@@ -102,6 +102,20 @@ struct InteractiveMacControl<S: InsettableShape>: ViewModifier {
 }
 #endif
 
+#if os(iOS)
+/// The iPhone's card controls draw their own off state (`ink3` words, no
+/// faded fill), so their button style must not fade them again: `.plain`
+/// dims a disabled button's whole label to about half, which took a
+/// locked guess's white words on `prominent` to 4.18:1 and the other
+/// choice's to 2.56:1. Pressed, the label dims a little for a moment.
+struct InteractiveSteadyButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.8 : 1)
+    }
+}
+#endif
+
 extension View {
     /// This view as one card control: a button on the iPhone (the caller
     /// sizes it to `theme.minTarget`), a keyboard control on the Mac
@@ -117,7 +131,7 @@ extension View {
             .accessibilityAction { if isEnabled { action() } }
         #else
         Button(action: action) { self.contentShape(shape) }
-            .buttonStyle(.plain)
+            .buttonStyle(InteractiveSteadyButtonStyle())
             .disabled(!isEnabled)
         #endif
     }
@@ -191,6 +205,10 @@ public struct InteractiveChip: View {
         .accessibilityLabel(accessibilityLabel ?? title)
         .accessibilityHint(isEnabled ? (accessibilityHint ?? "") : "")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        // The off state on the element VoiceOver and XCUITest see ("dimmed"),
+        // not only on the button inside it. Nothing fades: the colours above
+        // draw the off state (`InteractiveSteadyButtonStyle`).
+        .disabled(!isEnabled)
     }
 }
 
@@ -261,5 +279,7 @@ public struct InteractiveActionButton: View {
         .accessibilityLabel(title)
         .accessibilityHint(accessibilityHint ?? "")
         .accessibilityAddTraits(.isButton)
+        // As the chip: "dimmed" on the outer element, with no fade.
+        .disabled(!isEnabled)
     }
 }

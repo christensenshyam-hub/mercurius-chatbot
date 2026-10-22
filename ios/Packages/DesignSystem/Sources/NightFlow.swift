@@ -20,7 +20,7 @@ public struct NightFlow: Layout {
         var lineHeight: CGFloat = 0
         var widest: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = Self.size(of: subview, line: maxWidth)
             if x > 0 && x + size.width > maxWidth {
                 y += lineHeight + lineSpacing
                 x = 0
@@ -37,9 +37,10 @@ public struct NightFlow: Layout {
         var x = bounds.minX
         var y = bounds.minY
         var lineHeight: CGFloat = 0
-        let maxX = bounds.minX + max(proposal.width ?? bounds.width, bounds.width) + 0.5
+        let line = max(proposal.width ?? bounds.width, bounds.width)
+        let maxX = bounds.minX + line + 0.5
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = Self.size(of: subview, line: line)
             if x > bounds.minX && x + size.width > maxX {
                 y += lineHeight + lineSpacing
                 x = bounds.minX
@@ -49,5 +50,14 @@ public struct NightFlow: Layout {
             x += size.width + spacing
             lineHeight = max(lineHeight, size.height)
         }
+    }
+
+    /// A child's size: its own width, or, when that is wider than a whole
+    /// line (a long chip at a large text size on a narrow screen), the
+    /// line's width, so its words wrap instead of running past the edge.
+    private static func size(of subview: LayoutSubview, line: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard line.isFinite, ideal.width > line + 0.5 else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: line, height: nil))
     }
 }
