@@ -18,4 +18,15 @@ import SwiftUI
 public enum BrandAppearance {
     /// The colour scheme of every window, sheet and preview host.
     public static let colorScheme: ColorScheme = .dark
+
+    /// The iPhone's interface tint, set on each root container (the tab
+    /// shell, Home, the first-run gate, Settings and the sheets): the tab
+    /// bar's selected item, back and toolbar buttons, text-style buttons and
+    /// links. It is `accentText`, the indigo made to be read on the ink
+    /// canvas. The fill indigo (`accent`, the asset `AccentColor`) as text is
+    /// 4.21:1 on the canvas, and the tab bar's selected label was 3.2:1 on
+    /// its highlight. Controls that want the indigo as a fill, such as
+    /// switches, set `BrandColor.accent` themselves. (The Mac tints with
+    /// `Night.prominent`.)
+    public static let tint: Color = BrandColor.accentText
 }

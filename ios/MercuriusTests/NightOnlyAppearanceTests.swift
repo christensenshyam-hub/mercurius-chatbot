@@ -65,6 +65,15 @@ struct NightOnlyAppearanceTests {
         }
     }
 
+    @Test("The interface tint (the tab bar's selected item, back and text buttons) is Night's readable indigo")
+    func interfaceTint() {
+        for style in [UIUserInterfaceStyle.light, .dark, .unspecified] {
+            #expect(Self.hex(BrandAppearance.tint, style: style) == 0xA5B4FC, "\(style.rawValue)")
+            #expect(Self.hex(BrandAppearance.tint, style: style, contrast: .high) == 0xC7D2FE,
+                    "\(style.rawValue), Increase Contrast")
+        }
+    }
+
     @Test("The fixed brand hues stay fixed")
     func fixedHues() {
         #expect(Self.hex(BrandColor.accent, style: .dark) == 0x6366F1)

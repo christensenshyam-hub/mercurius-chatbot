@@ -223,6 +223,28 @@ struct BrandContrastTests {
         #expect(abs(lowest(.darkHC) - 10.92) < 0.01, "\(Self.ratio(lowest(.darkHC)))")
     }
 
+    /// The tab bar's highlight behind the selected tab, as iOS 26.4 draws it
+    /// on an iPhone 16 Pro Max over the path and over the chat (measured
+    /// from the simulator's screenshots; the system draws it, so it isn't a
+    /// token).
+    static let tabHighlights: [(String, UInt32)] = [
+        ("over the path", 0x393F6A),
+        ("over the chat", 0x343650),
+    ]
+
+    @Test("The tab bar's selected label: the interface tint (accentText) reads at 4.5:1 on its highlight; the fill indigo didn't",
+          arguments: [Variant.dark, .darkHC])
+    func selectedTabLabel(variant: Variant) {
+        for (name, highlight) in Self.tabHighlights {
+            let tint = Self.contrast(Self.shade(BrandNight.accentText, variant), Shade(highlight))
+            #expect(tint >= Self.minimum, "accentText \(name) (\(variant)) is \(Self.ratio(tint)):1")
+            // The tint before the fix: the system drew the selected label
+            // a little lighter than the fill (#7F85FF), 3.2:1 and 3.6:1.
+            let fill = Self.contrast(Shade(BrandPalette.accent), Shade(highlight))
+            #expect(fill < Self.minimum, "accent \(name) is \(Self.ratio(fill)):1")
+        }
+    }
+
     @Test("The accent fill as text fails on the ink canvas: why accentText exists")
     func accentFillFailsAsText() {
         // If the fill hue ever passes as text everywhere, accentText could be

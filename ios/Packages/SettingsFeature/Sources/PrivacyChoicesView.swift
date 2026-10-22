@@ -20,9 +20,11 @@ struct PrivacyChoicesView: View {
                 disclosureSection
                 withdrawSection
             }
-            // Night's lit surface for the rows, as in Settings. (The Mac's
-            // Settings sheet keeps its own rows.)
+            // Night's lit surface for the rows, and its hairline between
+            // them, as in Settings. (The Mac's Settings sheet keeps its own
+            // rows.)
             .listRowBackground(BrandColor.surface)
+            .listRowSeparatorTint(BrandColor.border)
             #else
             disclosureSection
             withdrawSection
@@ -99,6 +101,7 @@ struct PrivacyChoicesView: View {
             }
         } header: {
             Text("How Mercurius uses your data")
+                .nightSectionCaption()
         }
     }
 
@@ -119,6 +122,7 @@ struct PrivacyChoicesView: View {
             .accessibilityIdentifier("settings.withdrawConsent")
         } footer: {
             Text("Deletes your data on this device and on our server, gives you a new anonymous ID, and shows the agreement again before you can chat.")
+                .nightSectionCaption()
         }
     }
 }
