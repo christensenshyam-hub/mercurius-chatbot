@@ -161,26 +161,31 @@ private struct TrackKeyboard: ViewModifier {
     }
 }
 
-/// Two or three options, one picked: a toggle like "What you see | What
-/// the agent reads" or "Gender box: kept | deleted". Chips side by side
-/// when they fit, else stacked; the picked one has a check. On the Mac
-/// ←/→ move the pick while an option has focus; Space or Return picks.
+/// Two or three options, one picked: a toggle like "You see | The agent
+/// reads" or "Gender box: kept | deleted". Chips side by side when they
+/// fit, else stacked; the picked one has a check. On the Mac ←/→ move the
+/// pick while an option has focus; Space or Return picks.
+/// `accessibilityTitle`: what VoiceOver says for an option, when its drawn
+/// title is a short form ("The agent reads" for "What the agent reads").
 public struct InteractiveSegmented<Option: Hashable & Sendable>: View {
     private let name: String
     private let options: [Option]
     private let title: (Option) -> String
+    private let accessibilityTitle: ((Option) -> String)?
     private let selection: Option
     private let isEnabled: Bool
     private let onSelect: (Option) -> Void
     @Environment(\.interactiveTheme) private var theme
 
     public init(_ name: String, options: [Option], selection: Option, isEnabled: Bool = true,
-                title: @escaping (Option) -> String, onSelect: @escaping (Option) -> Void) {
+                title: @escaping (Option) -> String, accessibilityTitle: ((Option) -> String)? = nil,
+                onSelect: @escaping (Option) -> Void) {
         self.name = name
         self.options = options
         self.selection = selection
         self.isEnabled = isEnabled
         self.title = title
+        self.accessibilityTitle = accessibilityTitle
         self.onSelect = onSelect
     }
 
@@ -199,7 +204,7 @@ public struct InteractiveSegmented<Option: Hashable & Sendable>: View {
     @ViewBuilder private var chips: some View {
         ForEach(Array(options.enumerated()), id: \.offset) { index, option in
             InteractiveChip(title(option), isSelected: option == selection, isEnabled: isEnabled, isFirst: index == 0,
-                            onArrow: { arrow in move(arrow) }) {
+                            accessibilityLabel: accessibilityTitle?(option), onArrow: { arrow in move(arrow) }) {
                 if option != selection { onSelect(option) }
             }
         }
