@@ -255,6 +255,23 @@ Walk the card on an iPhone and on the Mac, inside a real Lesson 1.3 run.
 
 ---
 
-## 9. Verification (2026-10-21)
+## 9. Verification (2026-10-21/22)
 
-See the PR notes and `shots/` (kept out of git). Summary in the build log of this branch's commit.
+Branch `feat/ia-citation-that-wasnt` (from `feat/interactives-wave1` at `4d401bd`). Shots are in `shots/`, kept out of git.
+
+- **`swift test`** (ios/Packages): 1,310 tests pass, including the 4 suites in `CitationThatWasntTests` (every chance, rank, both references and the guide's 2023 and $5,000 re-derived; the register; the labels; every VoiceOver summary; the gate; spoiled mode; the DEBUG states; nothing encodable).
+- **CI lint** (`ios/scripts/ci-compat-lint.py`): 0 findings.
+- **iOS build and `xcodebuild test`** on an iPhone 16 Pro Max simulator (iOS 26.4), snapshot recording forced off, the snapshot suite run separately:
+  - unit tests: 6 of 6 pass;
+  - UI tests: 35. In the full run 32 passed. Three failed, and each passes when re-run: `CitationThatWasntUITests` (a query that matched two nested buttons; fixed with `firstMatch`), `testTabBarHasChatAndCurriculum` (a 15 s wait under load) and Lesson 1.1's `LessonInteractiveUITests` (it failed on a simulator holding state from this card's screenshot launches, and passed on a fresh install). The new test walks all five slots, locks "No step did", reveals, writes it again, and answers the lesson's check after the card with one tap.
+  - The last change after that run is the step heading's no-break spaces (a string, re-tested in `swift test`).
+- **Snapshots** (`ios-unchanged-check.sh`): the same 23 results as the baseline (11 pass, 12 already stale), with the same pixels for every stale render. No record run.
+- **Mac:** the Debug build succeeds. Shots come from a renamed copy (`….macnsia4`), at 1280×800 and 700×600, light and dark: alone (`-InteractiveGallery`) at the year's draw, after the reveal and after "Write it again", and in the u1_l3 stub lesson after the example's part. The founder's running app was never touched. The script's "running before, is gone" notes were simulator app processes from other workflows.
+- **iPhone shots:** 16 Pro Max at Large (light and dark) and AX3; an SE at AX5 (hook, walk, the five drawn pieces, reveal, rewrite: everything wraps inside the card, no sideways scroll) and at Large; a 7.2 s clip of the reveal and the rewrite (`-InteractiveState predicted -CitationAutoplay YES`).
+- **Polish from the shots:**
+  - On the iPhone, a drawn slot's candidates were disabled buttons, which dimmed the model's pick at the very moment it should light up, and took its words below 4.5:1. A drawn slot's rows now draw as themselves and read as the slot's choice.
+  - At AX5 on an SE the step heading broke as "Step 2 of 5 / · Year" (then "Step 2 of / 5 · Year"). It now breaks only before the slot's name.
+  - On the Mac, VoiceOver's press now picks a candidate.
+- **Found in the shared framework, left for its owner** (shared views, not this card's files):
+  - On the iPhone, once a guess is locked, `PredictChips` draws every chip as a disabled button. The chosen chip's words measure about 4.2:1 on its fill, and the others about 2.6:1. The reveal box repeats "You guessed …" at full contrast.
+  - XCUI sees each `InteractiveActionButton` and chip as a Button inside a Button with the same label, so UI tests need `firstMatch`.

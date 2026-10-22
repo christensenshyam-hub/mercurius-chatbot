@@ -175,7 +175,9 @@ struct CitationWalkTests {
         walk.guess(1)
         walk.advance()
         #expect(walk.steps.position == "Step 2 of 5")
-        #expect(CitationCopy.stepHeading(walk) == "Step 2 of 5 \u{00B7} Year")
+        #expect(CitationCopy.stepHeading(walk) == "Step\u{00A0}2\u{00A0}of\u{00A0}5\u{00A0}\u{00B7} Year")
+        // It reads as the step strip's words, its spaces held together.
+        #expect(CitationCopy.stepHeading(walk).replacingOccurrences(of: "\u{00A0}", with: " ") == "Step 2 of 5 \u{00B7} Year")
     }
 }
 

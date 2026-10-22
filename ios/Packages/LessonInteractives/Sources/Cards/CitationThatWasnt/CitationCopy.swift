@@ -94,9 +94,12 @@ public enum CitationCopy {
     public static let walkHeading = "Be the model"
     /// "Pick", not "tap": the Mac clicks and keys.
     public static let walkPrompt = "Pick the piece you think gets written next."
-    /// "Step 2 of 5 · Year".
+    /// "Step 2 of 5 · Year". "Step 2 of 5 ·" holds together (its spaces
+    /// don't break), so at the accessibility sizes the line breaks only
+    /// before the slot's name, never inside the count or before the dot.
     public static func stepHeading(_ walk: CitationWalk) -> String {
-        "\(walk.steps.position) \u{00B7} \(slotName(walk.slot))"
+        let position = walk.steps.position.replacingOccurrences(of: " ", with: "\u{00A0}")
+        return "\(position)\u{00A0}\u{00B7} \(slotName(walk.slot))"
     }
 
     public static let pickedTag = "picked"
