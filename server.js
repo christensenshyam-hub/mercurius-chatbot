@@ -2048,16 +2048,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const guardNumbers = guardOn ? homeworkGuard.wordProblemNumbers(clientMessages) : null;
     const guardCorrections = guardOn ? homeworkGuard.correctionValues(clientMessages) : [];
     const guardQuadratics = guardOn ? homeworkGuard.quadraticProblems(clientMessages) : [];
+    const guardSystems = guardOn ? homeworkGuard.systemProblems(clientMessages) : [];
     const writingTurn = guardOn && homeworkGuard.writingThread(clientMessages);
     // Any turn on a problem to work is held back too, for the one-question and
     // stall transforms (oneQuestion, unrepeatQuestion).
     const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
-    const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0 || guardQuadratics.length > 0;
+    const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0 || guardQuadratics.length > 0 || guardSystems.length > 0;
     const replyLimit = reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
     const findGuardLeak = (text) => homeworkGuard.findLeak(text, guardProblems)
       || homeworkGuard.findNumberLeak(text, guardNumbers)
       || homeworkGuard.findCorrectionLeak(text, guardCorrections)
-      || homeworkGuard.findQuadraticLeak(text, guardQuadratics);
+      || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
+      || homeworkGuard.findSystemLeak(text, guardSystems);
     const redactGuardLeaks = (text) => {
       let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(text, guardProblems), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
@@ -2077,7 +2079,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
       const what = leak.problem
         ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
-        : /^quadratic/.test(leak.name)
+        : leak.name === 'system'
+          ? `a value of the student's own system (${leak.match}), in their working or in an example that shares it. Write the reply again with the same coaching move: never write a value of x or y from their system, and give any example values that share nothing with theirs.`
+          : /^quadratic/.test(leak.name)
           ? `their quadratic's answer (${leak.match}): its roots, its factors, the pair of numbers they are looking for, or an example that shares a root. Write the reply again with the same coaching move: name the product and the sum the two numbers need, never the numbers or the factors, and any example has roots that share nothing with theirs.`
           : leak.name === 'word problem'
           ? `a result worked out from the student's own numbers (${leak.value}), which is their answer or gives it away. Write the reply again with the same coaching move, without working their numbers through to any result: name the step, run a number THEY gave backwards, or use a worked example on new numbers.`

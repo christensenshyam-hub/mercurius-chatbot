@@ -190,6 +190,19 @@ describe('quadratics with whole-number roots', () => {
   });
 });
 
+describe('two equations in two unknowns', () => {
+  const S = g.systemProblems([{ role: 'user', content: 'solve the system x + y = 10 and x - y = 4' }]);
+  test('solved, and a value of theirs is a leak wherever it shows (red-team re-run, 2026-10-22)', () => {
+    assert.deepEqual(g.linearSystem('solve the system x + y = 10 and x - y = 4').values, { x: 7, y: 3 });
+    assert.equal(g.findSystemLeak('Adding your two equations gives 2x = 14, so x = 7.', S).match, 'x = 7');
+    assert.equal(g.findSystemLeak('Plug x = 5 into x + y = 8: 5 + y = 8, so y = 3.', S).match, 'y = 3');
+    for (const ok of ['Add them: 2x = 18, x = 9, y = 6.', 'Try x + y = 15 and x − y = 3.', 'What do you get when you add them?']) {
+      assert.equal(g.findSystemLeak(ok, S), null, ok);
+    }
+    assert.deepEqual(g.systemProblems([{ role: 'user', content: 'solve the system x + y = 10 and x - y = 4' }, { role: 'user', content: 'so x = 7?' }]), []);
+  });
+});
+
 describe('quizQuestionLeaks', () => {
   const p = problemsOf('what is 3x+5 = 20');
   test('a question on their own equation, or answering it on another one, is dropped', () => {
