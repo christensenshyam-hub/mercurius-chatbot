@@ -130,6 +130,9 @@ describe('findLeak: the red team\'s routes to the answer', () => {
       'Like this: 2x + 3 = 13. 2x = 10. **x = ?**. Check: 2(?) + 3 = 13 ✓, and 15 ÷ 3 = ? − so?',
     );
     assert.equal(g.redactLeaks('Like this: 3x + 5 = 29 → 3x = 24 → x = 8', p), 'Like this: 3x + 5 = 29 → 3x = 24 → x = 8');
+    // A code example on their answer (4x − 7 = 21; 3x − 5 = 16 is also x = 7)
+    // can't be fixed by replacing a value: its line goes (red-team run on 594cd6a).
+    assert.equal(g.dropExampleLines('# Solving 3x - 5 = 16\nx = (16 + 5) / 3\nRun it on yours.', problemsOf('solve 4x - 7 = 21')), 'x = (16 + 5) / 3\nRun it on yours.');
   });
 });
 
@@ -150,6 +153,8 @@ describe('the other guards: word problems, corrections, menus', () => {
     // confirms the answer they gave, nothing is left to give away (red-team
     // run on 5e6f309: "t² = ?" and "15² = ?" were redactions of right checks).
     assert.equal(g.findNumberLeak('Check it: if d = 30, then 30 = ½ × 10 × t² gives t² = 6, not 9.', fall), null);
+    // Red-team run on d1ec542: their number named in passing doesn't excuse it.
+    assert.equal(g.findNumberLeak('Check it: if the ball fell 30 m, then plugging back into d = ½gt² gives ½ × 10 × 3² = 5 × 9 = 45, not 30.', fall).value, '45');
     const pyth = g.wordProblemNumbers(T('right triangle legs 9 and 12, i got 15 for the hypotenuse. is that right?'));
     assert.equal(g.findNumberLeak('Check it: 9² + 12² = 81 + 144 = 225, and 15² = 225 ✓. That is right!', pyth), null);
     assert.equal(g.redactValue('½ × 10 × 3² gives 45, not 30.', { name: 'word problem', value: '45' }), '½ × 10 × 3² gives ?, not 30.');
@@ -594,7 +599,7 @@ for (const flag of ['on', 'off']) {
       assert.equal(staticOf(calls[1]), staticOf(calls[0]));
     });
 
-    test('a retry that still leaks is redacted; the JSON path is guarded too', async () => {
+    test('a retry that still leaks loses the leaking example (or the value becomes ?); the JSON path is guarded too', async () => {
       const n = nonce();
       const leak = 'Like this: 2x + 3 = 13, so 2x = 10 and x = 5.\n\nWhat is your first step?';
       const thread = [
@@ -603,9 +608,10 @@ for (const flag of ['on', 'off']) {
         { role: 'user', content: `idk MOCK_SAYS_B64:${b64(leak)}` },
       ];
       const { complete } = await chatSse(servers[flag], sid(), thread);
-      assert.equal(complete.reply, 'Like this: 2x + 3 = 13, so 2x = 10 and x = ?.\n\nWhat is your first step?');
+      // The example lands on their answer (2x + 3 = 13 is x = 5 too): its line goes.
+      assert.equal(complete.reply, 'What is your first step?');
       const json = await chatJson(servers[flag], sid(), thread.map((m) => ({ ...m, content: m.content.replace(n, nonce()) })));
-      assert.equal(json.reply, 'Like this: 2x + 3 = 13, so 2x = 10 and x = ?.\n\nWhat is your first step?');
+      assert.equal(json.reply, 'What is your first step?');
     });
 
     test('once the student has said the answer, nothing is held back or rewritten', async () => {

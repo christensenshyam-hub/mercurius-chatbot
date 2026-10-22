@@ -2064,7 +2064,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       || homeworkGuard.findSystemLeak(text, guardSystems)
       || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
     const redactGuardLeaks = (text) => {
-      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(text, guardProblems), guardQuadratics);
+      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, guardProblems), guardProblems), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
       return out;
     };
