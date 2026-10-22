@@ -74,6 +74,7 @@ const {
   qualityPrefix,
 } = require('./lib/responseQuality');
 const { UNIFIED_PROMPT, MODE_TOKENS, buildRuntimeContext, useUnifiedSystem } = require('./lib/unifiedPrompt');
+const homeworkGuard = require('./lib/homeworkGuard');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -120,6 +121,26 @@ const HELPER_MODEL = process.env.HELPER_MODEL || 'claude-haiku-4-5';
 // the Railway env to route /api/chat through the single unified prompt +
 // prompt caching. Flip back to instantly revert. See docs/V2_UPGRADE.md.
 const USE_UNIFIED_PROMPT = process.env.USE_UNIFIED_PROMPT === '1' || process.env.USE_UNIFIED_PROMPT === 'true';
+
+// Socratic homework review (2026-10-22). Free-chat turns on a problem to work
+// (an equation, a reaction, a quantity, a photo: lib/homeworkGuard
+// .looksLikeProblemWork) run with adaptive thinking at low effort: with none,
+// every verdict on a student's step was mental arithmetic written as it
+// streamed, and Merc called correct steps wrong (34 of 48 probe threads
+// right without thinking, 46 of 48 with it). Thinking counts against
+// max_tokens, so those turns get headroom; it is never forwarded to clients
+// (the SSE relay sends 'text' events only). HOMEWORK_THINKING=0 turns it off.
+const HOMEWORK_THINKING = process.env.HOMEWORK_THINKING !== '0';
+const THINKING_MODEL_RE = /^claude-(?:sonnet|opus)-4-6$/;
+const THINKING_MIN_TOKENS = 3000;
+// The answer guard (lib/homeworkGuard): when the student's own problem is
+// a linear equation, a word problem with numbers, or a distribution they got
+// wrong, a reply that gives its answer away (a worked example landing on it,
+// "Try 6", "15 ÷ 3 = 5", "150 ÷ 3 = 50 mph", the −12 they still have to find)
+// is regenerated once, then redacted. Those turns, and writing turns (whose
+// closing menu of readings is cut by stripMenu), are buffered and sent
+// whole. HOMEWORK_LEAK_GUARD=0 turns it off.
+const HOMEWORK_LEAK_GUARD = process.env.HOMEWORK_LEAK_GUARD !== '0';
 
 // ---------------------------------------------------------------------------
 // Standby gamification (quiet progress) — feature flag.
@@ -495,7 +516,7 @@ Generate exactly 4 questions as VALID JSON in this EXACT format (no text before 
 {"title":"[Short topic] Quiz","questions":[{"q":"Question text?","options":["A) option","B) option","C) option","D) option"],"answer":"A","explanation":"Brief explanation under 25 words."}]}
 
 Rules:
-- Questions must test genuine AI literacy understanding from topics actually discussed
+- Questions must test genuine understanding of the topics actually discussed: AI literacy, or the method behind a homework problem the student worked on
 - Include at least one critical thinking question requiring reasoning, not just recall
 - "answer" is the single correct letter: A, B, C, or D
 - Keep question text under 20 words each
@@ -1204,6 +1225,13 @@ const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 const CRISIS_RESULT = Object.freeze({ error: 'crisis', message: CRISIS_COPY, crisis: true });
 const sendCrisisResult = (res) => res.status(503).json({ ...CRISIS_RESULT });
 
+/** The reply text of a non-streaming response: with thinking on, content[0]
+ *  is the thinking block, so read the text blocks. */
+function firstTextOf(response) {
+  const blocks = Array.isArray(response && response.content) ? response.content : [];
+  return blocks.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
+}
+
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
@@ -1849,46 +1877,6 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     blogContext = buildBlogContext(blogPosts);
   }
 
-  let staticText;
-  let dynamicText;
-  if (isCurriculumMsg) {
-    // Curriculum is EXEMPT from the unified prompt (see useUnifiedSystem):
-    // mercurius-v2.md carries no lesson machinery, so swapping it in would
-    // drop the beat structure AND the [CHECK]/[LESSON_COMPLETE] client
-    // contract. CURRICULUM_PROMPT governs lessons on every path; capable
-    // clients get the block-markup appendix.
-    staticText = curriculumStatic(wantsBlocks);
-    dynamicText = responseMode === 'deep' ? EXPAND_MODE_NOTE : '';
-  } else if (useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false })) {
-    // v2: the quality preamble / mode rules / response-mode contract are
-    // baked into the unified prompt, so qualityPrefix + EXPAND_MODE_NOTE are
-    // intentionally not used — response_mode + the deep nudge live inside it.
-    staticText = isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
-    dynamicText = buildRuntimeContext({
-      mode: effectiveMode,
-      responseMode,
-      currentDate: new Date().toISOString().slice(0, 10),
-      meeting: meetingContext,
-      blog: blogContext,
-    });
-  } else {
-    // Legacy per-mode prompts (flag off): the quality preamble first so the
-    // model reads concision + format guidance before the pedagogy.
-    staticText = legacyStatic(mode, isWidget);
-    dynamicText = [
-      clubContext.dynamicClubBlock({ capabilities, meetingContext, blogContext }),
-      responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
-    ].filter(Boolean).join('\n\n');
-  }
-  // The meeting + blog material is only fetched for widget free chat, and is
-  // the same bytes on every such request until the feeds change: give it its
-  // own breakpoint instead of re-billing ~3k tokens at full price each turn.
-  const systemForApi = systemBlocks.buildSystem({
-    staticText,
-    dynamicText,
-    cacheDynamic: Boolean(meetingContext || blogContext),
-  });
-
   // v3 vision: if the student attached an image (uploaded earlier via
   // POST /api/images), fetch it and make THIS user turn multimodal so Claude
   // can see it. Only the current turn carries the image — history stays text
@@ -1908,6 +1896,63 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       logger.forRequest(req).warn({ err: err.message }, 'chat: attached image fetch failed — proceeding text-only');
     }
   }
+  // Socratic homework review (2026-10-22): what the server can work out for
+  // this reply from the thread (lib/homeworkGuard.homeworkMoment): the
+  // verdict on the student's latest line of a linear equation (typed or in
+  // words), atom counts for a reaction, a reminder to check a formula answer
+  // with their own number, the next move when they keep asking, and the
+  // writing and photo openers. Dynamic block only; never on a lesson, a
+  // crisis or a safety-topic turn.
+  const latestText = typeof latestUserMessage.content === 'string' ? latestUserMessage.content : '';
+  const homeworkNote = isCurriculumMsg
+    ? ''
+    : homeworkGuard.homeworkMoment(clientMessages, {
+      unsafe: Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText),
+      hasImage: Boolean(attachedImage),
+      deep: responseMode === 'deep',
+    });
+
+  let staticText;
+  let dynamicText;
+  if (isCurriculumMsg) {
+    // Curriculum is EXEMPT from the unified prompt (see useUnifiedSystem):
+    // mercurius-v2.md carries no lesson machinery, so swapping it in would
+    // drop the beat structure AND the [CHECK]/[LESSON_COMPLETE] client
+    // contract. CURRICULUM_PROMPT governs lessons on every path; capable
+    // clients get the block-markup appendix.
+    staticText = curriculumStatic(wantsBlocks);
+    dynamicText = responseMode === 'deep' ? EXPAND_MODE_NOTE : '';
+  } else if (useUnifiedSystem({ flagOn: USE_UNIFIED_PROMPT, promptLoaded: Boolean(UNIFIED_PROMPT), isCurriculum: false })) {
+    // v2: the quality preamble / mode rules / response-mode contract are
+    // baked into the unified prompt, so qualityPrefix + EXPAND_MODE_NOTE are
+    // intentionally not used — response_mode + the deep nudge live inside it.
+    staticText = isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+    dynamicText = [buildRuntimeContext({
+      mode: effectiveMode,
+      responseMode,
+      currentDate: new Date().toISOString().slice(0, 10),
+      meeting: meetingContext,
+      blog: blogContext,
+    }), homeworkNote].filter(Boolean).join('\n\n');
+  } else {
+    // Legacy per-mode prompts (flag off): the quality preamble first so the
+    // model reads concision + format guidance before the pedagogy.
+    staticText = legacyStatic(mode, isWidget);
+    dynamicText = [
+      clubContext.dynamicClubBlock({ capabilities, meetingContext, blogContext }),
+      responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
+      homeworkNote,
+    ].filter(Boolean).join('\n\n');
+  }
+  // The meeting + blog material is only fetched for widget free chat, and is
+  // the same bytes on every such request until the feeds change: give it its
+  // own breakpoint instead of re-billing ~3k tokens at full price each turn.
+  const systemForApi = systemBlocks.buildSystem({
+    staticText,
+    dynamicText,
+    cacheDynamic: Boolean(meetingContext || blogContext),
+  });
+
   let latestContent = buildUserContent(latestUserMessage.content, attachedImage);
   // The Messages API rejects an empty text turn: an image-only turn whose
   // image is gone (purged, or a retry after 24 h) says so instead.
@@ -1977,6 +2022,89 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? Math.max(responseBudget.maxTokens, DEBATE_MIN_TOKENS)
           : responseBudget.maxTokens);
 
+    // Homework turns (see HOMEWORK_THINKING above): adaptive thinking at low
+    // effort, no temperature (thinking takes the default), and room for the
+    // thinking on top of the reply. Safety-topic turns keep their own path.
+    const problemTurn = !isCurriculumMsg
+      && HOMEWORK_THINKING
+      && THINKING_MODEL_RE.test(chosenModel)
+      && !needsSafetyBudget(latestUserMessage.content)
+      && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+    const modelParams = {
+      model: chosenModel,
+      max_tokens: problemTurn ? Math.max(maxTokens + 2048, THINKING_MIN_TOKENS) : maxTokens,
+      ...(problemTurn ? { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } } : { temperature }),
+      system: systemForApi,
+      messages: messagesForApi,
+    };
+    // The answer guard (HOMEWORK_LEAK_GUARD), all worked out from the thread:
+    // the student's own linear equations whose answer they haven't stated; a
+    // word problem's numbers (a result they never gave, "150 ÷ 3 = 50"); and
+    // a distribution product their latest line got wrong (the −12 they still
+    // have to find). Any of them → this turn's reply is checked whole before
+    // it is sent. Writing threads are held back too, for stripMenu.
+    const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD;
+    const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];
+    const guardNumbers = guardOn ? homeworkGuard.wordProblemNumbers(clientMessages) : null;
+    const guardCorrections = guardOn ? homeworkGuard.correctionValues(clientMessages) : [];
+    const writingTurn = guardOn && homeworkGuard.writingThread(clientMessages);
+    // Any turn on a problem to work is held back too, for the one-question and
+    // stall transforms (oneQuestion, unrepeatQuestion).
+    const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+    const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0;
+    const replyLimit = reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
+    const findGuardLeak = (text) => homeworkGuard.findLeak(text, guardProblems)
+      || homeworkGuard.findNumberLeak(text, guardNumbers)
+      || homeworkGuard.findCorrectionLeak(text, guardCorrections);
+    const redactGuardLeaks = (text) => {
+      let out = homeworkGuard.redactLeaks(text, guardProblems);
+      for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
+      return out;
+    };
+    // A reply that gives the answer away is written once more with a note in
+    // the dynamic block (the cached prefix is untouched); if that one leaks
+    // too, or the call fails, the leaked values are replaced by "?".
+    // Merc's previous reply, for the stall check (unrepeatQuestion).
+    const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
+    const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(text, previousReply && previousReply.content, guardProblems[0] && guardProblems[0].variable));
+    const guardReply = async (draft) => {
+      if (writingTurn) return homeworkGuard.stripMenu(draft);
+      const text = unrepeat(draft);
+      const leak = findGuardLeak(text);
+      if (!leak) return text;
+      logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
+      const what = leak.problem
+        ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
+        : leak.name === 'word problem'
+          ? `a result worked out from the student's own numbers (${leak.value}), which is their answer or gives it away. Write the reply again with the same coaching move, without working their numbers through to any result: name the step, run a number THEY gave backwards, or use a worked example on new numbers.`
+          : `the corrected value (${leak.value}) that the student still has to find. Write the reply again: point at the term where it breaks and ask what it is, without writing its value or the corrected line.`;
+      const note = `## ANSWER GUARD (this reply only)\nYour draft reply gave away ${what}`;
+      try {
+        const retry = await claudeCall.createMessage({
+          route: '/api/chat',
+          kind: callKind,
+          sessionId,
+          ip: req.ip,
+          traceId: req.traceId,
+          params: {
+            ...modelParams,
+            system: systemBlocks.buildSystem({
+              staticText,
+              dynamicText: [dynamicText, note].filter(Boolean).join('\n\n'),
+              cacheDynamic: Boolean(meetingContext || blogContext),
+            }),
+          },
+        });
+        const retryText = unrepeat(reflowText(firstTextOf(retry), replyLimit));
+        if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText)) {
+          return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
+        }
+      } catch (err) {
+        logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
+      }
+      return redactGuardLeaks(text);
+    };
+
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
 
     if (wantsStream) {
@@ -1997,13 +2125,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ip: req.ip,
           traceId: req.traceId,
           signal: streamAbort.signal,
-          params: {
-            model: chosenModel,
-            max_tokens: maxTokens,
-            temperature,
-            system: systemForApi,
-            messages: messagesForApi,
-          },
+          params: modelParams,
         });
       } catch (err) {
         if (quotaErrorHandled(err, req, res)) return;
@@ -2077,16 +2199,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // streamed bytes always equal the final reply's reflow — clients never
       // see the text change shape at finalize. fullText accumulates the
       // REFLOWED text; markers pass through untouched.
-      const reflow = createReflow({
-        limit: reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }),
-      });
+      const reflow = createReflow({ limit: replyLimit });
+      // A guarded turn (see guardReply) is held back whole and checked first.
+      const holdBack = guardArmed || writingTurn || problemWork;
 
+      // Thinking streams no 'text' for a while: any upstream event is life.
+      stream.on('streamEvent', () => touch());
       stream.on('text', (text) => {
         touch();
         const out = reflow.push(text);
         if (!out) return; // held back pending a sentence-boundary decision
         fullText += out;
-        safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
+        if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
 
       stream.on('end', async () => {
@@ -2099,7 +2223,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const tail = reflow.flush();
         if (tail) {
           fullText += tail;
-          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
+          if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
         }
         // Defense in depth: a prose client must never persist/receive block
         // markers even on a model slip (it was never instructed to emit
@@ -2112,12 +2236,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const received = Array.isArray(stream.receivedMessages) ? stream.receivedMessages : [];
         const stopReason = received.length ? received[received.length - 1].stop_reason : null;
         const refused = isRefusedReply(stopReason, fullText);
+        if (holdBack && !refused) {
+          fullText = await guardReply(fullText);
+          if (fullText) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText })}\n\n`);
+        }
         if (refused) {
           noteRefusal(req, callKind, stopReason);
           // Stream the safe text as well, for any client (and the eval) that
           // renders deltas rather than the complete frame's reply: on its own
           // after an outright refusal, after a blank line if words streamed.
-          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText ? '\n\n' + REFUSAL_COPY : REFUSAL_COPY })}\n\n`);
+          const streamed = holdBack ? '' : fullText;
+          safeWrite(`data: ${JSON.stringify({ type: 'delta', text: streamed ? '\n\n' + REFUSAL_COPY : REFUSAL_COPY })}\n\n`);
         }
         const assembled = refused ? REFUSAL_COPY : fullText;
         const rawReply = wantsBlocks ? assembled : scrubBlockMarkers(assembled);
@@ -2214,22 +2343,16 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         sessionId,
         ip: req.ip,
         traceId: req.traceId,
-        params: {
-          model: chosenModel,
-          max_tokens: maxTokens,
-          temperature,
-          system: systemForApi,
-          messages: messagesForApi,
-        },
+        params: modelParams,
       });
 
-      const replyText = (response.content && response.content[0] && response.content[0].text) || '';
+      // With thinking on, content[0] is the thinking block: read the text.
+      const replyText = firstTextOf(response);
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
       // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
-      const reflowed = refused
-        ? REFUSAL_COPY
-        : reflowText(replyText, reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode }));
+      let reflowed = refused ? REFUSAL_COPY : reflowText(replyText, replyLimit);
+      if (!refused && (guardArmed || writingTurn || problemWork)) reflowed = await guardReply(reflowed);
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
       const lessonOutcome = isCurriculumMsg
@@ -2324,19 +2447,53 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await refuseUnseenSession(req, res, sessionId)) return;
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    const result = await generateFromHistory(sessionId, {
+    const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
-      userMessage: 'Generate a comprehension quiz based on our conversation.',
+      userMessage,
       maxTokens: 900,
       errorLabel: 'quiz',
     });
+    let result = await quizOnce('Generate a comprehension quiz based on our conversation.');
+    // The helper model now and then wraps or cuts its JSON, or answers a
+    // homework thread with a note instead of questions: one more try.
+    if (result.error === 'parse_error' || (!result.error && !Array.isArray(result.questions))) {
+      result = await quizOnce('Generate a comprehension quiz based on our conversation, as the JSON object. If we worked on a homework problem, quiz the method on new problems.');
+    }
+    if (!result.error && !Array.isArray(result.questions)) {
+      return res.status(500).json({ error: 'parse_error', message: 'Could not generate quiz — try after a longer conversation.' });
+    }
     if (result.error === 'insufficient_history') return res.status(400).json(result);
     if (result.error === 'crisis') return sendCrisisResult(res);
     if (result.error) return res.status(500).json(result);
+    // Review 2026-10-22: with the flag on, the quiz asked "After subtracting 5
+    // from both sides of 3x + 5 = 20, what equation results?" despite the
+    // prompt rule, and once answered the student's own x = 5 on another
+    // equation. Questions built on the student's own linear equation, or
+    // answering it, are dropped; if fewer than two are left, the quiz is
+    // asked for once more with the equation named, and filtered again.
+    const problems = homeworkGuard.studentProblems(await db.getMessages(sessionId, HISTORY_LIMITS.QUIZ, { kind: 'chat' }));
+    const clean = (quiz) => (Array.isArray(quiz && quiz.questions)
+      ? quiz.questions.filter((q) => !homeworkGuard.quizQuestionLeaks(q, problems))
+      : []);
+    if (problems.length > 0 && Array.isArray(result.questions)) {
+      let kept = clean(result);
+      if (kept.length < Math.min(2, result.questions.length)) {
+        const avoid = problems.map((p) => `${p.text} (answer ${p.variable} = ${p.value})`).join('; ');
+        const retry = await quizOnce(`Generate a comprehension quiz based on our conversation. Do not use the student's own problem ${avoid} in any question, option or explanation, and no question may have ${problems.map((p) => p.value).join(' or ')} as its answer: quiz the method on new problems.`);
+        if (!retry.error && clean(retry).length > kept.length) {
+          result = retry;
+          kept = clean(retry);
+        }
+      }
+      if (kept.length === 0) {
+        return res.status(500).json({ error: 'parse_error', message: 'Could not generate quiz — try after a longer conversation.' });
+      }
+      result = { ...result, questions: kept };
+    }
     return res.json(result);
   } catch (err) {
     if (quotaErrorHandled(err, req, res)) return;
