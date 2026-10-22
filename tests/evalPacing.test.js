@@ -1502,6 +1502,10 @@ describe('eval-pacing Socratic homework probes', () => {
     assert.equal(offersClaimMenu("What's your own take first — do you think Gatsby achieves the American Dream, fails at it, or does Fitzgerald argue the dream itself is the problem?"), true);
     assert.equal(offersClaimMenu("What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"), true);
     assert.equal(offersClaimMenu(HW_GOOD['hw-essay'][0]), false);
+    // Final run 2026-10-22: a list of readings with no "or" is a menu too.
+    const { MENU_QUESTION_RE, thesisOnTheBook, ROMEO_RE } = await modP;
+    assert.ok(MENU_QUESTION_RE.test('What went wrong with the plan specifically — was it reckless, naive, something else?'));
+    assert.equal(thesisOnTheBook('"Friar Laurence is responsible because of his plan" — this tells me what happened but not why it matters or what it reveals about the play.', ROMEO_RE, 'friar laurence is responsible because of his plan'), null);
     assert.equal(offersClaimMenu('Which scene do you remember, or should we start with the ending?'), false, 'an "or" not about the book');
     assert.equal(writingScaffold('In ___, ___ shows ___ when ___.'), true);
     assert.equal(writingScaffold('Claim: lunch should be longer.\nEvidence: students skip it.\nWhy: hungry kids learn less.'), true);

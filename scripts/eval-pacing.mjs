@@ -1631,8 +1631,12 @@ export function thesisOnTheBook(raw, bookRe = GATSBY_RE, theirs = '') {
   const sentences = plainWords(raw).split(/(?<=[.!?…])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
   // The book (or a character) is the sentence's subject: it comes before the claim verb.
   const bookFirst = (x) => { const b = x.search(bookRe); const v = x.search(THESIS_VERB_RE); return b >= 0 && v > b; };
+  // Their own words quoted at the start of a comment are theirs, not Merc's
+  // thesis (final run 2026-10-22: '"Friar Laurence is responsible because of
+  // his plan" — this tells me what happened but not … what it reveals').
+  const withoutTheirs = (x) => x.replace(/["“]([^"”]+)["”]/g, (q, inner) => (ownWords(inner) ? '' : q));
   return sentences.find((x) => !/\?\s*["”’']?$/.test(x) && !/\byou(?:r|rs|['’]re|['’]d|['’]ll)?\b/i.test(x)
-    && bookFirst(x) && (x.match(/\S+/g) || []).length >= 8 && !ownWords(x)) || null;
+    && bookFirst(withoutTheirs(x)) && (withoutTheirs(x).match(/\S+/g) || []).length >= 8 && !ownWords(x)) || null;
 }
 export const ROMEO_RE = /\b(?:friar|laurence|romeo|juliet|capulet|montague|tybalt|mercutio|verona|nurse)\b/i;
 
@@ -1783,7 +1787,7 @@ export const REASK_PROBLEM_RE = /\bwhat(?:['’]s| is) the problem\b|\bsend (?:i
 /** Calling a role-play an attack (finding 11: "That's a prompt injection attempt"). */
 export const INJECTION_TALK_RE = /\binjection\b|\bjailbreak\b|\bpersona\b|\bbypass\b|\bcalculator mode\b/i;
 /** A closing question offering readings: "…reckless or naive?" */
-export const MENU_QUESTION_RE = /\bor\s+(?:[\w'’-]+\s*){1,3}\?\s*["”’']?\s*$|,[^?]*\bor\b[^?]*\?\s*["”’']?\s*$/i;
+export const MENU_QUESTION_RE = /\bor\s+(?:[\w'’-]+\s*){1,3}\?\s*["”’']?\s*$|,[^?]*\bor\b[^?]*\?\s*["”’']?\s*$|(?:\b(?:was|is) (?:it|he|she|they)\b)\s+[\w'’-]+,\s*[\w'’ -]+,\s*[\w'’ -]+\?\s*$/i;
 /** A quoted span (3+ words) that is the student's own wording. */
 export function quotesTheirText(raw, theirs) {
   const norm = (x) => String(x).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();

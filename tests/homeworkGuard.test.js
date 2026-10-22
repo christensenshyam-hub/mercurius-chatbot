@@ -172,6 +172,8 @@ describe('the other guards: word problems, corrections, menus', () => {
   test('stripMenu cuts a dash-and-"or" menu off a whole question, and nothing else', () => {
     assert.equal(g.stripMenu('What do you think the book is saying about ambition — is it a warning or a celebration?'), 'What do you think the book is saying about ambition?');
     assert.equal(g.stripMenu('"His plan" is vague.\n\nWhat about the plan caused it — was it that he made it, or how he carried it out?'), '"His plan" is vague.\n\nWhat about the plan caused it?');
+    // Final run on b0940d8: a list after the dash is a menu too.
+    assert.equal(g.stripMenu('What went wrong with the plan specifically — was it reckless, naive, something else?'), 'What went wrong with the plan specifically?');
     for (const t of ["Who do you think is most to blame — and what's your reason?", 'What do you think the book is saying about ambition?', 'Is it a warning or a celebration?']) {
       assert.equal(g.stripMenu(t), t);
     }
@@ -364,6 +366,7 @@ describe('homeworkMoment: what the server works out for this reply', () => {
   test('stripPreamble drops a first sentence about whose work it is when the move follows (gate 2026-10-22, flag off)', () => {
     assert.equal(g.stripPreamble("That's your job — and you're closer than you think.\n\nWhat did he expect to happen?"), 'What did he expect to happen?');
     assert.equal(g.stripPreamble('Running it on their numbers would hand you the answer.\n\nWhat is the first move?'), 'What is the first move?');
+    assert.equal(g.stripPreamble("That's your job — but here's a frame with blanks to build from:\n\nIn ___, ___ shows ___ when ___."), 'In ___, ___ shows ___ when ___.');
     // Red-team run on 3d22459: a first line with no sentence end.
     assert.equal(g.stripPreamble("Here's an everyday model — not on your book, since that's your job:\n\nClaim: Lunch should be longer.\n\nWhat's your claim?"), "Claim: Lunch should be longer.\n\nWhat's your claim?");
     // Red-team run on 3d22459: essay and role-play pushback.
