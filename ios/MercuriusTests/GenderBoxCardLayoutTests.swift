@@ -19,6 +19,18 @@ final class GenderBoxCardLayoutTests: XCTestCase {
     private static let sizes: [DynamicTypeSize] = [.large, .xxxLarge, .accessibility3, .accessibility5]
     /// Room around the card in a render, where nothing of it may land.
     private static let margin: CGFloat = 120
+    /// Pixels per point, at most. A render much over 8,000 px tall comes
+    /// back empty (and would pass the overflow check without showing
+    /// anything), and the whole card at AX5 with the list open is far
+    /// taller than that in points, so each render picks its own scale from
+    /// the card's height, and `opaqueShare` proves it drew.
+    private static let scale: CGFloat = 0.5
+    private static let tallestRender: CGFloat = 8000
+
+    private struct Render {
+        let image: CGImage
+        let scale: CGFloat
+    }
 
     private func card(_ debug: InteractiveDebugState, showAll: Bool, size: DynamicTypeSize,
                       width: CGFloat) throws -> some View {
@@ -36,9 +48,13 @@ final class GenderBoxCardLayoutTests: XCTestCase {
     }
 
     private func render(_ debug: InteractiveDebugState, showAll: Bool = false, size: DynamicTypeSize,
-                        width: CGFloat) throws -> CGImage {
-        let renderer = ImageRenderer(content: try card(debug, showAll: showAll, size: size, width: width))
-        renderer.scale = 1
+                        width: CGFloat) throws -> Render {
+        let view = try card(debug, showAll: showAll, size: size, width: width)
+        let fitted = UIHostingController(rootView: view)
+            .sizeThatFits(in: CGSize(width: width + 2 * Self.margin, height: .greatestFiniteMagnitude))
+        let scale = min(Self.scale, Self.tallestRender / max(fitted.height, 1))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
         renderer.isOpaque = false
         let image = try XCTUnwrap(renderer.cgImage, "the card didn't render at \(size), \(width) pt")
         if let dir = ProcessInfo.processInfo.environment["GENDERBOX_RENDER_DIR"] {
@@ -59,19 +75,28 @@ final class GenderBoxCardLayoutTests: XCTestCase {
                 part += 1
             }
         }
-        return image
+        return Render(image: image, scale: scale)
     }
 
-    /// The opaque pixels outside the card's own frame (alpha above 40).
-    private func strayPixels(in image: CGImage, width: CGFloat) -> Int {
+    /// The render's pixels as RGBA bytes.
+    private func pixels(_ image: CGImage) -> [UInt8] {
         let w = image.width, h = image.height
         var data = [UInt8](repeating: 0, count: w * h * 4)
         let space = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return -1 }
+                                  space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        let left = Int(Self.margin) - 1
-        let right = Int(Self.margin + width) + 1
+        return data
+    }
+
+    /// The opaque pixels outside the card's own frame (alpha above 40).
+    private func strayPixels(in render: Render, width: CGFloat) -> Int {
+        let image = render.image
+        let data = pixels(image)
+        guard !data.isEmpty else { return -1 }
+        let w = image.width, h = image.height
+        let left = Int(Self.margin * render.scale) - 1
+        let right = Int((Self.margin + width) * render.scale) + 1
         var stray = 0
         for y in 0..<h {
             for x in 0..<w where x < left || x > right {
@@ -81,16 +106,35 @@ final class GenderBoxCardLayoutTests: XCTestCase {
         return stray
     }
 
+    /// The share of the card's own frame that is drawn (alpha above 40): near 1 for
+    /// a real render, 0 for an empty one.
+    private func opaqueShare(in render: Render, width: CGFloat) -> Double {
+        let image = render.image
+        let data = pixels(image)
+        guard !data.isEmpty else { return 0 }
+        let w = image.width
+        let x0 = Int(Self.margin * render.scale) + 2, x1 = Int((Self.margin + width) * render.scale) - 2
+        let y0 = Int(Self.margin * render.scale) + 2, y1 = image.height - Int(Self.margin * render.scale) - 2
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var opaque = 0
+        for y in y0..<y1 {
+            for x in x0..<x1 where data[(y * w + x) * 4 + 3] > 40 { opaque += 1 }
+        }
+        return Double(opaque) / Double((x1 - x0) * (y1 - y0))
+    }
+
     func testNothingLeavesTheCardAtAnyWidthOrTextSize() throws {
         for width in Self.widths {
             for size in Self.sizes {
                 var cases: [(InteractiveDebugState, Bool)] = [(.hook, false), (.revealed, false)]
                 if size.isAccessibilitySize { cases.append((.revealed, true)) }
                 for (debug, showAll) in cases {
-                    let image = try render(debug, showAll: showAll, size: size, width: width)
-                    XCTAssertEqual(CGFloat(image.width), width + 2 * Self.margin,
-                                   "the card at \(size), \(debug) asked for more than \(width) pt")
-                    XCTAssertEqual(strayPixels(in: image, width: width), 0,
+                    let drawn = try render(debug, showAll: showAll, size: size, width: width)
+                    XCTAssertEqual(CGFloat(drawn.image.width), ((width + 2 * Self.margin) * drawn.scale).rounded(.up),
+                                   accuracy: 1, "the card at \(size), \(debug) asked for more than \(width) pt")
+                    XCTAssertGreaterThan(opaqueShare(in: drawn, width: width), 0.9,
+                                         "the card at \(size), \(width) pt, \(debug) didn't render")
+                    XCTAssertEqual(strayPixels(in: drawn, width: width), 0,
                                    "something of the card at \(size), \(width) pt, \(debug), lands outside it")
                 }
             }
@@ -99,7 +143,8 @@ final class GenderBoxCardLayoutTests: XCTestCase {
 
     func testTheCardGrowsWithTheTextAndTheListOpensAtAccessibilitySizes() throws {
         func height(_ debug: InteractiveDebugState, showAll: Bool = false, _ size: DynamicTypeSize) throws -> CGFloat {
-            CGFloat(try render(debug, showAll: showAll, size: size, width: 343).height) - 2 * Self.margin
+            let drawn = try render(debug, showAll: showAll, size: size, width: 343)
+            return CGFloat(drawn.image.height) / drawn.scale - 2 * Self.margin
         }
         let large = try height(.hook, .large)
         XCTAssertGreaterThan(try height(.hook, .xxxLarge), large, "the card grows with the text")
