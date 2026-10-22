@@ -275,7 +275,36 @@ The pre-merge capture has no `temperature` field (#44 added it to `MOCK_CAPTURE_
 
 `npm test`: 1,241 of 1,241 pass on the merge.
 
-**Live evals.** None have run since the merge. The Basics gate and the live A/B in "Gate" above are on the pre-merge code. The mock shows that a Basics lesson sends the model the same bytes and post-processes the reply the same way. A small live re-check costs about $1–2: for example `--runs 1 --only basics-` in both flags, or `--runs 3` in one. Whether to spend that is a founder budget decision.
+**Live evals.** The Basics gate and the live A/B in "Gate" above are on the pre-merge code. The mock shows that a Basics lesson sends the model the same bytes and post-processes the reply the same way. The founder approved a small live re-check, below.
+
+### Post-merge live re-check (2026-10-22)
+
+Two servers from this worktree at the merge `ab80173`, with exactly the env in "Gate" (ports 3601 flag on, 3602 flag off), then `BASE_URL=… node scripts/eval-pacing.mjs --only basics- --runs 1 --label basics-postmerge-recheck-flag-<on|off>`. Results: `docs/evals/pacing-basics-postmerge-recheck-flag-on.json` and `…-flag-off.json` (6 scenarios, 26 replies each).
+
+| Basics row | flag on | flag off | gate 2 (on / off) | A/B branch (on / off) |
+|---|---|---|---|---|
+| plain language (FK ≤ 7 per lesson) | pass (max 5.1) | pass (max 5.4) | 3/3 / 3/3 | 3/3 / 3/3 |
+| no unexplained jargon | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| ≤ 4 sentences per paragraph | pass (max 4) | pass (max 4) | 3/3 / 3/3 | 3/3 / 3/3 |
+| practice line in reply 1 | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| well-formed `[Q]`, no `[CHECK]` | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| one thing to do at the end | pass | pass | 3/3 / 3/3 | 3/3 / 2/3 |
+| completion after practice + check, once | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| safety lesson: a wrong pick never completes | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| fake-call lesson | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| privacy lesson | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| ≤ 130 words of teaching per reply | pass (max 119) | pass (max 120) | 3/3 / 3/3 | 3/3 / 3/3 |
+| no sentence over 25 words | pass (max 24) | pass (max 24) | 2/3 / 2/3 | 2/3 / 1/3 (rerun 3/3) |
+| "is this safe?" privacy answer | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| the letter: never "locked in" | pass | pass | 3/3 / 3/3 | 3/3 / 3/3 |
+| cache | pass (min read 14,835) | pass (min read 14,835) | 3/3 / 3/3 | 3/3 / 3/3 |
+| INFO: banned voice words | 3 of 26 | 3 of 26 | 1–3 / 1–2 | — |
+
+- **Every gated Basics row passes in both flags**, as before the merge. Lessons completed at the same replies as in gate 2 (b1l1 4, b2l3 3, b2l4 4, b1l1-safe 5, b4l2 5; the wrong pick at 4, completion at 5).
+- **No reply broke a Basics rule.** A scan of all 52 replies (not only the rows' own scenarios) found no unexplained jargon, no "locked in" or kin, no made-up privacy comfort, no sentence over 25 words and no reply over 130 words of teaching. The longest sentences, 24 words, sit one word under the gate's limit (b1l1, b2l3, b2l4-wrong with the flag on; b1l1, b4l2, b2l4-wrong with it off), so the row stays a boundary row.
+- **The INFO words** are all in the practice's own output: "just" inside the quoted family text in b2l4 and b2l4-wrong, and "quickly" in Merc's answer to the practice question "My bank charged me twice" (b2l3, flag on). The rows exclude that output; the guide doesn't ban it there.
+- **Two upstream stalls** (flag on, b2l3 turns 2 and 3) hit the stream watchdog ("That reply took too long") and the eval retried each once. Both are in the ledger as `aborted/timeout` (one 108 s with 141 output tokens, one 190 s with none). Nothing in the merge touches the watchdog.
+- **Spend: $0.4694**, from the two servers' usage ledgers ($0.2632 flag on, including $0.0076 for the two aborted calls; $0.2061 flag off) plus a $0.00003 Haiku credit check before the run. No call reported a low credit balance.
 
 ## Spend
 
@@ -296,7 +325,8 @@ Every live call used Sonnet 4.6 at list prices (`lib/pricing.js`), against local
 | Review fixes: gate 2, 3 runs × 2 flags (`pacing-basics-fix-gate2-*.json`) | 157 | $1.34 |
 | Byte-identity re-check on the final code (mock) | 384 | $0 |
 | Merge with #44: mock checks (Basics pre/post, #44 against the merge) | 868 | $0 |
-| **Total** | | **≈ $4.90** |
+| Post-merge live re-check, 1 run × 2 flags (ledgers; 2 calls aborted by the watchdog) and a Haiku credit check | 55 | $0.47 |
+| **Total** | | **≈ $5.37** |
 
 **A Basics lesson in production.** A turn reads about 14,000 cached tokens, roughly $0.004, and writes about 300 output tokens, roughly $0.0045, so about $0.009 a turn. A 4–5 turn lesson costs about $0.04. The first call after a cache expiry writes the prefix once, about $0.05.
 
@@ -316,5 +346,4 @@ Every live call used Sonnet 4.6 at list prices (`lib/pricing.js`), against local
   - add the Basics prefixes to `prewarmCaches` when a client ships;
   - fix the numbered-list reflow gap for every mode in its own PR;
   - run the live A/B of the pre-existing rows when convenient (commands above);
-  - a small live Basics re-check after the #44 merge (about $1–2; founder budget);
   - the pause offer is three sentences, so the 2-sentence reflow puts "I'll save your place." on a line of its own (the eval accepts it; holding it together would be a reflow special case).
