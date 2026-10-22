@@ -26,14 +26,14 @@ The card is a picture the app draws and a computation it does on the device. It 
 | Eyebrow | INTERACTIVE |
 | Title | Patch the Reward |
 | Hook | You’re training a boat to win a race. You can only tell it one thing: what earns points. |
-| Under the hook | A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 stars that come back after they’re hit. |
+| Under the hook | A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 star targets that come back after they’re hit. |
 
 ### The track (a picture)
 
 Seen from above, on night water (the same in light and dark): the loop's channel; a chequered finish line on its near bend with the word **finish** beside it; gates **1**, **2** and **3** (a dashed bar across the channel and a numbered disc on the island side); the side lagoon off the far bend with **3 stars** in a small ring and open water around them; the boat.
 - Before a rule runs: the boat waits on the start line, pointing the way the race runs.
 - While a run plays: the boat moves along its route with its wake (lit on the Mac); a star is drawn as a dashed outline for the 4 ticks it is gone.
-- After a run (and at once under Reduce Motion or VoiceOver): the route as a line with arrows and the boat where the run ended, with every star shown (a still shows the track as set). A route with a way in and a loop has its legs numbered in order on white squares (the gates are indigo discs): **1** the way in, **2** the loop it then repeats. A route that is one loop (A, C) needs no number. Where a route runs a stretch both ways (rule A, over the line), it is drawn as two lanes with arrows each way.
+- After a run (and at once under Reduce Motion or VoiceOver): the route as a line with arrows and the boat where the run ended, with every star shown (a still shows the track as set). A route with a way in and a loop has its legs numbered in order on white squares (the gates are indigo discs): **1** the way in, **2** the loop it then repeats. A route that is one loop (A, C) needs no number. Where a route runs a stretch both ways (rule A, over the line), it is drawn as two lanes with arrows each way, and, because that stretch is shorter than the boat that ends the run on it, a double-headed arrow beside it, on the loop's outer side.
 
 Under the track, two counters: **Points** and **Laps** ("0 of 3"). They count up as a run plays and show where the shown run ended.
 
@@ -106,7 +106,7 @@ The guess is shown as **It finishes** / **It won’t finish**. A guess can't be 
 | … after a run | the run's sentence (next row), then "2 of 3 patches left to try." (after the 2016-style rule: "Now patch the rule: pick A, B or C.") |
 | … revealed | You predicted it would finish for 2 of 3 rules. It finished for 1 of 3: rule C. It isn’t cheating. It’s scoring. |
 | A run's sentence (also announced when a run ends, with the line under its result; after the third patch, with the reveal) | The 2016-style rule: plus 10 per target hit. The boat hit 26 targets, circling the stars in the lagoon, and finished 0 laps. 260 points. / Rule A: plus 100 per finish-line crossing. The boat crossed the line 30 times, back and forth, and finished 0 laps. 3000 points. / Rule B: plus 1 per metre moved. The boat moved 1114 metres, round and round the lagoon’s open water, and finished 0 laps. 1114 points. / Rule C: plus 100 per full lap through gates 1, 2 and 3 in order. The boat went through gates 1, 2 and 3 in order and finished 3 laps. 300 points. |
-| The track (one image) | The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 stars. Then: The boat waits on the start line. / The boat is running rule A. / Its route: past gates 1 and 2 into the lagoon, then round and round the 3 stars. / Its route: back and forth over the finish line. / Its route: past gates 1 and 2 into the lagoon, then round and round its open water. / Its route: 3 laps, through gates 1, 2 and 3 in order each time. |
+| The track (one image) | The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 star targets. Then: The boat waits on the start line. / The boat is running rule A. / Its route: past gates 1 and 2 into the lagoon, then round and round the 3 stars. / Its route: back and forth over the finish line. / Its route: past gates 1 and 2 into the lagoon, then round and round its open water. / Its route: 3 laps, through gates 1, 2 and 3 in order each time. |
 | The counters (one element) | Points: 260. Laps: 0 of 3. |
 | A rule's chip (a button; "selected" when picked) | Rule A: plus 100 per finish-line crossing. (once tried: "… Tried: 0 laps.") Hint: Shows this rule on the track. Before the 2016-style rule has run, a patch's chip is dimmed and its value says "Play the 2016 rule first." |
 | Will it finish now? (a header), Yes / No (buttons) | Yes. Hint: Locks in your guess. It can’t be changed after. |

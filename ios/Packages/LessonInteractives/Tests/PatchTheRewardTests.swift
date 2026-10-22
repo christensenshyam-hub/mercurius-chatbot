@@ -213,6 +213,8 @@ struct PatchTheRewardCopyTests {
     func slateLines() {
         #expect(PatchTheRewardCopy.hook == "You\u{2019}re training a boat to win a race. You can only tell it one thing: what earns points.")
         #expect(PatchTheRewardCopy.goal == "Patch the rule so the boat finishes the race.")
+        // The stars are the targets the 2016-style rule pays for (the slate's "3 star targets").
+        #expect(PatchTheRewardCopy.trackLine.contains("3 star targets"))
         #expect(PatchTheRewardCopy.predictPrompt == "Will it finish now?")
         #expect(PatchTheRewardCopy.scoring == "It isn\u{2019}t cheating. It\u{2019}s scoring.")
         #expect(PatchTheRewardCopy.replayCaption == "Like the real 2016 CoastRunners agent: lots of points, no finish.")

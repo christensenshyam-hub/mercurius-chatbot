@@ -270,6 +270,12 @@ struct PatchTrackPicture: View {
             for (index, arrow) in arrows.enumerated() where index % every == every / 2 {
                 context.fill(Self.arrowHead(at: arrow.0, angle: arrow.1, size: 5 * map.glyph), with: .color(sky.skyLink))
             }
+            // A stretch run both ways (rule A, over the line) is shorter
+            // than the boat, which ends the run on it: a double-headed
+            // arrow beside it says "back and forth here".
+            if let shuttle = pairs.first(where: { pair in pairs.contains { $0.0 == pair.1 && $0.1 == pair.0 } }) {
+                drawShuttle(&context, map, sky, from: shuttle.0, to: shuttle.1)
+            }
             // With a way in and a loop, the legs are numbered in order, by
             // each leg's first stretch: 1 on the way in (on the island
             // side, above the line's "finish"), 2 on the loop (outside it).
@@ -303,6 +309,36 @@ struct PatchTrackPicture: View {
             .font(.system(size: 10 * map.glyph, weight: .heavy, design: .rounded))
             .foregroundStyle(sky.skyBottom))
         context.draw(text, at: point, anchor: .center)
+    }
+
+    /// A double-headed arrow along the stretch `from`–`to`, a little longer
+    /// than it, beside it on the side away from the loop's middle (the
+    /// boat's hull, where the run ends, covers the stretch itself).
+    private func drawShuttle(_ context: inout GraphicsContext, _ map: TrackMap, _ sky: NightSkyCard, from: Int,
+                             to: Int) {
+        let a = map.point(from), b = map.point(to)
+        let angle = atan2(b.y - a.y, b.x - a.x)
+        let mid = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+        let middle = map.point((PatchTrack.loopWestCentre.x + PatchTrack.loopEastCentre.x) / 2,
+                               PatchTrack.loopWestCentre.y)
+        var normal = CGPoint(x: -sin(angle), y: cos(angle))
+        if normal.x * (middle.x - mid.x) + normal.y * (middle.y - mid.y) > 0 {
+            normal = CGPoint(x: -normal.x, y: -normal.y)
+        }
+        // Clear of the hull (half its beam) by a small gap.
+        let distance = 4 * map.glyph + 3
+        let centre = CGPoint(x: mid.x + normal.x * distance, y: mid.y + normal.y * distance)
+        let half = max(hypot(b.x - a.x, b.y - a.y) * 0.8, 9 * map.glyph + 4)
+        let along = CGPoint(x: cos(angle) * half, y: sin(angle) * half)
+        let start = CGPoint(x: centre.x - along.x, y: centre.y - along.y)
+        let end = CGPoint(x: centre.x + along.x, y: centre.y + along.y)
+        var shaft = Path()
+        shaft.move(to: start)
+        shaft.addLine(to: end)
+        context.stroke(shaft, with: .color(sky.skyLink), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        let size = 5 * map.glyph
+        context.fill(Self.arrowHead(at: end, angle: angle, size: size), with: .color(sky.skyLink))
+        context.fill(Self.arrowHead(at: start, angle: angle + CGFloat.pi, size: size), with: .color(sky.skyLink))
     }
 
     static func arrowHead(at point: CGPoint, angle: CGFloat, size: CGFloat) -> Path {

@@ -13,7 +13,7 @@ public enum PatchTheRewardCopy {
     // MARK: The hook
 
     public static let hook = "You\u{2019}re training a boat to win a race. You can only tell it one thing: what earns points."
-    public static let trackLine = "A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 stars that come back after they\u{2019}re hit."
+    public static let trackLine = "A race is 3 laps of the loop, past gates 1, 2 and 3. Off to the side is a lagoon: open water, and 3 star targets that come back after they\u{2019}re hit."
 
     // MARK: Labels (on the canvas)
 
@@ -163,7 +163,7 @@ public enum PatchTheRewardCopy {
     // MARK: The picture
 
     /// The track, once, in words (VoiceOver; the picture's label).
-    public static let trackDescription = "The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 stars."
+    public static let trackDescription = "The toy track, seen from above: a loop with a finish line and gates 1, 2 and 3, and off to the side a lagoon with open water and 3 star targets."
 
     /// The route drawn on the track, in words.
     public static func route(_ rule: PatchRule?) -> String {
