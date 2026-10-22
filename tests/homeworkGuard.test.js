@@ -364,6 +364,9 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.equal(g.unrepeatQuestion("What's 90 ÷ 18?", "What's 90 divided by 18?"), 'What do you get for yours?');
     // Never the previous reply's own closing question again (final run 2026-10-22).
     assert.equal(g.unrepeatQuestion('Example.\n\nNow yours: 36 ÷ 18 — what do you get?', 'Divide: 36 ÷ 18. What do you get for yours?'), "Example.\n\nWhat's your answer for yours?");
+    // The previous reply's closing question word for word is a repeat too.
+    assert.equal(g.unrepeatQuestion('Here is a similar example: 90 g ÷ 18 g/mol = 5 mol.\n\nNow yours. What do you get?', 'Divide 36 by 18. What do you get?'), 'Here is a similar example: 90 g ÷ 18 g/mol = 5 mol.\n\nNow yours. What do you get for yours?');
+    assert.equal(g.unrepeatQuestion("Yes: 3x = 15. What's your next step?", "Yes. What's your next step?", 'x'), "Yes: 3x = 15. What's your next step?", 'only after a worked example');
     for (const [t, prev] of [['4 times what makes 28?', "What's 28 ÷ 4?"], ["What's 28 ÷ 4?", 'Look at the 4. What undoes multiplying?'], ["What's 28 ÷ 4?", '']]) {
       assert.equal(g.unrepeatQuestion(t, prev, 'x'), t);
     }
