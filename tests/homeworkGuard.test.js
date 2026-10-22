@@ -145,7 +145,13 @@ describe('the other guards: word problems, corrections, menus', () => {
     assert.equal(g.findNumberLeak('Check it: 10 × 7 = 70 is base times height.', area), null);
     const fall = g.wordProblemNumbers(T('a rock is dropped and falls for 3 s. with d = ½gt² and g = 10 m/s², i got 30 m. is that right?'));
     assert.equal(g.findNumberLeak('Check it: ½ × 10 × 3² = 5 × 9 = 45 m, not 30 m.', fall).value, '45');
-    assert.equal(g.findNumberLeak('Check it: plug your 30 back into the formula — ½ × 10 × 3² gives 45, not 30.', fall).value, '45');
+    assert.equal(g.findNumberLeak('Check it: ½ × 10 × 3² gives 45. That is not what you got.', fall).value, '45');
+    // Their own number run backwards is the check, not a leak; and once Merc
+    // confirms the answer they gave, nothing is left to give away (red-team
+    // run on 5e6f309: "t² = ?" and "15² = ?" were redactions of right checks).
+    assert.equal(g.findNumberLeak('Check it: if d = 30, then 30 = ½ × 10 × t² gives t² = 6, not 9.', fall), null);
+    const pyth = g.wordProblemNumbers(T('right triangle legs 9 and 12, i got 15 for the hypotenuse. is that right?'));
+    assert.equal(g.findNumberLeak('Check it: 9² + 12² = 81 + 144 = 225, and 15² = 225 ✓. That is right!', pyth), null);
     assert.equal(g.redactValue('½ × 10 × 3² gives 45, not 30.', { name: 'word problem', value: '45' }), '½ × 10 × 3² gives ?, not 30.');
     assert.equal(g.redactValue('Check it: ½ × 10 × 3² = 5 × 9 = 45 m, not 30 m.', { name: 'word problem', value: '45' }), 'Check it: ½ × 10 × 3² = 5 × 9 = ? m, not 30 m.');
     // Off: a number of their own proposed later, lettered options, an equation.
