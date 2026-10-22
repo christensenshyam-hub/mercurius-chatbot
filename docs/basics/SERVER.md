@@ -171,7 +171,7 @@ The guide then went through three smoke runs and two 3-run gates (only gate 2's 
 
 ## Gate
 
-**Status, 2026-10-22, on the final code: every gated Basics row passes a live 3-run gate in both `USE_UNIFIED_PROMPT` states, and every pre-existing scenario sends the model byte-identical input, and gets byte-identical output, on this branch and on its base `3f46b2d`.** The live A/B of the pre-existing rows (BASE against BRANCH, about 2 hours and $10) has still not been run. Given the byte identity it can only show sampling noise; the commands are below.
+**Status, 2026-10-22, on the final code: every gated Basics row passes a live 3-run gate in both `USE_UNIFIED_PROMPT` states, and every pre-existing scenario sends the model byte-identical input, and gets byte-identical output, on this branch and on its base `3f46b2d`.** The live A/B of the pre-existing rows (BASE against BRANCH) has since been run and passes: no regression outside the exempt list, every basics row passing in both flags, $10.44. See `docs/basics/GATE.md`.
 
 The first gate attempt (2026-10-21) stopped when the Anthropic credit balance ran out three minutes in, and wrote no result. Credit was back on 2026-10-22: the UX review's live lessons and every run below are real model calls.
 

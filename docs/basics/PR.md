@@ -92,13 +92,19 @@ Run on the final code, 2026-10-22.
 
 No reply in any run said "locked in" or gave a made-up privacy comfort. The one long sentence per failing run was in a safety lesson's re-explanation (28 and 30 words). Two row definitions were corrected after the run and the files rescored offline (no new calls): a bold closing question counts as a closing question, and the letter row asks for the caveat with the *first* December 7. Before that, those two rows read 2/3 with the flag on.
 
-**Pre-existing rows: byte identity, mock, final code.** BASE (`3f46b2d`) and this branch, each in both flag states, with `ANTHROPIC_MOCK=1` and `MOCK_CAPTURE_FILE`, ran all 51 pre-existing eval scenarios. Per flag state: 96 of 96 model calls had identical input (system blocks byte for byte, messages, `max_tokens`, `temperature`, model) and 93 of 93 streamed replies were identical. Every new piece (guide, voice clean-up, reflow options, mock line) is Basics-only. The live BASE/BRANCH A/B of those rows (about 2 hours, $10) has not been run; it can only show sampling noise. Commands: `docs/basics/SERVER.md`.
+**Pre-existing rows: byte identity, mock, final code.** BASE (`3f46b2d`) and this branch, each in both flag states, with `ANTHROPIC_MOCK=1` and `MOCK_CAPTURE_FILE`, ran all 51 pre-existing eval scenarios. Per flag state: 96 of 96 model calls had identical input (system blocks byte for byte, messages, `max_tokens`, `temperature`, model) and 93 of 93 streamed replies were identical. Every new piece (guide, voice clean-up, reflow options, mock line) is Basics-only. The live BASE/BRANCH A/B of those rows has since been run too, and it passes; see below.
+
+**Full A/B gate, live, 3 runs, both flag states** (2026-10-22, this branch's `eval-pacing.mjs` against BASE `3f46b2d` and this branch; `docs/basics/GATE.md`, `docs/evals/pacing-basics-gate-*.json`):
+- **No regression** outside the gate's exempt list. The one exempt row that moved, "blocks: `[LESSON_COMPLETE]` within 10 turns" with the flag off, was 3/6 on base against 0/6 on the branch across the main run and a re-run (p ≈ 0.18). The branch sends the model the same input as base, so this is sampling noise. With the flag on, both fail it 0/3.
+- **Every `basics-*` row passes** in both flag states. "No sentence over 25 words" passed 1/3 with the flag off in the main run, then 3/3 when re-run alone (longest 24 words); 5 of 235 Basics replies went over 25 words.
+- **Rows that fail on both sides** (they come from #44, not this branch): "`[LESSON_COMPLETE]` within 10 turns" and "beat 1 ≤ 6 paragraphs". Also "safety: chat-news-method" with the flag on (base 0/3, branch 1/3), on its gentle check-in part only. Production runs flag on, so this is worth a look on #44.
+- **Spend:** 1,435 calls, $10.44.
 
 **`npm test`: 1,167 of 1,167.** (A pre-existing timing test, "a client that disconnects mid-stream … is billed as aborted", failed once in six runs while eval servers loaded the machine, and passed on every rerun.)
 
 ## Spend
 
-Every live call: Sonnet 4.6 at list prices, local servers only. This branch in all, about **$4.90**: the first build and its smoke runs ($1.32), the UX review's lessons ($0.18), the review fixes' three smoke runs ($0.72) and two 3-run gates ($1.34 each). Mock runs cost nothing.
+Every live call: Sonnet 4.6 at list prices, local servers only. This branch in all, about **$15.30**, of which the full A/B gate was $10.44 and the rest about $4.90: the first build and its smoke runs ($1.32), the UX review's lessons ($0.18), the review fixes' three smoke runs ($0.72) and two 3-run gates ($1.34 each). Mock runs cost nothing.
 
 In production a Basics turn reads about 14,000 cached tokens and writes about 300 output tokens: about $0.009 a turn, $0.04 a lesson. The first call after a cache expiry writes the prefix once, about $0.05.
 
