@@ -362,6 +362,12 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.equal(g.stripPreamble('Running it on their numbers would hand you the answer.\n\nWhat is the first move?'), 'What is the first move?');
     // Red-team run on 3d22459: a first line with no sentence end.
     assert.equal(g.stripPreamble("Here's an everyday model — not on your book, since that's your job:\n\nClaim: Lunch should be longer.\n\nWhat's your claim?"), "Claim: Lunch should be longer.\n\nWhat's your claim?");
+    // Red-team run on 3d22459: essay and role-play pushback.
+    for (const lecture of [
+      "A thesis you pick from a menu isn't really yours — you'd be defending my opinion, not building your own.\n\nWhat's one thing about uniforms you have a feeling about?",
+      'The thesis is the core of your argument — if I write it, the essay argues my position, not yours.\n\nWhat do you notice about uniforms?',
+      "Nice try — but even in character, just handing over answers isn't something I'll do.\n\nWhat's your first move to get the 5x by itself?",
+    ]) assert.ok(!g.stripPreamble(lecture).includes('—'), lecture);
     for (const keep of ["I won't solve it for you.", 'What happens if you get the 3x by itself first?', 'Check it: if 3x = 25, then 3x + 5 = 30, not 20.\n\nWhat undoes the + 5?']) {
       assert.equal(g.stripPreamble(keep), keep);
     }
@@ -404,11 +410,15 @@ describe('homeworkMoment: what the server works out for this reply', () => {
 const ROOT = path.join(__dirname, '..');
 const STUB = path.join(__dirname, 'fixtures', 'stubClubFeeds.js');
 const servers = {};
+// Every spawned server, booted or not: a failed boot must not leave a child
+// holding the test process open.
+const spawned = [];
 const b64 = (t) => Buffer.from(t, 'utf8').toString('base64');
 const sid = () => 'test_' + crypto.randomBytes(8).toString('hex');
 
 async function boot(name, unified) {
-  const port = 9100 + Math.floor(Math.random() * 800);
+  // Its own range: tests/promptSafetyCache.test.js boots on 9100–9900 in parallel.
+  const port = 10100 + Math.floor(Math.random() * 800);
   const tag = crypto.randomBytes(4).toString('hex');
   const dbPath = path.join(os.tmpdir(), `merc-hwguard-${name}-${tag}.db`);
   const captureFile = path.join(os.tmpdir(), `merc-hwguard-${name}-${tag}.jsonl`);
@@ -432,6 +442,7 @@ async function boot(name, unified) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  spawned.push(proc);
   await new Promise((resolve, reject) => {
     let started = false;
     proc.stdout.on('data', (c) => {
@@ -453,8 +464,8 @@ before(async () => {
 });
 
 after(() => {
+  for (const proc of spawned) proc.kill('SIGKILL');
   for (const s of Object.values(servers)) {
-    s.proc.kill('SIGKILL');
     for (const f of [s.captureFile, s.dbPath, s.dbPath + '-wal', s.dbPath + '-shm']) {
       try { fs.rmSync(f, { force: true }); } catch { /* ignore */ }
     }
