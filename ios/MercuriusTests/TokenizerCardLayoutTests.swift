@@ -14,9 +14,11 @@ import UIKit
 @MainActor
 final class TokenizerCardLayoutTests: XCTestCase {
 
-    /// The card's width: an SE's row (375 pt less its 16 pt margins) and a
-    /// 16 Pro Max's (440 pt less them).
-    private static let widths: [CGFloat] = [343, 408]
+    /// The card's width: a 320 pt window's row (an SE or a mini with Display
+    /// Zoom, iPad Slide Over: 320 pt less its 16 pt margins, so a 256 pt map
+    /// panel), an SE's (375 pt less them) and a 16 Pro Max's (440 pt less
+    /// them).
+    private static let widths: [CGFloat] = [288, 343, 408]
     private static let sizes: [DynamicTypeSize] = [.large, .xxxLarge, .accessibility3, .accessibility5]
     /// Room around the card in a render, where nothing of it may land.
     private static let margin: CGFloat = 120
@@ -89,6 +91,68 @@ final class TokenizerCardLayoutTests: XCTestCase {
         XCTAssertGreaterThan(try height(.accessibility5), try height(.accessibility3))
         // A sanity floor: four steps and a map at Large on an SE.
         XCTAssertGreaterThan(large, 900)
+    }
+
+    // MARK: A pick moves "bank", not the card
+
+    /// Holds what the card reports from inside its own layout pass.
+    private final class PanelBox: @unchecked Sendable {
+        var frame: CGRect?
+    }
+
+    /// The map panel's frame in the card, laid out in a window at `width`.
+    /// At the accessibility sizes the folded map is shown.
+    private func panelFrame(_ context: TokenizerContext?, size: DynamicTypeSize, width: CGFloat) throws -> CGRect? {
+        let state = TokenizerState(context: context)
+        state.showsFoldedMap = true
+        let box = PanelBox()
+        let view = LessonTokenizerCard()
+            .environment(state)
+            .environment(\.dynamicTypeSize, size)
+            .frame(width: width)
+            .fixedSize(horizontal: false, vertical: true)
+            .onPreferenceChange(LessonTokenizerCard.PanelFrameKey.self) { box.frame = $0 }
+        let host = UIHostingController(rootView: view)
+        // In a window of the test host's scene, so SwiftUI runs a full pass.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: width, height: 6000)
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        host.view.layoutIfNeeded()
+        window.isHidden = true
+        return box.frame
+    }
+
+    /// Before a pick and after each one, the map panel is in the same place
+    /// and the card is the same height: on an SE the finished sentence wraps
+    /// onto a second line after a pick, and the map once slid down 26 pt as
+    /// "bank" moved inside it.
+    func testAPickNeverMovesTheMapOrResizesTheCard() throws {
+        for width in Self.widths {
+            for size in [DynamicTypeSize.large, .xLarge, .xxLarge, .xxxLarge, .accessibility3, .accessibility5] {
+                let before = try XCTUnwrap(try panelFrame(nil, size: size, width: width),
+                                           "no map panel at \(size), \(width) pt")
+                XCTAssertGreaterThan(before.minY, 300, "the panel is in step 4 at \(size), \(width) pt")
+                for context in TokenizerContext.allCases {
+                    let after = try XCTUnwrap(try panelFrame(context, size: size, width: width))
+                    XCTAssertEqual(after.minY, before.minY, accuracy: 0.01,
+                                   "picking \(context) moves the map at \(size), \(width) pt")
+                    XCTAssertEqual(after.height, before.height, accuracy: 0.01)
+                }
+            }
+        }
+        for width in Self.widths {
+            for size in Self.sizes {
+                let heights = try [nil, .money, .river].map { (context: TokenizerContext?) in
+                    try render(context, size: size, width: width).height
+                }
+                XCTAssertEqual(Set(heights).count, 1, "the card's height changes with a pick at \(size), \(width) pt: \(heights)")
+            }
+        }
     }
 
     // MARK: Its place in the lesson's bubble

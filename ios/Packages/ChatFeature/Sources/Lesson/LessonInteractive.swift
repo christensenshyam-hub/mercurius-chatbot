@@ -432,11 +432,24 @@ enum LessonInteractiveSplit {
         let after = Array(blocks[(at.flat + 1)...])
         guard let piece = at.piece, case .prose(let prose) = blocks[at.flat],
               let cut = cutProse(prose, afterPiece: piece) else {
-            return Halves(head: Array(blocks[...at.flat]), tail: after)
+            return Halves(head: Array(blocks[...at.flat]), tail: droppingOpeningBreak(after))
         }
         var tail: [MessageBlock] = []
         if !cut.rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { tail.append(.prose(cut.rest)) }
         return Halves(head: Array(blocks[..<at.flat]) + [.prose(cut.before)], tail: tail + after)
+    }
+
+    /// The blocks after a card that follows a card block ([EX], [KEY]): when
+    /// the prose after it opens with a break, before any text, that break
+    /// ends the card's part, so the card stands where its rule was and the
+    /// line isn't drawn (as when the part ends in prose). A break with text
+    /// before it isn't the part's end and stays.
+    private static func droppingOpeningBreak(_ blocks: [MessageBlock]) -> [MessageBlock] {
+        guard case .prose(let prose) = blocks.first, let cut = cutProse(prose, afterPiece: 0),
+              cut.before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return blocks }
+        let rest = blocks.dropFirst()
+        return cut.rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? Array(rest) : [.prose(cut.rest)] + rest
     }
 
     /// `prose` cut at the break that ends its piece `piece`: the text before

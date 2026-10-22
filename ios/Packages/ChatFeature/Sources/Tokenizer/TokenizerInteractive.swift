@@ -307,6 +307,34 @@ struct MeaningMapLines: Shape {
 /// At the accessibility sizes the map starts folded behind "Show the map",
 /// with those words in its place: the decoration goes, the content stays.
 enum TokenizerMapScale {
+    /// The narrowest panel the map is drawn at. Its rules hold down to about
+    /// 284 pt; 300 (the Mac's narrowest) keeps a margin. A narrower panel
+    /// (a 320 pt window: an SE or a mini with Display Zoom, iPad Slide Over
+    /// or a third of Split View, so a 256 pt panel) gets the map drawn at
+    /// this width and scaled down to fit, every rule intact: its words are
+    /// then 11 pt or more (13 × 256/300), and with Display Zoom a point is
+    /// that much bigger on the glass.
+    static let narrowestDrawnWidth: CGFloat = 300
+
+    /// The width the map is drawn at for a panel this wide.
+    static func drawnWidth(forPanelWidth width: CGFloat) -> CGFloat {
+        max(width, narrowestDrawnWidth)
+    }
+
+    /// How much the drawn map is scaled down to fit a panel this wide (1
+    /// from `narrowestDrawnWidth` up).
+    static func fitScale(forPanelWidth width: CGFloat) -> CGFloat {
+        min(1, width / narrowestDrawnWidth)
+    }
+
+    /// The panel's height for this width and text size: the drawn map's
+    /// height, scaled down with it.
+    static func panelHeight(forPanelWidth width: CGFloat, typeSize: DynamicTypeSize) -> CGFloat {
+        let drawn = drawnWidth(forPanelWidth: width)
+        return MeaningMap.height(forWidth: drawn, scale: labelScale(for: typeSize, panelWidth: drawn))
+            * fitScale(forPanelWidth: width)
+    }
+
     /// The largest label scale whose map keeps its rules at this width.
     static func maximum(forPanelWidth width: CGFloat) -> CGFloat {
         width >= 340 ? 15.0 / 13.0 : 1
@@ -420,6 +448,10 @@ enum TokenizerCopy {
     static let tryIt = "Try it"
     static let tryItHint = "Opens the interactive here, in the lesson"
 
+    // The iPhone's header: `compactLine` under the title, then "Try it",
+    // which brings step 4's openings up.
+    static let tryItJumpHint = "Goes to step 4, where you start the sentence"
+
     // The iPhone's folded map (accessibility text sizes)
     static let showMap = "Show the map"
     static let hideMap = "Hide the map"
@@ -446,6 +478,10 @@ enum TokenizerCopy {
     // VoiceOver
     static let cardAccessibility = "Interactive: How a model reads bank"
     static func stepAccessibility(_ number: Int, _ title: String) -> String { "Step \(number): \(title)" }
+    /// A step's title as the iPhone draws it at the accessibility sizes,
+    /// where the number's disc goes: VoiceOver's own line ("Step 2: It’s cut
+    /// into tokens"), with no "·" that could read as a token's space.
+    static func stepLine(_ number: Int, _ title: String) -> String { stepAccessibility(number, title) }
     static let typedAccessibility = "You type: \(TokenizerInteractive.sentence)"
 
     static var tokensAccessibility: String {
@@ -496,10 +532,12 @@ enum TokenizerCopy {
     /// Every line, for the register tests.
     static var everyLine: [String] {
         var lines = [eyebrow, title, spaceNote, idNote, listLabel, listMore, listNote, startPrompt, sketch,
-                     howItMoves, compactLine, tryIt, tryItHint, showMap, hideMap, showMapHint,
+                     howItMoves, compactLine, tryIt, tryItHint, tryItJumpHint, showMap, hideMap, showMapHint,
                      cardAccessibility, typedAccessibility, tokensAccessibility, numbersAccessibility,
                      chipHint, mapSummary(nil), mapInWords(nil), MeaningMap.startCaption] + steps
-        for (index, step) in steps.enumerated() { lines.append(stepAccessibility(index + 1, step)) }
+        for (index, step) in steps.enumerated() {
+            lines += [stepAccessibility(index + 1, step), stepLine(index + 1, step)]
+        }
         for context in TokenizerContext.allCases {
             lines += [context.chipTitle, context.sentence, chipHelp(context), mapSummary(context),
                       mapInWords(context), pickedAnnouncement(context), chipAccessibility(context)]

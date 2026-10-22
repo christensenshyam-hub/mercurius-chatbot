@@ -2,6 +2,36 @@
 
 **Setup:** Xcode 26.4 (Swift 6.3) on this Mac. **Simulators:** "Audit 16PM" (iPhone 16 Pro Max, iOS 26.4) and "Audit SE3". **Build output:** iOS into `/private/tmp/merc-ios-tok-dd`, SwiftPM into `/private/tmp/merc-ios-tok-spm`, the Mac into `/private/tmp/merc-mac-tok2-dd`. Every build ran after `xcodegen generate`, and no snapshot was recorded.
 
+## After the second review (round 3, 2026-10-21)
+
+The second review returned four medium and three low findings. Six were fixed in `7ac6095` and `d3d76c8`. The seventh was the hand-off summary's pointers, which are corrected here and in the PR description. How each finding was checked first:
+
+| Finding | Checked by | Fix |
+|---|---|---|
+| A pick slides the map 26 pt on an SE (medium) | the code: neither the finished sentence nor the map in words reserved its longest version | both are laid out for every state with one shown; the chips keep their size. `testAPickNeverMovesTheMapOrResizesTheCard`; on the SE, the `map` and `money` shots now differ only in the chip (rows 366–453 px), the sentence (601–679 px) and the map's inside (751–969 px). The panel's edge rows are identical |
+| Nothing to tap on the card's first screen (medium) | the renders: the openings are about 990 pt into a 1,546 pt card at an SE's width | the compact line and "Try it ↓" (44 pt) on the first screen; `testTryItBringsTheOpeningsUp` on both phones |
+| The check drawn over the "I" (low) | the code: the check was inserted inside the animated layout | an always-present ring that fills with the check; the SE clip's frames at 1/30 s show no movement of the words |
+| "2 · It’s" looks like a token's dot (low) | the code | "Step 2: It’s cut into tokens" at the accessibility sizes (VoiceOver's own line) |
+| The map's rules break under about 352 pt windows (medium) | `MeaningMapTests` at 240–296 pt: failures from 240 to 282 pt, passes from 284 pt | under 300 pt the 300 pt map is drawn and scaled down; 240/256/270/288 added to the map tests and 288 to the layout tests |
+| A stray `---` rule after a part that ends in [EX] or [KEY] (low) | two new split tests, which failed on the old code | `LessonInteractiveSplit` drops a break that opens the prose after a card block |
+| Wrong commit range and shot paths in the hand-off (low) | git log and the folders | the range is `4aa93cd..` HEAD; the key shots are in `key-shots/`, the full set outside the repo (see the README) |
+
+Then the whole verification ran again on the final code, from the build step:
+
+| Check | Result |
+|---|---|
+| `swift test`, full, from an empty scratch path (`/private/tmp/merc-ios-tok-spm` deleted first) | **1215 tests in 182 suites passed** (1209 before the fixes), 0 failures |
+| `scripts/ci-compat-lint.py`, and again on `MercuriusTests` and `MercuriusUITests` | 0 findings |
+| iOS build (Audit 16PM), installed on Audit 16PM and Audit SE3 | BUILD SUCCEEDED, no warnings in the changed files |
+| iOS `xcodebuild test`, CI's flags, Audit 16PM | **TEST SUCCEEDED**: 7 XCTest unit (incl. the 4 `TokenizerCardLayoutTests`), 3 Swift Testing and 27 UI (incl. the 2 `LessonInteractiveUITests`): 34 test cases passed, 0 failed, so no retries |
+| `LessonInteractiveUITests` on Audit SE3 | TEST SUCCEEDED (2 of 2), with the screens before and after "Try it" kept |
+| `scripts/ios-unchanged-check.sh` (recording forced off) | "iOS unchanged: the same 23 results and the same pixels for every stale render as the baseline": 11 pass, 12 stale. Nothing under `MercuriusTests/Snapshots` changed |
+| Mac Debug build (`/private/tmp/merc-mac-tok2-dd`) | BUILD SUCCEEDED |
+| Mac copied-app shots, `lesson-interactive-map`, `-money`, `-river` (copy `macns10`, off screen) | **Pixel-identical to the base build's (9504c58)**: PIL finds no differing pixel. The founder's running Mercurius was untouched |
+| Shots | the SE and 16 Pro Max matrix taken again on the final build (60 shots), the slow-stream and cut-off checks, "Try it" from the UI test, three clips and the whole-card renders; see the README |
+
+A comment in `LessonTokenizerCard.swift` was corrected after the test build. The final build, installed on both sims, includes it, and `swift test` and the lint ran again on it: 1215 tests in 182 suites passed, 0 findings. (One run of `swift test` made while the iOS build was compiling lost a loopback connection in NetworkingKit's `APIClient end-to-end` stream test; NetworkingKit is untouched on this branch, and the run with nothing else building passed.)
+
 ## After review (round 2, 2026-10-21)
 
 The review returned no findings, so no code changed. The whole verification ran again on the final code (`f0d9e60` + the UI test `eaf03c2`), from the build step:

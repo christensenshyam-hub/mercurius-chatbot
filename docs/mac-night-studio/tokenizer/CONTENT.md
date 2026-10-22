@@ -19,6 +19,8 @@ Curly quotes and apostrophes are as drawn. `·` is the dot drawn for a space.
 |---|---|
 | Eyebrow | INTERACTIVE |
 | Title | How a model reads “bank” |
+| Under the title (iPhone only) | See “I went to the bank” become tokens, then numbers, then a place on a map of meaning. (the Mac's compact-card line) |
+| Button (iPhone only) | Try it ↓ (brings step 4 up: on a phone the openings are a screen or two below the card's top) |
 
 ### Step 1, "You type"
 
@@ -53,7 +55,7 @@ The bars go up and down from a zero line and each one carries its value, so the 
 |---|---|
 | Step title | 4 · The numbers land in a map of meaning |
 | Prompt | Start the sentence: |
-| Chips (the control) | I got my paycheck, so… / I wanted to go fishing, so… (a check on the picked one) |
+| Chips (the control) | I got my paycheck, so… / I wanted to go fishing, so… (a check on the picked one; on the iPhone each chip has a ring that fills with the check, so a pick never moves its words) |
 | The sentence, before a pick | … I went to the bank |
 | The sentence, after a pick | **I got my paycheck, so** I went to the bank. / **I wanted to go fishing, so** I went to the bank. (the context in indigo) |
 | On the map | loan, deposit (one neighbourhood), shore, water (the other), and bank (a lit pill) on a dashed ring captioned **where “bank” starts**. The caption shows before a pick too, so the ring reads as “bank”’s starting numbers, not as the model’s reading of “I went to the bank” |
@@ -74,7 +76,15 @@ The iPhone draws the same lines. Its map's labels grow with the student's text a
 | … after a pick | On the map, “bank” is now near loan and deposit. / On the map, “bank” is now near shore and water. |
 | The fold (accessibility sizes) | Show the map / Hide the map |
 
-At the accessibility sizes the card drops what is only decoration (the step numbers' discs, the arrow in step 3, the bars over the numbers, which then read as a line, "0.12, −0.08, 0.31, −0.27, 0.05, …", and the icons), never a word.
+At the accessibility sizes the card drops what is only decoration (the step numbers' discs, the arrows in step 3 and on "Try it", the bars over the numbers, which then read as a line, "0.12, −0.08, 0.31, −0.27, 0.05, …", and the icons), never a word. Without the disc, a step's title reads as VoiceOver says it:
+
+| Where | Text |
+|---|---|
+| Step titles (accessibility sizes) | Step 1: You type / Step 2: It’s cut into tokens / Step 3: Each token becomes a list of numbers / Step 4: The numbers land in a map of meaning |
+
+(Not "1 · You type": the "·" read as the dot that marks a space in the tokens just below it.)
+
+The sentence after a pick and the map in words are laid out for every state, so a pick never changes step 4's height and the map stays where it is; only "bank" and its lines move. In a 320 pt window (an SE or a mini with Display Zoom, iPad Slide Over) the map is drawn at 300 pt and scaled down to fit, with the same places and the same words.
 
 ### The compact card (Mac only: a card narrower than 440 pt, a 700 pt window with the sidebar open)
 
@@ -109,6 +119,7 @@ At the accessibility sizes the card drops what is only decoration (the step numb
 | Announced on a pick | The finished sentence, then the map's line, e.g. "I got my paycheck, so I went to the bank. Map of meaning, a 2-D sketch drawn by hand. With “I got my paycheck, so” before it, bank is near loan and deposit." |
 | Try it (compact, Mac) | Try it. Hint: Opens the interactive here, in the lesson |
 | Show the map (iPhone, accessibility sizes) | Show the map. Hint: Shows the map of meaning, a 2-D sketch drawn by hand |
+| Try it (iPhone) | Try it. Hint: Goes to step 4, where you start the sentence. On a press, the lesson scrolls step 4 to the top and VoiceOver moves to "Step 4: The numbers land in a map of meaning", with the openings next |
 | The map in words (iPhone, xxLarge and up) | Read as text while the map is folded; while the map shows, VoiceOver hears the map's own line instead |
 
 ---
@@ -148,7 +159,7 @@ At the accessibility sizes the card drops what is only decoration (the step numb
 - **A cut-off reply never gets it, even after a reopen.** A reply cut off mid-part that the student answered instead of retrying (AUD-29) is saved and comes back from storage looking complete. So a reply with anything after it must show that the example's part ended (a later part, or a check after the example) before the card goes there. One honest limit: after the app restarts, a complete first reply whose example ends the reply, with no check after it, looks the same as a cut one, so the card then goes to the next reply instead. That shape is rare in Lesson 1.1, whose replies close with a check.
 - **Never in a thread with a crisis line** (a reply with 988 or 741741), before, beside or after it.
 - **Merc's lesson text is generated each time.** In a live lesson, Merc's example may not mention "bank" at all, so the card introduces its own sentence (step 1) and stands on its own.
-- **On the iPhone** the reply's bubble is drawn in two around the card, which takes the row's whole width: the bubble up to the card, the card, then the rest of the reply in a second bubble. Where the card stands at the end of a part, the part's dividing rule isn't drawn (the card divides them); nothing else in the reply changes, and the reply's text (what Copy, Report and VoiceOver read) is untouched. The check's tap-to-answer works as before: a tap grades and sends "I picked B) …".
+- **On the iPhone** the reply's bubble is drawn in two around the card, which takes the row's whole width: the bubble up to the card, the card, then the rest of the reply in a second bubble. Where the card stands at the end of a part, the part's dividing rule isn't drawn (the card divides them), whether the part ends in text or in an [EX] or [KEY] card; nothing else in the reply changes, and the reply's text (what Copy, Report and VoiceOver read) is untouched. The check's tap-to-answer works as before: a tap grades and sends "I picked B) …".
 - **The lesson's check is untouched:** a pick sends nothing; the check's Lock it in, its keys and "I picked B) …" work as before.
   - A click on a chip picks it without keeping the keyboard, so A–D, the arrows and Return go on answering the check below it.
   - A chip reached with Tab keeps Return (Return picks the chip and never locks in the check from there). A–D, 1–4 and the arrows still answer the check, and once the check has a pick (from a key or a click) the chip lets go of the keyboard, so Return locks the pick in.
@@ -175,6 +186,7 @@ Please tick each, or note a change.
 - [ ] "A dot marks a space: it travels with the word after it." is understandable without help.
 - [ ] "a list of numbers" (rather than "vector" or "embedding") is the right word here. The lesson's own text says "numbers".
 - [ ] The step titles read as one story: You type → It’s cut into tokens → Each token becomes a list of numbers → The numbers land in a map of meaning.
+- [ ] On the iPhone, the line under the title and "Try it ↓" make it clear, on the card's first screen, that there is something to try further down.
 
 **Fit with the lesson**
 - [ ] The card's place, after the example's part and before the check, is right. (The check asks "What is a token in the context of an LLM?"; the card's step 2 shows tokens being numbered, so it supports the answer without stating it.)

@@ -401,6 +401,55 @@ struct LessonInteractiveSplitTests {
         #expect(Self.words(halves.head + halves.tail) == Self.words(BlockParser.parse(text)))
     }
 
+    /// Whether a half's first prose block opens with a break line (drawn as
+    /// a rule at the top of the second bubble).
+    private static func opensWithBreak(_ blocks: [MessageBlock]) -> Bool {
+        guard let text = Self.prose(blocks.first) else { return false }
+        let first = text.split(separator: "\n", omittingEmptySubsequences: false)
+            .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return first.map { LessonParts.isThematicBreak($0) } ?? false
+    }
+
+    @Test("A part that ends in a key idea: the break after it isn't drawn, the check follows the card")
+    func partEndsInKey() throws {
+        let text = "Intro.\n\n---\n\nTokens.\n\n[EX]Example.[/EX]\n\n[KEY]Key idea.[/KEY]\n\n---\n\n"
+            + "[Q]\nWhat is a token?\nA) A chunk of text\nB) A sentence\nANS: A\n[/Q]"
+        let position = try #require(placement([reply(text)])?.position)
+        #expect(position == LessonInteractivePosition(section: 1, afterBlock: 2))
+        let halves = try #require(LessonInteractiveSplit.halves(of: text, at: position))
+        if case .key = halves.head.last {} else { Issue.record("the key idea ends the first half: \(halves.head)") }
+        #expect(!Self.opensWithBreak(halves.tail), "no rule over the check: \(halves.tail)")
+        #expect(halves.tail.count == 1)
+        #expect(halves.tail.first.map(Self.isQuiz) == true)
+        #expect(Self.words(halves.head + halves.tail) == Self.words(BlockParser.parse(text)))
+    }
+
+    @Test("A part that ends in its example: the next part follows the card with no rule over it")
+    func partEndsInExample() throws {
+        let text = "Tokens first.\n\n[EX]\"unbelievable\" might become \"un\", \"believ\", \"able\".[/EX]\n\n---\n\n"
+            + "Next part.\n\nIts second line."
+        let position = try #require(placement([reply(text)])?.position)
+        #expect(position == LessonInteractivePosition(section: 0, afterBlock: 1))
+        let halves = try #require(LessonInteractiveSplit.halves(of: text, at: position))
+        if case .example = halves.head.last {} else { Issue.record("the example ends the first half: \(halves.head)") }
+        #expect(!Self.opensWithBreak(halves.tail), "no rule over the next part: \(halves.tail)")
+        let tail = try #require(Self.prose(halves.tail.first))
+        #expect(tail.contains("Next part."))
+        #expect(tail.contains("Its second line."))
+        #expect(Self.words(halves.head + halves.tail) == Self.words(BlockParser.parse(text)))
+    }
+
+    @Test("A break that isn't the part's end stays: the card before a check in the same part")
+    func breakLaterStays() throws {
+        let text = "[EX]An example.[/EX]\n\n[Q]\nWhat is a token?\nA) A chunk\nB) A word\nANS: A\n[/Q]\n\n---\n\nAfter the check."
+        let position = try #require(placement([reply(text)])?.position)
+        #expect(position == LessonInteractivePosition(section: 0, afterBlock: 0))
+        let halves = try #require(LessonInteractiveSplit.halves(of: text, at: position))
+        #expect(halves.tail.first.map(Self.isQuiz) == true)
+        // The break between the check and the next part is still drawn.
+        #expect(Self.prose(halves.tail.last)?.contains("---") == true)
+    }
+
     @Test("A break inside a code block isn't a part's end")
     func fencedBreak() throws {
         let text = "[EX]Code.[/EX]\n\n```\n---\n```\n\nStill part 1.\n\n---\n\nPart 2."
@@ -465,6 +514,33 @@ struct TokenizerMapScaleTests {
         let xLarge = Double(15) / Double(13)
         #expect(abs(Double(TokenizerMapScale.labelScale(for: .xLarge, panelWidth: 376)) - xLarge) < 1e-9)
         #expect(abs(Double(TokenizerMapScale.labelScale(for: .accessibility5, panelWidth: 376)) - xLarge) < 1e-9)
+    }
+
+    @Test("Under 300 pt the map is drawn at 300 and scaled down to fit: its words stay 11 pt or more in a 320 pt window",
+          arguments: [240, 256, 270, 288, 299] as [CGFloat])
+    func narrow(panelWidth: CGFloat) {
+        let drawn = TokenizerMapScale.drawnWidth(forPanelWidth: panelWidth)
+        let fit = TokenizerMapScale.fitScale(forPanelWidth: panelWidth)
+        #expect(drawn == TokenizerMapScale.narrowestDrawnWidth)
+        #expect(abs(Double(drawn * fit - panelWidth)) < 1e-9, "the drawn map fills the panel exactly")
+        for size in DynamicTypeSize.allCases {
+            #expect(TokenizerMapScale.labelScale(for: size, panelWidth: drawn) == 1, "\(size)")
+            let height = TokenizerMapScale.panelHeight(forPanelWidth: panelWidth, typeSize: size)
+            #expect(abs(Double(height - MeaningMap.height(forWidth: drawn) * fit)) < 1e-9, "\(size)")
+        }
+        // A 320 pt window's panel (256 pt) and wider: words of 11 pt or more.
+        if panelWidth >= 256 { #expect(MeaningMap.wordPointSize * fit >= 11) }
+    }
+
+    @Test("From 300 pt the map is drawn at the panel's own width", arguments: [300, 311, 376, 528] as [CGFloat])
+    func wide(panelWidth: CGFloat) {
+        #expect(TokenizerMapScale.drawnWidth(forPanelWidth: panelWidth) == panelWidth)
+        #expect(TokenizerMapScale.fitScale(forPanelWidth: panelWidth) == 1)
+        for size in DynamicTypeSize.allCases {
+            let scale = TokenizerMapScale.labelScale(for: size, panelWidth: panelWidth)
+            #expect(TokenizerMapScale.panelHeight(forPanelWidth: panelWidth, typeSize: size)
+                    == MeaningMap.height(forWidth: panelWidth, scale: scale), "\(size)")
+        }
     }
 
     @Test("Past xLarge the card says the map in words; at the accessibility sizes the map starts folded")
@@ -547,11 +623,15 @@ struct MeaningMapTests {
     /// window with the sidebar open (about 350; 300 with a wide sidebar) up
     /// to a 1280 pt window's reading column.
     static let widths: [CGFloat] = [300, 320, 350, 390, 440, 460, 520, 580, 640]
-    /// The iPhone's map panel: inside an SE's card (343 pt wide, 311 pt
-    /// inside) up to a 16 Pro Max's (376 pt inside), with its labels at every
-    /// size `TokenizerMapScale` draws them at for that width, from Large up
-    /// (and the accessibility sizes' folded map, which is the largest).
-    static let phoneWidths: [CGFloat] = [300, 311, 320, 330, 340, 343, 360, 376, 390, 420]
+    /// The iPhone's map panel: from a 320 pt window's (256 pt: an SE or a
+    /// mini with Display Zoom, iPad Slide Over) through an SE's card (343 pt
+    /// wide, 311 pt inside) and a 16 Pro Max's (376 pt inside) to an iPad's
+    /// widest card (528 pt inside), with its labels at every size
+    /// `TokenizerMapScale` draws them at for that width, from Large up (and
+    /// the accessibility sizes' folded map, which is the largest). A panel
+    /// under 300 pt is checked as the map is drawn for it: at 300, scaled
+    /// down to fit (`TokenizerMapScale.drawnWidth`).
+    static let phoneWidths: [CGFloat] = [240, 256, 270, 288, 300, 311, 320, 330, 340, 343, 360, 376, 390, 420, 528]
     static let phoneScales: [DynamicTypeSize] = [.large, .xLarge, .xxLarge, .xxxLarge, .accessibility5]
 
     /// A panel width and how big its labels are drawn.
@@ -563,8 +643,9 @@ struct MeaningMapTests {
 
     /// The Mac's widths at its one size, then the iPhone's at each of its.
     static let layouts: [Layout] = widths.map { Layout(width: $0, scale: 1) }
-        + phoneWidths.flatMap { width in
-            Set(phoneScales.map { TokenizerMapScale.labelScale(for: $0, panelWidth: width) }).sorted()
+        + phoneWidths.flatMap { panel in
+            let width = TokenizerMapScale.drawnWidth(forPanelWidth: panel)
+            return Set(phoneScales.map { TokenizerMapScale.labelScale(for: $0, panelWidth: width) }).sorted()
                 .map { Layout(width: width, scale: $0) }
         }
     static let contexts: [TokenizerContext?] = [nil] + TokenizerContext.allCases.map { Optional($0) }
@@ -784,6 +865,19 @@ struct TokenizerCopyTests {
         #expect(TokenizerCopy.stepAccessibility(4, TokenizerCopy.step4)
                 == "Step 4: The numbers land in a map of meaning")
         #expect(TokenizerCopy.chipAccessibility(.river) == "Start the sentence: I wanted to go fishing, so")
+    }
+
+    @Test("The iPhone's large-text step titles carry no space dot; its Try it says where it goes")
+    func iPhoneLines() {
+        for (index, step) in TokenizerCopy.steps.enumerated() {
+            let line = TokenizerCopy.stepLine(index + 1, step)
+            #expect(line == "Step \(index + 1): \(step)")
+            // "·" is the card's mark for a space in a token, one line below.
+            #expect(!line.contains("\u{00B7}"), "\(line)")
+        }
+        #expect(TokenizerCopy.tryIt == "Try it")
+        #expect(TokenizerCopy.tryItJumpHint.contains("step 4"))
+        #expect(TokenizerCopy.compactLine.contains("map of meaning"))
     }
 
     @Test("The iPhone's folded map says where bank is, in words")
