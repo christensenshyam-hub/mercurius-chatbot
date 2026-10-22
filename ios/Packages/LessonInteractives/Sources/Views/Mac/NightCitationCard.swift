@@ -125,7 +125,7 @@ struct NightCitationColumns: View {
                     .accessibilityLabel(CitationCopy.candidateAccessibility(slot, index: index))
                     .accessibilityValue(CitationCopy.candidateValue(walk, slot: slot, index: index))
                     .accessibilityHint(walk.canGuess ? CitationCopy.walkPrompt : "")
-                    .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAddTraits(CitationCandidateTraits.traits(canGuess: walk.canGuess, picked: picked))
             }
         }
         .accessibilityElement(children: .contain)

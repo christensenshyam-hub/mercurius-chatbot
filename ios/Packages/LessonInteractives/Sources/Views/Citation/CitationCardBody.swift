@@ -175,18 +175,27 @@ struct CitationCardBody: View {
             .accessibilityLabel(CitationCopy.candidateAccessibility(slot, index: index))
             .accessibilityValue(CitationCopy.candidateValue(walk, slot: slot, index: index))
             .accessibilityHint(walk.canGuess ? CitationCopy.walkPrompt : "")
-            .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAddTraits(CitationCandidateTraits.traits(canGuess: walk.canGuess, picked: picked))
         #else
-        row
-            .interactiveControl(shape: RoundedRectangle(cornerRadius: 14, style: .continuous),
-                                isEnabled: walk.canGuess) {
-                guess(index, fromKeyboard: false)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(CitationCopy.candidateAccessibility(slot, index: index))
-            .accessibilityValue(CitationCopy.candidateValue(walk, slot: slot, index: index))
-            .accessibilityHint(walk.canGuess ? CitationCopy.walkPrompt : "")
-            .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+        if walk.canGuess {
+            row
+                .interactiveControl(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) {
+                    guess(index, fromKeyboard: false)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(CitationCopy.candidateAccessibility(slot, index: index))
+                .accessibilityHint(CitationCopy.walkPrompt)
+                .accessibilityAddTraits(.isButton)
+        } else {
+            // Drawn: no longer a control. Drawn as itself, since a disabled
+            // button would dim the pick that just lit up (and its words
+            // below 4.5:1), and read as the slot's choice with its state.
+            row
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(CitationCopy.candidateAccessibility(slot, index: index))
+                .accessibilityValue(CitationCopy.candidateValue(walk, slot: slot, index: index))
+                .accessibilityAddTraits(CitationCandidateTraits.traits(canGuess: false, picked: picked))
+        }
         #endif
     }
 

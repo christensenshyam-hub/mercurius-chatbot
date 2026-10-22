@@ -134,7 +134,7 @@ The registry gives this card no spoiler terms (the hook doesn't give away a mech
 | The example reply (one element) | Example reply, written for this lesson. Sure, here’s one: Quillfeather, T., 2018. Not written yet: title, journal, volume and pages. |
 | The step's heading (a header) | Step 2 of 5, Year. Written: First author. |
 | Each slot (a group named for the slot) holding three choices | First author. Quillfeather, T., 12 percent, illustrative, 1 of 3. Button. Hint: Pick the piece you think gets written next. |
-| A choice after the draw | value "picked", "your guess", or "your guess, picked"; the pick is also "selected" |
+| A choice after the draw | no longer a button (the slot is written); value "picked", "your guess", or "your guess, picked"; the pick is also "selected" |
 | Pages are said in words | Volume and pages. volume 14, issue 3, pages 211 to 229, 8 percent, illustrative, 1 of 3. |
 | Announced after a guess | The model drew 2018 this time. Drawn by chance, not always the top bar. (after the fifth: "… The reference is finished: Quillfeather, T., 2018. Houseplants and attention in secondary-school classrooms. Journal of Classroom Ecology, volume 14, issue 3, pages 211 to 229.") |
 | Announced on Next piece | Step 3 of 5 · Title |

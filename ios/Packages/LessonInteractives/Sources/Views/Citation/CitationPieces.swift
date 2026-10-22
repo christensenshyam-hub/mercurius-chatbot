@@ -17,6 +17,15 @@ enum CitationScrollID {
     static let end = "citation-end"
 }
 
+/// A candidate's VoiceOver traits: a button while its slot takes a guess;
+/// once drawn it is no longer a control, and the model's pick is selected.
+enum CitationCandidateTraits {
+    static func traits(canGuess: Bool, picked: Bool) -> AccessibilityTraits {
+        if canGuess { return .isButton }
+        return picked ? .isSelected : []
+    }
+}
+
 // MARK: - The reference
 
 /// The reference as styled text: written pieces in `written`, the slot

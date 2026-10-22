@@ -33,7 +33,9 @@ final class CitationThatWasntUITests: XCTestCase {
 
         let selected = NSPredicate(format: "isSelected == true")
 
-        // Be the model: guess the first candidate at each slot.
+        // Be the model: guess the first candidate at each slot. (On the
+        // iPhone a card's button is a Button inside its accessibility
+        // element, so XCUI sees two with one label: `firstMatch`.)
         let slots = ["First author", "Year", "Title", "Journal", "Volume and pages"]
         for (number, slot) in slots.enumerated() {
             let first = candidate(app, slot, 1)
@@ -51,19 +53,19 @@ final class CitationThatWasntUITests: XCTestCase {
                 expectation(for: selected, evaluatedWith: first)
                 waitForExpectations(timeout: 5)
             }
-            let next = app.buttons[number == slots.count - 1 ? "See the finished reference" : "Next piece"]
+            let next = app.buttons[number == slots.count - 1 ? "See the finished reference" : "Next piece"].firstMatch
             XCTAssertTrue(next.waitForExistence(timeout: 5))
             tap(next, in: app)
         }
 
         // The step question: locks once.
-        let noStep = app.buttons["No step did"]
+        let noStep = app.buttons["No step did"].firstMatch
         XCTAssertTrue(noStep.waitForExistence(timeout: 10), "the step question never came")
         tap(noStep, in: app)
         expectation(for: selected, evaluatedWith: noStep)
         waitForExpectations(timeout: 5)
 
-        let showMe = app.buttons["Show me"]
+        let showMe = app.buttons["Show me"].firstMatch
         XCTAssertTrue(showMe.waitForExistence(timeout: 5))
         tap(showMe, in: app)
         let reveal = app.descendants(matching: .any)
@@ -71,7 +73,7 @@ final class CitationThatWasntUITests: XCTestCase {
         XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal didn't come")
         XCTAssertTrue(reveal.label.hasPrefix("You guessed No step did."), reveal.label)
 
-        let again = app.buttons["Write it again"]
+        let again = app.buttons["Write it again"].firstMatch
         XCTAssertTrue(again.waitForExistence(timeout: 5))
         tap(again, in: app)
         let second = app.descendants(matching: .any)
@@ -87,11 +89,12 @@ final class CitationThatWasntUITests: XCTestCase {
         XCTAssertTrue(sent.waitForExistence(timeout: 10), "the check's tap didn't send the pick")
     }
 
-    /// A slot's candidate by its place ("1 of 3").
+    /// A slot's candidate by its place ("1 of 3"): a button until its slot
+    /// is drawn, then the slot's choice, the pick selected.
     @MainActor
     private func candidate(_ app: XCUIApplication, _ slot: String, _ place: Int) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@",
-                                         "\(slot). ", "illustrative, \(place) of 3.")).firstMatch
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@",
+                                                             "\(slot). ", "illustrative, \(place) of 3.")).firstMatch
     }
 
     /// The lesson's list doesn't take the accessibility scroll action for
