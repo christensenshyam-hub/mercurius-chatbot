@@ -62,8 +62,12 @@ final class PageWithASecretCardLayoutTests: XCTestCase {
         var pictures = [full]
         if full.height > Self.sliceHeight + 1000 {
             pictures = []
-            for top in stride(from: 0, to: full.height, by: Self.sliceHeight) {
-                let slice = min(Self.sliceHeight, full.height - top)
+            // Equal slices, so the last one is never a sliver of bottom margin
+            // that draws nothing (CI's iOS 18 lays the card out a little shorter).
+            let count = (full.height + Self.sliceHeight - 1) / Self.sliceHeight
+            let step = (full.height + count - 1) / count
+            for top in stride(from: 0, to: full.height, by: step) {
+                let slice = min(step, full.height - top)
                 pictures.append(try draw(try card(state, size: size, width: width)
                     .fixedSize(horizontal: false, vertical: true)
                     .offset(y: -CGFloat(top))
