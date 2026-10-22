@@ -3,9 +3,10 @@ import XCTest
 /// Delete the Gender Box (U3L1) on the iPhone, end to end in its lesson
 /// (`-Interactive delete-the-gender-box`: the u3_l1 stub replies stream
 /// through the real replay and placement, and the card shows while it ships
-/// dark): the toggle waits for a guess, a guess locks, deleting the gender
-/// box reveals 42 vs 77 beside the guess, and the lesson's check after the
-/// card still answers with one tap ("I picked A) …").
+/// dark): the toggle waits for a guess, a guess about the gap locks,
+/// deleting the gender box reveals that it grew (42 vs 77, 35 points apart)
+/// beside the guess, and the lesson's check after the card still answers
+/// with one tap ("I picked A) …").
 final class DeleteTheGenderBoxUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -64,18 +65,18 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
 
         // `firstMatch`: XCUITest finds two buttons per shared chip whose
         // label is its title (the chip's element and its inner button).
-        let tie = app.buttons["They\u{2019}ll tie"].firstMatch
-        XCTAssertTrue(tie.waitForExistence(timeout: 10))
-        bringOnScreen(tie, in: app)
-        tie.tap()
+        let shrink = app.buttons["Shrink"].firstMatch
+        XCTAssertTrue(shrink.waitForExistence(timeout: 10))
+        bringOnScreen(shrink, in: app)
+        shrink.tap()
         let picked = NSPredicate(format: "isSelected == true")
-        expectation(for: picked, evaluatedWith: tie)
+        expectation(for: picked, evaluatedWith: shrink)
         waitForExpectations(timeout: 5)
         // A locked guess can't change: another chip's tap does nothing.
-        let other = app.buttons["Yes, still lower"].firstMatch
+        let other = app.buttons["Grow"].firstMatch
         other.tap()
         XCTAssertFalse(other.isSelected, "a locked guess changed")
-        XCTAssertTrue(tie.isSelected)
+        XCTAssertTrue(shrink.isSelected)
 
         bringOnScreen(deleted, in: app)
         XCTAssertNotEqual(deleted.value as? String, "Make your guess first.")
@@ -84,9 +85,10 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         waitForExpectations(timeout: 5)
 
         let reveal = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "You guessed They\u{2019}ll tie. Still lower: 42 vs 77"))
+            .matching(NSPredicate(format: "label BEGINSWITH %@",
+                                  "You guessed Shrink. It grew: 42 vs 77, 35 points apart (it was 29)."))
             .firstMatch
-        XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal didn't pair the guess with 42 vs 77")
+        XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal didn't pair the guess with the grown gap")
         let newScore = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@", "Score: 42 out of 100.")).firstMatch
         XCTAssertTrue(newScore.exists, "the test résumé's score didn't change to 42")

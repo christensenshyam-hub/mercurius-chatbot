@@ -137,7 +137,11 @@ public enum GenderBoxContent {
     public static let testWithout = GenderBoxProfile(woman: true, womens: false, captain: true, coding: true)
 
     /// The fit's convention (recorded in CONTENT.md): λ = 0.5, intercept
-    /// unpenalised, summed log-loss, exact optimum.
+    /// unpenalised, summed log-loss, exact optimum. The ridge is needed, not
+    /// a nicety: "women's" appears only on not-hired résumés (rows 9 and
+    /// 11), so an unpenalised fit sends that weight to minus infinity. Every
+    /// λ from 0.001 to 1 gives the same direction (the word's weight grows
+    /// in size, both scores rise, the gap grows); λ sets the sizes.
     public static let lambda = ToyFit.slateLambda
 
     public static var examples: [ToyFit.Example] {
@@ -190,6 +194,14 @@ public enum GenderBoxContent {
     public static var women: [GenderBoxResume] { resumes.filter { $0.profile.woman } }
     public static var menHired: Int { men.filter(\.hired).count }
     public static var womenHired: Int { women.filter(\.hired).count }
+
+    /// Every past résumé that says "women's" is a woman's (rows 9 and 11),
+    /// and at least one does: why the word could stand in for the gender
+    /// box. The reveal says so only while this holds.
+    public static var womensOnlyOnWomen: Bool {
+        let saying = resumes.filter { $0.profile.womens }
+        return !saying.isEmpty && saying.allSatisfy { $0.profile.woman }
+    }
 
     // MARK: Drawing
 

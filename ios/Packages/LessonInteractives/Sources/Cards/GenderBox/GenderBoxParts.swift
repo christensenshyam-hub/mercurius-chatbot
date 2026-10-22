@@ -94,7 +94,7 @@ struct GenderBoxCardBody: View {
     private var learnedSection: some View {
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
             heading(GenderBoxCopy.learnedHeading)
-            Text(GenderBoxCopy.learnedIntro)
+            Text(GenderBoxCopy.learnedIntro(state.box))
                 .interactiveText(.callout)
                 .foregroundStyle(theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -117,6 +117,13 @@ struct GenderBoxCardBody: View {
     private var reveal: some View {
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
             RevealBox(state.revealLines)
+            // The payoff where the click is: the weights' growing bar sits
+            // a screen above, so the reveal shows "women's" again, its bar
+            // with a tick where it was. Decoration: it goes at the
+            // accessibility sizes, where the result says the numbers.
+            if !theme.usesTables {
+                GenderBoxRevealWeight()
+            }
             // The honest nuance, kept small (SLATE.md: both women gained).
             Text(GenderBoxCopy.nuance)
                 .interactiveText(.caption)
@@ -440,7 +447,7 @@ struct GenderBoxWeights: View {
                     .foregroundStyle(theme.ink)
                     .contentTransition(theme.reduceMotion ? .opacity : .numericText())
             }
-            GenderBoxBar(weight: weight, box: box, height: 14)
+            GenderBoxBar(weight: weight, box: box, earlier: earlier, height: 20)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(weight.map { GenderBoxCopy.effect(GenderBoxContent.effect($0)) } ?? GenderBoxCopy.deletedTag)
                 Spacer(minLength: 8)
@@ -484,7 +491,7 @@ struct GenderBoxWeights: View {
                         .foregroundStyle(theme.ink2)
                 }
             }
-            GenderBoxBar(weight: weight, box: box)
+            GenderBoxBar(weight: weight, box: box, earlier: earlier)
                 .frame(maxWidth: .infinity)
             numberColumn {
                 VStack(alignment: .trailing, spacing: 1) {
@@ -552,13 +559,21 @@ struct GenderBoxWeights: View {
 /// "pushes up", its length the weight on the card's one scale. The words
 /// and the signed number say the same (never colour alone). Under Reduce
 /// Motion a new length crossfades instead of growing.
+///
+/// `earlier`: the weight before the gender box went, drawn as a tick at
+/// that length (a notch through the bar, and a line a little taller than
+/// it), so "women's" visibly grew without flipping back. Static, so Reduce
+/// Motion changes nothing; the row's "was −1.21" says the same in words.
 struct GenderBoxBar: View {
     let weight: Double?
     let box: GenderBox
+    var earlier: Double? = nil
     var height: CGFloat = 24
     @Environment(\.interactiveTheme) private var theme
 
     private static let thickness: CGFloat = 12
+    /// The tick's height: 4 pt past the bar on each side.
+    static let tickHeight: CGFloat = thickness + 8
 
     var body: some View {
         GeometryReader { geo in
@@ -591,9 +606,49 @@ struct GenderBoxBar: View {
                         .id(theme.reduceMotion ? box.rawValue : "bar")
                         .transition(.opacity)
                 }
+                if let earlier {
+                    let reach = half * GenderBoxContent.barFraction(earlier)
+                    let x = earlier < 0 ? half - reach : half + reach
+                    Rectangle()
+                        .fill(theme.surface)
+                        .frame(width: 4, height: Self.thickness)
+                        .offset(x: x - 2, y: (geo.size.height - Self.thickness) / 2)
+                        .transition(.opacity)
+                    Rectangle()
+                        .fill(theme.increasedContrast ? theme.ink : theme.ink2)
+                        .frame(width: 2, height: Self.tickHeight)
+                        .offset(x: x - 1, y: (geo.size.height - Self.tickHeight) / 2)
+                        .transition(.opacity)
+                }
             }
         }
         .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The reveal's "women's" row: its name and "−1.21 → −1.53" above its bar
+/// at the new length, with a tick where it was, across the reveal's width
+/// (the same on both platforms; the weights a screen above are out of view
+/// when the student deletes the box). Decoration: the result says the same
+/// numbers, so VoiceOver skips it, and the accessibility sizes leave it out.
+struct GenderBoxRevealWeight: View {
+    @Environment(\.interactiveTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(GenderBoxCopy.featureName(.womens))
+                    .foregroundStyle(theme.ink)
+                Spacer(minLength: 8)
+                Text(GenderBoxCopy.revealWeightChange)
+                    .monospacedDigit()
+                    .foregroundStyle(theme.ink)
+            }
+            .interactiveText(.calloutStrong)
+            GenderBoxBar(weight: GenderBoxContent.weight(.womens, .deleted), box: .deleted,
+                         earlier: GenderBoxContent.weight(.womens, .kept), height: GenderBoxBar.tickHeight)
+        }
         .accessibilityHidden(true)
     }
 }

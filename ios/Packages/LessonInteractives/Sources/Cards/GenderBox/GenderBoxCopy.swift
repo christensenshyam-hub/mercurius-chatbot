@@ -1,11 +1,13 @@
 import Foundation
 
-/// The prediction's choices: will the résumé with "women's" still score
-/// lower once the gender box is deleted?
+/// The prediction's choices: once the gender box is deleted and the toy
+/// trained again, what will the gap between the two new résumés do?
+/// "Shrink" is the misconception's answer ("delete gender and it can't
+/// discriminate"); the fit says it grows (29 → 35 points).
 public enum GenderBoxGuess: String, CaseIterable, Sendable, Hashable {
-    case stillLower
-    case higher
-    case tie
+    case shrink
+    case same
+    case grow
 }
 
 /// Every line Delete the Gender Box shows or speaks, on both platforms
@@ -21,11 +23,13 @@ public enum GenderBoxCopy {
 
     // MARK: The hook (the audit role)
 
+    /// The last sentence says where the two-value gender box comes from
+    /// (the toy's made-up old records), with no commentary.
     public static var hook: String {
         let c = GenderBoxContent.self
         return "You\u{2019}re checking a r\u{E9}sum\u{E9} scorer: a toy we built, not Amazon\u{2019}s. It learned from "
             + "\(c.resumes.count) made-up past r\u{E9}sum\u{E9}s and who got hired: \(c.menHired) of \(c.men.count) men, "
-            + "\(c.womenHired) of \(c.women.count) women."
+            + "\(c.womenHired) of \(c.women.count) women. Those old records have a man/woman gender box."
     }
 
     // MARK: Labels (on the canvas)
@@ -35,11 +39,13 @@ public enum GenderBoxCopy {
         .toy,
         "A toy we built from made-up r\u{E9}sum\u{E9}s. Amazon\u{2019}s real tool was never published, and this isn\u{2019}t how it worked."
     )
-    /// Under the weights: the numbers are the toy's real fit, and real tools
+    /// Under the weights: the numbers are the toy's real fit, a weight isn't
+    /// a number of points (the score is 100·σ(b + w·x)), and real tools
     /// learn from far more (the slate's accuracy note).
     public static var arithmeticLabel: InteractiveLabel {
         InteractiveLabel(.ourArithmetic, "Weights and scores: our arithmetic, from fitting the toy to these "
-                         + "\(GenderBoxContent.resumes.count) r\u{E9}sum\u{E9}s. Real scorers learn from far more.")
+                         + "\(GenderBoxContent.resumes.count) r\u{E9}sum\u{E9}s. Weights aren\u{2019}t points: the toy "
+                         + "adds them up, then turns the total into a score out of 100. Real scorers learn from far more.")
     }
 
     public static var labels: [InteractiveLabel] { [toyLabel, arithmeticLabel] }
@@ -113,7 +119,13 @@ public enum GenderBoxCopy {
     // MARK: What it learned
 
     public static let learnedHeading = "What it learned"
-    public static let learnedIntro = "It reads the gender box and three words. Each weight pushes a score up or down."
+
+    /// What the toy reads, as the gender box `box` leaves it.
+    public static func learnedIntro(_ box: GenderBox) -> String {
+        let reads = box == .kept ? "It reads the gender box and three words."
+                                 : "Now it reads only the three words."
+        return "\(reads) Each weight pushes a score up or down."
+    }
 
     public static func featureName(_ feature: GenderBoxFeature) -> String {
         switch feature {
@@ -203,14 +215,19 @@ public enum GenderBoxCopy {
 
     // MARK: Predict
 
-    public static let predictPrompt = "Delete the gender box and train the toy again. Will the r\u{E9}sum\u{E9} with "
-        + "\u{201C}women\u{2019}s\u{201D} still score lower?"
+    /// The audit role's bet: the gap between the two new résumés, which
+    /// neither the weights above nor the tutor's Amazon line answers (a
+    /// departure from SLATE.md's "still lower?", recorded in CONTENT.md).
+    public static var predictPrompt: String {
+        "Your fix: delete the gender box and train the toy again. Right now the r\u{E9}sum\u{E9} with "
+            + "\u{201C}women\u{2019}s\u{201D} scores \(GenderBoxContent.gap(.kept)) points lower. What will that gap do?"
+    }
 
     public static func guessTitle(_ guess: GenderBoxGuess) -> String {
         switch guess {
-        case .stillLower: return "Yes, still lower"
-        case .higher: return "No, it\u{2019}ll score higher"
-        case .tie: return "They\u{2019}ll tie"
+        case .shrink: return "Shrink"
+        case .same: return "Stay the same"
+        case .grow: return "Grow"
         }
     }
 
@@ -234,32 +251,68 @@ public enum GenderBoxCopy {
 
     // MARK: Reveal
 
-    /// "Still lower" when the deleted fit still scores "women's" lower.
+    /// What the gap between the two new résumés did once the box was
+    /// deleted, from the scores shown (29 → 35: "It grew").
     public static var resultWord: String {
-        let pair = GenderBoxContent.scores(.deleted)
-        if pair.with < pair.without { return "Still lower" }
-        return pair.with == pair.without ? "A tie" : "Higher"
+        let before = GenderBoxContent.gap(.kept), after = GenderBoxContent.gap(.deleted)
+        if after > before { return "It grew" }
+        return after < before ? "It shrank" : "It stayed the same"
     }
 
+    /// The guess this result answers (the chip the fit agrees with).
+    public static var answer: GenderBoxGuess {
+        let before = GenderBoxContent.gap(.kept), after = GenderBoxContent.gap(.deleted)
+        if after > before { return .grow }
+        return after < before ? .shrink : .same
+    }
+
+    /// "It grew: 42 vs 77, 35 points apart (it was 29). …" Then why, in
+    /// the card's own words: the word took the weight because in these
+    /// rows only women wrote it (`GenderBoxContent.womensOnlyOnWomen`).
     public static var revealResult: String {
         let pair = GenderBoxContent.scores(.deleted)
         let before = GenderBoxContent.weight(.womens, .kept) ?? 0
         let after = GenderBoxContent.weight(.womens, .deleted) ?? 0
-        return "\(resultWord): \(pair.with) vs \(pair.without). With the gender box gone, \u{201C}women\u{2019}s\u{201D} "
-            + "carried more of the weight (from \(GenderBoxContent.signed(before)) to \(GenderBoxContent.signed(after)))."
+        let push = abs(after) > abs(before) ? "pushes down harder" : "pushes down less hard"
+        var line = "\(resultWord): \(pair.with) vs \(pair.without), \(GenderBoxContent.gap(.deleted)) points apart "
+            + "(it was \(GenderBoxContent.gap(.kept))). With the gender box gone, \u{201C}women\u{2019}s\u{201D} \(push) "
+            + "(\(GenderBoxContent.signed(before)) to \(GenderBoxContent.signed(after)))."
+        if GenderBoxContent.womensOnlyOnWomen {
+            line += " In these \(GenderBoxContent.resumes.count) r\u{E9}sum\u{E9}s only women wrote it, so the word "
+                + "stood in for the box."
+        }
+        return line
     }
 
-    /// The honest nuance, kept small (both women gained; the gap grew).
+    /// The honest nuance, kept small and scoped to the two new résumés:
+    /// deleting the box raised both, but the one with "women's" less (8
+    /// points against 14), so it reads as neither "deleting helped" nor
+    /// "deleting made it worse".
     public static var nuance: String {
         let kept = GenderBoxContent.scores(.kept)
         let deleted = GenderBoxContent.scores(.deleted)
         return "Both scores rose (\(kept.with) to \(deleted.with), and \(kept.without) to \(deleted.without)), "
-            + "and the gap grew."
+            + "but the one with \u{201C}women\u{2019}s\u{201D} rose less."
     }
 
-    public static let takeaway = "It learned from past decisions. Delete one column, and other words carry the same "
-        + "pattern. Reuters reported that Amazon\u{2019}s scorer downgraded r\u{E9}sum\u{E9}s containing "
+    /// "The toy", not "It": the sentence is about the toy, never Amazon's
+    /// tool (Reuters doesn't say what that one learned to predict). "Can":
+    /// in the toy, part of the pattern moved onto the word.
+    public static let takeaway = "The toy learned from past decisions. Delete one column, and other words can carry "
+        + "the same pattern. Reuters reported that Amazon\u{2019}s scorer downgraded r\u{E9}sum\u{E9}s containing "
         + "\u{201C}women\u{2019}s\u{201D} (2018)."
+
+    /// The reveal's own "women's" row (decoration; the result says the same
+    /// numbers): "−1.21 → −1.53".
+    public static var revealWeightChange: String {
+        let before = GenderBoxContent.weight(.womens, .kept) ?? 0
+        let after = GenderBoxContent.weight(.womens, .deleted) ?? 0
+        return "\(GenderBoxContent.signed(before)) \u{2192} \(GenderBoxContent.signed(after))"
+    }
+
+    /// "35 points apart" (the two new résumés, as the gender box `box`
+    /// leaves them).
+    public static func apart(_ box: GenderBox) -> String { "\(GenderBoxContent.gap(box)) points apart" }
 
     // MARK: VoiceOver
 
@@ -270,23 +323,21 @@ public enum GenderBoxCopy {
             GenderBoxContent.weight(feature, box).map { "\(featureName(feature)) \(GenderBoxContent.spokenSigned($0))" }
         }
         let pair = GenderBoxContent.scores(box)
-        var line = "Gender box \(boxTitle(box)). Weights: \(weights.joined(separator: ", ")). "
-            + "Women\u{2019}s chess club captain: \(pair.with). Chess club captain: \(pair.without)."
-        if box == .deleted { line += " \(resultWord)." }
-        return line
+        return "Gender box \(boxTitle(box)). Weights: \(weights.joined(separator: ", ")). "
+            + "Women\u{2019}s chess club captain: \(pair.with). Chess club captain: \(pair.without). \(apart(box))."
     }
 
     /// The card's state in one sentence or two, read after its title.
     public static func accessibilitySummary(box: GenderBox, asksForGuess: Bool) -> String {
         let pair = GenderBoxContent.scores(box)
         var line = "Gender box \(boxTitle(box)). The new r\u{E9}sum\u{E9} with women\u{2019}s scores \(pair.with); "
-            + "the one without scores \(pair.without)."
+            + "the one without scores \(pair.without), \(apart(box))."
         if box == .deleted, let now = GenderBoxContent.weight(.womens, .deleted),
            let before = GenderBoxContent.weight(.womens, .kept) {
             line += " Women\u{2019}s now weighs \(GenderBoxContent.spokenSigned(now)); "
                 + "it was \(GenderBoxContent.spokenSigned(before))."
         }
-        if asksForGuess { line += " Guess what deleting the gender box does." }
+        if asksForGuess { line += " Guess what deleting the gender box does to that gap." }
         return line
     }
 
@@ -296,16 +347,16 @@ public enum GenderBoxCopy {
     public static var everyLine: [String] {
         var lines: [String] = [
             title, compactLine, hook, pastHeading, pastSummary, pastHeadingSpoken, genderColumn, clubsColumn,
-            hiredColumn, man, woman, hired, notHired, noClubs, showAll, hideAll, showAllHelp, learnedHeading, learnedIntro, deletedTag,
+            hiredColumn, man, woman, hired, notHired, noClubs, showAll, hideAll, showAllHelp, learnedHeading, deletedTag,
             axisDown, axisUp, testHeading, testIntro, testWithTitle, testWithoutTitle, scoreCaption, predictPrompt,
-            controlName, controlLabel, resultWord, revealResult, nuance, takeaway,
+            controlName, controlLabel, resultWord, revealResult, nuance, takeaway, revealWeightChange,
         ]
         lines += labels.map(\.text)
         lines += GenderBoxClub.allCases.map(club)
         lines += GenderBoxGuess.allCases.map(guessTitle)
         lines += [GenderBoxEffect.up, .upALittle, .down, .downALittle].flatMap { [effect($0), effectSpoken($0)] }
         for box in GenderBox.allCases {
-            lines += [boxTitle(box), boxAccessibility(box), boxHelp(box), announcement(box),
+            lines += [boxTitle(box), boxAccessibility(box), boxHelp(box), announcement(box), learnedIntro(box), apart(box),
                       accessibilitySummary(box: box, asksForGuess: true),
                       accessibilitySummary(box: box, asksForGuess: false)]
             lines += GenderBoxContent.resumes.flatMap { [resumeSpoken($0, box), rowTitle($0), clubs($0.profile)] }

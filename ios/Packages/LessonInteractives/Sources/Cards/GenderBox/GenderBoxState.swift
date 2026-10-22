@@ -22,11 +22,13 @@ public final class GenderBoxState {
     public var showsAllResumes = false
 
     /// - Parameter debug: a DEBUG `-InteractiveState` (shots and UI tests
-    ///   only). `.explored` and `.revealed` both open with the box deleted
-    ///   and the reveal shown, because deleting it is what reveals.
+    ///   only). `.predicted` and later lock "Shrink" (the misconception's
+    ///   answer, so the shots show the surprise). `.explored` and
+    ///   `.revealed` both open with the box deleted and the reveal shown,
+    ///   because deleting it is what reveals.
     public init(spoiled: Bool, debug: InteractiveDebugState? = InteractiveLaunchOptions.current.state) {
         var machine = PredictReveal.debugStarting(debug, choices: GenderBoxGuess.allCases, showMeAfter: 1,
-                                                  spoiled: spoiled, guess: .tie)
+                                                  spoiled: spoiled, guess: .shrink)
         if machine.phase == .exploring || machine.phase == .revealed {
             box = .deleted
             machine.reveal()
@@ -85,7 +87,7 @@ public final class GenderBoxState {
     }
 
     /// `-GenderBoxAutoplayAt <seconds since 1970>`: at that moment the card
-    /// locks "They'll tie", and 1.6 s later deletes the gender box (the
+    /// locks "Shrink", and 1.6 s later deletes the gender box (the
     /// reveal clip: simctl can't tap, so a clock both sides share times it).
     nonisolated static func debugAutoplayAt(_ arguments: [String]) -> Date? {
         guard let index = arguments.firstIndex(of: "-GenderBoxAutoplayAt"), arguments.indices.contains(index + 1),
@@ -99,7 +101,7 @@ public final class GenderBoxState {
         let wait = start.timeIntervalSinceNow
         if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
         guard !Task.isCancelled else { return }
-        lock(.tie)
+        lock(.shrink)
         try? await Task.sleep(nanoseconds: 1_600_000_000)
         guard !Task.isCancelled else { return }
         if let line = set(.deleted) { InteractiveAccessibility.announce(line) }

@@ -24,8 +24,14 @@ struct GenderBoxContentTests {
         #expect(GenderBoxContent.resumes.map(\.id) == Array(1...12))
         #expect(GenderBoxContent.men.count == 8 && GenderBoxContent.menHired == 6)
         #expect(GenderBoxContent.women.count == 4 && GenderBoxContent.womenHired == 1)
-        // Only women's résumés say "women's" (a toy history, not a quirk).
+        // Only women's résumés say "women's" (a toy history, not a quirk):
+        // the reveal's "only women wrote it" rests on this.
         #expect(GenderBoxContent.resumes.filter { $0.profile.womens }.allSatisfy { $0.profile.woman })
+        #expect(GenderBoxContent.resumes.filter { $0.profile.womens }.map(\.id) == [9, 11])
+        #expect(GenderBoxContent.womensOnlyOnWomen)
+        // Both of them were not hired: the separation that makes the ridge
+        // necessary (CONTENT.md §2).
+        #expect(GenderBoxContent.resumes.filter { $0.profile.womens }.allSatisfy { !$0.hired })
     }
 
     @Test("Every weight shown, re-fitted from the rows (two decimals)")
@@ -44,11 +50,13 @@ struct GenderBoxContentTests {
         let deleted = GenderBoxContent.scores(.deleted)
         #expect(kept.with == 34 && kept.without == 63)
         #expect(deleted.with == 42 && deleted.without == 77)
-        // "Both scores rose, and the gap grew" (29 → 35 points).
+        // The prediction's gap (29) and the reveal's (35): it grew.
         #expect(GenderBoxContent.gap(.kept) == 29)
         #expect(GenderBoxContent.gap(.deleted) == 35)
         #expect(GenderBoxContent.gap(.deleted) > GenderBoxContent.gap(.kept))
+        // "Both scores rose, but the one with women's rose less" (8 against 14).
         #expect(deleted.with > kept.with && deleted.without > kept.without)
+        #expect(deleted.with - kept.with == 8 && deleted.without - kept.without == 14)
         // The two test résumés differ in "women's" only.
         #expect(GenderBoxContent.testWith.clubs == [.womensChessCaptain, .coding])
         #expect(GenderBoxContent.testWithout.clubs == [.chessCaptain, .coding])
@@ -68,6 +76,11 @@ struct GenderBoxContentTests {
         #expect(GenderBoxContent.barMaximum == 1.6)
         #expect(GenderBoxContent.barFraction(-1.53) > GenderBoxContent.barFraction(-1.21))
         #expect(GenderBoxContent.barFraction(-1.53) <= 1)
+        // The ticks where a weight was: "women's" and "coding" changed; the
+        // gender box has no weight to tick, and "captain" kept its +0.33.
+        let ticked = GenderBoxFeature.allCases.filter { GenderBoxCopy.earlier($0, .deleted) != nil }
+        #expect(ticked == [.womens, .coding])
+        #expect(GenderBoxFeature.allCases.allSatisfy { GenderBoxCopy.earlier($0, .kept) == nil })
     }
 
     @Test("The club lines carry the toy's words")
@@ -107,12 +120,21 @@ struct GenderBoxCopyTests {
 
     @Test("The numbers in the words are the fit's")
     func numbersInWords() {
-        #expect(GenderBoxCopy.hook.hasSuffix("12 made-up past r\u{E9}sum\u{E9}s and who got hired: 6 of 8 men, 1 of 4 women."))
+        #expect(GenderBoxCopy.hook.contains("12 made-up past r\u{E9}sum\u{E9}s and who got hired: 6 of 8 men, 1 of 4 women."))
+        #expect(GenderBoxCopy.hook.hasSuffix(" Those old records have a man/woman gender box."))
         #expect(GenderBoxCopy.pastSummary == "8 men, 6 hired. 4 women, 1 hired.")
-        #expect(GenderBoxCopy.resultWord == "Still lower")
-        #expect(GenderBoxCopy.revealResult == "Still lower: 42 vs 77. With the gender box gone, \u{201C}women\u{2019}s\u{201D} "
-            + "carried more of the weight (from \u{2212}1.21 to \u{2212}1.53).")
-        #expect(GenderBoxCopy.nuance == "Both scores rose (34 to 42, and 63 to 77), and the gap grew.")
+        // The bet is on the gap, which the card states before the guess.
+        #expect(GenderBoxCopy.predictPrompt == "Your fix: delete the gender box and train the toy again. Right now the "
+            + "r\u{E9}sum\u{E9} with \u{201C}women\u{2019}s\u{201D} scores 29 points lower. What will that gap do?")
+        #expect(GenderBoxCopy.resultWord == "It grew")
+        #expect(GenderBoxCopy.answer == .grow)
+        #expect(GenderBoxCopy.revealResult == "It grew: 42 vs 77, 35 points apart (it was 29). With the gender box gone, "
+            + "\u{201C}women\u{2019}s\u{201D} pushes down harder (\u{2212}1.21 to \u{2212}1.53). In these 12 "
+            + "r\u{E9}sum\u{E9}s only women wrote it, so the word stood in for the box.")
+        #expect(GenderBoxCopy.nuance == "Both scores rose (34 to 42, and 63 to 77), but the one with "
+            + "\u{201C}women\u{2019}s\u{201D} rose less.")
+        #expect(GenderBoxCopy.revealWeightChange == "\u{2212}1.21 \u{2192} \u{2212}1.53")
+        #expect(GenderBoxCopy.apart(.kept) == "29 points apart" && GenderBoxCopy.apart(.deleted) == "35 points apart")
         #expect(GenderBoxCopy.takeaway.contains("Reuters reported that Amazon\u{2019}s scorer downgraded"))
         #expect(GenderBoxCopy.takeaway.hasSuffix("(2018)."))
         #expect(GenderBoxCopy.weightText(.womens, .deleted) == "\u{2212}1.53, pushes down (was \u{2212}1.21)")
@@ -120,6 +142,51 @@ struct GenderBoxCopyTests {
         #expect(GenderBoxCopy.weightText(.coding, .deleted) == "+1.01, pushes up (was +1.12)")
         #expect(GenderBoxCopy.weightText(.woman, .deleted) == "deleted")
         #expect(GenderBoxCopy.weightText(.woman, .kept) == "\u{2212}1.04, pushes down")
+    }
+
+    @Test("Every number the reveal and the prediction show is the fit's, and none is stray")
+    func everyDisplayedNumber() {
+        let kept = GenderBoxContent.scores(.kept), deleted = GenderBoxContent.scores(.deleted)
+        let fitted: Set<String> = [kept.with, kept.without, deleted.with, deleted.without,
+                                   GenderBoxContent.gap(.kept), GenderBoxContent.gap(.deleted),
+                                   GenderBoxContent.resumes.count].reduce(into: []) { $0.insert(String($1)) }
+        let weights = [GenderBoxContent.weight(.womens, .kept), GenderBoxContent.weight(.womens, .deleted)]
+            .compactMap { $0 }.map { GenderBoxContent.signed($0).replacingOccurrences(of: "\u{2212}", with: "") }
+        for line in [GenderBoxCopy.predictPrompt, GenderBoxCopy.revealResult, GenderBoxCopy.nuance] {
+            // Runs of digits and points ("29", "1.21"), a sentence's own full stop trimmed.
+            let numbers = line.split { !$0.isNumber && $0 != "." }.map { String($0) }
+                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }.filter { !$0.isEmpty }
+            #expect(!numbers.isEmpty)
+            for number in numbers {
+                #expect(fitted.contains(number) || weights.contains(number), "\(number) in \(line)")
+            }
+        }
+        #expect(GenderBoxCopy.revealResult.contains("29") && GenderBoxCopy.revealResult.contains("35"))
+    }
+
+    @Test("Scoped words: the gap is the two new résumés', the takeaway is hedged and about the toy")
+    func scope() {
+        // The nuance names the two new résumés and never an unscoped "the gap".
+        #expect(GenderBoxCopy.nuance.contains("the one with \u{201C}women\u{2019}s\u{201D} rose less"))
+        #expect(!GenderBoxCopy.nuance.contains("the gap"))
+        // The prediction defines "that gap" as the two new résumés' points apart.
+        #expect(GenderBoxCopy.predictPrompt.contains("the r\u{E9}sum\u{E9} with \u{201C}women\u{2019}s\u{201D} scores 29 points lower"))
+        #expect(GenderBoxCopy.takeaway.hasPrefix("The toy learned from past decisions."))
+        #expect(GenderBoxCopy.takeaway.contains("other words can carry the same pattern"))
+        // The guesses: the misconception's answer first, and the fit's is one of them.
+        #expect(GenderBoxGuess.allCases.map(GenderBoxCopy.guessTitle) == ["Shrink", "Stay the same", "Grow"])
+    }
+
+    @Test("What it reads follows the gender box")
+    func learnedIntro() {
+        #expect(GenderBoxCopy.learnedIntro(.kept)
+            == "It reads the gender box and three words. Each weight pushes a score up or down.")
+        let deleted = GenderBoxCopy.learnedIntro(.deleted)
+        #expect(deleted == "Now it reads only the three words. Each weight pushes a score up or down.")
+        #expect(!deleted.contains("gender box"))
+        // The weights' unit is on the canvas, under them.
+        #expect(GenderBoxCopy.arithmeticLabel.text.contains("Weights aren\u{2019}t points"))
+        #expect(GenderBoxCopy.arithmeticLabel.text.contains("a score out of 100"))
     }
 
     @Test("A summary for every state, saying every score it shows")
@@ -138,7 +205,10 @@ struct GenderBoxCopyTests {
             }
         }
         #expect(GenderBoxCopy.accessibilitySummary(box: .deleted, asksForGuess: false).contains("minus 1.53"))
-        #expect(GenderBoxCopy.announcement(.deleted).hasSuffix("Still lower."))
+        #expect(GenderBoxCopy.accessibilitySummary(box: .kept, asksForGuess: true).hasSuffix(
+            "63, 29 points apart. Guess what deleting the gender box does to that gap."))
+        #expect(GenderBoxCopy.announcement(.deleted).hasSuffix("Chess club captain: 77. 35 points apart."))
+        #expect(GenderBoxCopy.announcement(.kept).hasSuffix("Chess club captain: 63. 29 points apart."))
     }
 
     @Test("Weights are read as signed numbers with words, never colour")
@@ -183,8 +253,8 @@ struct GenderBoxStateTests {
         #expect(state.asksForGuess)
         #expect(state.set(.deleted) == nil, "no move before a guess")
         #expect(state.box == .kept)
-        #expect(state.lock(.tie))
-        #expect(!state.lock(.stillLower), "a guess can't be changed")
+        #expect(state.lock(.same))
+        #expect(!state.lock(.grow), "a guess can't be changed")
         #expect(state.machine.canExplore)
         let spoiled = GenderBoxState(spoiled: true, debug: nil)
         #expect(spoiled.machine.canExplore)
@@ -201,7 +271,7 @@ struct GenderBoxStateTests {
             #expect(state.box == .deleted)
             #expect(state.revealLines.guess == GenderBoxCopy.guessTitle(guess))
             #expect(state.revealLines.spoken.hasPrefix("You guessed \(GenderBoxCopy.guessTitle(guess))."))
-            #expect(said?.contains("Still lower: 42 vs 77") == true)
+            #expect(said?.contains("It grew: 42 vs 77, 35 points apart (it was 29).") == true)
             #expect(said?.hasSuffix(GenderBoxCopy.nuance) == true)
             #expect(state.set(.kept) == GenderBoxCopy.announcement(.kept))
             #expect(state.machine.isRevealed)
@@ -218,7 +288,7 @@ struct GenderBoxStateTests {
     func debugStates() {
         #expect(GenderBoxState(spoiled: false, debug: .hook).asksForGuess)
         let predicted = GenderBoxState(spoiled: false, debug: .predicted)
-        #expect(predicted.machine.guess == .tie && predicted.box == .kept && !predicted.machine.isRevealed)
+        #expect(predicted.machine.guess == .shrink && predicted.box == .kept && !predicted.machine.isRevealed)
         for state in [InteractiveDebugState.explored, .revealed] {
             let opened = GenderBoxState(spoiled: false, debug: state)
             #expect(opened.box == .deleted && opened.machine.isRevealed, "\(state)")
@@ -235,7 +305,7 @@ struct GenderBoxStateTests {
         #expect(GenderBox.after(.previous) == .kept)
         let state = GenderBoxState(spoiled: false, debug: nil)
         #expect(state.set(GenderBox.after(.next)) == nil, "no arrow before a guess")
-        state.lock(.higher)
+        state.lock(.grow)
         #expect(state.set(GenderBox.after(.next))?.hasPrefix("You guessed") == true)
         #expect(state.set(GenderBox.after(.next)) == nil, "already deleted: nothing to say")
         #expect(state.set(GenderBox.after(.previous)) == GenderBoxCopy.announcement(.kept))
@@ -245,7 +315,7 @@ struct GenderBoxStateTests {
     func summary() {
         let state = GenderBoxState(spoiled: false, debug: nil)
         #expect(state.summary == GenderBoxCopy.accessibilitySummary(box: .kept, asksForGuess: true))
-        state.lock(.stillLower)
+        state.lock(.shrink)
         state.set(.deleted)
         #expect(state.summary == GenderBoxCopy.accessibilitySummary(box: .deleted, asksForGuess: false))
     }

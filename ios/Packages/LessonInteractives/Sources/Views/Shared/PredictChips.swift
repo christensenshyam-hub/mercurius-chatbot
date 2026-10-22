@@ -103,6 +103,9 @@ public struct RevealBox: View {
             Text(label.uppercased())
                 .interactiveText(.eyebrow)
                 .foregroundStyle(theme.accentText)
+                // Wraps at AX5 on an SE everywhere: the device already did,
+                // an ImageRenderer render truncated it ("YOU GUESS…").
+                .fixedSize(horizontal: false, vertical: true)
             Text(text)
                 .interactiveText(.callout)
                 .foregroundStyle(theme.ink)
