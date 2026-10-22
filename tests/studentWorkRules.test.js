@@ -176,7 +176,7 @@ describe('STUDENT_WORK_RULES (shared by both flag states)', () => {
     assert.ok(hw.includes('if more than one step of theirs is left, do the next one and ask for the one after; if only the last step is left, use the last-step moves below'));
     assert.ok(hw.includes('- The last step. No rung and no reply ever does it or writes its result, not even as "28 ÷ 4 = 7", "4 × 7 = 28", "you get 7" or "so x = …".'));
     assert.ok(hw.includes('name the operation and ask for the bare arithmetic ("Divide both sides by 4. What\'s 28 divided by 4?"'));
-    assert.ok(hw.includes('then make it smaller ("4 times what makes 28?"); then "Pick a number and we\'ll check it together."; then another worked example with a new right side.'));
+    assert.ok(hw.includes('then make it smaller ("4 times what makes 28?"); then "Guess a number and we\'ll check it together: what\'s your guess?"; then another worked example with a new right side.'));
     assert.ok(hw.includes('make a different move each time and never repeat your previous reply'));
     assert.ok(hw.includes('Confirm and advance.') && hw.includes('ask about the NEXT step'));
     assert.ok(hw.includes("Otherwise never ask what their step gives or what's left on each side"));

@@ -1200,7 +1200,7 @@ const HW_GOOD = {
     "Here is one worked all the way:\n\n2x + 9 = 27\n2x = 18 (subtract 9 from both sides)\nx = 9 (divide both sides by 2)\n\nNow try yours the same way, from 2x = 12. What's the next step?",
     "Divide both sides by 2.\n\nWhat's 12 divided by 2?",
     '2 times what number makes 12?',
-    "Pick a number and we'll check it together.\n\nWhich number do you want to try?",
+    "Guess a number and we'll check it together: what's your guess?",
   ],
   'hw-one-step': [
     'Look at the + 8 next to the x.\n\nWhat could you do to both sides to get x by itself?',
