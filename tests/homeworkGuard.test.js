@@ -350,6 +350,14 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     }
   });
 
+  test('stripPreamble drops a first sentence about whose work it is when the move follows (gate 2026-10-22, flag off)', () => {
+    assert.equal(g.stripPreamble("That's your job — and you're closer than you think.\n\nWhat did he expect to happen?"), 'What did he expect to happen?');
+    assert.equal(g.stripPreamble('Running it on their numbers would hand you the answer.\n\nWhat is the first move?'), 'What is the first move?');
+    for (const keep of ["I won't solve it for you.", 'What happens if you get the 3x by itself first?', 'Check it: if 3x = 25, then 3x + 5 = 30, not 20.\n\nWhat undoes the + 5?']) {
+      assert.equal(g.stripPreamble(keep), keep);
+    }
+  });
+
   test('oneQuestion keeps only the closing question mark', () => {
     assert.equal(g.oneQuestion('How many moles are in 90 g of water?\n90 ÷ 18 = 5 mol.\n\nNow yours: how many moles is your 36 g?'), 'How many moles are in 90 g of water.\n90 ÷ 18 = 5 mol.\n\nNow yours: how many moles is your 36 g?');
     assert.equal(g.oneQuestion('What undoes the 4?'), 'What undoes the 4?');

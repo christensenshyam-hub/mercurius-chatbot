@@ -2072,8 +2072,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
     const unrepeat = (text) => homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(text, previousReply && previousReply.content, guardProblems[0] && guardProblems[0].variable));
     const guardReply = async (draft) => {
-      if (writingTurn) return homeworkGuard.stripMenu(draft);
-      const text = unrepeat(draft);
+      if (writingTurn) return homeworkGuard.stripMenu(homeworkGuard.stripPreamble(draft));
+      const text = unrepeat(homeworkGuard.stripPreamble(draft));
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
@@ -2103,7 +2103,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             }),
           },
         });
-        const retryText = unrepeat(reflowText(firstTextOf(retry), replyLimit));
+        const retryText = unrepeat(homeworkGuard.stripPreamble(reflowText(firstTextOf(retry), replyLimit)));
         if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText)) {
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }
