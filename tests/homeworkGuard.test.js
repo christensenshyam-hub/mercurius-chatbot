@@ -38,6 +38,10 @@ describe('linearEquations', () => {
       ['2(2w - 3) + 2w = 54', '10', false], ['6w - 6 = 54', '10', false], ['w = 10', '10', true],
     ]);
     assert.deepEqual(eqs('**4x − 3 = 25**'), [['4x - 3 = 25', '7', false]]);
+    // A fraction coefficient (red-team run on b0940d8).
+    assert.deepEqual(eqs('solve x/3 + 2 = 7'), [['x/3 + 2 = 7', '15', false]]);
+    assert.equal(g.findLeak('x/3 + 4 = 9\nSubtract 4: x/3 = 5\nMultiply by 3: x = 15', problemsOf('solve x/3 + 2 = 7')).match, 'x/3 + 4 = 9');
+    assert.equal(g.wordProblemNumbers([{ role: 'user', content: 'solve x/3 + 2 = 7' }]), null);
   });
 
   test('skips what it can\'t decide exactly: quadratics, two variables, units, long decimals', () => {
