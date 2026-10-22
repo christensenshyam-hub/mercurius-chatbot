@@ -166,12 +166,16 @@ struct BasicsCopyTests {
 
     @Test("No \"just\", \"simply\", \"easy\" or urgency in what Basics screens say")
     func plainWords() {
-        let lines = [BasicsCopy.back, BasicsCopy.backAccessibility, BasicsCopy.introLine, BasicsCopy.start,
+        var lines = [BasicsCopy.back, BasicsCopy.backAccessibility, BasicsCopy.introLine, BasicsCopy.start,
                      BasicsCopy.placeholder, BasicsCopy.chipHint, BasicsCopy.headline, BasicsCopy.tryThisToday,
                      BasicsCopy.copy, BasicsCopy.copied, BasicsCopy.next("Be specific"), BasicsCopy.backToLessons,
                      BasicsCopy.enough, BasicsCopy.placeSaved]
+        #if os(macOS)
+        lines.append(NightReplyCopy.checkOpenBasics)
+        #endif
         for line in lines {
-            for word in ["just ", "simply", "easy", "quickly", "hurry", "!"] {
+            // No mode names or game words either (review 2026-10-22).
+            for word in ["just ", "simply", "easy", "quickly", "hurry", "!", "socratic", "streak"] {
                 #expect(!line.lowercased().contains(word), "\"\(word)\" in: \(line)")
             }
         }

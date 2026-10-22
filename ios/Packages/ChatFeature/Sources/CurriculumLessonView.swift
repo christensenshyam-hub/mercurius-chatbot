@@ -245,6 +245,7 @@ public struct CurriculumLessonView: View {
                 // Basics: Copy on Merc's replies (its notes and emails are
                 // meant to leave the app).
                 .environment(\.lessonOffersCopy, basics != nil)
+                .environment(\.isBasicsLesson, basics != nil)
 
                 // Basics: the reply's practice line as a chip that fills the
                 // box (never sends), so the learner can change the words.
@@ -307,7 +308,8 @@ public struct CurriculumLessonView: View {
                 // The Mac's card recaps the objective and Merc's [KEY] ideas.
                 .environment(\.nightLessonRecap,
                              NightLessonRecap(objective: objective,
-                                              keyIdeas: NightKeyIdeas.collect(from: model.messages)))
+                                              keyIdeas: NightKeyIdeas.collect(from: model.messages,
+                                                                              standaloneOnly: basics != nil)))
                 #endif
                 .accessibilityAddTraits(.isModal)
                 .transition(.opacity)

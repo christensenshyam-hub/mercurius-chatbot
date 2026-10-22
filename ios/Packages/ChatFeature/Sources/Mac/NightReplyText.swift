@@ -1104,6 +1104,8 @@ enum NightReplyCopy {
     // The check. The strip ("Part 3 · Check") and the part's mark already
     // name it, so the card's eyebrow says what to do, not "Check" again.
     static let checkOpen = "Your turn first"
+    /// Basics says what to do in plain words (review 2026-10-22).
+    static let checkOpenBasics = "Pick one"
     static let checkAnswered = "Answered"
     static let checkInert = "Check"
     static let lockIn = "Lock it in"

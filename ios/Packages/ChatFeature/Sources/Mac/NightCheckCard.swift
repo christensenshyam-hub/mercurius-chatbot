@@ -34,6 +34,7 @@ struct NightCheckCard: View {
     @NightSettings private var night
     @Environment(\.nightCheckRouter) private var router
     @Environment(\.nightComposerFocused) private var composerFocused
+    @Environment(\.isBasicsLesson) private var isBasicsLesson
 
     /// The lesson's keys come here: this is the waiting check and the
     /// composer hasn't the keyboard.
@@ -49,7 +50,8 @@ struct NightCheckCard: View {
 
     private var eyebrow: String {
         if graded { return NightReplyCopy.checkAnswered }
-        return isEnabled ? NightReplyCopy.checkOpen : NightReplyCopy.checkInert
+        guard isEnabled else { return NightReplyCopy.checkInert }
+        return isBasicsLesson ? NightReplyCopy.checkOpenBasics : NightReplyCopy.checkOpen
     }
 
     var body: some View {

@@ -689,7 +689,7 @@ struct NightReplyCopyTests {
         lines += [NightReplyCopy.stripAccessibilityHint, NightReplyCopy.moreMayFollowHelp,
                   NightReplyCopy.example, NightReplyCopy.keyIdea, NightReplyCopy.yourTurn,
                   NightReplyCopy.tokenLineAccessibility(.init(word: "unbelievable", pieces: ["un", "believ", "able"])),
-                  NightReplyCopy.checkOpen, NightReplyCopy.checkAnswered, NightReplyCopy.checkInert,
+                  NightReplyCopy.checkOpen, NightReplyCopy.checkOpenBasics, NightReplyCopy.checkAnswered, NightReplyCopy.checkInert,
                   NightReplyCopy.lockIn, NightReplyCopy.lockInAccessibility(letter: "B"), NightReplyCopy.lockInHelp,
                   NightReplyCopy.checkCardHelp, NightReplyCopy.checkPlaceholder, NightReplyCopy.sourceHelp,
                   NightReplyCopy.sourceInertHelp, NightReplyCopy.merc, NightReplyCopy.aiTutor,

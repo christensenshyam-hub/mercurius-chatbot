@@ -197,7 +197,10 @@ enum NightLessonCode {
 
 /// The `[KEY]` ideas Merc gave in a lesson's thread, in order, each once.
 enum NightKeyIdeas {
-    static func collect(from messages: [ChatMessage]) -> [String] {
+    /// `standaloneOnly` (Basics): leave out an idea that points back into
+    /// the chat ("…in plain words, just like this one."), which reads as
+    /// nonsense on the summary card (review 2026-10-22).
+    static func collect(from messages: [ChatMessage], standaloneOnly: Bool = false) -> [String] {
         var seen = Set<String>()
         var ideas: [String] = []
         for message in messages where message.role == .assistant {
@@ -206,11 +209,19 @@ enum NightKeyIdeas {
                 // Without its sources: a raw tag never reaches the recap.
                 let idea = NightSourceParser.strip(text, isStreaming: false).text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !idea.isEmpty, seen.insert(idea).inserted else { continue }
+                guard !idea.isEmpty, !(standaloneOnly && pointsBack(idea)),
+                      seen.insert(idea).inserted else { continue }
                 ideas.append(idea)
             }
         }
         return ideas
+    }
+
+    /// The idea leans on the chat around it: "this one", "like this",
+    /// "here", "above", "below".
+    static func pointsBack(_ idea: String) -> Bool {
+        idea.range(of: #"\b(this one|these ones|like this|like that|that one|here|above|below)\b"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
     }
 }
 

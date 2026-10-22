@@ -132,7 +132,9 @@ struct PracticeChip: View {
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
-                Image(systemName: "text.cursor")
+                // A pencil: "text.cursor" drew as "A⌶", which read as
+                // 'AI "Are you a real person?"' (review 2026-10-22).
+                Image(systemName: "pencil")
                     .font(BrandFont.bodyEmphasized)
                     .foregroundStyle(BrandColor.accentText)
                     .accessibilityHidden(true)
@@ -170,6 +172,10 @@ private struct LessonOffersCopyKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct IsBasicsLessonKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     /// Merc's replies offer Copy in their press-and-hold menu (Basics: its
     /// lessons write notes and emails meant to leave the app, and b4_l1
@@ -177,6 +183,13 @@ extension EnvironmentValues {
     var lessonOffersCopy: Bool {
         get { self[LessonOffersCopyKey.self] }
         set { self[LessonOffersCopyKey.self] = newValue }
+    }
+
+    /// The view is inside a Basics lesson (plain wording on shared cards,
+    /// such as the Mac check's "Pick one").
+    var isBasicsLesson: Bool {
+        get { self[IsBasicsLessonKey.self] }
+        set { self[IsBasicsLessonKey.self] = newValue }
     }
 }
 
