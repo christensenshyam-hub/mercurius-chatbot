@@ -2,8 +2,10 @@ import SwiftUI
 import DesignSystem
 
 /// The prediction: a question and two to four chips. One tap locks a guess
-/// in (it can't be changed); the picked chip keeps its check and the others
-/// dim, still readable. In spoiled mode a card doesn't draw this at all.
+/// in (it can't be changed). Once locked the chips are no longer controls
+/// (`InteractiveChip`'s `isLocked`): the picked chip keeps its check and
+/// accent fill, the others step back to reading text, all at 4.5:1 or
+/// better. In spoiled mode a card doesn't draw this at all.
 ///
 /// - iPhone: chips side by side when they fit, else one under another;
 ///   44 pt or taller; a selection haptic on the lock.
@@ -52,7 +54,8 @@ public struct PredictChips<Choice: Hashable & Sendable>: View {
     @ViewBuilder private var chipViews: some View {
         ForEach(Array(machine.choices.enumerated()), id: \.offset) { index, choice in
             let picked = machine.guess == choice
-            InteractiveChip(title(choice), isSelected: picked, isEnabled: machine.canLock, isFirst: index == 0,
+            InteractiveChip(title(choice), isSelected: picked, isEnabled: machine.canLock,
+                            isLocked: machine.guess != nil, isFirst: index == 0,
                             accessibilityLabel: title(choice),
                             accessibilityHint: InteractiveShellCopy.lockHint) {
                 onLock(choice)

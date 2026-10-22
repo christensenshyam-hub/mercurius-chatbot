@@ -107,4 +107,18 @@ struct LayoutTests {
                                            typeSize: .large)
         #expect(!large.usesTables && !large.lit)
     }
+
+    @Test("A locked-in chip reads at full strength: white on the pick, ink2 on the others, never dimmed")
+    func lockedChipInk() {
+        // Locked (a guess is in): the pick keeps white on `prominent`, the
+        // others step back to reading text, not to `ink3` (the theme holds
+        // each pair at 4.5:1 or better; a disabled button's dimming doesn't
+        // apply, since a locked chip is no longer a button).
+        #expect(InteractiveChip.ink(isSelected: true, isEnabled: false, isLocked: true) == .white)
+        #expect(InteractiveChip.ink(isSelected: false, isEnabled: false, isLocked: true) == .ink2)
+        // Not locked: the ordinary states.
+        #expect(InteractiveChip.ink(isSelected: false, isEnabled: true, isLocked: false) == .ink)
+        #expect(InteractiveChip.ink(isSelected: false, isEnabled: false, isLocked: false) == .ink3)
+        #expect(InteractiveChip.ink(isSelected: true, isEnabled: true, isLocked: false) == .white)
+    }
 }

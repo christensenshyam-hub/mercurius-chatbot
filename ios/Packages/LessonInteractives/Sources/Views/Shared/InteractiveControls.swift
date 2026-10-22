@@ -142,11 +142,28 @@ extension View {
 /// One choice: a prediction, a rule, an option. On the iPhone a rounded
 /// button at least 44 pt tall; on the Mac a 36 pt capsule. `prominent` with
 /// white words and a check once picked (the check, not colour alone, says
-/// it is picked); dimmed (still readable) when it can no longer be picked.
+/// it is picked); dimmed (still readable) when it can't be picked yet.
+///
+/// `isLocked`: the choice is settled (a locked-in guess), so the chip is no
+/// longer a control. It draws as itself, not as a disabled button (on the
+/// iPhone a disabled button dims its words below 4.5:1 just when the
+/// student compares their guess with the reveal): the pick keeps white on
+/// `prominent`, the others read in `ink2` on `raised`, and VoiceOver hears
+/// a choice ("selected" on the pick), not a dimmed button.
 public struct InteractiveChip: View {
+    /// A chip's words' colour role (pure, so a test holds the rule).
+    public enum Ink: Equatable, Sendable { case white, ink, ink2, ink3 }
+
+    public static func ink(isSelected: Bool, isEnabled: Bool, isLocked: Bool) -> Ink {
+        if isSelected { return .white }
+        if isLocked { return .ink2 }
+        return isEnabled ? .ink : .ink3
+    }
+
     private let title: String
     private let isSelected: Bool
     private let isEnabled: Bool
+    private let isLocked: Bool
     private let isFirst: Bool
     private let accessibilityLabel: String?
     private let accessibilityHint: String?
@@ -155,12 +172,13 @@ public struct InteractiveChip: View {
     @Environment(\.interactiveTheme) private var theme
     @State private var hovering = false
 
-    public init(_ title: String, isSelected: Bool, isEnabled: Bool = true, isFirst: Bool = false,
-                accessibilityLabel: String? = nil, accessibilityHint: String? = nil,
+    public init(_ title: String, isSelected: Bool, isEnabled: Bool = true, isLocked: Bool = false,
+                isFirst: Bool = false, accessibilityLabel: String? = nil, accessibilityHint: String? = nil,
                 onArrow: ((InteractiveArrow) -> Void)? = nil, action: @escaping () -> Void) {
         self.title = title
         self.isSelected = isSelected
-        self.isEnabled = isEnabled
+        self.isEnabled = isEnabled && !isLocked
+        self.isLocked = isLocked
         self.isFirst = isFirst
         self.accessibilityLabel = accessibilityLabel
         self.accessibilityHint = accessibilityHint
@@ -169,11 +187,47 @@ public struct InteractiveChip: View {
     }
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: theme.platform == .phone ? 22 : 18, style: .continuous)
+        if isLocked {
+            face
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityLabel ?? title)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            face
+                .onHover { hovering = $0 }
+                .interactiveControl(shape: shape, isFirst: isFirst, isEnabled: isEnabled, onArrow: onArrow,
+                                    action: action)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityLabel ?? title)
+                .accessibilityHint(isEnabled ? (accessibilityHint ?? "") : "")
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                // The off state on the element VoiceOver and XCUITest see
+                // ("dimmed"), not only on the button inside it. Nothing
+                // fades: the colours draw the off state
+                // (`InteractiveSteadyButtonStyle`). A locked chip (above) is
+                // no longer a control, so it isn't "dimmed" either.
+                .disabled(!isEnabled)
+        }
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: theme.platform == .phone ? 22 : 18, style: .continuous)
+    }
+
+    private var inkColor: Color {
+        switch Self.ink(isSelected: isSelected, isEnabled: isEnabled, isLocked: isLocked) {
+        case .white: return .white
+        case .ink: return theme.ink
+        case .ink2: return theme.ink2
+        case .ink3: return theme.ink3
+        }
+    }
+
+    private var face: some View {
         let layout = theme.usesTables
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
-        layout {
+        return layout {
             if isSelected {
                 Image(systemName: "checkmark")
                     .font(.system(size: theme.platform == .phone ? 13 : 11, weight: .bold))
@@ -184,7 +238,7 @@ public struct InteractiveChip: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .interactiveText(.calloutStrong)
-        .foregroundStyle(isSelected ? Color.white : (isEnabled ? theme.ink : theme.ink3))
+        .foregroundStyle(inkColor)
         .padding(.horizontal, theme.platform == .phone ? BrandSpacing.lg : 14)
         .padding(.vertical, theme.platform == .phone ? BrandSpacing.sm + 2 : 6)
         .frame(minHeight: theme.minTarget)
@@ -199,16 +253,6 @@ public struct InteractiveChip: View {
                 shape.strokeBorder(theme.wellEdge, lineWidth: 1)
             }
         }
-        .onHover { hovering = $0 }
-        .interactiveControl(shape: shape, isFirst: isFirst, isEnabled: isEnabled, onArrow: onArrow, action: action)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel ?? title)
-        .accessibilityHint(isEnabled ? (accessibilityHint ?? "") : "")
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        // The off state on the element VoiceOver and XCUITest see ("dimmed"),
-        // not only on the button inside it. Nothing fades: the colours above
-        // draw the off state (`InteractiveSteadyButtonStyle`).
-        .disabled(!isEnabled)
     }
 }
 
