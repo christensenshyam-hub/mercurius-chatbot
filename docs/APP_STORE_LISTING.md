@@ -273,8 +273,9 @@ launch-argument artifacts.
 | 6 | **Disclosure (consent) screen** | The first-launch disclosure: messages and photos go to Anthropic's Claude via our server; Agree / Not now. | *You know where your words go.* |
 
 Keep captions short and literal — a caption is a claim Apple can hold you to.
-Keep the brand navy/violet band; light appearance for all six so the set is
-consistent. Order matters: the first three show in search results.
+Keep the brand navy/violet band. The app is dark only (Night Studio's
+palette, `feat/ios-night-only`), so all six are dark whatever the simulator's
+appearance; retake any set made before that branch, which was light. Order matters: the first three show in search results.
 
 ---
 
@@ -385,7 +386,7 @@ MADE FOR THE MAC
 • Return sends, Shift-Return starts a new line.
 • Keyboard shortcuts for a new chat, the three modes, Retry and Explain More.
 • Attach an image with the attach button, by dragging it onto the chat, or by pasting it.
-• Light and dark appearance.
+• One night look: dark, whatever your Mac's appearance.
 
 ALSO
 • Streaks and opt-in reminders help you keep the habit going.
@@ -421,9 +422,12 @@ scripts/mac-store-screenshots.sh ~/Desktop/mercurius-mac-store
 ```
 It launches the app through the DEBUG `-MacSnapshot` harness, once per
 state, isolated (in-memory chats and session id, the local server URL —
-nothing reaches production), light appearance, with the window's rounded
+nothing reaches production), with the window's rounded
 corners filled and no alpha channel. It writes `01-path.png` … `06-chat-thread.png`
 and fails on a wrong size, on alpha, or on anything the harness couldn't do.
+The app is dark only, so the pictures are dark: the harness still asks for
+light, but the windows keep the night look. Retake any set made before
+`feat/ios-night-only`, which was light.
 **The Mac must be unlocked with the display on**: with the screen locked the
 window server draws nothing and the pictures come out blank and the wrong size.
 The harness also activates the app for each shot and fails a picture of an
