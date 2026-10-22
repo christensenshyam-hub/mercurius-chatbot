@@ -81,8 +81,11 @@ struct BasicsCurriculumTests {
         for lesson in BasicsCurriculum.allLessons {
             let text = lesson.starter
             let match = try #require(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)))
-            let unit = try #require(Range(match.range(at: 1), in: text).map { Int(text[$0]) } ?? nil)
-            let number = try #require(Range(match.range(at: 2), in: text).map { Int(text[$0]) } ?? nil)
+            // One optional per #require: Swift 6.0's macro rejects a mapped double optional (CI, Xcode 16.2).
+            let unitRange = try #require(Range(match.range(at: 1), in: text))
+            let unit = try #require(Int(text[unitRange]))
+            let numberRange = try #require(Range(match.range(at: 2), in: text))
+            let number = try #require(Int(text[numberRange]))
             #expect(BasicsCurriculum.lessonId(unit: unit, lesson: number) == lesson.id)
         }
         // And no Deep-dive starter ever matches it.
