@@ -1187,6 +1187,21 @@ BASICS_GOOD['basics-b2l4-wrong'] = [
   ['tap', BASICS_GOOD['basics-b2l4'][3][1]],
 ];
 
+const B_Q42 = '[Q]\nYou want AI help with a letter from your health plan. What should you cover first?\nA) The confusing words\nB) Your name, member number and any ID numbers\nC) Nothing, since the chatbot needs the whole letter\nANS: B\n[/Q]';
+const B_PRIVACY = 'I only know what you type here. The app has no accounts, so it doesn\'t know your name.\n\nWhat you type goes to this app\'s server, and to Anthropic, the company that makes the AI behind me. The app keeps your chats for up to 90 days.\n\nAnyone who opens this app on your device can see them. "Delete my data & start over" in Settings erases them.\n\nTry asking me: "Are you a real person?"';
+BASICS_GOOD['basics-b1l1-safe'] = [
+  BASICS_GOOD['basics-b1l1'][0],
+  ['question', B_PRIVACY],
+  ...BASICS_GOOD['basics-b1l1'].slice(1),
+];
+BASICS_GOOD['basics-b4l2'] = [
+  ['opener', "Last time, you had a chatbot write an email and copied it out.\n\nType or paste only the confusing part. Then ask what it means and what to do.\n\nCover your name and numbers first.\n\nHere are two made-up letters:\n- A health plan's notice of change\n- An electric company's rate change\n\nWhich one is closer to your life?"],
+  ['practice', "Good thing this is practice. Let's use the made-up one.\n\n---\n\n**Sunrise Health Plan: Notice of Change**\n\nStarting January 1, your yearly deductible for Tier 3 and Tier 4 drugs will change from $250 to $400. After you meet the deductible, you will pay 25% of the cost of specialty-tier drugs.\n\nIf you want to change plans, you must do so during the Annual Enrollment Period, October 15 to December 7. If you want to keep this plan, you do not need to do anything.\n\n---\n\nTry asking me: \"What does this mean, and what do I need to do?\""],
+  ['practice', "Your drug costs go up next year. A deductible is the amount you pay each year before the plan pays its share.\n\nYou don't need to do anything to keep this plan.\n\nNotice that you got help without your name or member number.\n\nNow try: \"By when?\""],
+  ['practice', `By December 7, if you want to switch. Some people can switch at other times too. Your state's free Medicare helpers, called SHIP, can tell you what applies to you.\n\nBefore you act on a letter about money, call the sender yourself. Use the number on your card or a past bill.\n\n${B_Q42}`],
+  ['tap', "Right. Cover those first.\n\nYou asked what the letter meant and what to do.\n\nCover your name, address, account and member numbers with paper first. Then type, or photograph, only the confusing part. Then check what it says with the sender, using the number on your card or bill.\n\nTry this today: Find one confusing letter at home. Cover your name and numbers, then ask a chatbot what it means.\n\n[LESSON_COMPLETE]"],
+];
+
 function basicsResults(table = BASICS_GOOD) {
   const usage = (i) => ({ input_tokens: 80, output_tokens: 200, cache_read_input_tokens: i === 0 ? 0 : 12000 + 300 * i, cache_creation_input_tokens: i === 0 ? 12000 : 300 });
   return Object.entries(table).map(([id, rows]) => ({
@@ -1198,10 +1213,15 @@ function basicsResults(table = BASICS_GOOD) {
 }
 
 describe('eval-pacing Basics track', () => {
-  test('scenarios: four basics-* lessons in the iOS wire shape with the canonical [BASICS: …] starters', async () => {
-    const { SCENARIOS, BASICS_STARTERS, BASICS_TAG_RE, selectScenarios, isBasics } = await modP;
+  test('scenarios: six basics-* lessons in the iOS wire shape with the canonical [BASICS: …] starters', async () => {
+    const { SCENARIOS, BASICS_STARTERS, BASICS_TAG_RE, BASICS_SAFE_QUESTION, BASICS_REAL_LETTER_TURN, selectScenarios, isBasics } = await modP;
     const basics = SCENARIOS.filter((s) => s.id.startsWith('basics'));
-    assert.deepEqual(basics.map((s) => s.id), ['basics-b1l1', 'basics-b2l3', 'basics-b2l4', 'basics-b2l4-wrong']);
+    assert.deepEqual(basics.map((s) => s.id), ['basics-b1l1', 'basics-b2l3', 'basics-b2l4', 'basics-b2l4-wrong', 'basics-b1l1-safe', 'basics-b4l2']);
+    // UX review 2026-10-22: the beginner's own words.
+    assert.deepEqual(basics.find((s) => s.id === 'basics-b1l1-safe').firstTurns, [BASICS_SAFE_QUESTION]);
+    assert.match(BASICS_SAFE_QUESTION, /is this safe\? will it know who i am/);
+    assert.deepEqual(basics.find((s) => s.id === 'basics-b4l2').fallbacks, [BASICS_REAL_LETTER_TURN]);
+    assert.match(BASICS_REAL_LETTER_TURN, /a real one from my medicare plan/);
     for (const s of basics) {
       assert.equal(s.mode, 'basics');
       assert.match(s.lesson.starter, BASICS_TAG_RE);
@@ -1236,6 +1256,11 @@ describe('eval-pacing Basics track', () => {
     const noAns = q4.replace('ANS: B\n', '');
     assert.deepEqual(basicsLearnerTurn(noAns, { rightAnswer: 'B' }), { text: 'I picked B) Hang up and call him, or his parents, on a number you already know', responseMode: 'balanced', kind: 'tap', wrong: false });
     assert.deepEqual(basicsLearnerTurn(noAns, { rightAnswer: 'B', wrongFirst: true }).text, 'I picked C) Ask the caller for a phone number to call him back');
+    // A scenario's firstTurns go first, before the practice line, but never over a waiting check.
+    const scripted = { firstTurns: ['is this safe?'], fallbacks: [] };
+    assert.deepEqual(basicsLearnerTurn(BASICS_GOOD['basics-b1l1'][0][1], scripted), { text: 'is this safe?', responseMode: 'concise', kind: 'question' });
+    assert.equal(basicsLearnerTurn(BASICS_GOOD['basics-b1l1'][0][1], scripted).text, 'Are you a real person?', 'used once');
+    assert.equal(basicsLearnerTurn(B_Q1, { firstTurns: ['later'] }).kind, 'tap');
   });
 
   test('plain-language metrics: syllables, Flesch–Kincaid, prose without the [Q] card', async () => {
@@ -1285,6 +1310,10 @@ describe('eval-pacing Basics track', () => {
       }
     }
     assert.equal(basicsEnding("That's a good place to stop. Want to keep going, or pick up later? I'll save your place."), true);
+    assert.equal(basicsEnding("The date is December 7.\n\nThat's a good place to stop. Want to keep going, or pick up later?\n\nI'll save your place."), true,
+      'the reflow can split the pause offer');
+    assert.equal(basicsEnding("Ready?\n\nThat's a good place to stop. Want to keep going, or pick up later?\n\nI'll save your place."), 'a question before the end');
+    assert.equal(basicsEnding('Notice it.\n\n**By when do you need to act if you want to switch plans?**', { practiceReply: true }), true, 'a bold closing question');
     assert.equal(basicsEnding('Idea one.\n\nWhat would you like to ask?'), true);
     assert.equal(basicsEnding('Does that make sense? Here is more.\n\nTry asking me: "Gift ideas."'), 'a question before the end');
     assert.equal(basicsEnding('Here is the idea. Ready?\n\nWhat do you think? Or not?'), 'a question before the end');
@@ -1299,8 +1328,10 @@ describe('eval-pacing Basics track', () => {
   test('basicsCriteria: the guide-shaped lessons pass every row', async () => {
     const { basicsCriteria } = await modP;
     const rows = basicsCriteria(basicsResults());
-    assert.equal(rows.length, 12);
+    assert.equal(rows.length, 16);
     for (const r of rows) assert.equal(r.pass, true, `${r.name}: ${r.value}`);
+    assert.match(rows.find((r) => r.name.startsWith('basics: "is this safe?"')).value, /^b1l1-safe ok \(reply 2\)$/);
+    assert.match(rows.find((r) => r.name.startsWith('basics: the confusing-letter')).value, /^b4l2 ok$/);
     assert.match(rows.find((r) => r.name.startsWith('basics: [LESSON_COMPLETE]')).value, /b1l1 at reply 4; b2l3 at reply 3; b2l4 at reply 4/);
     assert.match(rows.find((r) => r.name.startsWith('basics: safety lesson')).value, /wrong pick at 4, completed at 5/);
     assert.ok(rows.at(-1).reportOnly, 'the banned-word row is INFO');
@@ -1358,6 +1389,51 @@ describe('eval-pacing Basics track', () => {
     t = clone();
     delete t['basics-b2l4-wrong'];
     assert.match(fails(t, 'basics: safety lesson'), /^missing: basics-b2l4-wrong$/);
+    // UX review 2026-10-22: per-reply length, the privacy answer, the letter's dates.
+    t = clone();
+    t['basics-b2l3'][0][1] = t['basics-b2l3'][0][1].replace('Try asking me:', `${'You can almost always get good help without the private part. '.repeat(9)}\n\nTry asking me:`);
+    assert.match(fails(t, 'basics: ≤ 130 words'), /b2l3 max 1[3-9]\d \(/);
+    t = clone();
+    t['basics-b2l4'][0][1] = t['basics-b2l4'][0][1].replace('Scammers use it to sound like a relative in trouble.', 'The warning signs are always the same: it feels urgent, they say to keep it secret ("don\'t tell Mom"), and they want cash, gift cards, a wire transfer, a payment app, or a Bitcoin machine at a store.');
+    assert.match(fails(t, 'basics: no sentence over 25'), /b2l4 max 3\d \(3\d\//);
+    t = clone();
+    t['basics-b1l1-safe'][1][1] = "What you type here is saved on the app's server for up to 90 days, but it's stored under a random ID, not your name. No one is reading your chats.\n\nTry asking me: \"Are you a real person?\"";
+    assert.match(fails(t, 'basics: "is this safe?"'), /reply 2: missing: Anthropic, anyone with the device can see; made-up comfort: "No one is reading"/);
+    t = clone();
+    t['basics-b4l2'][3][1] = t['basics-b4l2'][3][1].replace("Some people can switch at other times too. Your state's free Medicare helpers, called SHIP, can tell you what applies to you.", "After that date, you're locked in for the year.");
+    assert.match(fails(t, 'basics: the confusing-letter'), /reply 4 says "locked in"/);
+    t = clone();
+    t['basics-b4l2'][3][1] = t['basics-b4l2'][3][1].replace("Some people can switch at other times too. ", '');
+    assert.match(fails(t, 'basics: the confusing-letter'), /gave December 7 without/);
+  });
+
+  test('basicsTeachingText: cards, made-up letters, set-off and quoted task text, and a practice answer before "Notice" are not teaching', async () => {
+    const { basicsTeachingText, basicsReplyWords, basicsLongestSentence } = await modP;
+    assert.equal(basicsTeachingText(`One idea.\n\n[KEY]A key.[/KEY]\n\n[EX]An example.[/EX]\n\n${B_Q1}`).trim(), 'One idea.');
+    assert.equal(basicsReplyWords(BASICS_GOOD['basics-b4l2'][1][1]), 24, 'the letter between the rules is not counted');
+    assert.equal(basicsReplyWords('Here it is:\n\n> Hi all. A long text to the family goes right here today.\n\nNotice it.'), 5);
+    assert.equal(basicsReplyWords('Send: "Hi all, please pick one family code word for us this week, okay friends."'), 1);
+    assert.equal(basicsReplyWords('Try asking me: "What does this mean, and what do I need to do?"'), 14, 'a practice line counts');
+    assert.equal(basicsReplyWords('A story. In 2023, an Arizona mother got a call. Her 15-year-old daughter was safe the whole time.'), 2, 'a quoted example told as prose');
+    const practice = 'Basil likes a sunny window and warm air all day long.\n\n- Water it when dry.\n\nNotice how a plain question got a real answer.\n\nNow try: "Why?"';
+    assert.equal(basicsReplyWords(practice, { practiceReply: true }), 12);
+    assert.equal(basicsReplyWords(practice), 27, 'not in a reply to a practice message');
+    assert.equal(basicsReplyWords('Basil likes sun and warm air all day.\n\n---\n\nA chatbot guesses words.', { practiceReply: true }), 4, 'a lone rule ends the answer too');
+    assert.equal(basicsLongestSentence('Short one. The U.S. Senate heard it at 8 a.m. on a Monday.\n- A list item'), 11);
+  });
+
+  test('basicsPrivacyAnswer and basicsLetterDates: the UX review\'s live replies fail, the guide\'s fixed lines pass', async () => {
+    const { basicsPrivacyAnswer, basicsLetterDates, BASICS_FALSE_COMFORT_RE } = await modP;
+    assert.equal(basicsPrivacyAnswer(B_PRIVACY), true);
+    assert.equal(basicsPrivacyAnswer(B_PRIVACY.replace('Anyone who opens this app on your device can see them.', 'Your chats are completely private.')), 'missing: anyone with the device can see; made-up comfort: "completely private"');
+    for (const ok of ['No one is typing back to you.', 'Nobody types back.']) assert.doesNotMatch(ok, BASICS_FALSE_COMFORT_RE);
+    for (const bad of ['No one sees them.', 'Nobody reads your chats.', 'Your chats are never shared.', "It's totally safe."]) assert.match(bad, BASICS_FALSE_COMFORT_RE);
+    assert.equal(basicsLetterDates([{ raw: 'The deadline to switch plans is **December 7**. After that date, you\'re locked in for the year.' }]), 'reply 1 says "locked in"');
+    assert.equal(basicsLetterDates([{ raw: 'Fine.' }, { raw: "You can't change plans until next January." }]), 'reply 2 says "can\'t change plans until"');
+    assert.equal(basicsLetterDates([{ raw: 'Switch before December 7.' }, { raw: 'December 7. Some people can switch at other times too.' }]), 'reply 1 gave December 7 without "Some people can switch at other times too"', 'the first mention needs it');
+    assert.equal(basicsLetterDates([{ raw: 'December 7. Some people can switch at other times too.' }, { raw: 'December 7 is the date.' }]), true, 'a repeat after the caveat is fine');
+    assert.equal(basicsLetterDates([{ raw: 'Your card will be locked in 30 minutes.' }]), true, 'b5_l3\'s made-up bank text is material');
+    assert.equal(basicsLetterDates(BASICS_GOOD['basics-b4l2'].map(([, raw]) => ({ raw }))), true, 'the letter itself says December 7');
   });
 
   test('basicsCacheCriterion: reads the guide from turn 2, reads back each turn across typed and tapped turns, n/a without usage', async () => {
@@ -1394,7 +1470,7 @@ describe('eval-pacing Basics track', () => {
     const names = criteria.map((c) => c.name);
     const firstBasics = names.findIndex((n) => n.startsWith('basics:'));
     assert.ok(names[firstBasics - 1].startsWith('report: chat-news'), 'the Basics rows follow every earlier row');
-    assert.equal(names.slice(firstBasics).length, 12);
+    assert.equal(names.slice(firstBasics).length, 16);
     assert.ok(names.at(-1).startsWith('report: basics'));
   });
 });

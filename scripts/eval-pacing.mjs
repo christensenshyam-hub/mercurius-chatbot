@@ -293,7 +293,14 @@ export const BASICS_STARTERS = Object.freeze({
   b1l1: '[BASICS: Unit 1, Lesson 1] Teach me what an AI chatbot is, in plain words. Keep it short, then let me try one.',
   b2l3: '[BASICS: Unit 2, Lesson 3] Teach me what I should never share with an AI chatbot, and why. Then let me practice asking for help safely.',
   b2l4: '[BASICS: Unit 2, Lesson 4] Teach me about AI voice-clone and family emergency scams, and exactly what to do if I get one of those calls. Then help me make a plan.',
+  b4l2: '[BASICS: Unit 4, Lesson 2] Teach me how to use an AI chatbot to understand a confusing letter or bill, safely. Then let me practice with a made-up letter.',
 });
+
+/** The UX review's beginner (2026-10-22), word for word: the privacy question
+ *  a first-time learner asks before trying anything, and the Medicare-letter
+ *  reply that drew "locked in for the year". */
+export const BASICS_SAFE_QUESTION = 'before i do that is this safe? will it know who i am and where i live';
+export const BASICS_REAL_LETTER_TURN = 'the health one. i got a real one from my medicare plan last week';
 
 /**
  * One iOS-shaped /api/chat body (pure; unit-tested). `visible` is the thread
@@ -651,6 +658,22 @@ export const SCENARIOS = [
     // until the learner picks the right one.
     id: 'basics-b2l4-wrong', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
     lesson: { starter: BASICS_STARTERS.b2l4 }, rightAnswer: 'B', fallbacks: ["What if I can't reach anyone in my family?"], maxTurns: 8, wrongFirst: true,
+  },
+  {
+    // UX review 2026-10-22: the first lesson, with the beginner asking "is
+    // this safe?" before the practice. Reply 2 must be the guide's fixed
+    // privacy answer (90 days, Anthropic, anyone with the device can see),
+    // with no comfort the facts don't give ("No one is reading your chats").
+    id: 'basics-b1l1-safe', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b1l1 }, rightAnswer: 'B', firstTurns: [BASICS_SAFE_QUESTION],
+    fallbacks: ['How do I keep basil alive on a windowsill?'], maxTurns: 8,
+  },
+  {
+    // UX review 2026-10-22: the confusing-letter lesson, with a learner who
+    // is on a Medicare plan. Merc must never say "locked in", and gives the
+    // "other times" sentence whenever it gives December 7.
+    id: 'basics-b4l2', mode: 'basics', client: 'ios', capabilities: [BLOCKS_V1, 'platform_ios'],
+    lesson: { starter: BASICS_STARTERS.b4l2 }, rightAnswer: 'B', fallbacks: [BASICS_REAL_LETTER_TURN], maxTurns: 8,
   },
 ];
 
@@ -1421,11 +1444,17 @@ const hasQuiz = (raw) => {
  * lesson's first tap picks a wrong answer) and what has happened so far; it
  * is updated in place. Returns { text, responseMode, kind } where kind is
  * 'tap' (a [Q] pick: 'balanced', like CheckQuizCard), 'practice' (a typed
- * practice message: 'concise', like send()) or 'continue'.
+ * practice message: 'concise', like send()), 'question' (one of the
+ * scenario's scripted `firstTurns`) or 'continue'.
  */
 export function basicsLearnerTurn(lastReply, state = {}) {
   state.fallbacks = state.fallbacks || [];
   state.used = state.used || 0;
+  // A scenario's `firstTurns` (the learner's own questions, asked before
+  // anything else) go first, unless a check is waiting.
+  if (Array.isArray(state.firstTurns) && state.firstTurns.length && !/\[Q\]/.test(String(lastReply ?? ''))) {
+    return { text: state.firstTurns.shift(), responseMode: 'concise', kind: 'question' };
+  }
   if (hasQuiz(lastReply)) {
     const wrong = Boolean(state.wrongFirst) && !state.pickedWrong;
     if (wrong) state.pickedWrong = true;
@@ -1570,8 +1599,16 @@ export function basicsEnding(raw, { practiceReply = false } = {}) {
   if (/\[Q\]/.test(text) && !quiz) return 'the [Q] check is not the last thing';
   const body = (quiz ? text.slice(0, quiz.index) : text).trim();
   const paras = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  const last = paras.length ? paras[paras.length - 1] : '';
-  const earlier = paras.slice(0, quiz ? paras.length : -1).join('\n\n');
+  // The pause offer is three sentences, so the 2-sentence reflow can put
+  // "I'll save your place." in a paragraph of its own: then it ends the
+  // reply over the last two paragraphs.
+  const last1 = paras.length ? paras[paras.length - 1] : '';
+  const splitPause = !quiz && paras.length >= 2 && !PAUSE_OFFER_RE.test(last1)
+    && /save your place/i.test(last1) && PAUSE_OFFER_RE.test(paras[paras.length - 2]);
+  const ending = splitPause ? paras.slice(-2) : paras.slice(-1);
+  // A bold or italic closing question is still a closing question.
+  const last = ending.join(' ').replace(/[*_]+/g, '');
+  const earlier = paras.slice(0, quiz ? paras.length : paras.length - ending.length).join('\n\n');
   if (!practiceReply && ownQuestions(stripMarkers(earlier)) > 0) return 'a question before the end';
   if (quiz) return true;
   if (practiceLine(last) || NOW_ASK_RE.test(last) || PAUSE_OFFER_RE.test(last)) return true;
@@ -1604,8 +1641,10 @@ export function basicsCompletion(convo, { rightOnly = false } = {}) {
   return true;
 }
 
-const BASICS_PLAIN_IDS = ['basics-b1l1', 'basics-b2l3', 'basics-b2l4'];
+const BASICS_PLAIN_IDS = ['basics-b1l1', 'basics-b2l3', 'basics-b2l4', 'basics-b1l1-safe', 'basics-b4l2'];
 const BASICS_ALL_IDS = [...BASICS_PLAIN_IDS, 'basics-b2l4-wrong'];
+// b4_l2's first reply ends with "Which one is closer to your life?" by design.
+const BASICS_PRACTICE_FIRST_IDS = BASICS_ALL_IDS.filter((id) => id !== 'basics-b4l2');
 export const BASICS_FK_MAX = 7;
 
 // "U.S. Senate", "8 a.m." are not sentence ends (the shared countSentences
@@ -1615,6 +1654,145 @@ export function basicsMaxParagraphSentences(raw) {
   return maxParagraphSentences(String(raw ?? '').replace(ABBREV_RE, (m) => m.replace(/\./g, '')));
 }
 export const BASICS_PARAGRAPH_MAX = 4;
+
+// ── Length, per reply (UX review 2026-10-22) ─────────────────────────────
+// The pooled reading level hid a 205-word reply and a 38-word sentence. These
+// rows read every reply on its own: Merc's teaching, not the check card, the
+// [KEY]/[EX] cards, the passages the guide gives word for word (b4_l2's
+// letters, b5_l3's bank text, the real examples), text set off between "---" rules or in a
+// blockquote, a quoted task longer than a practice line, or (in a reply to a
+// practice message) the task's own answer before the "Notice" coaching line
+// and the task's own list.
+
+export const BASICS_REPLY_WORDS_MAX = 130;
+export const BASICS_SENTENCE_WORDS_MAX = 25;
+
+// lib/basicsGuide's word-for-word passages, sentence by sentence: the made-up
+// letters and bank text, and the real examples it quotes (Merc sometimes
+// tells one as prose instead of in its [EX] card). Their words are the
+// reviewed curriculum's, like the [Q] card's.
+const BASICS_MATERIAL = Object.freeze([
+  'In 2023, an Arizona mother got a call.',
+  'Her 15-year-old daughter was safe the whole time.',
+  'But a voice that sounded exactly like her daughter asked for help, and a man demanded money.',
+  'The mother later told the U.S. Senate about it.',
+  'An airline\'s website chatbot told a customer the wrong refund rule.',
+  'The airline was ordered to pay him the difference.',
+  'In 2023, two New York lawyers used ChatGPT to find past court cases.',
+  'It made some up.',
+  'When one lawyer asked if the cases were real, it said yes.',
+  'A judge fined the lawyers and their firm $5,000.',
+  'In 2025, doctors wrote about a 60-year-old man who swapped table salt for a chemical called sodium bromide after reading chatbot answers.',
+  'He got very sick and ended up in the hospital.',
+  'Sunrise Health Plan: Notice of Change.',
+  'Sunrise Health Plan: Notice of Change',
+  'Starting January 1, your yearly deductible for Tier 3 and Tier 4 drugs will change from $250 to $400.',
+  'After you meet the deductible, you will pay 25% of the cost of specialty-tier drugs.',
+  'If you want to change plans, you must do so during the Annual Enrollment Period, October 15 to December 7.',
+  'If you want to keep this plan, you do not need to do anything.',
+  'Bright River Power: Notice of Rate Change.',
+  'Bright River Power: Notice of Rate Change',
+  'Starting with your next bill, the price per kilowatt-hour on the Standard Home plan will go up from 14.2 cents to 16.8 cents.',
+  'Your monthly service charge will stay at $12.',
+  'You can compare our other rate plans at any time.',
+  'If you want to stay on your current plan, you do not need to do anything.',
+  'BANK ALERT: We stopped a charge of $489.99 on your card.',
+  'If this wasn\'t you, call us now at the number below.',
+  'Your card will be locked in 30 minutes.',
+  '[number]',
+]);
+/** Prose without the guide's made-up material. */
+export function withoutMaterial(text) {
+  let t = String(text ?? '');
+  for (const m of BASICS_MATERIAL) t = t.split(m).join(' ');
+  return t;
+}
+const WORD_RE = /[A-Za-z0-9$][A-Za-z0-9'’.,:/$%\-–]*/g;
+const countWords = (s) => (String(s ?? '').match(WORD_RE) || []).length;
+const RULE_LINE = '[ \\t]*(?:-{3,}|\\*{3,}|_{3,})[ \\t]*';
+const SET_OFF_RE = new RegExp(`^${RULE_LINE}\\n[\\s\\S]*?\\n${RULE_LINE}$`, 'gm');
+
+/** Merc's teaching in one reply, as the length rows read it (pure). */
+export function basicsTeachingText(raw, { practiceReply = false } = {}) {
+  let t = String(raw ?? '')
+    .replace(/\[(Q|KEY|EX)\][\s\S]*?(?:\[\/\1\]|$)/g, '\n\n')
+    .replace(SET_OFF_RE, '\n\n');
+  // In a reply to a practice message, the task's own answer comes first and
+  // the coaching starts with "Notice" (lib/basicsGuide step 2), or follows a
+  // "---" rule: only the coaching and what follows it is teaching.
+  if (practiceReply) {
+    const paras = t.split(/\n\s*\n/);
+    const at = paras.findIndex((p) => /^[\s*_]*Notice\b/i.test(p) || /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(p));
+    if (at > 0) t = paras.slice(at).join('\n\n');
+  }
+  t = stripMarkers(t)
+    .split('\n')
+    .filter((l) => !/^\s*>/.test(l) && !/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(l))
+    .filter((l) => !(practiceReply && LIST_ITEM_RE.test(l)))
+    .join('\n')
+    .replace(/[*_`#]+/g, '');
+  t = withoutMaterial(t);
+  // A quoted task (a whole text message, a note) is the practice's output; a
+  // practice line (12 words or fewer) is part of the teaching.
+  return t.replace(/"([^"\n]*)"|“([^”\n]*)”/g, (q, a, b) => (countWords(a ?? b) > 12 ? ' ' : q));
+}
+
+/** Words in Merc's teaching in one reply. */
+export function basicsReplyWords(raw, opts) {
+  return countWords(basicsTeachingText(raw, opts));
+}
+
+/** The longest sentence (in words) in Merc's teaching in one reply. A line
+ *  break ends a sentence; "U.S." and "a.m." don't. */
+export function basicsLongestSentence(raw, opts) {
+  const text = basicsTeachingText(raw, opts).replace(ABBREV_RE, (m) => m.replace(/\./g, ''));
+  let longest = 0;
+  for (const line of text.split('\n')) {
+    for (const s of line.replace(/^\s*(?:[-*+•]|\d+[.)])\s+/, '').split(/(?<=[.!?…]["”’)]*)\s+/)) {
+      longest = Math.max(longest, countWords(s));
+    }
+  }
+  return longest;
+}
+
+// ── The beginner's two safety moments (UX review 2026-10-22) ──────────────
+
+// "No one is reading your chats" and kin: a comfort APP FACTS never gives.
+export const BASICS_FALSE_COMFORT_RE = /\b(?:no one|nobody|no person|no human)\b[^.\n]{0,20}\b(?:read|reads|reading|see|sees|seeing|look|looks|looking|check|checks|checking)\b|\b(?:completely|totally|100%|perfectly|fully) (?:private|safe|secure)\b|\bnever (?:read|seen|looked at|shared)\b/i;
+
+/** The privacy answer, checked against APP FACTS: true, or what's wrong. */
+export function basicsPrivacyAnswer(raw) {
+  const t = stripMarkers(String(raw ?? '')).replace(/[*_]+/g, '');
+  const missing = [
+    ['90 days', /\b90 days\b/i],
+    ['Anthropic', /\bAnthropic\b/],
+    ['anyone with the device can see', /\b(?:device|phone|tablet|computer|iPad|iPhone|Mac)\b[^.\n]*\bsee\b|\bsee\b[^.\n]*\b(?:device|phone|tablet|computer|iPad|iPhone|Mac)\b/i],
+  ].filter(([, re]) => !re.test(t)).map(([n]) => n);
+  const comfort = BASICS_FALSE_COMFORT_RE.exec(t);
+  const problems = [...(missing.length ? [`missing: ${missing.join(', ')}`] : []), ...(comfort ? [`made-up comfort: "${comfort[0]}"`] : [])];
+  return problems.length ? problems.join('; ') : true;
+}
+
+// "Locked in for the year" and kin (b4_l2): false for people in Medicare
+// Advantage, who can also switch from January 1 to March 31.
+export const BASICS_LOCKED_IN_RE = /\block(?:ed|s)? (?:you )?in\b|\bstuck (?:with|in)\b|\bcan(?:'|’|no)?t (?:change|switch)\b[^.\n]*\b(?:until|till)\b|\b(?:last|only|final) chance\b|\bno (?:other|more) chances?\b/i;
+
+/** The confusing-letter lesson's dates: true, or what's wrong. Merc's own
+ *  prose only (the letter itself says December 7). No reply says "locked in"
+ *  or the like, and the first reply that gives December 7 also says some
+ *  people can switch at other times (a later reply may repeat the date the
+ *  learner has already heard with that caveat). */
+export function basicsLetterDates(replies) {
+  let caveated = false;
+  for (const [i, x] of replies.entries()) {
+    const own = basicsTeachingText(x.raw);
+    const locked = BASICS_LOCKED_IN_RE.exec(own);
+    if (locked) return `reply ${i + 1} says "${locked[0]}"`;
+    if (/\bswitch at other times\b/i.test(own)) caveated = true;
+    else if (/\bDec(?:ember|\.)? 7\b/i.test(own) && !caveated) return `reply ${i + 1} gave December 7 without "Some people can switch at other times too"`;
+  }
+  return true;
+}
 
 /** One row per Basics criterion, each over the conversations it names. */
 export function basicsCriteria(results) {
@@ -1633,9 +1811,9 @@ export function basicsCriteria(results) {
   };
   const allIds = BASICS_ALL_IDS;
 
-  row(`basics: plain language — Flesch–Kincaid grade ≤ ${BASICS_FK_MAX} over each lesson's reply prose ([Q] card excluded)`, BASICS_PLAIN_IDS, (c) => {
-    const per = c.replies.map((x) => fleschKincaidGrade(basicsProse(x.raw)));
-    const total = c.replies.map((x) => textCounts(basicsProse(x.raw))).reduce((a, b) => ({
+  row(`basics: plain language — Flesch–Kincaid grade ≤ ${BASICS_FK_MAX} over each lesson's reply prose ([Q] card and made-up letters excluded)`, BASICS_PLAIN_IDS, (c) => {
+    const per = c.replies.map((x) => fleschKincaidGrade(withoutMaterial(basicsProse(x.raw))));
+    const total = c.replies.map((x) => textCounts(withoutMaterial(basicsProse(x.raw)))).reduce((a, b) => ({
       words: a.words + b.words, sentences: a.sentences + b.sentences, syllables: a.syllables + b.syllables,
     }), { words: 0, sentences: 0, syllables: 0 });
     const grade = fleschKincaidGrade(total);
@@ -1649,7 +1827,7 @@ export function basicsCriteria(results) {
     const worst = Math.max(0, ...c.replies.map((x) => basicsMaxParagraphSentences(x.raw)));
     return { pass: worst <= BASICS_PARAGRAPH_MAX, value: `max ${worst}` };
   });
-  row('basics: a "Try asking me" practice line in the first reply', allIds, (c) => {
+  row('basics: a "Try asking me" practice line in the first reply', BASICS_PRACTICE_FIRST_IDS, (c) => {
     const line = practiceLine(c.replies[0].raw);
     return { pass: Boolean(line), value: line ? `"${line.slice(0, 40)}"` : 'none' };
   });
@@ -1696,6 +1874,26 @@ export function basicsCriteria(results) {
     ].filter(([, re]) => !re.test(prose)).map(([n]) => n);
     return { pass: missing.length === 0, value: missing.length ? `missing: ${missing.join(', ')}` : 'ok' };
   });
+  row(`basics: ≤ ${BASICS_REPLY_WORDS_MAX} words of teaching in every reply (cards, made-up material and the practice's output excluded)`, allIds, (c) => {
+    const words = c.replies.map((x, i) => basicsReplyWords(x.raw, { practiceReply: i > 0 && x.kind === 'practice' }));
+    const worst = Math.max(0, ...words);
+    return { pass: worst <= BASICS_REPLY_WORDS_MAX, value: `max ${worst} (${words.join('/')})` };
+  });
+  row(`basics: no sentence over ${BASICS_SENTENCE_WORDS_MAX} words in any reply`, allIds, (c) => {
+    const longest = c.replies.map((x, i) => basicsLongestSentence(x.raw, { practiceReply: i > 0 && x.kind === 'practice' }));
+    const worst = Math.max(0, ...longest);
+    return { pass: worst <= BASICS_SENTENCE_WORDS_MAX, value: `max ${worst} (${longest.join('/')})` };
+  });
+  row('basics: "is this safe?" gets the fixed privacy answer (90 days, Anthropic, anyone with the device can see) and no made-up comfort', ['basics-b1l1-safe'], (c) => {
+    const at = c.replies.findIndex((x) => x.kind === 'question');
+    if (at < 0) return { pass: false, value: 'the question was never asked' };
+    const v = basicsPrivacyAnswer(c.replies[at].raw);
+    return { pass: v === true, value: v === true ? `ok (reply ${at + 1})` : `reply ${at + 1}: ${v}` };
+  });
+  row('basics: the confusing-letter lesson never says "locked in", and its first December 7 comes with "switch at other times"', ['basics-b4l2'], (c) => {
+    const v = basicsLetterDates(c.replies);
+    return { pass: v === true, value: v === true ? 'ok' : v };
+  });
   rows.push(basicsCacheCriterion(all));
   rows.push(basicsBannedWordsReport(all));
   return rows;
@@ -1716,7 +1914,10 @@ export function basicsCacheCriterion(convos) {
     if (x.turn >= 2 && u.read < 5000) problems.push(`${x.convoId} t${x.turn} read=${u.read}`);
     if (x.turn >= 3 && (x.responseMode || 'concise') !== 'deep') {
       const p = usageOf(x.prev);
-      if (u.read < p.read + p.write || u.read <= p.read) problems.push(`${x.convoId} t${x.turn} read=${u.read} expected≥${p.read + p.write}`);
+      // A previous turn that wrote nothing (its whole prefix was already
+      // cached, say by an earlier conversation with the same opener and the
+      // same first reply) leaves nothing new to read back.
+      if (u.read < p.read + p.write || (p.write > 0 && u.read <= p.read)) problems.push(`${x.convoId} t${x.turn} read=${u.read} expected≥${p.read + p.write}`);
     }
     if (u.input > 1000) problems.push(`${x.convoId} t${x.turn} uncached=${u.input}`);
   }
@@ -2152,7 +2353,12 @@ async function runBasicsScenario(baseUrl, scenario, delayMs) {
   const sessionId = newSessionId();
   const lessonStarter = scenario.lesson.starter;
   const maxTurns = scenario.maxTurns ?? 7;
-  const state = { fallbacks: [...(scenario.fallbacks || [])], wrongFirst: Boolean(scenario.wrongFirst), rightAnswer: scenario.rightAnswer };
+  const state = {
+    fallbacks: [...(scenario.fallbacks || [])],
+    firstTurns: [...(scenario.firstTurns || [])],
+    wrongFirst: Boolean(scenario.wrongFirst),
+    rightAnswer: scenario.rightAnswer,
+  };
   const visible = [];
   const replies = [];
   let step = { kind: 'opener', responseMode: 'balanced' };
