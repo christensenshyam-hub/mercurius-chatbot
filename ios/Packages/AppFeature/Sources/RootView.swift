@@ -80,7 +80,7 @@ public struct RootView: View {
                 model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
                 dismissAction: {}
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -132,7 +132,7 @@ public struct RootView: View {
                 totalInUnit: unit.lessons.count,
                 nextStop: next.map(AppShellView.celebrationStop)
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -145,7 +145,7 @@ public struct RootView: View {
            let test = MercuriusCurriculum.unitTest(for: unit.id) {
             UnitTestPreviewHost(unit: unit, test: test,
                                 stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
-                .preferredColorScheme(env.themeStore.theme.colorScheme)
+                .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -162,7 +162,7 @@ public struct RootView: View {
                 test: test,
                 via503: ProcessInfo.processInfo.arguments.contains("-CrisisVia503")
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -189,7 +189,7 @@ public struct RootView: View {
             chatStore: env.chatStore,
             autoSend: ProcessInfo.processInfo.arguments.contains("-ChatSeed")
         )
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
     }
     #endif
 
@@ -208,7 +208,7 @@ public struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
         .task { await bootstrap() }
         .task {
             #if DEBUG

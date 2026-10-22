@@ -1,11 +1,12 @@
 import SwiftUI
 import Observation
 
-/// Observable, app-wide source of truth for the user's theme preference.
+/// Observable store for the theme preference earlier versions offered.
 ///
-/// `AppEnvironment` constructs one and applies the selected color
-/// scheme at the root of the app. `SettingsViewModel` writes through
-/// the same store so changes take effect immediately.
+/// No longer read: both apps are dark only (`BrandAppearance`), so a stored
+/// System or Light choice is ignored, and Settings no longer shows the
+/// picker. `AppEnvironment` still constructs one and `SettingsViewModel`
+/// still holds it, so their initialisers don't change.
 ///
 /// Values are persisted via `PreferenceStore` — `UserDefaults` in
 /// production, an in-memory fake in tests.

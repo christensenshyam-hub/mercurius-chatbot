@@ -254,7 +254,11 @@ struct MessageBubbleView: View {
         .padding(.horizontal, BrandSpacing.lg)
         .frame(maxWidth: Self.assistantMeasureCap, alignment: .leading)
         .background(BrandColor.surface, in: lessonAssistantShape)
+        // No shadow on the iPhone: it is dark only, and Night Studio casts
+        // none in dark (SPEC.md §2.6). The Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
+        #endif
         .contextMenu {
             #if os(macOS)
             if !message.content.isEmpty {

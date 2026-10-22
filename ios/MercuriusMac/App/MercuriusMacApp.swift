@@ -1,5 +1,6 @@
 import SwiftUI
 import AppFeature
+import DesignSystem
 
 /// The native Mac app: the main window, the Settings window and the Help
 /// window, all composed in AppFeature like the iPhone app's screens.
@@ -18,6 +19,10 @@ import AppFeature
 /// - Settings (⌘,) is `MacSettingsView`: General, Privacy, About.
 /// - Help is `MacHelpView`: how Mercurius teaches, the Mac's shortcuts, and
 ///   where to get help.
+///
+/// Every scene is dark only (`BrandAppearance`): each content root applies
+/// the dark scheme, and `MacAppDelegate` sets the app's appearance to Dark
+/// Aqua at launch for the menus and panels.
 @main
 struct MercuriusMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
@@ -35,9 +40,10 @@ struct MercuriusMacApp: App {
                 #if DEBUG
                 .background(MacDebugWindows())
                 #endif
-            // NOTE: no `.preferredColorScheme` here — `RootView` applies the
-            // student's System/Light/Dark choice, and one nearer the window
-            // root would override it (see MercuriusApp on iOS).
+                // Dark only, whatever the Mac's own appearance (`RootView`
+                // applies the same scheme; there is no student choice any
+                // more for this to override).
+                .preferredColorScheme(BrandAppearance.colorScheme)
         }
         .defaultSize(width: 1180, height: 800)
         .commands {
@@ -47,11 +53,13 @@ struct MercuriusMacApp: App {
         Settings {
             MacSettingsView()
                 .environmentObject(environment)
+                .preferredColorScheme(BrandAppearance.colorScheme)
         }
 
         Window("Mercurius Help", id: MacCommands.helpWindowId) {
             MacHelpView()
                 .environmentObject(environment)
+                .preferredColorScheme(BrandAppearance.colorScheme)
         }
         .defaultSize(width: 600, height: 640)
         .windowResizability(.contentMinSize)

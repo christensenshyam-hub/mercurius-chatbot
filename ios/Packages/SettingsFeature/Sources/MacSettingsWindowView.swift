@@ -7,7 +7,8 @@ import NetworkingKit
 /// Settings screen as three Mac tabs, on the same `SettingsViewModel`, so
 /// every reset, erasure and withdrawal runs exactly the iPhone's code.
 ///
-/// - General: appearance (and the progress nudges, while that flag is on).
+/// - General: the appearance, which is always dark (`BrandAppearance`), and
+///   the progress nudges while that flag is on.
 /// - Privacy: the session ID with Copy, Delete my data & start over, and
 ///   Privacy choices (the disclosure and withdrawing consent).
 /// - About: the version, How Mercurius teaches, Help & FAQ, Send feedback,
@@ -90,14 +91,11 @@ public struct MacSettingsWindowView: View {
     private var general: some View {
         Form {
             Section {
-                Picker("Appearance", selection: $model.theme) {
-                    ForEach(ThemePreference.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
-                    }
-                }
-                .pickerStyle(.radioGroup)
+                // Dark only: the System / Light / Dark choice is gone, and a
+                // stored one isn't read (`BrandAppearance`).
+                LabeledContent("Appearance", value: "Dark")
             } footer: {
-                Text("System follows your Mac's Light or Dark appearance.")
+                Text("Mercurius always uses its night look, whatever your Mac's appearance.")
                     .foregroundStyle(Night.ink3)
             }
             if GamificationFlag.clientEnabled {

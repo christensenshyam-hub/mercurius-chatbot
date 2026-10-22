@@ -28,7 +28,9 @@
 #   scripts/mac-snapshots.sh <out-dir> [shot ...]
 # Each window shot is taken four ways: <shot>.png (1280×800, light),
 # <shot>-dark.png, <shot>-min.png (700×600, the window's minimum) and
-# <shot>-min-dark.png. The Settings and Help windows have their own size:
+# <shot>-min-dark.png. VARIANTS="system" takes <shot>-system.png with no
+# appearance flag at all: the app as the Mac's own appearance leaves it
+# (with mac-copy-snapshots.sh's AQUA=YES, a Mac in light mode). The Settings and Help windows have their own size:
 # light and dark only. Set VARIANTS="light" (or any of light dark min
 # min-dark) to take fewer. VARIANTS="store" takes <shot>-store.png instead:
 # light, square corners, no alpha, at STORE_SIZE points (default 1280x800,
@@ -131,7 +133,7 @@ snap() {
   # The control dump and the composer log once per state (the light,
   # full-size shot), not once per variant.
   case $name in
-    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass) ;;
+    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass|*-system) ;;
     *)
       grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
       grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
@@ -150,6 +152,7 @@ window_shot() {
       min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 700x600 ;;
       min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 700x600 ;;
       store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
+      system)   snap "$name-system"   "$@" ;;
       hc)       snap "$name-hc"       "$@" -MacSnapshotAppearance light -NightContrast increased ;;
       hc-dark)  snap "$name-dark-hc"  "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
       rt)       snap "$name-rt"       "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
@@ -168,6 +171,7 @@ panel_shot() {
     case $variant in
       light) snap "$name"      "$@" -MacSnapshotAppearance light ;;
       dark)  snap "$name-dark" "$@" -MacSnapshotAppearance dark ;;
+      system) snap "$name-system" "$@" ;;
       hc)    snap "$name-hc"   "$@" -MacSnapshotAppearance light -NightContrast increased ;;
       hc-dark) snap "$name-dark-hc" "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
       rt)    snap "$name-rt"   "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;

@@ -453,7 +453,7 @@ final class MercuriusUITests: XCTestCase {
     }
 
     @MainActor
-    func testTappingSettingsOpensSheetWithAppearanceSection() {
+    func testTappingSettingsOpensSheet() {
         let app = launchApp()
         waitForBootComplete(app)
 
@@ -461,7 +461,7 @@ final class MercuriusUITests: XCTestCase {
 
         // The sheet's navigation bar "Settings" and its toolbar "Done"
         // button are stable anchors across iOS versions. Form section
-        // headers ("Appearance", "Session", "About") render as
+        // headers ("Session", "Privacy", "About") render as
         // accessibility role `.header` on iOS 18+, so matching against
         // `staticTexts` misses them.
         let sheetNavBar = app.navigationBars["Settings"].firstMatch

@@ -16,6 +16,11 @@ public protocol SessionResetting: Sendable {
 extension SessionIdentity: SessionResetting {}
 
 /// Theme preference. `.system` follows iOS appearance settings.
+///
+/// No longer offered or read: both apps are dark only (`BrandAppearance`,
+/// docs/ios-night-only/PR.md). The type and its store stay so the stored
+/// key and the hosts' initialisers don't change; a later cleanup can drop
+/// them.
 public enum ThemePreference: String, CaseIterable, Identifiable, Codable, Sendable {
     case system
     case light
@@ -151,8 +156,9 @@ public final class SettingsViewModel {
 
     // MARK: - Theme projection
 
-    /// Computed binding so SwiftUI pickers can read and write through
-    /// the shared `ThemePreferenceStore`. Writes propagate app-wide.
+    /// Computed binding through the shared `ThemePreferenceStore`. No
+    /// Settings screen shows it any more, and nothing applies it: the app is
+    /// dark only (`BrandAppearance`).
     public var theme: ThemePreference {
         get { themeStore.theme }
         set { themeStore.theme = newValue }

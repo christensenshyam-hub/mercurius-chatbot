@@ -8,8 +8,7 @@ import UIKit
 
 /// Settings screen. Presented as a sheet from the chat header.
 ///
-/// Sections:
-/// - Appearance — theme preference
+/// Sections (no Appearance: the app is dark only, `BrandAppearance`):
 /// - Session — full, copyable session id + "Delete my data & start over"
 /// - Privacy — pushes `PrivacyChoicesView` (disclosure + withdraw consent)
 /// - About — version, "How Mercurius teaches", feedback / policy / support links
@@ -42,7 +41,6 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                appearanceSection
                 // Standby gamification toggle — only shown when the client flag
                 // is on, so the default Settings screen is unchanged.
                 if GamificationFlag.clientEnabled {
@@ -134,17 +132,6 @@ public struct SettingsView: View {
     }
 
     // MARK: - Sections
-
-    private var appearanceSection: some View {
-        Section("Appearance") {
-            Picker("Theme", selection: $model.theme) {
-                ForEach(ThemePreference.allCases) { theme in
-                    Text(theme.displayName).tag(theme)
-                }
-            }
-            .pickerStyle(.segmented)
-        }
-    }
 
     private var nudgesSection: some View {
         Section {

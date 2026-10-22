@@ -1093,7 +1093,8 @@ struct MessageListView: View {
                 .padding(.horizontal, BrandSpacing.md)
                 .background(BrandColor.surfaceElevated, in: Capsule())
                 .overlay(Capsule().strokeBorder(BrandColor.accent.opacity(0.35), lineWidth: 1))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                // No shadow: the iPhone is dark only, and Night casts none
+                // in dark (SPEC.md §2.6). The stroke carries the edge.
         }
         .buttonStyle(.plain)
         .frame(minHeight: 44)
