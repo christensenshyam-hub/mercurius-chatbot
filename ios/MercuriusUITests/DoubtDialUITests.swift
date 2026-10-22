@@ -172,11 +172,12 @@ final class DoubtDialUITests: XCTestCase {
         let tall = element.frame.height > (bottom - top) * 0.8
         func below() -> Bool { tall ? element.frame.minY > (top + bottom) / 2 : element.frame.maxY > bottom }
         var drags = 0
-        while below() && drags < 40 {
-            drag(app, by: -200)
+        // At AX5 the card with "Check first" open is many screens tall.
+        while below() && drags < 120 {
+            drag(app, by: -240)
             drags += 1
         }
-        while element.frame.minY < top && drags < 60 {
+        while element.frame.minY < top && drags < 150 {
             drag(app, by: 200)
             drags += 1
         }

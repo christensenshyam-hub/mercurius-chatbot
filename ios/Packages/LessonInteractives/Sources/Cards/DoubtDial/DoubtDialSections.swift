@@ -52,7 +52,26 @@ struct DoubtDialActions {
         withAnimation(theme.animation(InteractiveMotion.change)) { _ = state.turn(to: stop) }
     }
 
+    /// "Show me" in two beats: the dial first turns, in place, to the
+    /// setting the result names, then, once its words and colours have
+    /// settled, the reveal arrives. (Both at once, or the second beat
+    /// before the first had settled, moved the card's layout while its
+    /// words were still changing: a jumble for a moment.) The state's own
+    /// `showMe()` does both, so a tap that lands before the second beat
+    /// changes nothing twice.
     func showMe() {
+        guard state.machine.showsShowMe else { return }
+        let target = DoubtDialContent.revealStop(for: state.machine.spoiled ? nil : state.machine.guess,
+                                                 current: state.stop)
+        guard target != state.stop else { return reveal() }
+        withAnimation(theme.animation(InteractiveMotion.change)) { _ = state.turn(to: target) }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            reveal()
+        }
+    }
+
+    private func reveal() {
         var shown = false
         withAnimation(theme.animation(InteractiveMotion.change)) { shown = state.showMe() }
         if shown { InteractiveAccessibility.announce(state.revealLines.spoken) }
@@ -172,7 +191,10 @@ struct DoubtDialProgress: View {
         if state.machine.showsShowMe {
             InteractiveActionButton(InteractiveShellCopy.showMe, systemImage: "eye", prominent: true,
                                     accessibilityHint: InteractiveShellCopy.showMeHint, action: onShowMe)
-                .transition(theme.transition())
+                // Leaving, a quick fade in place, gone before the words
+                // above it move down into its room.
+                .transition(.asymmetric(insertion: theme.transition(),
+                                        removal: .opacity.animation(InteractiveMotion.crossfade.speed(2.5))))
         } else if state.machine.canExplore && !state.machine.isRevealed {
             Text(DoubtDialCopy.turnPrompt)
                 .interactiveText(.callout)

@@ -318,13 +318,18 @@ struct DoubtDialFeedStrip: View {
                     .interactiveText(.calloutStrong)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                // One height for ↗ and ⊘, so every cell (and the ✕ under
-                // it) lines up.
-                Image(systemName: DoubtDialGlyph.name(verdict))
-                    .font(.system(size: theme.platform == .phone ? 10 : 9, weight: .bold))
-                    .frame(height: theme.platform == .phone ? 13 : 12)
-                    .id(verdict)
-                    .transition(.opacity)
+                // Both glyphs always there, one shown: a flip crossfades in
+                // place and never changes the cell's layout (an inserted
+                // glyph overlapped the letter while the card moved). One
+                // height for ↗ and ⊘, so every cell and its ✕ line up.
+                ZStack {
+                    Image(systemName: DoubtDialGlyph.name(.shared))
+                        .opacity(verdict.isShared ? 1 : 0)
+                    Image(systemName: DoubtDialGlyph.name(.wavedAway))
+                        .opacity(verdict.isShared ? 0 : 1)
+                }
+                .font(.system(size: theme.platform == .phone ? 10 : 9, weight: .bold))
+                .frame(height: theme.platform == .phone ? 13 : 12)
             }
             .foregroundStyle(verdict.isShared ? theme.ink : theme.ink2)
             .padding(.vertical, 5)
