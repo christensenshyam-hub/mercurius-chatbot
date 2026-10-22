@@ -26,12 +26,19 @@ public enum InteractiveScrollTarget: String, CaseIterable, Sendable {
 }
 
 /// The scroll ids a lesson's list knows the card by. A card marks its
-/// reveal with `.id(InteractiveScrollID.reveal)`; the host marks the rest.
+/// reveal with `.id(InteractiveScrollID.reveal)` (and, when it asks the
+/// list to bring them into view, its `stage` and `panel`); the host marks
+/// the rest.
 public enum InteractiveScrollID {
     public static let card = "lesson-interactive-card"
     public static let top = "lesson-interactive-card-top"
     public static let reveal = "lesson-interactive-card-reveal"
     public static let after = "lesson-interactive-card-after"
+    /// The card's picture, where something plays (Patch the Reward's track
+    /// and its counters).
+    public static let stage = "lesson-interactive-card-stage"
+    /// What the picked item is doing: its question, its run, its result.
+    public static let panel = "lesson-interactive-card-panel"
 
     public static func id(for target: InteractiveScrollTarget) -> String {
         switch target {

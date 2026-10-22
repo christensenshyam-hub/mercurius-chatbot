@@ -66,18 +66,29 @@ public struct InteractiveGalleryView: View {
             #else
             BrandColor.background.ignoresSafeArea()
             #endif
-            ScrollView {
-                card
-                    #if os(macOS)
-                    .padding(.horizontal, NightRowMetrics.gutter)
-                    .padding(.vertical, 24)
-                    .macReadableColumn()
-                    #else
-                    .frame(maxWidth: 560, alignment: .leading)
-                    .padding(.horizontal, BrandSpacing.lg)
-                    .padding(.vertical, BrandSpacing.xl)
-                    .frame(maxWidth: .infinity)
-                    #endif
+            ScrollViewReader { proxy in
+                ScrollView {
+                    card
+                        #if os(macOS)
+                        .padding(.horizontal, NightRowMetrics.gutter)
+                        .padding(.vertical, 24)
+                        .macReadableColumn()
+                        #else
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .padding(.horizontal, BrandSpacing.lg)
+                        .padding(.vertical, BrandSpacing.xl)
+                        .frame(maxWidth: .infinity)
+                        #endif
+                }
+                // As in a lesson: a card brings a part of itself into view.
+                .environment(\.interactiveScrollIntoView,
+                             InteractiveScrollAction(key: "gallery") { id, animated in
+                                 if animated {
+                                     withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
+                                 } else {
+                                     proxy.scrollTo(id, anchor: nil)
+                                 }
+                             })
             }
         }
         .environment(store)
