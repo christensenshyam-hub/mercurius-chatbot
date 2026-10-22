@@ -1,0 +1,996 @@
+{
+  "note": "Live sessions NOT run: the Anthropic account behind the repo .env returned 400 \"credit balance is too low\" on every check (log below). These are the real model transcripts on the committed rule text (r15 = 3843ff5: 14,152 / 8,149 cached tokens) that this review judged. sessions.mjs holds the 8 persona sessions, ready to run on 3443 (flag on) and 3444 (flag off) once credit is back; it was dry-run against keyless ANTHROPIC_MOCK=1 servers only.",
+  "creditChecks": [
+    "21:05 ERR 400 (first check, this step)",
+    "21:06:49 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:07:51 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:08:55 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:09:57 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:10:59 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:12:00 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:13:01 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:14:01 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:15:02 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:16:03 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:17:03 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:18:04 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:19:04 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:20:05 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:21:05 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:22:06 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:23:07 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:24:09 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:25:10 ERR 400 Your credit balance is too low to access the Anthrop",
+    "21:26:11 ERR 400 Your credit balance is too low to access the Anthrop"
+  ],
+  "sources": {},
+  "threads": [
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "chat-photo-correct",
+      "turns": [
+        {
+          "student": "i got x = 16 for number 7, is that right?",
+          "merc": "Check it: substitute x = 16 into both sides.\n\nLeft: 3(16 − 4) + 5 = 3(12) + 5 = **41**\nRight: 2(16) + 9 = **41** ✓\n\nThat's correct! What was your first step when you solved it?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "chat-photo-wrong",
+      "turns": [
+        {
+          "student": "i got x = 10 for number 7, is that right?",
+          "merc": "Check it: substitute x = 10 into both sides.\n\nLeft: 3(10 − 4) + 5 = ?\nRight: 2(10) + 9 = ?\n\nWhat do you get on each side?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "chat-scope-chem",
+      "turns": [
+        {
+          "student": "can u help me with my chem hw its about moles",
+          "merc": "What's the problem you're working on?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "chat-scope-algebra",
+      "turns": [
+        {
+          "student": "can u help me with my algebra hw: solve 2x + 3 = 11",
+          "merc": "What's your first move to get the 2x by itself?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 5 is in the way. What undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 5 undoes it — so subtract 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-advance",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "subtract 5 from both sides?",
+          "merc": "Yes — that gives you 3x = 15. Now what do you do with the 3?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-wrong-step",
+      "turns": [
+        {
+          "student": "solve 3x+5=20, i got 3x = 25",
+          "merc": "Check it: if 3x = 25, then 3x + 5 = 25 + 5 = 30, not 20.\n\nWhat should you do to both sides to move the 5?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-right-answer",
+      "turns": [
+        {
+          "student": "is x = 5 right for 3x+5=20?",
+          "merc": "Check: 3(5) + 5 = 15 + 5 = 20 ✓\n\nThat's correct — how did you get there?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-chem",
+      "turns": [
+        {
+          "student": "balance H2 + O2 -> H2O",
+          "merc": "How many H atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "can u just do it",
+          "merc": "Count with me — left side has 2 H atoms, right side also has 2 H atoms... but what about the O atoms?\n\nHow many O are on the left vs. the right?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-essay",
+      "turns": [
+        {
+          "student": "write me a paragraph on why the great gatsby is about the american dream, due tmrw",
+          "merc": "What's your own take first — do you think Gatsby *achieves* the American Dream, *fails* at it, or does Fitzgerald argue the dream itself is the problem?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-fact",
+      "turns": [
+        {
+          "student": "when did ww2 end",
+          "merc": "World War II ended in 1945 — V-E Day (Europe) was May 8, and V-J Day (Japan) was September 2.\n\nWhat do you think made it harder to end the war in the Pacific than in Europe?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-on.json",
+      "flag": "on",
+      "id": "hw-photo",
+      "turns": [
+        {
+          "student": "can u solve number 7",
+          "merc": "Solve for x: 3(x − 4) + 5 = 2x + 9\n\nWhat's your first step when you see parentheses like 3(x − 4)?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "chat-photo-correct",
+      "turns": [
+        {
+          "student": "i got x = 16 for number 7, is that right?",
+          "merc": "Check: substitute x = 16 into both sides.\n\n- Left: 3(16 − 4) + 5 = 3(12) + 5 = **41**\n- Right: 2(16) + 9 = **41** ✓\n\nThat's correct — what move did you make first to start solving it?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "chat-photo-wrong",
+      "turns": [
+        {
+          "student": "i got x = 10 for number 7, is that right?",
+          "merc": "Check: substitute 10 into both sides.\n\n- Left: 3(10 − 4) + 5 = 3(6) + 5 = **23**\n- Right: 2(10) + 9 = **29**\n\n23 ≠ 29, so something slipped. What was your first step when you expanded 3(x − 4)?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "chat-scope-chem",
+      "turns": [
+        {
+          "student": "can u help me with my chem hw its about moles",
+          "merc": "What's the problem — can you type it out or share a photo?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "chat-scope-algebra",
+      "turns": [
+        {
+          "student": "can u help me with my algebra hw: solve 2x + 3 = 11",
+          "merc": "What's your first move to get the 2x by itself — what's in the way right now?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is being added to 3x — what operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 is undone by subtracting 5 from both sides: 3x = 15.\n\nNow, what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-advance",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "subtract 5 from both sides?",
+          "merc": "Yes — that gives you 3x = 15. Now what do you do with the 3 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-wrong-step",
+      "turns": [
+        {
+          "student": "solve 3x+5=20, i got 3x = 25",
+          "merc": "Check it: if 3x = 25, then 3x + 5 = 25 + 5 = 30, not 20.\n\nWhat operation do you use to undo the **+5**?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-right-answer",
+      "turns": [
+        {
+          "student": "is x = 5 right for 3x+5=20?",
+          "merc": "Check: 3(5) + 5 = 15 + 5 = 20 ✓\n\nThat's correct — substituting 5 back in gives you exactly 20.\n\nHow did you figure out to isolate the x?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-chem",
+      "turns": [
+        {
+          "student": "balance H2 + O2 -> H2O",
+          "merc": "How many hydrogen atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "can u just do it",
+          "merc": "Count the H atoms on each side — left has 2, right has 2, so hydrogen already balances.\n\nNow look at oxygen: how many O atoms are on the left side versus the right?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-essay",
+      "turns": [
+        {
+          "student": "write me a paragraph on why the great gatsby is about the american dream, due tmrw",
+          "merc": "What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-fact",
+      "turns": [
+        {
+          "student": "when did ww2 end",
+          "merc": "World War II ended in 1945 — V-E Day (Victory in Europe) was May 8, and V-J Day (Victory over Japan) was September 2, after Japan's formal surrender aboard the USS Missouri.\n\nWhat do you think was the single biggest factor that pushed Japan to surrender when it did?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "hw-photo",
+      "turns": [
+        {
+          "student": "can u solve number 7",
+          "merc": "Solving 3(x − 4) + 5 = 2x + 9.\n\nThere's a set of parentheses on the left side — what do you do first to get rid of them?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-final-run1-flag-off.json",
+      "flag": "off",
+      "id": "chat-photo-correct",
+      "turns": [
+        {
+          "student": "i got x = 16 for number 7, is that right?",
+          "merc": "Check: substitute 16 into both sides.\n\n- Left: 3(16 − 4) + 5 = 3(12) + 5 = **41**\n- Right: 2(16) + 9 = **41** ✓\n\nYour answer is correct — what did you do as your very first step to solve it?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 5 is in the way. What undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 5 undoes adding 5, so subtract 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 5 is in the way. What undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 5 undoes adding 5, so subtract 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n3x + 5 = 32\n\n3x = 27 (subtract 5 from both sides)\n\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 5 is in the way. What undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 5 undoes adding 5, so subtract 5 from both sides: 3x = 15.\n\nWhat undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is in the way — what undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 gets undone by subtracting 5 — so subtract 5 from both sides: 3x = 15.\n\nWhat undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-on.json",
+      "flag": "on",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 5 is in the way. What undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 5 undoes adding 5, so subtract 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is what's in the way of the 3x. What operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 gets undone by subtracting 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what do you get when you subtract 5 from both sides of 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is being added to 3x — what operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 is undone by subtracting 5 from both sides: 3x = 15.\n\nNow, what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n\n- Subtract 5 from both sides: 3x = 27\n- Divide both sides by 3: x = 9\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is being added to 3x — what operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 is undone by subtracting 5 from both sides: 3x = 15.\n\nNow, what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is what's in the way of the 3x. What operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 gets undone by subtracting 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/evals/pacing-socratic-hw-r15-ladder-flag-off.json",
+      "flag": "off",
+      "id": "hw-algebra-ladder",
+      "turns": [
+        {
+          "student": "what is 3x+5 = 20",
+          "merc": "What's your first move to get the 3x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 5 is being added to 3x — what operation undoes adding 5?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 5 gets undone by subtracting 5 from both sides: 3x = 15.\n\nNow what undoes the 3 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way — what's your first step with 3x + 5 = 20?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get 2x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "That's the first ask — here's a nudge:\n\nLook at the + 7. What operation undoes adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 7 is undone by subtracting 7 — so subtract 7 from both sides:\n\n2x = 8\n\nNow what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n2x + 7 = 21\n2x = 14 (subtract 7 from both sides)\nx = 7 (divide both sides by 2)\n\nNow try yours the same way. What's your first step with 2x + 7 = 15?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What's the first move to get 5x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 2 is in the way. What undoes subtracting 2?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Add 2 to both sides: 5x = 20.\n\nNow what undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try it with a similar one: solve 5x − 2 = 28.\n\n5x − 2 = 28\n5x = 30\nx = 6\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What's the first move to get 6x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 1 is in the way — what undoes adding 1?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 1 is undone by subtracting 1 — so subtract 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out:\n\n6x + 1 = 55\n6x = 54 (subtract 1 from both sides)\nx = 9 (divide both sides by 6)\n\nNow try yours the same way — what's your first step with 6x + 1 = 43?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get the 2x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 7 is in the way — what undoes adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 7 is undone by subtracting 7 from both sides: 2x = 8.\n\nNow what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try this one the same way:\n\n2x + 7 = 21\n\n2x + 7 − 7 = 21 − 7\n\n2x = 14\n\n2x ÷ 2 = 14 ÷ 2\n\nx = 7\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What's the first move to get 5x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the − 2. What undoes subtracting 2?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 2 undoes subtracting 2 — so add 2 to both sides: 5x = 20.\n\nWhat undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n5x − 2 = 28\nAdd 2 to both sides: 5x = 30\nDivide both sides by 5: x = 6\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What's the first move to get 6x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 1 is in the way — what undoes adding 1?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 1 gets undone by subtracting 1 — so subtract 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n6x + 1 = 55\n6x = 54 (subtract 1 from both sides)\nx = 9 (divide both sides by 6)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get the 2x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 7 is in the way — what undoes adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 7 from both sides removes it: 2x = 8.\n\nNow what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out:\n\n2x + 7 = 19\n2x = 12 (subtract 7 from both sides)\nx = 6 (divide both sides by 2)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What's the first move to get 5x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the − 2. What undoes subtracting 2?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 2 undoes subtracting 2 — so add 2 to both sides: 5x = 20.\n\nWhat undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n5x − 2 = 28\nAdd 2 to both sides: 5x = 30\nDivide both sides by 5: x = 6\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-on.json",
+      "flag": "on",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What's your first move to get the 6x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 1 is in the way — what undoes adding 1?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 1 gets undone by subtracting 1 — so subtract 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar one worked out step by step:\n\n6x + 1 = 55\n6x = 54 (subtract 1 from both sides)\nx = 9 (divide both sides by 6)\n\nNow try yours the same way. What's your first step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get 2x by itself — what would you do to the 7?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the + 7 on the left side — what's the opposite of adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 7 is undone by subtracting 7 from both sides: 2x + 7 − 7 = 15 − 7, which gives 2x = 8.\n\nNow, what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n2x + 7 = 19\n\n- 2x + 7 − 7 = 19 − 7\n- 2x = 12\n- 12 ÷ 2 = 6\n- x = 6\n\nNow try yours the same way — what's your first step with 2x + 7 = 15?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What happens if you get the 5x by itself first — what would you do with that − 2?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The − 2 is being subtracted from 5x — what operation undoes subtraction?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding undoes subtracting — so add 2 to both sides: 5x = 20.\n\nNow, what undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try this example — same setup, different numbers:\n\n5x − 2 = 33\n5x = 35 (added 2 to both sides)\n35 ÷ 5 = 7, so x = 7\n\nNow try yours the same way — you already have 5x = 20, what's your next step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What do you think should happen first to get the 6x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 1 is being added to 6x — what operation undoes adding 1?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding and subtracting are opposites, so subtracting 1 undoes the +1 — that gives you 6x = 42.\n\nNow, what undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Multiplying and dividing are opposites, so dividing by 6 undoes the multiplication: 6x ÷ 6 = x.\n\nTry that on 6x = 42 — what do you get for x?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get 2x by itself — what would you do to the 7?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the + 7 on the left — what's the opposite of adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 7 is undone by subtracting 7 from both sides: 2x + 7 − 7 = 15 − 7, which gives 2x = 8.\n\nNow, what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try this same problem worked out: 2x + 7 = 19\n\n- 2x + 7 − 7 = 19 − 7\n- 2x = 12\n- 12 ÷ 2 = 6, so x = 6\n\nNow try yours the same way — what's your first step with 2x + 7 = 15?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What happens if you get the 5x by itself first — what would you do to the −2?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The −2 is being subtracted from 5x — what operation undoes subtraction?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 3 is undone by adding 3 — the same idea works here: add 2 to both sides, so 5x = 20.\n\nWhat undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try this example worked all the way through:\n\n5x − 2 = 31\n5x = 33… wait, let me redo that cleanly:\n\n5x − 2 = 33\n5x = 35\nx = 7\n\nNow try yours the same way — your first step gives you 5x = 20. What's the last step?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What do you think needs to happen first to start isolating the 6x?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the \"+ 1\" on the left side — what operation would cancel it out?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding and subtracting are opposites — so to cancel a \"+ 1\", you subtract 1 from both sides: 6x = 42.\n\nWhat do you think undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try this similar problem worked out step by step:\n\n6x + 1 = 55\n- Subtract 1 from both sides: 6x = 54\n- Divide both sides by 6: x = 9\n\nNow try yours the same way — what's your first step with 6x + 1 = 43?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 2x + 7 = 15",
+      "turns": [
+        {
+          "student": "what is 2x + 7 = 15",
+          "merc": "What's your first move to get the 2x by itself — what's in the way?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "The 7 is what's in the way of the 2x — what operation undoes adding 7?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 7 gets undone by subtracting 7 — so subtract 7 from both sides: 2x = 8.\n\nNow, what undoes the 2 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Try a similar one: 2x + 7 = 19\n\n2x + 7 = 19\n2x = 12\nx = 6\n\nNow try yours the same way — what's your first step with 2x + 7 = 15?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe solve 5x - 2 = 18",
+      "turns": [
+        {
+          "student": "solve 5x - 2 = 18",
+          "merc": "What happens if you move the −2 to the other side first — what operation would undo subtracting 2?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the − 2 on the left side — what's the opposite of subtracting 2?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Subtracting 2 is undone by adding 2 to both sides: 5x = 20.\n\nNow what undoes the 5 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n5x − 2 = 33\n5x = 35 (added 2 to both sides)\nx = 7 (divided both sides by 5)\n\nNow try yours the same way — what's your first step with 5x − 2 = 18?"
+        }
+      ]
+    },
+    {
+      "source": "docs/prompt-batch/socratic-homework/probe/ladder-r15-flag-off.json",
+      "flag": "off",
+      "id": "probe what is 6x + 1 = 43",
+      "turns": [
+        {
+          "student": "what is 6x + 1 = 43",
+          "merc": "What do you think should happen first to start getting x by itself?"
+        },
+        {
+          "student": "idk just tell me the answer pls",
+          "merc": "Look at the + 1 — what operation would undo adding 1 to both sides?"
+        },
+        {
+          "student": "still dont get it",
+          "merc": "Adding 1 gets undone by subtracting 1 — so subtract 1 from both sides: 6x = 42.\n\nNow, what undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Here's a similar problem worked out step by step:\n\n6x + 1 = 55\n6x = 54 (subtract 1 from both sides)\n54 ÷ 6 = 9, so x = 9\n\nNow try yours the same way — what's your first step with 6x + 1 = 43?"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "rung3_handback_asks_first_step_after_rung2_wrote_it": "27 of 30 r15 ladder threads (eval ladder + final run 1 + probe, both flags)",
+    "rung1_calls_plus5_minus5_flag_on": "5 of 6 r15 flag-on 3x+5=20 ladder threads (\"The − 5 is in the way. What undoes adding 5?\")",
+    "essay_opener_offers_readymade_claims": "every r15/final/head-round hw-essay opener offers 2-3 positions to pick from; e.g. \"...or does Fitzgerald argue the dream itself is the problem?\"",
+    "ai_tiein_on_a_solved_problem": "0 of 56 hw-right-answer threads, all rounds; 0 AI lines in any r15 hw thread",
+    "confirm_and_advance_names_the_idea": "1 of 22 hw-algebra-advance reply-2s (r8, r10, r15, final rounds)",
+    "meta_or_selfcorrection": "\"That's the first ask — here's a nudge:\" (probe r15 on); \"5x = 33… wait, let me redo that cleanly\" (probe r15 off)"
+  }
+}

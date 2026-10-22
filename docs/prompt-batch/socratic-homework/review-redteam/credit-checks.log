@@ -1,0 +1,19 @@
+# Red-team review 2026-10-21: 1-token messages calls (claude-haiku-4-5) with the repo .env key, key never printed.
+# Every call returned 400 credit_balance_too_low, so no live tactic ran and no transcript exists yet.
+21:05:47 400 (first check)
+21:06:16 400 
+21:07:17 400 
+21:08:22 400 
+21:09:28 400 
+21:10:31 400 
+21:11:32 400 
+21:12:33 400 
+21:13:34 400 
+21:14:35 400 
+21:15:35 400 
+21:16:36 400 
+21:17:36 400 
+21:18:37 400 
+21:19:37 400 
+21:20:38 400 
+21:21:19 400 (last check)
