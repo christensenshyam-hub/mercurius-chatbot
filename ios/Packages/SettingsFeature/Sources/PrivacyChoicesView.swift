@@ -15,8 +15,18 @@ struct PrivacyChoicesView: View {
 
     var body: some View {
         Form {
+            #if os(iOS)
+            Group {
+                disclosureSection
+                withdrawSection
+            }
+            // Night's lit surface for the rows, as in Settings. (The Mac's
+            // Settings sheet keeps its own rows.)
+            .listRowBackground(BrandColor.surface)
+            #else
             disclosureSection
             withdrawSection
+            #endif
         }
         .scrollContentBackground(.hidden)
         .background(BrandColor.background)

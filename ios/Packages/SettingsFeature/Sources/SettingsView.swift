@@ -41,14 +41,19 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                // Standby gamification toggle — only shown when the client flag
-                // is on, so the default Settings screen is unchanged.
-                if GamificationFlag.clientEnabled {
-                    nudgesSection
+                Group {
+                    // Standby gamification toggle — only shown when the client
+                    // flag is on, so the default Settings screen is unchanged.
+                    if GamificationFlag.clientEnabled {
+                        nudgesSection
+                    }
+                    sessionSection
+                    privacySection
+                    aboutSection
                 }
-                sessionSection
-                privacySection
-                aboutSection
+                // Night's lit surface for the rows: the system's neutral grey
+                // rows sat apart from the ink canvas.
+                .listRowBackground(BrandColor.surface)
             }
             .scrollContentBackground(.hidden)
             .background(BrandColor.background)
@@ -88,6 +93,9 @@ public struct SettingsView: View {
             ))
             .modifier(ResetFailureAlert(message: $resetFailure))
         }
+        // The pushed pages' back button and the alerts' buttons: the asset
+        // accent (#6366F1) as text is 4.2:1 on the ink canvas.
+        .tint(BrandColor.accentText)
     }
 
     // MARK: - Actions
@@ -168,7 +176,9 @@ public struct SettingsView: View {
                         }
                     }
                     .buttonStyle(.borderless)
-                    .tint(BrandColor.accent)
+                    // `accentText`: the fill indigo as text was 3.1:1 on the
+                    // dark row.
+                    .tint(BrandColor.accentText)
                     .disabled(!model.canCopySessionId)
                     .accessibilityLabel("Copy session ID")
                 }
