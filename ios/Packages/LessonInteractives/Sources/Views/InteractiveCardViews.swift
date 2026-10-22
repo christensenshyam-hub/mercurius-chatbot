@@ -11,6 +11,8 @@ public enum InteractiveCardViews {
     /// enabled (`RegistryTests`).
     public static let built: Set<InteractiveID> = [
         .tokenizer,
+
+        .citationThatWasnt,
     ]
 
     /// The card's view, with its context (spec, spoiled, the lesson's state).
@@ -34,7 +36,7 @@ public enum InteractiveCardViews {
             InteractivePlaceholderCard(context)
 
         case .citationThatWasnt:
-            InteractivePlaceholderCard(context)
+            CitationPhoneCard(context)
 
         case .deleteTheGenderBox:
             InteractivePlaceholderCard(context)
@@ -63,7 +65,7 @@ public enum InteractiveCardViews {
             InteractivePlaceholderCard(context)
 
         case .citationThatWasnt:
-            InteractivePlaceholderCard(context)
+            NightCitationCard(context)
 
         case .deleteTheGenderBox:
             InteractivePlaceholderCard(context)
