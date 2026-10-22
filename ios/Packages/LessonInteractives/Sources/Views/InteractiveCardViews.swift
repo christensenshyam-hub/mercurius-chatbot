@@ -11,6 +11,8 @@ public enum InteractiveCardViews {
     /// enabled (`RegistryTests`).
     public static let built: Set<InteractiveID> = [
         .tokenizer,
+
+        .doubtDial,
     ]
 
     /// The card's view, with its context (spec, spoiled, the lesson's state).
@@ -28,7 +30,7 @@ public enum InteractiveCardViews {
     static func phone(_ context: InteractiveCardContext) -> some View {
         switch context.id {
         case .doubtDial:
-            InteractivePlaceholderCard(context)
+            DoubtDialPhoneCard(context)
 
         case .pageWithASecret:
             InteractivePlaceholderCard(context)
@@ -57,7 +59,7 @@ public enum InteractiveCardViews {
     static func mac(_ context: InteractiveCardContext) -> some View {
         switch context.id {
         case .doubtDial:
-            InteractivePlaceholderCard(context)
+            NightDoubtDialCard(context)
 
         case .pageWithASecret:
             InteractivePlaceholderCard(context)

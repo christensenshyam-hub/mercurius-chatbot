@@ -57,6 +57,9 @@ public struct CounterTiles: View {
                         tileView(tile)
                     }
                 }
+                // Every tile as tall as the tallest (a label that wraps
+                // doesn't leave its neighbour short).
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -78,7 +81,7 @@ public struct CounterTiles: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(theme.raised, in: shape)
         .overlay(shape.strokeBorder(theme.increasedContrast ? theme.hairline : theme.wash(theme.lit ? 0.35 : 0.5),
                                     lineWidth: 1))
