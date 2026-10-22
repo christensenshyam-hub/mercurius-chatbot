@@ -63,6 +63,7 @@ const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
 const curriculumTag = require('./lib/curriculumTag');
 const basicsGuide = require('./lib/basicsGuide');
+const { createBasicsVoice, basicsVoiceText } = require('./lib/basicsVoice');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const { notifyReport } = require('./lib/reportWebhook');
@@ -2039,6 +2040,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       ? (responseMode === 'deep' ? 3 : 2)
       : reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
     const reflowOptions = { keepQuotes: isBasicsLesson, numberedLists: isBasicsLesson };
+    // Basics only: drop the filler words the guide bans ("just", "simply")
+    // and any of the guide's own labels ("Safety point:") before the reflow
+    // (lib/basicsVoice). Quoted text and markers pass through; every other
+    // request skips it, so its output is unchanged.
 
     if (wantsStream) {
       // -----------------------------------------------------------------------
@@ -2139,10 +2144,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // see the text change shape at finalize. fullText accumulates the
       // REFLOWED text; markers pass through untouched.
       const reflow = createReflow({ limit: replyReflowLimit, ...reflowOptions });
+      const voice = isBasicsLesson ? createBasicsVoice() : null;
 
       stream.on('text', (text) => {
         touch();
-        const out = reflow.push(text);
+        const out = reflow.push(voice ? voice.push(text) : text);
         if (!out) return; // held back pending a sentence-boundary decision
         fullText += out;
         safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
@@ -2154,8 +2160,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) return;
-        // Drain the reflow hold-back so the tail reaches the client too.
-        const tail = reflow.flush();
+        // Drain the voice and reflow hold-backs so the tail reaches the
+        // client too.
+        const tail = (voice ? reflow.push(voice.flush()) : '') + reflow.flush();
         if (tail) {
           fullText += tail;
           safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
@@ -2288,7 +2295,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
       const reflowed = refused
         ? REFUSAL_COPY
-        : reflowText(replyText, replyReflowLimit, reflowOptions);
+        : reflowText(isBasicsLesson ? basicsVoiceText(replyText) : replyText, replyReflowLimit, reflowOptions);
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
       const lessonOutcome = isCurriculumMsg

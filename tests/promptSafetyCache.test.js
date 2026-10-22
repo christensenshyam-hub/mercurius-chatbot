@@ -472,6 +472,12 @@ for (const flag of ['on', 'off']) {
         usages.push(complete.usage);
         visible.push({ role: 'assistant', content: complete.reply });
       }
+      // lib/basicsVoice ran on the stream: the mock's guide label and filler
+      // "just" are gone from every reply, the sentence kept with a capital.
+      for (const reply of visible.filter((m) => m.role === 'assistant').map((m) => m.content)) {
+        assert.ok(reply.includes('\n\nLeave private details out.\n\n'), reply);
+        assert.doesNotMatch(reply, /Safety point|\bJust\b/);
+      }
       const calls = captured(server(), n);
       assert.equal(calls.length, 5);
       for (const call of calls) {

@@ -113,6 +113,19 @@ describe('airyReflow', () => {
 // keepQuotes (the Basics track, 2026-10): a short quoted span on one line is
 // never split, so a two-sentence practice line stays one chip-able line.
 describe('airyReflow keepQuotes', () => {
+  test('a quoted question in the middle of a sentence is not a sentence end (UX review 2026-10-22)', () => {
+    const text = 'You did well. You asked "what does this mean?" and then "by when?" to get the date. That works.';
+    assert.equal(reflowText(text, 2, { keepQuotes: true }), 'You did well. You asked "what does this mean?" and then "by when?" to get the date.\n\nThat works.');
+    assert.equal(reflowText(text, 2), 'You did well. You asked "what does this mean?"\n\nand then "by when?" to get the date.\n\nThat works.', 'the default mode is unchanged (it breaks mid-sentence)');
+    for (let size = 1; size <= 9; size++) {
+      const r = createReflow({ limit: 2, keepQuotes: true });
+      let out = '';
+      for (let i = 0; i < text.length; i += size) out += r.push(text.slice(i, i + size));
+      assert.equal(out + r.flush(), reflowText(text, 2, { keepQuotes: true }), `chunk ${size}`);
+    }
+    assert.equal(reflowText('One. Two.\nthree. Four.', 2, { keepQuotes: true }), 'One. Two.\n\nthree. Four.', 'a line break still ends it');
+  });
+
   const { MAX_HELD_QUOTE_CHARS } = require('../lib/airyReflow');
   const PRACTICE = 'Here is one idea. Try asking me: "Plan dinner for 6. One is vegetarian, one hates anything green." Then we go on. And more here.';
 

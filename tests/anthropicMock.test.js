@@ -211,6 +211,13 @@ describe('create(): curriculum reply', () => {
     assert.ok(five.content[0].text.endsWith('[LESSON_COMPLETE]'));
   });
 
+  test('a [BASICS: …] thread gets one slip line for the server\'s clean-up; a Deep-dive thread never does', async () => {
+    const basics = await client.messages.create(chat('[BASICS: Unit 1, Lesson 1] Go.'));
+    assert.ok(basics.content[0].text.includes('\n\n**Safety point:** Just leave private details out.\n\n[CHECK]'));
+    const deep = await client.messages.create(chat('[CURRICULUM: Unit 1, Lesson 1] Go.'));
+    assert.ok(!deep.content[0].text.includes('Safety point'));
+  });
+
   test('[LESSON_COMPLETE] is appended once the conversation has ≥5 user turns', async () => {
     const four = await client.messages.create(conversation(4, { system: CURRICULUM_SYSTEM, opener: '[CURRICULUM: Unit 1, Lesson 1] Go.' }));
     assert.doesNotMatch(four.content[0].text, /\[LESSON_COMPLETE\]/);
