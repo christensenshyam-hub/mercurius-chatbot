@@ -117,6 +117,39 @@ public struct RevealBox: View {
     }
 }
 
+/// The card's takeaway, after its reveal: the line a student should leave
+/// with, in the heading style, and an optional detail under it (a reason,
+/// or the real case) in reading text. One VoiceOver element. Every card's
+/// closing takeaway is drawn by this, or by `RevealBox(takeaway:)` when it
+/// closes the reveal box itself, so the family reads alike: bold, `ink`,
+/// never a caption.
+public struct InteractiveTakeaway: View {
+    private let line: String
+    private let detail: String?
+    @Environment(\.interactiveTheme) private var theme
+
+    public init(_ line: String, detail: String? = nil) {
+        self.line = line
+        self.detail = detail
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(line)
+                .interactiveText(.heading)
+                .foregroundStyle(theme.ink)
+            if let detail {
+                Text(detail)
+                    .interactiveText(.callout)
+                    .foregroundStyle(theme.ink)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// A label on the canvas, never a footnote: "A made-up feed…", "Example,
 /// written for this lesson…". Reading text (`ink2`), with an info glyph
 /// that goes at the accessibility sizes.

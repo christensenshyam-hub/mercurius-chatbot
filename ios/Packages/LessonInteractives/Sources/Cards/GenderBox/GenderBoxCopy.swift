@@ -298,9 +298,13 @@ public enum GenderBoxCopy {
     /// "The toy", not "It": the sentence is about the toy, never Amazon's
     /// tool (Reuters doesn't say what that one learned to predict). "Can":
     /// in the toy, part of the pattern moved onto the word.
-    public static let takeaway = "The toy learned from past decisions. Delete one column, and other words can carry "
-        + "the same pattern. Reuters reported that Amazon\u{2019}s scorer downgraded r\u{E9}sum\u{E9}s containing "
-        + "\u{201C}women\u{2019}s\u{201D} (2018)."
+    public static let takeaway = takeawayLine + " " + takeawayDetail
+    /// The takeaway's line, drawn in the family's takeaway style.
+    public static let takeawayLine = "The toy learned from past decisions. Delete one column, and other words can carry "
+        + "the same pattern."
+    /// Under it: the real case, in reading text.
+    public static let takeawayDetail = "Reuters reported that Amazon\u{2019}s scorer downgraded r\u{E9}sum\u{E9}s "
+        + "containing \u{201C}women\u{2019}s\u{201D} (2018)."
 
     /// The reveal's own "women's" row (decoration; the result says the same
     /// numbers): "−1.21 → −1.53".

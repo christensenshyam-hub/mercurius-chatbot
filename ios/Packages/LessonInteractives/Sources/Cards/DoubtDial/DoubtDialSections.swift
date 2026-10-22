@@ -227,10 +227,7 @@ struct DoubtDialCheckSection: View {
                               CounterTile(DoubtDialCopy.notSureYetLabel, value: tally.notSureYet)])
                     .shadow(color: theme.lumen.opacity(glowingCounters && theme.lit ? 0.35 : 0), radius: 12)
                     .transition(theme.doubtDialArrival)
-                Text(DoubtDialCopy.takeaway)
-                    .interactiveText(.heading)
-                    .foregroundStyle(theme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                InteractiveTakeaway(DoubtDialCopy.takeaway)
                     .transition(theme.doubtDialArrival)
                 LabelLine(DoubtDialCopy.checkLabel)
                 InteractiveActionButton(DoubtDialCopy.backToDial, systemImage: "arrow.uturn.backward",

@@ -184,8 +184,9 @@ struct LessonInteractivePlacement { messageID, position (section, afterBlock), c
 | `StopControl(name, stops:, selection:, isEnabled:, value:, decreaseLabel:, increaseLabel:, onSelect:)` | a stops track (44 pt marks), or two step buttons at AX sizes; one adjustable VoiceOver element; ←/→ on the Mac while focused; a haptic |
 | `InteractiveSegmented(name, options:, selection:, title:, onSelect:)` | a 2–3-way toggle (←/→ on the Mac) |
 | `StepControls(steps, nextTitle:, onBack:, onNext:)` | Back / Next with "Step n of m" (→/← on the Mac) |
-| `InteractiveChip`, `InteractiveActionButton` | a single choice or action, with the platform's target, ring and keys |
+| `InteractiveChip`, `InteractiveActionButton` | a single choice or action, with the platform's target, ring and keys. A chip that can't be picked yet is still a control: VoiceOver and XCUITest hear it "dimmed" (`.disabled` on its outer element), and on the iPhone nothing fades (`InteractiveSteadyButtonStyle`; its words are `ink3`). A locked guess (`isLocked`, which `PredictChips` sets) is no longer a control: the pick stays white on `prominent`, the others read in `ink2`, and VoiceOver hears a choice ("selected" on the pick). A UI test finds a locked chip with `app.descendants(matching: .any)[title]`, not `app.buttons` |
 | `LabelLine(InteractiveLabel)` | an on-canvas label (never a footnote) |
+| `InteractiveTakeaway(line, detail:)` | the card's closing takeaway: the line in the heading style, an optional detail (a reason, the real case) under it in reading text; one VoiceOver element. Use it for every takeaway that isn't the last line of the reveal box (`RevealBox(takeaway:)` draws that one in the same style) |
 | `InteractiveTextTable(rows)` | label-over-value rows for the accessibility sizes |
 
 ### 4.3 Styling hooks
@@ -210,6 +211,17 @@ On the iPhone the roles come from `NightSkyCard` (the same in light and dark, th
 - **No state by colour alone:** use a glyph and words.
 - **VoiceOver:** the title and the steps are headers, and the card's state is one sentence (`summary`). Announce what the student caused.
 - **Minors:** no real faces or voices, synthetic people only, and no real person accused of anything. Name real companies only as the slate allows.
+
+### 4.5 One family (the wave-1 consistency pass)
+
+The five wave-1 cards were built in parallel and lined up side by side after the merge (`MercuriusTests/InteractiveFamilyRenderTests` renders every card at 408 pt in its hook, guessed and revealed states; set `TEST_RUNNER_INTERACTIVE_FAMILY_DIR` to keep the PNGs). Keep a new card in the family:
+- **Title:** the slate's name, in Title Case ("The Citation That Wasn’t"), under the shell's INTERACTIVE eyebrow.
+- **Opening:** the hook in `.body`, `ink` (a second, quieter line may follow in `.callout`, `ink2`), or the example the student starts from (a request bubble, a reply). The card's main label (`LabelLine`) comes right after it, **before the guess**, never only at the card's foot.
+- **The guess:** `PredictChips`: the question in the heading style, chips that lock; locked chips keep full contrast.
+- **The reveal:** `RevealBox`: YOU GUESSED / WHAT HAPPENED, never a score.
+- **The takeaway:** in the heading style, `ink`: `InteractiveTakeaway` after the reveal (with a detail line for a reason or the real case), or `RevealBox(takeaway:)` when it closes the box.
+- **Actions:** the one main action `prominent`; secondary actions raised capsules with accent words. Shared glyphs: `eye` for "Show me", `arrow.counterclockwise` for an "… again" action (Play it again, Write it again).
+- **Spacing and colour:** only `theme.sectionSpacing` / `rowSpacing` / `chipSpacing` and the theme's roles (§4.3).
 
 ---
 
@@ -398,3 +410,14 @@ Copy `MercuriusTests/TokenizerCardLayoutTests.swift`. It renders the card with `
 - **iPhone shots:**
   - `-InteractiveGallery doubt-dial` on the 16 Pro Max and on an SE at AX5: the card wraps inside its width, with no sideways overflow.
   - `-Interactive two-tests-one-line -InteractiveStubSpoiled YES`: the replay answered its own check, the card landed in reply 2 (`teachReply(2)`), and the real spoiler scan turned on the spoiled mode.
+
+---
+
+## 10. The wave-1 merge (2026-10-22)
+
+`feat/interactives-wave1` now holds the five cards, each merged from its own branch (registry conflicts only: each card joins `InteractiveCardViews.built`), and `feat/ios-tokenizer` again. The shared chip's two fixes are reconciled (§4.2), and the family pass is in §4.5.
+- `swift test` from an empty scratch path: 1,441 tests pass. CI lint: 0 findings.
+- iOS on a 16 Pro Max simulator: unit tests 16 of 16; UI tests 44 of 44. Three card UI tests needed `descendants(matching: .any)` for a locked chip. The Citation's AX5 walk failed once under load, then passed alone.
+- `ios-unchanged-check.sh`: the same 23 results and pixels.
+- Mac: the Debug build and the unsigned universal Release build succeed; shots from a renamed copy.
+- Key shots: `docs/interactives/key-shots/<slug>-iphone.jpg` and `<slug>-mac.jpg` for every card, the same way for each, plus `family-iphone.jpg` and `family-mac.jpg`.

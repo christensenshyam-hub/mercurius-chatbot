@@ -8,9 +8,9 @@ import DesignSystem
 // control (`NightGenderBoxCard`). Every word comes from `GenderBoxCopy`,
 // every number from `GenderBoxContent`.
 
-/// The card's content inside the shell: the hook, the past résumés, what
-/// the toy learned, the two new résumés, the guess, the one control, the
-/// reveal and the label.
+/// The card's content inside the shell: the hook and its label, the past
+/// résumés, what the toy learned, the two new résumés, the guess, the one
+/// control and the reveal.
 struct GenderBoxCardBody: View {
     let state: GenderBoxState
 
@@ -18,10 +18,15 @@ struct GenderBoxCardBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.sectionSpacing) {
-            Text(GenderBoxCopy.hook)
-                .interactiveText(.body)
-                .foregroundStyle(theme.ink2)
-                .fixedSize(horizontal: false, vertical: true)
+            // The hook in `ink` and the slate's label right under it, before
+            // the résumés and the guess, as every card opens.
+            VStack(alignment: .leading, spacing: theme.rowSpacing) {
+                Text(GenderBoxCopy.hook)
+                    .interactiveText(.body)
+                    .foregroundStyle(theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                LabelLine(GenderBoxCopy.toyLabel)
+            }
             if theme.platform == .mac {
                 // The Mac: the résumés left and the weights right, from
                 // 500 pt (stacked below that). The two new résumés span
@@ -52,7 +57,6 @@ struct GenderBoxCardBody: View {
                     .id(InteractiveScrollID.reveal)
                     .transition(theme.transition())
             }
-            LabelLine(GenderBoxCopy.toyLabel)
         }
         .animation(theme.animation(.easeInOut(duration: 0.45)), value: state.box)
         .animation(theme.animation(.smooth(duration: 0.4)), value: state.machine.phase)
@@ -129,10 +133,7 @@ struct GenderBoxCardBody: View {
                 .interactiveText(.caption)
                 .foregroundStyle(theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(GenderBoxCopy.takeaway)
-                .interactiveText(.callout)
-                .foregroundStyle(theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
+            InteractiveTakeaway(GenderBoxCopy.takeawayLine, detail: GenderBoxCopy.takeawayDetail)
         }
     }
 }

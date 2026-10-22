@@ -123,10 +123,7 @@ struct PatchTheRewardBody: View {
         if let reveal = state.overallReveal {
             VStack(alignment: .leading, spacing: theme.rowSpacing) {
                 RevealBox(reveal)
-                Text(PatchTheRewardCopy.takeaway)
-                    .interactiveText(.body)
-                    .foregroundStyle(theme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                InteractiveTakeaway(PatchTheRewardCopy.takeawayLine, detail: PatchTheRewardCopy.takeawayDetail)
                 LabelLine(PatchTheRewardCopy.madeUpLabel)
             }
             .interactiveScrollMark(InteractiveScrollID.reveal)

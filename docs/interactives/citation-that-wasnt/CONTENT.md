@@ -1,4 +1,4 @@
-# "The citation that wasn’t": the content
+# "The Citation That Wasn’t": the content
 
 **What this is:** every line a student sees or hears in Unit 1 Lesson 3's interactive on the iPhone and the Mac, every number with its source or derivation, every factual claim with its source, the invented-name searches, and the checklist for the teacher who reviews it.
 **Where it shows:** Unit 1, Lesson 3 ("Why AI sounds confident but can be wrong"), as a card at the end of the part of Merc's first reply that holds its first [EX] example (the hallucination example, usually Mata v. Avianca), before that reply's check. Anchor `.firstExample`, no spoiler terms (SLATE.md ★3).
@@ -23,7 +23,7 @@ Curly quotes and apostrophes are as drawn.
 | Where | Text |
 |---|---|
 | Eyebrow | INTERACTIVE |
-| Title | The citation that wasn’t |
+| Title | The Citation That Wasn’t |
 
 ### The hook (readable before any tap)
 
@@ -107,7 +107,7 @@ At the reveal all five rows of drawn pieces light up at once (a wash and an acce
 
 | Where | Text |
 |---|---|
-| Button (after the reveal, once) | Write it again |
+| Button (after the reveal, once; the ↺ glyph, as Patch the Reward's "Play it again") | Write it again |
 | A second example reply | The same question, asked again · EXAMPLE REPLY, WRITTEN FOR THIS LESSON · Sure, here’s one: · **Ambervale, R. (2019). Indoor plants and student focus: a classroom study. Indoor Learning Review, 9(2), 45–61.** (written one piece after another; all at once under Reduce Motion, and when VoiceOver is on) |
 | Line under it | This time the first draw was Ambervale, R. (11%), not Quillfeather, T. (12%), and every piece after it followed from that start. |
 | Caption | A model draws from its chances at every step, so the same question can get a different made-up source. |
@@ -118,7 +118,7 @@ The line ties the second reference to the bars the student saw, and only to step
 
 | Where | Text |
 |---|---|
-| Heading | Likely isn’t the same as true. |
+| Heading (the family's takeaway style, `InteractiveTakeaway`) | Likely isn’t the same as true. |
 | Line | ChatGPT wrote the fake court cases in Mata v. Avianca (2023) the same way, one likely piece at a time. |
 
 A callback to the example in Merc's reply just above the card (the guide's Mata v. Avianca line), not a second telling of it.
@@ -133,7 +133,7 @@ The registry gives this card no spoiler terms (the hook doesn't give away a mech
 
 | Where | Text |
 |---|---|
-| Eyebrow, title | INTERACTIVE · The citation that wasn’t |
+| Eyebrow, title | INTERACTIVE · The Citation That Wasn’t |
 | Line | Guess each piece as a model writes a study’s reference, and see how a source that never existed gets written. |
 | Button | Try it |
 
@@ -141,7 +141,7 @@ The registry gives this card no spoiler terms (the hook doesn't give away a mech
 
 | Element | Spoken |
 |---|---|
-| The card's title (a header; its value is the state in one sentence) | Interactive: The citation that wasn’t. Value, e.g.: "Step 2 of 5, Year: the model drew 2018, at 21 percent, the 2nd likeliest of 3." After the reveal: "No step decided to make it up: each piece was one of the likeliest next pieces, and no step checks that the source is real." After the rewrite: "Written again: Ambervale, R., 2019. … A different made-up source." |
+| The card's title (a header; its value is the state in one sentence) | Interactive: The Citation That Wasn’t. Value, e.g.: "Step 2 of 5, Year: the model drew 2018, at 21 percent, the 2nd likeliest of 3." After the reveal: "No step decided to make it up: each piece was one of the likeliest next pieces, and no step checks that the source is real." After the rewrite: "Written again: Ambervale, R., 2019. … A different made-up source." |
 | The student's bubble | A student asks: Can you give me a study showing that houseplants help students concentrate? |
 | The example reply (one element) | Example reply, written for this lesson. Sure, here’s one: Quillfeather, T., 2018. Not written yet: title, journal, volume and pages. |
 | The step's heading (a header) | Step 2 of 5, Year. Written: First author. |
@@ -241,7 +241,7 @@ Every author, title and journal was searched before ship (FACT RULE row 7; BUILD
 
 ## 6. The VoiceOver walk-through (to do once on a device)
 
-1. Swipe to the card: "Interactive: The citation that wasn’t, heading", with the state ("Step 1 of 5, First author: Pick the piece you think gets written next.").
+1. Swipe to the card: "Interactive: The Citation That Wasn’t, heading", with the state ("Step 1 of 5, First author: Pick the piece you think gets written next.").
 2. The student's bubble, then the example reply ("… Not written yet: first author, year, title, journal, volume and pages."), then the label.
 3. "Guess the next piece, heading". "Step 1 of 5, First author, heading".
 4. The three choices, each "First author. … percent, illustrative, 1 of 3, button". Double-tap one: hear "The model drew Quillfeather, T. this time …".
@@ -316,7 +316,7 @@ Verification after the fixes:
 - **The AX5 tap-through** (`testAtAccessibilitySizesEachTapKeepsWhatItChangedInView`, no `-CitationScroll`): after each guess "Next piece" is on screen, after each "Next piece" the new step's heading, then the five drawn pieces, "Show me", the reveal and the second reference, each before any swipe. Its ten screenshots are `shots/iphone16pm-AX5-tapped-*.png`: the button lands at the bottom edge and each heading at the top, the least scroll that shows them. Run on the 16 Pro Max at AX5 (this pass's only simulator), not an SE.
 - **Snapshots** (`ios-unchanged-check.sh`, recording forced off): the same 23 results (11 pass, 12 already stale), the same pixels for every stale render. No record run.
 - **Mac:** the Debug build succeeds; shots from the renamed copy (`….macnsia4`) at 1280×800 light and dark and 700×600: the walk at the year, the reveal (locked chips readable) and "Write it again". The founder's running app was never touched (the copy script's "running before, is gone" lines were short-lived processes from other workflows; the founder's builds kept running).
-- **Shots retaken:** iPhone 16 Pro Max at Large (the walk, the reveal light and dark, the rewrite light and dark), the AX5 tap-through, and the Mac set above. The shots from before the review (the hook, the SE set, AX3, the clip) show old wording and are in `shots/stale-before-review/`; retake them at sign-off. Key shots: `docs/interactives/key-shots/citation-that-wasnt-*.jpg`.
+- **Shots retaken:** iPhone 16 Pro Max at Large (the walk, the reveal light and dark, the rewrite light and dark), the AX5 tap-through, and the Mac set above. The shots from before the review (the hook, the SE set, AX3, the clip) show old wording and are in `shots/stale-before-review/`; retake them at sign-off. Key shots: `docs/interactives/key-shots/citation-that-wasnt-*.jpg`. The key shots were retaken on the merged `feat/interactives-wave1` build (2026-10-22), the same way for every card: iPhone 16 Pro Max at Large, light, the card's top in its lesson beside its reveal; Mac, the top (light) beside the reveal (dark). `-iphone-revealed.jpg` and `-mac-rewritten.jpg` are this branch's own, from before the merge.
 
 Not changed, and why:
 - **The slate's own files.** They are the approved concept, outside the repo; the card's departures are in §10, as with the earlier name changes.

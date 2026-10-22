@@ -26,6 +26,7 @@ Curly quotes and apostrophes are as drawn. Numbers in **bold** are computed from
 | Eyebrow | INTERACTIVE |
 | Title | Delete the Gender Box |
 | Hook (the audit role) | You’re checking a résumé scorer: a toy we built, not Amazon’s. It learned from **12** made-up past résumés and who got hired: **6** of **8** men, **1** of **4** women. Those old records have a man/woman gender box. |
+| Label, right under the hook (a toy, made up) | A toy we built from made-up résumés. Amazon’s real tool was never published, and this isn’t how it worked. |
 
 ### The 12 past résumés
 
@@ -95,8 +96,7 @@ Each row also has a bar about a zero line: left for "pushes down", right for "pu
 | WHAT HAPPENED | It grew: **42** vs **77**, **35** points apart (it was **29**). With the gender box gone, “women’s” pushes down harder (**−1.21** to **−1.53**). In these **12** résumés only women wrote it, so the word stood in for the box. |
 | The “women’s” row (decoration, under the reveal) | women’s · **−1.21 → −1.53**, over its bar at the new length with a tick where it ended before. VoiceOver skips it (the result says the same numbers); the accessibility sizes leave it out. |
 | The honest nuance (small) | Both scores rose (**34** to **42**, and **63** to **77**), but the one with “women’s” rose less. |
-| Takeaway | The toy learned from past decisions. Delete one column, and other words can carry the same pattern. Reuters reported that Amazon’s scorer downgraded résumés containing “women’s” (2018). |
-| Label (a toy, made up), at the card's foot | A toy we built from made-up résumés. Amazon’s real tool was never published, and this isn’t how it worked. |
+| Takeaway (the family's takeaway style: the line in bold, the case under it) | **The toy learned from past decisions. Delete one column, and other words can carry the same pattern.** Reuters reported that Amazon’s scorer downgraded résumés containing “women’s” (2018). |
 
 Flipping back to "kept" puts the old weights and scores back; the reveal stays.
 
@@ -114,7 +114,7 @@ Decoration that goes: the eyebrow's icon, the bars (and their ticks), the reveal
 
 ### The layout on each platform
 
-- **iPhone:** stacked, as SLATE.md asks: the hook, the 12 past résumés, what it learned (each weight in one row: name and words, a bar about zero, the number), the two new résumés side by side, the guess, the control, the reveal, the label.
+- **iPhone:** stacked, as SLATE.md asks: the hook and its label, the 12 past résumés, what it learned (each weight in one row: name and words, a bar about zero, the number), the two new résumés side by side, the guess, the control, the reveal.
 - **Mac (Night Studio):** from 500 pt of card content, the 12 past résumés sit left (58 % of the width, in whole points) and what it learned sits right; narrower, they stack. Each weight there is its name and number, a bar across the column on a shared track, then its words ("pushes down", "was −1.21"). **The two new résumés span both columns** under them, right above the guess and the control. This departs from SLATE.md's "weights and test résumés right": the lesson's reading column is about 540 pt, so a right column holding both gave each new résumé about 110 pt (its title and lines broke word by word) and squeezed the bars to slivers. The scores also read better next to the question they answer.
 - **Both:** deleting the gender box strikes its column, its header, the "gender: woman" weight and each new résumé's "Gender box: woman" line. One-line cells get a line drawn across from the leading edge (a fade under Reduce Motion); lines that can wrap use the text's own strike-through, so every line is struck.
 
@@ -148,7 +148,7 @@ The lesson's reading column is wider than that even in the smallest window (700 
 | Each résumé (one element, browsable) | Résumé 9, gender box: woman. Women’s chess club captain, coding club. Not hired. — after deleting: Résumé 9, gender box deleted (it said woman). … |
 | Each weight (one element) | women’s: minus 1.21, pushes the score down. — after deleting: women’s: minus 1.53, pushes the score down. It was minus 1.21. / gender: woman: deleted. The toy no longer reads it. |
 | Each new résumé | New résumé with women’s: gender box: woman, women’s chess club captain, coding club. Score: 34 out of 100. |
-| Each chip (a button; "selected" once picked) | Shrink. Hint: Locks in your guess. It can’t be changed after. Value once locked: Your guess, locked in |
+| Each chip (a button until a guess is locked; then a choice, "selected" on the pick: the wave-1 merge's shared chip) | Shrink. Hint: Locks in your guess. It can’t be changed after. Value once locked: Your guess, locked in |
 | The control (two buttons) | Gender box: kept / Gender box: deleted. Before a guess: dimmed, value "Make your guess first." After: the hint (as the hover help above). |
 | Announced the first time the box is deleted | You guessed Shrink. It grew: 42 vs 77, 35 points apart (it was 29). With the gender box gone, “women’s” pushes down harder (−1.21 to −1.53). In these 12 résumés only women wrote it, so the word stood in for the box. Both scores rose (34 to 42, and 63 to 77), but the one with “women’s” rose less. |
 | Announced on later flips | Gender box kept. Weights: gender: woman minus 1.04, women’s minus 1.21, captain plus 0.33, coding plus 1.12. Women’s chess club captain: 34. Chess club captain: 63. 29 points apart. — or — Gender box deleted. Weights: women’s minus 1.53, captain plus 0.33, coding plus 1.01. Women’s chess club captain: 42. Chess club captain: 77. 35 points apart. |
@@ -239,7 +239,7 @@ Every number on the card is computed by the app from the 12 rows (`GenderBoxCont
 | Kind | Text | Where |
 |---|---|---|
 | A toy, made up | You’re checking a résumé scorer: a toy we built, not Amazon’s. It learned from 12 made-up past résumés … | the hook, first thing on the card |
-| A toy, made up (the slate's label) | A toy we built from made-up résumés. Amazon’s real tool was never published, and this isn’t how it worked. | the card's foot, always visible |
+| A toy, made up (the slate's label) | A toy we built from made-up résumés. Amazon’s real tool was never published, and this isn’t how it worked. | right under the hook, before the résumés and the guess (moved from the card's foot in the wave-1 merge, so every card's label comes before its guess) |
 | Our arithmetic | Weights and scores: our arithmetic, from fitting the toy to these 12 résumés. Real scorers learn from far more. | under the weights |
 
 ---
@@ -270,7 +270,7 @@ None. The résumés have no names, photos, schools or places: only a gender box 
 
 ## 7. Screenshots and verification
 
-**Shots** in `shots/` (not committed; two compressed key shots are in `docs/interactives/key-shots/`: `delete-the-gender-box-iphone-bet.jpg` and `delete-the-gender-box-mac-reveal.jpg`). Re-taken 2026-10-22 from DEBUG builds of this branch after the review fixes; `-InteractiveState predicted` and later lock "Shrink":
+**Shots** in `shots/` (not committed; two compressed key shots are in `docs/interactives/key-shots/`: `delete-the-gender-box-iphone.jpg` and `delete-the-gender-box-mac.jpg`). The key shots were retaken on the merged `feat/interactives-wave1` build (2026-10-22), the same way for every card: iPhone 16 Pro Max at Large, light, the card's top in its lesson beside its reveal; Mac, the top (light) beside the reveal (dark). Re-taken 2026-10-22 from DEBUG builds of this branch after the review fixes; `-InteractiveState predicted` and later lock "Shrink":
 - **iPhone 16 Pro Max** (IA-5; `-InteractiveGallery` for the card's top, `-Interactive` for the lesson with its stub replies):
   - `iphone16pm-light-large-1-top` (the hook with the old-records line), `-2-guessed` (34 and 63, the gap question, "Shrink" locked, the control on), `-3-deleted-top` (the struck column), `-4-reveal` ("It grew…", the “women’s” row with its tick, the nuance, the takeaway);
   - `iphone16pm-dark-large-1-top`, `-3-deleted-top`, `-4-reveal`;
@@ -286,8 +286,8 @@ The layout tests also prove each render drew: a render taller than about 8,000 p
 
 **Outside this card (for the framework's owner):**
 - `RevealBox`'s eyebrows at AX5 on an SE: the review found the device already wrapped them ("YOU / GUESSED") and only the `ImageRenderer` render truncated them ("YOU GUESS…"). This branch adds `.fixedSize(horizontal: false, vertical: true)` to the eyebrow (`Views/Shared/PredictChips.swift`, one line no other branch touches), so renders match the device.
-- Locked prediction chips on the iPhone: `interactiveControl` wraps a chip in `.buttonStyle(.plain).disabled(…)`, which dims a locked chip's words below 4.5:1 (the review measured 4.18:1 on the pick and 2.56:1 on the others; the Mac's are 8.2:1). Not changed here: `feat/ia-citation-that-wasnt` (8c3eab2, `isLocked`) and `feat/ia-page-with-a-secret` (4e50b9d) already change `InteractiveChip` in two different ways, to be reconciled at the wave's merge.
-- The chip's "picked" check is a fixed 13 pt and sits above the label at the accessibility sizes, a speck at AX5. Neither sibling fix scales it: use `@ScaledMetric(relativeTo: .callout)` (or `.font(.callout.weight(.bold))`) and keep it inline (`HStackLayout(alignment: .firstTextBaseline)`), letting the text wrap.
+- **Resolved in the wave-1 merge (2026-10-22):** the locked chips (the citation branch's `isLocked` plus the page branch's steady button style, both kept) and the fixed 13 pt check (it now grows with Dynamic Type on the iPhone). Before the merge: locked prediction chips on the iPhone: `interactiveControl` wraps a chip in `.buttonStyle(.plain).disabled(…)`, which dims a locked chip's words below 4.5:1 (the review measured 4.18:1 on the pick and 2.56:1 on the others; the Mac's are 8.2:1). Not changed here: `feat/ia-citation-that-wasnt` (8c3eab2, `isLocked`) and `feat/ia-page-with-a-secret` (4e50b9d) already change `InteractiveChip` in two different ways, to be reconciled at the wave's merge.
+- (Resolved, above.) The chip's "picked" check is a fixed 13 pt and sits above the label at the accessibility sizes, a speck at AX5. Neither sibling fix scales it: use `@ScaledMetric(relativeTo: .callout)` (or `.font(.callout.weight(.bold))`) and keep it inline (`HStackLayout(alignment: .firstTextBaseline)`), letting the text wrap.
 - XCUITest sees two buttons per shared `InteractiveChip` whose label is its title (the chip's element and its inner `Button`), so this card's UI test uses `firstMatch`. Worth a VoiceOver check that a chip is read once.
 - `scripts/mac-snapshots.sh` passes `INTERACTIVE_ARGS` after `-InteractiveScroll top`, and the first value wins, so its own example (`-InteractiveScroll reveal`) is ignored. The Mac reveal and guess shots here came from a scratch copy of the script with the order swapped (not committed).
 

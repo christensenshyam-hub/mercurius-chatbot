@@ -28,7 +28,7 @@ final class CitationThatWasntUITests: XCTestCase {
         ]
         app.launch()
 
-        let title = app.descendants(matching: .any)["Interactive: The citation that wasn\u{2019}t"]
+        let title = app.descendants(matching: .any)["Interactive: The Citation That Wasn\u{2019}t"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u1_l3")
 
         let selected = NSPredicate(format: "isSelected == true")
@@ -114,7 +114,7 @@ final class CitationThatWasntUITests: XCTestCase {
         ]
         app.launch()
 
-        let title = app.descendants(matching: .any)["Interactive: The citation that wasn\u{2019}t"]
+        let title = app.descendants(matching: .any)["Interactive: The Citation That Wasn\u{2019}t"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u1_l3")
 
         let slots = ["First author", "Year", "Title", "Journal", "Volume and pages"]

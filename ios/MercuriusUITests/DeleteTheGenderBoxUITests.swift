@@ -70,13 +70,17 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         bringOnScreen(shrink, in: app)
         shrink.tap()
         let picked = NSPredicate(format: "isSelected == true")
-        expectation(for: picked, evaluatedWith: shrink)
-        waitForExpectations(timeout: 5)
+        // Locked, the chips are no longer buttons (`InteractiveChip.isLocked`):
+        // the pick reads as a selected choice.
+        let locked = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ AND isSelected == true", "Shrink")).firstMatch
+        XCTAssertTrue(locked.waitForExistence(timeout: 5), "the guess didn't lock")
         // A locked guess can't change: another chip's tap does nothing.
-        let other = app.buttons["Grow"].firstMatch
+        XCTAssertFalse(app.buttons["Grow"].exists, "a locked chip is still a button")
+        let other = app.descendants(matching: .any)["Grow"].firstMatch
         other.tap()
         XCTAssertFalse(other.isSelected, "a locked guess changed")
-        XCTAssertTrue(shrink.isSelected)
+        XCTAssertTrue(locked.exists)
 
         bringOnScreen(deleted, in: app)
         XCTAssertNotEqual(deleted.value as? String, "Make your guess first.")

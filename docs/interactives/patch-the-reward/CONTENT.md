@@ -9,7 +9,7 @@
 - `…/PatchTheRewardCopy.swift`: every line below. `…/PatchTheRewardState.swift`: the guesses and runs (in memory only).
 - `Sources/Views/PatchTheReward/` (the track picture and the card's parts), `Views/Phone/PatchTheRewardPhoneCard.swift`, `Views/Mac/NightPatchTheRewardCard.swift`.
 - Tests: `Tests/RoutePlannerTests.swift`, `Tests/PatchTheRewardTests.swift` (every number below is re-derived there), `ios/MercuriusUITests/PatchTheRewardUITests.swift`.
-**Screenshots:** `shots/` next to this file (not committed; the first build's in `shots/2026-10-21/`). Two key shots are committed: `docs/interactives/key-shots/patch-the-reward-*.jpg`.
+**Screenshots:** `shots/` next to this file (not committed; the first build's in `shots/2026-10-21/`). Three key shots are committed: `docs/interactives/key-shots/patch-the-reward-iphone.jpg`, `-mac.jpg` and `-iphone-track.jpg` (the track's marks). The key shots were retaken on the merged `feat/interactives-wave1` build (2026-10-22), the same way for every card: iPhone 16 Pro Max at Large, light, the card's top in its lesson beside its reveal; Mac, the top (light) beside the reveal (dark).
 
 The card is a picture the app draws and a computation it does on the device. It sends nothing, stores nothing, runs no model and changes nothing in the prompt or the lesson. Every route it shows was worked out by exact arithmetic over authored toy data, and is the same on every device, every time.
 
@@ -86,7 +86,7 @@ The guess is shown as **It finishes** / **It won’t finish**. A guess can't be 
 |---|---|
 | You guessed | It would finish for 2 of the 3 rules (or "none of the 3 rules", "1 of the 3 rules", "all 3 rules") |
 | What happened | It finished for 1 of them: rule C. |
-| Takeaway | Nothing was broken: the boat did exactly what each rule paid for. Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. “Be helpful” or “be honest” can’t be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps. |
+| Takeaway (the family's takeaway style: the first sentence in bold, the rest under it) | **Nothing was broken: the boat did exactly what each rule paid for.** Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. “Be helpful” or “be honest” can’t be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps. |
 | Label | Loopholes A and B are made up for this toy. … (above) |
 
 **Spoiled mode** (never reached in a lesson, since the card has no spoiler terms; DEBUG `-InteractiveState spoiled` shows it): no guesses; a patch runs when its chip is picked; the results have no "You guessed", and the reveal says "It finished for 1 of the 3 rules: rule C."

@@ -38,7 +38,9 @@ final class DoubtDialUITests: XCTestCase {
         XCTAssertTrue(guess.waitForExistence(timeout: 10))
         bringOnScreen(guess, in: app)
         guess.tap()
-        let locked = app.buttons
+        // Locked, the chip is no longer a button (`InteractiveChip.isLocked`):
+        // it reads as a selected choice.
+        let locked = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@ AND isSelected == true", "Doubt everything")).firstMatch
         XCTAssertTrue(locked.waitForExistence(timeout: 5), "the guess didn't lock")
 

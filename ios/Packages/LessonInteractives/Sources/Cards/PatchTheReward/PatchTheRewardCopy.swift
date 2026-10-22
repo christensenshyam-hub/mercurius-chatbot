@@ -53,7 +53,14 @@ public enum PatchTheRewardCopy {
     /// exactly), and why that doesn't carry over to values: a rule for them
     /// pays for a stand-in, as A and B did. Not "a lap is easy to count":
     /// crossings and metres are as easy to count, and those rules failed.
-    public static let takeaway = "Nothing was broken: the boat did exactly what each rule paid for. Rule C worked here because a lap can be spelled out exactly, so the rule could pay for the race itself. \u{201C}Be helpful\u{201D} or \u{201C}be honest\u{201D} can\u{2019}t be spelled out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps."
+    public static let takeaway = takeawayLine + " " + takeawayDetail
+    /// The takeaway's line, drawn in the family's takeaway style.
+    public static let takeawayLine = "Nothing was broken: the boat did exactly what each rule paid for."
+    /// Under it, in reading text: why C worked, and why a value can't be
+    /// paid for so exactly.
+    public static let takeawayDetail = "Rule C worked here because a lap can be spelled out exactly, so the rule could "
+        + "pay for the race itself. \u{201C}Be helpful\u{201D} or \u{201C}be honest\u{201D} can\u{2019}t be spelled "
+        + "out like that, so a rule for them pays for a stand-in, as A and B did, and stand-ins leave gaps."
 
     // Counters
     public static let pointsTile = "Points"

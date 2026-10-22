@@ -229,8 +229,11 @@ public struct InteractiveChip: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
         return layout {
             if isSelected {
+                // On the iPhone the check grows with the text (13 pt at the
+                // default size, as before), so it isn't a speck at AX5.
                 Image(systemName: "checkmark")
-                    .font(.system(size: theme.platform == .phone ? 13 : 11, weight: .bold))
+                    .font(theme.platform == .phone ? .system(.footnote, design: .rounded, weight: .bold)
+                                                   : .system(size: 11, weight: .bold))
                     .accessibilityHidden(true)
             }
             Text(title)

@@ -6,7 +6,7 @@ import Foundation
 /// ("decided") appear only in `predictionLines`, the prediction and the
 /// reveal that refutes it.
 public enum CitationCopy {
-    public static let title = "The citation that wasn\u{2019}t"
+    public static let title = "The Citation That Wasn\u{2019}t"
 
     /// The Mac's compact card (narrower than 440 pt).
     public static let compactLine = "Guess each piece as a model writes a study\u{2019}s reference, and see how a source that never existed gets written."

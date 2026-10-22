@@ -293,7 +293,7 @@ Please tick each, or note a change. Record the sign-off (name, date) at the end.
 - `ios/scripts/ios-unchanged-check.sh` (on IA-3): the same 23 results as the baseline (11 pass, 12 already stale) and the same pixels for every stale render. No record run; nothing under `MercuriusTests/Snapshots` changed.
 - Mac: the Debug build succeeds. The window shots come from a renamed copy of this branch's build (`com.mayoailiteracy.mercurius.native.macnsia3`, quit by its own PID by the script). The founder's two Mercurius processes (the builds in `merc-mac-tok-dd` and `merc-mac-user-dd`) ran throughout; the script's "is gone" lines were another agent's simulator app restarting, as in the first build.
 
-**Shots** (`shots/`, not committed; two key shots are: `docs/interactives/key-shots/page-with-a-secret-iphone.jpg`, before the guess · guess locked · the reveal, and `page-with-a-secret-mac.jpg`, the Mac card with a guess locked (light) beside the whole run revealed (dark))
+**Shots** (`shots/`, not committed; two key shots are: `docs/interactives/key-shots/page-with-a-secret-iphone.jpg` and `page-with-a-secret-mac.jpg`). The key shots were retaken on the merged `feat/interactives-wave1` build (2026-10-22), the same way for every card: iPhone 16 Pro Max at Large, light, the card's top in its lesson beside its reveal; Mac, the top (light) beside the reveal (dark).
 
 | File | What it shows |
 |---|---|

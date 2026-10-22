@@ -48,8 +48,11 @@ final class PageWithASecretUITests: XCTestCase {
         XCTAssertFalse(stepHeader(4, in: app).exists, "Next left the page before a guess was locked")
         bringOnScreen(guess, in: app)
         guess.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: guess)
-        waitForExpectations(timeout: 5)
+        // Locked, the chip is no longer a button (`InteractiveChip.isLocked`):
+        // it reads as a selected choice.
+        let locked = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ AND isSelected == true", "It sticks to your task")).firstMatch
+        XCTAssertTrue(locked.waitForExistence(timeout: 5), "the guess didn't lock")
 
         // Locked: the toggle appears, the card asks for the switch, and Next
         // still holds until it is made.

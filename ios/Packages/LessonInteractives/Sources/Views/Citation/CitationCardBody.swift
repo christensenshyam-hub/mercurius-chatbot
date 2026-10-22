@@ -297,7 +297,7 @@ struct CitationCardBody: View {
             .id(InteractiveScrollID.reveal)
             .transition(theme.transition())
             if state.canRewrite {
-                InteractiveActionButton(CitationCopy.rewrite, systemImage: "arrow.clockwise", isFirst: true,
+                InteractiveActionButton(CitationCopy.rewrite, systemImage: "arrow.counterclockwise", isFirst: true,
                                         accessibilityHint: CitationCopy.rewriteHint) {
                     rewrite()
                 }
@@ -321,16 +321,7 @@ struct CitationCardBody: View {
                 .id(CitationScrollID.askedAgain)
                 .transition(theme.transition())
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(CitationCopy.takeawayHeading)
-                    .interactiveText(.heading)
-                    .foregroundStyle(theme.ink)
-                Text(CitationCopy.takeaway)
-                    .interactiveText(.callout)
-                    .foregroundStyle(theme.ink)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
+            InteractiveTakeaway(CitationCopy.takeawayHeading, detail: CitationCopy.takeaway)
         }
     }
 
