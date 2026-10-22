@@ -18,6 +18,19 @@ enum MacNightCopy {
     /// The line under the greeting: `HomeState.greeting`'s, without its
     /// opener and without the streak cheer ("keep your streak alive!").
     static func subline(_ state: HomeState) -> String {
+        if state.track == .basics {
+            // Basics: no weekly goal; lessons finished, in words.
+            switch state.next {
+            case .lesson:
+                if !state.hasProgress && !state.resumesNext {
+                    return "Your first Basics lesson is ready when you are."
+                }
+                return state.basicsProgressLine.map { "\($0) The next one is ready when you are." }
+                    ?? "Your next Basics lesson is ready when you are."
+            case .unitTest, nil:
+                return "You've finished the Basics. Chat with Merc any time."
+            }
+        }
         switch state.next {
         case nil:
             return "You've finished the whole path. Chat with Merc any time to go deeper."

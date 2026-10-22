@@ -1,0 +1,171 @@
+{
+  "track": "basics",
+  "units": [
+    {
+      "id": "basics_1",
+      "number": "01",
+      "title": "Meet AI chatbots",
+      "summary": "What a chatbot is, what it's good at, and what it gets wrong.",
+      "lessons": [
+        {
+          "id": "b1_l1",
+          "number": 1,
+          "title": "What is an AI chatbot?",
+          "objective": "You'll send your first message to a chatbot.",
+          "starter": "[BASICS: Unit 1, Lesson 1] Teach me what an AI chatbot is, in plain words. Keep it short, then let me try one."
+        },
+        {
+          "id": "b1_l2",
+          "number": 2,
+          "title": "What chatbots are good at",
+          "objective": "You'll get a chatbot to write a short note for you.",
+          "starter": "[BASICS: Unit 1, Lesson 2] Show me what AI chatbots are good at in everyday life, in plain words. Then let me try one."
+        },
+        {
+          "id": "b1_l3",
+          "number": 3,
+          "title": "What chatbots get wrong",
+          "objective": "You'll see a chatbot get something wrong, and learn when to check.",
+          "starter": "[BASICS: Unit 1, Lesson 3] Show me, in plain words, what AI chatbots get wrong and how to catch it. Then let me test you."
+        }
+      ]
+    },
+    {
+      "id": "basics_2",
+      "number": "02",
+      "title": "Your first conversations, safely",
+      "summary": "Ask questions, follow up, keep private things private, and handle a fake family call.",
+      "lessons": [
+        {
+          "id": "b2_l1",
+          "number": 1,
+          "title": "Asking a real question",
+          "objective": "You'll ask a chatbot a real question from your own week.",
+          "starter": "[BASICS: Unit 2, Lesson 1] Teach me how to ask an AI chatbot a real question, in plain words. Then let me ask you one."
+        },
+        {
+          "id": "b2_l2",
+          "number": 2,
+          "title": "Following up",
+          "objective": "You'll steer an answer with a follow-up, like \"shorter\" or \"in plain words.\"",
+          "starter": "[BASICS: Unit 2, Lesson 2] Teach me how to follow up with an AI chatbot, including asking it for plainer words or a shorter answer. Then let me practice."
+        },
+        {
+          "id": "b2_l3",
+          "number": 3,
+          "title": "What never to share",
+          "objective": "You'll get good help from a chatbot without sharing anything private.",
+          "starter": "[BASICS: Unit 2, Lesson 3] Teach me what I should never share with an AI chatbot, and why. Then let me practice asking for help safely."
+        },
+        {
+          "id": "b2_l4",
+          "number": 4,
+          "title": "Fake calls that sound like family",
+          "objective": "You'll know exactly what to do if a call sounds like family asking for money.",
+          "starter": "[BASICS: Unit 2, Lesson 4] Teach me about AI voice-clone and family emergency scams, and exactly what to do if I get one of those calls. Then help me make a plan."
+        }
+      ]
+    },
+    {
+      "id": "basics_3",
+      "number": "03",
+      "title": "Getting good answers",
+      "summary": "Small changes that get you clearer, more useful answers.",
+      "lessons": [
+        {
+          "id": "b3_l1",
+          "number": 1,
+          "title": "Be specific",
+          "objective": "You'll turn a general question into one that gets a much better answer.",
+          "starter": "[BASICS: Unit 3, Lesson 1] Teach me how adding details gets better answers from an AI chatbot. Then let me try it."
+        },
+        {
+          "id": "b3_l2",
+          "number": 2,
+          "title": "Tell it your situation",
+          "objective": "You'll give a chatbot the background it needs, and leave out private details.",
+          "starter": "[BASICS: Unit 3, Lesson 2] Teach me how to give an AI chatbot the right background so it can help me, without sharing private details. Then let me practice."
+        },
+        {
+          "id": "b3_l3",
+          "number": 3,
+          "title": "Ask for the downsides",
+          "objective": "You'll get honest pros and cons from a chatbot, not only agreement.",
+          "starter": "[BASICS: Unit 3, Lesson 3] Teach me how to get honest, balanced answers from an AI chatbot instead of agreement. Then let me practice."
+        }
+      ]
+    },
+    {
+      "id": "basics_4",
+      "number": "04",
+      "title": "Everyday tasks",
+      "summary": "Emails, confusing letters, meal plans, and learning something new.",
+      "lessons": [
+        {
+          "id": "b4_l1",
+          "number": 1,
+          "title": "Write an email or letter",
+          "objective": "You'll get a chatbot to write an email, then copy it out to use.",
+          "starter": "[BASICS: Unit 4, Lesson 1] Teach me how to use an AI chatbot to help write an email or letter, and how to copy it out. Then let me try one."
+        },
+        {
+          "id": "b4_l2",
+          "number": 2,
+          "title": "Understand a confusing letter",
+          "objective": "You'll get a confusing letter explained in plain words, with private parts covered.",
+          "starter": "[BASICS: Unit 4, Lesson 2] Teach me how to use an AI chatbot to understand a confusing letter or bill, safely. Then let me practice with a made-up letter."
+        },
+        {
+          "id": "b4_l3",
+          "number": 3,
+          "title": "Meals, plans and lists",
+          "objective": "You'll get a meal plan and a shopping list that fit the people you're feeding.",
+          "starter": "[BASICS: Unit 4, Lesson 3] Teach me how to use an AI chatbot for recipes, plans and lists. Then let me try one."
+        },
+        {
+          "id": "b4_l4",
+          "number": 4,
+          "title": "Learn something new, with a photo",
+          "objective": "You'll learn something new one step at a time, and try asking about a photo.",
+          "starter": "[BASICS: Unit 4, Lesson 4] Teach me how to use an AI chatbot to learn something new, one step at a time, including by sharing a photo. Then let me try."
+        }
+      ]
+    },
+    {
+      "id": "basics_5",
+      "number": "05",
+      "title": "Using it wisely on your own",
+      "summary": "Check what matters, know when to ask a person, spot scams, and start on your own.",
+      "lessons": [
+        {
+          "id": "b5_l1",
+          "number": 1,
+          "title": "Checking answers that matter",
+          "objective": "You'll know which answers to check, and where to check them.",
+          "starter": "[BASICS: Unit 5, Lesson 1] Teach me which AI answers to check and where to check them. Then let me practice."
+        },
+        {
+          "id": "b5_l2",
+          "number": 2,
+          "title": "Health, money and legal: ask a person",
+          "objective": "You'll use AI to get ready for a doctor, banker or lawyer, not to decide for you.",
+          "starter": "[BASICS: Unit 5, Lesson 2] Teach me how to use AI safely for health, money and legal questions, and when to ask a real person instead. Then let me practice."
+        },
+        {
+          "id": "b5_l3",
+          "number": 3,
+          "title": "Other scams that use AI",
+          "objective": "You'll spot the signs of a scam, and know what to do if you already paid.",
+          "starter": "[BASICS: Unit 5, Lesson 3] Teach me how scammers use AI in calls, emails, texts and pop-ups, the signs of any scam, and what to do if I already paid. Then let me practice spotting one."
+        },
+        {
+          "id": "b5_l4",
+          "number": 4,
+          "title": "On your own",
+          "objective": "You'll know how to get a real chatbot app safely, and leave with your own safety rules.",
+          "starter": "[BASICS: Unit 5, Lesson 4] Teach me how to use a chatbot app on my own, safely, and recap my safety rules. Then let me practice."
+        }
+      ]
+    }
+  ]
+}

@@ -229,8 +229,11 @@ struct AppEntryView: View {
             scheduler: scheduler,
             streakStore: env.streakStore,
             reminderCardStore: env.reminderCardStore,
-            onStartLesson1: {
-                let lesson1 = MercuriusCurriculum.units.first?.lessons.first
+            onStartLesson1: { track in
+                // The card the learner tapped is their course from now on
+                // (switchable on the path, or the Mac's sidebar).
+                env.trackStore.choose(track)
+                let lesson1 = track.units.first?.lessons.first
                 entryTab = .curriculum
                 entryLesson = lesson1
                 hasEnteredApp = true
@@ -299,6 +302,7 @@ struct AppEntryView: View {
                 reminderStore: env.reminderStore,
                 progress: env.progressStore,
                 progressSync: env.progressSync,
+                trackStore: env.trackStore,
                 lastActivityStore: env.lastActivityStore,
                 reviewPromptStore: env.reviewPromptStore,
                 scheduler: scheduler,
@@ -362,7 +366,8 @@ struct AppEntryView: View {
             // Only a streak the server confirmed recently — a weeks-old cache
             // would make Merc claim a streak that has already died.
             streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0,
-            progress: env.progressStore
+            progress: env.progressStore,
+            track: env.trackStore.track
         )
     }
 
@@ -391,7 +396,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         }
     }
@@ -414,7 +419,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         case .cancel:
             scheduler.cancel()

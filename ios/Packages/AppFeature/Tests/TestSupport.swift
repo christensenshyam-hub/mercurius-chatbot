@@ -83,15 +83,20 @@ actor StubProgressRemote: ProgressSyncing {
     private var remote: ProgressSnapshotDTO
     private var fetchFails: Bool
     private var putFails: Bool
+    /// Answers a PUT holding any Basics id with a 400, as a server from
+    /// before Basics does.
+    private var refusesBasics: Bool
 
     init(
         remote: ProgressSnapshotDTO = ProgressSnapshotDTO(curriculumVersion: nil),
         fetchFails: Bool = false,
-        putFails: Bool = false
+        putFails: Bool = false,
+        refusesBasics: Bool = false
     ) {
         self.remote = remote
         self.fetchFails = fetchFails
         self.putFails = putFails
+        self.refusesBasics = refusesBasics
     }
 
     func fetchProgress(sessionId: String) async throws -> ProgressSnapshotDTO {
@@ -107,6 +112,9 @@ actor StubProgressRemote: ProgressSyncing {
     ) async throws -> ProgressSnapshotDTO {
         puts.append(Put(sessionId: sessionId, curriculumVersion: curriculumVersion, items: items))
         if putFails { throw StubFailure() }
+        if refusesBasics, items.contains(where: { BasicsCurriculum.isBasicsId($0.id) }) {
+            throw APIError.invalidRequest(reason: "Invalid request")
+        }
         return remote
     }
 }

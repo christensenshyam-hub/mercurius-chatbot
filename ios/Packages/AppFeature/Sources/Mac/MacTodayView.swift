@@ -105,7 +105,8 @@ struct MacTodayView: View {
                 .foregroundStyle(Night.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             // The streak, quietly, where it isn't read against the week's
-            // lesson dots (it counts chat days too).
+            // lesson dots (it counts chat days too). Never on Basics
+            // (`HomeState` holds it at 0 there).
             if let streakLine = MacNightCopy.streakLine(state.streak) {
                 Text(streakLine)
                     .nightFont(.caption)
@@ -150,7 +151,8 @@ struct MacTodayView: View {
                     .help("\(next.buttonTitle) (Return)")
                     .accessibilityLabel(next.buttonTitle)
                     .accessibilityIdentifier("today.nextStop")
-                    NightTextButton("Learning Path", color: .white, action: onOpenPath)
+                    NightTextButton(state.track == .basics ? "All Basics lessons" : "Learning Path",
+                                    color: .white, action: onOpenPath)
                         .help("Open the learning path (⌘2)")
                 }
             }
@@ -219,8 +221,12 @@ struct MacTodayView: View {
     static func upNext(state: HomeState, progress: CurriculumProgressStore) -> UpNext {
         switch state.next {
         case .lesson(let lesson):
-            let unit = MercuriusCurriculum.unit(containingLesson: lesson.id)
+            let unit = CurriculumTrack.unit(containingLesson: lesson.id)
             let unitNumber = unit.map { Int($0.number) ?? 0 } ?? 0
+            // Basics says its name, so its "Lesson 1.1" isn't read as the
+            // Deep dive's.
+            let course = state.track == .basics ? "Basics · " : ""
+            let unitName = state.track == .basics ? "Basics Unit \(unitNumber)" : "Unit \(unitNumber)"
             // The path's code ("Lesson 1.3"), as the unit page and the
             // complete card say it; "3 of 4" is the meter's caption only.
             let code = unit == nil ? "\(lesson.number)"
@@ -232,13 +238,13 @@ struct MacTodayView: View {
                     return candidate.id == lesson.id ? .current : .ahead
                 }
                 return UpNext.UnitProgress(done: done, total: unit.lessons.count,
-                                           label: "\(done) of \(unit.lessons.count) lessons done in Unit \(unitNumber)",
+                                           label: "\(done) of \(unit.lessons.count) lessons done in \(unitName)",
                                            segments: segments)
             }
             let title = lesson.title
             let resumes = MacNightCopy.resumes(lessonId: lesson.id, progress: progress)
             return UpNext(
-                eyebrow: "\(resumes ? "Continue" : "Up next") · Lesson \(code)",
+                eyebrow: "\(course)\(resumes ? "Continue" : "Up next") · Lesson \(code)",
                 title: title,
                 detail: lesson.objective,
                 unitProgress: unitProgress,
@@ -267,6 +273,19 @@ struct MacTodayView: View {
                 accessibilityLabel: MacNightCopy.heroAccessibilityLabel(
                     lead: "Unit \(number) check", title: unit.title, detail: detail, progress: label)
             )
+        case nil where state.track == .basics:
+            let title = "You've finished the Basics"
+            let detail = "Go back over any lesson, or chat with Merc any time."
+            return UpNext(
+                eyebrow: "Basics complete",
+                title: title,
+                detail: detail,
+                unitProgress: nil,
+                buttonTitle: "Review Your Lessons",
+                symbol: "flag.checkered",
+                accessibilityLabel: MacNightCopy.heroAccessibilityLabel(
+                    lead: "Basics complete", title: title, detail: detail, progress: nil)
+            )
         case nil:
             let title = "You've finished every unit"
             let detail = "Go back over any lesson, or chat with Merc to go deeper."
@@ -287,7 +306,11 @@ struct MacTodayView: View {
 
     @ViewBuilder
     private func cards(sideBySide: Bool, now: Date) -> some View {
-        if sideBySide {
+        if state.track == .basics {
+            // Basics has no weekly goal (BEGINNER_GUIDE §2.5): Think it
+            // through alone.
+            thinkCard(now: now)
+        } else if sideBySide {
             // Each card its own height, top-aligned: Think it through has
             // less to say than the week, and no empty room to say it in.
             HStack(alignment: .top, spacing: Self.cardSpacing) {

@@ -10,6 +10,13 @@ import NetworkingKit
 ///
 /// Best-effort by design: every failure is swallowed. Progress lives on the
 /// device first; the next pull or push catches up.
+///
+/// Both courses sync as one list: Deep-dive `u` ids and Basics `b` ids go
+/// up in the same PUT, under the app's one `MercuriusCurriculum.version`,
+/// and a pull merges both (each count filters by its own course). A server
+/// from before Basics refuses `b` ids — and with them the whole push — so
+/// such a refusal is retried once with the Deep dive's ids alone, keeping
+/// its progress in sync until the server knows Basics.
 @MainActor
 final class CurriculumProgressSync {
     private let progress: CurriculumProgressStore
@@ -142,7 +149,28 @@ final class CurriculumProgressSync {
             }
         } catch {
             // Best-effort: the next pull re-sends whatever the server lacks.
+            guard Self.isRefusal(error), let deepDive = Self.withoutBasics(items) else { return }
+            _ = try? await remote.putProgress(
+                sessionId: sid,
+                curriculumVersion: snapshot.curriculumVersion,
+                items: deepDive
+            )
         }
+    }
+
+    /// The server refused the request itself (a 400), as one from before
+    /// Basics does for a `b` id.
+    static func isRefusal(_ error: Error) -> Bool {
+        if case APIError.invalidRequest = error { return true }
+        return false
+    }
+
+    /// `items` without Basics' ids, or nil when there were none to drop (or
+    /// nothing else to send).
+    static func withoutBasics(_ items: [ProgressPutItem]) -> [ProgressPutItem]? {
+        let kept = items.filter { !BasicsCurriculum.isBasicsId($0.id) }
+        guard kept.count < items.count, !kept.isEmpty else { return nil }
+        return kept
     }
 
     /// Server items → the sets `merge` takes. A mastered lesson still counts

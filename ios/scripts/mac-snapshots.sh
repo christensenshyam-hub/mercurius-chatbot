@@ -177,6 +177,9 @@ panel_shot() {
 }
 
 LESSON=(-LessonPreview YES -LessonReplay YES -LessonSkipIntro YES)
+# A Basics lesson (docs/basics/CLIENTS.md): Basics 1.1 opened the way a
+# reminder opens a lesson, replaying a real recorded Basics session.
+BASICS_LESSON=(-CurriculumTrack basics -OpenLesson b1_l1 -LessonReplay YES -LessonSkipIntro YES)
 
 run() {
   case $1 in
@@ -226,6 +229,17 @@ run() {
     # -NightCompleteDemo counts Lesson 1 as finished a minute ago, so the
     # week row reads 1 of 2. Nothing is pushed.
     lesson-complete) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightCompleteAfterReply YES -NightCompleteDemo YES -MacSnapshotDelay 12 ;;
+    # Basics: Today leading into it; the sidebar's Basics section and a
+    # Basics unit's page (Basics 1.1 done, -SeedCompleted in the -UITests
+    # suite, never pushed); a Basics lesson's intro, its first reply with the
+    # practice chip, its check (-LessonReplayScript: the session's recorded
+    # learner turns), and its completion with Try this today.
+    basics-today)    window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CurriculumTrack basics ;;
+    basics-path)     window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES -CurriculumTrack basics -SeedCompleted b1_l1 ;;
+    basics-intro)    window_shot "$1" "${PAST_GATE[@]}" -CurriculumTrack basics -OpenLesson b1_l1 ;;
+    basics-lesson)   window_shot "$1" "${PAST_GATE[@]}" "${BASICS_LESSON[@]}" -LessonReplayScript 0 -MacSnapshotDelay 8 ;;
+    basics-lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${BASICS_LESSON[@]}" -LessonReplayScript 2 -LessonJumpToLatest YES -MacSnapshotDelay 16 ;;
+    basics-lesson-complete) window_shot "$1" "${PAST_GATE[@]}" "${BASICS_LESSON[@]}" -LessonReplayScript 3 -MacSnapshotDelay 19 ;;
     chat)            window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
     chat-thread)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -SeedDemoChat YES ;;
     # A real recorded Socratic thread (DEBUG -NightChatDemo): Merc's last
@@ -266,7 +280,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent gate-limits gate-paused gate-under13 gate-path today today-week path path-week path-check path-mastered lesson-intro lesson lesson-top lesson-cut lesson-interactive lesson-interactive-map lesson-interactive-money lesson-interactive-river lesson-interactive-compact lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-mode-sheet chat-typing chat-failed chat-quiz unit-test unit-test-quiz unit-test-written unit-test-mastered unit-test-almost unit-test-unavailable crisis start-failure settings-general settings-privacy settings-about settings-gated help help-mac help-support"
+ALL="gate-meet gate-age gate-consent gate-limits gate-paused gate-under13 gate-path today today-week path path-week path-check path-mastered lesson-intro lesson lesson-top lesson-cut lesson-interactive lesson-interactive-map lesson-interactive-money lesson-interactive-river lesson-interactive-compact lesson-check lesson-answered lesson-complete basics-today basics-path basics-intro basics-lesson basics-lesson-check basics-lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-mode-sheet chat-typing chat-failed chat-quiz unit-test unit-test-quiz unit-test-written unit-test-mastered unit-test-almost unit-test-unavailable crisis start-failure settings-general settings-privacy settings-about settings-gated help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL

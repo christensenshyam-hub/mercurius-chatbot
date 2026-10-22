@@ -25,6 +25,11 @@ public struct LessonCompleteOverlay: View {
     let lessonNumber: Int?
     let reduceMotion: Bool
     let exits: LessonCompleteExits
+    /// A Basics lesson's completion (BEGINNER_GUIDE §2.6): "Try this today",
+    /// the next lesson, and "That's enough for today". No share card and no
+    /// week ring. nil is the Deep dive's celebration, unchanged.
+    let basics: BasicsWrapUp?
+    @State private var copiedMessage = false
 
     #if os(macOS)
     /// The Mac's card rises a little as it fades in, rather than sliding up
@@ -64,13 +69,15 @@ public struct LessonCompleteOverlay: View {
         onNext: @escaping () -> Void,
         onBackToLessons: @escaping () -> Void,
         onDismiss: @escaping () -> Void,
-        onCelebrationDismissed: (() -> Void)? = nil
+        onCelebrationDismissed: (() -> Void)? = nil,
+        basicsWrapUp: BasicsWrapUp? = nil
     ) {
         self.lessonTitle = lessonTitle
         self.nextStop = nextStop ?? Self.nextStop(lessonNumber: nextLessonNumber, lessonTitle: nextLessonTitle)
         self.unitLabel = unitLabel
         self.lessonNumber = lessonNumber
         self.reduceMotion = reduceMotion
+        self.basics = basicsWrapUp
         self.exits = LessonCompleteExits(
             onNext: onNext,
             onBackToLessons: onBackToLessons,
@@ -89,7 +96,8 @@ public struct LessonCompleteOverlay: View {
         // Night Studio's card (SPEC.md §5.6): the credential, the lesson's
         // key ideas, the week and the next stop, with "Done for now".
         NightLessonComplete(lessonTitle: lessonTitle, nextStop: nextStop, unitLabel: unitLabel,
-                            lessonNumber: lessonNumber, reduceMotion: reduceMotion, exits: exits)
+                            lessonNumber: lessonNumber, reduceMotion: reduceMotion, exits: exits,
+                            basics: basics)
         #else
         phoneBody
         #endif
@@ -115,7 +123,7 @@ public struct LessonCompleteOverlay: View {
             }
         }
         .onAppear(perform: animateIn)
-        .task { await renderShareCard() }
+        .task { if basics == nil { await renderShareCard() } }
     }
 
     /// A bottom sheet with Merc (celebrating) bursting out over its top edge.
@@ -132,6 +140,17 @@ public struct LessonCompleteOverlay: View {
 
     private var contentCard: some View {
         ScrollView {
+            if let basics {
+                basicsContent(basics)
+            } else {
+                deepDiveContent
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(cardBackground)
+    }
+
+    private var deepDiveContent: some View {
             VStack(spacing: BrandSpacing.lg) {
                 Color.clear.frame(height: 56)   // room for the bursting Merc
 
@@ -156,9 +175,98 @@ public struct LessonCompleteOverlay: View {
             .padding(.top, BrandSpacing.lg)
             .padding(.bottom, BrandSpacing.xxl)
             .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Basics
+
+    /// Basics' completion: a calm headline, "Try this today" (with Copy when
+    /// it quotes a message), then the next lesson and a way to stop.
+    private func basicsContent(_ wrapUp: BasicsWrapUp) -> some View {
+        VStack(spacing: BrandSpacing.lg) {
+            Color.clear.frame(height: 56)   // room for Merc
+
+            VStack(spacing: BrandSpacing.xs) {
+                Text(BasicsCopy.headline)
+                    .font(.system(size: headlineSize, weight: .black, design: .rounded))
+                    .foregroundStyle(BrandColor.successText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(lessonTitle)
+                    .font(.system(size: subtitleSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(basicsAccessibilitySummary)
+
+            if !wrapUp.tryThisToday.isEmpty {
+                tryThisTodayCard(wrapUp)
+            }
+
+            VStack(spacing: BrandSpacing.sm) {
+                if case .lesson(_, let title) = nextStop {
+                    BrandButton(BasicsCopy.next(title), style: .primary) { exit(.next) }
+                        .accessibilityIdentifier("basics.complete.next")
+                    BrandButton(BasicsCopy.enough, style: .ghost) { exit(.backToLessons) }
+                        .accessibilityIdentifier("basics.complete.enough")
+                } else {
+                    BrandButton(BasicsCopy.backToLessons, style: .primary) { exit(.backToLessons) }
+                }
+                Text(BasicsCopy.placeSaved)
+                    .font(BrandFont.caption)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, BrandSpacing.xs)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .background(cardBackground)
+        .padding(.horizontal, BrandSpacing.xl)
+        .padding(.top, BrandSpacing.lg)
+        .padding(.bottom, BrandSpacing.xxl)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func tryThisTodayCard(_ wrapUp: BasicsWrapUp) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            Text(BasicsCopy.tryThisToday.uppercased())
+                .font(BrandFont.caption)
+                .tracking(1.2)
+                .foregroundStyle(BrandColor.accentText)
+                .accessibilityAddTraits(.isHeader)
+            Text(wrapUp.tryThisToday)
+                .font(BrandFont.bodyEmphasized)
+                .foregroundStyle(BrandColor.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if let message = wrapUp.message {
+                Button {
+                    LessonPasteboard.copy(message)
+                    copiedMessage = true
+                } label: {
+                    Label(copiedMessage ? BasicsCopy.copied : BasicsCopy.copy,
+                          systemImage: copiedMessage ? "checkmark" : "doc.on.doc")
+                        .font(BrandFont.bodyEmphasized)
+                        .foregroundStyle(BrandColor.accentText)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("basics.complete.copy")
+            }
+        }
+        .padding(BrandSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BrandColor.background, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
+                .strokeBorder(BrandColor.border, lineWidth: 1)
+        )
+    }
+
+    private var basicsAccessibilitySummary: String {
+        if case .lesson(_, let title) = nextStop {
+            return "Lesson complete: \(lessonTitle). Up next: \(title)."
+        }
+        return "Lesson complete: \(lessonTitle)."
     }
 
     @ViewBuilder private var cardBackground: some View {

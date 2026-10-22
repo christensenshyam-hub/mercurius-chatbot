@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import CurriculumFeature
 import EngagementFeature
 import PersistenceKit
 
@@ -45,8 +46,9 @@ struct OnboardingFlow: View {
     let streakStore: StreakStore
     /// "Your path" asks about reminders, so Home never repeats the question.
     let reminderCardStore: ReminderCardStore
-    /// Full mode: the two exits from "Your path".
-    let onStartLesson1: () -> Void
+    /// Full mode: the exits from "Your path" — a course's first lesson
+    /// (Basics or the Deep dive), or the free chat.
+    let onStartLesson1: (CurriculumTrack) -> Void
     let onJustChat: () -> Void
     /// Gate-only mode: fired at "Got it", right after consent is recorded,
     /// so the host can fall through to Home in this launch.
@@ -67,7 +69,7 @@ struct OnboardingFlow: View {
         scheduler: NotificationScheduler,
         streakStore: StreakStore,
         reminderCardStore: ReminderCardStore,
-        onStartLesson1: @escaping () -> Void,
+        onStartLesson1: @escaping (CurriculumTrack) -> Void,
         onJustChat: @escaping () -> Void,
         onGateCleared: @escaping () -> Void
     ) {
@@ -173,8 +175,8 @@ struct OnboardingFlow: View {
                 scheduler: scheduler,
                 streakStore: streakStore,
                 reminderCardStore: reminderCardStore,
-                onStartLesson1: { finish(startingLesson: true) },
-                onJustChat: { finish(startingLesson: false) }
+                onStart: { finish(startingLesson: $0) },
+                onJustChat: { finish(startingLesson: nil) }
             )
         }
     }
@@ -204,10 +206,10 @@ struct OnboardingFlow: View {
 
     /// Route first, then flip the flag: `AppEntryView` re-renders on the flag
     /// change and must already know which tab / lesson to open.
-    private func finish(startingLesson: Bool) {
-        if startingLesson {
-            OnboardingTelemetry.startLesson1()
-            onStartLesson1()
+    private func finish(startingLesson track: CurriculumTrack?) {
+        if let track {
+            OnboardingTelemetry.startLesson1(track: track.rawValue)
+            onStartLesson1(track)
         } else {
             OnboardingTelemetry.justChat()
             onJustChat()

@@ -95,6 +95,10 @@ public final class MacShellModel {
     @ObservationIgnored var scheduler = NotificationScheduler()
 
     @ObservationIgnored private let progress: CurriculumProgressStore
+    /// The learner's course. It follows what they open: a Basics unit or
+    /// lesson makes Basics the course Today and View ▸ Learning Path lead
+    /// into, a Deep-dive one the Deep dive. nil (tests) is the Deep dive.
+    @ObservationIgnored private let tracks: CurriculumTrackStore?
     @ObservationIgnored private let lastActivityStore: LastActivityStore
     @ObservationIgnored private let chatStore: ChatStore?
     @ObservationIgnored private let makeChatModel: @MainActor () -> ChatViewModel
@@ -116,11 +120,13 @@ public final class MacShellModel {
 
     init(
         progress: CurriculumProgressStore,
+        tracks: CurriculumTrackStore? = nil,
         lastActivityStore: LastActivityStore,
         chatStore: ChatStore?,
         makeChatModel: @escaping @MainActor () -> ChatViewModel
     ) {
         self.progress = progress
+        self.tracks = tracks
         self.lastActivityStore = lastActivityStore
         self.chatStore = chatStore
         self.makeChatModel = makeChatModel
@@ -178,7 +184,16 @@ public final class MacShellModel {
         guard !isGated else { return }
         activeLesson = nil
         activeUnitTest = nil
-        selection = .unit(Self.pathUnitId(frontier: progress.frontier()))
+        selection = .unit(Self.pathUnitId(frontier: progress.frontier(in: track), track: track))
+    }
+
+    /// The course Today and the path lead into.
+    var track: CurriculumTrack { tracks?.track ?? .deepDive }
+
+    /// Opening a unit or lesson of the other course makes it the course.
+    private func follow(_ id: String) {
+        guard let tracks, let opened = CurriculumTrack.of(id: id), opened != tracks.track else { return }
+        tracks.choose(opened)
     }
 
     /// Chat ▸ Socratic / Debate / Discussion (⌥⌘1–⌥⌘3): the chat, in that
@@ -225,6 +240,7 @@ public final class MacShellModel {
         activeLesson = nil
         activeUnitTest = nil
         selection = destination
+        if case .unit(let unitId) = destination { follow(unitId) }
         guard case .chat(let id?) = destination, id != chatModel.conversationId || isOpeningThread else { return }
         // Opens run one at a time, and only the newest selection's runs. A
         // thread in another mode switches the server's mode first
@@ -283,7 +299,8 @@ public final class MacShellModel {
         progress.markOpened(lesson.id)
         lastActivityStore.touch()
         activeUnitTest = nil
-        if let unit = MercuriusCurriculum.unit(containingLesson: lesson.id) {
+        follow(lesson.id)
+        if let unit = CurriculumTrack.unit(containingLesson: lesson.id) {
             selection = .unit(unit.id)
         }
         activeLesson = lesson
@@ -306,7 +323,7 @@ public final class MacShellModel {
         case nil:
             activeLesson = nil
             activeUnitTest = nil
-            selection = .unit(Self.pathUnitId(frontier: nil))
+            selection = .unit(Self.pathUnitId(frontier: nil, track: track))
         }
     }
 
@@ -347,16 +364,17 @@ public final class MacShellModel {
 
     /// The unit page "Learning Path" opens: the next stop's unit, else the
     /// first unit.
-    static func pathUnitId(frontier: MercuriusCurriculum.PathStop?) -> String {
+    static func pathUnitId(frontier: MercuriusCurriculum.PathStop?,
+                           track: CurriculumTrack = .deepDive) -> String {
         switch frontier {
         case .lesson(let lesson):
-            if let unit = MercuriusCurriculum.unit(containingLesson: lesson.id) { return unit.id }
+            if let unit = CurriculumTrack.unit(containingLesson: lesson.id) { return unit.id }
         case .unitTest(let unit):
             return unit.id
         case nil:
             break
         }
-        return MercuriusCurriculum.units.first?.id ?? ""
+        return track.units.first?.id ?? ""
     }
 
     // MARK: - Saved threads

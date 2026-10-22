@@ -4,31 +4,36 @@ import CurriculumFeature
 import EngagementFeature
 import PersistenceKit
 
-/// The last screen of the full first-run flow: Unit 1's lessons, the
-/// reminder switches, and the two ways into the app. The rows are built here
-/// rather than reusing the learning path's nodes, which are internal to
-/// CurriculumFeature.
+/// The last screen of the full first-run flow: where to start, the reminder
+/// switches, and the way into the free chat.
+///
+/// Two equal choices (BEGINNER_GUIDE §2.1): "I'm new to AI: start with the
+/// Basics" and "Take the Deep dive", each a full-width button that remembers
+/// the choice and opens that course's first lesson. Learners pick by
+/// experience, never by age, and "You can switch any time" says the choice
+/// locks nothing. The two buttons are the step's pinned CTA, so both stay on
+/// screen at every text size (AUD-12); what each course is reads above them,
+/// and "Just chat instead" closes the scrolling part.
 struct YourPathStep: View {
     let reminderStore: ReminderStore
     let scheduler: NotificationScheduler
     let streakStore: StreakStore
     let reminderCardStore: ReminderCardStore
-    let onStartLesson1: () -> Void
+    /// Start the chosen course's first lesson.
+    let onStart: (CurriculumTrack) -> Void
     let onJustChat: () -> Void
-
-    private var unit: CurriculumFeature.Unit? { MercuriusCurriculum.units.first }
 
     var body: some View {
         GateStepContainer(
             title: "Your path",
-            subtitle: unit.map { "Unit \($0.number) · \($0.title)" }
+            subtitle: YourPathCopy.subtitle
         ) {
             VStack(alignment: .leading, spacing: BrandSpacing.lg) {
-                VStack(spacing: 0) {
-                    ForEach(unit?.lessons ?? []) { lesson in
-                        lessonRow(lesson)
-                        if lesson.id != unit?.lessons.last?.id {
-                            Divider().padding(.leading, 56)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(YourPathCopy.order, id: \.self) { track in
+                        courseRow(track)
+                        if track != YourPathCopy.order.last {
+                            Divider().padding(.leading, BrandSpacing.md)
                         }
                     }
                 }
@@ -42,17 +47,19 @@ struct YourPathStep: View {
                     store: reminderStore,
                     scheduler: scheduler,
                     streakStore: streakStore,
-                    nextLessonId: unit?.lessons.first?.id
+                    nextLessonId: MercuriusCurriculum.units.first?.lessons.first?.id
                 )
+
+                BrandButton("Just chat instead", style: .ghost, action: onJustChat)
+                    .accessibilityIdentifier("onboarding.justChat")
             }
             .padding(.top, BrandSpacing.sm)
         } cta: {
-            DuoButton("Start Lesson 1", style: .primary, action: onStartLesson1)
-                .macDefaultAction()
-                .accessibilityIdentifier("onboarding.startLesson1")
-
-            DuoButton("Just chat instead", style: .secondary, action: onJustChat)
-                .accessibilityIdentifier("onboarding.justChat")
+            ForEach(YourPathCopy.order, id: \.self) { track in
+                DuoButton(YourPathCopy.title(track), style: .primary) { onStart(track) }
+                    .accessibilityHint(YourPathCopy.hint(track))
+                    .accessibilityIdentifier(YourPathCopy.identifier(track))
+            }
         }
         .onAppear {
             OnboardingTelemetry.pathShown()
@@ -62,39 +69,66 @@ struct YourPathStep: View {
         }
     }
 
-    private func lessonRow(_ lesson: Lesson) -> some View {
-        HStack(alignment: .center, spacing: BrandSpacing.md) {
-            #if os(macOS)
-            // The path's node, numbered (no gradient fill: SPEC.md §2.5).
-            Text("\(lesson.number)")
-                .font(NightType.lexend(13, semibold: true))
-                .foregroundStyle(Night.accentText)
-                .frame(width: 30, height: 30)
-                .background(Night.surface, in: Circle())
-                .overlay(Circle().strokeBorder(Night.accentText, lineWidth: 1.5))
-                .accessibilityHidden(true)
-            #else
-            Text("\(lesson.number)")
+    /// What one course is, in a line: its name, then who it's for.
+    private func courseRow(_ track: CurriculumTrack) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.xs) {
+            Text(track.displayName)
+                #if os(macOS)
+                .nightFont(.headline)
+                .foregroundStyle(Night.ink)
+                #else
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(BrandGradient.merc, in: Circle())
-                .accessibilityHidden(true)
-            #endif
-
-            Text(lesson.title)
+                .foregroundStyle(BrandColor.text)
+                #endif
+            Text(YourPathCopy.detail(track))
                 #if os(macOS)
                 .nightFont(.body)
+                .foregroundStyle(Night.ink2)
                 #else
                 .font(BrandFont.body)
+                .foregroundStyle(BrandColor.textSecondary)
                 #endif
-                .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, BrandSpacing.md)
-        .padding(.vertical, BrandSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(BrandSpacing.md)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Lesson \(lesson.number). \(lesson.title)")
+    }
+}
+
+/// The words on "Your path" (BEGINNER_GUIDE §2.1).
+enum YourPathCopy {
+    /// Basics first: a beginner reads down from the top.
+    static let order: [CurriculumTrack] = [.basics, .deepDive]
+
+    static let subtitle = "Where would you like to start? You can switch any time."
+
+    static func title(_ track: CurriculumTrack) -> String {
+        switch track {
+        case .basics: return "I'm new to AI: start with the Basics"
+        case .deepDive: return "Take the Deep dive"
+        }
+    }
+
+    static func detail(_ track: CurriculumTrack) -> String {
+        switch track {
+        case .basics: return "New to AI chatbots? Learn the basics, one small step at a time."
+        case .deepDive: return "Already use AI? Learn how it works, where it goes wrong, and how to think about it."
+        }
+    }
+
+    static func hint(_ track: CurriculumTrack) -> String {
+        switch track {
+        case .basics: return "Opens the first Basics lesson"
+        case .deepDive: return "Opens Lesson 1 of the Deep dive"
+        }
+    }
+
+    /// The Deep dive keeps the identifier the UI tests tap ("Start Lesson 1").
+    static func identifier(_ track: CurriculumTrack) -> String {
+        switch track {
+        case .basics: return "onboarding.startBasics"
+        case .deepDive: return "onboarding.startLesson1"
+        }
     }
 }

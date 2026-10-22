@@ -225,8 +225,15 @@ struct HomeView: View {
     /// (the growth loop), chat second.
     private var ctaSection: some View {
         VStack(spacing: BrandSpacing.md) {
-            if state.next != nil {
+            if state.showsWeek {
                 weekRow
+            } else if let line = state.basicsProgressLine {
+                // Basics: lessons finished, in words — no ring, no goal.
+                Text(line)
+                    .font(BrandFont.roundedCaption)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
 
             DuoButton(state.primaryActionTitle, style: .primary, action: onStartNext)

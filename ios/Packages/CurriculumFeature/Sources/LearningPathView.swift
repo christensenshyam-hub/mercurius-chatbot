@@ -15,6 +15,11 @@ struct LearningPathView: View {
     /// Show only this unit's banner and stops (the Mac sidebar's "Path by
     /// unit"); nil shows the whole path under its header, as on iOS.
     var unitId: String? = nil
+    /// Which course's path this is. Basics has no unit checks and a calmer
+    /// header (no bar, no cheering).
+    var track: CurriculumTrack = .deepDive
+    /// The learner's choices, for Basics' text-size offer and button.
+    var tracks: CurriculumTrackStore? = nil
     let onStartLesson: (Lesson) -> Void
     let onStartUnitTest: (Unit) -> Void
 
@@ -43,7 +48,11 @@ struct LearningPathView: View {
                         // One unit's page opens on its own banner; the
                         // overall header belongs to the whole path.
                         if unitId == nil {
-                            pathHeader
+                            if track == .basics {
+                                basicsHeader
+                            } else {
+                                pathHeader
+                            }
                         }
 
                         ForEach(Array(elements.enumerated()), id: \.element.id) { index, element in
@@ -68,9 +77,13 @@ struct LearningPathView: View {
                 .scrollContentBackground(.hidden)
                 .background(BrandColor.background)
                 .onAppear {
-                    let opening = PathOpeningScroll.target(
-                        frontierID: current,
-                        rows: elements.map { (id: $0.id, isBanner: $0.isBanner) })
+                    // Basics opens at its header while the one-time text-size
+                    // offer waits there, so the learner sees it first.
+                    let opening = track == .basics && unitId == nil && tracks?.offersReadingSize == true
+                        ? .top
+                        : PathOpeningScroll.target(
+                            frontierID: current,
+                            rows: elements.map { (id: $0.id, isBanner: $0.isBanner) })
                     // Defer a frame so the lazy stack has laid out before scrolling.
                     DispatchQueue.main.async {
                         switch opening {
@@ -108,6 +121,38 @@ struct LearningPathView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             overallProgressBar(done: done, total: total)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, BrandSpacing.xl)
+        .padding(.top, BrandSpacing.md)
+        .padding(.bottom, BrandSpacing.xs)
+    }
+
+    /// Basics' header: its name, lessons finished in words (check marks, not
+    /// a bar: BEGINNER_GUIDE §2.5), the text-size offer the first time, and
+    /// a Text size button after that.
+    private var basicsHeader: some View {
+        let done = progress.totalCompleted(in: .basics)
+        let total = progress.totalLessons(in: .basics)
+        return VStack(spacing: BrandSpacing.sm) {
+            if currentStopId == nil {
+                MercMascot(.celebrate, size: 92, pokeable: true)
+                    .accessibilityHidden(true)
+            }
+            Text(CurriculumTrack.basics.displayName)
+                .font(BrandFont.roundedTitle)
+                .foregroundStyle(BrandColor.text)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
+            Text(BasicsPathCopy.finished(done: done, total: total))
+                .font(BrandFont.body)
+                .foregroundStyle(BrandColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let tracks {
+                BasicsReadingSizeControl(tracks: tracks)
+                    .padding(.top, BrandSpacing.xs)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, BrandSpacing.xl)
@@ -300,8 +345,10 @@ struct LearningPathView: View {
 
     private func speakMercLine() {
         mercLineTask?.cancel()
-        let lines = ["You've got this!", "Ready when you are!",
-                     "One step at a time.", "Let's go!"]
+        // Basics speaks as one adult to another: no cheering (BEGINNER_GUIDE §1.2).
+        let lines = track == .basics
+            ? ["Ready when you are.", "One step at a time.", "Take your time."]
+            : ["You've got this!", "Ready when you are!", "One step at a time.", "Let's go!"]
         mercLine = lines.randomElement()
         mercLineTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
@@ -360,7 +407,7 @@ struct LearningPathView: View {
 
     /// The row id of the learner's frontier (`CurriculumProgressStore.frontier()`).
     private var currentStopId: String? {
-        switch progress.frontier() {
+        switch progress.frontier(in: track) {
         case .lesson(let lesson): return PathElement.lessonId(lesson)
         case .unitTest(let unit): return PathElement.unitTestId(unit)
         case nil:                 return nil
@@ -372,14 +419,17 @@ struct LearningPathView: View {
     private func buildElements() -> [PathElement] {
         var out: [PathElement] = []
         var nodeIndex = 0
-        for unit in MercuriusCurriculum.units where unitId == nil || unit.id == unitId {
+        for unit in track.units where unitId == nil || unit.id == unitId {
             out.append(.header(unit))
             for lesson in unit.lessons {
                 out.append(.lesson(lesson, unit, nodeIndex: nodeIndex))
                 nodeIndex += 1
             }
-            out.append(.unitTest(unit, nodeIndex: nodeIndex))
-            nodeIndex += 1
+            // Basics has no unit checks.
+            if track.hasUnitTests {
+                out.append(.unitTest(unit, nodeIndex: nodeIndex))
+                nodeIndex += 1
+            }
         }
         return out
     }

@@ -53,6 +53,10 @@ public struct CurriculumLessonView: View {
     /// shows). Called on appear; unused on iOS, where Settings can't be
     /// reached during a lesson.
     private let onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)?
+    /// A Basics lesson (BEGINNER_GUIDE §2): plain intro, a labelled way back
+    /// on the leading edge, the practice-line chip, Copy on replies, the
+    /// text-size offer and "Try this today". nil is the Deep dive, unchanged.
+    private let basics: BasicsLessonOptions?
 
     @State private var model: ChatViewModel
     @State private var didBegin = false
@@ -73,6 +77,10 @@ public struct CurriculumLessonView: View {
     @State private var reactionClearTask: Task<Void, Never>?
     /// The composer has focus (the keyboard is up); the coach card makes room.
     @State private var composerFocused = false
+    #if DEBUG
+    /// `-LessonReplayScript`: recorded learner turns sent so far.
+    @State private var scriptedTurnsSent = 0
+    #endif
     #if os(macOS)
     /// Opens the composer's image panel (File ▸ Attach Image…, ⇧⌘A).
     @State private var attachTrigger = 0
@@ -118,7 +126,8 @@ public struct CurriculumLessonView: View {
         totalInUnit: Int = 0,
         nextStop: LessonCompleteOverlay.NextStop? = nil,
         onCelebrationDismissed: (() -> Void)? = nil,
-        onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)? = nil
+        onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)? = nil,
+        basics: BasicsLessonOptions? = nil
     ) {
         self.lessonId = lessonId
         self.unitLabel = unitLabel
@@ -138,6 +147,7 @@ public struct CurriculumLessonView: View {
         self.nextStop = nextStop
         self.onCelebrationDismissed = onCelebrationDismissed
         self.onRegisterStop = onRegisterStop
+        self.basics = basics
         // Fresh lessons open on the speech-bubble intro; resumed ones skip it.
         _showIntro = State(initialValue: resumeConversationId == nil)
         // Seed the de-dupe high-water mark, CLAMPED to the current count. This
@@ -163,11 +173,17 @@ public struct CurriculumLessonView: View {
         ))
         #if DEBUG
         // `-LessonReplay`: recorded replies, no network (see LessonReplay).
-        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel()) }
+        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel(lessonId: lessonId)) }
         #endif
     }
 
     public var body: some View {
+        // Split into steps so the type checker takes them one at a time.
+        windowChrome(completionHandlers(startHandlers(lessonLayers)))
+    }
+
+    /// The lesson, its celebration and its intro, stacked.
+    private var lessonLayers: some View {
         ZStack(alignment: .top) {
             #if os(macOS)
             // Night Studio: the ink canvas with the indigo pool (§2.4).
@@ -226,6 +242,24 @@ public struct CurriculumLessonView: View {
                 .environment(\.nightCheckRouter, nightCheckRouter)
                 .environment(\.nightComposerFocused, composerFocused)
                 #endif
+                // Basics: Copy on Merc's replies (its notes and emails are
+                // meant to leave the app).
+                .environment(\.lessonOffersCopy, basics != nil)
+
+                // Basics: the reply's practice line as a chip that fills the
+                // box (never sends), so the learner can change the words.
+                if let line = practiceChipLine {
+                    PracticeChip(line: line) {
+                        model.draft = line
+                        inputFocusTrigger += 1
+                    }
+                    .padding(.horizontal, BrandSpacing.md)
+                    .padding(.top, BrandSpacing.xs)
+                    #if os(macOS)
+                    .macReadableColumn()
+                    #endif
+                    .transition(.opacity)
+                }
 
                 // Clean, fixed composer — nothing tucked behind it.
                 composer
@@ -266,7 +300,8 @@ public struct CurriculumLessonView: View {
                     },
                     // `didCelebrate` is only set by a real completion, so the
                     // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
-                    onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
+                    onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil,
+                    basicsWrapUp: basics.map { $0.wrapUp ?? BasicsWrapUp(tryThisToday: "") }
                 )
                 #if os(macOS)
                 // The Mac's card recaps the objective and Merc's [KEY] ideas.
@@ -286,6 +321,11 @@ public struct CurriculumLessonView: View {
                     .zIndex(2)
             }
         }
+    }
+
+    /// Starting (or resuming) the lesson, and the DEBUG screenshot hooks.
+    private func startHandlers<Content: View>(_ content: Content) -> some View {
+        content
         // Resume a saved thread immediately; a FRESH lesson waits behind the
         // speech-bubble intro and starts when the student taps Continue.
         .task { if resumeConversationId != nil { await beginOrResume() } }
@@ -316,6 +356,30 @@ public struct CurriculumLessonView: View {
             }
         }
         #endif
+        #if DEBUG
+        // `-LessonReplayScript <n>`: answer the replay's replies with the
+        // session's recorded turns (a tap for the check), `n` of them.
+        .onChange(of: model.phase) { _, phase in
+            guard LessonReplay.isRequested, phase == .idle, let steps = LessonReplay.scriptSteps else { return }
+            let turns = LessonReplay.userTurns(lessonId: lessonId)
+            guard scriptedTurnsSent < min(steps, turns.count) else { return }
+            let turn = turns[scriptedTurnsSent]
+            scriptedTurnsSent += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                if turn.hasPrefix("I picked ") {
+                    model.sendQuickReply(turn)
+                } else {
+                    model.draft = turn
+                    model.send()
+                }
+            }
+        }
+        #endif
+    }
+
+    /// The celebration, the coach's progress reactions and the report alert.
+    private func completionHandlers<Content: View>(_ content: Content) -> some View {
+        content
         // The lesson was passed (server flag or a pass marker) → celebrate ONCE.
         // Not again if the student dismissed it to re-read feedback and then
         // re-demonstrates proficiency in the same thread (a fresh lesson gets a
@@ -356,7 +420,13 @@ public struct CurriculumLessonView: View {
             showCelebration = true
         }
         #endif
+    }
+
+    /// The Mac window's title, toolbar, keys and drops; nothing on iOS.
+    @ViewBuilder
+    private func windowChrome<Content: View>(_ content: Content) -> some View {
         #if os(macOS)
+        content
         .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
         .nightCheckKeys(nightCheckRouter, isEnabled: !showIntro && !showCelebration)
         .focusedSceneValue(\.chatCommandTarget, commandTarget)
@@ -378,6 +448,8 @@ public struct CurriculumLessonView: View {
                 }
             })
         }
+        #else
+        content
         #endif
     }
 
@@ -397,7 +469,8 @@ public struct CurriculumLessonView: View {
                     onExit()
                 }
             } label: {
-                Label(showIntro ? "Not now" : "Done", systemImage: "chevron.backward")
+                Label(basics != nil ? BasicsCopy.back : (showIntro ? "Not now" : "Done"),
+                      systemImage: "chevron.backward")
             }
             // A toolbar button's own look (the detail column's views use
             // borderless buttons).
@@ -460,9 +533,10 @@ public struct CurriculumLessonView: View {
             useBrandSend: true,
             backgroundFade: true,
             focusTrigger: inputFocusTrigger,
-            // Merc asks; the student answers (AUD-44).
-            placeholder: "Type your answer…",
-            compactPlaceholder: "Answer…",
+            // Merc asks; the student answers (AUD-44). In Basics the
+            // learner mostly writes practice messages, so it says that.
+            placeholder: basics == nil ? "Type your answer…" : BasicsCopy.placeholder,
+            compactPlaceholder: basics == nil ? "Answer…" : BasicsCopy.compactPlaceholder,
             // A long answer must not swallow the reading area.
             maxLines: 3,
             onFocusChange: { composerFocused = $0 }
@@ -476,7 +550,8 @@ public struct CurriculumLessonView: View {
         // Return are the check's (Tab, a click or ⌘L reach the composer).
         return bar.withAttachTrigger(attachTrigger)
             .nightTypeToFocus(!checkOpen)
-            .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder : "Type your answer…")
+            .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder
+                              : (basics == nil ? "Type your answer…" : BasicsCopy.placeholder))
             .macReadableColumn()
         #else
         return bar
@@ -527,6 +602,9 @@ public struct CurriculumLessonView: View {
     /// the first person ("I'll help you …"). Falls back to a generic line.
     private var coachLine: String {
         let goal = objective.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Basics objectives already speak to the learner ("You'll send your
+        // first message to a chatbot."), so they're used as they are.
+        if basics != nil, !goal.isEmpty { return goal }
         guard !goal.isEmpty else {
             return "I'll guide you through this — then check what landed."
         }
@@ -555,14 +633,15 @@ public struct CurriculumLessonView: View {
             eyebrow: eyebrowText,
             title: title,
             accessibilityLabel: headerAccessibilityLabel,
-            exitTitle: "Done",
-            exitAccessibilityLabel: "Done. Exit lesson."
+            exitTitle: basics == nil ? "Done" : BasicsCopy.back,
+            exitAccessibilityLabel: basics == nil ? "Done. Exit lesson." : BasicsCopy.backAccessibility,
+            exitLeading: basics != nil
         ) {
             model.cancel()
             onExit()
         }
-        .padding(.leading, 22)
-        .padding(.trailing, 12)
+        .padding(.leading, basics == nil ? 22 : 8)
+        .padding(.trailing, basics == nil ? 12 : 22)
         .padding(.vertical, BrandSpacing.xs)
     }
 
@@ -604,12 +683,21 @@ public struct CurriculumLessonView: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityAddTraits(.isHeader)
-                        Text("Ready to dig in? I'll walk you through it — then check what landed.")
+                        if basics != nil {
+                            Text(NightTypography.curlQuotes(objective))
+                                .nightFont(.title2)
+                                .foregroundStyle(Night.ink)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text(basics == nil ? "Ready to dig in? I'll walk you through it — then check what landed."
+                             : BasicsCopy.introLine)
                             .nightFont(.body)
                             .foregroundStyle(Night.ink2)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
-                        NightPrimaryButton("Continue", size: .large, action: startFromIntro)
+                        NightPrimaryButton(basics == nil ? "Continue" : BasicsCopy.start, size: .large,
+                                           action: startFromIntro)
                             .keyboardShortcut(.defaultAction)
                             .help("Start the lesson (Return)")
                             .accessibilityLabel("Continue. Start the lesson.")
@@ -636,18 +724,30 @@ public struct CurriculumLessonView: View {
                     eyebrow: "\(unitLabel) · Lesson \(lessonNumber)".uppercased(),
                     title: nil,
                     accessibilityLabel: "\(unitLabel.capitalized), Lesson \(lessonNumber)",
-                    exitTitle: "Not now",
-                    exitAccessibilityLabel: "Not now. Leave without starting the lesson."
+                    exitTitle: basics == nil ? "Not now" : BasicsCopy.back,
+                    exitAccessibilityLabel: basics == nil
+                        ? "Not now. Leave without starting the lesson."
+                        : "Back to lessons. Leave without starting the lesson.",
+                    exitLeading: basics != nil
                 ) {
                     onExit()
                 }
-                .padding(.leading, 24)
+                .padding(.leading, basics == nil ? 24 : 10)
                 .padding(.trailing, 14)
                 .padding(.top, BrandSpacing.sm)
 
                 GeometryReader { geo in
                     ScrollView {
-                        introSpeechBubble
+                        VStack(spacing: BrandSpacing.md) {
+                            // Basics, the first time: "Want the words bigger?"
+                            if let basics, basics.offersReadingSize,
+                               basics.readingSize.offersChoice(atFlooredSize: dynamicTypeSize) {
+                                ReadingSizeOffer(current: basics.readingSize,
+                                                 onChoose: basics.onChooseReadingSize,
+                                                 onDismiss: basics.onDismissReadingSizeOffer)
+                            }
+                            introSpeechBubble
+                        }
                             .padding(.horizontal, 24)
                             .padding(.top, BrandSpacing.md)
                             // Room for the bubble's tail and shadow, which
@@ -700,7 +800,7 @@ public struct CurriculumLessonView: View {
 
     private var continueButton: some View {
         Button(action: startFromIntro) {
-            Text("Continue")
+            Text(basics == nil ? "Continue" : BasicsCopy.start)
                 .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.vertical, 14)
@@ -708,7 +808,7 @@ public struct CurriculumLessonView: View {
                 .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
         }
-        .accessibilityLabel("Continue. Start the lesson.")
+        .accessibilityLabel(basics == nil ? "Continue. Start the lesson." : BasicsCopy.startAccessibility)
     }
 
     private var introSpeechBubble: some View {
@@ -717,7 +817,16 @@ public struct CurriculumLessonView: View {
                 .font(.system(size: introTitleSize, weight: .black, design: .rounded))
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Ready to dig in? I'll walk you through it — then check what landed.")
+            if basics != nil {
+                // Basics: what the learner will do, in their words, and that
+                // stopping is fine (BEGINNER_GUIDE §1.3–1.5).
+                Text(objective)
+                    .font(.system(size: introBodySize, weight: .bold, design: .rounded))
+                    .foregroundStyle(BrandColor.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(basics == nil ? "Ready to dig in? I'll walk you through it — then check what landed."
+                 : BasicsCopy.introLine)
                 .font(.system(size: introBodySize, weight: .bold, design: .rounded))
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -803,6 +912,12 @@ public struct CurriculumLessonView: View {
         return "\(completed) down, \(left) to go."
     }
 
+    /// The chip above the box: the latest reply's practice line (Basics only).
+    private var practiceChipLine: String? {
+        guard basics != nil, !showIntro, !showCelebration else { return nil }
+        return PracticeLine.chip(messages: model.messages, isIdle: model.phase == .idle, draft: model.draft)
+    }
+
     private var isSending: Bool {
         switch model.phase {
         case .sending, .streaming: return true
@@ -834,6 +949,9 @@ struct LessonHeaderBar: View {
     let accessibilityLabel: String
     let exitTitle: String
     let exitAccessibilityLabel: String
+    /// Basics: the way out is a labelled back button ("‹ Lessons") on the
+    /// leading edge, where a beginner looks for it (BEGINNER_GUIDE §2.4).
+    var exitLeading: Bool = false
     let onExit: () -> Void
 
     /// Below accessibility sizes the title sits in the bar, on up to two
@@ -848,7 +966,7 @@ struct LessonHeaderBar: View {
     var body: some View {
         Content(eyebrow: eyebrow, title: title, accessibilityLabel: accessibilityLabel,
                 exitTitle: exitTitle, exitAccessibilityLabel: exitAccessibilityLabel,
-                onExit: onExit)
+                exitLeading: exitLeading, onExit: onExit)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
@@ -858,6 +976,7 @@ struct LessonHeaderBar: View {
         let accessibilityLabel: String
         let exitTitle: String
         let exitAccessibilityLabel: String
+        let exitLeading: Bool
         let onExit: () -> Void
 
         @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -867,6 +986,7 @@ struct LessonHeaderBar: View {
 
         var body: some View {
             HStack(alignment: .center, spacing: BrandSpacing.md) {
+                if exitLeading { exitButton }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(eyebrow)
                         .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
@@ -890,21 +1010,31 @@ struct LessonHeaderBar: View {
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityAddTraits(.isHeader)
 
-                Button(action: onExit) {
+                if !exitLeading { exitButton }
+            }
+        }
+
+        private var exitButton: some View {
+            Button(action: onExit) {
+                HStack(spacing: 3) {
+                    if exitLeading {
+                        Image(systemName: "chevron.backward")
+                            .font(.system(size: buttonSize, weight: .heavy))
+                    }
                     Text(exitTitle)
                         .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
-                        .foregroundStyle(BrandColor.accentText)
                         .lineLimit(1)
                         .fixedSize()
-                        .padding(.horizontal, 10)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .layoutPriority(1)
-                .accessibilityLabel(exitAccessibilityLabel)
-                .accessibilityShowsLargeContentViewer()
+                .foregroundStyle(BrandColor.accentText)
+                .padding(.horizontal, exitLeading ? 6 : 10)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+            .accessibilityLabel(exitAccessibilityLabel)
+            .accessibilityShowsLargeContentViewer()
         }
     }
 }
