@@ -274,9 +274,18 @@ The dial's own moves aren't announced: VoiceOver reads an adjustable control's n
 - Mac at 1280 × 800 and 700 × 600, light and dark: `mac-hook-lesson*`, `mac-middle-lesson*` (Shared | Waved away, with "Mistake" marks), `mac-middle-gallery*`, `mac-revealed-gallery*`.
 - The reveal, 7.8 s: `16pm-reveal-clip.mov` (the dial from Believe everything to Unsure, Show me, the guess beside the result).
 
+**The dial at AX5 on a device.** The layout test's AX5 renders of the longer states draw the two step buttons squeezed, and the tallest ones aren't saved at all: an `ImageRenderer` limit on very tall images (the hook and spoiled renders, which are shorter, draw them right). Run on the simulator at AX5 (the UI test, recorded), both buttons are full capsules of 44 pt or more with their words inside.
+
 **Polish made after looking at the shots:** the feed now marks each post the setting gets wrong with "✕ Mistake" (a word in a small well; VoiceOver adds "A mistake."), so the two counters can be traced post by post; the verdict drops to its own line when a narrow Mac column or a large text size has no room. The counter tiles now share one height when a label wraps.
 
-## 10. For teacher review
+## 10. Open questions (for the framework, not this card)
+
+- **The picked chip after the guess is locked reads at 4.2:1** (white words dimmed by `.disabled` on the shared `InteractiveChip`, measured on the 16 Pro Max shot), under the 4.5:1 rule; the unpicked chips dim to 2.6:1 (inactive controls, which WCAG exempts). The guess is also printed in the reveal ("You guessed …"). A fix belongs in `InteractiveControls.swift` (don't dim the picked chip), so every card gets it.
+- **A chip reaches XCUITest as a button inside a button** with the same label (`InteractiveChip` puts `.accessibilityElement(children: .ignore)` and the button trait over a SwiftUI `Button`). This card's UI test takes the first match. Worth a VoiceOver pass on a device to confirm VoiceOver stops on each chip once.
+
+---
+
+## 11. For teacher review
 
 Please tick each, or note a change. Sign-off is recorded below with a date; only then may the card be enabled (with the founder's OK).
 
