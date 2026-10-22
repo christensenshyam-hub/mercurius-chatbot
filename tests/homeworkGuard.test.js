@@ -141,6 +141,8 @@ describe('the other guards: word problems, corrections, menus', () => {
     assert.equal(g.findNumberLeak('Check it: 10 × 7 = 70 is base times height.', area), null);
     const fall = g.wordProblemNumbers(T('a rock is dropped and falls for 3 s. with d = ½gt² and g = 10 m/s², i got 30 m. is that right?'));
     assert.equal(g.findNumberLeak('Check it: ½ × 10 × 3² = 5 × 9 = 45 m, not 30 m.', fall).value, '45');
+    assert.equal(g.findNumberLeak('Check it: plug your 30 back into the formula — ½ × 10 × 3² gives 45, not 30.', fall).value, '45');
+    assert.equal(g.redactValue('½ × 10 × 3² gives 45, not 30.', { name: 'word problem', value: '45' }), '½ × 10 × 3² gives ?, not 30.');
     assert.equal(g.redactValue('Check it: ½ × 10 × 3² = 5 × 9 = 45 m, not 30 m.', { name: 'word problem', value: '45' }), 'Check it: ½ × 10 × 3² = 5 × 9 = ? m, not 30 m.');
     // Off: a number of their own proposed later, lettered options, an equation.
     assert.equal(g.wordProblemNumbers(T('a car goes 150 miles in 3 hours. how fast', 'is it 50?')), null);
