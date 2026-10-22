@@ -176,6 +176,53 @@ describe('content rules', () => {
     assert.ok(Object.isFrozen(guide));
   });
 
+  test('one fixed privacy answer, built from APP FACTS, and no comfort the facts don\'t give (UX review 2026-10-22)', () => {
+    const answer = 'I only know what you type here. The app has no accounts, so it doesn\'t know your name. What you type goes to this app\'s server, and to Anthropic, the company that makes the AI behind me. The app keeps your chats for up to 90 days. Anyone who opens this app on your device can see them. "Delete my data & start over" in Settings erases them.';
+    assert.ok(BASICS_PROMPT.includes(`"${answer}"`), 'the answer, word for word');
+    assert.match(BASICS_PROMPT, /"Is this safe\?", "Will it know who I am\?", "Do you keep what I type\?" or "Can my family see it\?": give this answer, word for word/);
+    assert.match(BASICS_PROMPT, /never say no one reads, sees or checks their chats, and never call the app private, secure or completely safe/);
+    // Every fact in it is one APP FACTS states (a change there must change this answer too).
+    for (const fact of ['up to 90 days', 'to Anthropic', 'No accounts', 'Delete my data & start over', 'random ID, no name']) {
+      assert.ok(APP_FACTS.includes(fact), `APP FACTS still says "${fact}"`);
+    }
+    for (const sentence of answer.split(/(?<=\.)\s+/)) {
+      assert.ok(sentence.split(/\s+/).length <= 20, `≤ 20 words: ${sentence}`);
+    }
+  });
+
+  test('a family code word or a security answer is never repeated back', () => {
+    assert.match(BASICS_PROMPT, /The same goes for a family code word or an answer to a security question \(a pet's name, a street they grew up on\): never repeat it, not even to praise it\. Say: "Good thing this is practice\. Keep that word for your family\. Let's leave it out\."/);
+  });
+
+  test('the confusing-letter lesson never says "locked in" and never applies the made-up letter to a real plan', () => {
+    const e = entry('b4_l2');
+    assert.match(e, /Whenever you give December 7, add, word for word: "Some people can switch at other times too\. Your state's free Medicare helpers, called SHIP, can tell you what applies to you\."/);
+    assert.match(e, /Never say "locked in", "stuck with", "can't change until next year", "your last chance" or anything like them/);
+    assert.match(e, /Never apply its dates or rules to the learner's own plan or letter, even when they say they have one, and say nothing about the real Medicare season\./);
+    assert.match(e, /Give no date in this answer: the follow-up asks for it\./);
+    assert.match(e, /If your practice answer already gave the date, skip the follow-up/);
+    assert.doesNotMatch(e, /open enrollment is happening now/i);
+    // The real-letter steps moved to the wrap.
+    assert.match(e, /^- Safety point, in the wrap, as how to do this with a real letter: "Cover your name, address, account and member numbers with paper first\./m);
+    assert.ok(e.indexOf('- Check (right answer: B)') < e.indexOf('- Safety point, in the wrap'));
+  });
+
+  test('the fake-call lesson explains a code word before asking for the code-word text, and its warning signs are short sentences', () => {
+    const e = entry('b2_l4');
+    const explain = e.indexOf('Right before the practice line, say: "A code word is a word only your family knows. If a caller can\'t say it, hang up."');
+    assert.ok(explain > 0 && explain < e.indexOf('- Practice: "Write a text asking my family to pick a code word."'));
+    assert.match(e, /It's urgent\. It's a secret \("don't tell Mom"\)\. They want cash, gift cards, or money sent from your bank\./);
+    assert.doesNotMatch(e, /Bitcoin|payment app|a wire\b/);
+  });
+
+  test('no guide labels in replies; a check line for the Mac and web; [KEY] stands on its own', () => {
+    assert.match(BASICS_PROMPT, /Never write this guide's labels in a reply \("Idea 2:", "Safety point:", "Recap:", "One line on that:"\)\./);
+    assert.doesNotMatch(BASICS_PROMPT, /If it fits, one line:/);
+    assert.match(entry('b1_l1'), /\(If the runtime note says Mac or web: "Click the answer you think is right\. There's no grade\."\)/);
+    assert.match(BASICS_BLOCKS_APPENDIX, /so it must make sense on its own: never point back to the chat \("this one", "like this", "here", "above"\)\./);
+    assert.match(BASICS_PROMPT, /Never more than 120 words in one reply, not counting the check card or the task you do for them/);
+  });
+
   test('the blocks appendix asks for [Q] cards and never [CHECK]', () => {
     assert.match(BASICS_BLOCKS_APPENDIX, /^\[Q\]\n<the question, one line>\nA\) <option>\nB\) <option>\nC\) <option>\nANS: <letter of the right option>\n\[\/Q\]$/m);
     assert.match(BASICS_BLOCKS_APPENDIX, /In Basics, never use \[CHECK\]\./);
