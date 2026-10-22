@@ -231,26 +231,48 @@ public struct StepControls: View {
     }
 
     public var body: some View {
-        let layout = theme.usesTables
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: theme.chipSpacing))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: theme.chipSpacing))
-        layout {
-            Text(steps.position)
-                .interactiveText(.caption)
-                .foregroundStyle(theme.ink2)
-                .accessibilityHidden(true)
-            if !theme.usesTables { Spacer(minLength: 0) }
-            if steps.canGoBack {
-                InteractiveActionButton(InteractiveShellCopy.back, systemImage: "chevron.left",
-                                        onArrow: arrow) { onBack() }
+        Group {
+            if theme.usesTables {
+                VStack(alignment: .leading, spacing: theme.chipSpacing) {
+                    position
+                    buttons
+                }
+            } else {
+                // One row; where it doesn't fit (xxxLarge on an SE), the
+                // position goes above the buttons, so no word breaks.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: theme.chipSpacing) {
+                        position
+                        Spacer(minLength: 0)
+                        buttons
+                    }
+                    VStack(alignment: .leading, spacing: theme.chipSpacing) {
+                        position
+                        HStack(alignment: .center, spacing: theme.chipSpacing) { buttons }
+                    }
+                }
             }
-            InteractiveActionButton(nextTitle, systemImage: "chevron.right", prominent: true,
-                                    isEnabled: steps.canGoNext, isFirst: true,
-                                    accessibilityHint: steps.position, onArrow: arrow) { onNext() }
         }
         #if os(iOS)
         .sensoryFeedback(.selection, trigger: steps.index)
         #endif
+    }
+
+    private var position: some View {
+        Text(steps.position)
+            .interactiveText(.caption)
+            .foregroundStyle(theme.ink2)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var buttons: some View {
+        if steps.canGoBack {
+            InteractiveActionButton(InteractiveShellCopy.back, systemImage: "chevron.left",
+                                    onArrow: arrow) { onBack() }
+        }
+        InteractiveActionButton(nextTitle, systemImage: "chevron.right", prominent: true,
+                                isEnabled: steps.canGoNext, isFirst: true,
+                                accessibilityHint: steps.position, onArrow: arrow) { onNext() }
     }
 
     private func arrow(_ arrow: InteractiveArrow) {
