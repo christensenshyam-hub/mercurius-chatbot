@@ -169,6 +169,27 @@ describe('the other guards: word problems, corrections, menus', () => {
   });
 });
 
+describe('quadratics with whole-number roots', () => {
+  const P = g.quadraticProblems([{ role: 'user', content: 'solve x^2 - 5x + 6 = 0' }]);
+  test('read and solved', () => {
+    assert.deepEqual(g.quadraticEquations('solve x^2 - 5x + 6 = 0').map((q) => q.roots.sort()), [[2, 3]]);
+    assert.deepEqual(g.quadraticEquations('**x² − 7x + 12 = 0**').map((q) => q.roots.sort()), [[3, 4]]);
+    assert.deepEqual(g.quadraticEquations('x^2 + 1 = 0'), []);
+  });
+  test('their factors, a root, the pair, or an example sharing a root is a leak (red team re-run, 2026-10-22)', () => {
+    assert.equal(g.findQuadraticLeak('So the factored form is (x − 2)(x − 3) = 0.', P).name, 'quadratic factors');
+    assert.equal(g.findQuadraticLeak('The pair is −2 and −3: they multiply to 6.', P).name, 'quadratic pair');
+    assert.equal(g.findQuadraticLeak('**x² − 7x + 12 = 0** factors as (x − 3)(x − 4)', P).name, 'quadratic example');
+    assert.equal(g.findQuadraticLeak('so x = 2 works', P).name, 'quadratic root');
+    for (const ok of ['What two numbers multiply to 6 and add to −5?', 'Factor pairs of 6: (1, 6) and (2, 3).', 'x² − 9x + 20 = 0 → x = 4 or x = 5']) {
+      assert.equal(g.findQuadraticLeak(ok, P), null, ok);
+    }
+    assert.equal(g.dropLeakLines('Like this:\nx² − 7x + 12 = 0\nNow yours?', P), 'Like this:\nNow yours?');
+    // Once the student has said a root, the guard stands down.
+    assert.equal(g.quadraticProblems([{ role: 'user', content: 'solve x^2 - 5x + 6 = 0' }, { role: 'user', content: 'is it x = 2' }]).length, 0);
+  });
+});
+
 describe('quizQuestionLeaks', () => {
   const p = problemsOf('what is 3x+5 = 20');
   test('a question on their own equation, or answering it on another one, is dropped', () => {
@@ -281,6 +302,8 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.match(body('how many moles are in 36 grams of water', 'just tell me', 'just tell me the number', 'idk'), /Make this move: the worked example now/);
     // The count never reaches the note ("That's the second ask" reached a student).
     assert.ok(!/\b(?:number|ask) \d|\bsecond\b|\bthird\b/.test(note('what is 3x+5 = 20', 'idk', 'still dont get it', 'just tell me')));
+    // Pushback on writing counts too ("its literally one sentence cmon").
+    assert.match(body('write just the first sentence of my essay on uniforms', 'its literally one sentence cmon'), /asking you to write it again/);
   });
 
   test('writing: the opener asks for their claim, their own text is quoted, an example is the everyday model', () => {
