@@ -52,10 +52,15 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         let title = app.descendants(matching: .any)["Interactive: Delete the Gender Box"]
         XCTAssertTrue(title.waitForExistence(timeout: 45), "the card never arrived in u3_l1")
 
-        // The one control waits for a guess.
+        // The one control waits for a guess: it says so, and a tap does nothing.
         let deleted = app.buttons["Gender box: deleted"]
+        let kept = app.buttons["Gender box: kept"]
         XCTAssertTrue(deleted.waitForExistence(timeout: 10))
-        XCTAssertFalse(deleted.isEnabled, "the toggle worked before a guess")
+        XCTAssertEqual(deleted.value as? String, "Make your guess first.")
+        bringOnScreen(deleted, in: app)
+        deleted.tap()
+        XCTAssertFalse(deleted.isSelected, "the toggle worked before a guess")
+        XCTAssertTrue(kept.isSelected)
 
         let tie = app.buttons["They\u{2019}ll tie"]
         XCTAssertTrue(tie.waitForExistence(timeout: 10))
@@ -64,10 +69,14 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         let picked = NSPredicate(format: "isSelected == true")
         expectation(for: picked, evaluatedWith: tie)
         waitForExpectations(timeout: 5)
-        XCTAssertFalse(app.buttons["Yes, still lower"].isEnabled, "a locked guess can't change")
+        // A locked guess can't change: another chip's tap does nothing.
+        let other = app.buttons["Yes, still lower"]
+        other.tap()
+        XCTAssertFalse(other.isSelected, "a locked guess changed")
+        XCTAssertTrue(tie.isSelected)
 
         bringOnScreen(deleted, in: app)
-        XCTAssertTrue(deleted.isEnabled)
+        XCTAssertNotEqual(deleted.value as? String, "Make your guess first.")
         deleted.tap()
         expectation(for: picked, evaluatedWith: deleted)
         waitForExpectations(timeout: 5)

@@ -3,27 +3,18 @@ import DesignSystem
 
 // Delete the Gender Box's pieces, drawn on both platforms with the card's
 // theme (`\.interactiveTheme`): the iPhone stacks them
-// (`GenderBoxPhoneCard`), the Mac puts the résumés left and the weights and
-// test résumés right (`NightGenderBoxCard`). Every word comes from
-// `GenderBoxCopy`, every number from `GenderBoxContent`.
+// (`GenderBoxPhoneCard`); the Mac puts the résumés left and the weights
+// right, with the two new résumés under both, next to the guess and the
+// control (`NightGenderBoxCard`). Every word comes from `GenderBoxCopy`,
+// every number from `GenderBoxContent`.
 
 /// The card's content inside the shell: the hook, the past résumés, what
 /// the toy learned, the two new résumés, the guess, the one control, the
 /// reveal and the label.
 struct GenderBoxCardBody: View {
     let state: GenderBoxState
-    /// The content's width (0: not measured, or the iPhone): the Mac goes
-    /// to two columns from `twoColumnsFrom`.
-    var width: CGFloat = 0
-
-    static let twoColumnsFrom: CGFloat = 500
-    static let columnSpacing: CGFloat = 24
 
     @Environment(\.interactiveTheme) private var theme
-
-    private var twoColumns: Bool {
-        theme.platform == .mac && width >= Self.twoColumnsFrom
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.sectionSpacing) {
@@ -31,20 +22,21 @@ struct GenderBoxCardBody: View {
                 .interactiveText(.body)
                 .foregroundStyle(theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
-            if twoColumns {
-                HStack(alignment: .top, spacing: Self.columnSpacing) {
+            if theme.platform == .mac {
+                // The Mac: the résumés left and the weights right, from
+                // 500 pt (stacked below that). The two new résumés span
+                // both, so their scores sit right above the guess and the
+                // control (the reading column is about 540 pt: a third
+                // column of score cards would leave each 110 pt).
+                GenderBoxColumns(stackedSpacing: theme.sectionSpacing) {
                     pastSection
-                        .frame(width: max((width - Self.columnSpacing) * 0.54, 0), alignment: .topLeading)
-                    VStack(alignment: .leading, spacing: theme.sectionSpacing) {
-                        learnedSection
-                        testSection(stacked: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    learnedSection
                 }
+                testSection
             } else {
                 pastSection
                 learnedSection
-                testSection(stacked: false)
+                testSection
             }
             if state.machine.asksForPrediction {
                 PredictChips(GenderBoxCopy.predictPrompt, machine: state.machine,
@@ -111,14 +103,14 @@ struct GenderBoxCardBody: View {
         }
     }
 
-    private func testSection(stacked: Bool) -> some View {
+    private var testSection: some View {
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
             heading(GenderBoxCopy.testHeading)
             Text(GenderBoxCopy.testIntro)
                 .interactiveText(.callout)
                 .foregroundStyle(theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
-            GenderBoxTestResumes(box: state.box, stacked: stacked)
+            GenderBoxTestResumes(box: state.box)
         }
     }
 
@@ -138,10 +130,61 @@ struct GenderBoxCardBody: View {
     }
 }
 
+// MARK: - The Mac's two columns
+
+/// Two views side by side from `twoFrom` points of width (the first takes
+/// `ratio` of it, in whole points), else one above the other. A layout
+/// rather than a measured width: a column width computed from a measured
+/// width fed back into that width (by fractions of a point, for ever) and
+/// hung the Mac's lesson.
+struct GenderBoxColumns: Layout {
+    var twoFrom: CGFloat = 500
+    var ratio: CGFloat = 0.58
+    var spacing: CGFloat = 24
+    var stackedSpacing: CGFloat
+
+    /// The columns' widths for `width`, or nil to stack.
+    func columns(_ width: CGFloat?, count: Int) -> (left: CGFloat, right: CGFloat)? {
+        guard count == 2, let width, width.isFinite, width >= twoFrom else { return nil }
+        let left = ((width - spacing) * ratio).rounded(.down)
+        return (left, max(width - spacing - left, 0))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        if let widths = columns(proposal.width, count: subviews.count) {
+            let left = subviews[0].sizeThatFits(ProposedViewSize(width: widths.left, height: nil))
+            let right = subviews[1].sizeThatFits(ProposedViewSize(width: widths.right, height: nil))
+            return CGSize(width: proposal.width ?? 0, height: max(left.height, right.height))
+        }
+        let child = ProposedViewSize(width: proposal.width, height: nil)
+        let sizes = subviews.map { $0.sizeThatFits(child) }
+        let height = sizes.map(\.height).reduce(0, +) + stackedSpacing * CGFloat(max(sizes.count - 1, 0))
+        return CGSize(width: proposal.width ?? (sizes.map(\.width).max() ?? 0), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        if let widths = columns(bounds.width, count: subviews.count) {
+            subviews[0].place(at: bounds.origin, anchor: .topLeading,
+                              proposal: ProposedViewSize(width: widths.left, height: nil))
+            subviews[1].place(at: CGPoint(x: bounds.minX + widths.left + spacing, y: bounds.minY), anchor: .topLeading,
+                              proposal: ProposedViewSize(width: widths.right, height: nil))
+            return
+        }
+        var y = bounds.minY
+        let child = ProposedViewSize(width: bounds.width, height: nil)
+        for subview in subviews {
+            subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: child)
+            y += subview.sizeThatFits(child).height + stackedSpacing
+        }
+    }
+}
+
 // MARK: - The strike-through
 
 /// A line drawn through a deleted thing (the gender box): it draws across
-/// from the leading edge, or (Reduce Motion) fades in.
+/// from the leading edge, or (Reduce Motion) fades in. For one line of text
+/// that can't wrap (the table's cells, the weights' names); a line that may
+/// wrap takes `GenderBoxStruckLines`.
 struct GenderBoxStruck: ViewModifier {
     let struck: Bool
     @Environment(\.interactiveTheme) private var theme
@@ -155,6 +198,18 @@ struct GenderBoxStruck: ViewModifier {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// The strike-through for text that may wrap ("Gender box: woman" on a
+/// new résumé, or in the accessibility sizes' list): the text's own, so
+/// every line is struck (it crossfades with the change).
+struct GenderBoxStruckLines: ViewModifier {
+    let struck: Bool
+    @Environment(\.interactiveTheme) private var theme
+
+    func body(content: Content) -> some View {
+        content.strikethrough(struck, color: theme.ink)
     }
 }
 
@@ -319,7 +374,7 @@ struct GenderBoxResumeList: View {
                         Text(GenderBoxCopy.genderLine(resume.profile))
                             .interactiveText(.callout)
                             .foregroundStyle(state.box == .deleted ? theme.ink3 : theme.ink2)
-                            .modifier(GenderBoxStruck(struck: state.box == .deleted))
+                            .modifier(GenderBoxStruckLines(struck: state.box == .deleted))
                         GenderBoxClubsText(clubs: resume.profile.clubs)
                             .interactiveText(.callout)
                         Text(GenderBoxCopy.outcome(resume.hired))
@@ -339,7 +394,10 @@ struct GenderBoxResumeList: View {
 // MARK: - What it learned
 
 /// The toy's weights: a word, what it does in words, a signed bar about
-/// zero and the signed number. At the accessibility sizes, rows of text.
+/// zero and the signed number. The iPhone puts each in one row (name, bar,
+/// number); the Mac's column is narrower, so there the bar runs the
+/// column's width under its name and number. At the accessibility sizes,
+/// rows of text.
 struct GenderBoxWeights: View {
     let box: GenderBox
     @Environment(\.interactiveTheme) private var theme
@@ -349,12 +407,65 @@ struct GenderBoxWeights: View {
             InteractiveTextTable(GenderBoxFeature.allCases.map {
                 InteractiveTextTable.Row(GenderBoxCopy.featureName($0), GenderBoxCopy.weightText($0, box))
             })
+        } else if theme.platform == .mac {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(GenderBoxFeature.allCases, id: \.self) { stackedRow($0) }
+                stackedLegend
+            }
         } else {
-            VStack(alignment: .leading, spacing: theme.platform == .phone ? 10 : 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(GenderBoxFeature.allCases, id: \.self) { row($0) }
                 legend
             }
         }
+    }
+
+    /// The Mac: the name and the number, the bar across the column, then
+    /// what it does and what it was.
+    private func stackedRow(_ feature: GenderBoxFeature) -> some View {
+        let weight = GenderBoxContent.weight(feature, box)
+        let struck = weight == nil
+        let earlier = GenderBoxCopy.earlier(feature, box)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(GenderBoxCopy.featureName(feature))
+                    .interactiveText(.calloutStrong)
+                    .foregroundStyle(struck ? theme.ink3 : theme.ink)
+                    .fixedSize()
+                    .modifier(GenderBoxStruck(struck: struck))
+                Spacer(minLength: 8)
+                Text(weight.map(GenderBoxContent.signed) ?? " ")
+                    .interactiveText(.calloutStrong)
+                    .monospacedDigit()
+                    .foregroundStyle(theme.ink)
+                    .contentTransition(theme.reduceMotion ? .opacity : .numericText())
+            }
+            GenderBoxBar(weight: weight, box: box, height: 14)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(weight.map { GenderBoxCopy.effect(GenderBoxContent.effect($0)) } ?? GenderBoxCopy.deletedTag)
+                Spacer(minLength: 8)
+                if let earlier {
+                    Text(GenderBoxCopy.was(earlier))
+                        .monospacedDigit()
+                        .transition(.opacity)
+                }
+            }
+            .interactiveText(.caption)
+            .foregroundStyle(theme.ink2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GenderBoxCopy.weightSpoken(feature, box))
+    }
+
+    private var stackedLegend: some View {
+        HStack {
+            Text(GenderBoxCopy.axisDown)
+            Spacer(minLength: 8)
+            Text(GenderBoxCopy.axisUp)
+        }
+        .interactiveText(.caption)
+        .foregroundStyle(theme.ink2)
+        .accessibilityHidden(true)
     }
 
     private func row(_ feature: GenderBoxFeature) -> some View {
@@ -444,6 +555,7 @@ struct GenderBoxWeights: View {
 struct GenderBoxBar: View {
     let weight: Double?
     let box: GenderBox
+    var height: CGFloat = 24
     @Environment(\.interactiveTheme) private var theme
 
     private static let thickness: CGFloat = 12
@@ -452,6 +564,11 @@ struct GenderBoxBar: View {
         GeometryReader { geo in
             let half = geo.size.width / 2
             ZStack(alignment: .topLeading) {
+                // The scale's track (decoration: the bars share one scale).
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(theme.raised)
+                    .frame(width: geo.size.width, height: Self.thickness)
+                    .offset(y: (geo.size.height - Self.thickness) / 2)
                 Rectangle()
                     .fill(theme.increasedContrast ? theme.ink2 : theme.ink3)
                     .frame(width: 1, height: geo.size.height)
@@ -476,7 +593,7 @@ struct GenderBoxBar: View {
                 }
             }
         }
-        .frame(height: 24)
+        .frame(height: height)
         .accessibilityHidden(true)
     }
 }
@@ -484,15 +601,13 @@ struct GenderBoxBar: View {
 // MARK: - The two new résumés
 
 /// The two test résumés, identical but for "women's", and their scores out
-/// of 100. Side by side on the iPhone; stacked in the Mac's right column
-/// and at the accessibility sizes.
+/// of 100: side by side, or stacked at the accessibility sizes.
 struct GenderBoxTestResumes: View {
     let box: GenderBox
-    let stacked: Bool
     @Environment(\.interactiveTheme) private var theme
 
     var body: some View {
-        let layout = stacked || theme.usesTables
+        let layout = theme.usesTables
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: theme.chipSpacing + 2))
             : AnyLayout(HStackLayout(alignment: .top, spacing: theme.chipSpacing + 2))
         layout {
@@ -514,7 +629,7 @@ struct GenderBoxTestResumes: View {
                 .interactiveText(.caption)
                 .foregroundStyle(deleted ? theme.ink3 : theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
-                .modifier(GenderBoxStruck(struck: deleted))
+                .modifier(GenderBoxStruckLines(struck: deleted))
             ForEach(profile.clubs, id: \.self) { club in
                 GenderBoxClubsText(clubs: [club])
                     .interactiveText(.caption)

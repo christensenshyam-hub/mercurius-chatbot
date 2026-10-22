@@ -256,3 +256,26 @@ struct GenderBoxDebugTests {
         #expect(!GenderBoxState.debugShowsAll(["-GenderBoxShowAll", "NO"]))
     }
 }
+
+@Suite("Delete the Gender Box: the Mac's columns")
+struct GenderBoxColumnsTests {
+    @Test("Side by side from 500 pt, in whole points; stacked below, and when the width is open")
+    func columns() {
+        let layout = GenderBoxColumns(stackedSpacing: 22)
+        #expect(layout.columns(499.5, count: 2) == nil)
+        #expect(layout.columns(nil, count: 2) == nil)
+        #expect(layout.columns(.infinity, count: 2) == nil)
+        #expect(layout.columns(800, count: 3) == nil)
+        // A fractional width gives whole-point columns that add up to it
+        // (a measured width once fed its own fractions back, for ever).
+        for width in stride(from: 500.0, through: 1000.0, by: 0.25) {
+            let split = layout.columns(CGFloat(width), count: 2)
+            #expect(split != nil)
+            if let split {
+                #expect(split.left == split.left.rounded(), "\(width)")
+                #expect(abs(split.left + layout.spacing + split.right - CGFloat(width)) < 1e-9, "\(width)")
+                #expect(split.left > split.right, "the résumés get the wider column at \(width)")
+            }
+        }
+    }
+}
