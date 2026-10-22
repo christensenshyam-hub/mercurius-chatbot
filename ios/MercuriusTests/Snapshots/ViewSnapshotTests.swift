@@ -298,6 +298,51 @@ final class ViewSnapshotTests: XCTestCase {
         )
     }
 
+    // The path the app shows (review 2026-10-22): AppShellView always builds
+    // `CurriculumView(tracks:)`, with the "Basics | Deep dive" switch, the
+    // `.id(track)` and the reading-size floor, which the store-less test
+    // above never draws. One on each course.
+    //
+    // NO REFERENCES ARE COMMITTED for these two: recording is the founder's
+    // job (see the header). Until they are recorded, these two fail with
+    // "no reference" (CI skips this class). To record: run these two once
+    // with `.image(record: .all)` or SNAPSHOT_TESTING_RECORD=missing, check
+    // the images, and commit them.
+
+    func testCurriculumTrackedDeepDive() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferences())
+        let tracks = CurriculumTrackStore(preferences: InMemoryPreferences())
+        tracks.choose(.deepDive)
+        let view = CurriculumView(progress: progress, tracks: tracks,
+                                  onStartLesson: { _ in }, onStartUnitTest: { _ in }, topBar: { EmptyView() })
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
+            )
+        )
+    }
+
+    func testCurriculumTrackedBasics() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferences())
+        let tracks = CurriculumTrackStore(preferences: InMemoryPreferences())
+        tracks.choose(.basics)
+        tracks.markReadingSizeOfferHandled()
+        progress.markCompleted("b1_l1")
+        let view = CurriculumView(progress: progress, tracks: tracks,
+                                  onStartLesson: { _ in }, onStartUnitTest: { _ in }, topBar: { EmptyView() })
+        assertSnapshot(
+            of: view,
+            as: .image(
+                precision: 0.98,
+                layout: .device(config: .iPhone13),
+                traits: .init(userInterfaceStyle: .light)
+            )
+        )
+    }
+
     func testModeSelectorAtAccessibilityXXL() {
         // The mode selector is a horizontal pill scroller — at XXL the
         // pills grow vertically and horizontally. The ScrollView should
