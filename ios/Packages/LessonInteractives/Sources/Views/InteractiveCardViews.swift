@@ -15,6 +15,7 @@ public enum InteractiveCardViews {
         .doubtDial,
         .pageWithASecret,
         .citationThatWasnt,
+        .deleteTheGenderBox,
     ]
 
     /// The card's view, with its context (spec, spoiled, the lesson's state).
@@ -41,7 +42,7 @@ public enum InteractiveCardViews {
             CitationPhoneCard(context)
 
         case .deleteTheGenderBox:
-            InteractivePlaceholderCard(context)
+            GenderBoxPhoneCard(context)
 
         case .patchTheReward:
             InteractivePlaceholderCard(context)
@@ -70,7 +71,7 @@ public enum InteractiveCardViews {
             NightCitationCard(context)
 
         case .deleteTheGenderBox:
-            InteractivePlaceholderCard(context)
+            NightGenderBoxCard(context)
 
         case .patchTheReward:
             InteractivePlaceholderCard(context)
