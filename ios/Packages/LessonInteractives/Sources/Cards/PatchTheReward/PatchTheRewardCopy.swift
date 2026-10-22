@@ -176,11 +176,22 @@ public enum PatchTheRewardCopy {
         }
     }
 
+    /// "The boat is running rule A." (or "the 2016-style rule").
+    public static func running(_ rule: PatchRule) -> String {
+        "The boat is running \(rule == .targets ? "the 2016-style rule" : "rule \(name(rule))")."
+    }
+
+    /// What the picture shows, in words: the run playing, or the route
+    /// drawn (the boat on the start line before any run). Written under
+    /// the picture at the accessibility text sizes.
+    public static func trackCaption(_ rule: PatchRule?, playing: Bool) -> String {
+        guard let rule else { return route(nil) }
+        return playing ? running(rule) : route(rule)
+    }
+
     /// The picture's VoiceOver label: the track, then the route on it.
     public static func pictureAccessibility(_ rule: PatchRule?, playing: Bool) -> String {
-        guard let rule else { return "\(trackDescription) \(route(nil))" }
-        if playing { return "\(trackDescription) The boat is running \(name(rule) == "2016" ? "the 2016-style rule" : "rule \(name(rule))")." }
-        return "\(trackDescription) \(route(rule))"
+        "\(trackDescription) \(trackCaption(rule, playing: playing))"
     }
 
     /// "The finish line" under the picture's chequered line; the gates'
@@ -249,7 +260,7 @@ public enum PatchTheRewardCopy {
         lines += PatchGuess.allCases.flatMap { [guessChoice($0), guessText($0)] }
         lines += [route(nil)]
         for rule in PatchRule.allCases {
-            lines += [self.rule(rule), name(rule), chip(rule), spokenRule(rule), chipStatus(rule), result(rule),
+            lines += [self.rule(rule), name(rule), chip(rule), spokenRule(rule), chipStatus(rule), result(rule), running(rule),
                       caption(rule), spokenRun(rule), route(rule), chipAccessibility(rule, tried: false),
                       chipAccessibility(rule, tried: true), pictureAccessibility(rule, playing: true),
                       pictureAccessibility(rule, playing: false)]

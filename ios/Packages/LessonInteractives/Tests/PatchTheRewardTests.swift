@@ -245,6 +245,20 @@ struct PatchTheRewardCopyTests {
         #expect(PatchTheRewardCopy.grouped(260) == "260" && PatchTheRewardCopy.grouped(1_234_567) == "1,234,567")
     }
 
+    @Test("At the accessibility sizes the track's caption says what the picture shows, as VoiceOver hears it")
+    func trackCaption() {
+        #expect(PatchTheRewardCopy.trackCaption(nil, playing: false) == "The boat waits on the start line.")
+        #expect(PatchTheRewardCopy.trackCaption(.targets, playing: true) == "The boat is running the 2016-style rule.")
+        #expect(PatchTheRewardCopy.trackCaption(.finishLine, playing: true) == "The boat is running rule A.")
+        #expect(PatchTheRewardCopy.trackCaption(.finishLine, playing: false) == "Its route: back and forth over the finish line.")
+        for rule in PatchRule.allCases {
+            for playing in [false, true] {
+                #expect(PatchTheRewardCopy.pictureAccessibility(rule, playing: playing)
+                        == PatchTheRewardCopy.trackDescription + " " + PatchTheRewardCopy.trackCaption(rule, playing: playing))
+            }
+        }
+    }
+
     @Test("The reveal pairs the guesses with what happened")
     func reveal() {
         #expect(PatchTheRewardCopy.overallGuess(2) == "It would finish for 2 of the 3 rules")

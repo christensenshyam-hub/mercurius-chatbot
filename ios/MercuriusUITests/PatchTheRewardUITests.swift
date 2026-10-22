@@ -8,6 +8,11 @@ import XCTest
 ///   guess and runs, the reveal pairs the guesses with what happened, and
 ///   the lesson's check after the card still answers by tap.
 /// - A run plays on the track and "Skip to the result" ends it.
+/// - At AX5 every line stays inside the window.
+///
+/// The shared controls show up twice in the UI test tree (a button inside
+/// a button with the same label; VoiceOver reads one), so every button
+/// query takes its `firstMatch`.
 final class PatchTheRewardUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -34,19 +39,42 @@ final class PatchTheRewardUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
 
-    /// Swipes the lesson up, as a student would, until `element` sits in the
-    /// top three quarters of the window (the composer covers the bottom).
+    /// Scrolls the lesson, as a student would, until `element` sits between
+    /// the lesson's header and the composer (the top 15% and the bottom
+    /// quarter of the window). By its frame, not `isHittable`: the lesson's
+    /// list reports a row's controls as not hittable even on screen
+    /// (LessonInteractiveUITests scrolls the same way).
     @MainActor
     private func bringIntoView(_ element: XCUIElement, in app: XCUIApplication, file: StaticString = #filePath,
                                line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: 15), "\(element) never appeared", file: file, line: line)
         let window = app.windows.firstMatch.frame
-        var swipes = 0
-        while (!element.isHittable || element.frame.maxY > window.height * 0.75) && swipes < 14 {
-            app.swipeUp(velocity: .slow)
-            swipes += 1
+        let top = window.height * 0.15, bottom = window.height * 0.75
+        for _ in 0..<24 {
+            let frame = element.frame
+            if frame.maxY > bottom {
+                drag(app, up: true)
+            } else if frame.minY < top {
+                drag(app, up: false)
+            } else {
+                break
+            }
         }
-        XCTAssertTrue(element.isHittable, "\(element) never came on screen", file: file, line: line)
+        let frame = element.frame
+        XCTAssertTrue(frame.minY >= top && frame.maxY <= bottom, "\(element) never came on screen (\(frame))",
+                      file: file, line: line)
+    }
+
+    /// Moves the list by `span` of the window (a quarter by default), held
+    /// at the end so it doesn't coast (a swipe can fling a row past the
+    /// window).
+    @MainActor
+    private func drag(_ app: XCUIApplication, up: Bool, span: CGFloat = 0.25) {
+        let window = app.windows.firstMatch
+        let low = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.475 + span / 2))
+        let high = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.475 - span / 2))
+        (up ? low : high).press(forDuration: 0.05, thenDragTo: up ? high : low, withVelocity: .slow,
+                                thenHoldForDuration: 0.2)
     }
 
     @MainActor
@@ -62,7 +90,7 @@ final class PatchTheRewardUITests: XCTestCase {
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
 
-        tap(app.buttons["Play it"], in: app)
+        tap(app.buttons["Play it"].firstMatch, in: app)
         XCTAssertTrue(element(app, labelContains: "It hit 26 targets").waitForExistence(timeout: 5))
 
         let patches: [(chip: String, guess: String, result: String)] = [
@@ -71,11 +99,11 @@ final class PatchTheRewardUITests: XCTestCase {
             ("Rule C: plus 100 per full lap through gates 1, 2 and 3 in order.", "Yes", "finished 3 laps"),
         ]
         for patch in patches {
-            let chip = app.buttons[patch.chip]
+            let chip = app.buttons[patch.chip].firstMatch
             tap(chip, in: app)
             expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: chip)
             waitForExpectations(timeout: 5)
-            tap(app.buttons[patch.guess], in: app)
+            tap(app.buttons[patch.guess].firstMatch, in: app)
             XCTAssertTrue(element(app, labelContains: patch.result).waitForExistence(timeout: 5),
                           "no result for \(patch.chip)")
         }
@@ -90,13 +118,62 @@ final class PatchTheRewardUITests: XCTestCase {
         XCTAssertTrue(sent.waitForExistence(timeout: 10), "the check's tap didn't send the pick")
     }
 
+    /// The largest text size (AX5), every state on at once (revealed): a
+    /// student scrolling the card from its title to the made-up label never
+    /// meets a word outside the window's width (nothing scrolls sideways,
+    /// nothing is cut off at the side). Set TEST_RUNNER_PATCH_SHOTS_DIR to
+    /// keep a screenshot of each screen (for review; nothing is compared).
+    @MainActor
+    func testAtTheLargestTextSizeEveryLineStaysInsideTheWindow() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-UITests", "YES",
+            "-hasSeenOnboarding", "YES",
+            "-consentVersion", "1",
+            "-InteractiveGallery", "patch-the-reward",
+            "-InteractiveState", "revealed",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ]
+        app.launch()
+        let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
+        XCTAssertTrue(title.waitForExistence(timeout: 20), "the card never showed")
+        let window = app.windows.firstMatch.frame
+        let last = element(app, labelContains: "Loopholes A and B are made up for this toy.")
+        let shots = ProcessInfo.processInfo.environment["PATCH_SHOTS_DIR"]
+        var checked = Set<String>()
+        // One snapshot of the tree per screen (querying each text would
+        // take minutes at this size).
+        func texts(in node: XCUIElementSnapshot) -> [XCUIElementSnapshot] {
+            (node.elementType == .staticText ? [node] : []) + node.children.flatMap { texts(in: $0) }
+        }
+        for screen in 0..<40 {
+            for text in try texts(in: app.snapshot()) where !text.label.isEmpty {
+                let frame = text.frame
+                guard frame.height > 0, frame.maxY > window.minY, frame.minY < window.maxY else { continue }
+                checked.insert(text.label)
+                XCTAssertGreaterThanOrEqual(frame.minX, window.minX - 0.5, "\"\(text.label)\" leaves the window")
+                XCTAssertLessThanOrEqual(frame.maxX, window.maxX + 0.5, "\"\(text.label)\" leaves the window")
+            }
+            if let shots {
+                let url = URL(fileURLWithPath: shots).appendingPathComponent(String(format: "ax5-%02d.png", screen))
+                try? XCUIScreen.main.screenshot().pngRepresentation.write(to: url)
+            }
+            if last.exists && last.frame.minY >= window.minY && last.frame.maxY <= window.maxY { break }
+            drag(app, up: true, span: 0.6)
+        }
+        XCTAssertTrue(last.exists && last.frame.maxY <= window.maxY, "never scrolled to the card's last label")
+        // The walk saw the card's words, not just its title.
+        XCTAssertTrue(checked.contains { $0.hasPrefix("You\u{2019}re training a boat") }, "\(checked)")
+        XCTAssertTrue(checked.contains { $0.hasPrefix("Patch the rule so the boat finishes") }, "\(checked)")
+    }
+
     @MainActor
     func testARunPlaysOnTheTrackAndSkipEndsIt() {
         let app = launch([])
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
-        tap(app.buttons["Play it"], in: app)
-        let skip = app.buttons["Skip to the result"]
+        tap(app.buttons["Play it"].firstMatch, in: app)
+        let skip = app.buttons["Skip to the result"].firstMatch
         XCTAssertTrue(skip.waitForExistence(timeout: 5), "the run didn't play")
         skip.tap()
         XCTAssertTrue(element(app, labelContains: "It hit 26 targets").waitForExistence(timeout: 5))

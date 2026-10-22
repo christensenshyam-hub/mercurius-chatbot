@@ -35,6 +35,8 @@ Seen from above, on night water (the same in light and dark): the loop's channel
 - While a run plays: the boat moves along its route with its wake (lit on the Mac); a star is drawn as a dashed outline for the 4 ticks it is gone.
 - After a run (and at once under Reduce Motion or VoiceOver): the route as a line with arrows and the boat where the run ended, with every star shown (a still shows the track as set). A route with a way in and a loop has its legs numbered in order on white squares (the gates are indigo discs): **1** the way in, **2** the loop it then repeats. A route that is one loop (A, C) needs no number. Where a route runs a stretch both ways (rule A, over the line), it is drawn as two lanes with arrows each way, and, because that stretch is shorter than the boat that ends the run on it, a double-headed arrow beside it, on the loop's outer side.
 
+At the accessibility text sizes (iPhone), the picture keeps its width but its labels don't grow, so a line under it says what it shows: "The boat waits on the start line.", "The boat is running rule A." while a run plays, or the route's sentence (the VoiceOver table below lists them; VoiceOver hears it once, in the picture's label).
+
 Under the track, two counters: **Points** and **Laps** ("0 of 3"). They count up as a run plays and show where the shown run ended.
 
 ### Labels (on the canvas, never footnotes)
@@ -217,7 +219,7 @@ The reveal's "You guessed" count is the student's own guesses (how many of A, B,
 
 - **Where:** the first of Merc's replies in `u5_l1` with an [EX] example, at the end of that example's part, before the reply's check. The guide's Key examples open with CoastRunners, so the card usually follows the tutor's telling of it, which is why the 2016-style rule plays with no prediction. If the first complete reply has no example, the card goes at its end, before its check.
 - **Once per thread**, never into text that is still streaming, never in a cut-off reply, never in a thread with a crisis line; reopened in the same run, the same place (all the framework's placement rules, `InteractivePlacementTests`).
-- **Spoilers:** none (the slate's row). A tutor reply that happened to describe a patch would not switch on the spoiled mode; the predictions would still be asked. See open question Q2.
+- **Spoilers:** none (the slate's row). A tutor reply that happened to describe a patch would not switch on the spoiled mode; the predictions would still be asked. See open question Q1 (§8).
 - **State:** the lesson's `InteractiveStateStore`, in memory only. Leaving the lesson starts the card fresh. Nothing is sent or stored, and the wire and the prompt are unchanged.
 - **The lesson's check is untouched.** On the iPhone, the check after the card still answers with one tap (the UI test). On the Mac a focused card control holds Return; A–D, 1–4 and ↑/↓ still answer the check.
 
@@ -230,7 +232,7 @@ The reveal's "You guessed" count is the student's own guesses (how many of A, B,
 ### Accessibility
 
 - **VoiceOver:** the title is a header with the card's state in one sentence; the track is one image described once in words, with its route; each run is spoken as a result with its counts, not as motion; the reveal is one element.
-- **Dynamic Type to AX5 on an iPhone SE:** the track stays full width (its route is also in words), the counters become a text table, chips stack their words, and decoration (icons, the card's light and stars) goes. Never a word.
+- **Dynamic Type to AX5 on an iPhone SE:** the track stays full width, with its route written under it, the counters become a text table, chips stack their words, and decoration (icons, the card's light and stars) goes. Never a word. A UI test (`testAtTheLargestTextSizeEveryLineStaysInsideTheWindow`) scrolls the revealed card at AX5 from its title to its last label and fails if any line leaves the window's width; it passes on the SE and the 16 Pro Max.
 - **Reduce Motion:** nothing plays by itself; each run's still route with numbered arrows and its result appear at once.
 - **Increase Contrast / Reduce Transparency:** no glows or stars, solid edges, the HC values.
 - **Nothing by colour alone:** stars are star shapes (a dashed outline while gone), gates are numbered, the line is chequered and says "finish", a picked chip has a check, a tried chip says its laps.
@@ -292,3 +294,24 @@ Please tick each, or note a change. Sign-off is recorded at the end, with a date
 | `-PatchRewardAutoRun 2016\|a\|b\|c` (+ `-PatchRewardAutoRunDelay <s>`, default 1.5) | runs that rule once, as a tap would (a patch with the guess "It finishes"): the motion clip |
 | `-PatchRewardFreezeTick <n>` (with `-PatchRewardAutoRun`) | holds the run at tick n: a still of the boat and its wake |
 | `-InteractiveScroll top\|reveal\|after`, `-InteractiveReduceMotion YES`, `-InteractiveIncreaseContrast YES`, `-InteractiveReduceTransparency YES`, `-InteractiveCompact YES` | the framework's (FRAMEWORK.md §5) |
+
+---
+
+## 8. Open questions
+
+- **Q1. Spoiler terms.** The slate gives the card none: its predictions are on the patches, which the tutor's text never covers. If a live tutor reply did describe a patch ("pay for each lap"), the card would still ask for the guesses. Adding "per lap" or "full lap" as spoiler terms would switch on the spoiled mode then, but would also fire on ordinary race talk. Left as the slate says.
+- **Q2. The overall reveal on the iPhone sits under the rule chips.** After the third patch's run, the patch's own result shows in the panel above the chips, and the reveal ("You guessed … What happened …") appears below them, so a student scrolls past the chips to reach it (VoiceOver speaks it with the run's result). Scrolling the lesson to it is the lesson list's job (ChatFeature), not the card's; worth a look in the teacher pass.
+- **Q3. Rule A's motion is small.** The stretch over the finish line is 8 m, shorter than the boat, so the run rocks the boat across the line rather than travelling. The still adds a double-headed arrow beside it. A longer stretch would mean retuning the toy track and re-proving that every rule's best route is unique.
+- **Q4. "Play it" replays the 2016-style rule with no guess** because the tutor has just told that story (the card sits after the CoastRunners example). If the tutor's first example is a different case, the replay still introduces itself ("First, a rule like the one in 2016"), but it then plays without a prediction to a student who hasn't heard the story.
+
+---
+
+## 9. Verified (2026-10-21)
+
+- `swift test` (ios/Packages): 1,315 tests pass, including `RoutePlannerTests` and `PatchTheRewardTests`.
+- `ios/scripts/ci-compat-lint.py`: 0 findings.
+- iOS build and `xcodebuild test` on the iPhone 16 Pro Max simulator (snapshot recording forced off, `ViewSnapshotTests` skipped as in the framework's run): 6/6 app unit tests; 34/34 UI tests other than this card's. The card's 3 UI tests pass on the SE and on the 16 Pro Max (§6.3; their first version queried the shared controls, which appear twice in the UI test tree, and waited on `isHittable`, which the lesson list never reports; both fixed).
+- `ios/scripts/ios-unchanged-check.sh`: the same 23 results (11 pass, 12 already stale) and the same pixels for every stale render. No record run.
+- Mac Debug build: builds. Shots through renamed copies (`….macnsia1`), quit by PID; the founder's Mercurius kept running.
+- Shots in `shots/` (not committed): the iPhone 16 Pro Max in light and dark at the default size and at AX3, the SE at AX5 (including the AX5 test's walk through the whole card), the Mac at 1280 and 700 pt wide in light and dark, Increase Contrast, Reduce Motion stills, and a 7.5 s clip of patch C's run ending on its reveal.
+

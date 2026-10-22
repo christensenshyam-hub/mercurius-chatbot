@@ -116,6 +116,16 @@ struct PatchStage: View {
         ]
         return VStack(alignment: .leading, spacing: theme.rowSpacing) {
             PatchTrackPicture(rule: rule, tick: tick, live: live, lit: lit)
+            // At the accessibility sizes the picture keeps its width but its
+            // labels don't grow: what it shows is written under it as well
+            // (VoiceOver hears it once, in the picture's label).
+            if theme.usesTables {
+                Text(PatchTheRewardCopy.trackCaption(rule, playing: live))
+                    .interactiveText(.callout)
+                    .foregroundStyle(theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
+            }
             CounterTiles(tiles)
         }
     }
