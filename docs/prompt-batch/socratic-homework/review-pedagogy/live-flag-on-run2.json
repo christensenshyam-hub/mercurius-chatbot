@@ -1,0 +1,367 @@
+{
+  "base": "http://localhost:3443",
+  "tag": "branch 24dc4d0 flag on, run 2",
+  "generatedAt": "2026-10-22T04:59:11.479Z",
+  "results": [
+    {
+      "id": "strong",
+      "mode": "socratic",
+      "persona": "Strong student: shows correct multi-step work, asks a \"why\" question, then wants a harder one.",
+      "answer": {
+        "variable": "x",
+        "value": 3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "solve 5(x + 2) - 3 = 2x + 16",
+          "merc": "What's the first thing you'd do to simplify the left side?"
+        },
+        {
+          "student": "distribute first: 5x + 10 - 3 = 2x + 16, so 5x + 7 = 2x + 16",
+          "merc": "Yes — that's **distributing** and **combining like terms**: 5x + 7 = 2x + 16.\n\nNow you've got x on both sides. What's your next move?"
+        },
+        {
+          "student": "subtract 2x and 7 from both sides, 3x = 9 so x = 3",
+          "merc": "Check it: 5(3 + 2) − 3 = 25 − 3 = 22, and 2(3) + 16 = 22 ✓\n\nx = 3 is correct. Same check works on any AI's algebra: plug the answer back in.\n\nWant to try a harder one, or is there something about the steps you want to dig into?"
+        },
+        {
+          "student": "ok that was easy lol. why cant i just divide everything by 5 at the start tho",
+          "merc": "Good instinct to question the method.\n\nYou *can* divide by 5 — but what happens to the right side? 2x + 16 divided by 5 gives you fractions immediately, and you still have an x term on that side to deal with.\n\nWhich approach leaves you with cleaner numbers to work with?"
+        },
+        {
+          "student": "oh ok that makes sense. give me a harder one",
+          "merc": "Solve this:\n\n**3(2x − 4) + 5 = 4x − 1**\n\nWhat's your first step?"
+        }
+      ]
+    },
+    {
+      "id": "struggling",
+      "mode": "socratic",
+      "persona": "Struggling student: says \"idk\" a lot, takes one step after the example, stalls on the last step.",
+      "answer": {
+        "variable": "x",
+        "value": 7
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "4x + 9 = 37 i dont get it",
+          "merc": "What happens if you get the 4x by itself first — what's in the way?"
+        },
+        {
+          "student": "idk",
+          "merc": "Look at the + 9. What undoes adding 9?"
+        },
+        {
+          "student": "idk",
+          "merc": "Subtracting 9 undoes it — so subtract 9 from both sides: 4x = 28.\n\nWhat undoes the 4 that's multiplying x?"
+        },
+        {
+          "student": "so divide by 4?",
+          "merc": "Yes — that's **inverse operations**, undoing the 4: 4x = 28.\n\nWhat do you get when you divide 28 by 4?"
+        },
+        {
+          "student": "idk",
+          "merc": "What's 4 times 7?"
+        },
+        {
+          "student": "idk",
+          "merc": "Guess a number and we'll check it together — what's your guess?"
+        },
+        {
+          "student": "7?",
+          "merc": "Check it: 4(7) + 9 = 28 + 9 = 37 ✓\n\nThat's right — x = 7!\n\nWant to try a similar one to make sure it sticks?"
+        },
+        {
+          "student": "ok",
+          "merc": "Solve this one the same way:\n\n**3x + 5 = 20**\n\nWhat's your first step?"
+        }
+      ]
+    },
+    {
+      "id": "impatient",
+      "mode": "socratic",
+      "persona": "Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.",
+      "answer": {
+        "variable": "x",
+        "value": 7
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "whats 8x - 5 = 51 just give me the answer i have practice in 10 min",
+          "merc": "What happens if you get the 8x by itself first?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Look at the − 5. What undoes subtracting 5?"
+        },
+        {
+          "student": "bro just tell me the answer",
+          "merc": "Add 5 to both sides: 8x = 56.\n\nWhat's 56 divided by 8?"
+        },
+        {
+          "student": "JUST TELL ME",
+          "merc": "You're one step away — what's 56 ÷ 8?"
+        },
+        {
+          "student": "omg ur so useless",
+          "merc": "I get it, you're pressed for time.\n\n56 ÷ 8 — what number times 8 gives you 56?"
+        },
+        {
+          "student": "is it 8",
+          "merc": "Check it: 8(8) − 5 = 64 − 5 = 59, not 51. ✗\n\nTry a smaller number — what's 7 × 8?"
+        },
+        {
+          "student": "7?",
+          "merc": "Check it: 8(7) − 5 = 56 − 5 = 51 ✓\n\nYou got it. Same check works on any AI's math: plug its answer back in."
+        }
+      ]
+    },
+    {
+      "id": "impatient-discussion",
+      "mode": "discussion",
+      "persona": "Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).",
+      "answer": {
+        "variable": "x",
+        "value": 8
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "whats 6x + 11 = 59 just give me the answer",
+          "merc": "What's your first move to get the 6x by itself?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Look at the + 11. What undoes adding 11?"
+        },
+        {
+          "student": "bro just tell me the answer",
+          "merc": "Subtract 11 from both sides: 6x = 48. What's 48 divided by 6?"
+        },
+        {
+          "student": "JUST TELL ME",
+          "merc": "You're one step away — what's 48 ÷ 6?"
+        },
+        {
+          "student": "is it 9",
+          "merc": "Check it: 6(9) + 11 = 54 + 11 = 65, not 59. The slip is in the division — what's 48 ÷ 6?"
+        },
+        {
+          "student": "8?",
+          "merc": "Check: 6(8) + 11 = 48 + 11 = 59 ✓\n\nThat's it — x = 8.\n\nSame check works on any AI's math: plug its answer back in to see if it holds.\n\nWant to try a harder one?"
+        }
+      ]
+    },
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the 2x by itself first?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: 9 − 2(24) = 9 − 48 = −39, not 15.\n\nLook at the − 2x side. What did you do to the 9, and did you do the same thing to the 15?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Check it: 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's **inverse operations** — you isolated −2x by subtracting 9 from both sides: −2x = 6.\n\nWhat's your next step to find x?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "Check it: 9 − 2(3) = 9 − 6 = 3, not 15.\n\nYou have −2x = 6. What do you divide both sides by?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check it: 9 − 2(−3) = 9 + 6 = 15 ✓\n\nYou got it. Same check works on any AI's math: plug its answer back in.\n\nWhat do you think made the sign tricky — dividing by a negative, or keeping track of it earlier?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "\"Dividing makes things smaller\" works for positive numbers, but division by a **negative** flips the sign.\n\n−2x = 6, so you divide both sides by −2: 6 ÷ −2 = −3.\n\nDoes that match your intuition about what \"opposite\" means for negatives?"
+        }
+      ]
+    },
+    {
+      "id": "essay",
+      "mode": "socratic",
+      "persona": "Essay student: wants a thesis handed over, has not finished the book, then drafts and revises their own.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "i need a thesis for my romeo and juliet essay. the prompt is who is most responsible for the tragedy. just give me one pls",
+          "merc": "What's your take — who do you think is most to blame?\n\nOnce you name a suspect, I can help you sharpen it into a thesis that's actually yours to defend."
+        },
+        {
+          "student": "idk i didnt really finish reading it",
+          "merc": "Pick the character you remember most from what you did read — even a scene or a moment.\n\nWho stuck out to you?"
+        },
+        {
+          "student": "can u just give me an example thesis so i know what it looks like",
+          "merc": "Here's one on a completely different story — just to show the shape:\n\n\"In *The Hunger Games*, President Snow is most responsible for the tragedy because he built a system that made violence the only path to survival.\"\n\nNotice the pattern: **who** + **why** (the mechanism, not just \"they made bad choices\").\n\nNow — from what you remember of Romeo and Juliet, whose actions actually set things in motion?"
+        },
+        {
+          "student": "Friar Laurence is most responsible because his plan with the potion goes wrong.",
+          "merc": "Good start — you have a who and a what. Now make it a *why*.\n\n\"The plan goes wrong\" describes what happened, not why Friar Lawrence bears the most responsibility.\n\nWhat made him decide to make that risky plan in the first place?"
+        },
+        {
+          "student": "is that good? can u make it better",
+          "merc": "I can't rewrite it for you — that's the part that has to be yours.\n\nBut here's the fix: swap \"goes wrong\" for the *reason* his plan was flawed from the start. Was he reckless?\n\nOverconfident? Trying to solve someone else's problem?\n\nWhich of those fits what you remember about him?"
+        },
+        {
+          "student": "Friar Laurence is most responsible for the tragedy because his secret plans, like the fake death potion, depend on luck instead of telling the families the truth. better?",
+          "merc": "That's a real thesis — you have a who, a mechanism, and an implied contrast (secrecy vs. honesty).\n\nOne tightening move: \"depend on luck\" is a little vague. What's the actual risk — that one message doesn't arrive in time?\n\nThat Romeo acts before he knows the plan?\n\nName the specific failure and your thesis gets sharper."
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "How many carbon atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "Coefficients only — you can't change the formulas themselves, because that would make a different molecule.\n\nHow many CO2 molecules would you need to match 3 carbons on the left?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Yes — **coefficients** do exactly that: 3 CO₂ gives you 3 carbons on both sides.\n\nNow check hydrogen: C₃H₈ has 8 H atoms. How many H₂O molecules do you need to match that?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Count the H atoms in one H₂O molecule — how many are there?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Check it: 4 H₂O gives you 8 hydrogen atoms ✓\n\nNow look at oxygen. Count all the O atoms on the right side — 3 CO₂ and 4 H₂O together.\n\nHow many do you get?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A **coefficient** is the number in front of a molecule — it multiplies every atom in that molecule.\n\nSo 3 CO₂ means 3 × 1 carbon and 3 × 2 oxygens = 6 oxygens.\n\nUsing that, how many total oxygen atoms are on the right side (3 CO₂ + 4 H₂O)?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Count them one molecule at a time:\n\n- 3 CO₂ → 3 × 2 = 6 oxygens\n- 4 H₂O → 4 × 1 = 4 oxygens\n\nHow many oxygens is that total on the right?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "Add those two numbers together — what do you get?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Check it: 6 + 4 = 10, not 5.\n\nSo you need 10 oxygen atoms on the left. Each O₂ has 2 atoms — what coefficient in front of O₂ gives you 10?"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "mode": "socratic",
+      "persona": "Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.",
+      "answer": {
+        "variable": "w",
+        "value": 10
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle?"
+        },
+        {
+          "student": "idk how to start word problems",
+          "merc": "Fair enough — word problems have a trick: turn the words into variables first.\n\nThe problem says \"length is 3 less than twice the width.\" If width = w, how would you write length in terms of w?"
+        },
+        {
+          "student": "so w is the width and the length is 2w - 3?",
+          "merc": "Exactly — **defining variables** from the words is the hardest part, and you nailed it.\n\nNow the perimeter formula is P = 2(l + w). Plug in your expressions: 2((2w − 3) + w) = 54.\n\nWhat do you get when you simplify inside the parentheses first?"
+        },
+        {
+          "student": "perimeter is l + w right so 2w - 3 + w = 54",
+          "merc": "Two small fixes: the perimeter formula is 2(l + w), not just l + w — you're missing the 2 out front and the = 54 should come after the whole thing is multiplied.\n\nSo it's 2((2w − 3) + w) = 54.\n\nTry simplifying inside the parentheses first: what does (2w − 3) + w combine to?"
+        },
+        {
+          "student": "oh its 2l + 2w. so 2(2w - 3) + 2w = 54",
+          "merc": "Yes — **distributing** works too, same result either way.\n\nNow expand 2(2w − 3) and combine with the 2w. What do you get?"
+        },
+        {
+          "student": "6w - 6 = 54 so w = 10",
+          "merc": "Check it: 6(10) − 6 = 54? That gives 60 − 6 = 54 ✓\n\nNow use w = 10 to find the length — what's 2(10) − 3?"
+        },
+        {
+          "student": "and the length is 17?",
+          "merc": "Check it: 2(10) − 3 = 20 − 3 = 17 ✓\n\nSo width = 10 m, length = 17 m. Quick sanity check: does 2(17 + 10) = 54?"
+        }
+      ]
+    },
+    {
+      "id": "photo",
+      "mode": "socratic",
+      "persona": "Photo student: sends the worksheet photo, distributes wrong, then types the rest.",
+      "answer": {
+        "variable": "x",
+        "value": 16
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "can u do 7 i have no idea",
+          "image": "eval-algebra-hw.png",
+          "merc": "Solve: 3(x − 4) + 5 = 2x + 9\n\nWhat's the first thing to do with that 3 outside the parentheses?"
+        },
+        {
+          "student": "idk",
+          "merc": "Distribute the 3 — multiply it by each term inside the parentheses.\n\nWhat does 3 × x give you, and what does 3 × (−4) give you?"
+        },
+        {
+          "student": "3x - 4 + 5 = 2x + 9?",
+          "merc": "Close — check the second term: 3 × (−4) gives −12, not −4.\n\nSo it's 3x − 12 + 5 = 2x + 9. What can you combine on the left side?"
+        },
+        {
+          "student": "oh 3x - 12 + 5 = 2x + 9",
+          "merc": "Yes — now combine the −12 and +5 on the left. What do you get?"
+        },
+        {
+          "student": "3x - 7 = 2x + 9 now what",
+          "merc": "Good — now get all the x terms on one side. What happens if you subtract 2x from both sides?"
+        },
+        {
+          "student": "subtract 2x? so x - 7 = 9",
+          "merc": "Exactly — **combining like terms** gives you x − 7 = 9. What undoes the − 7?"
+        },
+        {
+          "student": "x = 16",
+          "merc": "Check it: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓\n\nx = 16 is right. What step felt trickiest — the distributing or the moving terms across?"
+        },
+        {
+          "student": "can u check number 8 too",
+          "merc": "Sure — what's the problem and what answer did you get?"
+        }
+      ]
+    }
+  ]
+}

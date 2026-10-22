@@ -1,6 +1,6 @@
 # Basics track: server
 
-Branch `feat/basics-server`, on top of `3f46b2d` (the head of draft PR #44, `fix/prompts-lessons-2026-10`, as pushed; the local branch has unpushed homework commits after it). Not pushed. The PR description is `docs/basics/PR.md`.
+Branch `feat/basics-server` (PR #54), built on `3f46b2d` (then the head of draft PR #44, `fix/prompts-lessons-2026-10`). On 2026-10-22 it merged #44's new head `6bbb88c`, which adds Socratic homework coaching: see "Merge with #44's homework coaching" below. **The Basics live evals below were all run before that merge.** The PR description is `docs/basics/PR.md`.
 
 The founder asked for "a separate 'easy' curriculum that can just teach people the basics of how to use AI … (think of a grandma wanting to learn how to use ChatGPT)." This branch is the server half: a second lesson track called **Basics**, next to the existing 8-unit course (called **Deep dive** where the two sit side by side). The content is the final curriculum (`BASICS_CURRICULUM.md` v1 and `basics.json`, 2026-10-21: 5 units, 18 lessons) and its tutor-voice guide (`BEGINNER_GUIDE.md`).
 
@@ -216,7 +216,7 @@ So for every request without a Basics tag, this branch sends the model exactly w
 
 ### Tests
 
-`npm test`: 1,167 of 1,167 pass. One pre-existing timing test (`tests/quotasIntegration.test.js`, "a client that disconnects mid-stream … is billed as aborted") failed once in six runs while eval servers were busy on the same machine, and passed on every rerun; nothing here touches it.
+`npm test`, before the #44 merge: 1,167 of 1,167 pass (1,241 after it). One pre-existing timing test (`tests/quotasIntegration.test.js`, "a client that disconnects mid-stream … is billed as aborted") failed once in six runs while eval servers were busy on the same machine, and passed on every rerun; nothing here touches it.
 
 ### Running the live A/B for the pre-existing rows
 
@@ -238,6 +238,45 @@ BASE_URL=http://localhost:3464 node scripts/eval-pacing.mjs --runs 3 --label bas
 
 Expected result: on the existing rows, BASE and BRANCH within run-to-run noise. That includes #44's three founder-decision rows (the two `[LESSON_COMPLETE] within 10 turns` rows and beat-1 length) and the known boundary flakes (debate ≤ 7 lines and socratic one-question with the flag on). Every Basics row should pass.
 
+## Merge with #44's homework coaching (2026-10-22)
+
+`origin/fix/prompts-lessons-2026-10` at `6bbb88c` (27 commits of "Socratic homework coaching", `docs/prompt-batch/PR.md`) is merged into this branch. Both features are kept in full.
+
+**How the conflicts were resolved.**
+
+- **`server.js`, the system prompt.** #44 moved the image fetch above the prompt block and added `homeworkNote`. The Basics branch stays first in that block, unchanged.
+- **`server.js`, the stream.** The Basics reflow (`replyReflowLimit`, `reflowOptions`) and voice clean-up stay. #44's hold-back flag (`guardArmed || writingTurn || problemWork`) sits beside them, with its `streamEvent` keepalive and held-back writes. `replyReflowLimit` now reuses #44's `replyLimit` for every request but Basics; the value is the same.
+- **`server.js`, the JSON path.** The Basics voice and reflow run first. #44's `guardReply` runs after them, and is never armed for a lesson.
+- **`scripts/eval-pacing.mjs`.** Both scenario sets are kept: the `hw-*` probes follow the audit probes, and the `basics-*` scenarios come last, as before. Every criterion from both sides is kept: `homeworkCriteria()` sits after the lesson rows, and `basicsCriteria()` stays last.
+- **`tests/evalPacing.test.js`.** Both sides' fixtures are kept. The order tests expect the `hw` rows and then the Basics rows.
+
+**Basics is exempt from the homework machinery.** A Basics practice turn has Merc write the learner's note or list on purpose. `isCurriculumMsg` is true for both lesson tracks, and every homework gate in the chat handler already requires it to be false:
+
+- `homeworkNote`: no STEP CHECK, WRITING or NEXT MOVE note;
+- `problemTurn`: no adaptive thinking, so the temperature and the 2,048-token budget stay;
+- `guardOn`: no answer guard, no hold-back, no writing tidy-up and no quote retry.
+
+The step checker is part of `homeworkNote`, so it is off too, and the Basics dynamic block is only `basicsRuntimeBlock()`. Deep-dive lessons were already exempt on #44, so they are unchanged.
+
+`tests/basicsHomeworkExempt.test.js` checks this with the real server and the mock, in both flag states. A Basics turn whose thread holds an equation, or a "rewrite my note" request, gets one call with no thinking and no homework note. Its reply is streamed in pieces, and only the Basics voice and reflow touch it, so the scripted "x = 5" and its questions survive. The same thread in free chat gets the following: thinking, a homework note, the guard's retry, one held-back delta and a redacted reply. The JSON path is checked the same way. The test was mutation-checked: with the lesson gates removed, 6 of its 8 cases fail.
+
+**Verification (mock only, no model calls, $0).** All servers ran with `ANTHROPIC_MOCK=1`, `MOCK_CAPTURE_FILE`, explicit env and no key.
+
+| check | flag on | flag off |
+|---|---|---|
+| `basics-*` eval scenarios: pre-merge `f48ae7c` against the merge, model calls with byte-identical system blocks, messages, model and `max_tokens`; no thinking, temperature kept | 30 / 30 | 30 / 30 |
+| the same scenarios: streamed replies identical | 30 / 30 | 30 / 30 |
+| a scripted Basics lesson (opener, practice, an equation, "rewrite my note", "Explain more", a `[Q]` tap on the JSON path): calls identical, replies and every delta identical | 6 / 6 | 6 / 6 |
+| every other scenario (86 conversations: Deep-dive lessons, `hw-*`, chat, safety, widget, helpers), #44's head `6bbb88c` against the merge: identical input, including `temperature`, `thinking` and `output_config` | 178 / 178 | 178 / 178 |
+| the same: replies identical | 174 / 174 | 174 / 174 |
+| a homework free chat ("what is 3x+5 = 20", two asks) on the merge | thinking `adaptive`, effort `low`, no temperature, `max_tokens` 3,000, NEXT MOVE note in the dynamic block only, sent whole | same |
+
+The pre-merge capture has no `temperature` field (#44 added it to `MOCK_CAPTURE_FILE`), so that one field is compared only on the #44 side. Both sides take it from the same `responseBudget`.
+
+`npm test`: 1,241 of 1,241 pass on the merge.
+
+**Live evals.** None have run since the merge. The Basics gate and the live A/B in "Gate" above are on the pre-merge code. The mock shows that a Basics lesson sends the model the same bytes and post-processes the reply the same way. A small live re-check costs about $1–2: for example `--runs 1 --only basics-` in both flags, or `--runs 3` in one. Whether to spend that is a founder budget decision.
+
 ## Spend
 
 Every live call used Sonnet 4.6 at list prices (`lib/pricing.js`), against local servers only.
@@ -256,6 +295,7 @@ Every live call used Sonnet 4.6 at list prices (`lib/pricing.js`), against local
 | Review fixes: gate 1, 3 runs × 2 flags (result files, not committed) | 158 | $1.34 |
 | Review fixes: gate 2, 3 runs × 2 flags (`pacing-basics-fix-gate2-*.json`) | 157 | $1.34 |
 | Byte-identity re-check on the final code (mock) | 384 | $0 |
+| Merge with #44: mock checks (Basics pre/post, #44 against the merge) | 868 | $0 |
 | **Total** | | **≈ $4.90** |
 
 **A Basics lesson in production.** A turn reads about 14,000 cached tokens, roughly $0.004, and writes about 300 output tokens, roughly $0.0045, so about $0.009 a turn. A 4–5 turn lesson costs about $0.04. The first call after a cache expiry writes the prefix once, about $0.05.
@@ -276,4 +316,5 @@ Every live call used Sonnet 4.6 at list prices (`lib/pricing.js`), against local
   - add the Basics prefixes to `prewarmCaches` when a client ships;
   - fix the numbered-list reflow gap for every mode in its own PR;
   - run the live A/B of the pre-existing rows when convenient (commands above);
+  - a small live Basics re-check after the #44 merge (about $1–2; founder budget);
   - the pause offer is three sentences, so the 2-sentence reflow puts "I'll save your place." on a line of its own (the eval accepts it; holding it together would be a reflow special case).

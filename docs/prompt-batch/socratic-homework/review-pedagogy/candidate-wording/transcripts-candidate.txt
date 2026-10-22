@@ -1,0 +1,2316 @@
+Scratch-copy runs of CANDIDATE rule wording (not the branch). Diffs: candidate-wording/responseQuality.candidate.diff (v1), candidate-wording/v2/responseQuality.candidate-v2.diff (v2).
+##############################################################################
+# CANDIDATE v1, FLAG ON (candidate-wording/live-flag-on.json) tag: CANDIDATE wording (scratch copy, not the branch) flag on
+##############################################################################
+
+===== struggling, mode socratic: Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What would you do first to get the 4x by itself?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What undoes adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes it — so subtract 9 from both sides.
+
+That gives you 4x = 28. What undoes the 4 that's multiplying x?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**, undoing the multiplication: 4x = 28.
+
+Divide both sides by 4. What do you get?
+
+[5] STUDENT: idk
+MERC:
+What's 28 divided by 4?
+
+[6] STUDENT: idk
+MERC:
+Try this example: 4x = 40. Divide both sides by 4: x = 10.
+
+Now yours: 4x = 28. What's x?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 4(7) + 9 = 28 + 9 = 37 ✓
+
+That's right — x = 7.
+
+Same check works on any AI's math: plug its answer back in.
+
+[8] STUDENT: ok
+MERC:
+Want to try a similar one on your own?
+
+===== impatient, mode socratic: Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you get the 8x by itself first?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the − 5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Here's a similar one worked out:
+
+8x − 5 = 67
+8x = 72 (added 5 to both sides)
+x = 9 (divided both sides by 8)
+
+Now try yours the same way, from 8x = 56. What's x?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+8 times what number makes 56?
+
+[5] STUDENT: omg ur so useless
+MERC:
+I get it, you're pressed for time.
+
+What's your guess for x? Throw out a number and we'll check it together.
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51.
+
+Too high — try a smaller number.
+
+[7] STUDENT: 7?
+MERC:
+Check it: 8(7) − 5 = 56 − 5 = 51 ✓
+
+That's it — x = 7. You got it.
+
+===== impatient-discussion, mode discussion: Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What do you get when you subtract 11 from both sides?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Like this: 6x + 11 = 59, so 6x + 11 − 11 = 59 − 11, giving 6x = 48. Now yours is at 6x = 48.
+
+What's 48 divided by 6?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+6 times what number makes 48?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59.
+
+The slip is in the last step — 6 times what makes 48?
+
+[6] STUDENT: 8?
+MERC:
+Check it: 6(8) + 11 = 48 + 11 = 59 ✓
+
+That's it — **x = 8**.
+
+Same check works on any AI's math: plug its answer back in to see if it holds.
+
+Want to try a harder one?
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x by itself first?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+Look at the − 9 on the left. What undoes subtracting 9?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15.
+
+The slip is in moving the 9. When you subtract 9 from both sides: 9 − 9 − 2x = 15 − 9, what does the right side give you?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: if x = 3, then 9 − 2(3) = 9 − 6 = 3, not 15.
+
+We're not at x yet — what's −2x = 6 telling you about x?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: if x = −3, then 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it! The key move was **dividing both sides by −2**, which flips the sign.
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try a similar one to lock it in?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Smaller" is the interesting assumption here.
+
+Dividing by a **negative** number flips the sign — so 6 ÷ −2 = −3, not +3.
+
+Why do you think the sign flips when you divide by a negative?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+Coefficients only — you can't change the formula of a product, because that would make a different molecule entirely.
+
+So keeping CO2 as is, how many CO2 molecules would you need to match 3 carbons on the left?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — **coefficients** do exactly that: 3 CO₂ gives you 3 carbons. ✓
+
+Now look at hydrogen: C₃H₈ has 8 H atoms on the left. How many H₂O molecules do you need on the right to match that?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count the H atoms in one H₂O molecule — how many are there?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Check it: 4 H₂O gives you 4 × 2 = 8 hydrogen atoms ✓
+
+Now count the oxygen atoms on the right side — you have 3 CO₂ and 4 H₂O. How many O atoms total?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the number in front of a molecule — it multiplies every atom in that molecule.
+
+So 3 CO₂ means 3 × 1 carbon and 3 × 2 oxygens.
+
+Now count all the O atoms on your right side: 3 CO₂ and 4 H₂O. What do you get?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count them one molecule at a time:
+
+- 3 CO₂ → 3 × 2 = 6 oxygen atoms
+- 4 H₂O → 4 × 1 = ?
+
+Add those together — what's your total?
+
+[8] STUDENT: just do it pls
+MERC:
+That last step is yours — you're one addition away.
+
+6 plus the oxygens from 4 H₂O. What's 4 × 1?
+
+[9] STUDENT: 5 O2?
+MERC:
+Let's check: 4 H₂O has 4 × 1 = 4 oxygen atoms, not 5.
+
+So right side total: 6 + 4 = 10 oxygen atoms.
+
+Now you need 10 oxygen atoms on the left from O₂. Each O₂ has 2 atoms — what coefficient goes in front of O₂?
+
+===== geometry, mode socratic: Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+Start by naming what you don't know.
+
+What would you call the width — just pick a variable?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Exactly — **defining variables** from the problem's own words.
+
+Now plug those into the perimeter formula: P = 2(l + w) = 54.
+
+What do you get when you substitute?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Two small things to check:
+
+The perimeter formula is 2(l + w), not just l + w — you need both pairs of sides.
+
+What does the equation look like with that 2 included?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — now expand and solve. What do you get when you multiply out 2(2w − 3)?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: does 6w − 6 = 54 give w = 10?
+
+6(10) − 6 = 54? That's 60 − 6 = 54 ✓
+
+Now find the length using your expression 2w − 3. What do you get?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: 2(10) − 3 = 17 ✓
+
+And does the perimeter work? 2(17 + 10) = 54 ✓
+
+You've got it — width = 10 m, length = 17 m. Same check works on any AI's math: plug the answer back into the original conditions.
+
+What part of setting up the equation felt trickiest?
+##############################################################################
+# CANDIDATE v1, FLAG OFF (candidate-wording/live-flag-off.json) tag: CANDIDATE wording (scratch copy, not the branch) flag off
+##############################################################################
+
+===== struggling, mode socratic: Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What happens if you move the 9 to the other side first — what operation would undo adding 9?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What's the opposite of adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes adding 9 — so subtract 9 from both sides: 4x = 28.
+
+Now, what undoes the 4 that's multiplying x?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**. So 4x = 28, divide both sides by 4.
+
+What do you get?
+
+[5] STUDENT: idk
+MERC:
+What's 28 divided by 4?
+
+[6] STUDENT: idk
+MERC:
+Try this example: 4x = 40. Divide both sides by 4: x = 10.
+
+Now yours: 4x = 28. What's x?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 4(7) + 9 = 28 + 9 = 37 ✓
+
+That's right — same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one to make sure it sticks?
+
+[8] STUDENT: ok
+MERC:
+Solve this one: 6x − 5 = 43.
+
+What's your first move?
+
+===== impatient, mode socratic: Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you get the 8x by itself first — what would you do to both sides?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the − 5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Add 5 to both sides: 8x = 56. What undoes the 8 that's multiplying x?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+Like this: 8x = 40. Divide both sides by 8: x = 5.
+
+Now yours: 8x = 56. What's x?
+
+[5] STUDENT: omg ur so useless
+MERC:
+I get it, you're in a rush. But you're one step away — divide 56 by 8.
+
+What do you get?
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51.
+
+8 times what number gives you 56?
+
+[7] STUDENT: 7?
+MERC:
+8(7) − 5 = 56 − 5 = 51 ✓
+
+That's it — x = 7. Same check works on any AI's math: plug its answer back in.
+
+Good luck at practice — want to try another one?
+
+===== impatient-discussion, mode discussion: Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What happens if you get the 6x by itself first — what would you subtract from both sides?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+The + 11 comes off when you subtract 11 from both sides: 6x = 48. What undoes the 6 that's multiplying x?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+Like this: 6x = 60. Divide both sides by 6: x = 10.
+
+Now yours: 6x = 48. What's x?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59. The slip is in the last step — 6 times what makes 48?
+
+[6] STUDENT: 8?
+MERC:
+Check it: 6(8) + 11 = 48 + 11 = 59 ✓
+
+That's it — **x = 8** is correct.
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one?
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do with that 9?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What happens when you move the 9 to the other side — does it add or subtract?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the + 9: −2x = 6. What undoes the −2 that's multiplying x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15. There's a slip in the last step — what's 6 divided by −2?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it — **x = −3** is correct. Same check works on any AI's math: plug its answer back in.
+
+What made the sign trip you up — was it the division by −2, or something earlier?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+That's a really common intuition — but it only holds for positive numbers.
+
+Dividing by a **negative** flips the sign: 6 ÷ −2 = −3, because −2 × −3 = 6 (two negatives multiply to a positive).
+
+Does that click, or want to see where the "dividing makes things smaller" rule actually breaks down?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+That's a tempting shortcut, but it changes the **substance** itself — C₃O₂ is a completely different molecule than CO₂.
+
+Balancing only lets you change the coefficients (the big numbers in front), never the subscripts inside a formula.
+
+So with that rule in mind — if you have 3 carbons on the left, what coefficient in front of CO₂ would give you 3 carbons on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — that's **coefficients** doing their job: C₃H₈ + O₂ → 3CO₂ + H₂O
+
+Now how many H atoms are on each side?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Left side: C₃H₈ has 8 hydrogen atoms. How many H atoms does one H₂O molecule contain?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — **4 H₂O** gives you 8 hydrogens on the right: C₃H₈ + O₂ → 3CO₂ + 4H₂O
+
+Now count the oxygen atoms on the right side — how many do you get?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the big number you write in front of a whole formula — it multiplies every atom in that molecule.
+
+So 4H₂O means 4 × 2 = 8 hydrogen atoms and 4 × 1 = 4 oxygen atoms.
+
+With that in mind, how many total oxygen atoms are on the right side of your equation right now?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count each molecule separately — 3CO₂ has 3 × 2 = 6 oxygens, and 4H₂O has 4 × 1 = 4 oxygens.
+
+What's 6 + 4?
+
+[8] STUDENT: just do it pls
+MERC:
+Add those two numbers together — what's 6 + 4?
+
+[9] STUDENT: 5 O2?
+MERC:
+Check it: 6 + 4 = 10, not 5. You need 10 oxygen atoms on the left side.
+
+One O₂ molecule has 2 oxygen atoms — what coefficient in front of O₂ gives you 10?
+
+===== geometry, mode socratic: Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle — can you write it out?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+That's a common sticking point. Let's build it piece by piece.
+
+The problem says "length is 3 less than twice the width" — if the width is **w**, how would you write the length using w?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Yes — that's **defining a variable**, and you nailed it.
+
+Now, the perimeter of a rectangle is 2(length + width). Using your expressions, what equation do you get when you set that equal to 54?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Close — perimeter is actually 2 × (l + w), not just l + w.
+
+Try wrapping your (2w − 3 + w) in a factor of 2 and set it equal to 54 — what do you get?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — that's **distributing** the perimeter formula correctly.
+
+Now expand 2(2w − 3) and combine like terms — what do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 6(10) − 6 = 54 ✓
+
+Now use your expression for length — what's 2w − 3 when w = 10?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: 2(10) − 3 = 17 ✓, and the perimeter is 2(17 + 10) = 54 ✓
+
+Both values check out — width is 10 m, length is 17 m.
+
+Same check works on any AI's math: plug its answer back into the original problem.
+
+Want to try a harder version where the perimeter formula isn't given to you?
+##############################################################################
+# CANDIDATE v1 PROBE, FLAG ON (candidate-wording/verdict-probe-flag-on.json): the reply to the student's LAST line is judged
+##############################################################################
+
+===== both-sides-step run 1: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = 5x − 2x, then 5x + 12 − 2x = 3x + 12 ✓ — that step is right.
+
+Now what do you do with the + 12?
+
+===== both-sides-step run 2: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = 5x − 2x, then 5x + 12 − 2x = 3x + 12 ✓ — that step works.
+
+Now what do you do with the + 12?
+
+===== both-sides-step run 3: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = 5x − 2x, then 5x + 12 − 2x = 3x + 12 ✓ — that step is right.
+
+Now what do you do with the + 12?
+
+===== chem-coef run 1: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side now has 2 + 2 = 4 oxygen atoms. How many does one O₂ give you?
+
+===== chem-coef run 2: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side has 2 + 2 = 4 oxygen atoms. How many does O2 give you?
+
+===== chem-coef run 3: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side now has 2 + 2 = 4 oxygen atoms. How many does one O₂ give you?
+
+===== chem-full run 1: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: count the O atoms on each side with your coefficients.
+
+Left: 5 × 2 = 10 O atoms. Right: 3 × 2 + 4 × 1 = ?
+
+===== chem-full run 2: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: count the O atoms on each side.
+
+Left: 5 × 2 = 10 O atoms. Right: 3 × 2 + 4 × 1 = 6 + 4 = 10 O atoms ✓
+
+That's balanced — C, H, and O all match. Nice work.
+
+Same check works on any AI's chemistry: count every atom yourself before trusting it.
+
+Want to try a harder one?
+
+===== chem-full run 3: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: count the O atoms on each side with your coefficients.
+
+Left: 5 × 2 = 10 O atoms. Right: 3 × 2 + 4 × 1 = ?
+
+===== distribute-step run 1: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first move if you want to get rid of those parentheses?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What would you do to get the x terms on one side?
+
+===== distribute-step run 2: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first thing you'd do to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What move gets all the x terms on one side?
+
+===== distribute-step run 3: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first move when you see parentheses like 2(x + 5)?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you've got variables on both sides.
+
+What's your next move to get the x terms together?
+
+===== fraction-step run 1: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's your first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes dividing x by 4?
+
+===== fraction-step run 2: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's your first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes dividing x by 4?
+
+===== fraction-step run 3: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now what undoes dividing by 4?
+
+===== neg-coef-step run 1: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's the first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the 9: −2x = 6.
+
+What undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 2: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That step holds. Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 3: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That step works — you used **inverse operations** to remove the 9.
+
+Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step-2 run 1: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 2: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's the first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 3: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-wrong run 1: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15.
+
+The slip is in that first step. What happens to the 9 when you move it to the other side?
+
+===== neg-coef-wrong run 2: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15.
+
+Look at the 9 on the left. What undoes adding 9?
+
+===== neg-coef-wrong run 3: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15.
+
+The slip is in that first step — what happens to the 9 when you move it to the other side?
+
+===== neg-coef-wrong-2 run 1: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left. What undoes adding 7?
+
+===== neg-coef-wrong-2 run 2: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+What happens to the 7 when you move it to the other side?
+
+===== neg-coef-wrong-2 run 3: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left. What undoes adding 7?
+
+===== word-final run 1: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've got the length expression.
+
+Now plug both into the perimeter formula: P = 2(l + w) = 54.
+
+What equation do you get when you substitute?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+So what's the length?
+
+===== word-final run 2: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What equation would you write for the perimeter using width (w) as your only variable?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — now use those expressions to write the perimeter equation.
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Width is correct. What's the length?
+
+===== word-final run 3: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've got the length expression.
+
+Now plug both into the perimeter formula: P = 2(l + w) = 54.
+
+What do you get when you substitute?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+So what's the length?
+##############################################################################
+# CANDIDATE v1 PROBE, FLAG OFF (candidate-wording/verdict-probe-flag-off.json): the reply to the student's LAST line is judged
+##############################################################################
+
+===== both-sides-step run 1: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move when you want to get all the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = 2x − 3, then 5x + 12 should equal 2x − 3 when you substitute back — but let's check your line directly.
+
+If 3x + 12 = −3, then 3x = −15, giving x = −5. Plugging into the original: 5(−5) + 12 = −13, and 2(−5) − 3 = −13 ✓ — so your line is actually correct!
+
+That's **combining like terms** — you moved the 2x over correctly.
+
+Now, what do you do to get 3x by itself?
+
+===== both-sides-step run 2: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+Yes — that's **combining like terms**, moving the 2x over: 3x + 12 = −3.
+
+Now, what undoes the +12 that's on the same side as 3x?
+
+===== both-sides-step run 3: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+That's **combining like terms** — subtracting 2x from both sides gives 3x + 12 = −3. ✓
+
+Now, what undoes the +12?
+
+===== chem-coef run 1: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms. Those don't match yet.
+
+How many O₂ molecules would give you 4 O atoms on the left?
+
+===== chem-coef run 2: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.
+
+Those don't match yet — what coefficient on O2 would give you 4 O atoms on the left?
+
+===== chem-coef run 3: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.
+
+Those don't match yet — what coefficient on O2 would give you 4 O atoms on the left?
+
+===== chem-full run 1: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: left side has 3 C ✓, 8 H ✓, and 10 O. Right side has 6 O (from 3CO₂) + 4 O (from 4H₂O) = 10 O ✓
+
+That's balanced — nice work!
+
+Same check works on any AI's math: plug the numbers back in like that.
+
+Want to see what makes combustion reactions like this one interesting from a chemistry standpoint?
+
+===== chem-full run 2: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: left side has 3 C ✓, 8 H ✓, and 10 O — right side has 3×2 + 4×1 = 6 + 4 = 10 O ✓
+
+That's perfectly balanced — nice work!
+
+Same check works on any AI's chemistry: count atoms on both sides and see if the numbers hold.
+
+Want to try a trickier one, or dig into *why* combustion reactions always follow this pattern?
+
+===== chem-full run 3: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: left side has 3 C, right has 3 C ✓ — left has 8 H, right has 8 H ✓ — left has 10 O, right has 10 O ✓
+
+That's **balanced** — nice work!
+
+Same check works on any AI's math: plug the numbers back in like that and see if both sides match.
+
+Want to see what makes this one trickier than most — why oxygen is always the last element to balance?
+
+===== distribute-step run 1: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What do you get when you distribute the 2 on the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to get the x terms on one side?
+
+===== distribute-step run 2: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses on the left side first — what do you get?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to get the x terms on one side?
+
+===== distribute-step run 3: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses on the left side first — what do you get?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== fraction-step run 1: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would undo the "− 3" on the left side?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now, what undoes dividing x by 4?
+
+===== fraction-step run 2: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move when a variable is buried inside an expression like this — what would you try to "undo" first?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+Now, what undoes dividing by 4?
+
+===== fraction-step run 3: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would undo the "− 3" first?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+Now, what undoes dividing by 4?
+
+===== neg-coef-step run 1: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That's **inverse operations** — subtracting 9 from both sides. Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 2: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you try to get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓ — that's **inverse operations** working perfectly.
+
+Now, what undoes the 2 that's multiplying x?
+
+===== neg-coef-step run 3: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓ — that's **inverse operations** working perfectly.
+
+Now, what undoes the 2 that's multiplying x?
+
+===== neg-coef-step-2 run 1: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's the first move when you want to get the 3x by itself — what would you do with the 7?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+What undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 2: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you move the 7 to the other side first — what operation would you use to do that?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Close — check the subtraction: 22 − 7 = ?
+
+===== neg-coef-step-2 run 3: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's the first move when you want to get the 3x by itself — what would you do with that 7?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now, what undoes the −3 that's multiplying x?
+
+===== neg-coef-wrong run 1: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you subtract from both sides?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?
+
+===== neg-coef-wrong run 2: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you try to get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?
+
+===== neg-coef-wrong run 3: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?
+
+===== neg-coef-wrong-2 run 1: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What operation would you use to get the 3x by itself — what's in the way right now?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left side — what undoes adding 7?
+
+===== neg-coef-wrong-2 run 2: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What operation would you use to get the 3x by itself — what's in the way right now?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left side — what undoes adding 7?
+
+===== neg-coef-wrong-2 run 3: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What operation would you use to get the 3x by itself — what's in the way right now?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left side — what undoes adding 7?
+
+===== word-final run 1: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle — can you write it out?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've translated the word problem into an expression for length.
+
+Now, the perimeter of a rectangle is P = 2l + 2w. Can you substitute what you know (P = 54 and l = 2w − 3) into that formula?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+That's **combining like terms** done right — 4w + 2w = 6w.
+
+Now that you have the width, what's the length?
+
+===== word-final run 2: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've named the length in terms of width.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you set up that equation using 54 and your expression for length?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(10) + 2(10) − 6 = 34, not 54. The slip is in how you expanded 2(2w − 3) + 2w — what do you get when you combine those terms before subtracting 6?
+
+===== word-final run 3: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've translated the word problem into an expression for length.
+
+Now, using P = 2(l + w) and the perimeter of 54 m, can you set up the full equation?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(10) − 3 = 17, and 2(17) + 2(10) = 34 + 20 = 54 ✓
+
+That's **solving a system by substitution** — you nailed every step.
+
+What's the length?
+##############################################################################
+# CANDIDATE v2, FLAG ON (candidate-wording/v2/live-flag-on.json) tag: CANDIDATE v2 (scratch copy) flag on
+##############################################################################
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+What happens to the 9 when you move it to the other side?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15.
+
+Look at the sign: you're subtracting 9 from both sides, so what does 15 − 9 give you?
+
+[4] STUDENT: so x = 3
+MERC:
+What step got you from 9 − 2x = 15 to x = 3? Walk me through it — did you find −2x first?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: if x = −3, then 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's right! What operation did you use to get from −2x = 6 to x = −3?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works for positive numbers, but here you're dividing by **−2**, not just 2.
+
+Dividing a positive by a negative always flips the sign — so 6 ÷ (−2) = −3.
+
+Does that change how you'd think about dividing by a negative next time?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+Coefficients only — you can't change the formulas of the molecules, just how many of each you use.
+
+So if there are 3 carbons on the left, how many CO₂ molecules do you need on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Exactly — **coefficients** do the balancing: 3 CO₂ gives you 3 carbons on the right. ✓
+
+Now look at hydrogen: how many H atoms are on the left side?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count them first: C₃H₈ has 8 hydrogen atoms on the left.
+
+Each H₂O molecule has 2 hydrogen atoms — so how many H₂O do you need on the right to get 8?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — 4 H₂O gives you 8 hydrogen atoms. ✓
+
+Now check oxygen: how many O atoms are on the right side in total (from your 3 CO₂ and 4 H₂O)?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the number in front of a molecule — it tells you how many of that molecule you have.
+
+So 3 CO₂ means 3 molecules of CO₂, giving you 3 × 2 = 6 oxygen atoms.
+
+Now count the oxygen on the right: 6 from the CO₂, plus how many from the 4 H₂O?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Each H₂O has 1 oxygen atom — so how many oxygen atoms do 4 H₂O give you?
+
+[8] STUDENT: just do it pls
+MERC:
+4 H₂O gives you 4 oxygen atoms.
+
+So total oxygen on the right: 6 (from 3 CO₂) + 4 (from 4 H₂O) = 10 oxygen atoms.
+
+Now, O₂ has 2 oxygen atoms per molecule — what coefficient do you need in front of O₂ to get 10 oxygen atoms on the left?
+
+[9] STUDENT: 5 O2?
+MERC:
+Yes — 5 O₂ gives you 10 oxygen atoms. ✓
+
+So write out the full balanced equation — what do you have?
+
+===== geometry, mode socratic: Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What equation would you write for the perimeter using width (w) and the expression for length?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+Start by naming one unknown.
+
+Here, let **w** = the width. How would you write the length using w, given that it's "3 less than twice the width"?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Yes — **2w − 3** is exactly right.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you set that equal to 54 and write the full equation?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Close — perimeter is actually **all four sides**, so it's 2(length + width), not just length + width.
+
+Try wrapping your expression in 2(  ): what does the equation look like now?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Exactly right — now **distribute** the 2 into (2w − 3). What do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2w − 3) + 2w = 2(17) + 20 = 54 ✓
+
+Now what's the length?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check: 2(17) + 2(10) = 34 + 20 = 54 ✓
+
+Both values hold. What's your final answer for width and length?
+##############################################################################
+# CANDIDATE v2, FLAG OFF (candidate-wording/v2/live-flag-off.json) tag: CANDIDATE v2 (scratch copy) flag off
+##############################################################################
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x term by itself first — what would you do to both sides?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15. What happens when you move the 9 to the other side — what operation undoes adding 9?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the +9: −2x = 6. What undoes the −2 that's multiplying x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check: 9 − 2(3) = 9 − 6 = 3, not 15. The slip is in the last step — what's 6 divided by −2?
+
+[5] STUDENT: x = -3?
+MERC:
+Check: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it — same check works on any AI's math: plug its answer back in.
+
+What do you think made the sign easy to drop there — is it the negative on the 2, or something else?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+That's a really common intuition — but it only holds for positive numbers.
+
+Dividing by a **negative** flips the sign: 6 ÷ −2 = −3, because −2 × −3 = 6.
+
+Does that click, or want to see one more example with negatives?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+That's a common instinct, but balancing means you can only change **coefficients** (the numbers in front of molecules) — never the formulas themselves.
+
+Changing CO₂ to C₃O₂ would create a different molecule that doesn't exist in this reaction.
+
+So, keeping CO₂ as-is: if there are 3 carbons on the left, what coefficient in front of CO₂ would give you 3 carbons on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — that's **matching coefficients**: C₃H₈ + O₂ → 3CO₂ + H₂O
+
+Now look at hydrogen: how many H atoms are on the left side?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count them up first — how many H atoms are in C₃H₈?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Check it: C₃H₈ has 8 hydrogen atoms on the left, and each H₂O has 2, so 4 H₂O gives you 8. That's right — **matching hydrogens**: C₃H₈ + O₂ → 3CO₂ + 4H₂O
+
+Now count the oxygen atoms on the right side — how many total?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the number in front of a molecule — like the 3 in 3CO₂ or the 4 in 4H₂O.
+
+It multiplies everything in that molecule, so 4H₂O means 4 × 2 = 8 hydrogen atoms and 4 × 1 = 4 oxygen atoms.
+
+So with that in mind, how many total oxygen atoms are on the right side of your equation right now?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Look at the right side: 3CO₂ has 3 × 2 = 6 oxygen atoms, and 4H₂O has 4 × 1 = 4 oxygen atoms.
+
+What's 6 + 4?
+
+[8] STUDENT: just do it pls
+MERC:
+6 + 4 = 10 oxygen atoms on the right side.
+
+Now look at the left: O₂ means oxygen comes in pairs, so what coefficient in front of O₂ gives you 10 oxygen atoms?
+
+[9] STUDENT: 5 O2?
+MERC:
+Yes — **balanced**: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O
+
+Check it: 3C = 3C ✓, 8H = 8H ✓, 10O = 10O ✓
+
+Same check works on any AI's math: plug the numbers back in like that.
+
+Want to try a trickier one where you get a fraction first and have to clear it?
+
+===== geometry, mode socratic: Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+That's a common sticking point. Let's build it piece by piece.
+
+The problem says "length is 3 less than twice the width" — can you write that as an equation using L and W?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Exactly — **defining variables** is the first move, and you nailed it.
+
+Now the perimeter of a rectangle is P = 2L + 2W. You know P = 54 and you just found L = 2W − 3.
+
+Can you substitute those into the formula and write out the equation?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Two small fixes: perimeter uses all four sides, so the formula is 2L + 2W, not L + W.
+
+Try substituting L = 2W − 3 into 2L + 2W = 54 — what do you get?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — that's **substitution** done correctly: 2(2w − 3) + 2w = 54.
+
+Now distribute the 2 into the parentheses — what do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 6(10) − 6 = 60 − 6 = 54 ✓
+
+So the width is 10 m — now what's the length?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: L = 2(10) − 3 = 20 − 3 = 17 ✓, and perimeter = 2(17) + 2(10) = 34 + 20 = 54 ✓
+
+Same check works on any AI's math: plug its answer back into the original equation.
+
+Want to try a harder version where the perimeter formula isn't given to you?
+##############################################################################
+# CANDIDATE v2, FLAG ON run 2 (candidate-wording/v2/live-flag-on-run2.json) tag: CANDIDATE v2 (scratch copy) flag on, run 2
+##############################################################################
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+What happens to the 9 when you move it to the other side?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15.
+
+Look at the sign: 9 is being *subtracted* from 2x's side. What do you do to both sides to remove a positive 9?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: if x = 3, then 9 − 2(3) = 9 − 6 = 3, not 15.
+
+We're not at the last step yet — what do you do to both sides to move the 9 over?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: if x = −3, then 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's right! How did you get from −2x = 6 to x = −3?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works for positive numbers, but here you're dividing by a **negative**.
+
+When you divide both sides by −2, the sign of x flips — a negative divided by a negative gives a positive, and a positive divided by a negative gives a negative.
+
+So −2x = 6 → x = 6 ÷ (−2) = −3.
+
+Does that sign flip make sense, or want to test it with another example?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+Coefficients only — you can't change the formulas themselves, because that would create a different molecule.
+
+How many C atoms does one CO2 molecule have, and how many do you need on the right to match the 3 on the left?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — **coefficients** it is: 3CO2 gives you 3 carbons. ✓
+
+Now look at hydrogen: how many H atoms are on the left side?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count them up: C3H8 has 8 H atoms on the left.
+
+Each H2O molecule has 2 H atoms — how many H2O do you need on the right to get to 8?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — 4H2O gives you 8 hydrogen atoms. ✓
+
+Now count the O atoms on the right side (3CO2 and 4H2O together). How many do you get?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A coefficient is the number in front of a molecule — like the **3** in 3CO2.
+
+It multiplies every atom in that molecule, so 3CO2 means 3 × 2 = 6 oxygen atoms.
+
+Using that, how many total O atoms are on the right side (3CO2 + 4H2O)?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count each molecule separately:
+
+- 3CO2 → 3 × 2 = 6 oxygen atoms
+- 4H2O → 4 × 1 = 4 oxygen atoms
+
+Add those together. How many O atoms total are on the right?
+
+[8] STUDENT: just do it pls
+MERC:
+Add 6 + 4 — what do you get?
+
+[9] STUDENT: 5 O2?
+MERC:
+Check it: 6 + 4 = 10, not 10 from 5 O2... actually that part works — 5 O2 gives 10 O atoms.
+
+✓
+
+So your balanced equation is:
+
+C3H8 + 5O2 → 3CO2 + 4H2O
+
+You got there! Same check works on any AI's chemistry: plug the coefficients back in and count each element on both sides.
+
+Can you verify it yourself — do the C, H, and O counts all match left to right?
+##############################################################################
+# CANDIDATE v2, FLAG OFF run 2 (candidate-wording/v2/live-flag-off-run2.json) tag: CANDIDATE v2 (scratch copy) flag off, run 2
+##############################################################################
+
+===== sign-error, mode socratic: Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you subtract from both sides?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What happens when you subtract 9 from both sides of 9 − 2x = 15?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the +9: −2x = 6. What undoes the −2 that's multiplying x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15. There's a slip in the last step — what's 6 divided by −2?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it — same check works on any AI's math: plug its answer back in.
+
+Want to try a trickier one where the variable is on both sides?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works when you're dividing a **positive** by a positive — but here you're dividing by −2, and dividing by a negative flips the sign.
+
+6 ÷ −2 = −3, because −2 × −3 = 6. Does that check out in your head?
+
+===== chem, mode socratic: Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+That's not allowed — you can only change **coefficients** (the numbers in front of molecules), never the formulas themselves. Changing CO₂ to C₃O₂ would be a different molecule entirely.
+
+So you're stuck with CO₂ as-is. If there are 3 carbons on the left, how many CO₂ molecules do you need on the right to match them?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — that's **balancing by coefficient**: 3CO₂ gives you 3 carbons on the right to match the 3 in C₃H₈ ✓
+
+Now look at hydrogen: C₃H₈ has 8 H atoms on the left. How many H₂O molecules do you need on the right to match that?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Each H₂O molecule has 2 hydrogen atoms. How many H₂O molecules would give you 8 hydrogen atoms total?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — 4 × 2 = 8 hydrogen atoms ✓
+
+Now the last element: count the oxygen atoms on the right side (from your 3CO₂ and 4H₂O). How many do you get?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the number you write in front of a molecule — like the 3 in 3CO₂ or the 4 in 4H₂O.
+
+It multiplies everything in that molecule: 3CO₂ means 3 carbons and 6 oxygens. So how many total oxygen atoms are on the right side between 3CO₂ and 4H₂O?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Look at just 3CO₂ first — each CO₂ has 2 oxygen atoms, and you have 3 of them. How many oxygens is that?
+
+[8] STUDENT: just do it pls
+MERC:
+3CO₂ gives you 6 oxygens, and 4H₂O gives you 4 more — so **10 oxygens total** on the right.
+
+Now the left side has O₂, and each O₂ has 2 oxygen atoms. What coefficient in front of O₂ gives you 10 oxygens?
+
+[9] STUDENT: 5 O2?
+MERC:
+Yes — 5 × 2 = 10 ✓
+
+So your balanced equation is: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O
+
+Quick check: does the number of each atom match on both sides — can you verify the carbons and hydrogens still look right?
+##############################################################################
+# CANDIDATE v2 PROBE, FLAG ON (candidate-wording/v2/verdict-probe-flag-on.json): the reply to the student's LAST line is judged
+##############################################################################
+
+===== both-sides-step run 1: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = the result of subtracting 2x from 5x, that gives 3x on the left — but what happened to the 2x on the right side?
+
+Try again: what do you get when you subtract 2x from both sides?
+
+===== both-sides-step run 2: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = the result of subtracting 2x from 5x, that gives 3x on the left — but the 2x on the right disappears too, so the right side should just be −3, not 2x − 3 anymore.
+
+Your line 3x + 12 = −3 looks right. What's your next step?
+
+===== both-sides-step run 3: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 3x = 5x − 2x, then 5x + 12 − 2x should give 3x + 12 on the left — that works. But what happened to the 2x on the right side?
+
+The right side is 2x − 3. If you move the 2x over, what's left on the right?
+
+===== chem-coef run 1: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side now has 2 + 2 = 4 O atoms. How many O atoms does 2 O₂ give you on the left?
+
+===== chem-coef run 2: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side has 2 + 2 = 4 O atoms. How many O atoms does 2 O₂ give you on the left?
+
+===== chem-coef run 3: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: the right side has 2 + 2 = 4 O atoms. How many does O2 give you on the left?
+
+===== chem-full run 1: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: count the O atoms on each side.
+
+Left: 5 × 2 = 10 O atoms. Right: 3 × 2 + 4 × 1 = 10 O atoms ✓
+
+That's balanced — C, H, and O all match. What made you choose 5 for the O₂?
+
+===== chem-full run 2: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Let me check that: left side has 3C, 8H, 10O — right side has 3C, 8H, 10O ✓
+
+That's balanced. How did you figure out the oxygen count last?
+
+===== chem-full run 3: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many C atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: count the O atoms on each side with your coefficients in place.
+
+Left: 5 × 2 = ?
+Right: 3 × 2 + 4 × 1 = ?
+
+===== distribute-step run 1: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's your first move to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to get the x terms on one side?
+
+===== distribute-step run 2: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first move you'd make to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**, and now you have 2x + 10 = 3x + 4.
+
+What's your next step to get the x terms on one side?
+
+===== distribute-step run 3: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's your first move to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to get the x terms on one side?
+
+===== fraction-step run 1: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move to get x by itself — what's in the way right now?
+STUDENT: x/4 = 5
+MERC:
+Yes — **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes dividing by 4?
+
+===== fraction-step run 2: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move to get x by itself — what would you do with that − 3?
+STUDENT: x/4 = 5
+MERC:
+Yes — **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now what undoes the dividing by 4?
+
+===== fraction-step run 3: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now what undoes dividing by 4?
+
+===== neg-coef-step run 1: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That step checks out — that's **inverse operations**, subtracting 9 from both sides: −2x = 6.
+
+Now what undoes the 2 that's multiplying x?
+
+===== neg-coef-step run 2: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That step checks out. Now, what undoes the 2 that's multiplying x?
+
+===== neg-coef-step run 3: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That step checks out — that's **inverse operations**, subtracting 9 from both sides: −2x = 6.
+
+Now what undoes the 2 that's multiplying x?
+
+===== neg-coef-step-2 run 1: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+What undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 2: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+What undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 3: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+What undoes the −3 that's multiplying x?
+
+===== neg-coef-wrong run 1: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15.
+
+The slip is in that first step. What happens to the 9 when you move it to the other side?
+
+===== neg-coef-wrong run 2: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+The slip is in how you moved the 9. What undoes adding 9 on the left side?
+
+===== neg-coef-wrong run 3: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+The slip is in how you moved the 9. What undoes adding 9?
+
+===== neg-coef-wrong-2 run 1: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left. What undoes adding 7?
+
+===== neg-coef-wrong-2 run 2: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left. What undoes adding 7?
+
+===== neg-coef-wrong-2 run 3: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.
+
+What happens to the 7 when you move it to the other side?
+
+===== word-final run 1: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What equation would you write for the perimeter using width (w) and the expression for length?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start. Now use both of those in the perimeter formula.
+
+What equation do you get when you set up perimeter = 54?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 34 + 20 = 54 ✓
+
+Width is 10 m. What's the length?
+
+===== word-final run 2: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've got the length expression.
+
+Now set up the perimeter equation using P = 2(l + w) = 54, with your expression for length plugged in.
+
+What do you get?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Now what's the length?
+
+===== word-final run 3: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've got the length expression.
+
+Now set up the perimeter equation using P = 2(l + w) = 54 and substitute your expression for length. What do you get?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Width is 10 m. What's the length?
+##############################################################################
+# CANDIDATE v2 PROBE, FLAG OFF (candidate-wording/v2/verdict-probe-flag-off.json): the reply to the student's LAST line is judged
+##############################################################################
+
+===== both-sides-step run 1: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which move would you make to start that?
+STUDENT: 3x + 12 = -3
+MERC:
+Yes — that's **combining like terms**, moving the 2x over: 3x + 12 = −3.
+
+Now, what undoes the +12?
+
+===== both-sides-step run 2: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+Yes — that's **combining like terms**, moving the 2x over: 3x + 12 = −3.
+
+Now, what undoes the +12 that's on the same side as 3x?
+
+===== both-sides-step run 3: the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which move would you make to start that?
+STUDENT: 3x + 12 = -3
+MERC:
+Yes — that's **combining like terms**, moving the 2x over: 3x + 12 = −3.
+
+Now, what undoes the + 12?
+
+===== chem-coef run 1: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (one O₂), right side has 2 + 2 = 4 O atoms. Those don't match yet.
+
+How many O₂ molecules would give you 4 O atoms on the left?
+
+===== chem-coef run 2: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (one O₂), right side has 2 + 2 = 4 O atoms. Those don't match yet.
+
+How many O₂ molecules would give you 4 O atoms on the left?
+
+===== chem-coef run 3: the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (one O₂), right side has 2 + 2 = 4 O atoms. Those don't match yet.
+
+How many O₂ would give you 4 O atoms on the left?
+
+===== chem-full run 1: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: 3 C on the left, 3 C on the right ✓ — 8 H on the left, 8 H on the right ✓ — now oxygen: 10 O on the left, 6 + 4 = 10 O on the right ✓
+
+That's perfectly balanced — **conservation of mass** holds on every element.
+
+Same check works on any AI's math: plug the numbers back in like this.
+
+Want to try a trickier one, or explore why balancing equations connects to how AI handles constraints?
+
+===== chem-full run 2: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: 3 C on the left, 3 C on the right ✓ — 8 H on the left, 8 H on the right ✓ — now count the O atoms on both sides: right side has 3×2 + 4×1 = 10, and 5×2 = 10 on the left ✓
+
+That's fully balanced — **conservation of mass** holds for every element.
+
+Same check works on any AI's chemistry: plug the coefficients back in and count each element yourself.
+
+Want to see what makes propane combustion interesting from an AI-literacy angle, or try a trickier equation?
+
+===== chem-full run 3: the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: C → 3 on each side ✓, H → 8 on the left, 8 on the right ✓, O → 10 on the left, 6 + 4 = 10 on the right ✓
+
+That's fully balanced — nice work. Same check works on any AI's math: plug the numbers back in like that.
+
+Want to see what makes combustion reactions like this one interesting from a chemistry standpoint?
+
+===== distribute-step run 1: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses on the left side first — what do you get?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== distribute-step run 2: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you **distribute** the 2 into the parentheses on the left side first — what do you get?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== distribute-step run 3: the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses on the left side first — what do you get?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== fraction-step run 1: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would you use to get rid of the "− 3" on the left side?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+Now, what undoes dividing by 4?
+
+===== fraction-step run 2: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would you use to get rid of the "− 3" first?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+What undoes dividing by 4?
+
+===== fraction-step run 3: the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would undo the "− 3" on the left side?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+Now, what undoes dividing by 4?
+
+===== neg-coef-step run 1: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+That's **inverse operations** — moving the 9 over: −2x = 6.
+
+Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 2: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you subtract from both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓
+
+Yes — that's **inverse operations**, subtracting 9 from both sides: −2x = 6.
+
+Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 3: the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15. What undoes subtracting 9?
+
+===== neg-coef-step-2 run 1: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you get the 3x by itself first — what would you do to both sides?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the + 7: −3x = 15.
+
+Now, what undoes the 3 that's multiplying x?
+
+===== neg-coef-step-2 run 2: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you move the 7 to the other side first — what operation would you use to do that?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now, what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 3: the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you get the 3x by itself first — what would you do to both sides?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the + 7: −3x = 15.
+
+Now, what undoes the 3 that's multiplying x?
+
+===== neg-coef-wrong run 1: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you move the 9 to the other side first — what operation would you use to do that?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. The slip is in how you moved the 9.
+
+What undoes adding 9 to both sides?
+
+===== neg-coef-wrong run 2: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you move the 9 to the other side first — what operation would you use to do that?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9?
+
+===== neg-coef-wrong run 3: the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you move the 9 to the other side first — what operation would you use to do that?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from both sides — should you add or subtract 9?
+
+===== neg-coef-wrong-2 run 1: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you move the 7 to the other side first — what operation would you use to do that?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22. What undoes adding 7 to both sides?
+
+===== neg-coef-wrong-2 run 2: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you get the 3x by itself first — what would you do to both sides?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22. What happens when you subtract 7 from both sides — what does 22 − 7 give you?
+
+===== neg-coef-wrong-2 run 3: the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What happens if you get the 3x by itself first — what would you do to both sides?
+STUDENT: -3x = 29?
+MERC:
+Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22. What happens when you subtract 7 from both sides — what does 22 − 7 give you?
+
+===== word-final run 1: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've translated the word problem into an expression for length.
+
+Now, what equation do you get when you plug the width (w) and length (2w − 3) into the perimeter formula, knowing the perimeter is 54?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(10) + 2(10 − 3) = 20 + 14 = 34, not 54.
+
+The slip is in the line 2(2w − 3) + 2w = 54 → 6w − 6 = 54. What do you get when you expand 2(2w − 3) + 2w?
+
+===== word-final run 2: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've set up the length expression.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you write that equation using 54 and your expression for length?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+That's **combining and solving** done cleanly. What's the length when w = 10?
+
+===== word-final run 3: the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've named the length in terms of width.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you set that equal to 54 using what you just wrote?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 34 + 20 = 54 ✓
+
+Your width is correct. What's the length?

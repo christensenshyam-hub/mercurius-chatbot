@@ -1,0 +1,528 @@
+{
+  "base": "http://localhost:3444",
+  "generatedAt": "2026-10-22T05:05:47.000Z",
+  "results": [
+    {
+      "run": 1,
+      "id": "neg-coef-step-2",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What's the first move when you want to get the 3x by itself — what would you do with the 7?"
+        },
+        {
+          "student": "subtract 7 so -3x = 15",
+          "merc": "Yes — that's **inverse operations**, undoing the +7: −3x = 15.\n\nWhat undoes the −3 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "neg-coef-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the **2x** term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 6",
+          "merc": "Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓\n\nThat's **inverse operations** — subtracting 9 from both sides. Now, what undoes the −2 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "both-sides-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 5x + 12 = 2x - 3",
+          "merc": "What's your first move when you want to get all the x terms on the same side?"
+        },
+        {
+          "student": "3x + 12 = -3",
+          "merc": "Check it: if 3x = 2x − 3, then 5x + 12 should equal 2x − 3 when you substitute back — but let's check your line directly.\n\nIf 3x + 12 = −3, then 3x = −15, giving x = −5. Plugging into the original: 5(−5) + 12 = −13, and 2(−5) − 3 = −13 ✓ — so your line is actually correct!\n\nThat's **combining like terms** — you moved the 2x over correctly.\n\nNow, what do you do to get 3x by itself?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "distribute-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 2(x + 5) = 3x + 4",
+          "merc": "What do you get when you distribute the 2 on the left side?"
+        },
+        {
+          "student": "2x + 10 = 3x + 4",
+          "merc": "Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.\n\nWhat's your next move to get the x terms on one side?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "fraction-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve x/4 - 3 = 2",
+          "merc": "What operation would undo the \"− 3\" on the left side?"
+        },
+        {
+          "student": "x/4 = 5",
+          "merc": "Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.\n\nNow, what undoes dividing x by 4?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "chem-full",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O\n\nHow many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?"
+        },
+        {
+          "student": "C3H8 + 5O2 -> 3CO2 + 4H2O?",
+          "merc": "Check it: left side has 3 C ✓, 8 H ✓, and 10 O. Right side has 6 O (from 3CO₂) + 4 O (from 4H₂O) = 10 O ✓\n\nThat's balanced — nice work!\n\nSame check works on any AI's math: plug the numbers back in like that.\n\nWant to see what makes combustion reactions like this one interesting from a chemistry standpoint?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "chem-coef",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "balance CH4 + O2 -> CO2 + H2O",
+          "merc": "How many H atoms are on each side right now?"
+        },
+        {
+          "student": "ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?",
+          "merc": "Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms. Those don't match yet.\n\nHow many O₂ molecules would give you 4 O atoms on the left?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "neg-coef-wrong",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the **2x** term by itself first — what would you subtract from both sides?"
+        },
+        {
+          "student": "-2x = 24",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "word-final",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle — can you write it out?"
+        },
+        {
+          "student": "w is width so length is 2w - 3",
+          "merc": "Good start — you've translated the word problem into an expression for length.\n\nNow, the perimeter of a rectangle is P = 2l + 2w. Can you substitute what you know (P = 54 and l = 2w − 3) into that formula?"
+        },
+        {
+          "student": "2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10",
+          "merc": "Check it: if w = 10, then 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓\n\nThat's **combining like terms** done right — 4w + 2w = 6w.\n\nNow that you have the width, what's the length?"
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "id": "neg-coef-wrong-2",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What operation would you use to get the 3x by itself — what's in the way right now?"
+        },
+        {
+          "student": "-3x = 29?",
+          "merc": "Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.\n\nLook at the 7 on the left side — what undoes adding 7?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "neg-coef-step-2",
+      "truth": "right",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What happens if you move the 7 to the other side first — what operation would you use to do that?"
+        },
+        {
+          "student": "subtract 7 so -3x = 15",
+          "merc": "Close — check the subtraction: 22 − 7 = ?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "neg-coef-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you try to get the **2x** term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 6",
+          "merc": "Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓ — that's **inverse operations** working perfectly.\n\nNow, what undoes the 2 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "both-sides-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 5x + 12 = 2x - 3",
+          "merc": "What happens if you get all the x terms on one side first — which term would you move, and how?"
+        },
+        {
+          "student": "3x + 12 = -3",
+          "merc": "Yes — that's **combining like terms**, moving the 2x over: 3x + 12 = −3.\n\nNow, what undoes the +12 that's on the same side as 3x?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "distribute-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 2(x + 5) = 3x + 4",
+          "merc": "What happens if you distribute the 2 into the parentheses on the left side first — what do you get?"
+        },
+        {
+          "student": "2x + 10 = 3x + 4",
+          "merc": "Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.\n\nWhat's your next move to get the x terms on one side?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "fraction-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve x/4 - 3 = 2",
+          "merc": "What's the first move when a variable is buried inside an expression like this — what would you try to \"undo\" first?"
+        },
+        {
+          "student": "x/4 = 5",
+          "merc": "Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.\n\nNow, what undoes dividing by 4?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "chem-full",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O\n\nHow many carbon atoms are on the left side, and how many CO₂ molecules would you need on the right to match them?"
+        },
+        {
+          "student": "C3H8 + 5O2 -> 3CO2 + 4H2O?",
+          "merc": "Check it: left side has 3 C ✓, 8 H ✓, and 10 O — right side has 3×2 + 4×1 = 6 + 4 = 10 O ✓\n\nThat's perfectly balanced — nice work!\n\nSame check works on any AI's chemistry: count atoms on both sides and see if the numbers hold.\n\nWant to try a trickier one, or dig into *why* combustion reactions always follow this pattern?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "chem-coef",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "balance CH4 + O2 -> CO2 + H2O",
+          "merc": "How many H atoms are on each side right now?"
+        },
+        {
+          "student": "ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?",
+          "merc": "Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.\n\nThose don't match yet — what coefficient on O2 would give you 4 O atoms on the left?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "word-final",
+      "truth": "right",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle?"
+        },
+        {
+          "student": "w is width so length is 2w - 3",
+          "merc": "Good start — you've named the length in terms of width.\n\nNow, the perimeter of a rectangle is 2(length + width). Can you set up that equation using 54 and your expression for length?"
+        },
+        {
+          "student": "2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10",
+          "merc": "Check it: if w = 10, then 2(10) + 2(10) − 6 = 34, not 54. The slip is in how you expanded 2(2w − 3) + 2w — what do you get when you combine those terms before subtracting 6?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "neg-coef-wrong",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you try to get the **2x** term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 24",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "id": "neg-coef-wrong-2",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What operation would you use to get the 3x by itself — what's in the way right now?"
+        },
+        {
+          "student": "-3x = 29?",
+          "merc": "Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.\n\nLook at the 7 on the left side — what undoes adding 7?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "neg-coef-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the **2x** term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 6",
+          "merc": "Check it: if −2x = 6, then 9 − 2x = 9 + 6 = 15 ✓ — that's **inverse operations** working perfectly.\n\nNow, what undoes the 2 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "neg-coef-step-2",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What's the first move when you want to get the 3x by itself — what would you do with that 7?"
+        },
+        {
+          "student": "subtract 7 so -3x = 15",
+          "merc": "Yes — that's **inverse operations**, undoing the +7: −3x = 15.\n\nNow, what undoes the −3 that's multiplying x?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "both-sides-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 5x + 12 = 2x - 3",
+          "merc": "What happens if you get all the x terms on one side first — which term would you move, and how?"
+        },
+        {
+          "student": "3x + 12 = -3",
+          "merc": "That's **combining like terms** — subtracting 2x from both sides gives 3x + 12 = −3. ✓\n\nNow, what undoes the +12?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "distribute-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve 2(x + 5) = 3x + 4",
+          "merc": "What happens if you distribute the 2 into the parentheses on the left side first — what do you get?"
+        },
+        {
+          "student": "2x + 10 = 3x + 4",
+          "merc": "Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.\n\nWhat's your next move to start getting x by itself?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "fraction-step",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "solve x/4 - 3 = 2",
+          "merc": "What operation would undo the \"− 3\" first?"
+        },
+        {
+          "student": "x/4 = 5",
+          "merc": "Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.\n\nNow, what undoes dividing by 4?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "chem-full",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O\n\nHow many carbon atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "C3H8 + 5O2 -> 3CO2 + 4H2O?",
+          "merc": "Check it: left side has 3 C, right has 3 C ✓ — left has 8 H, right has 8 H ✓ — left has 10 O, right has 10 O ✓\n\nThat's **balanced** — nice work!\n\nSame check works on any AI's math: plug the numbers back in like that and see if both sides match.\n\nWant to see what makes this one trickier than most — why oxygen is always the last element to balance?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "chem-coef",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "balance CH4 + O2 -> CO2 + H2O",
+          "merc": "How many H atoms are on each side right now?"
+        },
+        {
+          "student": "ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?",
+          "merc": "Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.\n\nThose don't match yet — what coefficient on O2 would give you 4 O atoms on the left?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "neg-coef-wrong",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the **2x** term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 24",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from the left side?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "neg-coef-wrong-2",
+      "truth": "wrong",
+      "callsWrong": true,
+      "callsRight": false,
+      "turns": [
+        {
+          "student": "solve 7 - 3x = 22",
+          "merc": "What operation would you use to get the 3x by itself — what's in the way right now?"
+        },
+        {
+          "student": "-3x = 29?",
+          "merc": "Check it: if −3x = 29, then 7 − 3x = 7 + 29 = 36, not 22.\n\nLook at the 7 on the left side — what undoes adding 7?"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "id": "word-final",
+      "truth": "right",
+      "callsWrong": false,
+      "callsRight": true,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle?"
+        },
+        {
+          "student": "w is width so length is 2w - 3",
+          "merc": "Good start — you've translated the word problem into an expression for length.\n\nNow, using P = 2(l + w) and the perimeter of 54 m, can you set up the full equation?"
+        },
+        {
+          "student": "2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10",
+          "merc": "Check it: if w = 10, then 2(10) − 3 = 17, and 2(17) + 2(10) = 34 + 20 = 54 ✓\n\nThat's **solving a system by substitution** — you nailed every step.\n\nWhat's the length?"
+        }
+      ]
+    }
+  ]
+}

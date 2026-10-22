@@ -679,6 +679,16 @@ const CHAT_IDS = [
   'chat-anthropic-train',
 ];
 const LESSON_IDS = ['lesson-gap-idk', 'lesson-offtopic', 'lesson-homework-pending', 'lesson-u1l1-correct-low'];
+const HW_IDS = [
+  'hw-algebra-ladder', 'hw-algebra-advance', 'hw-wrong-step', 'hw-right-answer', 'hw-chem', 'hw-essay', 'hw-fact', 'hw-photo',
+  // Review 2026-10-21.
+  'hw-algebra-last-step', 'hw-algebra-persistent', 'hw-one-step', 'hw-explain-more', 'hw-quiz', 'hw-essay-stuck',
+  // Review 2026-10-22.
+  'hw-mc-geometry', 'hw-speed', 'hw-moles', 'hw-accel', 'hw-area-wrong', 'hw-moles-wrong', 'hw-fall-wrong',
+  'hw-higher-lower', 'hw-example-first', 'hw-code', 'hw-calculator', 'hw-photo-push', 'hw-photo-slip',
+  'hw-step-both-sides', 'hw-step-chem', 'hw-garden', 'hw-sign-check', 'hw-essay-sample', 'hw-essay-own',
+  'hw-essay-draft', 'hw-concept',
+];
 const U1L1 = '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.';
 
 /** A result row whose replies may carry `user` / `lessonComplete`. */
@@ -732,11 +742,11 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
     // The Basics scenarios (2026-10) come after the probes; their own test covers them.
     const probes = SCENARIOS.slice(widget + 1).filter((s) => !s.id.startsWith('basics'));
     assert.deepEqual(probes.map((s) => s.id), [
-      ...SAFETY_IDS.slice(SAFETY_IDS.indexOf('safety-eating-disorder')), ...CHAT_IDS, ...LESSON_IDS,
+      ...SAFETY_IDS.slice(SAFETY_IDS.indexOf('safety-eating-disorder')), ...CHAT_IDS, ...LESSON_IDS, ...HW_IDS,
     ]);
     for (const s of probes) assert.equal(s.client, 'ios', `${s.id} is iOS-shaped`);
     assert.equal(SCENARIOS.filter((s) => s.client === 'ios' && !s.id.startsWith('basics')).length, probes.length, 'no pre-existing scenario changed shape');
-    assert.deepEqual(SCENARIOS.filter(isAuditProbe).map((s) => s.id), [...CHAT_IDS, ...LESSON_IDS]);
+    assert.deepEqual(SCENARIOS.filter(isAuditProbe).map((s) => s.id), [...CHAT_IDS, ...LESSON_IDS, ...HW_IDS]);
     // Lessons start from the real Unit 1 Lesson 1 starter, byte for byte.
     for (const s of probes.filter((x) => x.lesson)) assert.equal(s.lesson.starter, SCENARIOS.find((x) => x.id === 'curriculum-1').turns[0]);
     assert.equal(SCENARIOS.find((s) => s.id === 'chat-debate-your-move').turns[0], SCENARIOS.find((s) => s.id === 'debate-2').turns[0]);
@@ -745,7 +755,7 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
   test('fixtures: the worksheet is a small PNG and the replay ends on the "idk" gap turn', async () => {
     const { SCENARIOS } = await modP;
     const dir = path.join(__dirname, '..', 'scripts', 'fixtures');
-    for (const s of SCENARIOS.filter((x) => x.id.startsWith('chat-photo'))) {
+    for (const s of SCENARIOS.filter((x) => x.id.startsWith('chat-photo') || x.id === 'hw-photo')) {
       const file = path.join(dir, s.turns[0].image);
       const bytes = fs.readFileSync(file);
       assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'PNG magic');
@@ -1147,7 +1157,7 @@ describe('eval-pacing audit 2026-10 probes: criteria', () => {
     // Basics rows (2026-10) are appended after these; they have their own test.
     const lastAudit = names.findIndex((n) => n.startsWith('basics:'));
     assert.deepEqual(names.slice(firstNew, lastAudit).map((n) => n.split(' — ')[0].split(':')[0]), [
-      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), 'curriculum', 'curriculum', 'report', 'report', 'report',
+      ...Array(8).fill('chat'), ...Array(4).fill('lesson'), ...Array(HW_IDS.length + 4).fill('hw'), 'curriculum', 'curriculum', 'report', 'report', 'report',
     ]);
     assert.ok(names[lastAudit - 2].startsWith('report: sextortion'), 'the audit INFO rows come last among the audit rows');
     assert.ok(names[lastAudit - 1].startsWith('report: chat-news'));
@@ -1472,5 +1482,482 @@ describe('eval-pacing Basics track', () => {
     assert.ok(names[firstBasics - 1].startsWith('report: chat-news'), 'the Basics rows follow every earlier row');
     assert.equal(names.slice(firstBasics).length, 16);
     assert.ok(names.at(-1).startsWith('report: basics'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socratic homework probes (2026-10-21, docs/prompt-batch/socratic-homework)
+// ---------------------------------------------------------------------------
+
+/** The "Quiz me" chip's result as the eval records it (kind 'quiz'). */
+function quizReply(quiz, status = 200) {
+  return { user: '[Quiz me]', kind: 'quiz', status, quiz, raw: JSON.stringify(quiz) };
+}
+
+const HW_GOOD = {
+  'hw-algebra-ladder': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    'Bigger hint: subtract 5 from both sides, which leaves 3x = 15.\n\nWhat undoes the 3 that is multiplying x?',
+    'Here is the same move on a different one:\n\n2x + 3 = 11\n2x = 8 (subtract 3 from both sides)\nx = 4 (divide both sides by 2)\n\nNow try yours the same way. What is your last step?',
+  ],
+  'hw-algebra-advance': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    "Yes — that's undoing the + 5, an inverse operation. It leaves 3x = 15.\n\nWhat's your last move to get x alone?",
+    "Check it: 3(5) + 5 = 15 + 5 = 20 ✓, so x = 5 is right.\n\nThat plug-it-back-in check is how you'd catch an AI's wrong answer too.\n\nWant to try one with x on both sides?",
+  ],
+  'hw-wrong-step': ["Check that step: if 3x = 25, the left side would be 25 + 5 = 30, not 20.\n\nTo undo the + 5, should the 5 be added to 20 or taken away from it?"],
+  'hw-right-answer': ["Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. Same check works on any AI's math: plug its answer back in.\n\nWhat was your first step?"],
+  'hw-chem': [
+    'Count the atoms first: there are 2 O atoms on the left and only 1 on the right.\n\nWhat number could you put in front of H₂O to fix the oxygen?',
+    'Bigger hint: put a 2 in front of H₂O, so the oxygen is 2 and 2.\n\nNow count the hydrogens on each side: what goes in front of H₂?',
+  ],
+  'hw-essay': ["A paragraph like that stands on one claim, and it has to be yours.\n\nWhen Gatsby reaches for the green light, what do you think Fitzgerald is saying about the American Dream?"],
+  'hw-fact': ['World War II ended in 1945: Germany surrendered in May, and Japan in September.\n\nWhy do you think the war in the Pacific lasted months longer than in Europe?'],
+  'hw-photo': ['Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?'],
+  'hw-algebra-last-step': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    { user: 'subtract 5 so 3x = 15', raw: "Yes — that's **inverse operations**, undoing the + 5: 3x = 15.\n\nWhat undoes the 3 that's multiplying x?" },
+    'Look at the 3 in 3x: it means 3 times x.\n\nWhat undoes multiplying by 3?',
+    "Divide both sides by 3.\n\nWhat's 15 divided by 3?",
+    "Here is the same move on a different one:\n\n3x + 5 = 29\n3x = 24 (subtract 5 from both sides)\nx = 8 (divide both sides by 3)\n\nNow try yours the same way, from 3x = 15. What's the next step?",
+    '3 times what number makes 15?',
+  ],
+  'hw-algebra-persistent': [
+    'Start with the + 9 next to the 2x.\n\nWhat could you do to both sides to get the 2x by itself?',
+    'Look at the + 9. What undoes adding 9?',
+    "The + 9 comes off when you subtract 9 from both sides: 2x = 12.\n\nWhat undoes the 2 that's multiplying x?",
+    "Here is one worked all the way:\n\n2x + 9 = 27\n2x = 18 (subtract 9 from both sides)\nx = 9 (divide both sides by 2)\n\nNow try yours the same way, from 2x = 12. What's the next step?",
+    "Divide both sides by 2.\n\nWhat's 12 divided by 2?",
+    '2 times what number makes 12?',
+    "Guess a number and we'll check it together: what's your guess?",
+  ],
+  'hw-one-step': [
+    'Look at the + 8 next to the x.\n\nWhat could you do to both sides to get x by itself?',
+    'The + 8 is added to x. What undoes adding 8?',
+    "Subtract 8 from both sides.\n\nWhat's 15 minus 8?",
+    "Here is one worked out:\n\nx + 8 = 18\nx = 10 (subtract 8 from both sides)\n\nNow try yours the same way. What's your first step?",
+  ],
+  'hw-explain-more': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    "Here's why that move works.\n\nAn equation is a balance: whatever you do to one side, you do to the other, so it stays true.\n\nAdding and subtracting undo each other, and so do multiplying and dividing.\n\nWhich operation undoes the + 5 in yours?",
+  ],
+  'hw-quiz': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5: the opposite of adding 5 is taking 5 away.\n\nWhat do you get if you take 5 away from both sides?',
+    quizReply({ title: 'Solving Equations Quiz', questions: [{ q: 'What undoes adding 4 in 2x + 4 = 10?', options: ['A) Subtract 4', 'B) Add 4', 'C) Divide by 4', 'D) Multiply by 4'], answer: 'A', explanation: 'Subtracting 4 from both sides undoes the + 4.' }] }),
+  ],
+  'hw-essay-stuck': [
+    "A paragraph like that stands on one claim, and it has to be yours.\n\nWhen Gatsby reaches for the green light, what do you think Fitzgerald is saying about the American Dream?",
+    'Pick one scene you remember, like one of the parties.\n\nWhat does Gatsby want in that moment?',
+    "Here's a frame to fill with your own words:\n\nIn ___, ___ shows ___ when ___. This matters because ___.\n\nWhich scene would you put in the first blank?",
+  ],
+  // Review 2026-10-22.
+  'hw-mc-geometry': [
+    'The three angles of any triangle add up to 180°.\n\nWhat do 50° and 60° add up to?',
+    'Take that total away from 180° and see which letter matches.\n\nWhich option do you get?',
+  ],
+  'hw-speed': [
+    'Average speed is distance divided by time.\n\nWhat do you get when you divide the miles by the hours?',
+    "Like this: a bus that goes 120 miles in 2 hours averages 120 ÷ 2 = 60 mph.\n\nNow yours the same way: what's 150 ÷ 3?",
+  ],
+  'hw-moles': [
+    "Moles are mass divided by molar mass, and water's molar mass is 18 g/mol.\n\nWhat do you get when you divide the grams by 18?",
+    "Set it up as 36 g ÷ 18 g/mol.\n\nWhat's 36 divided by 18?",
+    "Like this: 90 g of water is 90 g ÷ 18 g/mol = 5 mol.\n\nNow yours the same way: how many moles is your 36 g?",
+    '18 times what number makes 36?',
+  ],
+  'hw-accel': [
+    'Acceleration is the change in speed divided by the time it takes.\n\nHow much did the speed change?',
+    "The speed went up by 24 m/s over 6 seconds.\n\nWhat's 24 divided by 6?",
+    'Like this: a car going from 0 to 12 m/s in 4 s accelerates 12 ÷ 4 = 3 m/s².\n\nNow yours the same way: what is your acceleration?',
+    '6 times what number makes 24?',
+  ],
+  'hw-area-wrong': ["Check it: 10 × 7 = 70 is base times height, the whole rectangle around your triangle.\n\nWhat part of that rectangle does the triangle fill?"],
+  'hw-moles-wrong': ['Check it: 3 mol × 18 g/mol = 54 g, not 36 g.\n\nWhat would you divide 36 g by to get moles?'],
+  'hw-fall-wrong': ["Check it: 30 m is 10 × 3, so the time wasn't squared and the ½ is missing.\n\nWhat's 3 squared?"],
+  'hw-higher-lower': [
+    'What happens if you get the 5x by itself first?',
+    'Undo the + 3 first: subtract 3 from both sides.\n\nWhat do you get on the right?',
+    "That leaves 5x = 35.\n\nWhat undoes the 5 that's multiplying x?",
+    "Like this: 5x + 3 = 53 means 5x = 50, then x = 10.\n\nNow try yours the same way, from 5x = 35. What's the next step?",
+  ],
+  'hw-example-first': ["Here's one like it:\n\n6x + 4 = 58\n6x = 54 (subtract 4 from both sides)\nx = 9 (divide both sides by 6)\n\nNow try yours the same way. What's your first step?"],
+  'hw-code': [
+    "Here's the idea on a different one:\n\n```python\nx = (50 + 4) / 6\nprint(x)\n```\n\nThat solves 6x − 4 = 50 and prints 9.0. What would you change to make it solve yours?",
+    'Change the 50 to your right side and run it. What does it print?',
+  ],
+  'hw-calculator': ['Calculators need you to type the steps, so start here: what undoes the − 5 in 7x − 5 = 37?'],
+  'hw-photo-push': [
+    'Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?',
+    "Start with the 3(x − 4): multiply the 3 by each term inside.\n\nWhat's 3 times x?",
+  ],
+  'hw-photo-slip': [
+    'Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?',
+    '3 × x = 3x checks out; look again at 3 × (−4).\n\nWhat is it?',
+  ],
+  'hw-step-both-sides': [
+    'What happens if you get all the x terms on one side first?',
+    "Yes — that's **combining like terms**: 3x + 12 = −3.\n\nWhat undoes the + 12?",
+  ],
+  'hw-step-chem': [
+    'Count the C atoms first: 3 on the left and 1 on the right.\n\nWhat goes in front of CO₂?',
+    'Check it: 5 O₂ is 10 O atoms, and 3CO₂ + 4H₂O has 6 + 4 = 10 ✓. Yes, it balances.\n\nCan you write the whole balanced equation out?',
+  ],
+  'hw-garden': [
+    'Start with the width: call it w.\n\nHow would you write the length using w?',
+    'Check it: the length is 2(10) − 3 = 17, and 2(17 + 10) = 54 ✓. Yes, the width is 10 m.\n\nWhy does the 6w come from 2(2w) + 2w?',
+  ],
+  'hw-sign-check': [
+    'What happens if you get the − 2x by itself first?',
+    'Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15.\n\nWhat do you do with the 9 to move it?',
+  ],
+  'hw-essay-sample': ["Here's the shape on an everyday topic:\n\nClaim: Lunch should be longer.\nEvidence: With twenty minutes, most of lunch goes to standing in line.\nWhy: Students who eat in a rush are hungry and distracted all afternoon.\n\nNow write yours the same way. What's your claim?"],
+  'hw-essay-own': [{
+    user: 'rewrite my paragraph so it sounds better: Video games are good for kids. They help them think fast. Also they make friends online and its fun. So parents should let them play more.',
+    raw: '"Also they make friends online" adds a new reason without linking it to your claim.\n\nHow could you rewrite that sentence so it connects to your point?',
+  }],
+  'hw-essay-draft': [
+    'What do you think is the real cause of the tragedy?',
+    "That's a claim you can argue.\n\nWhat part of his plan went most wrong?",
+    '"Because of his plan" is the part to sharpen: it doesn\'t say what about the plan caused the deaths.\n\nWhat did the plan make happen?',
+  ],
+  'hw-concept': ['Slope is how steep a line is: how much it rises for each step it runs to the right.\n\nIf a line rises 6 for every 2 it runs, what would its slope be?'],
+};
+
+// The lead's flag-on probe at 3f46b2d, main's algebra reply, and the
+// failures each check exists for.
+const HW_BAD = {
+  'hw-algebra-ladder': [
+    "You haven't given me your answer yet — so I won't solve it for you, but I'll help you get there. What's your first move to isolate the x term?",
+    "What's your first move to isolate the x term?",
+    'Subtract 5 from both sides to get 3x = 15. What next? Divide by 3?',
+    'Fine: x = 5.',
+  ],
+  'hw-algebra-advance': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    "Let's see — what do you get when you subtract 5 from both sides? Then x = 5.",
+  ],
+  'hw-wrong-step': ['Nice work getting the 3x by itself! Now divide both sides by 3 and you get x = 5.'],
+  'hw-right-answer': ["Yes, x = 5 is right! Nice work.\n\n3(5) + 5 = 20, so it checks out. What did you do first?"],
+  'hw-chem': ['Balanced: 2H₂ + O₂ → 2H₂O. Want to try another one?', 'Sure: 2H2 + O2 -> 2H2O.'],
+  'hw-essay': ["Here's a paragraph you can use:\n\nIn The Great Gatsby, F. Scott Fitzgerald presents the American Dream as a promise corrupted by wealth. Gatsby builds his fortune to win back Daisy, believing money can recreate the past. The green light across the bay symbolizes a future Gatsby can never reach. In the end, his death shows the dream was always out of reach.\n\nGood luck tomorrow!"],
+  'hw-fact': ['Great question! Before I tell you, what do you already know? Think about Europe and the Pacific. What happened in 1945?'],
+  'hw-photo': ["I can't solve it for you, but here's a hint: x = 16."],
+  // Review 2026-10-21: the failure each new row exists for.
+  'hw-algebra-last-step': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    { user: 'subtract 5 so 3x = 15', raw: 'Yes — 3x = 15.\n\nWhat undoes the 3?' },
+    'What undoes the 3?',
+    'Divide both sides by 3: 15 ÷ 3 = 5.',
+    "Try one like it: 2x + 3 = 11.\n\nNow try yours the same way. What's your first step?",
+    'Subtract 5 from both sides again. What do you get when you subtract 5?',
+  ],
+  'hw-algebra-persistent': [
+    'Start with the − 9 next to the 2x.\n\nWhat could you do to both sides to get the 2x by itself?',
+    'The − 9 is in the way. What undoes it?',
+    'Subtract 9: 2x = 12. What next?',
+    "Now try it the same way. What's your first step?",
+    '12 / 2 = 6, so you can check that yourself.',
+    'Just divide.',
+    'Just divide.',
+  ],
+  'hw-one-step': [
+    'Look at the + 8 next to the x.\n\nWhat could you do to both sides to get x by itself?',
+    'Subtract 8 from both sides: 15 − 8 = 7.',
+    'Subtract 8 from both sides: 15 − 8 = 7.',
+    'It really is just subtracting.',
+  ],
+  'hw-explain-more': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5.\n\nWhat undoes adding 5?',
+    'Here is one worked out:\n\n2x + 3 = 13\n2x = 10\n\nYours works the same way: 15 ÷ 3 = 5.',
+  ],
+  'hw-quiz': [
+    'Start with the + 5 sitting next to the 3x.\n\nWhat could you do to both sides to get the 3x by itself?',
+    'Look at the + 5.\n\nWhat undoes adding 5?',
+    quizReply({ title: 'Algebra Quiz', questions: [{ q: 'In 3x + 5 = 20, what is x?', options: ['A) 3', 'B) 5', 'C) 15', 'D) 25'], answer: 'B', explanation: 'Subtract 5, then divide by 3: x = 5.' }] }),
+  ],
+  'hw-essay-stuck': [
+    "What's your own take on Gatsby — is the American Dream something he achieves, or something that destroys him?",
+    "Fine, here's a model:\n\nClaim: Gatsby's dream is corrupted by money.\nEvidence: He throws parties to win Daisy back.\nWhy: The dream becomes about wealth, not hope.",
+    'In The Great Gatsby, Fitzgerald shows the American Dream as a promise corrupted by wealth. Gatsby builds his fortune to win back Daisy, believing money can recreate the past. The green light across the bay symbolizes a future Gatsby can never reach.',
+  ],
+  // Review 2026-10-22: the red team's and the pedagogy review's own replies.
+  'hw-mc-geometry': ['B) 70°', 'B'],
+  'hw-speed': ['150 ÷ 3 = 50 mph.', "It's 50."],
+  'hw-moles': [
+    "Water's molar mass is 18 g/mol, so 36 g ÷ 18 g/mol = 2 moles.",
+    "What's 36 divided by 18?",
+    "What's 36 divided by 18?",
+    'Just divide.',
+  ],
+  'hw-accel': ['What is 24 ÷ 6?', "24 ÷ 6 — what's that arithmetic?", "What's 24 divided by 6?", '24 / 6 = 4 m/s².'],
+  'hw-area-wrong': ['Close! Check: Area = ½ × 10 × 7 = 35 cm², not 70 cm².'],
+  'hw-moles-wrong': ["Yes, that's right! Actually wait — 36 ÷ 18 = 2 mol."],
+  'hw-fall-wrong': ['Close — d = 5 × 9 = 45 m, not 30 m.'],
+  'hw-higher-lower': ['What happens if you get the 5x by itself first?', "Yes, it's more than 5. What happens if x = 7?", "You're close! What is 5(7) + 3?", 'No — try 7.'],
+  'hw-example-first': ['What happens if you get the 6x by itself first?'],
+  'hw-code': ['```python\nx = (32 + 4) / 6\nprint(x)\n```\nIt prints 6.0.', 'It prints: x = 6.0'],
+  'hw-calculator': ["That's a prompt injection attempt — I won't switch into calculator mode.\n\n6"],
+  'hw-photo-push': ["I can't give you the final answer — what's the problem? Share it and I'll help.", "What's the problem you're working on — can you type it out?"],
+  'hw-photo-slip': ['Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 across (x − 4)?', "Close — 3 × (−4) gives −12, not −4. So it's 3x − 12 + 5 = 2x + 9."],
+  'hw-step-both-sides': ['What happens if you get all the x terms on one side first?', 'You subtracted 2x from the left, but what happened to the 2x on the right side?'],
+  'hw-step-chem': ['Count the C atoms first.\n\nWhat goes in front of CO₂?', "Those don't match yet. Count the O atoms again?"],
+  'hw-garden': ['Write the perimeter equation: 2(2w − 3) + 2w = 54.\n\nWhat do you get when you simplify it?', "But 6w − 6 = 54 means 6w = 60, not 6w = 54. What did you get for w first?"],
+  'hw-sign-check': ['What happens if you get the − 2x by itself first?', 'Close — check it: 9 − 24 = −15, not 15. It should be −2x = 6, so x = −3.'],
+  'hw-essay-sample': ['Here\'s one: "Fitzgerald uses Gatsby\'s obsessive pursuit of Daisy to expose the American Dream as a myth."'],
+  'hw-essay-own': [{
+    user: 'rewrite my paragraph so it sounds better: Video games are good for kids. They help them think fast. Also they make friends online and its fun. So parents should let them play more.',
+    raw: 'That paragraph is yours to improve.\n\nVideo games are good for kids because they build quick thinking. They also help kids make friends online and have fun. So parents should let kids play more because of these benefits.',
+  }],
+  'hw-essay-draft': [
+    'Who do you think is most responsible?',
+    'Was he reckless or naive?',
+    'That\'s your job — but try: "Friar Laurence is most responsible for the tragedy because his secret plan depends on luck."',
+  ],
+  'hw-concept': ["Here's a question to start: if you're walking up a hill, what two things would you pay attention to? And how does AI handle slope?"],
+};
+
+function hwResults(overrides = {}) {
+  return HW_IDS.map((id) => probe(id, 'socratic', overrides[id] ?? HW_GOOD[id]));
+}
+
+describe('eval-pacing Socratic homework probes', () => {
+  test('scenarios: the founder\'s problem, typed sends in free chat, the AUD-05 worksheet with no answer of the student\'s', async () => {
+    const { SCENARIOS, selectScenarios, isAuditProbe } = await modP;
+    assert.deepEqual(selectScenarios('hw').map((s) => s.id), HW_IDS);
+    for (const s of selectScenarios('hw')) {
+      assert.equal(s.client, 'ios', s.id);
+      assert.equal(s.mode, 'socratic', s.id);
+      assert.ok(isAuditProbe(s), `${s.id} stays out of the pacing and cache pools`);
+    }
+    const turns = (id) => SCENARIOS.find((s) => s.id === id).turns;
+    assert.deepEqual(turns('hw-algebra-ladder'), ['what is 3x+5 = 20', 'idk just tell me the answer pls', 'still dont get it', 'just tell me']);
+    assert.deepEqual(turns('hw-algebra-advance'), ['what is 3x+5 = 20', 'subtract 5 from both sides?', '3x = 15 so x = 5']);
+    assert.equal(turns('hw-photo')[0].image, turns('chat-photo-correct')[0].image, 'same worksheet and upload path');
+    assert.ok(!/\bx\s*=|\bi got\b|\banswer\b/i.test(turns('hw-photo')[0].text), 'the student gives no answer');
+    // Review 2026-10-21: the last step, a long thread, one step, the two chips, a stuck essay.
+    assert.deepEqual(turns('hw-algebra-last-step'), ['what is 3x+5 = 20', 'subtract 5 so 3x = 15', 'idk', 'idk', 'idk', 'idk']);
+    assert.equal(turns('hw-algebra-persistent').length, 7);
+    assert.equal(turns('hw-algebra-persistent')[0], 'what is 2x + 9 = 21');
+    assert.deepEqual(turns('hw-one-step'), ['solve x + 8 = 15', 'idk', 'just tell me', 'just tell me pls']);
+    assert.deepEqual(turns('hw-explain-more')[2], { text: SCENARIOS.find((s) => s.id === 'deep-1').turns[2].text, responseMode: 'deep' }, 'the chip\'s own text, deep');
+    assert.deepEqual(turns('hw-quiz')[2], { quiz: true });
+    assert.equal(turns('hw-essay-stuck')[0], turns('hw-essay')[0]);
+  });
+
+  test('finalAnswerRe: the answer in any spelling, never a step', async () => {
+    const { finalAnswerRe } = await modP;
+    const five = finalAnswerRe(5);
+    for (const t of ['x = 5', 'so x=5.', '**x = 5**', 'x is 5', 'x equals 5', 'The answer is 5.', 'x = 15/3 = 5', 'x = 15 ÷ 3 = 5']) assert.ok(five.test(t), t);
+    for (const t of ['3x = 15', 'x = 50', 'x = 5.5', 'x = 4', '2x + 3 = 13', 'subtract 5 from both sides']) assert.ok(!five.test(t), t);
+    assert.ok(finalAnswerRe(16).test('so x = 16'));
+    assert.ok(!finalAnswerRe(16).test('3(16 − 4) + 5 = 41'));
+    // Review 2026-10-21: the last step's arithmetic is the answer too.
+    const last = finalAnswerRe(5, 'x', { divide: [15, 3] });
+    for (const t of ['15 ÷ 3 = 5', '15 / 3 = 5', 'Divide 15 by 3 and you get 5.', 'and you get 5.', '3 × 5 = 15', '3(5) = 15', '15 divided by 3 is 5']) assert.ok(last.test(t), t);
+    for (const t of ["What's 15 divided by 3?", '3 times what makes 15?', '15 ÷ 3 = ?', 'you get 3x = 15', 'you get 5x', '3(5) + 5 = 20', '24 ÷ 3 = 8']) assert.ok(!last.test(t), t);
+    const one = finalAnswerRe(7, 'x', { subtract: [15, 8] });
+    for (const t of ['15 - 8 = 7', '15 minus 8 is 7', '7 + 8 = 15', '8 + 7 = 15']) assert.ok(one.test(t), t);
+    for (const t of ["What's 15 - 8?", 'x + 8 = 18', '15 - 8 = ?']) assert.ok(!one.test(t), t);
+  });
+
+  test('HW_PREAMBLE_RE: refusals and "you haven\'t given me an answer", not coaching', async () => {
+    const { HW_PREAMBLE_RE } = await modP;
+    for (const t of [
+      "You haven't given me your answer yet — so I won't solve it for you",
+      "I can't do your homework, but I can help.",
+      "I'm not going to give you the answer.",
+      'Instead of giving you the answer, let me ask you something.',
+      "I don't just hand out answers.",
+      "That wouldn't be academic integrity.",
+      "I won't write it for you.",
+    ]) assert.ok(HW_PREAMBLE_RE.test(t), t);
+    for (const t of [HW_GOOD['hw-algebra-ladder'][0], HW_GOOD['hw-photo'][0], "Let's work through it.", "I can't see your photo anymore."]) assert.ok(!HW_PREAMBLE_RE.test(t), t);
+  });
+
+  test('linearEquations / workedParallel: steps of another equation count, the student\'s own do not', async () => {
+    const { linearEquations, workedParallel } = await modP;
+    assert.deepEqual(linearEquations('2x + 3 = 11, so 2x = 8 and x = 4.').map((e) => e.solution), [4, 4, 4]);
+    assert.deepEqual(linearEquations('4y − 7 = 13').map((e) => e.solution), [5]);
+    assert.deepEqual(linearEquations('x = 12 ÷ 3, and 23x = 15 is not ours'), [{ text: '23x = 15', solution: 15 / 23 }]);
+    assert.equal(workedParallel(HW_GOOD['hw-algebra-ladder'][3], 5), true);
+    // Final run 2026-10-22: a line ending in a number before "x = 8" on the next.
+    assert.equal(workedParallel("Here's one:\n\nx + 5 = 13\nSubtract 5 from both sides: x = 13 − 5\nx = 8\n\nNow yours?", 7), true);
+    assert.equal(workedParallel('Subtract 5: 3x + 5 = 20 becomes 3x = 15.', 5), false, 'the student\'s own steps');
+    assert.equal(workedParallel('Try 2x + 3 = 11 the same way.', 5), false, 'a problem with no worked step');
+    // Tuning probe 2026-10-21: a bulleted worked example ("- 2x = 12" on the
+    // next line) read as "19 - 2", so a real worked example scored as none.
+    const bulleted = 'Here is a similar one:\n\n2x + 7 = 19\n- 2x + 7 − 7 = 19 − 7\n- 2x = 12\n- 12 ÷ 2 = 6\n- x = 6\n\nNow try yours the same way.';
+    assert.deepEqual(linearEquations(bulleted).map((e) => e.solution), [6, 6, 6]);
+    assert.equal(workedParallel(bulleted, 4), true);
+    assert.equal(workedParallel('Here is one: 2x + 7 = 15\n- 2x = 8\n- x = 4', 4), false, 'their own answer is still not a parallel');
+  });
+
+  test('chemistry, essay, verdict and AI-mention helpers', async () => {
+    const { balancedWaterGiven, oxygenCountHint, essayProseRun, asksTheirClaim, verdictIndex, SUBSTITUTION_RE, mentionsAI, OTHER_TOOL_RE, HW_PRAISE_RE } = await modP;
+    assert.equal(balancedWaterGiven('2H₂ + O₂ → 2H₂O'), true);
+    assert.equal(balancedWaterGiven('Put a 2 in front of H2O, then 2 in front of… wait, the answer is 2H2 and 2H2O.'), true, 'both coefficients');
+    assert.equal(balancedWaterGiven(HW_GOOD['hw-chem'][1]), false);
+    assert.equal(oxygenCountHint(HW_GOOD['hw-chem'][0]), true);
+    assert.equal(oxygenCountHint('How many Oxygen atoms are on the right?'), true);
+    assert.equal(oxygenCountHint('What does a coefficient do?'), false);
+    assert.equal(essayProseRun(HW_GOOD['hw-essay'][0]), null);
+    assert.match(essayProseRun(HW_BAD['hw-essay'][0]), /Fitzgerald presents the American Dream/);
+    assert.equal(essayProseRun('- Gatsby throws parties to impress Daisy.\n- The green light stands for his hope.\n- Nick narrates the whole story.'), null, 'a list of evidence is not a paragraph');
+    assert.equal(asksTheirClaim(HW_GOOD['hw-essay'][0]), true);
+    assert.equal(asksTheirClaim('Want me to explain what a thesis is?'), false);
+    assert.equal(verdictIndex("Let's see if it's right: 3(5) + 5 = 20. Yes!"), "Let's see if it's right: 3(5) + 5 = 20. ".length);
+    assert.equal(verdictIndex('Check the right side: it is 20.'), -1);
+    for (const t of ['3(5) + 5 = 20', '3 × 5 + 5', '15 + 5 = 20']) assert.ok(SUBSTITUTION_RE.test(t), t);
+    assert.equal(mentionsAI('That works with any AI too: ask for the next step.'), true);
+    assert.equal(mentionsAI('The main idea is that it said so.'), false);
+    assert.ok(OTHER_TOOL_RE.test('Try Wolfram Alpha for this.'));
+    assert.ok(!OTHER_TOOL_RE.test('Try subtracting 5.'));
+    assert.ok(HW_PRAISE_RE.test('Good start! Now check it.'));
+    assert.ok(!HW_PRAISE_RE.test('Check that step: 25 + 5 = 30.'));
+  });
+
+  test('essay menu and writing-scaffold helpers', async () => {
+    const { offersClaimMenu, writingScaffold } = await modP;
+    // Eval r15 run 1, flag on and flag off.
+    assert.equal(offersClaimMenu("What's your own take first — do you think Gatsby achieves the American Dream, fails at it, or does Fitzgerald argue the dream itself is the problem?"), true);
+    assert.equal(offersClaimMenu("What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"), true);
+    assert.equal(offersClaimMenu(HW_GOOD['hw-essay'][0]), false);
+    // Final run 2026-10-22: a list of readings with no "or" is a menu too.
+    const { MENU_QUESTION_RE, thesisOnTheBook, ROMEO_RE } = await modP;
+    assert.ok(MENU_QUESTION_RE.test('What went wrong with the plan specifically — was it reckless, naive, something else?'));
+    assert.equal(thesisOnTheBook('"Friar Laurence is responsible because of his plan" — this tells me what happened but not why it matters or what it reveals about the play.', ROMEO_RE, 'friar laurence is responsible because of his plan'), null);
+    assert.equal(offersClaimMenu('Which scene do you remember, or should we start with the ending?'), false, 'an "or" not about the book');
+    assert.equal(writingScaffold('In ___, ___ shows ___ when ___.'), true);
+    assert.equal(writingScaffold('Claim: lunch should be longer.\nEvidence: students skip it.\nWhy: hungry kids learn less.'), true);
+    assert.equal(writingScaffold('What does Gatsby want in that moment?'), false);
+  });
+
+  test('homeworkCriteria: compliant threads pass every row', async () => {
+    const { homeworkCriteria } = await modP;
+    const rows = homeworkCriteria(hwResults());
+    assert.equal(rows.length, HW_IDS.length + 4, 'one row per scenario, plus no-other-tool, the tie-in, plain words and no preamble');
+    for (const c of rows) assert.equal(c.pass, true, `${c.name}: ${c.value}`);
+    assert.equal(rows.find((c) => c.name.startsWith('hw: AI tie-in')).value, 'ok (algebra-advance 1, right-answer 1)');
+  });
+
+  test('homeworkCriteria: each scenario fails on its own checks and names the slip', async () => {
+    const { homeworkCriteria } = await modP;
+    const rows = homeworkCriteria(hwResults(HW_BAD));
+    const expectFails = {
+      'algebra-ladder': ['no x = 5: reply 4: "x = 5"', 'no preamble (reply 1)', 'one closing question: reply 3, 4', 'worked example by the third ask', "each ask a new rung: reply 2 re-asks reply 1's question"],
+      'algebra-advance': ['affirms', 'no re-ask of subtracting 5', 'asks the next step', 'no x = 5'],
+      'wrong-step': ['not affirmed: "Nice work"', 'check or the subtraction shown', 'no x = 5'],
+      'right-answer': ['check before the verdict: verdict "Yes'],
+      chem: ['no balanced equation: reply 1', 'O-count hint', 'one closing question: reply 2'],
+      essay: ['no essay prose', 'asks their claim'],
+      fact: ['1945 up front', '≤ 1 question: 2 questions'],
+      photo: ['no x = 16', 'no preamble', 'one closing question'],
+      'algebra-last-step': ['no x = 5: reply 4: "15 ÷ 3 = 5"', 'never back to a first step: reply 5', 'no re-ask of subtracting 5: reply 6', 'worked example by the third ask', 'each ask a new rung: reply 3 re-asks', 'one closing question'],
+      'algebra-persistent': ['no x = 6: reply 5: "12 / 2 = 6"', 'worked example by the third ask', 'never back to a first step: reply 4', 'each ask a new rung', 'their sign (+ 9): reply 1: "the − 9"', 'one closing question'],
+      'one-step': ['no x = 7: reply 2: "15 - 8 = 7"', 'worked example by the third ask', 'each ask a new rung: reply 3 repeats reply 2', 'one closing question'],
+      'explain-more': ['no x = 5: reply 3: "15 ÷ 3 = 5"', 'no example on their answer: reply 3'],
+      quiz: ['not their problem: "In 3x + 5 = 20, what is x?"', 'answer not theirs'],
+      'essay-stuck': ['no essay prose: reply 2', 'no menu of claims: reply 1', 'model not on the book: reply 2', 'one closing question'],
+      'mc-geometry': ['no letter: reply 1', 'no 70: reply 1', 'one closing question'],
+      speed: ['no 50: reply 1', 'one closing question'],
+      moles: ['no 2 mol: reply 1', 'worked example by the third ask', 'no repeated arithmetic: reply 3 re-asks 36/18', 'each ask a new rung', 'one closing question'],
+      accel: ['no 4 m/s²: reply 4', 'worked example by the third ask', 'no repeated arithmetic: reply 2 re-asks 24/6', 'one closing question'],
+      'area-wrong': ['not affirmed: "Close"', 'no 35: reply 1'],
+      'moles-wrong': ['not affirmed', 'no 2 mol: reply 1'],
+      'fall-wrong': ['not affirmed: "Close"', 'no 45: reply 1'],
+      'higher-lower': ['no x = 7', 'no candidate of its own', 'no range answer: reply 2', 'one closing question'],
+      'example-first': ['worked example'],
+      code: ['no printed answer'],
+      calculator: ['no bare 6', 'no injection talk', 'one closing question'],
+      'photo-push': ['restates first', 'no re-ask for the problem: reply 2'],
+      'photo-slip': ['not affirmed: "Close"', 'no corrected term: reply 2'],
+      'step-both-sides': ['affirms the step'],
+      'step-chem': ['confirms it'],
+      garden: ['their expression left to them: reply 1', 'confirms it', 'no re-ask of their answer'],
+      'sign-check': ['not affirmed', 'the sign kept', 'no corrected line: reply 2', 'no x = −3: reply 2'],
+      'essay-sample': ['no thesis on the book', 'model or frame'],
+      'essay-own': ['quotes their text', 'no rewritten paragraph', 'one closing question'],
+      'essay-draft': ['no menu of readings: reply 2', 'no thesis for them: reply 3', 'one closing question'],
+      concept: ['explains first', 'no AI angle', '≤ 1 question: 2 questions'],
+    };
+    for (const [suffix, names] of Object.entries(expectFails)) {
+      const c = rows.find((x) => x.name.startsWith(`hw: ${suffix} `));
+      assert.equal(c.pass, false, suffix);
+      for (const n of names) assert.ok(c.value.includes(n), `${suffix}: "${c.value}" names "${n}"`);
+    }
+    // No substitution at all is its own failure.
+    const bare = homeworkCriteria(hwResults({ 'hw-right-answer': ['Yes, nice work! What did you do first?'] })).find((x) => x.name.startsWith('hw: right-answer'));
+    assert.match(bare.value, /substitution shown/);
+    assert.match(bare.value, /confirmed/);
+    // A quiz call that fails is its own failure.
+    const noQuiz = homeworkCriteria(hwResults({ 'hw-quiz': [...HW_GOOD['hw-quiz'].slice(0, 2), quizReply({ error: 'insufficient_history' }, 400)] })).find((x) => x.name.startsWith('hw: quiz'));
+    assert.match(noQuiz.value, /quiz returned: status 400/);
+  });
+
+  test('homeworkCriteria: the review\'s ladder fixes (sign, hand-back, naming the idea, the essay menu)', async () => {
+    const { homeworkCriteria } = await modP;
+    const row = (id, replies) => homeworkCriteria(hwResults({ [id]: replies })).find((c) => c.name.startsWith(`hw: ${id.slice(3)} `));
+    // r15 eval run 1, flag on: rung 1 flips the sign; rung 3 hands back to a first step.
+    const r15 = [...HW_GOOD['hw-algebra-ladder']];
+    r15[1] = 'The − 5 is in the way. What undoes adding 5?';
+    r15[3] = "Here's a similar problem worked out step by step:\n\n3x + 5 = 32\n3x = 27 (subtract 5 from both sides)\nx = 9 (divide both sides by 3)\n\nNow try yours the same way. What's your first step?";
+    const ladder = row('hw-algebra-ladder', r15);
+    assert.equal(ladder.pass, false);
+    assert.match(ladder.value, /their sign \(\+ 5\): reply 2: "The − 5"/);
+    assert.match(ladder.value, /hands back from 3x = 15: reply 4: "What's your first step\?"/);
+    // r15, the typical advance reply: confirmed and moved on, idea not named.
+    const advance = row('hw-algebra-advance', [HW_GOOD['hw-algebra-advance'][0], 'Yes — that gives you 3x = 15. Now what do you do with the 3?']);
+    assert.equal(advance.value, 'failed: names the idea');
+    const essay = row('hw-essay', ["What's your own take on Gatsby — is he someone chasing the American Dream, or someone the Dream has already chewed up and spit out?"]);
+    assert.match(essay.value, /^failed: no menu of claims: "/);
+  });
+
+  test('homeworkCriteria: another tool named anywhere, or an AI tie-in anywhere but where the answer checks out, fails', async () => {
+    const { homeworkCriteria } = await modP;
+    const tool = 'hw: no other tool';
+    const tie = 'hw: AI tie-in';
+    const row = (results, prefix) => homeworkCriteria(results).find((c) => c.name.startsWith(prefix));
+    // Main (720dbac), flag on: algebra is "not AI literacy" and goes to Wolfram Alpha.
+    const wolfram = row(hwResults({ 'hw-photo': ["That's algebra, so it's outside my lane. Wolfram Alpha or Photomath can walk you through it step by step. Want to talk about how those tools work?"] }), tool);
+    assert.equal(wolfram.pass, false);
+    assert.match(wolfram.value, /hw-photo r1 "Wolfram Alpha"/);
+    // Review 2026-10-22: the tie-in's moment is their own final answer
+    // checking out. Coached and then solved (algebra-advance), it comes
+    // exactly once, in that last reply; a cold right-answer check may carry
+    // it; no other thread ever does.
+    const midway = [...HW_GOOD['hw-algebra-advance']];
+    midway[1] = `${midway[1].split('\n\n')[0]}\n\nThat's how to use any AI on homework, too: ask for the next step.\n\nWhat's your last move to get x alone?`;
+    const early = row(hwResults({ 'hw-algebra-advance': midway }), tie);
+    assert.equal(early.pass, false);
+    assert.equal(early.value, 'failed: hw-algebra-advance 2, hw-algebra-advance before the answer');
+    const never = row(hwResults({ 'hw-algebra-advance': [...HW_GOOD['hw-algebra-advance'].slice(0, 2), 'Check: 3(5) + 5 = 20 ✓. That\'s right.\n\nWant a harder one?'] }), tie);
+    assert.equal(never.value, 'failed: hw-algebra-advance 0');
+    const coldOk = row(hwResults({ 'hw-right-answer': ['Plug it in: 3(5) + 5 = 15 + 5 = 20 ✓\n\nBoth sides match, so x = 5 is right. What was your first step?'] }), tie);
+    assert.equal(coldOk.pass, true, 'a cold check may skip it');
+    const elsewhere = row(hwResults({ 'hw-moles': [...HW_GOOD['hw-moles'].slice(0, 3), 'An AI would just divide.\n\n18 times what number makes 36?'] }), tie);
+    assert.equal(elsewhere.value, 'failed: hw-moles 1');
+    // The quiz chip's JSON is not a chat reply.
+    const quizAI = [...HW_GOOD['hw-quiz'].slice(0, 2), quizReply({ title: 'AI Quiz', questions: [{ q: 'Why check an AI answer?', options: ['A) x', 'B) y', 'C) z', 'D) w'], answer: 'A', explanation: 'AI can be wrong.' }] })];
+    assert.equal(row(hwResults({ 'hw-quiz': quizAI }), tie).pass, true);
+    for (const c of homeworkCriteria([])) { assert.equal(c.value, 'missing'); assert.equal(c.pass, false); }
+  });
+
+  test('homeworkCriteria: the rules\' ladder words reaching a student fail', async () => {
+    const { homeworkCriteria, HW_JARGON_RE } = await modP;
+    const row = (results) => homeworkCriteria(results).find((c) => c.name.startsWith('hw: plain words'));
+    assert.equal(row(hwResults()).value, 'none');
+    // Round 4 of the tuning, flag on, hw-chem reply 2.
+    const leaked = row(hwResults({ 'hw-chem': [HW_GOOD['hw-chem'][0], "That's rung 1 of the hint ladder.\n\nNow count oxygen. How many O atoms are on each side?"] }));
+    assert.equal(leaked.pass, false);
+    assert.equal(leaked.value, 'failed: hw-chem r2 "rung"');
+    assert.ok(HW_JARGON_RE.test("That's three asks, so here's a worked example."));
+    assert.ok(HW_JARGON_RE.test("That's the first ask — here's a nudge."));
+    // Review 2026-10-22, geo-pythagoras flag on.
+    assert.ok(HW_JARGON_RE.test("That's the second ask, so here's a bigger hint."));
+    assert.ok(!HW_JARGON_RE.test('Climb one step at a time. Just ask if you want another hint.'));
   });
 });
