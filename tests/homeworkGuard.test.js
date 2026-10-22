@@ -267,7 +267,7 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.match(body('balance N2 + H2 -> NH3'), /As their reaction stands \(N2 \+ H2 → NH3\): N 2 and 1 \(differ\), H 2 and 3 \(differ\)\. Ask only about an element whose counts differ/);
     assert.match(body('balance CH4 + O2 -> CO2 + H2O'), /C 1 and 1 \(match\), H 4 and 2 \(differ\), O 2 and 3 \(differ\)/);
     // Review 2026-10-22: "is it 2 O2?" was called wrong 6 of 6 times.
-    assert.match(body('balance CH4 + O2 -> CO2 + H2O', 'ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?'), /With 2 O2, their reaction balances: C 1 and 1 \(match\), H 4 and 4 \(match\), O 4 and 4 \(match\)\. Their proposal is right/);
+    assert.match(body('balance CH4 + O2 -> CO2 + H2O', 'ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?'), /With 2 O2, their reaction balances: C 1 and 1 \(match\), H 4 and 4 \(match\), O 4 and 4 \(match\)\. Their proposal is right: your first word is "Yes"/);
     assert.match(body('balance CH4 + O2 -> CO2 + H2O', 'ok i have CH4 + O2 -> CO2 + 2H2O. is it 3 O2?'), /With 3 O2, their reaction doesn't balance yet: .*O 6 and 4 \(differ\)\. Start with "Check it:"/);
     assert.match(body('balance Ca(OH)2 + HCl -> CaCl2 + H2O'), /Ca 1 and 1 \(match\), O 2 and 1 \(differ\), H 3 and 2 \(differ\), Cl 1 and 2 \(differ\)/);
   });
