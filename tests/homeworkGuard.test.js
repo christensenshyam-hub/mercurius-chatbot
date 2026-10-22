@@ -146,6 +146,9 @@ describe('the other guards: word problems, corrections, menus', () => {
     assert.equal(g.wordProblemNumbers(T('a car goes 150 miles in 3 hours. how fast', 'is it 50?')), null);
     assert.equal(g.wordProblemNumbers(T("angles of 50° and 60°, what's the third? A) 60° B) 70° C) 80°")), null);
     assert.equal(g.wordProblemNumbers(T('what is 3x+5 = 20')), null);
+    for (const notWords of ['solve x^2 - 5x + 6 = 0', 'solve the system x + y = 10 and x - y = 4', 'balance C3H8 + O2 -> CO2 + H2O']) {
+      assert.equal(g.wordProblemNumbers(T(notWords)), null, notWords);
+    }
   });
 
   test('a distribution product their line got wrong is theirs to find', () => {
