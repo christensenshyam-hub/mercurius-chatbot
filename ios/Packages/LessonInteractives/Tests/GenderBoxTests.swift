@@ -229,6 +229,18 @@ struct GenderBoxStateTests {
         #expect(!GenderBoxState.debugShowsAll(["-GenderBoxShowAll"]))
     }
 
+    @Test("The Mac's arrows: → deletes, ← keeps; each says what changed, once")
+    func arrows() {
+        #expect(GenderBox.after(.next) == .deleted)
+        #expect(GenderBox.after(.previous) == .kept)
+        let state = GenderBoxState(spoiled: false, debug: nil)
+        #expect(state.set(GenderBox.after(.next)) == nil, "no arrow before a guess")
+        state.lock(.higher)
+        #expect(state.set(GenderBox.after(.next))?.hasPrefix("You guessed") == true)
+        #expect(state.set(GenderBox.after(.next)) == nil, "already deleted: nothing to say")
+        #expect(state.set(GenderBox.after(.previous)) == GenderBoxCopy.announcement(.kept))
+    }
+
     @Test("The summary follows the state")
     func summary() {
         let state = GenderBoxState(spoiled: false, debug: nil)

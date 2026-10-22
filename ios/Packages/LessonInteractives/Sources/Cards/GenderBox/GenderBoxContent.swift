@@ -12,6 +12,12 @@ import Foundation
 public enum GenderBox: String, CaseIterable, Sendable, Hashable {
     case kept
     case deleted
+
+    /// The Mac's ←/→ on the control ("kept | deleted", left to right):
+    /// → deletes, ← keeps.
+    static func after(_ arrow: InteractiveArrow) -> GenderBox {
+        arrow == .next ? .deleted : .kept
+    }
 }
 
 /// What the toy reads on a résumé: the gender box, and three words.

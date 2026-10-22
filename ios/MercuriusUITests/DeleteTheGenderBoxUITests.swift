@@ -62,7 +62,9 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         XCTAssertFalse(deleted.isSelected, "the toggle worked before a guess")
         XCTAssertTrue(kept.isSelected)
 
-        let tie = app.buttons["They\u{2019}ll tie"]
+        // `firstMatch`: XCUITest finds two buttons per shared chip whose
+        // label is its title (the chip's element and its inner button).
+        let tie = app.buttons["They\u{2019}ll tie"].firstMatch
         XCTAssertTrue(tie.waitForExistence(timeout: 10))
         bringOnScreen(tie, in: app)
         tie.tap()
@@ -70,7 +72,7 @@ final class DeleteTheGenderBoxUITests: XCTestCase {
         expectation(for: picked, evaluatedWith: tie)
         waitForExpectations(timeout: 5)
         // A locked guess can't change: another chip's tap does nothing.
-        let other = app.buttons["Yes, still lower"]
+        let other = app.buttons["Yes, still lower"].firstMatch
         other.tap()
         XCTAssertFalse(other.isSelected, "a locked guess changed")
         XCTAssertTrue(tie.isSelected)

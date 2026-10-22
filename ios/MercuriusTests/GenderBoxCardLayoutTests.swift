@@ -42,9 +42,22 @@ final class GenderBoxCardLayoutTests: XCTestCase {
         renderer.isOpaque = false
         let image = try XCTUnwrap(renderer.cgImage, "the card didn't render at \(size), \(width) pt")
         if let dir = ProcessInfo.processInfo.environment["GENDERBOX_RENDER_DIR"] {
-            let name = "genderbox-\(Int(width))-\(size)-\(debug.rawValue)\(showAll ? "-all" : "").png"
-            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
-            try? UIImage(cgImage: image).pngData()?.write(to: url)
+            // In slices of 3,000 px: a whole AX5 card is too tall to encode
+            // as one PNG.
+            let name = "genderbox-\(Int(width))-\(size)-\(debug.rawValue)\(showAll ? "-all" : "")"
+            let slice = 3000
+            var top = 0
+            var part = 1
+            while top < image.height {
+                let rect = CGRect(x: 0, y: top, width: image.width, height: min(slice, image.height - top))
+                if let piece = image.cropping(to: rect) {
+                    let suffix = image.height > slice ? "-\(part)" : ""
+                    let url = URL(fileURLWithPath: dir).appendingPathComponent("\(name)\(suffix).png")
+                    try? UIImage(cgImage: piece).pngData()?.write(to: url)
+                }
+                top += slice
+                part += 1
+            }
         }
         return image
     }

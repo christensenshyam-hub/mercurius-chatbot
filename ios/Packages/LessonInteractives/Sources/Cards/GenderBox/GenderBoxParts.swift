@@ -699,7 +699,7 @@ struct GenderBoxToggle: View {
                         isFirst: state.machine.spoiled && option == .deleted,
                         accessibilityLabel: GenderBoxCopy.boxAccessibility(option),
                         accessibilityHint: GenderBoxCopy.boxHelp(option),
-                        onArrow: { arrow in onSet(arrow == .next ? .deleted : .kept) }) {
+                        onArrow: { arrow in onSet(GenderBox.after(arrow)) }) {
             if option != state.box { onSet(option) }
         }
         .accessibilityValue(enabled ? "" : InteractiveShellCopy.guessFirst)

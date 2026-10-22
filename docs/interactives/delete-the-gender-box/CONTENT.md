@@ -110,7 +110,15 @@ Flipping back to "kept" puts the old weights and scores back; the reveal stays.
 
 Decoration that goes: the eyebrow's icon, the bars, the "Show all" chevron's icon, the label's info glyph. No word goes.
 
-### The compact card (Mac only: narrower than 440 pt, as in a 700 pt window with the sidebar open)
+### The layout on each platform
+
+- **iPhone:** stacked, as SLATE.md asks: the hook, the 12 past résumés, what it learned (each weight in one row: name and words, a bar about zero, the number), the two new résumés side by side, the guess, the control, the reveal, the label.
+- **Mac (Night Studio):** from 500 pt of card content, the 12 past résumés sit left (58 % of the width, in whole points) and what it learned sits right; narrower, they stack. Each weight there is its name and number, a bar across the column on a shared track, then its words ("pushes down", "was −1.21"). **The two new résumés span both columns** under them, right above the guess and the control. This departs from SLATE.md's "weights and test résumés right": the lesson's reading column is about 540 pt, so a right column holding both gave each new résumé about 110 pt (its title and lines broke word by word) and squeezed the bars to slivers. The scores also read better next to the question they answer.
+- **Both:** deleting the gender box strikes its column, its header, the "gender: woman" weight and each new résumé's "Gender box: woman" line. One-line cells get a line drawn across from the leading edge (a fade under Reduce Motion); lines that can wrap use the text's own strike-through, so every line is struck.
+
+### The compact card (Mac only: when the card is narrower than 440 pt)
+
+The lesson's reading column is wider than that even in the smallest window (700 × 600), so a student meets it only in a narrower layout; `-InteractiveCompact YES` shows it for review.
 
 | Where | Text |
 |---|---|
@@ -231,9 +239,21 @@ None. The résumés have no names, photos, schools or places: only a gender box 
 
 ---
 
-## 7. Screenshots
+## 7. Screenshots and verification
 
-In `shots/` (not committed): see the list in the build summary. The iPhone 16 Pro Max in light and dark at the default size and at AX3, the iPhone SE at AX5 (the table behind "Show all 12", and open), the Mac copied app at 1280 × 800 (light and dark) and 700 × 600 (the compact card), and a short clip of the reveal.
+**Shots** in `shots/` (not committed), taken 2026-10-21 from DEBUG builds of this branch:
+- **iPhone 16 Pro Max** (`-InteractiveGallery` for the card's top, `-Interactive` for the lesson with its stub replies):
+  - `iphone16pm-light-large-1-top`, `-2-guessed` (the guess locked, the control on), `-3-deleted-top` (the struck column), `-4-reveal`;
+  - `iphone16pm-dark-large-1-top`, `-3-deleted-top`, `-4-reveal` (the card is the same night-sky island in both appearances; the lesson around it changes);
+  - `iphone16pm-ax3-1-top`, `-4-reveal`, `-5-end` (Accessibility XL);
+  - `iphone16pm-reveal-clip.mp4` (6.8 s): "They’ll tie" locks, the gender box is deleted, 34/63 become 42/77 and the reveal arrives (`-GenderBoxAutoplayAt`, since simctl can't tap).
+- **iPhone SE at AX5**: `iphoneSE-ax5-1-top` (the table behind "Show all 12", the summary in sight), `-2-list-open`, `-3-weights-and-scores`, `-4-reveal`.
+- **Mac**, through a renamed copy of the Debug app (`….macnsia5`), never the founder's: `mac-1280-light-*` and `mac-1280-dark-*` (1280 × 800: the hook, the guess in its lesson, the deleted state with both columns, the reveal in its lesson) and `mac-700-*` (700 × 600, the smallest window: the deleted state and the reveal).
+- **Full-card renders** from `GenderBoxCardLayoutTests` (`render-343pt-…`, `render-408pt-…`): the whole card at an SE's and a Pro Max's width.
+
+**Verified** on this branch: `swift test` (1,313 tests, including `GenderBoxTests`, `ToyFitTests` and the columns test); `ci-compat-lint.py` (0 findings); the iOS build and `xcodebuild test` on IA-5 (the card's UI test, its layout tests, the framework's launch tests; the full suite once, where `testBootCompletes` timed out under load and then passed alone); `ios-unchanged-check.sh` (the same 23 results, 11 pass and 12 already stale, the same pixels); the Mac Debug build and the copied-app shots.
+
+**Fixed during the build:** the first Mac version measured its own width to size its two columns, and the column width fed fractions of a point back into that width for ever (the lesson hung at full CPU). The columns are now a stateless layout (`GenderBoxColumns`), with a test.
 
 ---
 
