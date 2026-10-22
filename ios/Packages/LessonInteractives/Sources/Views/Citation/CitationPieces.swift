@@ -14,8 +14,14 @@ enum CitationScrollID {
     static let walk = "citation-walk"
     /// The step's heading ("Step 2 of 5 · Year").
     static let step = "citation-step"
-    /// A draw's result and "Next piece".
-    static let drawn = "citation-drawn"
+    /// A draw's button ("Next piece", "See the finished reference"), under
+    /// its result: what a draw scrolls to. Not the result and button
+    /// together: at AX5 the title's draw is about 1,000 pt, taller than the
+    /// reading area, and `scrollTo(_:anchor: nil)` doesn't define which
+    /// edge of a part that can't fit it shows. The button always fits, so
+    /// every iOS shows it with as much of the result above it as fits (all
+    /// of it, whenever it fits).
+    static let next = "citation-next"
     static let finished = "citation-finished"
     static let showMe = "citation-show-me"
     static let askedAgain = "citation-asked-again"

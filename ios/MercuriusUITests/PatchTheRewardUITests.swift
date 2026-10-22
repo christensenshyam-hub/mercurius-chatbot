@@ -181,26 +181,71 @@ final class PatchTheRewardUITests: XCTestCase {
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
         let window = app.windows.firstMatch.frame
+        func onScreen(_ frame: CGRect) -> Bool {
+            frame.minY >= window.minY + window.height * 0.05 && frame.maxY <= window.minY + window.height * 0.88
+        }
         func onScreen(_ element: XCUIElement) -> Bool {
-            let frame = element.frame
-            return element.exists && frame.minY >= window.minY + window.height * 0.05
-                && frame.maxY <= window.minY + window.height * 0.88
+            element.exists && onScreen(element.frame)
         }
         tap(app.buttons["Rule C: plus 100 per full lap through gates 1, 2 and 3 in order."].firstMatch, in: app)
         tap(app.buttons["Yes"].firstMatch, in: app)
-        let track = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "The toy track")).firstMatch
+        // While the 6 s run plays, the track (running rule C) and the
+        // panel's Skip are on screen together. Each look is one snapshot of
+        // the tree, taken as soon as the tap returns: on CI, while a run
+        // animates, a single element query took over 2 s, so querying the
+        // two (after a predicate expectation's first one-second poll) could
+        // outlast a 3 s wait, or the run itself.
+        var running = false
+        var inView = false
+        var seen = "no run"
+        let deadline = Date().addingTimeInterval(10)
+        repeat {
+            guard let root = try? app.snapshot(),
+                  let track = first(in: root, where: { $0.label.hasPrefix("The toy track") }) else { continue }
+            guard let skip = first(in: root, where: { $0.elementType == .button && $0.label == "Skip to the result" })
+            else {
+                // No Skip: the run hasn't started yet, or it is over.
+                if running { break } else { continue }
+            }
+            running = true
+            seen = "the track at \(track.frame), Skip at \(skip.frame)"
+            if onScreen(track.frame) && onScreen(skip.frame) {
+                inView = true
+                XCTAssertTrue(track.label.contains("The boat is running rule C."), track.label)
+                break
+            }
+        } while Date() < deadline
+        if !inView { keep(app, "run-not-in-view") }
+        XCTAssertTrue(running, "the run didn't play (screenshot run-not-in-view)")
+        XCTAssertTrue(inView, "the run didn't play in view: \(seen) in \(window) (screenshot run-not-in-view)")
+        // Skip, if the run is still playing (a slow simulator may already
+        // have seen it end): either way the reveal follows the last run.
         let skip = app.buttons["Skip to the result"].firstMatch
-        XCTAssertTrue(skip.waitForExistence(timeout: 5), "the run didn't play")
-        // Give the scroll its moment, well inside the 6 s run.
-        let inView = expectation(for: NSPredicate { _, _ in onScreen(track) && onScreen(skip) }, evaluatedWith: track)
-        wait(for: [inView], timeout: 3)
-        XCTAssertTrue(track.label.contains("The boat is running rule C."), track.label)
-        skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        if skip.exists { skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         let reveal = element(app, labelContains: "It finished for 1 of them: rule C.")
-        XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal never showed")
+        XCTAssertTrue(reveal.waitForExistence(timeout: 10), "the reveal never showed")
+        // The reveal stays where the list brought it: no run to race here.
         let revealInView = expectation(for: NSPredicate { _, _ in onScreen(reveal) }, evaluatedWith: reveal)
-        wait(for: [revealInView], timeout: 3)
+        wait(for: [revealInView], timeout: 10)
+    }
+
+    /// The first element in `node`'s tree that passes `test`.
+    private func first(in node: XCUIElementSnapshot,
+                       where test: (XCUIElementSnapshot) -> Bool) -> XCUIElementSnapshot? {
+        if test(node) { return node }
+        for child in node.children {
+            if let hit = first(in: child, where: test) { return hit }
+        }
+        return nil
+    }
+
+    /// A screenshot of this moment, kept with the test's results.
+    @MainActor
+    private func keep(_ app: XCUIApplication, _ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 
     @MainActor

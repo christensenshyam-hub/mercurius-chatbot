@@ -80,13 +80,16 @@ public struct InteractiveGalleryView: View {
                         .frame(maxWidth: .infinity)
                         #endif
                 }
-                // As in a lesson: a card brings a part of itself into view.
+                // As in a lesson: a card brings a part of itself into view,
+                // once the update that asked for it is laid out.
                 .environment(\.interactiveScrollIntoView,
                              InteractiveScrollAction(key: "gallery") { id, animated in
-                                 if animated {
-                                     withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
-                                 } else {
-                                     proxy.scrollTo(id, anchor: nil)
+                                 DispatchQueue.main.async {
+                                     if animated {
+                                         withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
+                                     } else {
+                                         proxy.scrollTo(id, anchor: nil)
+                                     }
                                  }
                              })
             }

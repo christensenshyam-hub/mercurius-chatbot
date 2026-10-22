@@ -25,7 +25,8 @@ import DesignSystem
 /// - Release builds keep what a tap changed in view: at the accessibility
 ///   sizes the draw's result, the next step or the reveal can be a screen
 ///   away from the button pressed (`keepInView`; a jump under Reduce
-///   Motion).
+///   Motion). After a draw, its button comes into view with the result
+///   above it (`CitationScrollID.next`).
 struct CitationCardBody: View {
     let state: CitationState
 
@@ -145,7 +146,6 @@ struct CitationCardBody: View {
             // the canvas below them, at every step.
             if walk.isDrawn(slot) {
                 drawn(slot)
-                    .id(CitationScrollID.drawn)
                     .transition(theme.transition())
             }
             LabelLine(CitationCopy.chancesLabel)
@@ -245,6 +245,7 @@ struct CitationCardBody: View {
                 advance()
             }
             .environment(\.interactiveFocusFirst, nextFocus)
+            .id(CitationScrollID.next)
         }
     }
 
@@ -340,8 +341,9 @@ struct CitationCardBody: View {
         withAnimation(theme.animation(InteractiveMotion.change)) { line = state.guess(index) }
         guard let line else { return }
         InteractiveAccessibility.announce(line)
-        // The draw's result and "Next piece", under the three candidates.
-        keepInView(CitationScrollID.drawn, anchor: nil)
+        // "Next piece", with the draw's result above it, under the three
+        // candidates (`CitationScrollID.next`: the button, which always fits).
+        keepInView(CitationScrollID.next, anchor: nil)
         if fromKeyboard { bump { nextFocus += 1 } }
     }
 
@@ -390,9 +392,15 @@ struct CitationCardBody: View {
     }
 
     /// What a tap changed, in view: `anchor` nil scrolls the least that
-    /// shows all of it (nothing, when it already shows); `.top` puts it at
-    /// the top of the reading area. A jump under Reduce Motion. In release
-    /// builds too: the shots' DEBUG scrolls are separate.
+    /// shows all of it (nothing, when it already shows), so give it a part
+    /// that fits the reading area; `.top` puts it at the top of the reading
+    /// area. A jump under Reduce Motion. In release builds too: the shots'
+    /// DEBUG scrolls are separate.
+    ///
+    /// The card's own `ScrollViewReader` (inside the list's scroll view),
+    /// by a stable id, a beat after the tap (`bump`): by then the update
+    /// that drew the part has been laid out. ScrollViewReader and
+    /// `Task.sleep(for:)` are older than the iOS 17 deployment target.
     private func keepInView(_ id: String, anchor: UnitPoint?) {
         bump {
             guard let scroller else { return }

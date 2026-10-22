@@ -8,10 +8,17 @@ import SwiftUI
 /// student set off would otherwise happen out of sight: a run playing on a
 /// stage they scrolled past to reach the controls, a question opening above
 /// the chip they tapped. The host scrolls the least that shows the whole
-/// part (nothing when it already shows; its top edge first when it can't
-/// all fit), and counts the move as the student's own, so the list stops
-/// following a streaming reply. `animated` is the card's: false under
-/// Reduce Motion.
+/// part (nothing when it already shows), and counts the move as the
+/// student's own, so the list stops following a streaming reply. `animated`
+/// is the card's: false under Reduce Motion.
+///
+/// - The host scrolls on the next turn of the main queue, once the update
+///   that asked has been laid out, so a card may call this from `onChange`
+///   in the same update that resizes the part.
+/// - Mark a part that fits the reading area. For one taller than it,
+///   `scrollTo(_:anchor: nil)` doesn't define which edge shows, so it can
+///   differ between iOS versions: mark the piece of it the student needs
+///   (the Citation scrolls to its draw's button, not the whole draw).
 ///
 /// Outside a lesson (the gallery, previews, tests) it does nothing. Two
 /// actions with the same `key` are equal, so a host that hands a new one

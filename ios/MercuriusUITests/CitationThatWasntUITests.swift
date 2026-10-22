@@ -117,14 +117,22 @@ final class CitationThatWasntUITests: XCTestCase {
         let title = app.descendants(matching: .any)["Interactive: The Citation That Wasn\u{2019}t"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u1_l3")
 
+        // CI's simulator answers a query in about a second at this size, so
+        // each wait gives what a tap brought 10 s to arrive.
+        let wait: TimeInterval = 10
         let slots = ["First author", "Year", "Title", "Journal", "Volume and pages"]
         for (number, slot) in slots.enumerated() {
             let first = candidate(app, slot, 1)
-            XCTAssertTrue(first.waitForExistence(timeout: 10), "no candidates for \(slot)")
+            XCTAssertTrue(first.waitForExistence(timeout: wait), "no candidates for \(slot)")
             tap(first, in: app)
             let last = number == slots.count - 1
-            let next = app.buttons[last ? "See the finished reference" : "Next piece"].firstMatch
-            XCTAssertTrue(next.waitForExistence(timeout: 5))
+            let label = last ? "See the finished reference" : "Next piece"
+            let next = app.buttons[label].firstMatch
+            guard next.waitForExistence(timeout: wait) else {
+                keep(app, "ax5-\(number + 1)-no-button")
+                XCTFail("after the guess at \(slot), no \"\(label)\" button (screenshot ax5-\(number + 1)-no-button)")
+                return
+            }
             expectInView(next, in: app, "after the guess at \(slot), its button")
             keep(app, "ax5-\(number + 1)-drawn")
             next.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
@@ -132,37 +140,37 @@ final class CitationThatWasntUITests: XCTestCase {
                 let heading = app.descendants(matching: .any)
                     .matching(NSPredicate(format: "label BEGINSWITH %@", "Step \(number + 2) of 5, \(slots[number + 1])."))
                     .firstMatch
-                XCTAssertTrue(heading.waitForExistence(timeout: 5))
+                XCTAssertTrue(heading.waitForExistence(timeout: wait))
                 expectInView(heading, in: app, "after Next piece, step \(number + 2)'s heading")
                 if number == 0 { keep(app, "ax5-2-next-step") }
             }
         }
         let finished = app.descendants(matching: .any)["The five pieces it drew"]
-        XCTAssertTrue(finished.waitForExistence(timeout: 5))
+        XCTAssertTrue(finished.waitForExistence(timeout: wait))
         expectInView(finished, in: app, "after See the finished reference, its heading")
         keep(app, "ax5-6-finished")
 
         let journal = app.buttons["The journal"].firstMatch
-        XCTAssertTrue(journal.waitForExistence(timeout: 10))
+        XCTAssertTrue(journal.waitForExistence(timeout: wait))
         tap(journal, in: app)
         let showMe = app.buttons["Show me"].firstMatch
-        XCTAssertTrue(showMe.waitForExistence(timeout: 5))
+        XCTAssertTrue(showMe.waitForExistence(timeout: wait))
         expectInView(showMe, in: app, "after the lock, Show me")
         keep(app, "ax5-7-locked")
         showMe.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let reveal = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@", "You guessed The journal.")).firstMatch
-        XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal didn't come")
+        XCTAssertTrue(reveal.waitForExistence(timeout: wait), "the reveal didn't come")
         XCTAssertTrue(reveal.label.contains("as made up as the author"), reveal.label)
         expectTopInView(reveal, in: app, "after Show me, the reveal")
         keep(app, "ax5-8-revealed")
 
         let again = app.buttons["Write it again"].firstMatch
-        XCTAssertTrue(again.waitForExistence(timeout: 5))
+        XCTAssertTrue(again.waitForExistence(timeout: wait))
         tap(again, in: app)
         let second = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@", "The same question, asked again")).firstMatch
-        XCTAssertTrue(second.waitForExistence(timeout: 8), "the second reference wasn't written")
+        XCTAssertTrue(second.waitForExistence(timeout: wait), "the second reference wasn't written")
         expectTopInView(second, in: app, "after Write it again, the second reference")
         sleep(2)
         keep(app, "ax5-9-rewritten")
@@ -207,20 +215,56 @@ final class CitationThatWasntUITests: XCTestCase {
     }
 
     /// The lesson's list doesn't take the accessibility scroll action for
-    /// rows off screen: scroll as a student would until `element` is in the
-    /// middle band of the window, then touch it there.
+    /// rows off screen: scroll as a student would until enough of `element`
+    /// shows in the list, then touch the middle of the part that shows.
+    ///
+    /// Not the element's centre: at AX5 on an iPhone 16 (852 pt) the
+    /// title's first candidate is 448 pt tall. On CI (iOS 18) it was left
+    /// at y 450 to 898 with the list ending at about 671, so its centre
+    /// (674) was on the "Jump to latest" strip: the list jumped to its end,
+    /// no guess was made, and "Next piece" never came.
     @MainActor
     private func tap(_ element: XCUIElement, in app: XCUIApplication) {
-        let window = app.windows.firstMatch.frame
-        var swipes = 0
-        while element.frame.maxY > window.height * 0.72 && swipes < 14 {
-            app.swipeUp(velocity: .slow)
-            swipes += 1
+        var shown = CGRect.null
+        for _ in 0..<40 {
+            // A little inside the list, clear of its edges.
+            let list = readingArea(app).insetBy(dx: 0, dy: 8)
+            let frame = element.frame
+            shown = frame.intersection(list)
+            if !shown.isNull, shown.height >= min(frame.height, 88) { break }
+            let below = frame.midY > list.midY
+            // How far the element sits outside the list.
+            let gap = below ? frame.minY - list.maxY : list.minY - frame.maxY
+            if gap > list.height * 1.5 {
+                // Far off: a swipe (about half a screen and more) can't
+                // carry it past the list.
+                below ? app.swipeUp(velocity: .slow) : app.swipeDown(velocity: .slow)
+            } else {
+                drag(app, in: list, by: list.height * 0.4, up: below)
+            }
         }
-        while element.frame.minY < window.height * 0.12 && swipes < 20 {
-            app.swipeDown(velocity: .slow)
-            swipes += 1
-        }
-        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertFalse(shown.isNull || shown.height < 1, "\(element) never came into the lesson's list: \(element.frame)")
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: shown.midX, dy: shown.midY)).tap()
+    }
+
+    /// The lesson's list on screen, between its header and the "Jump to
+    /// latest" strip or the composer (it shrinks while the strip shows).
+    @MainActor
+    private func readingArea(_ app: XCUIApplication) -> CGRect {
+        let list = app.scrollViews.firstMatch
+        let frame = list.exists ? list.frame : .null
+        return frame.isNull || frame.height < 100 ? app.windows.firstMatch.frame : frame
+    }
+
+    /// Moves the list by `distance` points, held at the end so it doesn't
+    /// coast, from a point inside the list (a drag that starts on the "Jump
+    /// to latest" strip doesn't scroll).
+    @MainActor
+    private func drag(_ app: XCUIApplication, in list: CGRect, by distance: CGFloat, up: Bool) {
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let low = origin.withOffset(CGVector(dx: list.midX, dy: list.midY + distance / 2))
+        let high = origin.withOffset(CGVector(dx: list.midX, dy: list.midY - distance / 2))
+        (up ? low : high).press(forDuration: 0.05, thenDragTo: up ? high : low, withVelocity: .slow,
+                                thenHoldForDuration: 0.2)
     }
 }

@@ -929,14 +929,22 @@ struct MessageListView: View {
                 // A card brings a part of itself into view (Patch the
                 // Reward's track while a run plays, out of sight above the
                 // chip the student tapped): the least scroll that shows it,
-                // counted as the student's own move.
+                // counted as the student's own move. On the next turn of the
+                // main queue: a card asks from `onChange`, in the update that
+                // resizes the part (Patch the Reward's panel opens its
+                // question), and the proxy scrolls to the part's laid-out
+                // frame: asked inside that update, it could aim at the frame
+                // from before it. (ScrollViewReader and its scrollTo are
+                // older than the iOS 17 target; nothing here is newer.)
                 .environment(\.interactiveScrollIntoView,
                              InteractiveScrollAction(key: "lesson-list") { [scroll] id, animated in
                                  scroll.policy.partJumped()
-                                 if animated {
-                                     withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
-                                 } else {
-                                     proxy.scrollTo(id, anchor: nil)
+                                 DispatchQueue.main.async {
+                                     if animated {
+                                         withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
+                                     } else {
+                                         proxy.scrollTo(id, anchor: nil)
+                                     }
                                  }
                              })
                 .modifier(StudentScrollTracking { scrolling in

@@ -153,7 +153,7 @@ struct LessonInteractivePlacement { messageID, position (section, afterBlock), c
 - the tokenizer is drawn by `LessonTokenizerCard` / `NightInteractiveCard`, exactly as before;
 - every other card is drawn by `LessonInteractiveCardView`, which calls `InteractiveCardViews.card(InteractiveCardContext(spec, spoiled, store))`. The store is the lesson list's `InteractiveStateStore`, which lives only in memory and starts fresh on a new lesson screen.
 - The card carries the scroll ids `InteractiveScrollID.card` / `.top` / `.after`, and the card marks `.reveal` itself.
-- **Bringing a part into view.** The list hands every card `\.interactiveScrollIntoView` (`InteractiveScrollAction`, on both platforms; the DEBUG gallery has one too). A card whose control can sit a screen away from where its result shows (Patch the Reward: the chips are about 900 pt below the track) marks the part with `.interactiveScrollMark(InteractiveScrollID.stage)` (or `.panel`, `.reveal`: the id with a little room above and below, so the part lands clear of the Mac's edge fades) and calls `scrollIntoView(id, animated: !theme.reduceMotion)` when the student sets something off there. The list scrolls the least that shows the whole part (nothing when it already shows) and counts it as the student's own move (`MessageScrollPolicy.partJumped()`: a streaming reply stops being followed). Call it only after a tap, never on its own timer, and not at all where the parts can't share a screen (the accessibility sizes: show the result where the student tapped instead).
+- **Bringing a part into view.** The list hands every card `\.interactiveScrollIntoView` (`InteractiveScrollAction`, on both platforms; the DEBUG gallery has one too). A card whose control can sit a screen away from where its result shows (Patch the Reward: the chips are about 900 pt below the track) marks the part with `.interactiveScrollMark(InteractiveScrollID.stage)` (or `.panel`, `.reveal`: the id with a little room above and below, so the part lands clear of the Mac's edge fades) and calls `scrollIntoView(id, animated: !theme.reduceMotion)` when the student sets something off there. The list scrolls the least that shows the whole part (nothing when it already shows) and counts it as the student's own move (`MessageScrollPolicy.partJumped()`: a streaming reply stops being followed). It scrolls on the next turn of the main queue, after the update that asked has been laid out, so a card may ask from `onChange`. Mark a part that fits the reading area: for a taller one `scrollTo(_:anchor: nil)` doesn't define which edge shows, so it can differ between iOS versions (the Citation scrolls to its draw's button, with the result above it, not to the whole draw, which is about 1,000 pt at AX5). Call it only after a tap, never on its own timer, and not at all where the parts can't share a screen (the accessibility sizes: show the result where the student tapped instead).
 
 ---
 
@@ -421,3 +421,13 @@ Copy `MercuriusTests/TokenizerCardLayoutTests.swift`. It renders the card with `
 - `ios-unchanged-check.sh`: the same 23 results and pixels.
 - Mac: the Debug build and the unsigned universal Release build succeed; shots from a renamed copy.
 - Key shots: `docs/interactives/key-shots/<slug>-iphone.jpg` and `<slug>-mac.jpg` for every card, the same way for each, plus `family-iphone.jpg` and `family-mac.jpg`.
+
+---
+
+## 11. The Citation's AX5 walk on CI (2026-10-22)
+
+CI (iPhone 16, iOS 18.x) failed the Citation's AX5 walk at the title step. The test's tap had landed on the "Jump to latest" strip (the centre of a 448 pt candidate hung below the list), so no guess was made. The keep-in-view itself worked on iOS 18 for the steps it reached, and off-screen controls were in the accessibility tree. The fix: the test touches the part of a row that shows inside the list; a draw scrolls to its button, which always fits (§3, Drawing); the shared scroll action waits a main-queue turn; the CI test step gets 80 minutes.
+- `swift test` (empty scratch path): 1,441 tests pass. CI lint: 0 findings.
+- iPhone 16 (393 × 852, iOS 26.4, CI's screen): both Citation UI tests pass.
+- IA-1 16 Pro Max (iOS 26.4): all 18 interactive UI tests pass. Under a load average near 20, six first failed with simulator timeouts ("Timed out while synthesizing event"). On a rebooted simulator, five passed together and Doubt Dial passed alone.
+- No iOS 17 or 18 runtime locally: every API in the scroll path (ScrollViewReader, `scrollTo`, `Task.sleep(for:)`, `DispatchQueue.main.async`) predates the iOS 17 target.
