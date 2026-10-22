@@ -19,6 +19,13 @@ import DesignSystem
 /// - VoiceOver: the steps are headers; each candidate says its slot, its
 ///   chance (illustrative) and "1 of 3"; what the student caused is
 ///   announced (the draw, the finished reference, the reveal, the rewrite).
+///   On the iPhone, where the button just pressed goes away, VoiceOver's
+///   focus moves to what replaced it (the next step's heading, the five
+///   drawn pieces, the reveal, the second reference) instead.
+/// - Release builds keep what a tap changed in view: at the accessibility
+///   sizes the draw's result, the next step or the reveal can be a screen
+///   away from the button pressed (`keepInView`; a jump under Reduce
+///   Motion).
 struct CitationCardBody: View {
     let state: CitationState
 
@@ -35,6 +42,12 @@ struct CitationCardBody: View {
     /// The Mac's one glow when the reference is finished.
     @State private var glow = 0.0
     @State private var width: CGFloat = 0
+    /// The list the card is in (the lesson's, or the gallery's).
+    @State private var scroller: ScrollViewProxy?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverOn
+    #if os(iOS)
+    @AccessibilityFocusState private var voiceOverFocus: CitationVoiceOverTarget?
+    #endif
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -53,6 +66,7 @@ struct CitationCardBody: View {
             .overlay(alignment: .bottom) {
                 Color.clear.frame(height: 1).id(CitationScrollID.end).accessibilityHidden(true)
             }
+            .onAppear { scroller = proxy }
             .onGeometryChange(for: CGFloat.self) { geo in
                 geo.size.width
             } action: { newWidth in
@@ -95,7 +109,7 @@ struct CitationCardBody: View {
         #endif
     }
 
-    // MARK: Be the model
+    // MARK: Guess the next piece
 
     private var walkSection: some View {
         let walk = state.walk
@@ -112,6 +126,8 @@ struct CitationCardBody: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(CitationCopy.stripAccessibility(walk))
                 .accessibilityAddTraits(.isHeader)
+                .citationFocusTarget(.step, focus: voiceOverFocusBinding)
+                .id(CitationScrollID.step)
             if walk.canGuess {
                 Text(CitationCopy.walkPrompt)
                     .interactiveText(.callout)
@@ -129,6 +145,7 @@ struct CitationCardBody: View {
             // the canvas below them, at every step.
             if walk.isDrawn(slot) {
                 drawn(slot)
+                    .id(CitationScrollID.drawn)
                     .transition(theme.transition())
             }
             LabelLine(CitationCopy.chancesLabel)
@@ -214,6 +231,11 @@ struct CitationCardBody: View {
                         .interactiveText(.calloutStrong)
                         .foregroundStyle(theme.accentText)
                 }
+                if let note = CitationCopy.drawNote(walk, slot: slot) {
+                    Text(note)
+                        .interactiveText(.callout)
+                        .foregroundStyle(theme.ink)
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
@@ -234,6 +256,7 @@ struct CitationCardBody: View {
                 .interactiveText(.heading)
                 .foregroundStyle(theme.ink)
                 .accessibilityAddTraits(.isHeader)
+                .citationFocusTarget(.finished, focus: voiceOverFocusBinding)
             CitationPickRows(path: state.walk.path, lit: state.isRevealed)
             LabelLine(CitationCopy.chancesLabel)
             Text(CitationCopy.finishedCaption)
@@ -265,6 +288,7 @@ struct CitationCardBody: View {
         if state.isRevealed {
             VStack(alignment: .leading, spacing: theme.rowSpacing) {
                 RevealBox(state.revealLines)
+                    .citationFocusTarget(.reveal, focus: voiceOverFocusBinding)
                 Text(CitationCopy.topicNote)
                     .interactiveText(.callout)
                     .foregroundStyle(theme.ink2)
@@ -282,6 +306,13 @@ struct CitationCardBody: View {
             if state.rewritten {
                 VStack(alignment: .leading, spacing: theme.rowSpacing) {
                     reply(header: CitationCopy.askedAgain, picks: secondPicks, current: nil, glow: 0)
+                        .citationFocusTarget(.rewritten, focus: voiceOverFocusBinding)
+                    // Its first draw against step 1's bars, the only
+                    // chances a second try shares.
+                    Text(CitationCopy.rewriteNote)
+                        .interactiveText(.callout)
+                        .foregroundStyle(theme.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(CitationCopy.rewriteCaption)
                         .interactiveText(.callout)
                         .foregroundStyle(theme.ink)
@@ -318,6 +349,8 @@ struct CitationCardBody: View {
         withAnimation(theme.animation(InteractiveMotion.change)) { line = state.guess(index) }
         guard let line else { return }
         InteractiveAccessibility.announce(line)
+        // The draw's result and "Next piece", under the three candidates.
+        keepInView(CitationScrollID.drawn, anchor: nil)
         if fromKeyboard { bump { nextFocus += 1 } }
     }
 
@@ -325,7 +358,13 @@ struct CitationCardBody: View {
         var line: String?
         withAnimation(theme.animation(InteractiveMotion.change)) { line = state.advance() }
         guard let line else { return }
-        InteractiveAccessibility.announce(line)
+        if state.walk.finished {
+            keepInView(CitationScrollID.finished, anchor: .top)
+            moveVoiceOver(to: .finished, orAnnounce: line)
+        } else {
+            keepInView(CitationScrollID.step, anchor: nil)
+            moveVoiceOver(to: .step, orAnnounce: line)
+        }
         guard keyboardFlow else { return }
         if state.walk.finished {
             bump { if state.machine.asksForPrediction { chipsFocus += 1 } else { rewriteFocus += 1 } }
@@ -336,27 +375,72 @@ struct CitationCardBody: View {
 
     private func lock(_ choice: CitationStepGuess) {
         withAnimation(theme.animation(InteractiveMotion.change)) { _ = state.lock(choice) }
+        keepInView(CitationScrollID.showMe, anchor: nil)
         if keyboardFlow { bump { showMeFocus += 1 } }
     }
 
     private func reveal() {
         var line: String?
         withAnimation(theme.animation(InteractiveMotion.change)) { line = state.reveal() }
-        if let line { InteractiveAccessibility.announce(line) }
+        if let line {
+            keepInView(InteractiveScrollID.reveal, anchor: theme.usesTables ? .top : nil)
+            moveVoiceOver(to: .reveal, orAnnounce: line)
+        }
         if keyboardFlow { bump { rewriteFocus += 1 } }
     }
 
     private func rewrite() {
         var line: String?
         withAnimation(theme.animation(InteractiveMotion.change)) { line = state.rewrite() }
-        if let line { InteractiveAccessibility.announce(line) }
+        if let line {
+            keepInView(CitationScrollID.askedAgain, anchor: theme.usesTables ? .top : nil)
+            moveVoiceOver(to: .rewritten, orAnnounce: line)
+        }
+    }
+
+    /// What a tap changed, in view: `anchor` nil scrolls the least that
+    /// shows all of it (nothing, when it already shows); `.top` puts it at
+    /// the top of the reading area. A jump under Reduce Motion. In release
+    /// builds too: the shots' DEBUG scrolls are separate.
+    private func keepInView(_ id: String, anchor: UnitPoint?) {
+        bump {
+            guard let scroller else { return }
+            if theme.reduceMotion {
+                scroller.scrollTo(id, anchor: anchor)
+            } else {
+                withAnimation(InteractiveMotion.change) { scroller.scrollTo(id, anchor: anchor) }
+            }
+        }
+    }
+
+    /// The iPhone: the button just pressed is gone, so VoiceOver's focus
+    /// moves to what replaced it, which reads the same news as `line`. The
+    /// Mac keeps the announcement (its keyboard flow moves focus itself).
+    private func moveVoiceOver(to target: CitationVoiceOverTarget, orAnnounce line: String) {
+        #if os(iOS)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            voiceOverFocus = target
+        }
+        #else
+        InteractiveAccessibility.announce(line)
+        #endif
+    }
+
+    private var voiceOverFocusBinding: CitationVoiceOverFocus {
+        #if os(iOS)
+        CitationVoiceOverFocus(binding: $voiceOverFocus)
+        #else
+        CitationVoiceOverFocus()
+        #endif
     }
 
     /// The second reference's pieces, one after another (all at once under
-    /// Reduce Motion). Resumes where it was if the view is redrawn.
+    /// Reduce Motion, and for VoiceOver, which reads it whole). Resumes
+    /// where it was if the view is redrawn.
     private func writeAgainPieces() async {
         guard state.rewritten else { return }
-        if theme.reduceMotion {
+        if theme.reduceMotion || voiceOverOn {
             withAnimation(InteractiveMotion.crossfade) { state.rewriteShown = CitationContent.slotCount }
             return
         }

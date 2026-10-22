@@ -7,14 +7,56 @@ import DesignSystem
 // the five drawn pieces. The Mac's own pieces (the night-sky reply, the
 // candidate columns and their keys) are in Views/Mac/NightCitationCard.swift.
 
-/// The scroll ids inside the card (DEBUG autoplay keeps the newest part in
-/// view; the reveal's id is the framework's).
+/// The scroll ids inside the card (a tap keeps what it changed in view;
+/// DEBUG autoplay keeps the newest part in view; the reveal's id is the
+/// framework's).
 enum CitationScrollID {
     static let walk = "citation-walk"
+    /// The step's heading ("Step 2 of 5 · Year").
+    static let step = "citation-step"
+    /// A draw's result and "Next piece".
+    static let drawn = "citation-drawn"
     static let finished = "citation-finished"
     static let showMe = "citation-show-me"
     static let askedAgain = "citation-asked-again"
     static let end = "citation-end"
+}
+
+/// Where VoiceOver's focus goes on the iPhone after a tap that took away
+/// the button pressed: what replaced it.
+enum CitationVoiceOverTarget: Hashable, Sendable {
+    case step, finished, reveal, rewritten
+}
+
+/// The iPhone's VoiceOver focus for the card (the Mac has none: its
+/// keyboard flow moves focus, and VoiceOver follows it).
+struct CitationVoiceOverFocus {
+    #if os(iOS)
+    var binding: AccessibilityFocusState<CitationVoiceOverTarget?>.Binding?
+
+    init(binding: AccessibilityFocusState<CitationVoiceOverTarget?>.Binding) {
+        self.binding = binding
+    }
+    #endif
+
+    init() {}
+}
+
+extension View {
+    /// This element takes VoiceOver's focus when `focus` moves to `target`
+    /// (the iPhone; nothing on the Mac).
+    @ViewBuilder
+    func citationFocusTarget(_ target: CitationVoiceOverTarget, focus: CitationVoiceOverFocus) -> some View {
+        #if os(iOS)
+        if let binding = focus.binding {
+            accessibilityFocused(binding, equals: target)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
 }
 
 /// A candidate's VoiceOver traits: a button while its slot takes a guess;

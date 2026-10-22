@@ -9,7 +9,7 @@ public enum CitationCopy {
     public static let title = "The citation that wasn\u{2019}t"
 
     /// The Mac's compact card (narrower than 440 pt).
-    public static let compactLine = "Be the model: write a study\u{2019}s reference one likely piece at a time, and see how a source that never existed gets written."
+    public static let compactLine = "Guess each piece as a model writes a study\u{2019}s reference, and see how a source that never existed gets written."
 
     // MARK: The hook
 
@@ -20,10 +20,12 @@ public enum CitationCopy {
 
     // MARK: The labels (on the canvas, never a footnote)
 
-    /// Under the example reply. SLATE.md's first and third labels.
+    /// Under the example reply. SLATE.md's first and third labels (the
+    /// third with a subject, so it can't read as how the lesson was
+    /// written: CONTENT.md "Changes from the slate").
     public static let replyLabel = InteractiveLabel(
         .example,
-        "Example, written for this lesson. Every name in this reference is invented. Writing from memory, with no search."
+        "Example, written for this lesson. Every name in this reference is invented. The model here writes from memory, with no search."
     )
     /// Beside the bars. SLATE.md's first label's last sentence, and its
     /// second label.
@@ -35,13 +37,15 @@ public enum CitationCopy {
     public static let labels: [InteractiveLabel] = [replyLabel, chancesLabel]
 
     /// The slate's three on-card labels, sentence by sentence: each one is
-    /// in `labels` word for word (a test holds this).
+    /// in `labels` word for word (a test holds this). The last has gained
+    /// its subject ("The model here…"; the slate's "Writing from memory,
+    /// with no search.").
     public static let slateLabelSentences: [String] = [
         "Example, written for this lesson.",
         "Every name in this reference is invented.",
         "The chances are illustrative, not from a real model.",
         "Shown a few words at a time; real models go one small piece (token) at a time.",
-        "Writing from memory, with no search.",
+        "The model here writes from memory, with no search.",
     ]
 
     // MARK: The slots
@@ -89,11 +93,13 @@ public enum CitationCopy {
         }
     }
 
-    // MARK: Be the model
+    // MARK: Guess the next piece
 
-    public static let walkHeading = "Be the model"
-    /// "Pick", not "tap": the Mac clicks and keys.
-    public static let walkPrompt = "Pick the piece you think gets written next."
+    /// The student guesses; the model draws (their tap never writes the
+    /// piece, so the heading doesn't say "Be the model").
+    public static let walkHeading = "Guess the next piece"
+    /// No "tap": the Mac clicks and keys.
+    public static let walkPrompt = "Which piece will the model draw next?"
     /// "Step 2 of 5 · Year". "Step 2 of 5 ·" holds together (its spaces
     /// don't break), so at the accessibility sizes the line breaks only
     /// before the slot's name, never inside the count or before the dot.
@@ -114,14 +120,33 @@ public enum CitationCopy {
         return "The model drew \(piece) this time."
     }
 
-    /// When the pick isn't the top bar.
-    public static let notTopLine = "Drawn by chance, not always the top bar."
+    /// When the pick isn't the likeliest. ("Likeliest", not "the top bar":
+    /// the bars go at the accessibility sizes, and stand as columns on the
+    /// Mac.)
+    public static let notTopLine = "Drawn by chance, not always the likeliest."
+
+    /// The title's draw: the likeliest title restates the question, which
+    /// is why it reads as the right answer.
+    public static let titleEchoLine = "The likeliest title just echoes the question. That\u{2019}s why it sounds so right."
+
+    /// An extra line under a draw, where the slot has one: the title, when
+    /// the model drew the likeliest one (the walk does).
+    public static func drawNote(_ walk: CitationWalk, slot: CitationSlot) -> String? {
+        guard slot == .title, CitationContent.isTopBar(path: walk.path, slot: slot) else { return nil }
+        return titleEchoLine
+    }
 
     public static let nextPiece = "Next piece"
     public static let finishWalk = "See the finished reference"
 
     public static let finishedHeading = "The five pieces it drew"
-    public static let finishedCaption = "The finished text looks equally sure at every step."
+    /// Under the five drawn pieces: their chances' range, re-derived from
+    /// the walk's path ("from 8% to 62%"), against the text's even look.
+    public static var finishedCaption: String {
+        let low = CitationContent.picked(path: 0, slot: CitationContent.leastLikely(path: 0)).percent
+        let high = CitationContent.picked(path: 0, slot: CitationContent.mostLikely(path: 0)).percent
+        return "Its chances ran from \(low)% to \(high)%, but the finished text looks equally sure at every step."
+    }
 
     // MARK: Predict, then reveal
 
@@ -136,22 +161,72 @@ public enum CitationCopy {
         }
     }
 
-    public static let revealResult = "No step did. None of these steps chose to invent it, and none of them checks that the source is real. Each piece was just a likely next piece."
-    /// Said as the reveal appears (SLATE.md's VoiceOver line).
-    public static let revealAnnouncement = "No step decided to make it up. Each piece was a likely next piece, and no step checks that the source is real."
+    /// The reveal's first sentences, whatever the guess.
+    public static let revealOpening = "No step did. None of these steps chose to invent it, and none of them checks that the source is real."
+
+    /// The reveal's last sentence answers the reason behind the guess
+    /// (refutation text names the idea, then refutes it: RESEARCH.md §1).
+    /// Two choices are the low bars, which invites "the unlikely piece is
+    /// the made-up part": the answer sets each beside a likelier piece
+    /// that is just as made up. Never right or wrong. Every number is the
+    /// walk's, re-derived (nil: spoiled mode, no guess).
+    public static func revealAnswer(_ guess: CitationStepGuess?) -> String {
+        func percent(_ slot: CitationSlot) -> Int { CitationContent.picked(path: 0, slot: slot).percent }
+        let low = percent(CitationContent.leastLikely(path: 0))
+        let high = percent(CitationContent.mostLikely(path: 0))
+        switch guess {
+        case .author:
+            return "The author was the first invented piece, but that step only drew one likely-looking name (\(percent(.firstAuthor))%)."
+        case .journal:
+            return "The journal (\(percent(.journal))%) is as made up as the author (\(percent(.firstAuthor))%): each was just one of the likeliest next pieces."
+        case .pageNumbers:
+            return "The page numbers were the least likely piece (\(percent(.volumeAndPages))%), but the title (\(percent(.title))%) is just as made up."
+        case .noStep, nil:
+            return "Each piece, at \(low)% or at \(high)%, was just one of the likeliest next pieces."
+        }
+    }
+
+    /// What happened, as the reveal shows it.
+    public static func revealResult(_ guess: CitationStepGuess?) -> String {
+        "\(revealOpening) \(revealAnswer(guess))"
+    }
+
+    /// Said as the reveal appears (SLATE.md's VoiceOver line, then the
+    /// answer to the guess).
+    public static let revealAnnouncementOpening = "No step decided to make it up, and no step checks that the source is real."
+
+    public static func revealAnnouncement(_ guess: CitationStepGuess?) -> String {
+        "\(revealAnnouncementOpening) \(revealAnswer(guess))"
+    }
+
     public static let topicNote = "There may be real research on this question. This reference isn\u{2019}t part of it."
 
     // MARK: Write it again
 
     public static let rewrite = "Write it again"
-    public static let rewriteHint = "Draws another reference from the same chances"
+    /// It starts again from the first piece. (Not "from the same chances":
+    /// in a real model only the first piece's chances would be the same.)
+    public static let rewriteHint = "Draws again from the start, one likely piece at a time"
     public static let askedAgain = "The same question, asked again"
-    public static let rewriteCaption = "A model draws from these chances, so the same question can get a different made-up source."
+    /// Under the second reference: its first draw, set against the bars
+    /// the student saw at step 1 (the only step whose chances a second
+    /// try shares; every later piece's chances depend on what came before
+    /// it). Re-derived from both paths.
+    public static var rewriteNote: String {
+        let first = CitationContent.picked(path: CitationContent.rewritePath, slot: .firstAuthor)
+        let before = CitationContent.picked(path: 0, slot: .firstAuthor)
+        return "This time the first draw was \(first.text) (\(first.percent)%), not \(before.text) (\(before.percent)%), and every piece after it followed from that start."
+    }
+    public static let rewriteCaption = "A model draws from its chances at every step, so the same question can get a different made-up source."
 
     // MARK: The takeaway
 
-    public static let takeawayHeading = "Likely isn\u{2019}t true."
-    public static let takeaway = "In Mata v. Avianca (2023), lawyers filed a brief citing court cases ChatGPT had invented, and a federal judge fined them and their firm $5,000."
+    /// "Likely isn't the same as true", not the slate's "Likely isn't
+    /// true." (read as "probably isn't true").
+    public static let takeawayHeading = "Likely isn\u{2019}t the same as true."
+    /// A callback to Merc's own example above the card (the guide's Mata v.
+    /// Avianca line), not a repeat of it: the case's year only.
+    public static let takeaway = "ChatGPT wrote the fake court cases in Mata v. Avianca (2023) the same way, one likely piece at a time."
 
     // MARK: VoiceOver
 
@@ -200,6 +275,7 @@ public enum CitationCopy {
     public static func drawAnnouncement(_ walk: CitationWalk, slot: CitationSlot) -> String {
         var line = drawnLine(walk, slot: slot)
         if !CitationContent.isTopBar(path: walk.path, slot: slot) { line += " " + notTopLine }
+        if let note = drawNote(walk, slot: slot) { line += " " + note }
         if walk.isComplete {
             line += " The reference is finished: \(CitationContent.spokenReference(path: walk.path))"
         }
@@ -218,17 +294,21 @@ public enum CitationCopy {
 
     public static func rewriteAnnouncement() -> String {
         let path = CitationContent.rewritePath
-        return "Written again: \(CitationContent.spokenReference(path: path)) \(rewriteCaption)"
+        return "Written again: \(CitationContent.spokenReference(path: path)) \(rewriteNote) \(rewriteCaption)"
     }
+
+    /// The reveal in the card's one-sentence state (the reference was made
+    /// up, piece by piece; no step decided to).
+    public static let revealedSummary = "No step decided to make it up: each piece was one of the likeliest next pieces, and no step checks that the source is real."
 
     /// The card's state in one sentence (the title's VoiceOver value).
     public static func accessibilitySummary(walk: CitationWalk, guess: CitationStepGuess?, revealed: Bool,
                                             spoiled: Bool, rewritten: Bool) -> String {
         if rewritten {
-            return "Written again, from the same chances: \(CitationContent.spokenReference(path: CitationContent.rewritePath)) A different made-up source."
+            return "Written again: \(CitationContent.spokenReference(path: CitationContent.rewritePath)) A different made-up source."
         }
         if revealed {
-            return "No step made it up: each piece was a likely next piece, and no step checks that the source is real."
+            return revealedSummary
         }
         if walk.finished {
             if let guess { return "Your guess: \(choiceTitle(guess)). Show me is next." }
@@ -238,18 +318,36 @@ public enum CitationCopy {
         if walk.isDrawn(slot) {
             let candidate = CitationContent.picked(path: walk.path, slot: slot)
             let rank = CitationContent.rank(of: walk.pick(slot), in: slot)
-            let bar = rank == 1 ? "the top bar" : "bar \(rank) of \(CitationContent.candidates(slot).count)"
+            let bar = rank == 1 ? "the likeliest" : "the \(ordinal(rank)) likeliest of \(CitationContent.candidates(slot).count)"
             return "\(walk.steps.position), \(slotName(slot)): the model drew \(candidate.spoken), at \(candidate.percent) percent, \(bar)."
         }
         return "\(walk.steps.position), \(slotName(slot)): \(walkPrompt)"
     }
 
+    /// "2nd", "3rd" (a slot has three candidates).
+    static func ordinal(_ rank: Int) -> String {
+        switch rank {
+        case 1: return "1st"
+        case 2: return "2nd"
+        case 3: return "3rd"
+        default: return "\(rank)th"
+        }
+    }
+
     // MARK: The rules' lists
+
+    /// Every guess the reveal answers, and spoiled mode's none.
+    static var everyRevealGuess: [CitationStepGuess?] {
+        [nil] + CitationStepGuess.allCases.map(Optional.some)
+    }
 
     /// The prediction and the reveal lines that refute it: the only lines
     /// that may say "decided" or "chose".
     public static var predictionLines: [String] {
-        [predictionPrompt, revealResult, revealAnnouncement] + CitationStepGuess.allCases.map(choiceTitle)
+        [predictionPrompt, revealedSummary]
+            + everyRevealGuess.map(revealResult)
+            + everyRevealGuess.map(revealAnnouncement)
+            + CitationStepGuess.allCases.map(choiceTitle)
     }
 
     /// Every line the card shows or speaks (with its variable lines filled
@@ -257,11 +355,12 @@ public enum CitationCopy {
     public static var everyLine: [String] {
         var lines: [String] = [
             title, compactLine, studentQuestion, studentAccessibility, replyEyebrow, replyOpening,
-            walkHeading, walkPrompt, pickedTag, guessTag, notTopLine, nextPiece, finishWalk,
-            finishedHeading, finishedCaption, predictionPrompt, revealResult, revealAnnouncement, topicNote,
-            rewrite, rewriteHint, askedAgain, rewriteCaption, takeawayHeading, takeaway,
-            finishedAnnouncement(path: 0), rewriteAnnouncement(),
+            walkHeading, walkPrompt, pickedTag, guessTag, notTopLine, titleEchoLine, nextPiece, finishWalk,
+            finishedHeading, finishedCaption, predictionPrompt, revealedSummary, topicNote, rewrite, rewriteHint, askedAgain, rewriteNote, rewriteCaption,
+            takeawayHeading, takeaway, finishedAnnouncement(path: 0), rewriteAnnouncement()
         ]
+        lines += everyRevealGuess.map(revealResult)
+        lines += everyRevealGuess.map(revealAnnouncement)
         lines += labels.map(\.text)
         lines += CitationStepGuess.allCases.map(choiceTitle)
         for slot in CitationSlot.allCases {

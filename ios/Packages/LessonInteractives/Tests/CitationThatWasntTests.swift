@@ -3,9 +3,12 @@ import Testing
 @testable import LessonInteractives
 
 /// The Citation That Wasn't (u1_l3): content, copy, state and VoiceOver.
-/// Every number the card shows is re-derived here from its authored data
-/// (the slate's slate.json `data` is the cross-check; CONTENT.md §2 lists
-/// each number's source).
+/// The fifteen chances are asserted against the slate's values, typed in
+/// here (slate.json lives outside the repo, so that comparison was done by
+/// hand; CONTENT.md §2). Everything built from them is re-derived: the
+/// ranks, the picks, both references, the counts, and every chance a line
+/// quotes (the reveal's answers, the finished caption's range, the
+/// rewrite's first draw).
 @Suite("The Citation That Wasn't: content")
 struct CitationContentTests {
     @Test("Five slots, three candidates each, with the slate's chances")
@@ -13,8 +16,8 @@ struct CitationContentTests {
         #expect(CitationSlot.allCases.count == 5)
         #expect(CitationContent.candidates.count == 5)
         #expect(CitationContent.candidates.allSatisfy { $0.count == 3 })
-        // slate.json data.slots, in order (the chances are authored and
-        // illustrative; no model produced them).
+        // The slate's data.slots, in order, typed in (the chances are
+        // authored and illustrative; no model produced them).
         let percents = CitationContent.candidates.map { $0.map(\.percent) }
         #expect(percents == [[12, 11, 9], [24, 21, 19], [62, 14, 8], [41, 22, 10], [8, 7, 7]])
         #expect(CitationContent.displayedPercents == percents.flatMap { $0 })
@@ -87,11 +90,56 @@ struct CitationContentTests {
         #expect(CitationContent.guideMata.contains("(\(CitationContent.mataYear))"))
         #expect(CitationContent.guideMata.contains("$5,000"))
         #expect(CitationContent.mataFine == 5_000)
-        #expect(CitationCopy.takeaway.contains("(2023)") && CitationCopy.takeaway.contains("$5,000"))
-        // Nothing else in the takeaway is a number.
+        // The takeaway calls back to the guide's case by name and year
+        // (Merc's reply above the card gives the rest): its only number.
+        #expect(CitationCopy.takeaway.contains("Mata v. Avianca (\(CitationContent.mataYear))"))
         let numbers = CitationCopy.takeaway.split(whereSeparator: { !$0.isNumber && $0 != "," })
             .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ",")) }.filter { !$0.isEmpty }
-        #expect(numbers == ["2023", "5,000"])
+        #expect(numbers == ["2023"])
+    }
+
+    @Test("Every chance a line quotes is re-derived from the paths")
+    func quotedChances() {
+        // The walk's lowest and highest drawn chances: the pages and the
+        // title.
+        #expect(CitationContent.leastLikely(path: 0) == .volumeAndPages)
+        #expect(CitationContent.mostLikely(path: 0) == .title)
+        let low = CitationContent.picked(path: 0, slot: .volumeAndPages).percent
+        let high = CitationContent.picked(path: 0, slot: .title).percent
+        let author = CitationContent.picked(path: 0, slot: .firstAuthor).percent
+        let journal = CitationContent.picked(path: 0, slot: .journal).percent
+        let quoted: [Int] = [low, high, author, journal]
+        #expect(quoted == [8, 62, 12, 41])
+        let drawn = CitationSlot.allCases.map { CitationContent.picked(path: 0, slot: $0).percent }
+        #expect(drawn.min() == Optional(low) && drawn.max() == Optional(high))
+        // The finished caption: the range, not "equally sure" alone.
+        #expect(CitationCopy.finishedCaption
+                == "Its chances ran from \(low)% to \(high)%, but the finished text looks equally sure at every step.")
+        // The reveal's answers quote only the walk's own chances.
+        #expect(CitationCopy.revealAnswer(.author).contains("(\(author)%)"))
+        #expect(CitationCopy.revealAnswer(.journal).contains("(\(journal)%)")
+                && CitationCopy.revealAnswer(.journal).contains("(\(author)%)"))
+        #expect(CitationCopy.revealAnswer(.pageNumbers).contains("(\(low)%)")
+                && CitationCopy.revealAnswer(.pageNumbers).contains("(\(high)%)"))
+        #expect(CitationCopy.revealAnswer(.noStep).contains("at \(low)% or at \(high)%"))
+        #expect(CitationCopy.revealAnswer(nil) == CitationCopy.revealAnswer(.noStep))
+        // The rewrite's first draw against step 1's bars: Ambervale (11%)
+        // for Quillfeather (12%). Only the first slot: its chances are the
+        // only ones a second try shares.
+        let again = CitationContent.picked(path: CitationContent.rewritePath, slot: .firstAuthor)
+        let before = CitationContent.picked(path: 0, slot: .firstAuthor)
+        let firstDraws: [Int] = [again.percent, before.percent]
+        #expect(firstDraws == [11, 12])
+        #expect(CitationCopy.rewriteNote.contains("\(again.text) (\(again.percent)%)"))
+        #expect(CitationCopy.rewriteNote.contains("not \(before.text) (\(before.percent)%)"))
+        for other in CitationSlot.allCases where other != .firstAuthor {
+            let percent = CitationContent.picked(path: CitationContent.rewritePath, slot: other).percent
+            #expect(!CitationCopy.rewriteNote.contains("\(percent)%"), "\(other): a later slot's chance")
+        }
+        // Nothing claims a second try reuses every step's chances.
+        for line in CitationCopy.everyLine {
+            #expect(!line.contains("same chances"), "\(line)")
+        }
     }
 
     @Test("Every number on the card is a listed chance, a step count or the guide's two numbers")
@@ -188,13 +236,17 @@ struct CitationCopyTests {
         let found = InteractiveCopyRules.violations(in: CitationCopy.everyLine, card: .citationThatWasnt,
                                                     predictionLines: CitationCopy.predictionLines)
         #expect(found.isEmpty, "\(found)")
-        // "decided" is said only by the reveal that refutes it.
+        // "decided" is said only by the question and the reveal that
+        // refutes it (spoken, and in the card's one-sentence state).
         let deciding = CitationCopy.everyLine.filter { $0.range(of: #"\bdecide"#, options: .regularExpression) != nil }
-        #expect(Set(deciding) == [CitationCopy.predictionPrompt, CitationCopy.revealAnnouncement])
+        let refuting = CitationCopy.everyRevealGuess.map(CitationCopy.revealAnnouncement)
+        #expect(Set(deciding) == Set([CitationCopy.predictionPrompt, CitationCopy.revealedSummary] + refuting))
+        #expect(refuting.allSatisfy { $0.hasPrefix(CitationCopy.revealAnnouncementOpening) })
+        #expect(CitationCopy.revealedSummary.hasPrefix("No step decided to make it up"))
         // No other intent words anywhere (knows, lies, wants…), the
         // prediction included.
         let others = InteractiveCopyRules.violations(in: CitationCopy.everyLine, card: .citationThatWasnt,
-                                                     predictionLines: [CitationCopy.revealAnnouncement])
+                                                     predictionLines: [CitationCopy.revealedSummary] + refuting)
         #expect(others.isEmpty, "\(others)")
     }
 
@@ -215,11 +267,27 @@ struct CitationCopyTests {
         }
     }
 
-    @Test("The reveal says no step did, and only that this reference isn't real")
+    @Test("The reveal says no step did, answers the guess, and says only that this reference isn't real")
     func reveal() {
-        #expect(CitationCopy.revealResult.hasPrefix("No step did."))
-        #expect(CitationCopy.revealResult.contains("none of them checks that the source is real"))
+        for guess in CitationCopy.everyRevealGuess {
+            let result = CitationCopy.revealResult(guess)
+            #expect(result.hasPrefix("No step did."), "\(String(describing: guess))")
+            #expect(result.contains("none of them checks that the source is real"))
+            #expect(result.hasSuffix(CitationCopy.revealAnswer(guess)))
+            // Never a score.
+            let lower = result.lowercased()
+            for word in ["right", "wrong", "correct", "score"] {
+                #expect(!lower.contains(word), "\(word) in \(result)")
+            }
+        }
+        // Each answer is its own: a low-bar guess hears that a likelier
+        // piece is just as made up.
+        #expect(Set(CitationStepGuess.allCases.map(CitationCopy.revealAnswer)).count == CitationStepGuess.allCases.count)
+        #expect(CitationCopy.revealAnswer(.pageNumbers).contains("just as made up"))
+        #expect(CitationCopy.revealAnswer(.journal).contains("as made up as the author"))
         #expect(CitationCopy.topicNote.contains("may be real research"))
+        // The takeaway's heading can't read as "probably isn't true".
+        #expect(CitationCopy.takeawayHeading == "Likely isn\u{2019}t the same as true.")
         // Never that low chances mark the made-up part, or that the topic
         // is unstudied.
         for line in CitationCopy.everyLine {
@@ -235,8 +303,8 @@ struct CitationCopyTests {
                 == "First author. Quillfeather, T., 12 percent, illustrative, 1 of 3.")
         #expect(CitationCopy.candidateAccessibility(.volumeAndPages, index: 0)
                 == "Volume and pages. volume 14, issue 3, pages 211 to 229, 8 percent, illustrative, 1 of 3.")
-        #expect(CitationCopy.revealAnnouncement
-                == "No step decided to make it up. Each piece was a likely next piece, and no step checks that the source is real.")
+        #expect(CitationCopy.revealAnnouncement(.noStep)
+                == "No step decided to make it up, and no step checks that the source is real. Each piece, at 8% or at 62%, was just one of the likeliest next pieces.")
         let walk = CitationWalk.walked(through: .year)
         #expect(CitationCopy.candidateValue(walk, slot: .year, index: 0) == "your guess")
         #expect(CitationCopy.candidateValue(walk, slot: .year, index: 1) == "picked")
@@ -262,7 +330,10 @@ struct CitationCopyTests {
         }
         let year = CitationCopy.accessibilitySummary(walk: .walked(through: .year), guess: nil, revealed: false,
                                                      spoiled: false, rewritten: false)
-        #expect(year == "Step 2 of 5, Year: the model drew 2018, at 21 percent, bar 2 of 3.")
+        #expect(year == "Step 2 of 5, Year: the model drew 2018, at 21 percent, the 2nd likeliest of 3.")
+        let author = CitationCopy.accessibilitySummary(walk: .walked(through: .firstAuthor), guess: nil, revealed: false,
+                                                       spoiled: false, rewritten: false)
+        #expect(author.hasSuffix("at 12 percent, the likeliest."))
         let done = CitationWalk.walked(through: .volumeAndPages, finished: true)
         let states = [
             CitationCopy.accessibilitySummary(walk: done, guess: nil, revealed: false, spoiled: false, rewritten: false),
@@ -285,6 +356,19 @@ struct CitationCopyTests {
         walk.guess(0)
         #expect(CitationCopy.drawnLine(walk, slot: .year) == "The model drew 2018 this time.")
         #expect(CitationCopy.drawAnnouncement(walk, slot: .year).hasSuffix(CitationCopy.notTopLine))
+        #expect(CitationCopy.drawNote(walk, slot: .year) == nil)
+        // The title's draw (the 62% one) notes that it echoes the question.
+        walk.advance()
+        walk.guess(2)
+        #expect(CitationCopy.drawNote(walk, slot: .title) == CitationCopy.titleEchoLine)
+        #expect(CitationCopy.drawAnnouncement(walk, slot: .title).hasSuffix(CitationCopy.titleEchoLine))
+        // Only there: no other slot has a note.
+        for slot in CitationSlot.allCases where slot != .title {
+            #expect(CitationCopy.drawNote(.walked(through: slot), slot: slot) == nil, "\(slot)")
+        }
+        // The guess is the student's; the model draws (the heading says so).
+        #expect(CitationCopy.walkHeading == "Guess the next piece")
+        #expect(CitationCopy.walkPrompt == "Which piece will the model draw next?")
     }
 }
 
@@ -307,7 +391,8 @@ struct CitationStateTests {
         #expect(!state.lock(.noStep), "a locked guess can't be changed")
         #expect(state.showsShowMe && state.machine.guess == .journal)
         let spoken = state.reveal()
-        #expect(spoken == "You guessed The journal. " + CitationCopy.revealAnnouncement)
+        #expect(spoken == "You guessed The journal. " + CitationCopy.revealAnnouncement(.journal))
+        #expect(state.revealLines.result == CitationCopy.revealResult(.journal))
         #expect(state.isRevealed && state.canRewrite)
         #expect(state.rewrite() == CitationCopy.rewriteAnnouncement())
         #expect(state.rewritten && !state.canRewrite && state.rewrite() == nil, "written again once")
@@ -323,9 +408,9 @@ struct CitationStateTests {
         state.guess(1)
         #expect(!state.isRevealed)
         let line = state.advance()
-        #expect(line?.hasSuffix(CitationCopy.revealAnnouncement) == true)
+        #expect(line?.hasSuffix(CitationCopy.revealAnnouncement(nil)) == true)
         #expect(!state.asksStepQuestion && state.isRevealed && state.machine.guess == nil)
-        #expect(state.revealLines.guess == nil && state.revealLines.result == CitationCopy.revealResult)
+        #expect(state.revealLines.guess == nil && state.revealLines.result == CitationCopy.revealResult(nil))
     }
 
     @Test("The reveal pairs every guess with the result")
@@ -342,7 +427,7 @@ struct CitationStateTests {
             fresh.reveal()
             #expect(fresh.revealLines.guess == CitationCopy.choiceTitle(choice))
             #expect(fresh.revealLines.spoken.hasPrefix("You guessed \(CitationCopy.choiceTitle(choice))."))
-            #expect(fresh.revealLines.spoken.hasSuffix(CitationCopy.revealResult))
+            #expect(fresh.revealLines.spoken.hasSuffix(CitationCopy.revealResult(choice)))
         }
     }
 

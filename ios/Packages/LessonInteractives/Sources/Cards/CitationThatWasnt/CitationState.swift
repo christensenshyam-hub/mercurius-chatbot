@@ -83,9 +83,10 @@ public final class CitationState {
     public var canRewrite: Bool { isRevealed && !rewritten }
 
     /// The reveal's lines: the guess (none in spoiled mode) and what
-    /// happened.
+    /// happened, its last sentence answering that guess.
     public var revealLines: InteractiveRevealLines {
-        machine.revealLines(guessText: CitationCopy.choiceTitle, result: CitationCopy.revealResult)
+        machine.revealLines(guessText: CitationCopy.choiceTitle,
+                            result: CitationCopy.revealResult(machine.spoiled ? nil : machine.guess))
     }
 
     public var summary: String {
@@ -113,7 +114,7 @@ public final class CitationState {
         guard walk.finished else { return CitationCopy.stepHeading(walk) }
         if machine.spoiled {
             machine.reveal()
-            return CitationCopy.finishedAnnouncement(path: walk.path) + " " + CitationCopy.revealAnnouncement
+            return CitationCopy.finishedAnnouncement(path: walk.path) + " " + CitationCopy.revealAnnouncement(nil)
         }
         return CitationCopy.finishedAnnouncement(path: walk.path)
     }
@@ -129,8 +130,8 @@ public final class CitationState {
     @discardableResult
     public func reveal() -> String? {
         guard walk.finished, machine.reveal() else { return nil }
-        guard let guess = machine.guess, !machine.spoiled else { return CitationCopy.revealAnnouncement }
-        return "\(InteractiveShellCopy.youGuessed) \(CitationCopy.choiceTitle(guess)). \(CitationCopy.revealAnnouncement)"
+        guard let guess = machine.guess, !machine.spoiled else { return CitationCopy.revealAnnouncement(nil) }
+        return "\(InteractiveShellCopy.youGuessed) \(CitationCopy.choiceTitle(guess)). \(CitationCopy.revealAnnouncement(guess))"
     }
 
     /// "Write it again": the second path. Returns what VoiceOver should hear.

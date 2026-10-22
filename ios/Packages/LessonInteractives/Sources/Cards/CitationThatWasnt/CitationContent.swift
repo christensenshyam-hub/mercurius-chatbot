@@ -3,12 +3,14 @@ import Foundation
 // The Citation That Wasn't (U1L3, "Why AI sounds confident but can be
 // wrong"; SLATE.md ★3, docs/interactives/citation-that-wasnt/CONTENT.md).
 //
-// The student plays the model writing a reference for a study that doesn't
+// The student watches a model write a reference for a study that doesn't
 // exist: five slots, each with its three likeliest next pieces and their
 // illustrative chances. They guess each piece, see the one the model drew,
 // then guess the step where the model "decided" to make it up. The reveal:
 // no step did. "Write it again" draws a second authored path to a
-// different, equally tidy fake.
+// different, equally tidy fake (its first draw is the only one shown with
+// the same chances: a real model's later chances depend on the pieces
+// before them, CONTENT.md §3).
 //
 // Everything here is authored: no model runs, nothing is sent or stored.
 // Every name is invented and was searched before ship (CONTENT.md §4).
@@ -131,6 +133,20 @@ public enum CitationContent {
     /// one (the walk: only the year).
     public static func notTopSlots(path: Int) -> [CitationSlot] {
         CitationSlot.allCases.filter { !isTopBar(path: path, slot: $0) }
+    }
+
+    /// The drawn piece on `path` with the lowest chance (the walk: the
+    /// pages, 8%). Ties keep the reference's order.
+    public static func leastLikely(path: Int) -> CitationSlot {
+        CitationSlot.allCases.min { picked(path: path, slot: $0).percent < picked(path: path, slot: $1).percent }
+            ?? .firstAuthor
+    }
+
+    /// The drawn piece on `path` with the highest chance (the walk: the
+    /// title, 62%). Ties keep the reference's order.
+    public static func mostLikely(path: Int) -> CitationSlot {
+        CitationSlot.allCases.max { picked(path: path, slot: $0).percent <= picked(path: path, slot: $1).percent }
+            ?? .firstAuthor
     }
 
     /// The written pieces for `picks` (nil: not written yet).
