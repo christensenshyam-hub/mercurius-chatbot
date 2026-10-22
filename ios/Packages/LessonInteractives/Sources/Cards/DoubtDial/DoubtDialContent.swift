@@ -4,9 +4,13 @@ import Foundation
 // card 1, sketches/doubt-dial.svg). Ten one-line posts about a made-up
 // town, 5 real and 5 fake, each with a "how surprising" score. A five-stop
 // dial shares or waves away each post by that score alone, and two
-// counters count the two kinds of mistake. No stop gets below 4 mistakes
-// out of 10. A separate "Check first" step shows what checking found:
-// no fake shared, no real story waved away, 2 posts "not sure yet".
+// counters count the two kinds of mistake. Surprise only weakly tracks
+// truth here (fakes average a little more surprising, but every level from
+// 2 to 5 holds a real post and a fake), so no cut-off, at any limit from 0
+// to 5, gets below 4 mistakes out of 10: the middle stops make 4, the ends
+// 5. A separate "Check first" step shows what checking found: no fake
+// shared, no real story called fake, and 2 posts held back as "not sure
+// yet", which checking may say and the dial can't.
 //
 // Everything here is authored toy data and the arithmetic over it: every
 // number the card shows is counted from `posts` and `stops` below
@@ -37,6 +41,9 @@ public struct DoubtDialPost: Equatable, Hashable, Sendable, Identifiable {
     public let id: Int
     /// The post, as one line.
     public let title: String
+    /// A short name for it ("Seal"), for the strip under the dial's
+    /// text form ("Mistakes here: …").
+    public let shortName: String
     /// We wrote it, so we know: true for the 5 real posts.
     public let isReal: Bool
     /// How surprising it looks, 1 to 5 (the dots).
@@ -45,9 +52,11 @@ public struct DoubtDialPost: Equatable, Hashable, Sendable, Identifiable {
     public let checkLine: String
     public let finding: Finding
 
-    public init(id: Int, title: String, isReal: Bool, surprise: Int, checkLine: String, finding: Finding) {
+    public init(id: Int, title: String, shortName: String, isReal: Bool, surprise: Int, checkLine: String,
+                finding: Finding) {
         self.id = id
         self.title = title
+        self.shortName = shortName
         self.isReal = isReal
         self.surprise = surprise
         self.checkLine = checkLine
@@ -98,37 +107,49 @@ public enum DoubtDialContent {
 
     /// The feed, least surprising first, so the dial's cut moves down the
     /// list. Every surprise level from 2 to 5 holds a real post and a fake
-    /// one: surprising is not the same as fake.
+    /// one, so surprise only weakly tracks truth: surprising is not the same
+    /// as fake, and no cut-off sorts them. (Real feeds aren't half fake;
+    /// this one is, on purpose, and says so on the canvas.)
     public static let posts: [DoubtDialPost] = [
-        DoubtDialPost(id: 1, title: "Library lends fishing rods", isReal: true, surprise: 1,
+        DoubtDialPost(id: 1, title: "Library lends fishing rods", shortName: "Library",
+                      isReal: true, surprise: 1,
                       checkLine: "The library\u{2019}s own page lists the rods, and the Port Avery Gazette ran it too.",
                       finding: .real),
-        DoubtDialPost(id: 2, title: "Ferry fares drop to $1 for the summer", isReal: true, surprise: 2,
+        DoubtDialPost(id: 2, title: "Ferry fares drop to $1 for the summer", shortName: "Ferry fares",
+                      isReal: true, surprise: 2,
                       checkLine: "The ferry company and the Port Avery Gazette both report it.",
                       finding: .real),
-        DoubtDialPost(id: 3, title: "School board adds Saturday classes", isReal: false, surprise: 2,
+        DoubtDialPost(id: 3, title: "School board adds Saturday classes", shortName: "School board",
+                      isReal: false, surprise: 2,
                       checkLine: "The school board\u{2019}s meeting notes show no such vote, and the Gazette hasn\u{2019}t reported it.",
                       finding: .fake),
-        DoubtDialPost(id: 4, title: "May snow closes schools for a day", isReal: true, surprise: 3,
+        DoubtDialPost(id: 4, title: "May snow closes schools for a day", shortName: "May snow",
+                      isReal: true, surprise: 3,
                       checkLine: "The school district\u{2019}s notice and the town\u{2019}s weather report both say so.",
                       finding: .real),
-        DoubtDialPost(id: 5, title: "Water tower to be torn down Friday", isReal: false, surprise: 3,
+        DoubtDialPost(id: 5, title: "Water tower to be torn down Friday", shortName: "Water tower",
+                      isReal: false, surprise: 3,
                       checkLine: "One post, and no town notice yet.",
                       finding: .notSureYet),
-        DoubtDialPost(id: 6, title: "A seal naps on the ferry dock, and the ferry waits", isReal: true, surprise: 4,
+        DoubtDialPost(id: 6, title: "A seal naps on the ferry dock, and the ferry waits", shortName: "Seal",
+                      isReal: true, surprise: 4,
                       checkLine: "One video, posted an hour ago. No one else has it yet.",
                       finding: .notSureYet),
-        DoubtDialPost(id: 7, title: "Photo: a shark in the town pool", isReal: false, surprise: 4,
+        DoubtDialPost(id: 7, title: "Photo: a shark in the town pool", shortName: "Shark photo",
+                      isReal: false, surprise: 4,
                       checkLine: "Reverse search: this photo first appeared years ago, somewhere else. A real photo, a false story.",
                       finding: .fake),
-        DoubtDialPost(id: 8, title: "Council votes to paint the old bridge purple", isReal: true, surprise: 5,
+        DoubtDialPost(id: 8, title: "Council votes to paint the old bridge purple", shortName: "Bridge",
+                      isReal: true, surprise: 5,
                       checkLine: "The council\u{2019}s meeting notes record the vote, and the Gazette covered it.",
                       finding: .real),
-        DoubtDialPost(id: 9, title: "Leaked audio: the mayor cancels summer break", isReal: false, surprise: 5,
+        DoubtDialPost(id: 9, title: "Leaked audio: the mayor cancels summer break", shortName: "Leaked audio",
+                      isReal: false, surprise: 5,
                       checkLine: "The words come from an old speech, cut up and put back in a new order. The full speech is on the town\u{2019}s site.",
                       finding: .fake),
-        DoubtDialPost(id: 10, title: "Video: lightning knocks out the lighthouse", isReal: false, surprise: 5,
-                      checkLine: "The harbor\u{2019}s live camera shows the lighthouse lit tonight.",
+        DoubtDialPost(id: 10, title: "Video: lightning knocks out the lighthouse", shortName: "Lighthouse",
+                      isReal: false, surprise: 5,
+                      checkLine: "The harbor office says the light never went out, and its live camera shows it lit tonight.",
                       finding: .fake),
     ]
 
@@ -176,6 +197,17 @@ public enum DoubtDialContent {
     public static func representativeStop(for guess: DoubtDialGuess) -> Int {
         let named = stops(for: guess)
         return named[named.count / 2]
+    }
+
+    /// Where "Show me" turns the dial, so the counters, the lit mistakes
+    /// cell and the feed show the setting the result talks about: the
+    /// guess's end; for "Somewhere in the middle" the stop the student is
+    /// on if it is a middle one, else the middle. With no guess (spoiled),
+    /// Doubt everything, the setting the spoiled result names.
+    public static func revealStop(for guess: DoubtDialGuess?, current: Int) -> Int {
+        guard let guess else { return stopLimits.count - 1 }
+        let named = stops(for: guess)
+        return named.contains(clamped(current)) ? clamped(current) : representativeStop(for: guess)
     }
 
     /// A stop's index, clamped into range.
@@ -227,6 +259,28 @@ public enum DoubtDialContent {
     /// The fewest mistakes any stop makes ("every stop makes at least 4").
     public static var fewestMistakes: Int { dial.smallestTotal }
 
+    /// Mistakes out of `postCount` for a cut-off at any `limit`, not only
+    /// the dial's five: share a post when its surprise is at most `limit`.
+    /// (A test runs every limit from 0 to 5: none gets below 4.)
+    public static func mistakes(atLimit limit: Int) -> Int {
+        posts.filter { $0.isReal ? $0.surprise > limit : $0.surprise <= limit }.count
+    }
+
+    /// The mistakes the two ends make, if they make the same number
+    /// ("5 mistakes, the same as believing everything"); nil otherwise.
+    public static var endMistakes: Int? {
+        let ends = Set([mistakesByStop[0], mistakesByStop[mistakesByStop.count - 1]])
+        return ends.count == 1 ? ends.first : nil
+    }
+
+    /// Whether every middle stop makes fewer mistakes than either end ("the
+    /// middle fooled you least").
+    public static var middleBeatsTheEnds: Bool {
+        let middle = stops(for: .middle).map { mistakesByStop[$0] }
+        let ends = [mistakesByStop[0], mistakesByStop[mistakesByStop.count - 1]]
+        return (middle.max() ?? .max) < (ends.min() ?? .min)
+    }
+
     /// The mistakes every middle stop makes, if they all make the same
     /// number ("every setting in the middle still makes 4"); nil otherwise.
     public static var middleMistakes: Int? {
@@ -234,8 +288,12 @@ public enum DoubtDialContent {
         return middle.count == 1 ? middle.first : nil
     }
 
-    /// What checking leaves: fakes shared, real stories waved away, and
-    /// posts not sure yet.
+    /// What checking leaves: fakes shared, real stories it marks "Not
+    /// shared", and posts held back as not sure yet. Checking may hold a
+    /// post back; the dial can't (every stop shares or waves away each
+    /// post), so "not sure yet" is counted on its own, never as a mistake:
+    /// the seal is a real story checking holds back, and it is in the third
+    /// count, not the second.
     public static var checkTally: DoubtDialTally {
         let verdicts = posts.map { ($0, checkVerdict($0)) }
         return DoubtDialTally(
@@ -248,5 +306,17 @@ public enum DoubtDialContent {
     /// The posts shared at `stop` (or, `checking`, after checking).
     public static func sharedCount(atStop stop: Int, checking: Bool) -> Int {
         posts.filter { (checking ? checkVerdict($0) : verdict($0, atStop: stop)).isShared }.count
+    }
+
+    /// The posts checking settled, one way or the other ("Checking sorted 8
+    /// of 10"): shared or not shared, not held back.
+    public static var checkSettled: Int { posts.filter { $0.finding != .notSureYet }.count }
+
+    /// The feed sorted by what checking found, in the Mac's three groups:
+    /// shared, not sure yet, not shared. Each group keeps the feed's order.
+    public static var checkGroups: [(verdict: DoubtDialVerdict, posts: [DoubtDialPost])] {
+        [DoubtDialVerdict.shared, .notSureYet, .notShared].map { verdict in
+            (verdict, posts.filter { checkVerdict($0) == verdict })
+        }
     }
 }

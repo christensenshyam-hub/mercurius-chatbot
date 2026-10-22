@@ -49,10 +49,10 @@ private struct DoubtDialPhoneBody: View {
             DoubtDialProgress(state: state, onShowMe: actions.showMe)
             if state.machine.isRevealed {
                 RevealBox(state.revealLines)
-                    .id(InteractiveScrollID.reveal)
-                    .transition(theme.transition())
+                    .modifier(DoubtDialScrollMark(isFeed: false))
+                    .transition(theme.doubtDialArrival)
                 DoubtDialCheckSection(state: state, onCheck: actions.checkFirst, onBack: actions.backToDial)
-                    .transition(theme.transition())
+                    .transition(theme.doubtDialArrival)
             }
             feed
         }
@@ -69,6 +69,7 @@ private struct DoubtDialPhoneBody: View {
                     .interactiveText(.heading)
                     .foregroundStyle(theme.ink)
                     .accessibilityAddTraits(.isHeader)
+                    .modifier(DoubtDialScrollMark(isFeed: true))
                 if !theme.usesTables { Spacer(minLength: 0) }
                 Text(DoubtDialCopy.feedOrder)
                     .interactiveText(.caption)

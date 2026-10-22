@@ -26,10 +26,12 @@ struct DoubtDialContentTests {
         #expect(posts.map(\.surprise) == posts.map(\.surprise).sorted(), "least surprising first")
         #expect(DoubtDialContent.postCount == 10 && DoubtDialContent.realCount == 5 && DoubtDialContent.fakeCount == 5)
         #expect(DoubtDialContent.stopLimits == Self.slateLimits)
-        #expect(DoubtDialCopy.stops == ["Believe everything", "Believe most", "Unsure", "Doubt most", "Doubt everything"])
+        // The slate's "Unsure" is "In the middle" (CONTENT.md "Departures from the slate").
+        #expect(DoubtDialCopy.stops == ["Believe everything", "Believe most", "In the middle", "Doubt most", "Doubt everything"])
+        #expect(Set(DoubtDialContent.posts.map(\.shortName)).count == DoubtDialContent.postCount)
     }
 
-    @Test("Surprising isn't fake: every level from 2 to 5 holds a real post and a fake one")
+    @Test("Surprise only weakly tracks truth: every level from 2 to 5 holds a real post and a fake one")
     func surpriseDoesNotSort() {
         for level in 2...5 {
             let at = DoubtDialContent.posts.filter { $0.surprise == level }
@@ -38,6 +40,24 @@ struct DoubtDialContentTests {
         // The plainest real post is less surprising than any fake; the most
         // surprising level holds a real story.
         #expect(DoubtDialContent.posts.contains { $0.isReal && $0.surprise == DoubtDialContent.maxSurprise })
+        // Weakly, not not at all: fakes average a little more surprising
+        // (3.8 against 3.0), which is why the middle beats the ends.
+        let fakes = DoubtDialContent.posts.filter { !$0.isReal }.map(\.surprise)
+        let real = DoubtDialContent.posts.filter(\.isReal).map(\.surprise)
+        #expect(fakes.reduce(0, +) * real.count > real.reduce(0, +) * fakes.count)
+    }
+
+    @Test("No cut-off at any limit from 0 to 5 gets below 4 mistakes, not only the dial's five")
+    func everyLimit() {
+        let byHand = (0...DoubtDialContent.maxSurprise).map { limit in
+            Self.slateFake.filter { $0 <= limit }.count + Self.slateReal.filter { $0 > limit }.count
+        }
+        #expect(byHand == [5, 4, 4, 4, 4, 5])
+        #expect((0...DoubtDialContent.maxSurprise).map(DoubtDialContent.mistakes(atLimit:)) == byHand)
+        #expect(byHand.min() == DoubtDialContent.fewestMistakes)
+        for (stop, limit) in DoubtDialContent.stopLimits.enumerated() {
+            #expect(DoubtDialContent.mistakes(atLimit: limit) == DoubtDialContent.mistakesByStop[stop])
+        }
     }
 
     @Test("Every stop's counters, counted by hand, equal the slate's table and the block's")
@@ -64,6 +84,21 @@ struct DoubtDialContentTests {
         #expect(DoubtDialContent.stops(for: .believeEverything) == [0])
         #expect(DoubtDialContent.stops(for: .doubtEverything) == [4])
         #expect(DoubtDialContent.representativeStop(for: .middle) == 2)
+        // The ends tie for worst (5 = 5), and the middle beats both: the
+        // reveal says so ("the same as believing everything"; "You're right").
+        #expect(DoubtDialContent.mistakesByStop[0] == DoubtDialContent.mistakesByStop[4])
+        #expect(DoubtDialContent.endMistakes == 5)
+        #expect(DoubtDialContent.middleBeatsTheEnds)
+    }
+
+    @Test("Show me turns the dial to the setting the result names")
+    func revealStops() {
+        for current in 0..<5 {
+            #expect(DoubtDialContent.revealStop(for: .believeEverything, current: current) == 0)
+            #expect(DoubtDialContent.revealStop(for: .doubtEverything, current: current) == 4)
+            #expect(DoubtDialContent.revealStop(for: nil, current: current) == 4, "spoiled: Doubt everything")
+            #expect(DoubtDialContent.revealStop(for: .middle, current: current) == ((1...3).contains(current) ? current : 2))
+        }
     }
 
     @Test("Each post's verdict follows the stop's limit; the Mac's columns hold what they count")
@@ -119,6 +154,28 @@ struct DoubtDialContentTests {
         let fakesShared = DoubtDialContent.posts.filter { !$0.isReal && $0.finding == .real }.count
         let realDropped = DoubtDialContent.posts.filter { $0.isReal && $0.finding == .fake }.count
         #expect(fakesShared == 0 && realDropped == 0)
+        // Checking settled 8 and held 2 back ("Checking sorted 8 of 10").
+        #expect(DoubtDialContent.checkSettled == DoubtDialContent.posts.filter { $0.finding != .notSureYet }.count)
+        #expect(DoubtDialContent.checkSettled == 8)
+        #expect(DoubtDialContent.checkSettled + tally.notSureYet == DoubtDialContent.postCount)
+    }
+
+    @Test("The Mac's checking groups: Shared 4, Not sure yet 2, Not shared 4, matching the three counters")
+    func checkGroups() {
+        let groups = DoubtDialContent.checkGroups
+        let tally = DoubtDialContent.checkTally
+        #expect(groups.map(\.verdict) == [.shared, .notSureYet, .notShared])
+        #expect(groups.map { $0.posts.count } == [4, 2, 4])
+        #expect(groups.map { $0.posts.count }.reduce(0, +) == DoubtDialContent.postCount)
+        #expect(groups[0].posts.filter { !$0.isReal }.count == tally.fakesShared)
+        #expect(groups[1].posts.count == tally.notSureYet)
+        #expect(groups[2].posts.filter(\.isReal).count == tally.realWavedAway)
+        #expect(groups[0].posts.count + groups[2].posts.count == DoubtDialContent.checkSettled)
+        // The seal (real, held back) is in Not sure yet, never among the fakes.
+        #expect(groups[1].posts.map(\.shortName) == ["Water tower", "Seal"])
+        #expect(groups[2].posts.allSatisfy { !$0.isReal })
+        #expect(groups.map { DoubtDialCopy.column(DoubtDialCopy.checkColumn($0.verdict), count: $0.posts.count) }
+                == ["Shared \u{00B7} 4", "Not sure yet \u{00B7} 2", "Not shared \u{00B7} 4"])
     }
 
     @Test("No real people or brands: the town is invented, and no post names a person")
@@ -151,7 +208,8 @@ struct DoubtDialCopyTests {
         #expect(InteractiveCopyRules.missingLabels([.madeUp], in: DoubtDialCopy.labels).isEmpty)
         #expect(DoubtDialCopy.labels.allSatisfy { $0.isWellFormed })
         #expect(DoubtDialCopy.feedLabel.text
-                == "A made-up feed. Here the dial judges by how surprising a post looks. Real checking is messier.")
+                == "A made-up feed. Real feeds aren\u{2019}t half fake. The dial judges only by how surprising a post looks.")
+        #expect(DoubtDialCopy.checkLabel.text == "These checks are made up too, like the feed. Real checking is messier.")
         #expect(DoubtDialCopy.hook.contains("made-up town"))
         #expect(DoubtDialCopy.hook.contains("We wrote them all"))
     }
@@ -178,17 +236,87 @@ struct DoubtDialCopyTests {
         #expect(DoubtDialCopy.dialValue(atStop: 1)
                 == "Believe most. You\u{2019}d share 3 fakes and wave away 1 real story.")
         #expect(DoubtDialCopy.result(for: .doubtEverything)
-                == "It shared no fakes, and waved away all 5 real stories. That\u{2019}s exactly what someone hiding a real story would want.")
+                == "Doubt everything never shared a fake, but it waved away all 5 real stories: 5 mistakes, "
+                + "the same as believing everything. That\u{2019}s just what someone caught in a real story would want: "
+                + "everyone calling it fake. The middle did a little better, but no setting got below 4 mistakes out of 10.")
         #expect(DoubtDialCopy.result(for: .middle)
-                == "Every setting in the middle still made 4 mistakes out of 10. Turning the dial only moved your mistakes around.")
+                == "You\u{2019}re right: the middle fooled you least. But even there it made 4 mistakes out of 10, "
+                + "and moving within the middle only swapped one kind of mistake for the other.")
         #expect(DoubtDialCopy.result(for: .believeEverything)
-                == "It shared all 5 fakes, and waved away no real stories. No setting got below 4 mistakes out of 10.")
+                == "Believe everything never waved away a real story, but it shared all 5 fakes: 5 mistakes, "
+                + "the same as doubting everything. The middle did a little better, but no setting got below 4 mistakes out of 10.")
+        #expect(DoubtDialCopy.spoiledResult
+                == "Doubt everything never shared a fake, but it waved away all 5 real stories: 5 mistakes, "
+                + "the same as believing everything. The middle did a little better, but no setting got below 4 mistakes out of 10.")
+        // Each result names its setting and counts what that stop counts.
+        for guess in [DoubtDialGuess.believeEverything, .doubtEverything] {
+            let stop = DoubtDialContent.stops(for: guess)[0]
+            let tally = DoubtDialContent.tally(atStop: stop)
+            let line = DoubtDialCopy.result(for: guess)
+            #expect(line.hasPrefix(DoubtDialCopy.stopName(stop)))
+            #expect(line.contains(": \(tally.mistakes) mistakes"))
+            #expect(InteractiveAccessibility.numbersMissing([tally.fakesShared + tally.realWavedAway], from: line).isEmpty)
+        }
         #expect(DoubtDialCopy.checkTallyLine == "0 fakes shared, 0 real stories waved away, 2 not sure yet.")
-        #expect(DoubtDialCopy.takeaway
-                == "Doubt alone can\u{2019}t sort them. Checking can, and \u{201C}not sure yet\u{201D} is an honest answer.")
-        #expect(DoubtDialCopy.mistakesLine(atStop: 2) == "4 mistakes out of 10 at this setting.")
+        #expect(DoubtDialCopy.takeaway == "Checking sorted 8 of 10, and was honest about the other 2: not sure yet.")
         #expect(DoubtDialCopy.mistakesRowSpoken == "Mistakes out of 10 at each setting. Believe everything: 5 mistakes. "
-                + "Believe most: 4 mistakes. Unsure: 4 mistakes. Doubt most: 4 mistakes. Doubt everything: 5 mistakes.")
+                + "Believe most: 4 mistakes. In the middle: 4 mistakes. Doubt most: 4 mistakes. Doubt everything: 5 mistakes.")
+    }
+
+    @Test("Every stop's lines, word for word: the dial's value, the mistakes line, the strip and the Mac's headers")
+    func everyStopPinned() {
+        #expect(DoubtDialCopy.stops.indices.map(DoubtDialCopy.dialValue(atStop:)) == [
+            "Believe everything. You\u{2019}d share 5 fakes and wave away 0 real stories.",
+            "Believe most. You\u{2019}d share 3 fakes and wave away 1 real story.",
+            "In the middle. You\u{2019}d share 2 fakes and wave away 2 real stories.",
+            "Doubt most. You\u{2019}d share 0 fakes and wave away 4 real stories.",
+            "Doubt everything. You\u{2019}d share 0 fakes and wave away 5 real stories.",
+        ])
+        #expect(DoubtDialCopy.stops.indices.map(DoubtDialCopy.mistakesLine(atStop:)) == [
+            "5 mistakes out of 10 at this setting.",
+            "4 mistakes out of 10 at this setting.",
+            "4 mistakes out of 10 at this setting.",
+            "4 mistakes out of 10 at this setting.",
+            "5 mistakes out of 10 at this setting.",
+        ])
+        #expect(DoubtDialCopy.stops.indices.map(DoubtDialCopy.mistakesHere(atStop:)) == [
+            "Mistakes at this setting: School board, Water tower, Shark photo, Leaked audio, Lighthouse (fakes shared).",
+            "Mistakes at this setting: School board, Water tower, Shark photo (fakes shared); Bridge (real story waved away).",
+            "Mistakes at this setting: School board, Water tower (fakes shared); Seal, Bridge (real stories waved away).",
+            "Mistakes at this setting: Ferry fares, May snow, Seal, Bridge (real stories waved away).",
+            "Mistakes at this setting: Library, Ferry fares, May snow, Seal, Bridge (real stories waved away).",
+        ])
+        let headers = DoubtDialCopy.stops.indices.map { stop -> [String] in
+            let shared = DoubtDialContent.sharedCount(atStop: stop, checking: false)
+            return [DoubtDialCopy.column(DoubtDialCopy.sharedColumn, count: shared),
+                    DoubtDialCopy.column(DoubtDialCopy.wavedAwayColumn, count: DoubtDialContent.postCount - shared)]
+        }
+        #expect(headers == [
+            ["Shared \u{00B7} 10", "Waved away \u{00B7} 0"],
+            ["Shared \u{00B7} 7", "Waved away \u{00B7} 3"],
+            ["Shared \u{00B7} 5", "Waved away \u{00B7} 5"],
+            ["Shared \u{00B7} 1", "Waved away \u{00B7} 9"],
+            ["Shared \u{00B7} 0", "Waved away \u{00B7} 10"],
+        ])
+    }
+
+    @Test("The strip under the dial: one cell per post in feed order, the cut where the shared posts end")
+    func strip() {
+        #expect(DoubtDialContent.posts.map(DoubtDialCopy.stripLetter).joined() == "RRFRFRFRFF")
+        for stop in DoubtDialCopy.stops.indices {
+            let verdicts = DoubtDialContent.posts.map { DoubtDialContent.verdict($0, atStop: stop) }
+            let shared = DoubtDialContent.sharedCount(atStop: stop, checking: false)
+            // The shared posts are a run at the start (least surprising
+            // first), so one cut splits them from the rest.
+            #expect(verdicts.prefix(shared).allSatisfy { $0 == .shared }, "\(stop)")
+            #expect(verdicts.dropFirst(shared).allSatisfy { $0 == .wavedAway }, "\(stop)")
+            // The strip's words name exactly the posts the feed marks.
+            let line = DoubtDialCopy.mistakesHere(atStop: stop)
+            for post in DoubtDialContent.posts {
+                let marked = DoubtDialContent.mistakes(atStop: stop, checking: false).contains(post)
+                #expect(line.contains(post.shortName) == marked, "\(post.shortName) at \(stop)")
+            }
+        }
     }
 
     @Test("Each stop's rule says its limit in dots")
@@ -207,20 +335,23 @@ struct DoubtDialCopyTests {
         line.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
     }
 
-    @Test("Every number any line shows is one the content counts (or the made-up feed's own $1 fare)")
+    /// A set-membership check: every number in every line is one the
+    /// content counts somewhere. The exact lines (each stop's value,
+    /// mistakes line, strip line and headers; the reveal; the takeaway) are
+    /// pinned word for word by the tests above.
+    @Test("Every number any line shows is one the content counts somewhere (membership; or the feed's own $1 fare)")
     func everyNumberIsDerived() {
         let content = DoubtDialContent.self
         var derived = Set(content.table.flatMap { $0 } + content.mistakesByStop + content.stopLimits
                           + content.posts.map(\.surprise))
         derived.formUnion([content.postCount, content.realCount, content.fakeCount, content.maxSurprise,
                            content.fewestMistakes, content.checkTally.fakesShared, content.checkTally.realWavedAway,
-                           content.checkTally.notSureYet])
+                           content.checkTally.notSureYet, content.checkSettled])
         // The Mac's column counts, at every stop and after checking.
         derived.formUnion(DoubtDialCopy.stops.indices.flatMap {
             [content.sharedCount(atStop: $0, checking: false), content.postCount - content.sharedCount(atStop: $0, checking: false)]
         })
-        derived.formUnion([content.sharedCount(atStop: 0, checking: true),
-                           content.postCount - content.sharedCount(atStop: 0, checking: true)])
+        derived.formUnion(content.checkGroups.map { $0.posts.count })
         // The one number inside a post: the made-up ferry fare.
         let postNumbers = content.posts.flatMap { Self.numbers(in: $0.title) + Self.numbers(in: $0.checkLine) }
         #expect(postNumbers == [1])
@@ -341,6 +472,51 @@ struct DoubtDialStateTests {
         spoiled.showMe()
         #expect(spoiled.revealLines.guess == nil)
         #expect(spoiled.revealLines.spoken == DoubtDialCopy.spoiledResult)
+        #expect(spoiled.stop == 4, "the spoiled result names Doubt everything")
+    }
+
+    @Test("Show me turns the dial to the guess's setting, so the counters agree with the result")
+    func showMeTurnsTheDial() {
+        // The real path: the dial starts at Believe everything, two moves,
+        // Show me at "In the middle".
+        let doubt = DoubtDialState(spoiled: false, launch: Self.plain, debug: DoubtDialDebug())
+        doubt.lock(.doubtEverything)
+        doubt.turn(to: 1)
+        doubt.turn(to: 2)
+        #expect(doubt.stop == 2)
+        #expect(doubt.showMe())
+        #expect(doubt.stop == 4)
+        #expect(doubt.dialTally == DoubtDialTally(fakesShared: 0, realWavedAway: 5))
+        #expect(doubt.mode == .dial(4))
+        #expect(DoubtDialContent.posts.filter { doubt.verdict(for: $0) == .shared }.isEmpty)
+        #expect(doubt.revealLines.result.hasPrefix("Doubt everything never shared a fake"))
+
+        let believe = DoubtDialState(spoiled: false, launch: Self.plain, debug: DoubtDialDebug())
+        believe.lock(.believeEverything)
+        believe.turn(to: 1)
+        believe.turn(to: 2)
+        believe.showMe()
+        #expect(believe.stop == 0)
+        #expect(believe.dialTally == DoubtDialTally(fakesShared: 5, realWavedAway: 0))
+
+        // A middle guess stays on a middle stop; from an end it goes to the middle.
+        let middle = DoubtDialState(spoiled: false, launch: Self.plain, debug: DoubtDialDebug())
+        middle.lock(.middle)
+        middle.turn(to: 1)
+        middle.turn(to: 3)
+        middle.showMe()
+        #expect(middle.stop == 3)
+        #expect(middle.dialTally.mistakes == 4)
+        let middleFromEnd = DoubtDialState(spoiled: false, launch: Self.plain, debug: DoubtDialDebug())
+        middleFromEnd.lock(.middle)
+        middleFromEnd.turn(to: 1)
+        middleFromEnd.turn(to: 4)
+        middleFromEnd.showMe()
+        #expect(middleFromEnd.stop == 2)
+
+        // Turning on after the reveal still works; the result names its setting.
+        #expect(doubt.turn(to: 1))
+        #expect(doubt.machine.isRevealed)
     }
 
     @Test("Check first comes after the reveal; turning the dial or Back leaves it")
@@ -374,6 +550,9 @@ struct DoubtDialStateTests {
                                       debug: DoubtDialDebug(arguments: ["-DoubtDialCheckFirst", "YES"]))
         #expect(revealed.machine.isRevealed && revealed.machine.guess == .doubtEverything)
         #expect(revealed.stop == 4 && revealed.checking)
+        let believe = DoubtDialState(spoiled: false, launch: InteractiveLaunchOptions(arguments: ["-InteractiveState", "revealed"]),
+                                     debug: DoubtDialDebug(arguments: ["-DoubtDialGuess", "believe"]))
+        #expect(believe.stop == 0, "where Show me leaves it")
         let middle = DoubtDialState(spoiled: false, launch: InteractiveLaunchOptions(arguments: ["-InteractiveState", "explored"]),
                                     debug: DoubtDialDebug(arguments: ["-DoubtDialGuess", "middle"]))
         #expect(middle.machine.guess == .middle && middle.stop == 2 && middle.machine.showsShowMe && !middle.checking)
@@ -387,6 +566,8 @@ struct DoubtDialStateTests {
         #expect(DoubtDialDebug(arguments: ["-DoubtDialGuess", "believe"]).guess == .believeEverything)
         #expect(DoubtDialDebug(arguments: ["-DoubtDialGuess", "-Interactive"]).guess == nil)
         #expect(!DoubtDialDebug(arguments: ["-DoubtDialCheckFirst", "NO"]).checkFirst)
+        #expect(DoubtDialDebug(arguments: ["-DoubtDialScrollFeed", "YES"]).scrollToFeed)
+        #expect(!DoubtDialDebug(arguments: ["-DoubtDialCheckFirst", "YES"]).scrollToFeed)
         #expect(DoubtDialDebug.current == DoubtDialDebug(), "the test host was launched with none")
     }
 

@@ -265,3 +265,95 @@ struct DoubtDialMistakesRow: View {
             .frame(width: theme.minTarget)
     }
 }
+
+/// The feed in one strip under the dial, least surprising first: each post
+/// a cell with R (real) or F (fake) and its glyph (↗ shared, ⊘ waved
+/// away), a ring and a ✕ under each the setting gets wrong, and the dial's
+/// cut between the shared posts and the rest. Turning the dial moves the
+/// cut and flips posts in place, all in view, with no scrolling to the
+/// feed. Display only (the dial stays the one control); it never moves:
+/// cells and the cut crossfade, with or without Reduce Motion. One
+/// VoiceOver element, the strip in words ("Mistakes at this setting: …").
+/// Not drawn at the accessibility sizes, where that line is text.
+struct DoubtDialFeedStrip: View {
+    let stop: Int
+    @Environment(\.interactiveTheme) private var theme
+
+    var body: some View {
+        let posts = DoubtDialContent.posts
+        let shared = DoubtDialContent.sharedCount(atStop: stop, checking: false)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                    cut(isHere: index == shared)
+                    cell(post)
+                }
+                cut(isHere: shared == posts.count)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: theme.platform == .phone ? .infinity : 500, alignment: .leading)
+            key
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(DoubtDialCopy.mistakesHere(atStop: stop))
+    }
+
+    /// The dial's cut: drawn in the one gap where the shared posts end.
+    private func cut(isHere: Bool) -> some View {
+        Capsule()
+            .fill(theme.increasedContrast ? theme.ink : theme.accentText)
+            .frame(width: 2.5)
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, theme.platform == .phone ? 2 : 3)
+            .opacity(isHere ? 1 : 0)
+    }
+
+    private func cell(_ post: DoubtDialPost) -> some View {
+        let verdict = DoubtDialContent.verdict(post, atStop: stop)
+        let isMistake = DoubtDialContent.isMistake(post, verdict)
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        return VStack(spacing: 3) {
+            VStack(spacing: 1) {
+                Text(DoubtDialCopy.stripLetter(post))
+                    .interactiveText(.calloutStrong)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                // One height for ↗ and ⊘, so every cell (and the ✕ under
+                // it) lines up.
+                Image(systemName: DoubtDialGlyph.name(verdict))
+                    .font(.system(size: theme.platform == .phone ? 10 : 9, weight: .bold))
+                    .frame(height: theme.platform == .phone ? 13 : 12)
+                    .id(verdict)
+                    .transition(.opacity)
+            }
+            .foregroundStyle(verdict.isShared ? theme.ink : theme.ink2)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity)
+            .background(shape.fill(verdict.isShared ? theme.wash(theme.increasedContrast ? 0.4 : 0.3) : theme.raised))
+            .overlay(shape.strokeBorder(isMistake ? theme.ink : (theme.increasedContrast ? theme.hairline : theme.wellEdge),
+                                        lineWidth: isMistake ? 2 : 1))
+            Image(systemName: "xmark")
+                .font(.system(size: theme.platform == .phone ? 9 : 8, weight: .heavy))
+                .frame(height: 10)
+                .foregroundStyle(theme.ink)
+                .opacity(isMistake ? 1 : 0)
+        }
+        .frame(minWidth: 0, maxWidth: theme.platform == .phone ? .infinity : 40)
+    }
+
+    /// What the letters and marks mean, in one caption.
+    /// (One literal, so the glyphs are drawn as images in the line.)
+    private var key: some View {
+        let letters = DoubtDialCopy.stripKeyLetters
+        let up = Image(systemName: DoubtDialGlyph.name(.shared))
+        let away = Image(systemName: DoubtDialGlyph.name(.wavedAway))
+        let cross = Image(systemName: "xmark")
+        let shared = DoubtDialCopy.stripKeyShared
+        let waved = DoubtDialCopy.stripKeyWavedAway
+        let mistake = DoubtDialCopy.stripKeyMistake
+        return Text("\(letters) \u{00B7} \(up) \(shared) \u{00B7} \(away) \(waved) \u{00B7} \(cross) \(mistake)")
+            .interactiveText(.caption)
+            .foregroundStyle(theme.ink2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}

@@ -23,12 +23,19 @@ public enum DoubtDialCopy {
         "The dots show how surprising each post looks, from 1 to \(DoubtDialContent.maxSurprise)."
     }
 
-    /// The slate's on-canvas label, word for word.
+    /// The slate's on-canvas label, reworded after review (CONTENT.md
+    /// "Departures from the slate"): the feed is made up and half fake on
+    /// purpose, and the dial judges only by surprise. Saying "real checking
+    /// is messier" here, before checking is shown, made the dial read as a
+    /// simple kind of checking; that caveat now sits under "Check first".
     public static let feedLabel = InteractiveLabel(
-        .madeUp, "A made-up feed. Here the dial judges by how surprising a post looks. Real checking is messier."
+        .madeUp, "A made-up feed. Real feeds aren\u{2019}t half fake. The dial judges only by how surprising a post looks."
     )
-    /// Under "Check first": the findings are authored too.
-    public static let checkLabel = InteractiveLabel(.madeUp, "These checks are made up too, like the feed.")
+    /// Under "Check first": the findings are authored too, and real
+    /// checking is messier.
+    public static let checkLabel = InteractiveLabel(
+        .madeUp, "These checks are made up too, like the feed. Real checking is messier."
+    )
 
     public static let labels: [InteractiveLabel] = [feedLabel, checkLabel]
 
@@ -50,8 +57,10 @@ public enum DoubtDialCopy {
     public static let dialName = "How much doubt?"
     /// What VoiceOver calls the dial.
     public static let dialAccessibilityName = "Doubt dial"
-    /// The five stops, least doubt first.
-    public static let stops = ["Believe everything", "Believe most", "Unsure", "Doubt most", "Doubt everything"]
+    /// The five stops, least doubt first. The centre stop is "In the
+    /// middle" (the slate's "Unsure"): it makes firm calls like every stop,
+    /// and "not sure yet" belongs to checking alone.
+    public static let stops = ["Believe everything", "Believe most", "In the middle", "Doubt most", "Doubt everything"]
     /// The step buttons at the accessibility sizes.
     public static let lessDoubt = "Less doubt"
     public static let moreDoubt = "More doubt"
@@ -95,33 +104,60 @@ public enum DoubtDialCopy {
 
     // MARK: The reveal
 
-    /// What happened, beside the guess.
+    /// What happened, beside the guess. "Show me" turns the dial to the
+    /// setting it names (`DoubtDialContent.revealStop`), so the counters
+    /// beside it agree; each line names its setting rather than "it", so
+    /// it stays true if the student turns the dial on.
     public static func result(for guess: DoubtDialGuess) -> String {
-        let posts = DoubtDialContent.postCount
         switch guess {
         case .believeEverything:
-            let tally = DoubtDialContent.tally(atStop: DoubtDialContent.stops(for: .believeEverything)[0])
-            return "It shared \(fakesPhrase(tally.fakesShared)), and waved away \(realPhrase(tally.realWavedAway)). "
-                + "No setting got below \(DoubtDialContent.fewestMistakes) mistakes out of \(posts)."
+            return "\(endLine(.believeEverything)) \(floorLine)"
         case .middle:
-            let middle = DoubtDialContent.stops(for: .middle).map { DoubtDialContent.mistakesByStop[$0] }
-            let fewest = middle.min() ?? 0
-            let made = Set(middle).count == 1 ? "\(fewest)" : "at least \(fewest)"
-            return "Every setting in the middle still made \(made) mistakes out of \(posts). "
-                + "Turning the dial only moved your mistakes around."
+            let made = DoubtDialContent.middleMistakes.map { "\($0)" }
+                ?? "at least \(DoubtDialContent.fewestMistakes)"
+            let verdict = DoubtDialContent.middleBeatsTheEnds
+                ? "You\u{2019}re right: the middle fooled you least. But even there"
+                : "The middle didn\u{2019}t do better than the ends. Even there"
+            let within = DoubtDialContent.middleMistakes == nil ? ""
+                : ", and moving within the middle only swapped one kind of mistake for the other"
+            return "\(verdict) it made \(made) mistakes out of \(DoubtDialContent.postCount)\(within)."
         case .doubtEverything:
-            let tally = DoubtDialContent.tally(atStop: DoubtDialContent.stops(for: .doubtEverything)[0])
-            return "It shared \(fakesPhrase(tally.fakesShared)), and waved away \(realPhrase(tally.realWavedAway)). "
-                + "That\u{2019}s exactly what someone hiding a real story would want."
+            return "\(endLine(.doubtEverything)) "
+                + "That\u{2019}s just what someone caught in a real story would want: everyone calling it fake. "
+                + floorLine
         }
     }
 
-    /// What happened, with no guess (the spoiled mode).
+    /// What happened, with no guess (the spoiled mode; "Show me" turns the
+    /// dial to Doubt everything, the setting it names).
     public static var spoiledResult: String {
-        let tally = DoubtDialContent.tally(atStop: DoubtDialContent.stops(for: .doubtEverything)[0])
-        return "No setting got below \(DoubtDialContent.fewestMistakes) mistakes out of \(DoubtDialContent.postCount). "
-            + "Doubt everything shared \(fakesPhrase(tally.fakesShared)), "
-            + "and waved away \(realPhrase(tally.realWavedAway))."
+        "\(endLine(.doubtEverything)) \(floorLine)"
+    }
+
+    /// One end of the dial, its mistakes counted and set beside the other
+    /// end's: "Doubt everything never shared a fake, but it waved away all
+    /// 5 real stories: 5 mistakes, the same as believing everything."
+    static func endLine(_ end: DoubtDialGuess) -> String {
+        // The two ends (a middle guess has no end line; it reads as doubt).
+        let stop = end == .believeEverything ? 0 : DoubtDialContent.stopLimits.count - 1
+        let tally = DoubtDialContent.tally(atStop: stop)
+        let mistakes = count(tally.mistakes, "mistake", "mistakes")
+        let tie = DoubtDialContent.endMistakes == nil ? "" : (end == .believeEverything
+            ? ", the same as doubting everything" : ", the same as believing everything")
+        if end == .believeEverything {
+            let real = tally.realWavedAway == 0 ? "never waved away a real story"
+                : "waved away \(realPhrase(tally.realWavedAway))"
+            return "\(stopName(stop)) \(real), but it shared \(fakesPhrase(tally.fakesShared)): \(mistakes)\(tie)."
+        }
+        let fakes = tally.fakesShared == 0 ? "never shared a fake" : "shared \(fakesPhrase(tally.fakesShared))"
+        return "\(stopName(stop)) \(fakes), but it waved away \(realPhrase(tally.realWavedAway)): \(mistakes)\(tie)."
+    }
+
+    /// "The middle did a little better, but no setting got below 4
+    /// mistakes out of 10."
+    static var floorLine: String {
+        let better = DoubtDialContent.middleBeatsTheEnds ? "The middle did a little better, but no" : "No"
+        return "\(better) setting got below \(DoubtDialContent.fewestMistakes) mistakes out of \(DoubtDialContent.postCount)."
     }
 
     /// The row under the dial once revealed.
@@ -155,7 +191,13 @@ public enum DoubtDialCopy {
             + "\(tally.notSureYet) not sure yet."
     }
 
-    public static let takeaway = "Doubt alone can\u{2019}t sort them. Checking can, and \u{201C}not sure yet\u{201D} is an honest answer."
+    /// What checking did, reported rather than ruled: "Checking sorted 8 of
+    /// 10, and was honest about the other 2: not sure yet." (The general
+    /// rule is the lesson's exercise for the student to state.)
+    public static var takeaway: String {
+        "Checking sorted \(DoubtDialContent.checkSettled) of \(DoubtDialContent.postCount), "
+            + "and was honest about the other \(DoubtDialContent.checkTally.notSureYet): not sure yet."
+    }
 
     // MARK: The feed
 
@@ -164,6 +206,8 @@ public enum DoubtDialCopy {
     public static let sharedColumn = "Shared"
     public static let wavedAwayColumn = "Waved away"
     public static let notSharedColumn = "Not shared"
+    /// The Mac's checking group for the posts held back.
+    public static let notSureYetColumn = "Not sure yet"
     /// A Mac column with nothing in it at this setting.
     public static let emptyColumn = "No posts at this setting."
     public static let realTag = "Real"
@@ -175,6 +219,44 @@ public enum DoubtDialCopy {
     public static let mistakeSpoken = "A mistake"
 
     public static func tag(_ post: DoubtDialPost) -> String { post.isReal ? realTag : fakeTag }
+
+    // MARK: The strip under the dial
+
+    /// A post's letter in the strip: R (real) or F (fake).
+    public static func stripLetter(_ post: DoubtDialPost) -> String { post.isReal ? "R" : "F" }
+    /// The strip's key, drawn with the glyphs between: "R real · F fake ·
+    /// ↗ shared · ⊘ waved away · ✕ a mistake".
+    public static let stripKeyLetters = "R real \u{00B7} F fake"
+    public static let stripKeyShared = "shared"
+    public static let stripKeyWavedAway = "waved away"
+    public static let stripKeyMistake = "a mistake"
+
+    /// The strip in words (its VoiceOver line, and its text form at the
+    /// accessibility sizes): "Mistakes at this setting: School board, Water
+    /// tower (fakes shared); Seal, Bridge (real stories waved away)."
+    public static func mistakesHere(atStop stop: Int) -> String {
+        let wrong = DoubtDialContent.mistakes(atStop: stop, checking: false)
+        let fakes = wrong.filter { !$0.isReal }.map(\.shortName)
+        let real = wrong.filter(\.isReal).map(\.shortName)
+        var groups: [String] = []
+        if !fakes.isEmpty {
+            groups.append("\(fakes.joined(separator: ", ")) (\(fakes.count == 1 ? "fake shared" : "fakes shared"))")
+        }
+        if !real.isEmpty {
+            groups.append("\(real.joined(separator: ", ")) "
+                          + "(\(real.count == 1 ? "real story waved away" : "real stories waved away"))")
+        }
+        return groups.isEmpty ? "No mistakes at this setting." : "Mistakes at this setting: \(groups.joined(separator: "; "))."
+    }
+
+    /// The Mac's header for one of checking's groups.
+    public static func checkColumn(_ verdict: DoubtDialVerdict) -> String {
+        switch verdict {
+        case .shared: return sharedColumn
+        case .notSureYet: return notSureYetColumn
+        case .notShared, .wavedAway: return notSharedColumn
+        }
+    }
 
     /// A column's header with its count: "Shared · 7".
     public static func column(_ name: String, count: Int) -> String { "\(name) \u{00B7} \(count)" }
@@ -265,12 +347,15 @@ public enum DoubtDialCopy {
                      lessDoubt, moreDoubt, turnPrompt, fakesSharedLabel, realWavedAwayLabel, checkedFakesLabel,
                      checkedRealLabel, notSureYetLabel, spoiledResult, mistakesRowTitle, mistakesRowSpoken,
                      checkIntro, checkFirst, checkHint, backToDial, backHint, checkTallyLine, takeaway, feedTitle,
-                     feedOrder, sharedColumn, wavedAwayColumn, notSharedColumn, emptyColumn, realTag, fakeTag, whatChecking,
-                     mistakeTag, mistakeSpoken]
+                     feedOrder, sharedColumn, wavedAwayColumn, notSharedColumn, notSureYetColumn, emptyColumn, realTag,
+                     fakeTag, whatChecking, mistakeTag, mistakeSpoken, stripKeyLetters, stripKeyShared, stripKeyWavedAway,
+                     stripKeyMistake, "R", "F"]
         lines += labels.map(\.text)
         lines += DoubtDialGuess.allCases.flatMap { [guessTitle($0), result(for: $0)] }
         lines += stops
-        lines += stopIndices.flatMap { [rule(atStop: $0), dialValue(atStop: $0), mistakesLine(atStop: $0)] }
+        lines += stopIndices.flatMap {
+            [rule(atStop: $0), dialValue(atStop: $0), mistakesLine(atStop: $0), mistakesHere(atStop: $0)]
+        }
         lines += DoubtDialContent.mistakesByStop.map(mistakesCell)
         lines += [Mode.hook, .checked].map(accessibilitySummary) + stopIndices.map { accessibilitySummary(.dial($0)) }
         lines += [DoubtDialVerdict.shared, .wavedAway, .notShared, .notSureYet].flatMap { [verdictWord($0), verdictSpoken($0)] }
@@ -288,8 +373,7 @@ public enum DoubtDialCopy {
             let shared = DoubtDialContent.sharedCount(atStop: stop, checking: false)
             return [(sharedColumn, shared), (wavedAwayColumn, total - shared)]
         }
-        let checked = DoubtDialContent.sharedCount(atStop: 0, checking: true)
-        columns += [(sharedColumn, checked), (notSharedColumn, total - checked)]
+        columns += DoubtDialContent.checkGroups.map { (checkColumn($0.verdict), $0.posts.count) }
         lines += columns.flatMap { [column($0.0, count: $0.1), columnSpoken($0.0, count: $0.1)] }
         return lines
     }

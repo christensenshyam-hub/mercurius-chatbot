@@ -6,6 +6,35 @@ import DesignSystem
 // platform card stacks them in the same order and draws the feed its own
 // way (one column on the iPhone; Shared | Waved away on the Mac).
 
+extension InteractiveTheme {
+    /// How the reveal and "Check first" arrive: a fade that waits for the
+    /// card's layout to settle, so the new text never draws over the feed
+    /// while it is still moving down. Only a fade, with or without Reduce
+    /// Motion. Leaving, it fades at once.
+    var doubtDialArrival: AnyTransition {
+        .asymmetric(insertion: .opacity.animation(InteractiveMotion.crossfade.delay(reduceMotion ? 0.2 : 0.3)),
+                    removal: .opacity.animation(InteractiveMotion.crossfade.speed(2)))
+    }
+}
+
+/// The card's DEBUG scroll mark (`InteractiveScrollID.reveal`): on the
+/// reveal, or with `-DoubtDialScrollFeed YES` on the feed's heading instead
+/// (shots of the feed's columns). Release reads no arguments, so the mark
+/// stays on the reveal.
+struct DoubtDialScrollMark: ViewModifier {
+    /// Whether this is the feed's heading (else the reveal).
+    let isFeed: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if DoubtDialDebug.current.scrollToFeed == isFeed {
+            content.id(InteractiveScrollID.reveal)
+        } else {
+            content
+        }
+    }
+}
+
 /// What the student does, with the card's motion (a crossfade under Reduce
 /// Motion) and VoiceOver's announcements of what they caused. The dial's
 /// own moves aren't announced: VoiceOver reads an adjustable control's new
@@ -66,7 +95,10 @@ struct DoubtDialHook: View {
 
 /// The one control and what it counts: the dial (off until the guess is
 /// locked), once revealed each setting's mistakes under its stops, the
-/// stop's rule in words, and the two counters.
+/// stop's rule in words, the feed in one strip with the dial's cut through
+/// it (so each turn visibly moves the cut and flips posts), and the two
+/// counters. At the accessibility sizes the strip is a line of words under
+/// the counters.
 struct DoubtDialDialSection: View {
     let state: DoubtDialState
     let onTurn: (Int) -> Void
@@ -87,7 +119,7 @@ struct DoubtDialDialSection: View {
             if state.machine.isRevealed {
                 DoubtDialMistakesRow(current: state.stop)
                     .padding(.top, 2)
-                    .transition(theme.transition())
+                    .transition(theme.doubtDialArrival)
             }
             if state.machine.canExplore {
                 Text(DoubtDialCopy.rule(atStop: state.stop))
@@ -95,9 +127,21 @@ struct DoubtDialDialSection: View {
                     .foregroundStyle(theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.opacity)
+                if !theme.usesTables {
+                    DoubtDialFeedStrip(stop: state.stop)
+                        .transition(.opacity)
+                }
                 counters
                     .padding(.top, 2)
                     .transition(theme.transition())
+                if theme.usesTables {
+                    // The strip in words, under the counters.
+                    Text(DoubtDialCopy.mistakesHere(atStop: state.stop))
+                        .interactiveText(.callout)
+                        .foregroundStyle(theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                }
             }
         }
     }
@@ -139,8 +183,8 @@ struct DoubtDialProgress: View {
 }
 
 /// After the reveal, the move that works: "Check first", then checking's
-/// three counters, the takeaway, and the label that the checks are made up
-/// too. "Back to the dial" leaves it (so does turning the dial).
+/// three counters, what checking did (8 of 10 sorted, 2 held back), and
+/// the label that the checks are made up too, and real checking messier. "Back to the dial" leaves it (so does turning the dial).
 struct DoubtDialCheckSection: View {
     let state: DoubtDialState
     let onCheck: () -> Void
@@ -160,12 +204,12 @@ struct DoubtDialCheckSection: View {
                               CounterTile(DoubtDialCopy.checkedRealLabel, value: tally.realWavedAway),
                               CounterTile(DoubtDialCopy.notSureYetLabel, value: tally.notSureYet)])
                     .shadow(color: theme.lumen.opacity(glowingCounters && theme.lit ? 0.35 : 0), radius: 12)
-                    .transition(theme.transition())
+                    .transition(theme.doubtDialArrival)
                 Text(DoubtDialCopy.takeaway)
                     .interactiveText(.heading)
                     .foregroundStyle(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(theme.transition())
+                    .transition(theme.doubtDialArrival)
                 LabelLine(DoubtDialCopy.checkLabel)
                 InteractiveActionButton(DoubtDialCopy.backToDial, systemImage: "arrow.uturn.backward",
                                         accessibilityHint: DoubtDialCopy.backHint, action: onBack)

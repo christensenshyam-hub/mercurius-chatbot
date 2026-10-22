@@ -5,7 +5,10 @@ import DesignSystem
 /// The Doubt Dial on the Mac (U6L4): Night Studio's lit card, in the same
 /// order as the iPhone's, with the feed in two columns, Shared | Waved
 /// away. As the dial turns, posts crossfade from one column to the other
-/// (a fade, with or without Reduce Motion; nothing slides). The counters
+/// (a fade, with or without Reduce Motion; nothing slides). Under "Check
+/// first" the right column holds checking's two other groups, Not sure yet
+/// over Not shared, so the seal (real, held back) never sits among the
+/// fakes. The counters
 /// glow in lumen (not under Increase Contrast or Reduce Transparency).
 /// Below 440 pt the shell shows the compact "Try it" card, which opens in
 /// place.
@@ -47,11 +50,11 @@ private struct NightDoubtDialBody: View {
             DoubtDialProgress(state: state, onShowMe: actions.showMe)
             if state.machine.isRevealed {
                 RevealBox(state.revealLines)
-                    .id(InteractiveScrollID.reveal)
-                    .transition(theme.transition())
+                    .modifier(DoubtDialScrollMark(isFeed: false))
+                    .transition(theme.doubtDialArrival)
                 DoubtDialCheckSection(state: state, onCheck: actions.checkFirst, onBack: actions.backToDial,
                                       glowingCounters: true)
-                    .transition(theme.transition())
+                    .transition(theme.doubtDialArrival)
             }
             feed
         }
@@ -66,6 +69,7 @@ private struct NightDoubtDialBody: View {
                     .interactiveText(.heading)
                     .foregroundStyle(theme.ink)
                     .accessibilityAddTraits(.isHeader)
+                    .modifier(DoubtDialScrollMark(isFeed: true))
                 Spacer(minLength: 0)
                 Text(DoubtDialCopy.feedOrder)
                     .interactiveText(.caption)
@@ -74,40 +78,68 @@ private struct NightDoubtDialBody: View {
             }
             HStack(alignment: .top, spacing: 12) {
                 if let columns = sortedColumns {
-                    column(columns.left.title, posts: columns.left.posts)
-                    column(columns.right.title, posts: columns.right.posts)
+                    column(columns.left)
+                    column(columns.right)
                 } else {
                     // No guess yet: no verdicts, the feed in two halves.
                     let half = (DoubtDialContent.posts.count + 1) / 2
-                    column(nil, posts: Array(DoubtDialContent.posts.prefix(half)))
-                    column(nil, posts: Array(DoubtDialContent.posts.dropFirst(half)))
+                    column([(title: nil, posts: Array(DoubtDialContent.posts.prefix(half)))])
+                    column([(title: nil, posts: Array(DoubtDialContent.posts.dropFirst(half)))])
                 }
             }
         }
     }
 
-    /// Shared | Waved away (the dial), or Shared | Not shared (checking).
-    private var sortedColumns: (left: (title: String, posts: [DoubtDialPost]),
-                                right: (title: String, posts: [DoubtDialPost]))? {
+    /// One titled group of posts in a column.
+    private typealias FeedGroup = (title: String?, posts: [DoubtDialPost])
+
+    /// Shared | Waved away (the dial); under "Check first", Shared | Not
+    /// sure yet over Not shared (`DoubtDialContent.checkGroups`).
+    private var sortedColumns: (left: [FeedGroup], right: [FeedGroup])? {
         guard state.machine.canExplore || state.checking else { return nil }
+        if state.checking {
+            let groups: [FeedGroup] = DoubtDialContent.checkGroups.map {
+                (title: DoubtDialCopy.checkColumn($0.verdict), posts: $0.posts)
+            }
+            return (Array(groups.prefix(1)), Array(groups.dropFirst()))
+        }
         let shared = DoubtDialContent.posts.filter { state.verdict(for: $0)?.isShared == true }
         let other = DoubtDialContent.posts.filter { state.verdict(for: $0)?.isShared != true }
-        let right = state.checking ? DoubtDialCopy.notSharedColumn : DoubtDialCopy.wavedAwayColumn
-        return ((DoubtDialCopy.sharedColumn, shared), (right, other))
+        return ([(title: DoubtDialCopy.sharedColumn, posts: shared)], [(title: DoubtDialCopy.wavedAwayColumn, posts: other)])
     }
 
-    private func column(_ title: String?, posts: [DoubtDialPost]) -> some View {
+    private func column(_ groups: [FeedGroup]) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return VStack(alignment: .leading, spacing: 4) {
-            if let title {
-                Text(DoubtDialCopy.column(title, count: posts.count).uppercased())
+            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                if index > 0 {
+                    Rectangle()
+                        .fill(theme.increasedContrast ? theme.hairline : theme.wellEdge)
+                        .frame(height: 1)
+                        .padding(.vertical, 8)
+                        .accessibilityHidden(true)
+                }
+                groupView(group)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(theme.raised, in: shape)
+        .overlay(shape.strokeBorder(theme.increasedContrast ? theme.hairline : theme.wellEdge.opacity(0.5),
+                                    lineWidth: 1))
+    }
+
+    private func groupView(_ group: FeedGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let title = group.title {
+                Text(DoubtDialCopy.column(title, count: group.posts.count).uppercased())
                     .interactiveText(.eyebrow)
                     .foregroundStyle(theme.accentText)
                     .contentTransition(.identity)
-                    .accessibilityLabel(DoubtDialCopy.columnSpoken(title, count: posts.count))
+                    .accessibilityLabel(DoubtDialCopy.columnSpoken(title, count: group.posts.count))
                     .accessibilityAddTraits(.isHeader)
             }
-            if posts.isEmpty {
+            if group.posts.isEmpty {
                 Text(DoubtDialCopy.emptyColumn)
                     .interactiveText(.caption)
                     .foregroundStyle(theme.ink2)
@@ -115,7 +147,7 @@ private struct NightDoubtDialBody: View {
                     .transition(.opacity)
             }
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                ForEach(Array(group.posts.enumerated()), id: \.element.id) { index, post in
                     if index > 0 {
                         Rectangle()
                             .fill(theme.increasedContrast ? theme.hairline : theme.wellEdge.opacity(0.6))
@@ -127,11 +159,6 @@ private struct NightDoubtDialBody: View {
                 }
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(theme.raised, in: shape)
-        .overlay(shape.strokeBorder(theme.increasedContrast ? theme.hairline : theme.wellEdge.opacity(0.5),
-                                    lineWidth: 1))
     }
 }
 #endif

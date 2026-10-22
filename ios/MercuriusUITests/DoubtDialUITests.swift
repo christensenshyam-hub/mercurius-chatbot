@@ -4,7 +4,8 @@ import XCTest
 /// (`-Interactive doubt-dial`: the stub replies stream locally, no network,
 /// and the real placement puts the card after the first reply's example):
 /// a guess locks, the dial turns (it is one adjustable element), "Show me"
-/// pairs the guess with the result, "Check first" shows checking's count,
+/// pairs the guess with the result and turns the dial to the setting it
+/// names, "Check first" shows checking's count,
 /// and the lesson's check after the card still answers with one tap.
 final class DoubtDialUITests: XCTestCase {
 
@@ -48,10 +49,19 @@ final class DoubtDialUITests: XCTestCase {
             .matching(NSPredicate(format: "label == %@", "Doubt dial")).firstMatch
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
         bringOnScreen(dial, in: app)
-        tapStop(1, of: dial, in: app)
-        tapStop(2, of: dial, in: app)
+        turn(dial, to: 1, named: "Believe most", in: app)
+        turn(dial, to: 2, named: "In the middle", in: app)
+        keep("doubt-dial-turned", in: app)
+        // The strip under the dial names the setting's mistakes (one element
+        // at the regular sizes; a line of words at the accessibility sizes).
+        let strip = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Mistakes at this setting: School board, Water tower "
+                                  + "(fakes shared); Seal, Bridge (real stories waved away).")).firstMatch
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "the strip doesn't name In the middle's four mistakes")
+        bringOnScreen(strip, in: app)
+        keep("doubt-dial-strip", in: app)
         let value = dial.value as? String ?? ""
-        XCTAssertTrue(value.hasPrefix("Unsure."), "the dial says \(value)")
+        XCTAssertTrue(value.hasPrefix("In the middle."), "the dial says \(value)")
         XCTAssertTrue(value.contains("2 fakes") && value.contains("2 real stories"), "the dial says \(value)")
 
         // Show me: the guess beside what happened.
@@ -60,8 +70,18 @@ final class DoubtDialUITests: XCTestCase {
         bringOnScreen(showMe, in: app)
         showMe.tap()
         let reveal = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "You guessed Doubt everything.")).firstMatch
+            .matching(NSPredicate(format: "label BEGINSWITH %@",
+                                  "You guessed Doubt everything. Doubt everything never shared a fake")).firstMatch
         XCTAssertTrue(reveal.waitForExistence(timeout: 5), "the reveal didn't pair the guess with the result")
+        // Show me turned the dial to the setting the result names, so the
+        // counters beside it agree (it was on "In the middle").
+        let revealed = dial.value as? String ?? ""
+        XCTAssertTrue(revealed.hasPrefix("Doubt everything."), "after Show me the dial says \(revealed)")
+        XCTAssertTrue(revealed.contains("0 fakes") && revealed.contains("5 real stories"),
+                      "after Show me the dial says \(revealed)")
+        keep("doubt-dial-revealed", in: app)
+        bringOnScreen(dial, in: app)
+        keep("doubt-dial-revealed-dial", in: app)
 
         // Check first: no fake shared, no real story waved away, 2 not sure yet.
         let check = button("Check first", in: app)
@@ -71,6 +91,8 @@ final class DoubtDialUITests: XCTestCase {
         let tally = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@", "Fakes shared: 0. Real stories waved away: 0. Not sure yet: 2.")).firstMatch
         XCTAssertTrue(tally.waitForExistence(timeout: 5), "Check first's count didn't show")
+        bringOnScreen(tally, in: app)
+        keep("doubt-dial-checked", in: app)
 
         // The lesson's check after the card: one tap grades and sends.
         let option = button("Option A: A stand-in for Merc\u{2019}s reply", in: app)
@@ -90,6 +112,35 @@ final class DoubtDialUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
 
+    /// Turns the dial to stop `index` as a student would: a touch on its
+    /// stop mark, or at the accessibility sizes (where the track is two
+    /// step buttons, stacked or side by side, inside the one dial element)
+    /// a touch on "More doubt" where it is drawn. Checks the stop by its name.
+    @MainActor
+    private func turn(_ dial: XCUIElement, to index: Int, named name: String, in app: XCUIApplication) {
+        func there() -> Bool { (dial.value as? String ?? "").hasPrefix("\(name).") }
+        bringOnScreen(dial, in: app)
+        tapStop(index, of: dial, in: app)
+        var tries = 0
+        while !there() && tries < 6 {
+            bringOnScreen(dial, in: app)
+            let frame = dial.frame
+            let x = tries % 2 == 0 ? frame.minX + 60 : frame.midX + 60
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: frame.maxY - 26)).tap()
+            tries += 1
+        }
+        XCTAssertTrue(there(), "the dial didn't reach \(name): \(dial.value as? String ?? "")")
+    }
+
+    /// A picture of the screen, kept in the result bundle for review.
+    @MainActor
+    private func keep(_ name: String, in app: XCUIApplication) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     /// Touches the dial's stop `index` (of 5): the stop marks are 44 pt
     /// targets spread across the dial's width, on a track 44 pt tall that
     /// sits above the ends' names (about 50 pt above the dial's bottom).
@@ -101,21 +152,33 @@ final class DoubtDialUITests: XCTestCase {
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y)).tap()
     }
 
+    /// Scrolls the lesson's list by about `points` (negative: up), with no
+    /// fling: a drag that holds still before it lets go (a swipe overshoots
+    /// at the accessibility sizes, where the card is many screens tall).
+    @MainActor
+    private func drag(_ app: XCUIApplication, by points: CGFloat) {
+        let start = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: points)),
+                    withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
     /// The lesson's list doesn't take the accessibility scroll action for a
     /// row below the card: scroll as a student would, until `element` is on
-    /// screen above the composer.
+    /// screen above the composer (its top, for one taller than that band).
     @MainActor
     private func bringOnScreen(_ element: XCUIElement, in app: XCUIApplication) {
         let window = app.windows.firstMatch.frame
-        var swipes = 0
-        while element.frame.maxY > window.height * 0.75 && swipes < 16 {
-            app.swipeUp(velocity: .slow)
-            swipes += 1
+        let top = window.height * 0.12, bottom = window.height * 0.75
+        let tall = element.frame.height > (bottom - top) * 0.8
+        func below() -> Bool { tall ? element.frame.minY > (top + bottom) / 2 : element.frame.maxY > bottom }
+        var drags = 0
+        while below() && drags < 40 {
+            drag(app, by: -200)
+            drags += 1
         }
-        swipes = 0
-        while element.frame.minY < window.height * 0.12 && swipes < 8 {
-            app.swipeDown(velocity: .slow)
-            swipes += 1
+        while element.frame.minY < top && drags < 60 {
+            drag(app, by: 200)
+            drags += 1
         }
     }
 }
