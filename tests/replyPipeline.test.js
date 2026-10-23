@@ -75,6 +75,18 @@ describe('replyPipeline', () => {
     assert.ok(transformReply(LESSON_REPLY, { limit: 3 }).includes('[SOURCE: Mata v. Avianca — courtlistener.com/docket/1/x]'));
   });
 
+  test('Basics options reach the reflow: a quoted practice line stays whole', () => {
+    // Merge with #54: server.js passes keepQuotes/numberedLists for Basics
+    // lessons in the same options object as the other stages.
+    const practice = 'Good start. Try asking me: "Plan dinner for 6. One is vegetarian, one hates onions." Then see what it says.';
+    const basics = { limit: 2, keepQuotes: true, numberedLists: true };
+    const want = reflowText(practice, 2, { keepQuotes: true, numberedLists: true });
+    assert.notEqual(want, reflowText(practice, 2), 'keepQuotes changes this text');
+    assert.equal(transformReply(practice, basics), want);
+    assert.equal(transformReply(practice, { ...basics, rewriteSources: true }), want);
+    for (const sizes of [[1], [5], [practice.length]]) assert.equal(chunked(practice, basics, sizes), want, `sizes ${sizes}`);
+  });
+
   test('a reply ending inside held text still comes out whole at flush', () => {
     for (const text of ['Almost done [Q', 'Unclosed [Q]\nPick\nA) one', 'Ends on a terminal.', 'Ends mid-tag [SOURCE: Gender', '']) {
       const opts = { limit: 2, rewriteSources: true, shuffleQuiz: true };
