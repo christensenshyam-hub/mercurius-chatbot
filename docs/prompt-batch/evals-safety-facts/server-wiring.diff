@@ -1,0 +1,31 @@
+--- a/server.js (720dbac)
++++ b/server.js
+@@ -1096,8 +1096,8 @@
+ const SOURCE_BLOCK = '<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
+ const CLUB_BLOCK = clubContext.staticClubBlock({ capabilities: [clubContext.CLUB_V1], clubKnowledge: CLUB_KNOWLEDGE });
+ // v2 (USE_UNIFIED_PROMPT) prefixes for free chat.
+-const V2_STATIC_APP = systemBlocks.composeStatic([UNIFIED_PROMPT, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+-const V2_STATIC_WIDGET = systemBlocks.composeStatic([UNIFIED_PROMPT, CLUB_BLOCK, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
++const V2_STATIC_APP = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
++const V2_STATIC_WIDGET = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT, CLUB_BLOCK, SOURCE_BLOCK, SAFETY_CORE_TAGGED]);
+ // Legacy (flag off) and curriculum prefixes, memoized per variant.
+ const LEGACY_MODE_PROMPTS = { socratic: SOCRATIC_PROMPT, debate: DEBATE_PROMPT, discussion: DISCUSSION_PROMPT };
+ const staticPrefixCache = new Map();
+@@ -1105,7 +1105,7 @@
+   const m = LEGACY_MODE_PROMPTS[mode] ? mode : 'socratic';
+   const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
+   if (!staticPrefixCache.has(key)) {
+-    staticPrefixCache.set(key, systemBlocks.composeStatic([
++    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
+       qualityPrefix(m),
+       LEGACY_MODE_PROMPTS[m],
+       isWidget ? CLUB_BLOCK : null,
+@@ -1118,7 +1118,7 @@
+ function curriculumStatic(wantsBlocks) {
+   const key = `curriculum:${wantsBlocks ? 'blocks' : 'prose'}`;
+   if (!staticPrefixCache.has(key)) {
+-    staticPrefixCache.set(key, systemBlocks.composeStatic([
++    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
+       CURRICULUM_PROMPT,
+       wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : null,
+       SOURCE_BLOCK,

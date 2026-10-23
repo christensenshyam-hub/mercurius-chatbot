@@ -1,0 +1,131 @@
+{
+  "base": "http://localhost:3444",
+  "tag": "CANDIDATE v2 (scratch copy) flag off",
+  "generatedAt": "2026-10-22T05:08:15.765Z",
+  "results": [
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the 2x term by itself first — what would you do to both sides?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15. What happens when you move the 9 to the other side — what operation undoes adding 9?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Yes — that's **inverse operations**, undoing the +9: −2x = 6. What undoes the −2 that's multiplying x?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "Check: 9 − 2(3) = 9 − 6 = 3, not 15. The slip is in the last step — what's 6 divided by −2?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check: 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's it — same check works on any AI's math: plug its answer back in.\n\nWhat do you think made the sign easy to drop there — is it the negative on the 2, or something else?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "That's a really common intuition — but it only holds for positive numbers.\n\nDividing by a **negative** flips the sign: 6 ÷ −2 = −3, because −2 × −3 = 6.\n\nDoes that click, or want to see one more example with negatives?"
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O\n\nHow many carbon atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "That's a common instinct, but balancing means you can only change **coefficients** (the numbers in front of molecules) — never the formulas themselves.\n\nChanging CO₂ to C₃O₂ would create a different molecule that doesn't exist in this reaction.\n\nSo, keeping CO₂ as-is: if there are 3 carbons on the left, what coefficient in front of CO₂ would give you 3 carbons on the right?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Yes — that's **matching coefficients**: C₃H₈ + O₂ → 3CO₂ + H₂O\n\nNow look at hydrogen: how many H atoms are on the left side?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Count them up first — how many H atoms are in C₃H₈?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Check it: C₃H₈ has 8 hydrogen atoms on the left, and each H₂O has 2, so 4 H₂O gives you 8. That's right — **matching hydrogens**: C₃H₈ + O₂ → 3CO₂ + 4H₂O\n\nNow count the oxygen atoms on the right side — how many total?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A **coefficient** is the number in front of a molecule — like the 3 in 3CO₂ or the 4 in 4H₂O.\n\nIt multiplies everything in that molecule, so 4H₂O means 4 × 2 = 8 hydrogen atoms and 4 × 1 = 4 oxygen atoms.\n\nSo with that in mind, how many total oxygen atoms are on the right side of your equation right now?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Look at the right side: 3CO₂ has 3 × 2 = 6 oxygen atoms, and 4H₂O has 4 × 1 = 4 oxygen atoms.\n\nWhat's 6 + 4?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "6 + 4 = 10 oxygen atoms on the right side.\n\nNow look at the left: O₂ means oxygen comes in pairs, so what coefficient in front of O₂ gives you 10 oxygen atoms?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Yes — **balanced**: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O\n\nCheck it: 3C = 3C ✓, 8H = 8H ✓, 10O = 10O ✓\n\nSame check works on any AI's math: plug the numbers back in like that.\n\nWant to try a trickier one where you get a fraction first and have to clear it?"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "mode": "socratic",
+      "persona": "Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.",
+      "answer": {
+        "variable": "w",
+        "value": 10
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle?"
+        },
+        {
+          "student": "idk how to start word problems",
+          "merc": "That's a common sticking point. Let's build it piece by piece.\n\nThe problem says \"length is 3 less than twice the width\" — can you write that as an equation using L and W?"
+        },
+        {
+          "student": "so w is the width and the length is 2w - 3?",
+          "merc": "Exactly — **defining variables** is the first move, and you nailed it.\n\nNow the perimeter of a rectangle is P = 2L + 2W. You know P = 54 and you just found L = 2W − 3.\n\nCan you substitute those into the formula and write out the equation?"
+        },
+        {
+          "student": "perimeter is l + w right so 2w - 3 + w = 54",
+          "merc": "Two small fixes: perimeter uses all four sides, so the formula is 2L + 2W, not L + W.\n\nTry substituting L = 2W − 3 into 2L + 2W = 54 — what do you get?"
+        },
+        {
+          "student": "oh its 2l + 2w. so 2(2w - 3) + 2w = 54",
+          "merc": "Yes — that's **substitution** done correctly: 2(2w − 3) + 2w = 54.\n\nNow distribute the 2 into the parentheses — what do you get?"
+        },
+        {
+          "student": "6w - 6 = 54 so w = 10",
+          "merc": "Check it: if w = 10, then 6(10) − 6 = 60 − 6 = 54 ✓\n\nSo the width is 10 m — now what's the length?"
+        },
+        {
+          "student": "and the length is 17?",
+          "merc": "Check it: L = 2(10) − 3 = 20 − 3 = 17 ✓, and perimeter = 2(17) + 2(10) = 34 + 20 = 54 ✓\n\nSame check works on any AI's math: plug its answer back into the original equation.\n\nWant to try a harder version where the perimeter formula isn't given to you?"
+        }
+      ]
+    }
+  ]
+}

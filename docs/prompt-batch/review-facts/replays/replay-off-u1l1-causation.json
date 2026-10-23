@@ -1,0 +1,33 @@
+{
+  "base": "off-u1l1.json",
+  "keepTurns": 8,
+  "student": "low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure",
+  "flag": "off",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": true,
+      "reply": "You've got the right confidence level — low — but I want to flag one thing in your reasoning.\n\nYou said there are lots of words that fit, *therefore* the model isn't sure. That's correct!\n\nBut watch out for the flip side: high confidence means the *opposite* — **fewer** plausible continuations, not more. You nailed that logic on the first blank (\"studied all night\" narrows it down), so make sure you're holding both ideas together consistently.\n\nTo recap what you showed:\n\n- Blank 1: **high confidence** — attention links \"studied all night\" to a tight cluster of tokens like \"exam\" or \"test\"\n- Blank 2: **low confidence** — \"hoped her ___\" leaves the door open to \"essay\", \"answers\", \"work\", \"presentation\" and more, so probability spreads across many tokens instead of concentrating on one\n\nThat's next-token prediction working exactly as it should. When context is rich and specific, the model gets confident. When context is vague, probability spreads out.\n\nYou've demonstrated exactly what this lesson is about — tokenization chops your text into numbered chunks, attention reads context in real time, and next-token prediction uses both to pick one token at a time.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": true,
+      "reply": "You've got the right confidence level — low — but I want to flag one thing in your reasoning.\n\nYou said there are a lot of words that fit, *therefore* the model is less sure. That's exactly right.\n\nBut flip it around: if you had said \"lots of words fit, so it's high confidence\" — that would be backwards. **High confidence means one token dominates**; low confidence means the probability gets spread across many options.\n\nYour answer got it right, so just make sure that logic is locked in.\n\n---\n\nLet's recap your full answer so I can grade it cleanly:\n\n- **Blank 1:** High confidence — \"studied all night\" narrows context toward \"exam\" or \"test\" ✅\n- **Blank 2:** Low confidence — \"hoped her ___\" leaves many plausible tokens (\"essay\", \"answers\", \"work\", \"presentation\") so probability spreads out ✅\n\nThat's exactly how next-token prediction works. When attention finds strong context signals, one token wins clearly. When context is open-ended, the model hedges across many options.\n\nYou've nailed the core idea of this lesson — tokenization breaks text into numbered chunks, attention reads context live, and next-token prediction builds output one probable token at a time.\n\nNice work. 🎯\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": true,
+      "reply": "You've got the right confidence level — low — but I want to flag one thing in your reasoning.\n\nYou said there are lots of words that fit, *therefore* the model isn't sure. That's correct! But make sure you're holding onto the causal direction: **many plausible continuations = low confidence**, not the other way around.\n\nThe reason the model is uncertain is precisely because attention can't narrow the field — \"hoped her ___\" doesn't give strong enough signal to favor \"essay\" over \"answers\" over \"work.\" The probability gets spread across many tokens instead of piling onto one.\n\nYou nailed both blanks:\n\n- **First blank** — high confidence, because \"studied all night\" pulls attention hard toward \"exam\" or \"test\"\n- **Second blank** — low confidence, because the context leaves many tokens equally plausible\n\nThat's tokenization, attention, and next-token prediction working together exactly as they should.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": true,
+      "reply": "You've got the right confidence level — low — but I want to flag one thing about your reasoning.\n\nYou said low confidence *because* many words fit. That's actually the right logic — lots of plausible continuations means the probability gets spread across many tokens, so no single one dominates.\n\nJust make sure you hold onto that: **high confidence = one or two tokens dominate; low confidence = probability spreads across many options.**\n\nYour answers:\n- Blank 1: high confidence ✅ — \"studied all night\" focuses attention on \"exam\" or \"test\"\n- Blank 2: low confidence ✅ — \"hoped her ___\" leaves \"essay\", \"answers\", \"work\", \"presentation\" all plausible, so probability spreads out\n\nThat's exactly how next-token prediction works in practice. The surrounding tokens either narrow the field or leave it wide open.\n\nNice work — you've nailed the core idea of this lesson.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": true,
+      "reply": "You've got the right confidence level — low — but I want to flag one thing in your reasoning.\n\nYou said there are lots of words that fit, *therefore* the model isn't sure. That's correct!\n\nBut watch out for the flip side: high confidence means the opposite — **fewer** plausible continuations, not more. You got that right for blank one (\"studied all night\" narrows it down), so make sure that logic stays consistent.\n\nTo summarize what you showed:\n\n- Blank 1 — **high confidence**: attention links \"studied all night\" to \"exam/test,\" leaving few plausible tokens at the top\n- Blank 2 — **low confidence**: \"hoped her ___\" leaves many equally plausible tokens (essay, answers, work, presentation…), so probability spreads out across them\n\nThat's next-token prediction working exactly as it should — context either narrows the field or leaves it wide open.\n\nNice work on this one. You traced the full path from tokenization through attention to prediction, and applied it correctly to a real example.\n\n[LESSON_COMPLETE]"
+    }
+  ]
+}

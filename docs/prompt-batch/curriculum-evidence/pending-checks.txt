@@ -1,0 +1,4 @@
+base pending: credited 3/12 re-asked 5/12
+iso pending: credited 0/12 re-asked 10/12
+v2 pending: credited 1/12 re-asked 9/12
+v7 pending: credited 0/12 re-asked 9/12

@@ -1,0 +1,128 @@
+[
+  {
+    "run": 1,
+    "q": "what is 2x + 7 = 15",
+    "ans": 4,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 2x by itself?",
+      "The 7 is in the way — what undoes adding 7?",
+      "Adding 7 gets undone by subtracting 7 — so subtract 7 from both sides: 2x = 8.\n\nWhat undoes the 2 that's multiplying x?",
+      "Dividing both sides by 2 gives you x by itself.\n\nNow try yours: 2x = 8, so x = ?"
+    ]
+  },
+  {
+    "run": 1,
+    "q": "solve 5x - 2 = 18",
+    "ans": 4,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 5x by itself?",
+      "The − 2 is in the way. What undoes subtracting 2?",
+      "Add 2 to both sides: 5x = 20.\n\nNow what undoes the 5 that's multiplying x?",
+      "Divide both sides by 5: 5x ÷ 5 = 20 ÷ 5.\n\nWhat does that give you for x?"
+    ]
+  },
+  {
+    "run": 1,
+    "q": "what is 6x + 1 = 43",
+    "ans": 7,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 6x by itself?",
+      "The 1 is in the way — what undoes adding 1?",
+      "Adding 1 gets undone by subtracting 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?",
+      "Try this one the same way:\n\n6x + 1 = 55\n6x = 54\n54 ÷ 6 = 9\n\nNow try yours the same way — what's 42 ÷ 6?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "what is 2x + 7 = 15",
+    "ans": 4,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 2x by itself?",
+      "The 7 is in the way — what undoes adding 7?",
+      "Adding 7 gets undone by subtracting 7 from both sides: 2x = 8.\n\nNow what undoes the 2 that's multiplying x?",
+      "Try this one the same way:\n\n2x + 7 = 19\n\n2x + 7 − 7 = 19 − 7\n\n2x = 12\n\n2x ÷ 2 = 12 ÷ 2\n\nx = 6\n\nNow try yours the same way — what's your first step?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "solve 5x - 2 = 18",
+    "ans": 4,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 5x by itself?",
+      "The − 2 is in the way. What undoes subtracting 2?",
+      "Add 2 to both sides: 5x = 20.\n\nNow what undoes the 5 that's multiplying x?",
+      "Divide both sides by 5: 5x ÷ 5 = 20 ÷ 5.\n\nWhat does that give you for x?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "what is 6x + 1 = 43",
+    "ans": 7,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's the first move to get 6x by itself?",
+      "The 1 is in the way — what undoes adding 1?",
+      "Adding 1 gets undone by subtracting 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?",
+      "Dividing both sides by 6 gives you 6x ÷ 6 on the left.\n\nWhat does 42 ÷ 6 give you?"
+    ]
+  },
+  {
+    "run": 3,
+    "q": "what is 2x + 7 = 15",
+    "ans": 4,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 2x by itself?",
+      "The 7 is in the way — what undoes adding 7?",
+      "Adding 7 gets undone by subtracting 7 — so subtract 7 from both sides: 2x = 8.\n\nNow what undoes the 2 that's multiplying x?",
+      "Try this one the same way:\n\n2x + 7 = 19\n\n2x + 7 − 7 = 19 − 7\n\n2x = 12\n\n2x ÷ 2 = 12 ÷ 2\n\nx = 6\n\nNow try yours the same way. What's your first step?"
+    ]
+  },
+  {
+    "run": 3,
+    "q": "solve 5x - 2 = 18",
+    "ans": 4,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 5x by itself?",
+      "The − 2 is in the way. What undoes subtracting 2?",
+      "Add 2 to both sides: 5x = 20.\n\nNow what undoes the 5 that's multiplying x?",
+      "Divide both sides by 5: 5x ÷ 5 = 20 ÷ 5.\n\nWhat does that give you for x?"
+    ]
+  },
+  {
+    "run": 3,
+    "q": "what is 6x + 1 = 43",
+    "ans": 7,
+    "leak": null,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's the first move to get 6x by itself?",
+      "The 1 is in the way — what undoes adding 1?",
+      "Adding 1 gets undone by subtracting 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?",
+      "Dividing both sides by 6 gives you 6x ÷ 6 on the left.\n\nWhat does 42 ÷ 6 give you?"
+    ]
+  }
+]

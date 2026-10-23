@@ -1,0 +1,29 @@
+{
+  "about": "Recorded Unit 3 Lesson 2 thread (prompt-batch review 2026-10-19, docs/prompt-batch/review-facts/lessons/on-u3l2.json, branch flag on) up to tutor turn 2, which asks the FDA-authorization [Q]. The last student turn ignores it and asks for biology homework help. Live and in 4 of 6 branch replays per flag state (3 of 6 on main), the tutor credited the unanswered [Q] ('You just nailed that FDA authorization means...'). The assistant turns are the real server replies of that run, kept verbatim.",
+  "lesson": {
+    "id": "u3_l2",
+    "starter": "[CURRICULUM: Unit 3, Lesson 2] Walk me through how AI is used in healthcare — diagnostics, drug discovery, triage. What are the stakes when it fails? Give me an exercise after."
+  },
+  "gapTurn": {
+    "index": 2,
+    "responseMode": "concise"
+  },
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's something that might surprise you: an AI system used by hospitals to decide which patients needed extra care was quietly rating Black patients as healthier than equally sick white patients — not because anyone programmed it to, but because of what it was trained to predict.\n\nThat's the kind of high-stakes failure this lesson is about.\n\n---\n\nLet's start with the most important idea: **what a health AI is actually trained to predict matters enormously.**\n\nAn AI doesn't automatically learn \"who is sick.\" It learns to predict whatever number you give it as a target — and if that number is a flawed stand-in for health, the AI inherits the flaw.\n\n[EX]Obermeyer et al. (Science, 2019) studied a widely used commercial algorithm for identifying patients who need extra care. The algorithm used past health-care *cost* as its target — a reasonable-sounding proxy for health need. But because less money had historically been spent on Black patients (due to systemic barriers to care), the model rated them as healthier than equally sick white patients. Fixing it would have raised the share of Black patients flagged for extra care from 17.7% to 46.5%.[/EX]\n\n[KEY]A health AI learns to predict its *training target* — and if that target is a biased proxy for what you actually care about, the bias flows silently into every decision the model makes.[/KEY]\n\n[Q]\nWhy did the algorithm in the Obermeyer study underestimate how sick Black patients were?\nA) It was trained on data from hospitals that only served white patients, so it had never seen Black patients before\nB) It used past health-care cost as a stand-in for health need, and less had been spent on Black patients due to systemic barriers\nC) Its designers deliberately excluded race from the inputs, which caused it to ignore racial health disparities entirely\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) It used past health-care cost as a stand-in for health need, and less had been spent on Black patients due to systemic barriers"
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — the flaw wasn't in the model's math, it was in what the math was *optimizing for*. A biased proxy poisons the whole system, quietly.\n\n---\n\nNow let's look at the other side of AI in healthcare: the genuine promise — and where even well-intentioned tools can fail in practice.\n\n**Approved AI diagnostics** represent real progress. The FDA has authorized AI systems to screen for serious conditions, sometimes without a doctor needing to review the result first.\n\n[EX]IDx-DR (2018) was the first FDA-authorized AI system to screen for diabetic retinopathy — damage to the eye from diabetes — without a doctor reading the image. A primary-care clinic could run it without an ophthalmologist on site, potentially catching blindness-causing damage much earlier.[/EX]\n\n[KEY]FDA-authorized AI diagnostics can expand access to screening — but authorization means the tool was validated, not that it's perfect in every real-world setting.[/KEY]\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "can u help me with my bio homework real quick its about cells"
+    }
+  ]
+}

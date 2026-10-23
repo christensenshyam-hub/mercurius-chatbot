@@ -1,0 +1,86 @@
+[
+  {
+    "run": 1,
+    "q": "what is 2x + 7 = 15",
+    "ans": 4,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 2x by itself?",
+      "The 7 is being added to 2x — what undoes adding 7?",
+      "Subtracting 7 from both sides gets rid of it: 2x = 8.\n\nNow what undoes the 2 that's multiplying x?",
+      "Here's a similar one worked out (answer is 6):\n\n2x + 3 = 15\nStep 1: subtract 3 from both sides → 2x = 12\nStep 2: divide both sides by 2 → x = 6\n\nNow try yours the same way. What's your first step with 2x + 7 = 15?"
+    ]
+  },
+  {
+    "run": 1,
+    "q": "solve 5x - 2 = 18",
+    "ans": 4,
+    "leak": 3,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 5x by itself?",
+      "The − 2 is in the way. What undoes subtracting 2?",
+      "Here's a similar one worked out (answer is 4):\n\n5x − 2 = 18 → try 5x − 2 = 18... actually, here's a parallel:\n\n**3x − 2 = 10**\n- Add 2 to both sides: 3x = 12\n- Divide both sides by 3: x = 4\n\nNow try yours the same way. What's your first step on **5x − 2 = 18**?",
+      "Here's a parallel worked out (answer is 6):\n\n**5x − 2 = 28**\n- Add 2 to both sides: 5x = 30\n- Divide both sides by 5: x = 6\n\nNow try yours: **5x − 2 = 18**. What do you get when you add 2 to both sides?"
+    ]
+  },
+  {
+    "run": 1,
+    "q": "what is 6x + 1 = 43",
+    "ans": 7,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's the first move to get 6x by itself?",
+      "The 1 is in the way — what undoes adding 1?",
+      "Adding 1 gets undone by subtracting 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?",
+      "Here's one that works the same way, with the answer already shown:\n\n6x + 1 = 49 → subtract 1 from both sides → 6x = 48 → divide both sides by 6 → x = 8.\n\nNow try yours the same way. What's your first step?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "what is 2x + 7 = 15",
+    "ans": 4,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 2x by itself?",
+      "The 7 is in the way — what undoes adding 7?",
+      "Adding 7 gets undone by subtracting 7. So subtract 7 from both sides:\n\n2x + 7 − 7 = 15 − 7, which gives 2x = 8.\n\nNow what undoes the 2 that's multiplying x?",
+      "Here's one that works the same way — this one comes out to 9:\n\n2x + 7 = 25\nSubtract 7 from both sides: 2x = 18\nDivide both sides by 2: x = 9 ✓\n\nNow try yours the same way. What's your first step on 2x + 7 = 15?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "solve 5x - 2 = 18",
+    "ans": 4,
+    "leak": 3,
+    "worked": false,
+    "oneQ": true,
+    "replies": [
+      "What's your first move to get the 5x by itself?",
+      "The − 2 is in the way. What undoes subtracting 2?",
+      "Here's a similar one that comes out to 4:\n\n3x − 2 = 10\n→ Add 2 to both sides: 3x = 12\n→ Divide both sides by 3: x = 4\n\nNow try yours the same way. What's your first step with 5x − 2 = 18?",
+      "Add 2 to both sides: 5x = 20.\n\nWhat do you do next to find x?"
+    ]
+  },
+  {
+    "run": 2,
+    "q": "what is 6x + 1 = 43",
+    "ans": 7,
+    "leak": null,
+    "worked": true,
+    "oneQ": true,
+    "replies": [
+      "What's the first move to get 6x by itself?",
+      "The 1 is in the way — what undoes adding 1?",
+      "Adding 1 gets undone by subtracting 1 from both sides: 6x = 42.\n\nNow what undoes the 6 that's multiplying x?",
+      "Here's one that works the same way, with the answer already shown:\n\n6x + 1 = 49 → subtract 1 from both sides → 6x = 48 → divide both sides by 6 → x = 8\n\nNow try yours the same way. What's your first step with 6x + 1 = 43?"
+    ]
+  }
+]
