@@ -27,6 +27,12 @@ public struct QuizView: View {
                     content(for: quiz)
                 case .failed(let reason, let retryable):
                     failureView(reason: reason, retryable: retryable)
+                case .support:
+                    ScrollView {
+                        CrisisSupportView(closeTitle: "Close", onClose: dismissAction)
+                            .padding(.horizontal, BrandSpacing.lg)
+                            .padding(.vertical, BrandSpacing.lg)
+                    }
                 }
             }
             .background(BrandColor.background)
@@ -38,7 +44,7 @@ public struct QuizView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: dismissAction)
                         .fontWeight(.semibold)
-                        .foregroundStyle(BrandColor.accent)
+                        .foregroundStyle(BrandColor.accentText)
                 }
             }
         }
@@ -113,7 +119,7 @@ public struct QuizView: View {
             HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.xs) {
                 Text("Q\(index + 1).")
                     .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                 Text(question.q)
                     .font(BrandFont.bodyEmphasized)
                     .foregroundStyle(BrandColor.text)
@@ -187,9 +193,9 @@ public struct QuizView: View {
                                 (isUserWrong ? "xmark.circle.fill" : "circle"))
                     )
                     .foregroundStyle(
-                        isUserCorrect ? BrandColor.success :
-                            (isCorrectOption ? BrandColor.success :
-                                (isUserWrong ? BrandColor.error : BrandColor.textSecondary))
+                        isUserCorrect ? BrandColor.successText :
+                            (isCorrectOption ? BrandColor.successText :
+                                (isUserWrong ? BrandColor.errorText : BrandColor.textSecondary))
                     )
                     .accessibilityHidden(true)
                 }
@@ -229,7 +235,7 @@ public struct QuizView: View {
     private func explanationRow(question: QuizQuestion) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
             Image(systemName: "lightbulb")
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
             Text(question.explanation)
                 .font(BrandFont.caption)
@@ -259,7 +265,7 @@ public struct QuizView: View {
         return VStack(spacing: BrandSpacing.sm) {
             Text("\(score) / \(total)")
                 .font(BrandFont.largeTitle)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityLabel("You scored \(score) out of \(total)")
 
             Text(scoreBlurb(correct: score, total: total))

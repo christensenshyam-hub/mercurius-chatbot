@@ -1032,9 +1032,10 @@ struct APIClientEndToEndTests {
         do {
             _ = try await client.generateQuiz(sessionId: testSessionId)
             Issue.record("Expected APIError.quotaExceeded")
-        } catch APIError.quotaExceeded(let message, let retryAfter) {
+        } catch APIError.quotaExceeded(let message, let retryAfter, let scope) {
             #expect(message == "This network has reached today's usage limit.")
             #expect(retryAfter == 600)
+            #expect(scope == "ip")
         } catch {
             Issue.record("Expected .quotaExceeded, got \(error)")
         }
@@ -1058,6 +1059,52 @@ struct APIClientEndToEndTests {
             #expect(retryAfter == nil)
         } catch {
             Issue.record("Expected .serviceUnavailable, got \(error)")
+        }
+    }
+
+    @Test("gradeUnitDefense: the server's 200 crisis answer decodes with crisis set")
+    func gradeUnitDefenseCrisis200() async throws {
+        StubURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/unit-test/grade")
+            #expect(request.httpMethod == "POST")
+            return .response(status: 200, data: Data(UnitDefenseResultTests.serverCrisisPayload.utf8))
+        }
+        let client = makeTestAPIClient()
+        let result = try await client.gradeUnitDefense(
+            sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+        )
+        #expect(result.crisis)
+        #expect(!result.pass)
+    }
+
+    @Test("gradeUnitDefense: a normal 200 grade decodes with crisis unset")
+    func gradeUnitDefenseNormal() async throws {
+        StubURLProtocol.handler = { _ in
+            .response(status: 200, data: Data(#"{"grade":"A","pass":true,"feedback":"Strong."}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        let result = try await client.gradeUnitDefense(
+            sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+        )
+        #expect(!result.crisis)
+        #expect(result.grade == "A")
+    }
+
+    @Test("gradeUnitDefense: a 503 crisis body throws APIError.crisisSupport")
+    func gradeUnitDefenseCrisis503() async {
+        StubURLProtocol.handler = { _ in
+            .response(status: 503, data: Data(#"{"error":"crisis","message":"Call or text 988.","crisis":true}"#.utf8))
+        }
+        let client = makeTestAPIClient()
+        do {
+            _ = try await client.gradeUnitDefense(
+                sessionId: testSessionId, unitId: "unit_1", unitTitle: "U", defensePrompt: "P", answer: "A"
+            )
+            Issue.record("Expected APIError.crisisSupport")
+        } catch APIError.crisisSupport(let message) {
+            #expect(message == "Call or text 988.")
+        } catch {
+            Issue.record("Expected .crisisSupport, got \(error)")
         }
     }
 
@@ -1145,9 +1192,10 @@ struct APIClientEndToEndTests {
         do {
             for try await _ in stream {}
             Issue.record("Expected .quotaExceeded")
-        } catch APIError.quotaExceeded(let message, let retryAfter) {
+        } catch APIError.quotaExceeded(let message, let retryAfter, let scope) {
             #expect(message == "You've used today's chat turns.")
             #expect(retryAfter == 1200)
+            #expect(scope == "session")
         } catch {
             Issue.record("Expected .quotaExceeded, got \(error)")
         }

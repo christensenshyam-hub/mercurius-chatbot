@@ -346,7 +346,8 @@ first deploy since July (it turns on PRs #21–#31 at once).
    → `401`.
 5. **The erasure route is live.** `curl -s -o /dev/null -w '%{http_code}\n' -X DELETE $HOST/api/session/abc`
    → `400` (a short id is refused). The July build answered `404`
-   because the route did not exist.
+   because the route did not exist. Deletion requests that arrive at
+   privacy@ use this route too: `docs/PRIVACY_DELETION_RUNBOOK.md`.
 6. **Drain window.** Delete `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from
    Variables if it is set; `railway.toml` now sets `drainingSeconds`.
 7. Set any still-pending variables from "Running one replica" above

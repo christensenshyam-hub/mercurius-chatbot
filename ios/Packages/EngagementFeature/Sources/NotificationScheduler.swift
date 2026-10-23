@@ -15,6 +15,12 @@ import UserNotifications
 public final class NotificationScheduler {
     public init() {}
 
+    /// This week's lessons against the weekly goal, read at every re-plan so
+    /// the weekly nudges skip a week whose goal is met (AUD-36). Set by the
+    /// composition root, which can see the curriculum; until it is, a week
+    /// counts as nothing done.
+    public var weekProgress: (@MainActor () -> ReminderPlanner.WeekProgress?)?
+
     /// The pre-plan era's repeating-reminder id — cleared on every refresh so
     /// upgrading users don't get the old static notification alongside the
     /// planned ones.
@@ -53,7 +59,8 @@ public final class NotificationScheduler {
     ///     only scheduled while there's a live `streak` to protect, and only
     ///     through the last day a chat can still save it.
     ///   - streakDay: the day `streak` was last confirmed on.
-    ///   - weeklyEnabled: the weekly nudges (Wednesday + Sunday).
+    ///   - weeklyEnabled: the weekly nudges (Sunday + Wednesday), skipped in a
+    ///     week whose goal `weekProgress` reports as met.
     ///   - nextLessonId: when given, every reminder opens that lesson on tap.
     public func refresh(
         enabled: Bool,
@@ -65,27 +72,22 @@ public final class NotificationScheduler {
         weeklyEnabled: Bool,
         nextLessonId: String? = nil
     ) {
-        var daily: DailyInputs?
+        var daily: ReminderPlanner.DailySettings?
         if enabled, let streak, let streakDay {
-            daily = DailyInputs(hour: hour, minute: minute, streak: streak,
-                                streakDay: streakDay, chattedToday: chattedToday)
+            daily = ReminderPlanner.DailySettings(hour: hour, minute: minute, streak: streak,
+                                                  streakDay: streakDay, chattedToday: chattedToday)
         }
-        apply(daily: daily, weekly: weeklyEnabled, nextLessonId: nextLessonId)
-    }
-
-    private struct DailyInputs {
-        let hour: Int
-        let minute: Int
-        let streak: Int
-        let streakDay: Date
-        let chattedToday: Bool
+        let week = weeklyEnabled
+            ? (weekProgress?() ?? ReminderPlanner.WeekProgress.unknown(now: Date()))
+            : nil
+        apply(daily: daily, week: week, nextLessonId: nextLessonId)
     }
 
     /// Clear and re-add the daily family (`daily == nil` → none planned) and
-    /// the weekly family (added only when `weekly` is true).
+    /// the weekly family (`week == nil` → none planned).
     private func apply(
-        daily: DailyInputs?,
-        weekly: Bool,
+        daily: ReminderPlanner.DailySettings?,
+        week: ReminderPlanner.WeekProgress?,
         nextLessonId: String?
     ) {
         let center = UNUserNotificationCenter.current()
@@ -95,26 +97,17 @@ public final class NotificationScheduler {
                 .filter(Self.isPlannedReminder)
             center.removePendingNotificationRequests(withIdentifiers: pending + [legacyReminderId])
 
-            var planned: [(reminder: ReminderPlanner.PlannedReminder, repeats: Bool)] = []
-            if let daily {
-                planned += ReminderPlanner.plan(
-                    now: Date(), hour: daily.hour, minute: daily.minute,
-                    streak: daily.streak, streakDay: daily.streakDay,
-                    chattedToday: daily.chattedToday,
-                    quietWeekdays: weekly ? ReminderPlanner.weeklyWeekdays : []
-                ).map { (reminder: $0, repeats: false) }
-            }
-            if weekly {
-                planned += ReminderPlanner.weeklyPlan().map { (reminder: $0, repeats: true) }
-            }
+            let planned = ReminderPlanner.schedule(now: Date(), daily: daily, week: week)
             guard !planned.isEmpty, await self.notificationsAuthorized() else { return }
 
             // Render each pose tile once per refresh; every request needs its
             // OWN file on disk because the system MOVES attachment files into
             // its store when the request is added.
             var tiles: [ReminderPlanner.Pose: Data] = [:]
-            for (reminder, repeats) in planned {
-                let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireDate, repeats: repeats)
+            for reminder in planned {
+                // Every reminder is a dated one-off; re-planning keeps the
+                // window ahead of the student.
+                let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireDate, repeats: false)
                 // A failed add (system limit, etc.) just drops that reminder —
                 // the next refresh re-plans it.
                 try? await center.add(
@@ -191,11 +184,11 @@ public final class NotificationScheduler {
             // the dialog; timers below start once it's granted.
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
             var tiles: [ReminderPlanner.Pose: Data] = [:]
-            let weekly = ReminderPlanner.weeklyPlan()
+            let wednesday = ReminderPlanner.wednesdaySlot
             let flavors: [(TimeInterval, String, ReminderPlanner.Pose)] = [
                 (4, ReminderPlanner.defenseLine(streak: 2), .sleep),
-                (10, weekly[0].body, weekly[0].pose),
-                (16, ReminderPlanner.dailyLines[5].body, .celebrate),
+                (10, ReminderPlanner.weeklyLine(weekday: wednesday.weekday, done: 0), wednesday.pose),
+                (16, ReminderPlanner.dailyLines[4].body, ReminderPlanner.dailyLines[4].pose),
             ]
             for (delay, body, pose) in flavors {
                 let reminder = ReminderPlanner.PlannedReminder(

@@ -33,11 +33,21 @@ public struct LearningActivityAttributes: ActivityAttributes {
         public var level: Int
         public var lessonsToLevel: Int
 
-        // Time-sensitive completion window → rendered with a system timer.
+        // The end of the local day: the activity goes stale then, and it is
+        // the countdown's target while `streakAtRisk`.
         public var deadline: Date
 
         // For the stale state ("Updated 6m ago").
         public var lastUpdated: Date
+
+        // The weekly frame (AUD-37): lessons done this week against the
+        // goal, and whether a live streak ends at `deadline` unless the
+        // student chats today. Optional, so activities started by earlier
+        // builds (which ActivityKit persists) still decode; without them the
+        // card shows the unit's lessons left and no countdown.
+        public var weekDone: Int?
+        public var weekGoal: Int?
+        public var streakAtRisk: Bool?
 
         public init(
             phase: Phase,
@@ -48,7 +58,10 @@ public struct LearningActivityAttributes: ActivityAttributes {
             level: Int,
             lessonsToLevel: Int,
             deadline: Date,
-            lastUpdated: Date
+            lastUpdated: Date,
+            weekDone: Int? = nil,
+            weekGoal: Int? = nil,
+            streakAtRisk: Bool? = nil
         ) {
             self.phase = phase
             self.lessonsDone = lessonsDone
@@ -59,6 +72,9 @@ public struct LearningActivityAttributes: ActivityAttributes {
             self.lessonsToLevel = lessonsToLevel
             self.deadline = deadline
             self.lastUpdated = lastUpdated
+            self.weekDone = weekDone
+            self.weekGoal = weekGoal
+            self.streakAtRisk = streakAtRisk
         }
     }
 

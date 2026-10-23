@@ -114,12 +114,15 @@ struct HomeState: Equatable {
         }
     }
 
+    /// A plain hello. Between 10 PM and 5 AM it stays neutral: it used to
+    /// cheer a teenager on to study at 2 AM ("Up late? Perfect time to
+    /// learn."), which a learning app for minors shouldn't (AUD-44).
     static func opener(hour: Int) -> String {
         switch hour {
         case 5..<12:  return "Good morning!"
         case 12..<17: return "Good afternoon!"
         case 17..<22: return "Good evening!"
-        default:      return "Up late? Perfect time to learn."
+        default:      return "Hi there!"
         }
     }
 

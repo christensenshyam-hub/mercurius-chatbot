@@ -1,9 +1,9 @@
 import SwiftUI
 import DesignSystem
 
-/// One-time nudge that sits between the empty-chat state and the
-/// input bar, pointing the user at where to actually type their
-/// question. Mirrors the `ModeDescriptionSheet` pattern: shown once,
+/// One-time nudge at the foot of the empty chat's starter prompts
+/// (inside its scroll content since AUD-50), pointing the user at where
+/// to actually type their question. Mirrors the `ModeDescriptionSheet` pattern: shown once,
 /// then suppressed forever via `@AppStorage`.
 ///
 /// Why it exists: first-launch users land on EmptyChatView with four
@@ -25,11 +25,19 @@ struct ChatInputHint: View {
     /// — same pattern used for onboarding and mode descriptions.
     static let storageKey = "hasSeenChatInputHint"
 
+    /// Whether the hint shows. It points at the starter prompts "above", and
+    /// at accessibility text sizes those prompts are below Merc, off screen,
+    /// while the hint itself takes a quarter of it — so there it stays
+    /// hidden (AUD-48).
+    static func isShown(chatIsEmpty: Bool, hasSeen: Bool, dynamicTypeSize: DynamicTypeSize) -> Bool {
+        chatIsEmpty && !hasSeen && !dynamicTypeSize.isAccessibilitySize
+    }
+
     var body: some View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: "arrow.down")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
 
             Text("Try a prompt above, or type your own below.")
@@ -44,7 +52,8 @@ struct ChatInputHint: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(BrandColor.textSecondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)   // AUD-46: was 32 pt
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("Dismiss hint")
             .accessibilityHint("Hides this hint and doesn't show it again")
