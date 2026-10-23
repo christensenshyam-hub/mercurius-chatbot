@@ -157,6 +157,26 @@ describe('[Q] options in the server order for blocks_v1 clients (AUD-18)', () =>
   });
 });
 
+describe('Basics checks keep the guide\'s order (merge with #54)', () => {
+  // Each Basics lesson names its right answer, and a safety lesson's trap, by
+  // letter, so its [Q] options are never reordered.
+  const BASICS_OPENER = '[BASICS: Unit 1, Lesson 1] Teach me what an AI chatbot is.';
+  const basicsTurn = (reply) => [{ role: 'user', content: `${BASICS_OPENER}\nMOCK_REPLY:\n${reply}` }];
+
+  for (const [name, send] of [['streaming', stream], ['JSON', postJson]]) {
+    test(`${name}: the [Q] block arrives in the model's order with its ANS`, async () => {
+      const out = await send(sid(), basicsTurn(QUIZ_REPLY), { capabilities: BLOCKS });
+      assert.equal(out.status, 200);
+      const reply = name === 'streaming' ? out.complete.reply : out.body.reply;
+      const before = quizOf(QUIZ_REPLY);
+      const after = quizOf(reply);
+      assert.equal(after.wellFormed, true, reply);
+      assert.deepEqual(after.options, before.options, 'options in the guide order');
+      assert.equal(after.answerIndex, before.answerIndex, 'ANS unchanged');
+    });
+  }
+});
+
 describe('reflow end to end (AUD-17)', () => {
   test('a tight numbered list in free chat arrives whole', async () => {
     const list = 'Try it:\n\n1. Open the app\n2. Type the prompt\n3. Read the answer\n4. Check a source';

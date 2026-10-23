@@ -2127,11 +2127,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // thinking on top of the reply. Safety-topic turns keep their own path.
     // Lessons of either track (isCurriculumMsg is true for the Deep dive and
     // Basics alike) never get it.
+    // Problem detection reads the thread as text: a re-attached photo turn
+    // (AUD-10) counts by the student's own words, as it did before re-attach.
+    // This turn's photo is still hasImage.
+    const problemThread = photoReattach.textView(trimmed);
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
       && THINKING_MODEL_RE.test(chosenModel)
       && !needsSafetyBudget(latestUserMessage.content)
-      && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
     const modelParams = {
       model: chosenModel,
       max_tokens: problemTurn ? Math.max(maxTokens + 2048, THINKING_MIN_TOKENS) : maxTokens,
@@ -2157,7 +2161,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const writingTurn = guardOn && homeworkGuard.writingThread(clientMessages);
     // Any turn on a problem to work is held back too, for the one-question and
     // stall transforms (oneQuestion, unrepeatQuestion).
-    const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+    const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
     const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0 || guardQuadratics.length > 0 || guardSystems.length > 0;
     // A writing turn whose move is to quote the student's own wording.
     const quoteTurn = writingTurn && homeworkGuard.needsQuote(clientMessages);
@@ -2264,9 +2268,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // the Deep dive's 3, whatever mode the session's free chat is in. Basics
     // also keeps a short quoted span whole (keepQuotes), so a two-sentence
     // practice line ("Plan dinner for 6. One is vegetarian, …") is never
-    // split across paragraphs, and treats "1." at a line start as a list
-    // marker (numberedLists), so a numbered step or "My safety rules" item
-    // is never broken mid-item. Every other request reflows exactly as before.
+    // split across paragraphs. A "1." at a line start is a list marker for
+    // every request since AUD-17, so numberedLists no longer changes the
+    // output; it stays for the option's own tests.
     const replyReflowLimit = isBasicsLesson
       ? (responseMode === 'deep' ? 3 : 2)
       : replyLimit;
@@ -2275,12 +2279,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // stream, the JSON reply and an answer-guard retry (guardReply runs only
     // after this line): [SOURCE] tags as plain text and the [Q] order for
     // blocks_v1 clients (AUD-38, AUD-18), then the reflow with the limit and
-    // the Basics options above.
+    // the Basics options above. Basics checks keep the guide's order: its
+    // options are written out and balanced, and each lesson names its right
+    // answer (and a safety lesson's trap) by letter.
     const replyTransforms = {
       limit: replyReflowLimit,
       ...reflowOptions,
       rewriteSources: wantsBlocks && !isWidget,
-      shuffleQuiz: wantsBlocks,
+      shuffleQuiz: wantsBlocks && !isBasicsLesson,
     };
     // Basics only: drop the filler words the guide bans ("just", "simply")
     // and any of the guide's own labels ("Safety point:") before the reflow

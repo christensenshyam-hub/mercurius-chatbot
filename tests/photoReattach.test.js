@@ -13,6 +13,7 @@ const {
   keysForTurn,
   plan,
   apply,
+  textView,
   DEFAULT_MAX_TURNS,
   MAX_IMAGES,
   CANON_CHARS,
@@ -22,6 +23,7 @@ const {
 const { normalizeReplayedHistory } = require('../lib/curriculumTag');
 const { truncateUnits } = require('../lib/schemas');
 const { withHistoryBreakpoint } = require('../lib/systemBlocks');
+const { looksLikeProblemWork } = require('../lib/homeworkGuard');
 
 const SHARED = '[Shared an image]';
 const u = (content) => ({ role: 'user', content });
@@ -256,6 +258,30 @@ describe('apply', () => {
   test('skips an assistant target, a bad index or an invalid image', () => {
     const history = [u('hi'), a('Hey!')];
     assert.deepEqual(apply(history, [{ index: 1, image }, { index: 9, image }, { index: 0, image: { contentType: 'text/plain', dataBase64: 'x' } }]), history);
+  });
+});
+
+describe('textView', () => {
+  const image = { contentType: 'image/png', dataBase64: 'iVBORw0KGgo=' };
+
+  test('a re-attached turn reads as the student\'s words; every other turn is untouched', () => {
+    const history = [u('this one: a car goes 150 km in 3 hours, how fast is it going'), a('What two things does speed compare?'), u('distance and time?')];
+    const withPhoto = apply(history, [{ index: 0, image }]);
+    assert.ok(Array.isArray(withPhoto[0].content));
+    const view = textView(withPhoto);
+    assert.deepEqual(view, history);
+    assert.equal(view[1], withPhoto[1]);
+    // An array turn that was not re-attached (this turn's own photo) stays an array.
+    const own = [{ role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'solve 3x + 5 = 20' }] }];
+    assert.equal(textView(own)[0], own[0]);
+  });
+
+  test('homework detection sees a problem the student typed with an earlier photo (merge of AUD-10 with #44)', () => {
+    const history = [u('this one: a car goes 150 km in 3 hours, how fast is it going'), a('What two things does speed compare?'), u('distance and time?')];
+    const withPhoto = apply(history, [{ index: 0, image }]);
+    assert.equal(looksLikeProblemWork(history), true);
+    assert.equal(looksLikeProblemWork(withPhoto), false, 'the array turn hides the words');
+    assert.equal(looksLikeProblemWork(textView(withPhoto)), true);
   });
 });
 
