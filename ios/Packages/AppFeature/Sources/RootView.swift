@@ -7,6 +7,7 @@ import EngagementFeature
 import MercuriusActivity
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 #endif
 
 /// Root view of the app. Focused on **bootstrap** only:
@@ -61,7 +62,11 @@ public struct RootView: View {
 
     public var body: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-LessonPreview") && !Self.shellHostsPreviews {
+        if let card = InteractiveLaunchOptions.current.gallery {
+            // `-InteractiveGallery <slug>`: one card alone (both platforms).
+            InteractiveGalleryView(id: card)
+                .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else if Self.opensLessonPreview && !Self.shellHostsPreviews {
             lessonPreview
         } else if ProcessInfo.processInfo.arguments.contains("-MercPreview") {
             MercPreviewView()
@@ -104,15 +109,37 @@ public struct RootView: View {
         #endif
     }
 
+    /// `-LessonPreview`, or `-Interactive <slug>` (which implies it, with
+    /// `-LessonSkipIntro` and `-LessonReplay`, for the card's lesson).
+    static var opensLessonPreview: Bool {
+        ProcessInfo.processInfo.arguments.contains("-LessonPreview") || InteractiveLaunchOptions.current.card != nil
+    }
+
+    /// The lesson the preview opens: the card's under `-Interactive
+    /// <slug>`, else Unit 1, Lesson 1.
+    static var previewLesson: (unit: CurriculumFeature.Unit, lesson: CurriculumFeature.Lesson)? {
+        if let card = InteractiveLaunchOptions.current.card,
+           let lessonID = InteractiveRegistry.spec(for: card)?.lessonID {
+            for unit in MercuriusCurriculum.units {
+                if let lesson = unit.lessons.first(where: { $0.id == lessonID }) { return (unit, lesson) }
+            }
+        }
+        guard let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first else { return nil }
+        return (unit, lesson)
+    }
+
     /// DEBUG-only: launch straight into the redesigned lesson screen for the
-    /// first lesson, wired to the live environment, so the Playful redesign can
-    /// be screenshotted without navigating the whole app.
+    /// first lesson (or `-Interactive`'s card's lesson), wired to the live
+    /// environment, so the Playful redesign can be screenshotted without
+    /// navigating the whole app.
     @ViewBuilder private var lessonPreview: some View {
-        if let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first {
+        if let unit = Self.previewLesson?.unit, let lesson = Self.previewLesson?.lesson {
             let next = MercuriusCurriculum.nextStop(after: lesson.id)
             // A fake resume id skips the speech-bubble intro (and harmlessly
             // falls through to a fresh start) so the chat can be previewed.
-            let fakeResume: UUID? = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
+            let skipsIntro = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro")
+                || InteractiveLaunchOptions.current.card != nil
+            let fakeResume: UUID? = skipsIntro ? UUID() : nil
             CurriculumLessonView(
                 lessonId: lesson.id,
                 unitLabel: "UNIT \(unit.number)",

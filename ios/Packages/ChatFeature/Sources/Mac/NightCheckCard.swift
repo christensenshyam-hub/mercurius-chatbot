@@ -2,6 +2,7 @@
 import SwiftUI
 import AppKit
 import DesignSystem
+import LessonInteractives
 
 /// The lesson's [Q] check on the Mac (SPEC.md §5.3.3, D9): pick an answer,
 /// then **Lock it in**. Lock it in grades on the device, says the result to
@@ -285,6 +286,10 @@ final class NightCheckKeyRouter {
         return handler?(key) ?? false
     }
 }
+
+/// The lesson's interactives hold Return and let go on a check's pick
+/// through the same router (LessonInteractives can't see this type).
+extension NightCheckKeyRouter: InteractiveKeyRouting {}
 
 private struct NightCheckRouterKey: EnvironmentKey {
     static let defaultValue: NightCheckKeyRouter? = nil

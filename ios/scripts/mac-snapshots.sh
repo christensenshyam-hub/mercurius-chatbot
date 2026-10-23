@@ -223,6 +223,19 @@ run() {
     lesson-interactive-money)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer money -MacSnapshotDelay 11 ;;
     lesson-interactive-river)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer river -MacSnapshotDelay 11 ;;
     lesson-interactive-compact) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -NightTokenizerCompact YES -MacSnapshotDelay 11 ;;
+    # Any lesson interactive by its slug (docs/interactives/FRAMEWORK.md):
+    # interactive-<slug> opens its lesson with the replay or the stub
+    # replies (-Interactive, which shows a card that ships dark) and scrolls
+    # the card's top into view; gallery-<slug> shows the card alone
+    # (-InteractiveGallery). INTERACTIVE_ARGS adds state, e.g.
+    # INTERACTIVE_ARGS="-InteractiveState revealed"; INTERACTIVE_SCROLL
+    # (top, reveal or after; default top) is where the lesson scrolls (the
+    # first -InteractiveScroll on the line wins, so it can't go in
+    # INTERACTIVE_ARGS).
+    interactive-*)   window_shot "$1" "${PAST_GATE[@]}" -Interactive "${1#interactive-}" -InteractiveScroll "${INTERACTIVE_SCROLL:-top}" \
+                       ${INTERACTIVE_ARGS:-} -MacSnapshotDelay "${INTERACTIVE_DELAY:-14}" ;;
+    gallery-*)       window_shot "$1" "${PAST_GATE[@]}" -InteractiveGallery "${1#gallery-}" ${INTERACTIVE_ARGS:-} \
+                       -MacSnapshotDelay 4 ;;
     lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
     lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
     # Night Studio's complete card: the replay's first reply streams in

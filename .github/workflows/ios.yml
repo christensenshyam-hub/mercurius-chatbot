@@ -80,10 +80,10 @@ jobs:
   xcode:
     name: Xcode scheme tests
     runs-on: macos-14
-    # Above the test step's own 50-minute cap, so a slow or hung test step
+    # Above the test step's own 80-minute cap, so a slow or hung test step
     # FAILS (and its xcresult is uploaded) instead of the whole job being
     # cancelled with no diagnostics.
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -110,8 +110,8 @@ jobs:
         # runs in CI, so boot the device the test step resolves (iPhone 16 on
         # the newest iOS runtime) before it starts. Best effort: the test
         # step boots it anyway if this does not.
-        # Capped so setup + boot + the 50-minute test step stay inside the
-        # job's 60 minutes and the xcresult upload still runs.
+        # Capped so setup + boot + the 80-minute test step stay inside the
+        # job's 90 minutes and the xcresult upload still runs.
         continue-on-error: true
         timeout-minutes: 5
         run: |
@@ -127,7 +127,10 @@ jobs:
 
       - name: Run Xcode tests
         working-directory: ios
-        timeout-minutes: 50
+        # 80 minutes: the lesson interactives' UI tests add several minutes
+        # to a pass, and a failed test's retries (below) run it again; 50
+        # ran out mid-retry.
+        timeout-minutes: 80
         # Destination:
         #   * `OS=latest` picks the newest installed runtime (macos-14
         #     runners at the time of writing ship iOS 18.x).

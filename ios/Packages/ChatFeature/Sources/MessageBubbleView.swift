@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import MarkdownUI
 import NetworkingKit
+import LessonInteractives
 
 /// Shared metrics for the free-chat assistant avatar, so the follow-up
 /// footers in `MessageListView` can align with the assistant bubble's
@@ -44,11 +45,15 @@ struct MessageBubbleView: View {
     /// blocks_v1 quiz interaction. Nil (the default) renders any [Q] block
     /// inert — snapshots and free chat unaffected.
     var quizInteraction: QuizInteraction? = nil
-    /// Lesson 1.1's interactive (`LessonInteractiveAnchor`): where this reply
-    /// holds it, nil for every other reply (the default draws exactly as
-    /// before). On the iPhone the bubble is then drawn in two around the
+    /// The lesson's interactive (`LessonInteractiveAnchor`): where this
+    /// reply holds it, nil for every other reply (the default draws exactly
+    /// as before). On the iPhone the bubble is then drawn in two around the
     /// card (`LessonInteractiveSplit`).
     var interactiveAfter: LessonInteractivePosition? = nil
+    /// Which card that is, and whether it opens spoiled. The list passes the
+    /// placement's; the default is Lesson 1.1's, the one card there was
+    /// before the registry.
+    var interactiveCard: LessonInteractiveCardRef = .tokenizer
 
     /// How a [Q] block behaves in THIS bubble.
     struct QuizInteraction {
@@ -118,20 +123,27 @@ struct MessageBubbleView: View {
            let halves = LessonInteractiveSplit.halves(of: message.content, at: at) {
             VStack(alignment: .leading, spacing: BrandSpacing.md) {
                 row(.head(halves.head))
-                LessonTokenizerCard()
-                    .frame(maxWidth: 560, alignment: .leading)
-                    .padding(.horizontal, BrandSpacing.lg)
-                    .id(LessonTokenizerCard.scrollID)
-                    #if DEBUG
-                    // The card's edges, for the shots' `context` and `after`
-                    // jumps.
-                    .overlay(alignment: .top) {
-                        Color.clear.frame(height: 1).id(LessonTokenizerCard.topEdgeScrollID)
-                    }
-                    .overlay(alignment: .bottom) {
-                        Color.clear.frame(height: 1).id(LessonTokenizerCard.bottomEdgeScrollID)
-                    }
-                    #endif
+                if interactiveCard.id == .tokenizer {
+                    LessonTokenizerCard()
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .padding(.horizontal, BrandSpacing.lg)
+                        .id(LessonTokenizerCard.scrollID)
+                        #if DEBUG
+                        // The card's edges, for the shots' `context` and
+                        // `after` jumps.
+                        .overlay(alignment: .top) {
+                            Color.clear.frame(height: 1).id(LessonTokenizerCard.topEdgeScrollID)
+                        }
+                        .overlay(alignment: .bottom) {
+                            Color.clear.frame(height: 1).id(LessonTokenizerCard.bottomEdgeScrollID)
+                        }
+                        #endif
+                } else {
+                    LessonInteractiveCardView(card: interactiveCard)
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .padding(.horizontal, BrandSpacing.lg)
+                        .lessonInteractiveScrollMarks()
+                }
                 if !halves.tail.isEmpty || Self.hasStatusLine(message) {
                     row(.tail(halves.tail))
                 }
@@ -653,6 +665,7 @@ extension MessageBubbleView: Equatable {
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex
             && lhs.interactiveAfter == rhs.interactiveAfter
+            && lhs.interactiveCard == rhs.interactiveCard
     }
 }
 

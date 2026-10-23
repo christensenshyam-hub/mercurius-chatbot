@@ -7,6 +7,7 @@ import EngagementFeature
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
+import LessonInteractives
 
 /// The Mac window: a `NavigationSplitView` whose sidebar is Today, the path
 /// by unit and the chats, and whose detail column hosts the same views the
@@ -642,7 +643,8 @@ struct MacShellView: View {
     /// fresh start, so with `-LessonReplay` the recorded replies stream in.
     private static var debugResumeOverride: UUID? {
         #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
+        ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") || InteractiveLaunchOptions.current.card != nil
+            ? UUID() : nil
         #else
         nil
         #endif
@@ -701,7 +703,8 @@ struct MacShellView: View {
            let unit = MercuriusCurriculum.units.first {
             // The previews show Unit 1's check: its row, as the real check's.
             shell.selection = .unit(unit.id)
-        } else if args.contains("-LessonPreview"), let lesson = MercuriusCurriculum.units.first?.lessons.first {
+        } else if RootView.opensLessonPreview, let lesson = RootView.previewLesson?.lesson {
+            // `-Interactive <slug>` opens the card's lesson.
             shell.openLesson(lesson)
         } else if args.contains("-ChatPreview") {
             if MacNightDemo.isRequested, let store = env.chatStore {
