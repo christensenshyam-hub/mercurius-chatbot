@@ -72,6 +72,9 @@ public enum InteractiveScrollID {
 ///   flags apply.
 /// - `-InteractiveCompact YES`: the Mac's card starts as its compact "Try
 ///   it" card at any width.
+/// - `-InteractiveRunSeconds <n>`: a played run (Patch the Reward) lasts n
+///   seconds instead of its own length, so a UI test's tap on "Skip to the
+///   result" can't race the run's end on a slow simulator.
 ///
 /// Combine with `-UIPreferredContentSizeCategoryName
 /// UICTContentSizeCategoryAccessibilityXXXL` (AX5) for the text sizes.
@@ -87,6 +90,9 @@ public struct InteractiveLaunchOptions: Equatable, Sendable {
     /// `-InteractiveCompact YES` (or Lesson 1.1's `-NightTokenizerCompact
     /// YES`): the Mac's card starts compact at any width.
     public var macCompact = false
+    /// `-InteractiveRunSeconds <n>`: how long a played run lasts (nil: the
+    /// card's own length).
+    public var runSeconds: TimeInterval?
 
     public init() {}
 
@@ -110,6 +116,10 @@ public struct InteractiveLaunchOptions: Equatable, Sendable {
         reduceTransparency = flag("-InteractiveReduceTransparency") || flag("-NightTokenizerReduceTransparency")
         increaseContrast = flag("-InteractiveIncreaseContrast") || flag("-NightTokenizerIncreaseContrast")
         macCompact = flag("-InteractiveCompact") || flag("-NightTokenizerCompact")
+        // Finite and at most an hour: the run's timer turns it into
+        // nanoseconds (UInt64), which traps on inf or a huge number.
+        runSeconds = value("-InteractiveRunSeconds").flatMap(TimeInterval.init)
+            .flatMap { $0.isFinite && $0 > 0 && $0 <= 3600 ? $0 : nil }
     }
 
     /// This launch's options: DEBUG builds only. A Release build (which a

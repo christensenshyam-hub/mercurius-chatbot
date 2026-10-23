@@ -27,6 +27,19 @@ struct LaunchOptionsTests {
         #expect(gallery.gallery == .pageWithASecret)
         #expect(gallery.card == nil)
         #expect(gallery.increaseContrast, "the tokenizer's shot flags count too")
+        #expect(gallery.runSeconds == nil)
+    }
+
+    @Test("-InteractiveRunSeconds takes a positive number of seconds")
+    func runSeconds() {
+        #expect(InteractiveLaunchOptions(arguments: ["-InteractiveRunSeconds", "60"]).runSeconds == 60)
+        #expect(InteractiveLaunchOptions(arguments: ["-InteractiveRunSeconds", "0"]).runSeconds == nil)
+        #expect(InteractiveLaunchOptions(arguments: ["-InteractiveRunSeconds", "soon"]).runSeconds == nil)
+        for wild in ["inf", "nan", "1e30", "3601", "-5"] {
+            #expect(InteractiveLaunchOptions(arguments: ["-InteractiveRunSeconds", wild]).runSeconds == nil, "\(wild)")
+        }
+        #expect(InteractiveLaunchOptions().runSeconds == nil)
+        #expect(PatchTheRewardContent.playDuration == 6, "the test host passes no flag")
     }
 
     @Test("A flag without a value, a value that is another flag, or an unknown slug: nothing")
