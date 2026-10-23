@@ -2,6 +2,7 @@ import Foundation
 import OSLog
 import CurriculumFeature
 import EngagementFeature
+import DesignSystem
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
@@ -48,6 +49,9 @@ public final class AppEnvironment: ObservableObject {
     public let progressStore: CurriculumProgressStore
     /// Keeps `progressStore` in step with `/api/progress`.
     let progressSync: CurriculumProgressSync
+    /// Which course the learner follows (Basics or the Deep dive) and the
+    /// Basics reading size. Device-local; never synced.
+    public let trackStore: CurriculumTrackStore
     /// When the student last did something, for the cold-launch resume.
     public let lastActivityStore: LastActivityStore
     /// The per-device App Store review prompt budget. Never reset.
@@ -140,6 +144,18 @@ public final class AppEnvironment: ObservableObject {
         let isUITesting = arguments.contains(Self.uiTestArgument)
         let progress = CurriculumProgressStore(preferences: Self.curriculumProgressPreferences)
         self.progressStore = progress
+        #if DEBUG
+        // `-SeedCompleted b1_l1,b1_l2` (screenshots, with -UITests, whose
+        // progress suite is emptied at every launch and never synced): those
+        // lessons count as done.
+        if isUITesting, let raw = UserDefaults.standard.string(forKey: "SeedCompleted") {
+            progress.merge(completed: raw.split(separator: ",").map(String.init), mastered: [],
+                           remoteVersion: MercuriusCurriculum.version)
+        }
+        #endif
+        let tracks = CurriculumTrackStore(preferences: Self.curriculumProgressPreferences)
+        Self.applyDebugTrack(tracks, arguments: arguments)
+        self.trackStore = tracks
         self.progressSync = CurriculumProgressSync(
             progress: progress,
             remote: apiClient,
@@ -172,6 +188,7 @@ public final class AppEnvironment: ObservableObject {
         let achievements = achievementStore
         self.macShell = MacShellModel(
             progress: progress,
+            tracks: tracks,
             lastActivityStore: lastActivityStore,
             chatStore: chatStore,
             makeChatModel: {
@@ -184,6 +201,13 @@ public final class AppEnvironment: ObservableObject {
                 )
             }
         )
+        #endif
+        #if DEBUG
+        // `-OpenLesson <id>` (screenshots): open that lesson through the same
+        // route a tapped reminder takes, once the gate is clear.
+        if let lessonId = UserDefaults.standard.string(forKey: "OpenLesson") {
+            pendingLessonId = lessonId
+        }
         #endif
     }
 
@@ -198,6 +222,24 @@ public final class AppEnvironment: ObservableObject {
     }
 
     static let ephemeralSessionArgument = "-EphemeralSession"
+
+    /// DEBUG, for screenshots: `-CurriculumTrack basics|deepDive` picks the
+    /// course at launch, `-BasicsReadingSize standard|larger|largest` sets
+    /// the Basics size (and answers the one-time offer), and
+    /// `-BasicsSizeOffered YES` only answers the offer.
+    static func applyDebugTrack(_ tracks: CurriculumTrackStore, arguments: [String]) {
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: "CurriculumTrack"), let track = CurriculumTrack(rawValue: raw) {
+            tracks.choose(track)
+        }
+        if let raw = defaults.string(forKey: "BasicsReadingSize"), let size = ReadingSize(rawValue: raw) {
+            tracks.setBasicsReadingSize(size)
+        } else if defaults.bool(forKey: "BasicsSizeOffered") {
+            tracks.markReadingSizeOfferHandled()
+        }
+        #endif
+    }
 
     /// Seed the streak cache from the server's session row. Runs at most once
     /// successfully per process: the launch hold runs it when consent is

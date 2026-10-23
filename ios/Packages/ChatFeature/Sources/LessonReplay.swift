@@ -21,6 +21,17 @@ import LessonInteractives
 ///   through the real `APIClient` and gets a failure production or a school
 ///   network sends (see `NetworkScenario`).
 ///
+/// A Basics lesson (a `b` id) replays a real recorded Basics session
+/// instead: Unit 1, Lesson 1 from the server's smoke run on the Basics
+/// guide (docs/evals/pacing-basics-smoke3-flag-on.json on
+/// feat/basics-server), its last reply completing the lesson as the server
+/// would (marker stripped, `lessonComplete: true`). No server with Basics
+/// is deployed yet, so this is how its screens are seen.
+///
+/// - `-LessonReplayScript <n>`: after each reply, send the session's next
+///   recorded learner turn (typed, or the check's tap), `n` times. 0 rests
+///   on the first reply (the practice chip), 2 on the check, 3 on the
+///   completion.
 /// Only Unit 1, Lesson 1 was recorded. Any other lesson replays authored
 /// stub replies that say they are stubs (`InteractiveStubReplies`), shaped
 /// so the lesson's interactive lands where its anchor rule puts it:
@@ -30,9 +41,26 @@ enum LessonReplay {
         ProcessInfo.processInfo.arguments.contains("-LessonReplay") || InteractiveLaunchOptions.current.card != nil
     }
 
-    /// The replies lesson `lessonID` replays: the recording for Unit 1,
-    /// Lesson 1 (and when no lesson is named), else the stubs.
+    /// How many recorded learner turns `-LessonReplayScript` sends.
+    static var scriptSteps: Int? {
+        let raw = UserDefaults.standard.string(forKey: "LessonReplayScript")
+        return raw.flatMap(Int.init)
+    }
+
+    /// The recorded learner turns for a lesson's replay, in order.
+    static func userTurns(lessonId: String?) -> [String] {
+        isBasics(lessonId) ? basicsUserTurns : []
+    }
+
+    static func isBasics(_ lessonId: String?) -> Bool {
+        lessonId?.range(of: #"^b\d+_l\d+$"#, options: .regularExpression) != nil
+    }
+
+    /// The replies lesson `lessonID` replays: the recorded Basics session for
+    /// a `b` id, the recording for Unit 1, Lesson 1 (and when no lesson is
+    /// named), else the stubs.
     static func replies(forLesson lessonID: String?) -> [String] {
+        if isBasics(lessonID) { return basicsReplies }
         guard let lessonID, lessonID != "u1_l1" else { return replies }
         return InteractiveStubReplies.replies(forLesson: lessonID,
                                               spoiled: InteractiveLaunchOptions.current.stubSpoiled)
@@ -71,6 +99,87 @@ enum LessonReplay {
         model.awaitsLessonStart = true
         return model
     }
+
+    /// Basics Unit 1, Lesson 1, recorded against the Basics guide
+    /// (feat/basics-server, smoke 3), verbatim.
+    static let basicsReplies: [String] = [
+        #"""
+        Welcome to Basics. I'm Merc, your guide here.
+
+        You can't break anything here, and there are no silly questions. If something goes wrong, we start again.
+
+        Type in the box at the bottom, or tap the microphone on your keyboard and talk. Then tap the arrow to send.
+
+        An AI chatbot is a computer program you talk to by typing or speaking. It writes back in plain, everyday words.
+
+        No one is typing back to you — it's all the program.
+
+        It learned from a huge amount of writing. It makes each answer by guessing, word by word, what fits best.
+
+        There are many chatbots out there: ChatGPT, Claude, Gemini, Copilot. I'm one too, and what you learn here works in all of them.
+
+        Try asking me: "Are you a real person?"
+        """#,
+        #"""
+        No. I'm Merc, a chatbot in a learning app. No one is typing back to you.
+
+        Practicing on me works the same way as ChatGPT, Claude, Gemini, or Copilot.
+
+        I can sound friendly, but I don't feel anything. That's one of the things that makes chatbots a little surprising at first.
+
+        Now ask me anything you're curious about. It can be about cooking, your garden, or a place you'd like to visit.
+        """#,
+        #"""
+        Great question. Here's what basil needs:
+
+        Basil loves bright light — at least 6 hours a day. A south-facing window is best.
+
+        Water it when the top inch of soil feels dry. Don't let it sit in water, or the roots will rot.
+
+        Pinch off any flowers as soon as you see them. That keeps the leaves coming.
+
+        Warm temperatures help too. Keep it away from cold drafts and air conditioning.
+
+        Notice that you got a real, useful answer just by asking a plain question. That's how chatbots work — no special words needed.
+
+        [KEY]A chatbot answers real questions in plain words, just like this one.[/KEY]
+
+        Now, one more idea before we wrap up.
+
+        It learned from a huge amount of writing, and it guesses what words fit best. It isn't a search engine, and it isn't a person.
+
+        It can sound kind, but it doesn't feel anything.
+
+        Tap the answer you think is right. There's no grade.
+
+        [Q]
+        Which is the best description of an AI chatbot?
+        A) A person at the company typing answers to you
+        B) A computer program that writes answers by guessing what words fit best
+        C) A big library of facts that looks up the right answer every time
+        ANS: B
+        [/Q]
+        """#,
+        #"""
+        That's exactly right.
+
+        You asked a real question, got a real answer, and spotted what a chatbot actually is. That's a solid start.
+
+        One thing to keep in mind as you use chatbots: if you wouldn't write something on a postcard for anyone to read, don't type it into a chatbot. Keep private details private.
+
+        Try this today: Ask a chatbot one thing you've wondered about this week.
+
+        [LESSON_COMPLETE]
+        """#
+    ]
+
+    /// The learner's turns in that session, in order: two practice messages
+    /// and the check's tap.
+    static let basicsUserTurns: [String] = [
+        "Are you a real person?",
+        "How do I keep basil alive on a windowsill?",
+        "I picked B) A computer program that writes answers by guessing what words fit best"
+    ]
 
     /// Recorded replies, verbatim (blocks_v1 markup included).
     static let replies: [String] = [
@@ -182,7 +291,11 @@ private struct LessonReplayClient: ChatStreaming {
         imageId: String?
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         let turn = messages.filter { $0.role == "assistant" }.count
-        let recorded = replies[min(turn, replies.count - 1)]
+        let recordedRaw = replies[min(turn, replies.count - 1)]
+        // The server strips the completion marker and says so in `complete`.
+        let completes = recordedRaw.contains("[LESSON_COMPLETE]")
+        let recorded = recordedRaw.replacingOccurrences(of: "[LESSON_COMPLETE]", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let reply = short
             ? recorded.components(separatedBy: "\n\n").prefix(2).joined(separator: "\n\n")
             : recorded
@@ -213,7 +326,8 @@ private struct LessonReplayClient: ChatStreaming {
                     continuation.finish(throwing: APIError.connectionLost)
                     return
                 }
-                continuation.yield(.complete(ChatResponse(reply: reply, mode: "socratic")))
+                continuation.yield(.complete(ChatResponse(reply: reply, mode: "socratic",
+                                                          lessonComplete: completes ? true : nil)))
                 continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }

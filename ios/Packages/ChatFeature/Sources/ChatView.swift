@@ -1069,6 +1069,17 @@ struct MessageListView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { nightJump(toPart: part, proxy: proxy) }
             }
             #endif
+            #if DEBUG
+            // `-LessonJumpToLatest YES` (shots only): each time a lesson
+            // reply settles, the "Jump to latest" pill's jump, so a check at
+            // the end of a long reply is on screen.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle, UserDefaults.standard.bool(forKey: "LessonJumpToLatest") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    perform(scroll.policy.jumpToLatest(), proxy: proxy)
+                }
+            }
+            #endif
             .onChange(of: composerFocused) { _, focused in
                 let geometry = scroll.policy.geometry
                 let coachOnScreen = hasCoachRow && !coachHiddenForTyping

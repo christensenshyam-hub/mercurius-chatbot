@@ -25,6 +25,12 @@ public struct LessonCompleteOverlay: View {
     let lessonNumber: Int?
     let reduceMotion: Bool
     let exits: LessonCompleteExits
+    /// A Basics lesson's completion (BEGINNER_GUIDE §2.6): "Try this today",
+    /// the next lesson, and "That's enough for today". No share card and no
+    /// week ring. nil is the Deep dive's celebration, unchanged.
+    let basics: BasicsWrapUp?
+    @State private var copiedMessage = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     #if os(macOS)
     /// The Mac's card rises a little as it fades in, rather than sliding up
@@ -64,13 +70,15 @@ public struct LessonCompleteOverlay: View {
         onNext: @escaping () -> Void,
         onBackToLessons: @escaping () -> Void,
         onDismiss: @escaping () -> Void,
-        onCelebrationDismissed: (() -> Void)? = nil
+        onCelebrationDismissed: (() -> Void)? = nil,
+        basicsWrapUp: BasicsWrapUp? = nil
     ) {
         self.lessonTitle = lessonTitle
         self.nextStop = nextStop ?? Self.nextStop(lessonNumber: nextLessonNumber, lessonTitle: nextLessonTitle)
         self.unitLabel = unitLabel
         self.lessonNumber = lessonNumber
         self.reduceMotion = reduceMotion
+        self.basics = basicsWrapUp
         self.exits = LessonCompleteExits(
             onNext: onNext,
             onBackToLessons: onBackToLessons,
@@ -89,7 +97,8 @@ public struct LessonCompleteOverlay: View {
         // Night Studio's card (SPEC.md §5.6): the credential, the lesson's
         // key ideas, the week and the next stop, with "Done for now".
         NightLessonComplete(lessonTitle: lessonTitle, nextStop: nextStop, unitLabel: unitLabel,
-                            lessonNumber: lessonNumber, reduceMotion: reduceMotion, exits: exits)
+                            lessonNumber: lessonNumber, reduceMotion: reduceMotion, exits: exits,
+                            basics: basics)
         #else
         phoneBody
         #endif
@@ -109,29 +118,52 @@ public struct LessonCompleteOverlay: View {
 
                 sheet
                     // Cap the sheet so a long title at large Dynamic Type scrolls
-                    // instead of pushing the primary button off-screen.
-                    .frame(maxHeight: geo.size.height * 0.86)
+                    // instead of pushing the primary button off-screen. Bottom-
+                    // aligned: a sheet shorter than the cap (Basics' sized-to-
+                    // fit card) sits on the bottom edge, not in the middle.
+                    .frame(maxHeight: geo.size.height * 0.86, alignment: .bottom)
                     .offset(y: sheetOffset)
             }
         }
         .onAppear(perform: animateIn)
-        .task { await renderShareCard() }
+        .task { if basics == nil { await renderShareCard() } }
+    }
+
+    /// Merc bursts out over the sheet's top edge, except on a Basics sheet
+    /// at accessibility sizes: there the sheet is tall and Merc would sit on
+    /// the text (review 2026-10-22). The Deep dive's sheet is unchanged.
+    private var showsMerc: Bool {
+        basics == nil || !dynamicTypeSize.isAccessibilitySize
     }
 
     /// A bottom sheet with Merc (celebrating) bursting out over its top edge.
     private var sheet: some View {
         contentCard
             .overlay(alignment: .top) {
-                MercMascot(.celebrate, size: 148)
-                    .scaleEffect(mercScale)
-                    .offset(y: -80)
-                    .accessibilityHidden(true)
+                if showsMerc {
+                    MercMascot(.celebrate, size: 148)
+                        .scaleEffect(mercScale)
+                        .offset(y: -80)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(maxWidth: .infinity)
     }
 
-    private var contentCard: some View {
-        ScrollView {
+    @ViewBuilder private var contentCard: some View {
+        if let basics {
+            basicsCard(basics)
+                .background(cardBackground)
+        } else {
+            ScrollView {
+                deepDiveContent
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .background(cardBackground)
+        }
+    }
+
+    private var deepDiveContent: some View {
             VStack(spacing: BrandSpacing.lg) {
                 Color.clear.frame(height: 56)   // room for the bursting Merc
 
@@ -156,9 +188,140 @@ public struct LessonCompleteOverlay: View {
             .padding(.top, BrandSpacing.lg)
             .padding(.bottom, BrandSpacing.xxl)
             .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Basics
+
+    /// Basics' completion: a calm headline, "Try this today" (with Copy when
+    /// it quotes a message), then the next lesson and a way to stop.
+    ///
+    /// When it all fits, one column, as before. When it doesn't (the larger
+    /// text sizes older adults use), the two choices and "Your place is
+    /// saved." are pinned to the bottom of the sheet, the way "Your path"
+    /// pins its buttons, and only the headline and "Try this today" scroll
+    /// above them, so "Next" and "That's enough for today" are never below
+    /// the fold (review 2026-10-22).
+    private func basicsCard(_ wrapUp: BasicsWrapUp) -> some View {
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: BrandSpacing.lg) {
+                basicsSummary(wrapUp)
+                basicsChoices
+            }
+            .padding(.horizontal, BrandSpacing.xl)
+            .padding(.top, BrandSpacing.lg)
+            .padding(.bottom, BrandSpacing.xxl)
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 0) {
+                ScrollView {
+                    basicsSummary(wrapUp)
+                        .padding(.horizontal, BrandSpacing.xl)
+                        .padding(.top, BrandSpacing.lg)
+                        .padding(.bottom, BrandSpacing.md)
+                        .frame(maxWidth: .infinity)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                Divider()
+                basicsChoices
+                    .padding(.horizontal, BrandSpacing.xl)
+                    .padding(.top, BrandSpacing.md)
+                    .padding(.bottom, BrandSpacing.xxl)
+                    .frame(maxWidth: .infinity)
+                    // Never squeezed: the scrolling part gives up the room,
+                    // so the next lesson's whole title shows.
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .background(cardBackground)
+    }
+
+    /// The headline and "Try this today".
+    private func basicsSummary(_ wrapUp: BasicsWrapUp) -> some View {
+        VStack(spacing: BrandSpacing.lg) {
+            // Room for Merc, when he shows.
+            if showsMerc { Color.clear.frame(height: 56) }
+
+            VStack(spacing: BrandSpacing.xs) {
+                Text(BasicsCopy.headline)
+                    .font(.system(size: headlineSize, weight: .black, design: .rounded))
+                    .foregroundStyle(BrandColor.successText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(lessonTitle)
+                    .font(.system(size: subtitleSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(basicsAccessibilitySummary)
+
+            if !wrapUp.tryThisToday.isEmpty {
+                tryThisTodayCard(wrapUp)
+            }
+        }
+    }
+
+    /// The next lesson and a way to stop, then "Your place is saved."
+    private var basicsChoices: some View {
+        VStack(spacing: BrandSpacing.sm) {
+            if case .lesson(_, let title) = nextStop {
+                BrandButton(BasicsCopy.next(title), style: .primary) { exit(.next) }
+                    .accessibilityIdentifier("basics.complete.next")
+                BrandButton(BasicsCopy.enough, style: .ghost) { exit(.backToLessons) }
+                    .accessibilityIdentifier("basics.complete.enough")
+            } else {
+                BrandButton(BasicsCopy.backToLessons, style: .primary) { exit(.backToLessons) }
+            }
+            Text(BasicsCopy.placeSaved)
+                .font(BrandFont.caption)
+                .foregroundStyle(BrandColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, BrandSpacing.xs)
+    }
+
+    private func tryThisTodayCard(_ wrapUp: BasicsWrapUp) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            Text(BasicsCopy.tryThisToday.uppercased())
+                .font(BrandFont.caption)
+                .tracking(1.2)
+                .foregroundStyle(BrandColor.accentText)
+                .accessibilityAddTraits(.isHeader)
+            Text(wrapUp.tryThisToday)
+                .font(BrandFont.bodyEmphasized)
+                .foregroundStyle(BrandColor.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if let message = wrapUp.message {
+                Button {
+                    LessonPasteboard.copy(message)
+                    copiedMessage = true
+                } label: {
+                    Label(copiedMessage ? BasicsCopy.copied : BasicsCopy.copy,
+                          systemImage: copiedMessage ? "checkmark" : "doc.on.doc")
+                        .font(BrandFont.bodyEmphasized)
+                        .foregroundStyle(BrandColor.accentText)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("basics.complete.copy")
+            }
+        }
+        .padding(BrandSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BrandColor.background, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
+                .strokeBorder(BrandColor.border, lineWidth: 1)
+        )
+    }
+
+    private var basicsAccessibilitySummary: String {
+        if case .lesson(_, let title) = nextStop {
+            return "Lesson complete: \(lessonTitle). Up next: \(title)."
+        }
+        return "Lesson complete: \(lessonTitle)."
     }
 
     @ViewBuilder private var cardBackground: some View {

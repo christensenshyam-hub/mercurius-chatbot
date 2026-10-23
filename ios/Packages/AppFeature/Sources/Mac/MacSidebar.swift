@@ -5,9 +5,10 @@ import CurriculumFeature
 import NetworkingKit
 import PersistenceKit
 
-/// The Mac window's sidebar: Today, the learning path by unit (a section
-/// that folds away), and the chats — New Chat, then the saved threads,
-/// newest first.
+/// The Mac window's sidebar: Today, the two courses by unit — "Basics" and
+/// "Deep dive", each a section that folds away, the learner's own course
+/// first (BEGINNER_GUIDE §2.1) — and the chats: New Chat, then the saved
+/// threads, newest first.
 ///
 /// A click goes through `MacShellModel.select(_:)`, which closes any open
 /// lesson and opens a saved thread; code that routes on its own (opening a
@@ -29,11 +30,16 @@ import PersistenceKit
 struct MacSidebar: View {
     @Bindable var shell: MacShellModel
     let progress: CurriculumProgressStore
+    /// The learner's course, which section comes first. nil: the Deep dive.
+    var track: CurriculumTrack = .deepDive
     /// Ask to delete a saved thread (the shell confirms first).
     let onDelete: (ConversationSummary) -> Void
 
-    /// The Learning path section is open (kept across launches).
+    /// The Deep dive's section is open (kept across launches; the key is
+    /// from when it was the only "Learning path").
     @AppStorage("mac.sidebar.pathExpanded") private var pathExpanded = true
+    /// The Basics section is open (kept across launches).
+    @AppStorage("mac.sidebar.basicsExpanded") private var basicsExpanded = true
     @NightSettings private var night
 
     var body: some View {
@@ -43,13 +49,15 @@ struct MacSidebar: View {
                     .tag(MacShellModel.Destination.today)
             }
 
-            Section(isExpanded: $pathExpanded) {
-                ForEach(MercuriusCurriculum.units) { unit in
-                    UnitRow(unit: unit, progress: progress)
-                        .tag(MacShellModel.Destination.unit(unit.id))
+            ForEach(Self.sectionOrder(first: track), id: \.self) { course in
+                Section(isExpanded: course == .basics ? $basicsExpanded : $pathExpanded) {
+                    ForEach(course.units) { unit in
+                        UnitRow(unit: unit, progress: progress, showsMastery: course.hasUnitTests)
+                            .tag(MacShellModel.Destination.unit(unit.id))
+                    }
+                } header: {
+                    SectionHeader(title: course.displayName)
                 }
-            } header: {
-                SectionHeader(title: "Learning path")
             }
 
             Section {
@@ -76,6 +84,11 @@ struct MacSidebar: View {
                 onDelete(conversation)
             }
         }
+    }
+
+    /// The courses' sections, the learner's own first.
+    nonisolated static func sectionOrder(first: CurriculumTrack) -> [CurriculumTrack] {
+        [first] + CurriculumTrack.allCases.filter { $0 != first }
     }
 
     /// The saved thread the Delete key would delete: the selected row's, if
@@ -144,12 +157,14 @@ private struct SidebarSecondary: ViewModifier {
 private struct UnitRow: View {
     let unit: CurriculumFeature.Unit
     let progress: CurriculumProgressStore
+    /// Basics has no unit checks, so no seal.
+    var showsMastery = true
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         let done = progress.completedCount(in: unit)
         let total = unit.lessons.count
-        let mastered = progress.isUnitMastered(unit.id)
+        let mastered = showsMastery && progress.isUnitMastered(unit.id)
         HStack(spacing: BrandSpacing.sm) {
             Label {
                 Text(unit.title)

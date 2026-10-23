@@ -20,23 +20,73 @@ public struct CurriculumView<TopBar: View>: View {
     let onStartLesson: (Lesson) -> Void
     let onStartUnitTest: (Unit) -> Void
     let topBar: TopBar
+    /// The learner's course choice. With a store the path shows the
+    /// "Basics | Deep dive" switch and follows it; without one it is the
+    /// Deep dive's path alone, exactly as before Basics.
+    let tracks: CurriculumTrackStore?
 
     public init(
         progress: CurriculumProgressStore,
         unitId: String? = nil,
+        tracks: CurriculumTrackStore? = nil,
         onStartLesson: @escaping (Lesson) -> Void,
         onStartUnitTest: @escaping (Unit) -> Void,
         @ViewBuilder topBar: () -> TopBar
     ) {
         self.progress = progress
         self.unitId = unitId
+        self.tracks = tracks
         self.onStartLesson = onStartLesson
         self.onStartUnitTest = onStartUnitTest
         self.topBar = topBar()
     }
 
+    private var track: CurriculumTrack { tracks?.track ?? .deepDive }
+
     public var body: some View {
         NavigationStack {
+            if let tracks {
+                trackedPath(tracks)
+            } else {
+                deepDivePath
+            }
+        }
+    }
+
+    /// The path with the "Basics | Deep dive" switch pinned under the top
+    /// bar, following the learner's choice.
+    private func trackedPath(_ tracks: CurriculumTrackStore) -> some View {
+        LearningPathView(
+            progress: progress,
+            unitId: unitId,
+            track: track,
+            tracks: tracks,
+            onStartLesson: onStartLesson,
+            onStartUnitTest: onStartUnitTest
+        )
+        // A new track is a new path: it opens scrolled to its own frontier.
+        .id(track)
+        // Basics: the learner's text size (a floor; a bigger system size wins).
+        .readingSizeFloor(track == .basics ? tracks.basicsReadingSize : .standard)
+        .background(BrandColor.background.ignoresSafeArea())
+#if os(iOS)
+        .navigationTitle(Self.title(unitId: unitId, track: track))
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                topBar
+                TrackSwitch(tracks: tracks)
+            }
+        }
+#else
+        .navigationTitle("Learning Path")
+        .navigationSubtitle(Self.macSubtitle(unitId: unitId))
+#endif
+    }
+
+    /// The Deep dive's path alone, built exactly as before Basics (the
+    /// snapshot test's screen; no store, no switch).
+    private var deepDivePath: some View {
             LearningPathView(
                 progress: progress,
                 unitId: unitId,
@@ -56,11 +106,17 @@ public struct CurriculumView<TopBar: View>: View {
             .navigationTitle("Learning Path")
             .navigationSubtitle(Self.macSubtitle(unitId: unitId))
 #endif
-        }
     }
 }
 
 extension CurriculumView {
+    /// The whole path's title for a course: "Lessons" on Basics (plain
+    /// words, review 2026-10-22), "Curriculum" on the Deep dive as before.
+    static func title(unitId: String?, track: CurriculumTrack) -> String {
+        if track == .basics, unitId == nil { return BasicsPathCopy.title }
+        return title(unitId: unitId)
+    }
+
     /// "Curriculum" for the whole path; "Unit 1 · <title>" for one unit.
     static func title(unitId: String?) -> String {
         guard let unitId, let unit = MercuriusCurriculum.unit(withId: unitId) else { return "Curriculum" }
@@ -92,5 +148,54 @@ public extension CurriculumView where TopBar == EmptyView {
             onStartUnitTest: onStartUnitTest,
             topBar: { EmptyView() }
         )
+    }
+}
+
+/// "Basics | Deep dive": which course the path shows. Two large, labelled
+/// segments across the top (BEGINNER_GUIDE §2.1); each course keeps its own
+/// progress, and the choice is remembered.
+struct TrackSwitch: View {
+    @Bindable var tracks: CurriculumTrackStore
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(CurriculumTrack.allCases, id: \.self) { track in
+                segment(track)
+            }
+        }
+        .padding(4)
+        .background(BrandColor.surfaceElevated, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+        .padding(.horizontal, BrandSpacing.lg)
+        .padding(.vertical, BrandSpacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(BrandColor.background)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Course")
+    }
+
+    private func segment(_ track: CurriculumTrack) -> some View {
+        let selected = tracks.track == track
+        return Button {
+            guard !selected else { return }
+            tracks.choose(track)
+        } label: {
+            Text(track.displayName)
+                .font(BrandFont.bodyEmphasized)
+                .foregroundStyle(selected ? Color.white : BrandColor.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                            .fill(BrandGradient.merc)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(track.displayName)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityIdentifier("path.track.\(track.rawValue)")
     }
 }

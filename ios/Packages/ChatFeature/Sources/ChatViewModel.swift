@@ -1007,8 +1007,18 @@ public final class ChatViewModel {
         modeSwitchError = nil
     }
 
-    /// The `[CURRICULUM: Unit X, Lesson Y]` tag extracted from the lesson's
-    /// wire prefix, for re-tagging follow-up turns (legacy-server bridge).
+    /// Whether a turn already opens with a lesson tag — a Deep-dive
+    /// `[CURRICULUM: …]` or a Basics `[BASICS: …]` — so the legacy bridge
+    /// must not tag it again. The lesson's opener is the only such turn: on
+    /// the first request it is also the last user turn, and a second tag
+    /// would make that request's opener differ from every later one's.
+    static func carriesLessonTag(_ content: String) -> Bool {
+        content.hasPrefix("[CURRICULUM") || content.hasPrefix("[BASICS:")
+    }
+
+    /// The `[CURRICULUM: Unit X, Lesson Y]` (or `[BASICS: Unit X, Lesson Y]`)
+    /// tag extracted from the lesson's wire prefix, for re-tagging follow-up
+    /// turns (legacy-server bridge).
     private var curriculumTurnTag: String? {
         guard let content = lessonWirePrefix?.content, content.hasPrefix("["),
               let close = content.firstIndex(of: "]") else { return nil }
@@ -1142,7 +1152,7 @@ public final class ChatViewModel {
             // unaffected by the extra tag.
             if let tag = curriculumTurnTag,
                let lastUserIdx = history.lastIndex(where: { $0.role == "user" }),
-               !history[lastUserIdx].content.hasPrefix("[CURRICULUM") {
+               !Self.carriesLessonTag(history[lastUserIdx].content) {
                 history[lastUserIdx] = ChatMessageDTO(
                     role: "user",
                     content: tag + " " + history[lastUserIdx].content

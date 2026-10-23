@@ -697,6 +697,28 @@ final class MercuriusUITests: XCTestCase {
         )
     }
 
+    /// Basics: "I'm new to AI: start with the Basics" opens the first Basics
+    /// lesson on its intro, which offers the bigger text and says "Start".
+    @MainActor
+    func testFirstRunCanStartTheBasics() {
+        let app = launchApp(extraArgs: Self.freshInstallArgs)
+
+        tapOnboarding(app, "onboarding.continue", timeout: Self.firstScreenTimeout)
+        chooseAge(app, "15")
+        acceptDisclosure(app)
+        tapOnboarding(app, "onboarding.limitsAck")
+        tapOnboarding(app, "onboarding.startBasics")
+
+        XCTAssertTrue(
+            app.buttons["Start the lesson."].waitForExistence(timeout: Self.firstScreenTimeout),
+            "The Basics card did not open the Basics lesson intro (\"Start the lesson.\" missing)"
+        )
+        XCTAssertTrue(app.buttons["Back to lessons. Leave without starting the lesson."].exists,
+                      "The Basics intro has no labelled way back")
+        XCTAssertTrue(onboardingElement(app, "basics.readingSize.larger").exists,
+                      "The first Basics lesson doesn't offer bigger text")
+    }
+
     /// AUD-35: consent is recorded at "Got it", one screen before the flow
     /// ends. An app closed on Your path reopens there, not on Meet Merc.
     @MainActor

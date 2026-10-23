@@ -43,8 +43,9 @@ enum OnboardingTelemetry {
         log.info("onboarding.path_shown")
     }
 
-    static func startLesson1() {
-        log.info("onboarding.start_lesson_1")
+    /// `track` is "basics" or "deepDive".
+    static func startLesson1(track: String) {
+        log.info("onboarding.start_lesson_1 track=\(track, privacy: .public)")
     }
 
     static func justChat() {

@@ -185,8 +185,10 @@ enum NightCompleteCopy {
 enum NightLessonCode {
     static func code(unitLabel: String?, lessonNumber: Int) -> String {
         guard let unitLabel else { return "\(lessonNumber)" }
-        let parts = unitLabel.split(separator: " ")
-        guard parts.count == 2, parts[0].uppercased() == "UNIT", let unit = Int(parts[1]) else {
+        // "UNIT 01", or a Basics lesson's "BASICS UNIT 1".
+        var parts = unitLabel.split(separator: " ").map { $0.uppercased() }
+        if parts.count == 3, parts[0] == "BASICS" { parts.removeFirst() }
+        guard parts.count == 2, parts[0] == "UNIT", let unit = Int(parts[1]) else {
             return "\(lessonNumber)"
         }
         return "\(unit).\(lessonNumber)"
@@ -195,7 +197,10 @@ enum NightLessonCode {
 
 /// The `[KEY]` ideas Merc gave in a lesson's thread, in order, each once.
 enum NightKeyIdeas {
-    static func collect(from messages: [ChatMessage]) -> [String] {
+    /// `standaloneOnly` (Basics): leave out an idea that points back into
+    /// the chat ("…in plain words, just like this one."), which reads as
+    /// nonsense on the summary card (review 2026-10-22).
+    static func collect(from messages: [ChatMessage], standaloneOnly: Bool = false) -> [String] {
         var seen = Set<String>()
         var ideas: [String] = []
         for message in messages where message.role == .assistant {
@@ -204,11 +209,19 @@ enum NightKeyIdeas {
                 // Without its sources: a raw tag never reaches the recap.
                 let idea = NightSourceParser.strip(text, isStreaming: false).text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !idea.isEmpty, seen.insert(idea).inserted else { continue }
+                guard !idea.isEmpty, !(standaloneOnly && pointsBack(idea)),
+                      seen.insert(idea).inserted else { continue }
                 ideas.append(idea)
             }
         }
         return ideas
+    }
+
+    /// The idea leans on the chat around it: "this one", "like this",
+    /// "here", "above", "below".
+    static func pointsBack(_ idea: String) -> Bool {
+        idea.range(of: #"\b(this one|these ones|like this|like that|that one|here|above|below)\b"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
     }
 }
 
@@ -230,6 +243,9 @@ struct NightLessonComplete: View {
     let lessonNumber: Int?
     let reduceMotion: Bool
     let exits: LessonCompleteExits
+    /// A Basics lesson: "Try this today" and "That's enough for today", no
+    /// share. (The host passes no week for Basics, so no ring either.)
+    var basics: BasicsWrapUp? = nil
 
     @Environment(\.nightLessonRecap) private var recap
     @Environment(\.nightLessonWeek) private var week
@@ -243,6 +259,7 @@ struct NightLessonComplete: View {
     @State private var ringLit = false
     @State private var share: ShareItem?
     @State private var dismissalReported = false
+    @State private var copiedMessage = false
 
     private struct ShareItem {
         let image: LessonShareImage
@@ -317,7 +334,9 @@ struct NightLessonComplete: View {
                 .clipShape(shape)
         }
         .nightLit(radius: Night.Radius.hero, fill: Night.canvasTop)
-        .overlay(alignment: .topTrailing) { shareButton.padding(14) }
+        .overlay(alignment: .topTrailing) {
+            if basics == nil { shareButton.padding(14) }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
@@ -355,6 +374,9 @@ struct NightLessonComplete: View {
 
             if !keys.shown.isEmpty {
                 keyIdeas(keys.shown, more: keys.more)
+            }
+            if let basics, !basics.tryThisToday.isEmpty {
+                tryThisToday(basics)
             }
             if let week {
                 weekRow(week)
@@ -417,6 +439,40 @@ struct NightLessonComplete: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Basics' "Try this today", with Copy when the task quotes a message.
+    private func tryThisToday(_ wrapUp: BasicsWrapUp) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NightEyebrow(BasicsCopy.tryThisToday, systemImage: "sun.max")
+            Text(NightTypography.curlQuotes(wrapUp.tryThisToday))
+                .nightFont(.body)
+                .foregroundStyle(Night.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let message = wrapUp.message {
+                Button {
+                    LessonPasteboard.copy(message)
+                    copiedMessage = true
+                } label: {
+                    Label(copiedMessage ? BasicsCopy.copied : BasicsCopy.copy,
+                          systemImage: copiedMessage ? "checkmark" : "doc.on.doc")
+                        .nightFont(.calloutStrong)
+                        .foregroundStyle(Night.accentText)
+                }
+                .buttonStyle(.plain)
+                .nightFocusRing(Capsule())
+                .help("Copy “\(message)”")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Night.surfaceRaised, in: RoundedRectangle(cornerRadius: Night.Radius.row, style: .continuous))
+        .overlay {
+            if night.increasedContrast {
+                RoundedRectangle(cornerRadius: Night.Radius.row, style: .continuous)
+                    .strokeBorder(Night.hairline, lineWidth: 1)
+            }
+        }
+    }
+
     private func weekRow(_ week: NightLessonWeek) -> some View {
         let lit = ringLit || still ? week.done : week.before
         return HStack(spacing: 14) {
@@ -466,9 +522,9 @@ struct NightLessonComplete: View {
     /// the next step. With nothing next, "Done for now" is the one button.
     private var buttons: some View {
         HStack(spacing: 12) {
-            if let primary = NightCompleteCopy.primaryTitle(nextStop, unitLabel: unitLabel) {
+            if let primary = primaryTitle {
                 Button { exit(.backToLessons) } label: {
-                    Text(NightCompleteCopy.doneForNow).frame(maxWidth: .infinity)
+                    Text(doneTitle).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(NightSecondaryButtonStyle(size: .large))
                 .nightFocusRing(Capsule())
@@ -484,14 +540,28 @@ struct NightLessonComplete: View {
                 .accessibilityLabel(primary)
             } else {
                 Button { exit(.backToLessons) } label: {
-                    Text(NightCompleteCopy.doneForNow).frame(maxWidth: .infinity)
+                    Text(doneTitle).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(NightPrimaryButtonStyle(size: .large))
                 .keyboardShortcut(.defaultAction)
                 .nightFocusRing(Capsule())
-                .help("\(NightCompleteCopy.doneForNow) (Return)")
+                .help("\(doneTitle) (Return)")
             }
         }
+    }
+
+    /// "Start Lesson 1.2" (the up-next row above it names the lesson) or
+    /// the unit check; Basics has no check, so only a lesson.
+    private var primaryTitle: String? {
+        if basics != nil, case .unitTest = nextStop { return nil }
+        return NightCompleteCopy.primaryTitle(nextStop, unitLabel: unitLabel)
+    }
+
+    /// Basics: "That's enough for today" (or "Back to lessons" when nothing
+    /// is next); the Deep dive: "Done for now".
+    private var doneTitle: String {
+        guard basics != nil else { return NightCompleteCopy.doneForNow }
+        return primaryTitle == nil ? BasicsCopy.backToLessons : BasicsCopy.enough
     }
 
     /// The existing share card (`LessonShareCard`), from a 30 pt chrome
@@ -551,6 +621,7 @@ struct NightLessonComplete: View {
     }
 
     private func renderShareCard() async {
+        guard basics == nil else { return }
         // Rendering is synchronous main-actor work: let the card land first.
         if !still { try? await Task.sleep(for: .milliseconds(650)) }
         guard !Task.isCancelled else { return }

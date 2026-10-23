@@ -69,6 +69,8 @@ struct MessageBubbleView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.readingFaceOverride) private var readingFaceOverride
+    /// Basics lessons offer Copy on Merc's replies on the iPhone too.
+    @Environment(\.lessonOffersCopy) private var lessonOffersCopy
 
     /// The reply typeface: the app-wide pick (Lexend) unless the DEBUG font
     /// gallery overrides it for a comparison subtree.
@@ -348,6 +350,13 @@ struct MessageBubbleView: View {
             #if os(macOS)
             if !message.content.isEmpty {
                 copyMenuItem
+            }
+            #else
+            // Basics: Copy first, Report after it (App Store 1.2 keeps it).
+            if lessonOffersCopy, !message.content.isEmpty {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    LessonPasteboard.copy(BlockParser.plainText(message.content))
+                }
             }
             #endif
             if !message.content.isEmpty {

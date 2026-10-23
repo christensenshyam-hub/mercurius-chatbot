@@ -78,6 +78,7 @@ struct MacShellView: View {
             MacSidebar(
                 shell: shell,
                 progress: env.progressStore,
+                track: env.trackStore.track,
                 onDelete: { pendingDelete = $0 }
             )
             .disabled(isGated)
@@ -163,7 +164,7 @@ struct MacShellView: View {
                 reminderStore: env.reminderStore,
                 scheduler: scheduler,
                 gamificationStore: gamificationStore,
-                nextLessonId: env.progressStore.frontierLessonId,
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track),
                 certificates: env.certificates,
                 onDone: { shell.showsProgress = false }
             )
@@ -239,7 +240,8 @@ struct MacShellView: View {
             // Only a streak the server confirmed recently (as Home on iOS).
             streak: Self.debugTodayDemoStreak
                 ?? (env.streakStore.isCurrentFresh ? env.streakStore.current : 0),
-            progress: env.progressStore
+            progress: env.progressStore,
+            track: env.trackStore.track
         )
         return MacTodayView(
             state: state,
@@ -265,9 +267,10 @@ struct MacShellView: View {
     /// sidebar row.
     @ViewBuilder
     private func unitPath(_ unitId: String) -> some View {
-        if let unit = MercuriusCurriculum.unit(withId: unitId) {
+        if let track = CurriculumTrack.of(id: unitId), let unit = track.unit(withId: unitId) {
             MacUnitPage(
                 unit: unit,
+                track: track,
                 progress: env.progressStore,
                 onStartLesson: { shell.openLesson($0) },
                 onStartUnitTest: { shell.openUnitTest($0) },
@@ -320,10 +323,11 @@ struct MacShellView: View {
     private func lessonView(_ lesson: Lesson) -> some View {
         let progress = env.progressStore
         let next = AppShellView.resolvedNextStop(after: lesson.id, progress: progress)
-        let unit = MercuriusCurriculum.unit(containingLesson: lesson.id)
+        let unit = CurriculumTrack.unit(containingLesson: lesson.id)
+        let isBasics = BasicsCurriculum.isBasicsId(lesson.id)
         return CurriculumLessonView(
             lessonId: lesson.id,
-            unitLabel: unit.map { "UNIT \($0.number)" } ?? "CURRICULUM",
+            unitLabel: AppShellView.unitLabel(forLessonId: lesson.id),
             lessonNumber: lesson.number,
             title: lesson.title,
             objective: lesson.objective,
@@ -337,8 +341,10 @@ struct MacShellView: View {
             onStarted: { lessonId, conversationId in
                 progress.markInProgress(lessonId, conversationId: conversationId)
                 // "Started a structured curriculum lesson" — at start, as on
-                // iOS. Idempotent.
-                env.achievementStore.award(AchievementCatalog.explorer)
+                // iOS. Idempotent. Not in Basics, which has no badges.
+                if !isBasics {
+                    env.achievementStore.award(AchievementCatalog.explorer)
+                }
             },
             onLessonComplete: { handleLessonComplete($0) },
             onExit: { shell.closeActivity() },
@@ -347,11 +353,17 @@ struct MacShellView: View {
             totalInUnit: unit?.lessons.count ?? 0,
             nextStop: next.map(AppShellView.celebrationStop),
             // Settings' erasure stops this lesson's reply in flight.
-            onRegisterStop: { shell.registerLessonStop($0) }
+            onRegisterStop: { shell.registerLessonStop($0) },
+            // Basics: plain intro, practice chip, "Try this today". (No text
+            // size: the Mac has no Dynamic Type.)
+            basics: isBasics
+                ? BasicsLessonOptions(wrapUp: AppShellView.basicsWrapUp(for: lesson.id))
+                : nil
         )
         // The complete card's week row: this week's count, read again as the
-        // completion lands (the progress store is observed).
-        .environment(\.nightLessonWeek, Self.lessonWeek(lessonId: lesson.id, progress: progress))
+        // completion lands (the progress store is observed). Basics has no
+        // weekly goal (BEGINNER_GUIDE §2.5).
+        .environment(\.nightLessonWeek, isBasics ? nil : Self.lessonWeek(lessonId: lesson.id, progress: progress))
         // The lesson sets the window's title, subtitle and way back itself.
     }
 
@@ -385,7 +397,9 @@ struct MacShellView: View {
     private func handleLessonComplete(_ lessonId: String) {
         env.progressStore.markCompleted(lessonId)
         env.lastActivityStore.touch()
-        env.achievementStore.award(AchievementCatalog.explorer)
+        if !BasicsCurriculum.isBasicsId(lessonId) {
+            env.achievementStore.award(AchievementCatalog.explorer)
+        }
         recordModuleCompleted(sourceType: "lesson", sourceId: lessonId)
     }
 
@@ -493,7 +507,7 @@ struct MacShellView: View {
     private func presentPendingLesson() {
         guard !isGated, let lessonId = env.pendingLessonId else { return }
         env.pendingLessonId = nil
-        guard let unit = MercuriusCurriculum.unit(containingLesson: lessonId),
+        guard let unit = CurriculumTrack.unit(containingLesson: lessonId),
               let lesson = unit.lessons.first(where: { $0.id == lessonId })
         else {
             shell.show(.today)
@@ -734,7 +748,7 @@ struct MacShellView: View {
         }
         // `-NightPathUnit <unit id>`: that unit's page (shots).
         if let unitId = UserDefaults.standard.string(forKey: "NightPathUnit"),
-           MercuriusCurriculum.unit(withId: unitId) != nil {
+           CurriculumTrack.of(id: unitId)?.unit(withId: unitId) != nil {
             shell.show(.unit(unitId))
         }
         #endif

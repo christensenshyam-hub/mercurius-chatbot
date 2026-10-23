@@ -166,9 +166,12 @@ struct AppEntryView: View {
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
             .onAppear {
                 // Every re-plan reads this week's lessons, so the weekly
-                // nudges skip a week whose goal is met (AUD-36).
-                scheduler.weekProgress = { [progress = env.progressStore] in
-                    Self.weekProgress(WeeklyPlan.compute(progress: progress))
+                // nudges skip a week whose goal is met (AUD-36). It counts
+                // the course the learner follows, read at each re-plan, so
+                // a Basics learner's lessons count (and the Deep dive's
+                // don't count for them).
+                scheduler.weekProgress = { [progress = env.progressStore, tracks = env.trackStore] in
+                    Self.weekProgress(WeeklyPlan.compute(progress: progress, track: tracks.track))
                 }
                 #if os(iOS) || os(macOS)
                 // Before this, a reminder tapped at cold launch is held by
@@ -229,8 +232,11 @@ struct AppEntryView: View {
             scheduler: scheduler,
             streakStore: env.streakStore,
             reminderCardStore: env.reminderCardStore,
-            onStartLesson1: {
-                let lesson1 = MercuriusCurriculum.units.first?.lessons.first
+            onStartLesson1: { track in
+                // The card the learner tapped is their course from now on
+                // (switchable on the path, or the Mac's sidebar).
+                env.trackStore.choose(track)
+                let lesson1 = track.units.first?.lessons.first
                 entryTab = .curriculum
                 entryLesson = lesson1
                 hasEnteredApp = true
@@ -299,6 +305,7 @@ struct AppEntryView: View {
                 reminderStore: env.reminderStore,
                 progress: env.progressStore,
                 progressSync: env.progressSync,
+                trackStore: env.trackStore,
                 lastActivityStore: env.lastActivityStore,
                 reviewPromptStore: env.reviewPromptStore,
                 scheduler: scheduler,
@@ -341,6 +348,10 @@ struct AppEntryView: View {
                     entryTab = .chat
                     hasEnteredApp = true
                 },
+                onOpenLessons: {
+                    entryTab = .curriculum
+                    hasEnteredApp = true
+                },
                 showsReminderCard: ReminderCardStore.shows(
                     weeklyEnabled: env.reminderStore.weeklyEnabled,
                     handled: env.reminderCardStore.isHandled,
@@ -362,7 +373,8 @@ struct AppEntryView: View {
             // Only a streak the server confirmed recently — a weeks-old cache
             // would make Merc claim a streak that has already died.
             streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0,
-            progress: env.progressStore
+            progress: env.progressStore,
+            track: env.trackStore.track
         )
     }
 
@@ -391,7 +403,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         }
     }
@@ -414,7 +426,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         case .cancel:
             scheduler.cancel()

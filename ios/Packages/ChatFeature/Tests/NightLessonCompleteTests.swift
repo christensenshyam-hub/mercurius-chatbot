@@ -60,6 +60,18 @@ struct NightLessonCompleteTests {
         #expect(NightKeyIdeas.collect(from: []) == [])
     }
 
+    @Test("Basics leaves out an idea that points back into the chat (review 2026-10-22)")
+    func standaloneKeyIdeas() {
+        let messages = [
+            message(.assistant, "[KEY]A chatbot answers real questions in plain words, just like this one.[/KEY]"),
+            message(.assistant, "[KEY]A chatbot is a computer program, not a person.[/KEY]"),
+            message(.assistant, "[KEY]Cover your name and numbers here first.[/KEY]"),
+        ]
+        #expect(NightKeyIdeas.collect(from: messages, standaloneOnly: true) == ["A chatbot is a computer program, not a person."])
+        #expect(NightKeyIdeas.collect(from: messages).count == 3, "the Deep dive keeps every idea, as before")
+        #expect(!NightKeyIdeas.pointsBack("Thereafter, check the label."), "a whole word only")
+    }
+
     @Test("The card lists the last three ideas and says how many more the lesson holds")
     func shownKeyIdeas() {
         let five = ["1", "2", "3", "4", "5"]

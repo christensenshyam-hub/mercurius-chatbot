@@ -23,6 +23,9 @@ import CurriculumFeature
 /// path once the sidebar folded away in a narrow window (PR #47 step 05).
 struct MacUnitPage: View {
     let unit: CurriculumFeature.Unit
+    /// The unit's course. A Basics unit has no check: its thread ends at its
+    /// last lesson, and its words name the course.
+    var track: CurriculumTrack = .deepDive
     let progress: CurriculumProgressStore
     let onStartLesson: (Lesson) -> Void
     let onStartUnitTest: (CurriculumFeature.Unit) -> Void
@@ -42,7 +45,7 @@ struct MacUnitPage: View {
     var body: some View {
         let gutter = Night.Space.pageGutter(forWidth: detailWidth)
         let column = min(Self.columnWidth, max(detailWidth - 2 * gutter, 0))
-        let page = Self.page(unit: unit, progress: progress)
+        let page = Self.page(unit: unit, progress: progress, track: track)
         ScrollView {
             VStack(alignment: .leading, spacing: Night.Space.section) {
                 cover(page, showsNumeral: column >= Self.numeralMinColumn)
@@ -69,8 +72,8 @@ struct MacUnitPage: View {
                     .onChange(of: geo.size.width) { _, width in detailWidth = width }
             }
         }
-        .navigationTitle("Learning Path")
-        .navigationSubtitle(Self.subtitle(unitId: unit.id))
+        .navigationTitle(track == .basics ? CurriculumTrack.basics.displayName : "Learning Path")
+        .navigationSubtitle(Self.subtitle(unitId: unit.id, track: track))
     }
 
     // MARK: - The model (pure, tested)
@@ -109,6 +112,8 @@ struct MacUnitPage: View {
 
     struct Page: Equatable {
         let unit: CurriculumFeature.Unit
+        /// The unit's course: Basics has no check.
+        var track: CurriculumTrack = .deepDive
         let unitNumber: Int
         let lessons: [LessonStop]
         let check: CheckState
@@ -118,8 +123,10 @@ struct MacUnitPage: View {
         let nextUnit: CurriculumFeature.Unit?
 
         /// The cover's eyebrow status.
+        var hasCheck: Bool { track.hasUnitTests }
+
         var status: String {
-            if check == .mastered { return "Mastered" }
+            if hasCheck, check == .mastered { return "Mastered" }
             if done == unit.lessons.count { return "All lessons done" }
             if done > 0 || lessons.contains(where: { if case .current(_, true) = $0.state { return true }; return false }) {
                 return "In progress"
@@ -129,13 +136,14 @@ struct MacUnitPage: View {
 
         /// Whether the check is the page's prominent action (every lesson
         /// done, not yet mastered).
-        var checkIsPrimary: Bool { check == .open }
+        var checkIsPrimary: Bool { hasCheck && check == .open }
     }
 
     @MainActor
-    static func page(unit: CurriculumFeature.Unit, progress: CurriculumProgressStore) -> Page {
+    static func page(unit: CurriculumFeature.Unit, progress: CurriculumProgressStore,
+                     track: CurriculumTrack = .deepDive) -> Page {
         let number = Int(unit.number) ?? 0
-        let frontier = progress.frontierLessonId
+        let frontier = progress.frontierLessonId(in: track)
         var foundCurrent = false
         var stops: [LessonStop] = []
         for (index, lesson) in unit.lessons.enumerated() {
@@ -163,11 +171,11 @@ struct MacUnitPage: View {
         } else {
             check = .locked(after: unit.lessons.last(where: { !progress.isCompleted($0.id) }))
         }
-        let units = MercuriusCurriculum.units
+        let units = track.units
         let nextUnit = units.firstIndex(where: { $0.id == unit.id }).flatMap { index in
             units.indices.contains(index + 1) ? units[index + 1] : nil
         }
-        return Page(unit: unit, unitNumber: number, lessons: stops, check: check,
+        return Page(unit: unit, track: track, unitNumber: number, lessons: stops, check: check,
                     questionCount: MercuriusCurriculum.unitTest(for: unit.id)?.questions.count ?? 0,
                     done: progress.completedCount(in: unit), nextUnit: nextUnit)
     }
@@ -176,18 +184,24 @@ struct MacUnitPage: View {
     static func code(unitNumber: Int, lesson: Lesson) -> String { "\(unitNumber).\(lesson.number)" }
 
     /// "Unit 1 of 8", under "Learning Path" in the toolbar.
-    static func subtitle(unitId: String) -> String {
-        let units = MercuriusCurriculum.units
+    static func subtitle(unitId: String, track: CurriculumTrack = .deepDive) -> String {
+        let units = track.units
         guard let index = units.firstIndex(where: { $0.id == unitId }) else { return "All units" }
         return "Unit \(index + 1) of \(units.count)"
     }
 
     // MARK: - Words (held to the honest-copy register by NightCopyTests)
 
-    static func coverEyebrow(_ page: Page) -> String { "Unit \(page.unit.number) · \(page.status)" }
+    static func coverEyebrow(_ page: Page) -> String {
+        let unit = "Unit \(page.unit.number) · \(page.status)"
+        return page.hasCheck ? unit : "\(page.track.displayName) · \(unit)"
+    }
 
     static func coverMeterLabel(_ page: Page) -> String {
         let total = page.unit.lessons.count
+        guard page.hasCheck else {
+            return page.done == 1 ? "1 of \(total) lessons done" : "\(page.done) of \(total) lessons done"
+        }
         switch page.check {
         case .mastered: return "\(total) of \(total) lessons · check passed"
         case .open: return "\(total) of \(total) lessons · the unit check is open"
@@ -304,9 +318,11 @@ struct MacUnitPage: View {
                         .fill(meterFill(stop.state))
                         .frame(height: 5)
                 }
-                Image(systemName: page.check == .mastered ? "diamond.fill" : "diamond")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(page.check == .mastered ? Night.successText : Night.accentText)
+                if page.hasCheck {
+                    Image(systemName: page.check == .mastered ? "diamond.fill" : "diamond")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(page.check == .mastered ? Night.successText : Night.accentText)
+                }
             }
             .frame(maxWidth: 360)
             .accessibilityHidden(true)
@@ -329,7 +345,8 @@ struct MacUnitPage: View {
     private func thread(_ page: Page, stacked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(page.lessons.enumerated()), id: \.element.id) { index, stop in
-                threadRow(isFirst: index == 0, isLast: false,
+                // Basics: the thread ends at the last lesson (no check).
+                threadRow(isFirst: index == 0, isLast: !page.hasCheck && index == page.lessons.count - 1,
                           litAbove: index > 0 && page.lessons[index - 1].state == .done,
                           litBelow: stop.state == .done,
                           nodeTop: Self.nodeTop(stop.state)) {
@@ -338,11 +355,13 @@ struct MacUnitPage: View {
                     lessonContent(stop, page: page, stacked: stacked)
                 }
             }
-            threadRow(isFirst: false, isLast: true,
-                      litAbove: page.lessons.last?.state == .done, litBelow: false, nodeTop: 2) {
-                checkNode(page.check)
-            } content: {
-                checkContent(page, stacked: stacked)
+            if page.hasCheck {
+                threadRow(isFirst: false, isLast: true,
+                          litAbove: page.lessons.last?.state == .done, litBelow: false, nodeTop: 2) {
+                    checkNode(page.check)
+                } content: {
+                    checkContent(page, stacked: stacked)
+                }
             }
         }
     }
