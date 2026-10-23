@@ -142,11 +142,19 @@ struct HomeStateTests {
         #expect(store.frontierLessonId == nil)
     }
 
-    @Test("Late-night opener")
+    @Test("The late-night opener is a neutral hello, not encouragement to stay up (AUD-44)")
     func openers() {
-        #expect(HomeState.opener(hour: 2) == "Up late? Perfect time to learn.")
-        #expect(HomeState.opener(hour: 23) == "Up late? Perfect time to learn.")
+        for hour in [22, 23, 0, 2, 4] {
+            #expect(HomeState.opener(hour: hour) == "Hi there!")
+        }
         #expect(HomeState.opener(hour: 5) == "Good morning!")
+        #expect(HomeState.opener(hour: 12) == "Good afternoon!")
+        #expect(HomeState.opener(hour: 17) == "Good evening!")
+        for hour in 0..<24 {
+            let line = HomeState.opener(hour: hour).lowercased()
+            #expect(!line.contains("late"), "hour \(hour): \(line)")
+            #expect(!line.contains("perfect time"), "hour \(hour): \(line)")
+        }
     }
 
     @Test("The celebration's next stop mirrors the path's")
@@ -155,5 +163,27 @@ struct HomeStateTests {
                 == .lesson(number: 2, title: unit1.lessons[1].title))
         #expect(AppShellView.celebrationStop(.unitTest(unit1))
                 == .unitTest(unitNumber: unit1.number, unitTitle: unit1.title))
+    }
+}
+
+// AUD-50: on an iPhone SE, Home's reminder card pushed "Chat with Merc"
+// below the fold.
+@Suite("Home on short screens")
+struct HomeShortScreenTests {
+
+    @Test("An SE's 647 pt is short; every Face ID iPhone is not")
+    func compactHeight() {
+        #expect(HomeView.isCompactHeight(647))
+        #expect(!HomeView.isCompactHeight(728))   // 13 mini, inside its safe area
+        #expect(!HomeView.isCompactHeight(839))   // 16 Pro Max
+        #expect(!HomeView.isCompactHeight(0))     // first layout pass
+    }
+
+    @Test("Merc shrinks on a short screen, and at accessibility sizes")
+    func mercSizes() {
+        #expect(HomeView.mercSize(compactHeight: false, accessibility: false) == 216)
+        #expect(HomeView.mercSize(compactHeight: false, accessibility: true) == 150)
+        #expect(HomeView.mercSize(compactHeight: true, accessibility: false) == 120)
+        #expect(HomeView.mercSize(compactHeight: true, accessibility: true) == 120)
     }
 }

@@ -232,19 +232,76 @@ struct ChatViewModelErrorTests {
 
     // MARK: Server refusals (SSE `error` frame with a refusal code)
 
-    @Test("A daily_limit refusal shows the server's copy and is NOT retryable")
+    /// The audit's capture: refused at 21:10:57Z, `retryAfterSec` 10143 =
+    /// 00:00Z, read in Chicago (7:00 PM the same evening).
+    private static let chicagoAtAudit: LocalClock = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let instant = ISO8601DateFormatter().date(from: "2026-10-18T21:10:57Z")!
+        return LocalClock(now: { instant }, calendar: calendar, locale: Locale(identifier: "en_US"))
+    }()
+
+    private func failedReason(_ model: ChatViewModel) -> String? {
+        guard case .failed(let reason, _) = model.phase else { return nil }
+        return reason.replacingOccurrences(of: "\u{202F}", with: " ")
+    }
+
+    private func isRetryable(_ model: ChatViewModel) -> Bool? {
+        guard case .failed(_, let retryable) = model.phase else { return nil }
+        return retryable
+    }
+
+    @Test("A daily_limit refusal names its reset as a local time and is NOT retryable (AUD-30)")
     func refusalDailyLimitIsNotRetryable() async throws {
         let client = FakeChatClient()
         let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
-        client.outcome = .events([.refusal(code: "daily_limit", message: copy, retryAfter: 3600)])
+        client.outcome = .events([.refusal(code: "daily_limit", message: copy, retryAfter: 10_143)])
+        let model = makeModel(client: client)
+        model.clock = Self.chicagoAtAudit
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(failedReason(model) == "You've used today's chat turns. Try again after 7:00 PM.")
+        #expect(isRetryable(model) == false)
+        #expect(model.messages.last?.role == .assistant)
+        if case .failed(let bubble) = model.messages.last?.status {
+            #expect(bubble.replacingOccurrences(of: "\u{202F}", with: " ")
+                == "You've used today's chat turns. Try again after 7:00 PM.")
+        } else {
+            Issue.record("Expected a failed bubble")
+        }
+    }
+
+    @Test("A daily_limit refusal without a wait keeps the server's copy as written")
+    func refusalDailyLimitNoWait() async throws {
+        let client = FakeChatClient()
+        let copy = "You've used today's chat turns. Mercurius will be ready again tomorrow."
+        client.outcome = .events([.refusal(code: "daily_limit", message: copy, retryAfter: nil)])
         let model = makeModel(client: client)
         model.draft = "Hello"
         model.send()
         try await waitUntilSettled(model)
 
         #expect(model.phase == .failed(reason: copy, isRetryable: false))
-        #expect(model.messages.last?.role == .assistant)
-        #expect(model.messages.last?.status == .failed(reason: copy))
+    }
+
+    @Test("The network's new-session refusal says cellular works now and keeps Retry (AUD-30)")
+    func refusalNewSessionsOffersRetry() async throws {
+        let client = FakeChatClient()
+        // Production's SSE frame: no scope, so the copy names the network.
+        client.outcome = .events([.refusal(code: "daily_limit",
+                                           message: "Too many new sessions from this network today.",
+                                           retryAfter: 10_143)])
+        let model = makeModel(client: client)
+        model.clock = Self.chicagoAtAudit
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(failedReason(model)
+            == "Too many new sessions from this network today. Switch to cellular data and try again, or come back after 7:00 PM.")
+        #expect(isRetryable(model) == true)
     }
 
     @Test("A busy refusal shows the server's copy and IS retryable")
@@ -261,8 +318,21 @@ struct ChatViewModelErrorTests {
         #expect(model.messages.last?.status == .failed(reason: copy))
     }
 
-    @Test("Every non-daily_limit refusal code keeps Retry available", arguments: ["spend_cap", "service_disabled", "restarting"])
-    func otherRefusalsAreRetryable(code: String) async throws {
+    @Test("Restarting and unknown refusal codes keep Retry available", arguments: ["restarting", "some_future_code"])
+    func momentaryRefusalsAreRetryable(code: String) async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.refusal(code: code, message: "Back in a moment.", retryAfter: 5)])
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(reason: "Back in a moment.", isRetryable: true))
+    }
+
+    @Test("The spend cap and the kill switch drop Retry: they say no until they lift (AUD-30)",
+          arguments: ["spend_cap", "service_disabled"])
+    func capAndPauseAreNotRetryable(code: String) async throws {
         let client = FakeChatClient()
         client.outcome = .events([.refusal(code: code, message: "Paused for now.", retryAfter: nil)])
         let model = makeModel(client: client)
@@ -270,7 +340,7 @@ struct ChatViewModelErrorTests {
         model.send()
         try await waitUntilSettled(model)
 
-        #expect(model.phase == .failed(reason: "Paused for now.", isRetryable: true))
+        #expect(model.phase == .failed(reason: "Paused for now.", isRetryable: false))
     }
 
     @Test("A refusal's copy bypasses the billing sanitizer (server wording is trusted)")
@@ -284,26 +354,45 @@ struct ChatViewModelErrorTests {
         model.send()
         try await waitUntilSettled(model)
 
-        #expect(model.phase == .failed(reason: copy, isRetryable: true))
+        #expect(model.phase == .failed(reason: copy, isRetryable: false))
     }
 
-    // MARK: JSON-path refusals (a real 429 / 503 on /api/chat)
-
-    @Test("APIError.quotaExceeded surfaces the server message and is not retryable")
-    func quotaExceededIsNotRetryable() async throws {
+    @Test("A typed turn after a no-Retry refusal still sends")
+    func typingAfterRefusalSends() async throws {
         let client = FakeChatClient()
-        let copy = "You've reached today's usage limit. Mercurius will be ready again tomorrow."
-        client.outcome = .failure(APIError.quotaExceeded(message: copy, retryAfter: 7200))
+        client.outcome = .events([.refusal(code: "service_disabled", message: "Paused.", retryAfter: nil)])
         let model = makeModel(client: client)
         model.draft = "Hello"
         model.send()
         try await waitUntilSettled(model)
+        #expect(isRetryable(model) == false)
 
-        #expect(model.phase == .failed(reason: copy, isRetryable: false))
-        #expect(model.messages.last?.status == .failed(reason: copy))
+        client.outcome = .events([.complete(ChatResponse(reply: "Back now.", mode: "socratic"))])
+        model.draft = "Are you back?"
+        model.send()
+        try await waitUntilSettled(model)
+        #expect(model.phase == .idle)
+        #expect(model.messages.last?.content == "Back now.")
     }
 
-    @Test("APIError.serviceUnavailable surfaces the server message and is retryable")
+    // MARK: JSON-path refusals (a real 429 / 503 on /api/chat)
+
+    @Test("APIError.quotaExceeded names its reset as a local time and is not retryable")
+    func quotaExceededIsNotRetryable() async throws {
+        let client = FakeChatClient()
+        let copy = "You've reached today's usage limit. Mercurius will be ready again tomorrow."
+        client.outcome = .failure(APIError.quotaExceeded(message: copy, retryAfter: 10_143, scope: "session"))
+        let model = makeModel(client: client)
+        model.clock = Self.chicagoAtAudit
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(failedReason(model) == "You've reached today's usage limit. Try again after 7:00 PM.")
+        #expect(isRetryable(model) == false)
+    }
+
+    @Test("APIError.serviceUnavailable for a restart surfaces the server message and is retryable")
     func serviceUnavailableIsRetryable() async throws {
         let client = FakeChatClient()
         let copy = "Mercurius is restarting — try again in a few seconds."
@@ -314,6 +403,23 @@ struct ChatViewModelErrorTests {
         try await waitUntilSettled(model)
 
         #expect(model.phase == .failed(reason: copy, isRetryable: true))
+    }
+
+    // MARK: Network failures (AUD-32)
+
+    @Test("A network that blocks Mercurius says so, with Retry")
+    func blockedNetwork() async throws {
+        let client = FakeChatClient()
+        client.outcome = .failure(APIError.unreachableOnThisNetwork)
+        let model = makeModel(client: client)
+        model.draft = "Hello"
+        model.send()
+        try await waitUntilSettled(model)
+
+        #expect(model.phase == .failed(
+            reason: "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi.",
+            isRetryable: true
+        ))
     }
 }
 

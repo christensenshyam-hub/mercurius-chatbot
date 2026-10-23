@@ -234,6 +234,8 @@ targets:
         product: CurriculumFeature
       - package: LocalPackages
         product: SettingsFeature
+      - package: LocalPackages
+        product: MercuriusActivity
       - package: SnapshotTesting
         product: SnapshotTesting
     postCompileScripts:

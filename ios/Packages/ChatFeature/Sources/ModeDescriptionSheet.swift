@@ -62,7 +62,8 @@ struct ModeDescriptionSheet: View {
                 }
             }
         }
-        .tint(BrandColor.accent)
+        // The tint colours the Close text (the Got it fill sets its own).
+        .tint(BrandColor.accentText)
         // `.medium` detent keeps this lightweight — the user can
         // pull to `.large` if they want more breathing room at
         // accessibility Dynamic Type sizes.

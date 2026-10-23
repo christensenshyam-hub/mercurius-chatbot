@@ -38,6 +38,55 @@ public struct Merc: View {
     }
 }
 
+// MARK: - The right arm's pose
+
+/// Where Merc's right arm hangs from and how it swings, per state, in the
+/// art's 160×180 space. Rotation is in degrees about the arm's top centre
+/// (`shoulder`); 0 hangs straight down, negative swings it out to Merc's
+/// left (the viewer's right) and up.
+struct MercArmPose: Equatable {
+    static let width: CGFloat = 13
+    static let length: CGFloat = 44
+
+    /// The resting arm's top centre, at the toga's top corner.
+    static let restingShoulder = CGPoint(x: 109.5, y: 86)
+    /// Inside the toga's upper corner: the raised "Nailed it!" arm turns
+    /// here, behind the toga, so it comes out from under it. Turning about
+    /// `restingShoulder` swung its end through the empty gap between the
+    /// head and the toga, and the arm floated loose beside his head (AUD-52).
+    static let raisedShoulder = CGPoint(x: 96, y: 107)
+
+    let shoulder: CGPoint
+    /// Drawn behind the toga rather than in front of it.
+    var behindTorso: Bool = false
+    let rest: Double
+    let swing: Double
+    let dur: Double
+    let oscillates: Bool
+
+    static func pose(for state: MercState) -> MercArmPose {
+        switch state {
+        case .wave:
+            return MercArmPose(shoulder: restingShoulder, rest: 14, swing: -22, dur: 0.35, oscillates: true)
+        case .celebrate:
+            // Pumps between out-and-down and raised beside his head.
+            return MercArmPose(shoulder: raisedShoulder, behindTorso: true,
+                               rest: -40, swing: -130, dur: 0.25, oscillates: true)
+        case .happy:
+            // merc-wave — happy arm waves too
+            return MercArmPose(shoulder: restingShoulder, rest: 14, swing: -22, dur: 0.55, oscillates: true)
+        default:
+            return MercArmPose(shoulder: restingShoulder, rest: 0, swing: 0, dur: 0.5, oscillates: false)
+        }
+    }
+
+    /// The arm's far end (the hand's centre line) at `degrees`.
+    func hand(at degrees: Double) -> CGPoint {
+        let r = CGFloat(degrees * .pi / 180)
+        return CGPoint(x: shoulder.x - sin(r) * Self.length, y: shoulder.y + cos(r) * Self.length)
+    }
+}
+
 // MARK: - The character art (fixed 160×180 coordinate space)
 
 private struct MercArt: View {
@@ -98,6 +147,9 @@ private struct MercArt: View {
             // Left arm (rests)
             limb().placed(x: 45, y: 97, w: 13, h: 42, rotation: 7)
 
+            // The raised right arm comes out from under the toga.
+            if arm.behindTorso { rightArm }
+
             // Torso / toga
             UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 18.5,
                                    bottomTrailingRadius: 18.5, topTrailingRadius: 22, style: .continuous)
@@ -115,8 +167,7 @@ private struct MercArt: View {
                 .placed(x: 76, y: 126, w: 8, h: 8)
 
             // Right arm (state-driven; waves/cheers)
-            limb().placed(x: 103, y: 86, w: 13, h: 44, rotation: armRotation, anchor: .top)
-                .animation(arm.oscillates ? loop(arm.dur) : .easeOut(duration: 0.35), value: armPhase)
+            if !arm.behindTorso { rightArm }
 
             // Neck
             limb(lin(160, 0x5F33D6, 0x8A35D4)).placed(x: 73, y: 80, w: 14, h: 18)
@@ -140,6 +191,18 @@ private struct MercArt: View {
                 .animation(loop(1.3), value: t)
                 .placed(x: 118, y: 22, w: 22, h: 22)
         }
+    }
+
+    /// The right arm turns about its top centre, the shoulder. The swing
+    /// animates on its own; a shoulder that moves with the state eases over
+    /// once rather than riding the swing's repeat-forever animation.
+    private var rightArm: some View {
+        limb()
+            .frame(width: MercArmPose.width, height: MercArmPose.length)
+            .rotationEffect(.degrees(armRotation), anchor: .top)
+            .animation(arm.oscillates ? loop(arm.dur) : .easeOut(duration: 0.35), value: armPhase)
+            .position(x: arm.shoulder.x, y: arm.shoulder.y + MercArmPose.length / 2)
+            .animation(motionOff ? nil : .easeOut(duration: 0.35), value: state)
     }
 
     // MARK: face (expression per state)
@@ -239,14 +302,7 @@ private struct MercArt: View {
         }
     }
 
-    private var arm: (rest: Double, swing: Double, dur: Double, oscillates: Bool) {
-        switch state {
-        case .wave:      return (14, -22, 0.35, true)
-        case .celebrate: return (-32, -98, 0.25, true)
-        case .happy:     return (14, -22, 0.55, true)   // merc-wave — happy arm waves too
-        default:         return (0, 0, 0.5, false)
-        }
-    }
+    private var arm: MercArmPose { MercArmPose.pose(for: state) }
     private var armPhase: Bool { arm.oscillates ? t : false }
     private var armRotation: Double {
         if arm.oscillates { return anim(t) ? arm.swing : arm.rest }

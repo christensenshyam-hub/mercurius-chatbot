@@ -69,7 +69,7 @@ public struct HowMercuriusTeachesView: View {
         HStack(alignment: .top, spacing: BrandSpacing.lg) {
             Text(number)
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .frame(width: 32, alignment: .leading)
                 .accessibilityHidden(true)
 

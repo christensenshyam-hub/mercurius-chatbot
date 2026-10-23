@@ -71,6 +71,16 @@ public struct RootView: View {
             liveActivityGallery
         } else if ProcessInfo.processInfo.arguments.contains("-ReplyFontGallery") {
             ReplyFontGalleryView()
+        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestCrisisPreview") {
+            unitTestCrisisPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") {
+            unitTestPreview
+        } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
+            QuizView(
+                model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
+                dismissAction: {}
+            )
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
         } else {
             mainBody
         }
@@ -109,6 +119,36 @@ public struct RootView: View {
                 completedInUnit: 3,
                 totalInUnit: unit.lessons.count,
                 nextStop: next.map(AppShellView.celebrationStop)
+            )
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else {
+            mainBody
+        }
+    }
+
+    /// DEBUG-only: Unit 1's test at a stage (`-UnitTestStage`), for
+    /// screenshots (see `UnitTestPreviewHost`).
+    @ViewBuilder private var unitTestPreview: some View {
+        if let unit = MercuriusCurriculum.units.first,
+           let test = MercuriusCurriculum.unitTest(for: unit.id) {
+            UnitTestPreviewHost(unit: unit, test: test,
+                                stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
+                .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else {
+            mainBody
+        }
+    }
+
+    /// DEBUG-only: Unit 1's test driven through the real view model to the
+    /// crisis support view, for screenshots (see `UnitTestCrisisPreviewHost`).
+    /// `-CrisisVia503` takes the non-2xx path instead.
+    @ViewBuilder private var unitTestCrisisPreview: some View {
+        if let unit = MercuriusCurriculum.units.first,
+           let test = MercuriusCurriculum.unitTest(for: unit.id) {
+            UnitTestCrisisPreviewHost(
+                unit: unit,
+                test: test,
+                via503: ProcessInfo.processInfo.arguments.contains("-CrisisVia503")
             )
             .preferredColorScheme(env.themeStore.theme.colorScheme)
         } else {
@@ -196,7 +236,7 @@ public struct RootView: View {
         VStack(spacing: BrandSpacing.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(BrandColor.error)
+                .foregroundStyle(BrandColor.errorText)
             Text("Couldn't start")
                 .font(BrandFont.title)
                 .foregroundStyle(BrandColor.text)
@@ -313,6 +353,104 @@ private struct ChatPreviewHost: View {
             model.draft = "What is a token in an LLM?"
             model.send()
         }
+    }
+}
+
+/// DEBUG host for `-UnitTestPreview`: Unit 1's test, driven to a stage for
+/// screenshots with no network call. `-UnitTestStage partial` picks three
+/// answers (the submit button's "Answer all 5 · 3/5"); `review` answers
+/// every question, the first one wrong, and submits; `mastered` and
+/// `almost` reach the result screen through a canned grade. With no stage
+/// it opens untouched.
+private struct UnitTestPreviewHost: View {
+    @State private var model: UnitTestViewModel
+    private let stage: String?
+
+    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?) {
+        let pass = stage == "mastered"
+        _model = State(initialValue: UnitTestViewModel(unit: unit, test: test, shuffleSeed: 42) { _ in
+            .init(grade: pass ? "A" : "C", pass: pass,
+                  feedback: pass ? "Clear, specific and well reasoned." : "Name a concrete example of where it goes wrong.")
+        })
+        self.stage = stage
+    }
+
+    var body: some View {
+        UnitTestView(model: model, onMastered: { _ in }, onExit: {})
+            .task {
+                guard model.phase == .quiz, !model.quizSubmitted, let stage else { return }
+                switch stage {
+                case "partial":
+                    for question in model.questions.prefix(3) { model.select(question.answer, for: question.id) }
+                case "review":
+                    for (i, question) in model.questions.enumerated() {
+                        let wrong = question.answer == "A" ? "B" : "A"
+                        model.select(i == 0 ? wrong : question.answer, for: question.id)
+                    }
+                    model.submitQuiz()
+                case "mastered", "almost":
+                    for question in model.questions { model.select(question.answer, for: question.id) }
+                    model.submitQuiz()
+                    model.continueAfterQuiz()
+                    model.defenseAnswer = "DEBUG preview answer."
+                    await model.submitDefense()
+                default:
+                    break
+                }
+            }
+    }
+}
+
+/// DEBUG host for `-UnitTestCrisisPreview`: answers every multiple-choice
+/// question correctly, then submits a written answer whose grade is the
+/// production server's exact crisis payload, run through the real decode
+/// (`UnitDefenseResult`) and mapping (`UnitDefenseGrading`). With `via503` the
+/// same copy arrives as a helper route's 503 crisis body through
+/// `APIClient.validate`. No network call is made.
+private struct UnitTestCrisisPreviewHost: View {
+    @State private var model: UnitTestViewModel
+
+    /// `/api/unit-test/grade`'s crisis answer, byte for byte (server.js
+    /// CRISIS_GRADE with lib/safetyCore.js CRISIS_COPY).
+    static let grade200 = #"{"grade":"—","pass":false,"feedback":"I'm really glad you told me. I'm an AI, so I can't be your support person, but you deserve real support right now.\n\nCall or text 988 — the Suicide & Crisis Lifeline (US, 24/7).\nText HOME to 741741 — Crisis Text Line.\n\nIf you might be in immediate danger, call 911. Please tell a trusted adult too, like a parent or school counselor. Everything else can wait — come back to it whenever you're ready.","crisis":true}"#
+    /// A JSON helper route's crisis answer (server.js CRISIS_RESULT, 503).
+    nonisolated static let helper503 = #"{"error":"crisis","message":"I'm really glad you told me. I'm an AI, so I can't be your support person, but you deserve real support right now.\n\nCall or text 988 — the Suicide & Crisis Lifeline (US, 24/7).\nText HOME to 741741 — Crisis Text Line.\n\nIf you might be in immediate danger, call 911. Please tell a trusted adult too, like a parent or school counselor. Everything else can wait — come back to it whenever you're ready.","crisis":true}"#
+
+    init(unit: CurriculumFeature.Unit, test: UnitTest, via503: Bool) {
+        _model = State(initialValue: UnitTestViewModel(unit: unit, test: test) { _ in
+            try await UnitDefenseGrading.grade {
+                if via503 {
+                    try APIClient.validate(statusCode: 503, data: Data(Self.helper503.utf8))
+                }
+                return try JSONDecoder().decode(UnitDefenseResult.self, from: Data(Self.grade200.utf8))
+            }
+        })
+    }
+
+    var body: some View {
+        UnitTestView(model: model, onMastered: { _ in }, onExit: {})
+            .task {
+                guard model.phase == .quiz else { return }
+                for question in model.questions { model.select(question.answer, for: question.id) }
+                model.submitQuiz()
+                model.continueAfterQuiz()
+                model.defenseAnswer = "DEBUG crisis preview answer."
+                await model.submitDefense()
+            }
+    }
+}
+
+/// DEBUG `-QuizCrisisPreview`: `/api/quiz`'s crisis answer (server.js
+/// CRISIS_RESULT, a 503) through the real `APIClient.validate`, so the quiz
+/// sheet's support state can be screenshotted. No network call is made.
+private struct CrisisPreviewTools: ToolsProviding {
+    func generateQuiz(sessionId: String) async throws -> Quiz {
+        try APIClient.validate(statusCode: 503, data: Data(UnitTestCrisisPreviewHost.helper503.utf8))
+        throw APIError.unknown(underlying: "unreachable")
+    }
+
+    func generateReportCard(sessionId: String) async throws -> ReportCard {
+        throw APIError.unknown(underlying: "unused")
     }
 }
 #endif

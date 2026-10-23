@@ -54,12 +54,20 @@ public enum ChatStreamEvent: Sendable, Equatable {
     /// The server declined this turn before answering — quota, spend cap,
     /// paused, busy or restarting. `code` is a `ServerRefusalCode` raw value;
     /// `message` is the server's own student-facing copy; `retryAfter` is
-    /// seconds until it is worth trying again, when the server says. No more
-    /// events will follow.
-    case refusal(code: String, message: String, retryAfter: TimeInterval?)
+    /// seconds until it is worth trying again, when the server says; `scope`
+    /// is whose allowance it was, if the frame says (today's server leaves it
+    /// out of the SSE frame). No more events will follow. `serverRefusal`
+    /// turns it into copy and a Retry rule.
+    case refusal(code: String, message: String, retryAfter: TimeInterval?, scope: String? = nil)
 
     /// The server reported an error. No more events will follow.
     case streamError(message: String)
+
+    /// The refusal behind a `.refusal` event: its copy and Retry rule.
+    public var serverRefusal: ServerRefusal? {
+        guard case .refusal(let code, let message, let retryAfter, let scope) = self else { return nil }
+        return ServerRefusal(code: code, message: message, retryAfter: retryAfter, scope: scope)
+    }
 }
 
 /// Internal JSON shape of a single SSE payload. We decode it to this
@@ -80,6 +88,9 @@ struct SSEPayload: Decodable {
     let error: String?
     let code: String?
     @LenientSeconds var retryAfterSec: TimeInterval?
+    /// Whose allowance a refusal is about. Not in today's frame; read so a
+    /// server that adds it is understood.
+    let scope: String?
 }
 
 /// `retryAfterSec` however the server spells it: a number, a numeric string,

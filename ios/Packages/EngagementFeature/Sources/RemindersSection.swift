@@ -50,7 +50,7 @@ public struct RemindersSection: View {
                 .foregroundStyle(BrandColor.text)
 
             toggle(.weekly, title: "Weekly nudges (Wed & Sun)",
-                   detail: "Wednesday at 7 PM and Sunday at 6 PM.")
+                   detail: "Sunday at 6 PM and Wednesday at 7 PM. None once you've done two lessons that week.")
 
             toggle(.daily, title: "Daily streak reminder",
                    detail: "Only while you have a streak going.")

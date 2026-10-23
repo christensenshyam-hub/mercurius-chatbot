@@ -37,6 +37,16 @@ struct ReminderPlannerTests {
         #expect(p[1].pose != .sleep)
     }
 
+    @Test("No rotation line lectures about scrolling or screen time (AUD-44)")
+    func noLecture() {
+        #expect(ReminderPlanner.dailyLines.count == 6)
+        for line in ReminderPlanner.dailyLines.map(\.body) {
+            #expect(!line.localizedCaseInsensitiveContains("scroll"), "\(line)")
+            #expect(!line.localizedCaseInsensitiveContains("screen time"), "\(line)")
+        }
+        #expect(Set(ReminderPlanner.dailyLines.map(\.body)).count == ReminderPlanner.dailyLines.count)
+    }
+
     @Test("Every rotation line carries its paired pose")
     func rotationPoses() {
         let p = plan(streak: nil)
@@ -101,8 +111,12 @@ struct ReminderPlannerTests {
         let week = ReminderPlanner.plan(now: morning, calendar: calendar, hour: 18, minute: 0,
                                         streak: 3, chattedToday: false, horizonDays: 7)
         #expect(week.count == 7)
-        // 14 daily + 2 weekly stays far under iOS's 64 pending-request cap.
-        #expect(plan(streak: 3).count + ReminderPlanner.weeklyPlan().count <= 64)
+        // 14 daily + every weekly nudge stays far under iOS's 64
+        // pending-request cap.
+        let weekly = ReminderPlanner.weeklyPlan(now: morning, calendar: calendar,
+                                                week: self.week(done: 0))
+        #expect(weekly.count <= 2 * ReminderPlanner.weeklyHorizonWeeks)
+        #expect(plan(streak: 3).count + 2 * ReminderPlanner.weeklyHorizonWeeks <= 64)
     }
 
     // MARK: - Streak horizon
@@ -129,10 +143,10 @@ struct ReminderPlannerTests {
         #expect(p.map(\.fireDate.day) == [7, 8])
         #expect(p[0].body.contains("4-day streak"))
 
-        // With the weekly nudges on, Wednesday's rotation slot yields to the nudge.
+        // A day a weekly nudge covers yields its rotation slot to the nudge.
         let quiet = ReminderPlanner.plan(now: day(6, hour: 12), calendar: calendar, hour: 18, minute: 0,
                                          streak: 4, streakDay: day(6), chattedToday: true,
-                                         quietWeekdays: ReminderPlanner.weeklyWeekdays)
+                                         quietDays: ["2026-07-08"])
         #expect(quiet.map(\.fireDate.day) == [7])
 
         // Opened again on Thursday without chatting: the streak is gone.
@@ -154,65 +168,208 @@ struct ReminderPlannerTests {
         #expect(p.map(\.fireDate.day) == [6, 7, 8])
     }
 
-    // MARK: - Weekly nudges
+    // MARK: - Weekly nudges (AUD-36)
 
-    @Test("Weekly nudges: Wednesday 19:00 and Sunday 18:00 (Gregorian weekdays)")
-    func weeklyComponents() {
-        let w = ReminderPlanner.weeklyPlan()
-        #expect(w.count == 2)
-        #expect(w[0].fireDate == DateComponents(hour: 19, minute: 0, weekday: 4))
-        #expect(w[1].fireDate == DateComponents(hour: 18, minute: 0, weekday: 1))
-        // Weekday-only components: no year/month/day, or a repeating trigger
-        // would match a single date.
-        #expect(w.allSatisfy { $0.fireDate.year == nil && $0.fireDate.month == nil && $0.fireDate.day == nil })
-        // Pin the numbering: weekday 4 is a Wednesday, 1 a Sunday.
-        let wednesday = calendar.nextDate(after: morning, matching: w[0].fireDate, matchingPolicy: .strict)!
-        let sunday = calendar.nextDate(after: morning, matching: w[1].fireDate, matchingPolicy: .strict)!
-        #expect(calendar.dateComponents([.year, .month, .day, .hour], from: wednesday)
-                == DateComponents(year: 2026, month: 7, day: 8, hour: 19))
-        #expect(calendar.dateComponents([.year, .month, .day, .hour], from: sunday)
-                == DateComponents(year: 2026, month: 7, day: 12, hour: 18))
+    /// The week containing `morning` (Monday 6 July 2026) starts Thursday
+    /// 2 July: its Sunday nudge (5 July) is past, its Wednesday one (8 July)
+    /// is ahead.
+    private func week(done: Int, goal: Int = 2, start: Date? = nil) -> ReminderPlanner.WeekProgress {
+        ReminderPlanner.WeekProgress(weekStart: start ?? day(2), done: done, goal: goal)
     }
 
-    @Test("Weekly nudge copy and poses")
-    func weeklyBodies() {
-        let w = ReminderPlanner.weeklyPlan()
+    private func weekly(done: Int, goal: Int = 2, now: Date? = nil,
+                        weeks: Int = ReminderPlanner.weeklyHorizonWeeks) -> [ReminderPlanner.PlannedReminder] {
+        ReminderPlanner.weeklyPlan(now: now ?? morning, calendar: calendar,
+                                   week: week(done: done, goal: goal), weeks: weeks)
+    }
+
+    private func ymd(_ r: ReminderPlanner.PlannedReminder) -> String {
+        String(format: "%02d-%02d %02d:%02d", r.fireDate.month ?? 0, r.fireDate.day ?? 0,
+               r.fireDate.hour ?? 0, r.fireDate.minute ?? 0)
+    }
+
+    @Test("The week starts Thursday 00:00, as WeeklyPlan counts it")
+    func weekStartIsThursday() {
+        #expect(ReminderPlanner.weekStart(containing: morning, calendar: calendar) == day(2))
+        #expect(ReminderPlanner.weekStart(containing: day(9), calendar: calendar) == day(9))
+        #expect(ReminderPlanner.weekStart(containing: day(8, hour: 23), calendar: calendar) == day(2))
+        #expect(ReminderPlanner.weekStart(containing: day(12, hour: 18), calendar: calendar) == day(9))
+    }
+
+    @Test("Nothing done: Wednesday 19:00 and Sunday 18:00 nudges as dated one-offs, eight weeks out")
+    func weeklyNothingDone() {
+        let w = weekly(done: 0)
+        // This week's Sunday (5 July) is past, so 1 + 7 × 2.
+        #expect(w.count == 1 + 2 * (ReminderPlanner.weeklyHorizonWeeks - 1))
+        #expect(w.prefix(4).map(ymd) == ["07-08 19:00", "07-12 18:00", "07-15 19:00", "07-19 18:00"])
+        // Every fire date is a full local date, so the trigger fires once.
+        #expect(w.allSatisfy { $0.fireDate.year == 2026 && $0.fireDate.month != nil && $0.fireDate.day != nil })
+        #expect(w.allSatisfy { $0.fireDate.weekday == nil })
+        // Sorted, date-keyed, unique.
+        #expect(w.map(\.id) == w.map(\.id).sorted())
+        #expect(Set(w.map(\.id)).count == w.count)
+        #expect(w[0].id == "mercurius.weekly.2026-07-08")
+        // Pin the weekdays: 8 July 2026 is a Wednesday, 12 July a Sunday.
+        let wednesday = calendar.date(from: w[0].fireDate)!
+        let sunday = calendar.date(from: w[1].fireDate)!
+        #expect(calendar.component(.weekday, from: wednesday) == 4)
+        #expect(calendar.component(.weekday, from: sunday) == 1)
+    }
+
+    @Test("Nothing done: the nudges ask, with their poses")
+    func weeklyCopyNothingDone() {
+        let w = weekly(done: 0)
         #expect(w[0].body == "This week's lesson is waiting — six minutes with Merc?")
-        #expect(w[1].body == "New week, new lesson.")
         #expect(w[0].pose == .wave)
+        #expect(w[1].body == "This week's first lesson is ready — six minutes with Merc?")
         #expect(w[1].pose == .happy)
     }
 
-    @Test("With weekly nudges on, daily rotation skips Wednesdays and Sundays")
-    func quietWeekdaysSkipRotation() {
-        #expect(ReminderPlanner.weeklyWeekdays == [4, 1])
-        // Monday 6 July → Sunday 19 July: the 8th, 12th, 15th and 19th yield.
-        let p = ReminderPlanner.plan(now: morning, calendar: calendar, hour: 18, minute: 0,
-                                     streak: 3, chattedToday: false,
-                                     quietWeekdays: ReminderPlanner.weeklyWeekdays)
-        #expect(p.map(\.fireDate.day) == [6, 7, 9, 10, 11, 13, 14, 16, 17, 18])
-        #expect(p[0].body.contains("3-day streak"))
+    @Test("One of two done: this week's Wednesday says one more; later weeks start over")
+    func weeklyOneDone() {
+        let w = weekly(done: 1)
+        #expect(w[0].fireDate.day == 8)
+        #expect(w[0].body == "One more lesson rounds out your week — six minutes with Merc?")
+        #expect(w[1].body == "This week's first lesson is ready — six minutes with Merc?")
+        #expect(w[2].body == "This week's lesson is waiting — six minutes with Merc?")
+
+        // Seen from Thursday morning, both of this week's nudges are ahead.
+        let thursday = calendar.date(from: DateComponents(year: 2026, month: 7, day: 2, hour: 9))!
+        let fromThursday = weekly(done: 1, now: thursday)
+        #expect(fromThursday.prefix(2).map(ymd) == ["07-05 18:00", "07-08 19:00"])
+        #expect(fromThursday[0].body == "One lesson down this week. Ready for the next one with Merc?")
+    }
+
+    @Test("Goal met: no nudge this week — not \"This week's lesson is waiting\"")
+    func weeklyGoalMet() {
+        for done in [2, 3] {
+            let w = weekly(done: done)
+            #expect(!w.contains { $0.fireDate.day == 8 && $0.fireDate.month == 7 })
+            // Next week (from Thursday 9 July) nudges again, from zero.
+            #expect(w.first.map(ymd) == "07-12 18:00")
+            #expect(w.count == 2 * (ReminderPlanner.weeklyHorizonWeeks - 1))
+        }
+        // The two finished on Thursday: Sunday's and Wednesday's both go.
+        let thursday = calendar.date(from: DateComponents(year: 2026, month: 7, day: 2, hour: 20))!
+        #expect(weekly(done: 2, now: thursday).first.map(ymd) == "07-12 18:00")
+    }
+
+    @Test("A different goal is honoured: one of three is not met")
+    func weeklyOtherGoal() {
+        #expect(weekly(done: 2, goal: 3).first.map(ymd) == "07-08 19:00")
+        #expect(weekly(done: 1, goal: 1).first.map(ymd) == "07-12 18:00")
+    }
+
+    @Test("No line ever calls Sunday a new week: Sunday is mid-week in a Thursday week")
+    func sundayIsMidWeek() {
+        let lines = [0, 1].flatMap { done in
+            ReminderPlanner.weeklySlots.map { ReminderPlanner.weeklyLine(weekday: $0.weekday, done: done) }
+        }
+        #expect(lines.allSatisfy { !$0.localizedCaseInsensitiveContains("new week") })
+        // Thursday 2 July + 3 days is the Sunday nudge, + 6 the Wednesday one.
+        #expect(weekly(done: 0, now: day(2)).prefix(2).map(\.fireDate.day) == [5, 8])
+    }
+
+    @Test("Past slots are dropped; the horizon counts weeks from this one")
+    func weeklyHorizonAndPast() {
+        #expect(weekly(done: 0, weeks: 1).map(ymd) == ["07-08 19:00"])
+        #expect(weekly(done: 0, weeks: 0).isEmpty)
+        // After Wednesday's slot, nothing is left this week.
+        let lateWednesday = day(8, hour: 20)
+        #expect(weekly(done: 0, now: lateWednesday, weeks: 1).isEmpty)
+    }
+
+    @Test("Local wall-clock times hold across a DST change")
+    func weeklyAcrossDST() {
+        var chicago = Calendar(identifier: .gregorian)
+        chicago.timeZone = TimeZone(identifier: "America/Chicago")!
+        // Thursday 29 October 2026; DST ends Sunday 1 November.
+        let now = chicago.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 9))!
+        let start = ReminderPlanner.weekStart(containing: now, calendar: chicago)
+        let w = ReminderPlanner.weeklyPlan(
+            now: now, calendar: chicago,
+            week: ReminderPlanner.WeekProgress(weekStart: start, done: 0, goal: 2), weeks: 2)
+        #expect(w.map(ymd) == ["11-01 18:00", "11-04 19:00", "11-08 18:00", "11-11 19:00"])
+        for reminder in w {
+            let fire = chicago.date(from: reminder.fireDate)!
+            #expect(chicago.component(.hour, from: fire) == reminder.fireDate.hour)
+        }
+    }
+
+    @Test("WeekProgress clamps nonsense and has a nothing-known default")
+    func weekProgressValues() {
+        let odd = ReminderPlanner.WeekProgress(weekStart: day(2), done: -3, goal: 0)
+        #expect(odd.done == 0)
+        #expect(odd.goal == 1)
+        #expect(!odd.goalMet)
+        let unknown = ReminderPlanner.WeekProgress.unknown(now: morning, calendar: calendar)
+        #expect(unknown.weekStart == day(2))
+        #expect(unknown.done == 0)
+        #expect(unknown.goal == ReminderPlanner.defaultWeeklyGoal)
+        #expect(ReminderPlanner.defaultWeeklyGoal == 2)
+    }
+
+    // MARK: - Both families
+
+    private var dailyOn: ReminderPlanner.DailySettings {
+        // A streak confirmed Monday the 6th: Tuesday and Wednesday can save it.
+        ReminderPlanner.DailySettings(hour: 18, minute: 0, streak: 4, streakDay: day(6), chattedToday: true)
+    }
+
+    @Test("A day with a weekly nudge drops its daily rotation slot")
+    func scheduleQuietsNudgeDays() {
+        let all = ReminderPlanner.schedule(now: day(6, hour: 12), calendar: calendar,
+                                           daily: dailyOn, week: week(done: 0))
+        let daily = all.filter { $0.id.hasPrefix(ReminderPlanner.idPrefix) }
+        let weekly = all.filter { $0.id.hasPrefix(ReminderPlanner.weeklyIdPrefix) }
+        #expect(daily.map(\.fireDate.day) == [7])
+        #expect(daily[0].body.contains("4-day streak"))
+        #expect(weekly.first.map(ymd) == "07-08 19:00")
     }
 
     @Test("The streak-defense slot is never dropped, even on a weekly-nudge day")
-    func quietWeekdayKeepsDefense() {
-        let wednesday = calendar.date(from: DateComponents(year: 2026, month: 7, day: 8, hour: 10))!
-        let p = ReminderPlanner.plan(now: wednesday, calendar: calendar, hour: 18, minute: 0,
+    func quietDayKeepsDefense() {
+        let p = ReminderPlanner.plan(now: day(8, hour: 10), calendar: calendar, hour: 18, minute: 0,
                                      streak: 6, chattedToday: false,
-                                     quietWeekdays: ReminderPlanner.weeklyWeekdays)
+                                     quietDays: ["2026-07-08", "2026-07-12"])
         #expect(p[0].fireDate.day == 8)
         #expect(p[0].body.contains("6-day streak"))
-        #expect(!p.dropFirst().contains { $0.fireDate.day == 12 || $0.fireDate.day == 15 })
+        #expect(!p.dropFirst().contains { $0.fireDate.day == 12 })
+        #expect(p.dropFirst().contains { $0.fireDate.day == 9 })
     }
 
-    @Test("Weekly ids live under their own prefix, disjoint from the daily one")
+    @Test("A goal met this week brings Wednesday's daily slot back")
+    func scheduleGoalMetKeepsDaily() {
+        let all = ReminderPlanner.schedule(now: day(6, hour: 12), calendar: calendar,
+                                           daily: dailyOn, week: week(done: 2))
+        let daily = all.filter { $0.id.hasPrefix(ReminderPlanner.idPrefix) }
+        #expect(daily.map(\.fireDate.day) == [7, 8])
+        #expect(!all.contains { $0.id == "mercurius.weekly.2026-07-08" })
+    }
+
+    @Test("Weekly off: daily only, no quiet days; daily off: weekly only")
+    func scheduleEachFamilyAlone() {
+        let dailyOnly = ReminderPlanner.schedule(now: day(6, hour: 12), calendar: calendar,
+                                                 daily: dailyOn, week: nil)
+        #expect(dailyOnly.map(\.fireDate.day) == [7, 8])
+        let weeklyOnly = ReminderPlanner.schedule(now: morning, calendar: calendar,
+                                                  daily: nil, week: week(done: 0))
+        #expect(weeklyOnly == weekly(done: 0))
+        #expect(ReminderPlanner.schedule(now: morning, calendar: calendar, daily: nil, week: nil).isEmpty)
+    }
+
+    @Test("Weekly ids live under their own prefix, which also clears the old repeating pair")
     func weeklyIds() {
-        let w = ReminderPlanner.weeklyPlan()
-        #expect(w.map(\.id) == ["mercurius.weekly.wed", "mercurius.weekly.sun"])
+        let w = weekly(done: 0)
         #expect(w.allSatisfy { $0.id.hasPrefix(ReminderPlanner.weeklyIdPrefix) })
-        // The daily refresh clears by `idPrefix` — it must never match a weekly id…
+        // The daily family clears by `idPrefix` — it must never match a weekly id…
         #expect(w.allSatisfy { !$0.id.hasPrefix(ReminderPlanner.idPrefix) })
         // …and weekly clearing must never match a daily id.
         #expect(plan(streak: 2).allSatisfy { !$0.id.hasPrefix(ReminderPlanner.weeklyIdPrefix) })
+        // Builds before AUD-36 left two repeating requests behind; clearing
+        // by the weekly prefix removes them on the first re-plan.
+        for legacy in ["mercurius.weekly.wed", "mercurius.weekly.sun"] {
+            #expect(legacy.hasPrefix(ReminderPlanner.weeklyIdPrefix))
+        }
     }
 }

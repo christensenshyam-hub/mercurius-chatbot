@@ -115,7 +115,7 @@ public struct LessonCompleteOverlay: View {
                 VStack(spacing: BrandSpacing.xs) {
                     Text("Nailed it!")
                         .font(.system(size: headlineSize, weight: .black, design: .rounded))
-                        .foregroundStyle(BrandColor.success)
+                        .foregroundStyle(BrandColor.successText)
                         .multilineTextAlignment(.center)
                     Text("Lesson complete · \(lessonTitle)")
                         .font(.system(size: subtitleSize, weight: .bold, design: .rounded))
@@ -151,7 +151,7 @@ public struct LessonCompleteOverlay: View {
             Text("UP NEXT")
                 .font(BrandFont.caption)
                 .tracking(1.5)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
             Text(label)
                 .font(BrandFont.bodyEmphasized)
                 .foregroundStyle(BrandColor.text)
@@ -219,7 +219,7 @@ public struct LessonCompleteOverlay: View {
             // Holds the button's place so the sheet doesn't jump when the
             // image is ready.
             shareLabel
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .opacity(0.5)
                 .accessibilityHidden(true)
         case .unavailable:
@@ -303,7 +303,7 @@ private struct GhostLinkStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(BrandColor.accent)
+            .foregroundStyle(BrandColor.accentText)
             .background(configuration.isPressed ? BrandColor.accent.opacity(0.15) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
