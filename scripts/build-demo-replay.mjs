@@ -40,7 +40,10 @@ const RUN_INDEX = 1;          // perRun[1] = run 2
 const SCENARIO_ID = 'curriculum-blocks-1';
 const TURNS = 3;              // turns 1–3; 4+ are left out (see the spec)
 const RECORDED_ON = 'October 7, 2026';
-const APP_STORE_URL = 'https://apps.apple.com/app/id6773192313';
+// AUD-06: the end panel points at /get (TestFlight today) as a plain button,
+// not the App Store badge, until 2.3 is approved; then switch back per
+// docs/STORE_CTA_SWITCHBACK.md.
+const GET_URL = 'https://trymercurius.com/get';
 const START = '<!-- DEMO:START -->';
 const END = '<!-- DEMO:END -->';
 
@@ -327,10 +330,9 @@ const section = [
   '      <div class="demo-end" data-demo-end>',
   '        <h3 class="demo-end-title" data-demo-end-title>That’s where this replay stops.</h3>',
   '        <p>The full lesson continues in the app. There, Mercurius replies to your own answers, so your lesson won’t read word for word like this one.</p>',
-  `        <a class="demo-badge" href="${APP_STORE_URL}" target="_blank" rel="noopener noreferrer" aria-label="Download Mercurius on the App Store">`,
-  '          <img src="/assets/app-store-badge.svg" alt="Download on the App Store" width="144" height="48" />',
-  '        </a>',
-  '        <p class="demo-end-fine">Free on the App Store. Requires iPhone, iOS 17 or later.</p>',
+  '        <!-- AUD-06: switch back to the App Store link when 2.3 is approved -->',
+  `        <a class="btn btn-primary" href="${GET_URL}" target="_blank" rel="noopener noreferrer">Get the app (beta)</a>`,
+  '        <p class="demo-end-fine">Free beta on Apple’s TestFlight. Requires iPhone, iOS 17 or later.</p>',
   '        <button type="button" class="demo-btn" data-demo-action="restart" hidden>Start over</button>',
   '      </div>',
   '',

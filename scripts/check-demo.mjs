@@ -313,7 +313,7 @@ async function main() {
     const facts = await js(`(() => {
       const t = document.querySelector('#demo').textContent.replace(/\\s+/g, ' ');
       const a = document.querySelector('#demo .demo-end a');
-      return { t, href: a && a.href, badge: a && a.querySelector('img') && a.querySelector('img').getAttribute('src'),
+      return { t, href: a && a.href, badge: a && a.querySelector('img') && a.querySelector('img').getAttribute('src'), label: a && a.textContent.trim(),
         h2: !!document.querySelector('#demo h2#demo-heading'), h3: document.querySelectorAll('#demo h3').length,
         afterHero: document.querySelector('section.hero').nextElementSibling === document.querySelector('#demo'),
         defer: (document.querySelector('script[src^="/demo.js"]') || {}).defer };
@@ -323,7 +323,9 @@ async function main() {
       check('honesty: names the lesson and its real title', /Unit 1, Lesson 1, “What happens when you type a prompt,”/.test(facts.t));
       check('honesty: gives the recording date', /October 7, 2026/.test(facts.t));
       check('honesty: student taps scripted, replies unedited', /scripted the student’s taps/.test(facts.t) && /replies are unedited/.test(facts.t));
-      check('end: App Store link + self-hosted badge', facts.href === 'https://apps.apple.com/app/id6773192313' && facts.badge === '/assets/app-store-badge.svg');
+      // AUD-06: /get as a plain button while 2.3 is in TestFlight; switch back
+      // to the App Store link + badge per docs/STORE_CTA_SWITCHBACK.md.
+      check('end: /get link as a plain "Get the app (beta)" button, no App Store badge', facts.href === 'https://trymercurius.com/get' && facts.badge === null && facts.label === 'Get the app (beta)');
       check('end: says the full lesson continues in the app', /full lesson continues in the app/.test(facts.t));
       check('turns 4+ are left out', !/Here's your exercise|For the exercise, concretely/.test(facts.t));
       check('outline: h2 section heading, h3 lesson + end headings', facts.h2 && facts.h3 === 2);
