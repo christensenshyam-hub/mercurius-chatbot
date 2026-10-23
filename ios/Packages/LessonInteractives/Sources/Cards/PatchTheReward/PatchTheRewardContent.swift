@@ -473,8 +473,9 @@ public enum PatchTheRewardContent {
     }
 
     /// How long a run plays, start to finish (skippable; under Reduce
-    /// Motion it doesn't play, its result shows at once).
-    public static let playDuration: TimeInterval = 6
+    /// Motion it doesn't play, its result shows at once). DEBUG UI tests can
+    /// lengthen it with `-InteractiveRunSeconds`.
+    public static var playDuration: TimeInterval { InteractiveLaunchOptions.current.runSeconds ?? 6 }
 
     /// The run's clock tick `elapsed` after it started playing.
     public static func tick(afterPlaying elapsed: TimeInterval) -> Double {

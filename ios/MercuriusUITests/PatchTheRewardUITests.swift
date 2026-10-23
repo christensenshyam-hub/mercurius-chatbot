@@ -177,7 +177,10 @@ final class PatchTheRewardUITests: XCTestCase {
     /// Skip under it, and the reveal comes into view when the last run ends.
     @MainActor
     func testARunStartedBelowTheTrackPlaysInViewAndTheRevealFollows() {
-        let app = launch(["-InteractiveState", "explored"])
+        // A 60 s run: Skip is still there when the test taps it, however
+        // slow the simulator (CI's took over 2 s per query; a 6 s run could
+        // end between "Skip exists" and the tap).
+        let app = launch(["-InteractiveState", "explored", "-InteractiveRunSeconds", "60"])
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
         let window = app.windows.firstMatch.frame
@@ -189,7 +192,7 @@ final class PatchTheRewardUITests: XCTestCase {
         }
         tap(app.buttons["Rule C: plus 100 per full lap through gates 1, 2 and 3 in order."].firstMatch, in: app)
         tap(app.buttons["Yes"].firstMatch, in: app)
-        // While the 6 s run plays, the track (running rule C) and the
+        // While the run plays, the track (running rule C) and the
         // panel's Skip are on screen together. Each look is one snapshot of
         // the tree, taken as soon as the tap returns: on CI, while a run
         // animates, a single element query took over 2 s, so querying the
@@ -218,15 +221,31 @@ final class PatchTheRewardUITests: XCTestCase {
         if !inView { keep(app, "run-not-in-view") }
         XCTAssertTrue(running, "the run didn't play (screenshot run-not-in-view)")
         XCTAssertTrue(inView, "the run didn't play in view: \(seen) in \(window) (screenshot run-not-in-view)")
-        // Skip, if the run is still playing (a slow simulator may already
-        // have seen it end): either way the reveal follows the last run.
+        // Skip ends the run (it plays for 60 s); the reveal follows it. The
+        // tap goes to the part of Skip inside the lesson's list: below the
+        // list sits the "Jump to latest" strip, which a tap would hit instead.
         let skip = app.buttons["Skip to the result"].firstMatch
-        if skip.exists { skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        if !skip.exists { keep(app, "skip-gone") }
+        XCTAssertTrue(skip.exists, "the run ended before Skip (screenshot skip-gone)")
+        let visible = skip.frame.intersection(readingArea(app).insetBy(dx: 0, dy: 8))
+        XCTAssertFalse(visible.isNull, "Skip at \(skip.frame) is outside the lesson's list")
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: visible.midX, dy: visible.midY)).tap()
+        let skipGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: skip)
+        XCTAssertEqual(XCTWaiter().wait(for: [skipGone], timeout: 5), .completed, "the tap on Skip missed")
         let reveal = element(app, labelContains: "It finished for 1 of them: rule C.")
         XCTAssertTrue(reveal.waitForExistence(timeout: 10), "the reveal never showed")
         // The reveal stays where the list brought it: no run to race here.
         let revealInView = expectation(for: NSPredicate { _, _ in onScreen(reveal) }, evaluatedWith: reveal)
         wait(for: [revealInView], timeout: 10)
+    }
+
+    /// The lesson's list, where a tap reaches the card (the window if the
+    /// list can't be read), as in CitationThatWasntUITests.
+    @MainActor
+    private func readingArea(_ app: XCUIApplication) -> CGRect {
+        let list = app.scrollViews.firstMatch
+        let frame = list.exists ? list.frame : .null
+        return frame.isNull || frame.height < 100 ? app.windows.firstMatch.frame : frame
     }
 
     /// The first element in `node`'s tree that passes `test`.
@@ -250,7 +269,8 @@ final class PatchTheRewardUITests: XCTestCase {
 
     @MainActor
     func testARunPlaysOnTheTrackAndSkipEndsIt() {
-        let app = launch([])
+        // A 60 s run, so the reveal within 5 s below can only be Skip's doing.
+        let app = launch(["-InteractiveRunSeconds", "60"])
         let title = app.descendants(matching: .any)["Interactive: Patch the Reward"]
         XCTAssertTrue(title.waitForExistence(timeout: 30), "the card never arrived in u5_l1")
         tap(app.buttons["Play it"].firstMatch, in: app)
