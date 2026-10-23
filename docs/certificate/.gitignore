@@ -1,0 +1,4 @@
+# The full screenshot and PDF set is local only: tools/make-compare.sh
+# re-makes the PDFs, and the iOS and Mac shot runs the rest. The picks
+# are committed in key-shots/ and samples/.
+shots/

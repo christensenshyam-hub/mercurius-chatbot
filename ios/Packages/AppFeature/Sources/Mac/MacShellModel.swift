@@ -328,9 +328,12 @@ public final class MacShellModel {
     }
 
     /// Settings' hook after a reset cleared the on-device state: nothing of
-    /// the old session stays open, and the sidebar re-reads its chats.
+    /// the old session stays open (the Progress sheet included, with any
+    /// certificate sheet over it still showing the erased name), and the
+    /// sidebar re-reads its chats.
     func afterSettingsReset() {
         stopActivityForErase()
+        showsProgress = false
         refreshConversations()
     }
 

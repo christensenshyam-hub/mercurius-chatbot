@@ -35,6 +35,9 @@ struct SettingsSheet: View {
     /// Runs after a reset has cleared the on-device state (the Mac sidebar
     /// re-reads its chat list). Not needed on iOS.
     var afterReset: (@MainActor () -> Void)? = nil
+    /// The certificates' name and dates (and a course-complete card still
+    /// waiting): a reset erases them with the rest.
+    var certificates: CertificateCenter? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -49,7 +52,7 @@ struct SettingsSheet: View {
             sessionStorage: sessionIdentity,
             themeStore: themeStore,
             extraReset: { [chatStore, chatModel, streakStore, achievementStore, progress, progressSync,
-                           reminderStore, scheduler, afterReset] in
+                           reminderStore, scheduler, afterReset, certificates] in
                 // Order matters: wipe the disk store first so the
                 // new conversation `startNewConversation()` opens
                 // is the only record in the freshly-empty store.
@@ -78,6 +81,9 @@ struct SettingsSheet: View {
                 progressSync.cancelPending()
                 progress.reset()
                 progressSync.cancelPending()
+                // The name typed for a certificate (and the certificates'
+                // dates) describe the old learner too.
+                certificates?.reset()
                 // The Lock Screen card would otherwise keep showing the
                 // erased streak/progress (a lesson open under Settings is
                 // still running one).

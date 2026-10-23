@@ -75,8 +75,18 @@ got=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$COPY/Contents/Inf
 codesign --verify "$COPY"
 echo "copy: $COPY ($BUNDLE_ID, ad hoc)"
 
-# Every Mercurius running before (the founder's), to prove they survive.
-BEFORE=$(pgrep -x Mercurius | tr '\n' ' ' || true)
+# Every Mac Mercurius running before (the founder's), to prove they survive.
+# iOS Simulator apps are also named Mercurius; other runs relaunch those
+# freely, so they are left out (their binaries live under CoreSimulator).
+mac_mercurius() {
+  for pid in $(pgrep -x Mercurius || true); do
+    case $(ps -o command= -p "$pid" 2>/dev/null) in
+      */CoreSimulator/*) ;;
+      *) printf '%s ' "$pid" ;;
+    esac
+  done
+}
+BEFORE=$(mac_mercurius)
 echo "running before: ${BEFORE:-none}"
 
 # The frontmost app, twice a second, while the shots run.
@@ -115,5 +125,5 @@ if [ -n "$LEFT" ]; then
   for pid in $LEFT; do kill "$pid" 2>/dev/null || true; done
   status=1
 fi
-echo "running after: $(pgrep -x Mercurius | tr '\n' ' ' || true)"
+echo "running after: $(mac_mercurius)"
 exit "$status"

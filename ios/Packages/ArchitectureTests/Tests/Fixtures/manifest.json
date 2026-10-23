@@ -204,6 +204,14 @@
 
             }
           }
+        },
+        {
+          "path" : "CertificateArt",
+          "rule" : {
+            "copy" : {
+
+            }
+          }
         }
       ],
       "settings" : [

@@ -21,7 +21,8 @@ struct SettingsResetTests {
     private func makeSheet(
         reminderStore: ReminderStore,
         onConsentWithdrawn: (@MainActor () -> Void)? = nil,
-        afterReset: (@MainActor () -> Void)? = nil
+        afterReset: (@MainActor () -> Void)? = nil,
+        certificates: CertificateCenter? = nil
     ) -> SettingsSheet {
         let identity = SessionIdentity(keychain: InMemoryKeychain())
         let chatStore = InMemoryChatStore()
@@ -46,7 +47,8 @@ struct SettingsResetTests {
             scheduler: NotificationScheduler(),
             sessionDeleter: nil,
             onConsentWithdrawn: onConsentWithdrawn,
-            afterReset: afterReset
+            afterReset: afterReset,
+            certificates: certificates
         )
     }
 
@@ -82,6 +84,42 @@ struct SettingsResetTests {
         }).makeModel(dismiss: {})
         #expect(await model.resetSession())
         #expect(remindersOffWhenCalled == true)
+    }
+
+    private func certificateCenter(_ defaults: UserDefaults) -> CertificateCenter {
+        CertificateCenter.make(progress: CurriculumProgressStore(preferences: InMemoryPreferenceStore()),
+                               defaults: defaults)
+    }
+
+    @Test("Delete my data & start over erases the certificate name and dates")
+    func deleteErasesCertificateName() async {
+        let defaults = freshDefaults("settings.certificate")
+        let center = certificateCenter(defaults)
+        let certificates = center.store
+        certificates.setName("Alexandria Montgomery-Vasquez")
+        certificates.recordEarned(.deepDive, at: Date())
+        certificates.fixCompletionDate(.deepDive, lastMetAt: nil)
+        center.justEarned = .deepDive
+        let model = makeSheet(reminderStore: remindersOn(), certificates: center).makeModel(dismiss: {})
+        #expect(await model.deleteServerDataAndStartOver())
+        #expect(certificates.name == nil)
+        #expect(certificates.earnedAt(.deepDive) == nil)
+        #expect(CertificateStore(defaults: defaults).name == nil)
+        for key in CertificateStore.allKeys { #expect(defaults.object(forKey: key) == nil) }
+        // A course-complete card left waiting goes too.
+        #expect(center.justEarned == nil)
+        #expect(certificates.resetCount == 1)
+    }
+
+    @Test("Reset this device only erases the certificate name too")
+    func resetErasesCertificateName() async {
+        let center = certificateCenter(freshDefaults("settings.certificate.reset"))
+        center.store.setName("Li Wei")
+        center.justEarned = .deepDive
+        let model = makeSheet(reminderStore: remindersOn(), certificates: center).makeModel(dismiss: {})
+        #expect(await model.resetSession())
+        #expect(center.store.name == nil)
+        #expect(center.justEarned == nil)
     }
 
     @Test("Reset this device only")
