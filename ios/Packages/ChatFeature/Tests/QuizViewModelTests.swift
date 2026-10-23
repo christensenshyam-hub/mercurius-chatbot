@@ -76,6 +76,34 @@ struct QuizLoadTests {
         }
     }
 
+    @Test("A crisis answer to the quiz request shows support, not an error with Try again (AUD-02)")
+    func crisisShowsSupport() async {
+        let tools = FakeToolsClient()
+        tools.quizOutcome = .failure(APIError.crisisSupport(message: "Call or text 988."))
+        let vm = makeQuiz(tools: tools)
+
+        await vm.load()
+
+        #expect(vm.phase == .support)
+    }
+
+    @Test("The server's real 503 crisis body reaches the quiz as support")
+    func crisis503BodyShowsSupport() async {
+        let tools = FakeToolsClient()
+        let body = Data(#"{"error":"crisis","message":"Call or text 988.","crisis":true}"#.utf8)
+        do {
+            try APIClient.validate(statusCode: 503, data: body)
+            Issue.record("Expected a throw")
+        } catch {
+            tools.quizOutcome = .failure(error)
+        }
+        let vm = makeQuiz(tools: tools)
+
+        await vm.load()
+
+        #expect(vm.phase == .support)
+    }
+
     @Test("Empty quiz transitions to .failed with non-retryable short-conversation message")
     func emptyQuizFails() async {
         let tools = FakeToolsClient()

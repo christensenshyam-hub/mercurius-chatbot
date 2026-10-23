@@ -92,27 +92,38 @@ struct HomeView: View {
         // normal type sizes (Merc centered, CTAs down by the thumb) while
         // accessibility sizes fall back to a natural scroll.
         GeometryReader { geo in
+            let compact = Self.isCompactHeight(geo.size.height)
             ScrollView {
                 VStack(spacing: 0) {
                     brandRow
                         .padding(.top, BrandSpacing.md)
 
-                    if showsReminderCard {
+                    if showsReminderCard && !compact {
                         reminderCard
                             .padding(.top, BrandSpacing.lg)
                             .transition(.opacity)
                     }
 
-                    Spacer(minLength: BrandSpacing.xl)
+                    Spacer(minLength: compact ? BrandSpacing.md : BrandSpacing.xl)
 
                     speechBubble
                         .padding(.bottom, BrandSpacing.sm)
 
-                    mercHero
+                    mercHero(size: Self.mercSize(compactHeight: compact,
+                                                 accessibility: dynamicTypeSize.isAccessibilitySize))
 
-                    Spacer(minLength: BrandSpacing.xxl)
+                    Spacer(minLength: compact ? BrandSpacing.lg : BrandSpacing.xxl)
 
                     ctaSection
+
+                    // On a short screen the one-time reminder offer waits
+                    // under the CTAs, so it never pushes "Chat with Merc"
+                    // below the fold (AUD-50).
+                    if showsReminderCard && compact {
+                        reminderCard
+                            .padding(.top, BrandSpacing.lg)
+                            .transition(.opacity)
+                    }
 
                     Spacer(minLength: BrandSpacing.lg)
                 }
@@ -184,8 +195,8 @@ struct HomeView: View {
 
     /// The star of the screen. Pops in with a spring, waves, then lives —
     /// idle antics + poke reaction come from MercMascot itself.
-    private var mercHero: some View {
-        MercMascot(mercState, size: mercSize, emphasis: .softGlow,
+    private func mercHero(size: CGFloat) -> some View {
+        MercMascot(mercState, size: size, emphasis: .softGlow,
                    idleAntics: true, pokeable: true)
             .scaleEffect(entered ? 1 : 0.4, anchor: .bottom)
             .opacity(entered ? 1 : 0)
@@ -193,8 +204,21 @@ struct HomeView: View {
             .accessibilityHidden(true)
     }
 
-    private var mercSize: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 150 : 216
+    /// Below this height (an iPhone SE's screen is 647 pt inside its safe
+    /// area) Home is "short": Merc shrinks and the reminder offer moves under
+    /// the CTAs, so both CTAs fit above the fold (AUD-50). Every Face ID
+    /// iPhone is taller.
+    static let compactHeightThreshold: CGFloat = 700
+
+    static func isCompactHeight(_ height: CGFloat) -> Bool {
+        height > 0 && height < compactHeightThreshold
+    }
+
+    /// Merc's height: 216 pt on a tall screen, 150 at accessibility text
+    /// sizes (the text needs the room), 120 on a short screen.
+    static func mercSize(compactHeight: Bool, accessibility: Bool) -> CGFloat {
+        if compactHeight { return 120 }
+        return accessibility ? 150 : 216
     }
 
     /// The week ring over two chunky Duolingo-style CTAs: the next stop first

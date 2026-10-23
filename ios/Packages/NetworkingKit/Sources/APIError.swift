@@ -14,8 +14,10 @@ public enum APIError: Error, Equatable, Sendable {
 
     /// The device has a working network path, but this network would not
     /// let the request reach the server: DNS or connect refused, TLS
-    /// intercepted, or a proxy's own 401/403 page — what a school content
-    /// filter produces.
+    /// intercepted, a connection that never got through before the timeout,
+    /// or a page that isn't ours (a proxy's own 401/403, or a 2xx HTML block
+    /// or sign-in page in place of our JSON or event stream) — what a school
+    /// content filter or a captive portal produces.
     case unreachableOnThisNetwork
 
     /// The request took longer than the configured timeout.
@@ -38,8 +40,10 @@ public enum APIError: Error, Equatable, Sendable {
 
     /// Today's usage allowance is used up (429 with `error == "daily_limit"`).
     /// `message` is the server's own human copy; `retryAfter` is seconds
-    /// until the allowance resets. Retrying sooner re-hits the same wall.
-    case quotaExceeded(message: String, retryAfter: TimeInterval?)
+    /// until the allowance resets; `scope` is whose allowance it is
+    /// (`"session"` or `"ip"`). Retrying sooner re-hits the same wall, unless
+    /// it's the network's and the student switches network.
+    case quotaExceeded(message: String, retryAfter: TimeInterval?, scope: String? = nil)
 
     /// The server is up but not serving right now (503 with a
     /// `ServerRefusalCode` such as `spend_cap` / `service_disabled` / `busy` /
@@ -63,15 +67,54 @@ public enum APIError: Error, Equatable, Sendable {
     /// Anything else.
     case unknown(underlying: String)
 
+    /// The server read the student's text as a crisis and answered with
+    /// support resources instead of the route's output: any non-2xx whose
+    /// body carries `"crisis": true` or `"error": "crisis"` (today the JSON
+    /// helper routes' 503 `{error:"crisis", message, crisis:true}`; the
+    /// unit-test grader answers 200 instead — see `UnitDefenseResult.crisis`).
+    /// `message` is the server's fixed copy. Callers should show support (the
+    /// hotlines, a trusted adult), never an error with a retry: the same text
+    /// gets the same answer.
+    case crisisSupport(message: String)
+
+    /// The server refusal behind a `quotaExceeded` or `serviceUnavailable`,
+    /// which decides its copy and whether Retry can help.
+    public var serverRefusal: ServerRefusal? {
+        switch self {
+        case .quotaExceeded(let message, let retryAfter, let scope):
+            return ServerRefusal(
+                code: ServerRefusalCode.dailyLimit.rawValue,
+                message: message,
+                retryAfter: retryAfter,
+                scope: scope
+            )
+        case .serviceUnavailable(let code, let message, let retryAfter):
+            return ServerRefusal(code: code, message: message, retryAfter: retryAfter)
+        default:
+            return nil
+        }
+    }
+
     /// A user-friendly, non-technical message safe to show in the UI.
     public var userFacingMessage: String {
+        userFacingMessage(clock: .current)
+    }
+
+    /// `userFacingMessage`, with the clock a daily limit's reset time is
+    /// read on.
+    public func userFacingMessage(clock: LocalClock) -> String {
+        if let refusal = serverRefusal {
+            // The server writes this copy for students; it already names
+            // the reason. A daily limit gets its reset as a local time.
+            return refusal.studentMessage(clock: clock)
+        }
         switch self {
         case .offline:
             return "You're offline. Reconnect and try again."
         case .connectionLost:
             return "The connection dropped. Try again."
         case .unreachableOnThisNetwork:
-            return "Can't reach Mercurius on this network. Try cellular data or a different Wi-Fi."
+            return "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi."
         case .messageTooLong:
             return "That message is too long — try a shorter one."
         case .timeout:
@@ -82,9 +125,9 @@ public enum APIError: Error, Equatable, Sendable {
             return "You're not signed in to do that."
         case .rateLimited:
             return "You're moving fast — give it a moment, then try again."
-        case .quotaExceeded(let message, _), .serviceUnavailable(_, let message, _):
-            // The server writes this copy for students; it already names
-            // the reason and when to come back.
+        case .quotaExceeded(let message, _, _), .serviceUnavailable(_, let message, _):
+            return message  // Unreachable: `serverRefusal` answers both above.
+        case .crisisSupport(let message):
             return message
         case .server:
             return "The server hit an error. Try again in a moment."
@@ -98,13 +141,18 @@ public enum APIError: Error, Equatable, Sendable {
     }
 
     /// Whether the error is likely transient and a retry could succeed.
+    /// Refusals follow `ServerRefusal.isRetryable`: no Retry for a used-up
+    /// allowance (unless it's the network's), the spend cap or the kill
+    /// switch; Retry for a busy or restarting server.
     public var isRetryable: Bool {
         switch self {
         case .offline, .connectionLost, .unreachableOnThisNetwork, .timeout, .server,
-             .rateLimited, .serviceUnavailable, .unknown:
+             .rateLimited, .unknown:
             return true
-        case .messageTooLong, .invalidRequest, .unauthorized, .quotaExceeded, .decoding,
-             .invalidModelOutput, .cancelled:
+        case .quotaExceeded, .serviceUnavailable:
+            return serverRefusal?.isRetryable ?? false
+        case .messageTooLong, .invalidRequest, .unauthorized, .decoding,
+             .invalidModelOutput, .cancelled, .crisisSupport:
             return false
         }
     }

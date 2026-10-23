@@ -231,4 +231,65 @@ struct UnitTestViewModelTests {
         #expect(m.defenseError == "Busy.")
         #expect(m.canSubmitDefense)
     }
+
+    // MARK: - Crisis support (AUD-02)
+
+    /// A model that passed the multiple-choice half and has submitted its
+    /// written answer to `gradeDefense`.
+    private func submittedDefense(
+        gradeDefense: @escaping (String) async throws -> UnitTestViewModel.DefenseResult
+    ) async -> UnitTestViewModel {
+        let m = model(gradeDefense: gradeDefense)
+        answerAll(m, correct: 5); m.submitQuiz(); m.continueAfterQuiz()
+        m.defenseAnswer = "A written answer."
+        await m.submitDefense()
+        return m
+    }
+
+    @Test("A crisis answer shows support: no grade, no pass, no retake, and the mastery path stays shut")
+    func crisisShowsSupport() async {
+        let m = await submittedDefense { _ in .crisisSupport }
+        #expect(m.phase == .support)
+        #expect(m.defenseResult == nil, "no grade reaches the screen")
+        #expect(m.defenseError == nil, "support is not an error caption")
+        #expect(!m.overallPassed)
+        #expect(!m.offersRetake)
+        #expect(!m.isGrading)
+    }
+
+    @Test("A crisis flag wins over whatever grade fields came with it")
+    func crisisFlagOutranksGrade() async {
+        let m = await submittedDefense { _ in .init(grade: "A", pass: true, feedback: "Great.", isCrisis: true) }
+        #expect(m.phase == .support)
+        #expect(m.defenseResult == nil)
+        #expect(!m.overallPassed)
+    }
+
+    @Test("A non-2xx crisis (DefenseGradingError.crisis) shows the same support, not an error caption")
+    func crisisErrorShowsSupport() async {
+        let m = await submittedDefense { _ in throw DefenseGradingError.crisis }
+        #expect(m.phase == .support)
+        #expect(m.defenseError == nil)
+        #expect(m.defenseResult == nil)
+        #expect(!m.offersRetake)
+    }
+
+    @Test("Support has no retake action: retake() leaves the student on the support screen")
+    func supportIgnoresRetake() async {
+        let m = await submittedDefense { _ in .crisisSupport }
+        m.retake()
+        #expect(m.phase == .support)
+        #expect(m.quizSubmitted, "nothing restarted underneath")
+    }
+
+    @Test("A failed graded attempt still offers a retake; a pass doesn't")
+    func retakeOfferedOnlyAfterGradedFail() async {
+        let failed = await submittedDefense { _ in .init(grade: "C", pass: false, feedback: "Shallow.") }
+        #expect(failed.phase == .result)
+        #expect(failed.offersRetake)
+
+        let passed = await submittedDefense { _ in .init(grade: "A", pass: true, feedback: "Strong.") }
+        #expect(passed.phase == .result)
+        #expect(!passed.offersRetake)
+    }
 }

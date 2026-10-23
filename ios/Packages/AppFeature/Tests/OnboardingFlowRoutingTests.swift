@@ -19,6 +19,30 @@ struct OnboardingFlowRoutingTests {
         #expect(OnboardingFlow.initialStep(for: .gateOnly, ageBlocked: false) == .age)
     }
 
+    @Test("A full run interrupted on Your path resumes there, not at Meet Merc (AUD-35)")
+    func resumesOnYourPath() {
+        // Consent is recorded at "Got it", one screen before the flow ends.
+        #expect(OnboardingFlow.initialStep(for: .full, consentCurrent: true) == .path)
+        #expect(OnboardingFlow.initialStep(for: .full, consentCurrent: false) == .meet)
+        // Gate-only runs exist because consent isn't current; they always
+        // start at the age check.
+        #expect(OnboardingFlow.initialStep(for: .gateOnly, consentCurrent: true) == .age)
+        // A block in force wins over everything.
+        #expect(OnboardingFlow.initialStep(for: .full, ageBlocked: true, consentCurrent: true) == .underThirteen)
+    }
+
+    @Test("Consent counts as current only at ConsentGate.currentVersion")
+    func consentIsCurrent() throws {
+        let suite = "onboarding-consent-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(!OnboardingFlow.consentIsCurrent(defaults: defaults))
+        defaults.set(ConsentGate.currentVersion - 1, forKey: ConsentGate.storageKey)
+        #expect(!OnboardingFlow.consentIsCurrent(defaults: defaults))
+        defaults.set(ConsentGate.currentVersion, forKey: ConsentGate.storageKey)
+        #expect(OnboardingFlow.consentIsCurrent(defaults: defaults))
+    }
+
     @Test("The block holds through the cool-off and a clock set back, then lapses")
     func ageBlockCoolOff() {
         let blockedAt = Date(timeIntervalSince1970: 1_800_000_000)

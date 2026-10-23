@@ -47,5 +47,7 @@ struct UnitCheckpointHeader: View {
         .padding(.bottom, BrandSpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Unit \(unit.number): \(unit.title). \(completed) of \(total) lessons complete.\(mastered ? " Mastered." : "")")
+        // VoiceOver's Headings rotor jumps unit to unit (AUD-49).
+        .accessibilityAddTraits(.isHeader)
     }
 }

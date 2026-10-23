@@ -197,13 +197,17 @@ build 16 for it.
   forwards messages and photos to Anthropic to generate replies; the privacy
   policy says so. Nothing is collected before the student agrees on the
   first-launch disclosure screen.
-- The session id is a random string in the Keychain and is not linked to a
-  name, email, phone number or Apple ID — none of those are ever asked for.
-  It is still a user ID in Apple's sense, which is why the rows above say
-  Linked: Yes. The privacy page says the same thing in plain words: "What we
-  keep is filed under a random ID, never your name or an account. Usage rows
-  also carry the scrambled network address described above." (Not "linked
-  only": the `usage` table stores the salted IP hash next to the session id.)
+- **Linked: Yes** for all four (AUD-57). Apple counts data kept under a user
+  ID as linked to the user, and everything we keep is stored under the
+  session id so it can be shown back, synced and deleted. The session id is a
+  random string in the Keychain and is never tied to a name, email, phone
+  number or Apple ID — none of those are ever asked for. The privacy page says
+  the same thing in plain words: "What we keep is filed under a random ID,
+  never your name or an account. Usage rows also carry the scrambled network
+  address described above." (Not "linked only": the `usage` table stores the
+  salted IP hash next to the session id.) The privacy manifest says Linked =
+  true from the build after 2.3.0 (16); the App Store Connect answers can be
+  changed without a new build.
 
 ---
 

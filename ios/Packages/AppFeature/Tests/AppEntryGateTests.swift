@@ -1,4 +1,7 @@
+import Foundation
 import Testing
+import CurriculumFeature
+import EngagementFeature
 @testable import AppFeature
 
 @Suite("AppEntryView gate decision")
@@ -56,5 +59,51 @@ struct ReminderConsentGuardTests {
         // screens, and a withdrawal all read consent version 0.
         #expect(AppEntryView.reminderReplan(consentVersion: 0, clearedThisLaunch: false) == .cancel)
         #expect(AppEntryView.reminderReplan(consentVersion: ConsentGate.currentVersion - 1, clearedThisLaunch: false) == .cancel)
+    }
+}
+
+// AUD-36: the reminder planner counts the same Thursday week as the
+// curriculum's WeeklyPlan, and the composition root hands it that plan.
+@Suite("Weekly nudges read the weekly plan")
+struct WeeklyNudgeWiringTests {
+
+    @Test("The planner's week starts on the same Thursday as WeeklyPlan's, on every weekday")
+    @MainActor
+    func sameWeek() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())
+        // Two weeks of days, across the DST change on 1 November 2026.
+        for dayOffset in 0..<14 {
+            for hour in [0, 9, 23] {
+                let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 26 + dayOffset, hour: hour))!
+                let plan = WeeklyPlan.compute(progress: progress, now: date, calendar: calendar)
+                #expect(ReminderPlanner.weekStart(containing: date, calendar: calendar) == plan.weekStart)
+            }
+        }
+    }
+
+    @Test("The weekly plan maps straight into the planner's week, and two done means no nudge")
+    @MainActor
+    func mapsPlan() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let monday = calendar.date(from: DateComponents(year: 2026, month: 7, day: 6, hour: 10))!
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore(), now: { monday })
+        let unit1 = MercuriusCurriculum.units[0]
+
+        var week = AppEntryView.weekProgress(WeeklyPlan.compute(progress: progress, now: monday, calendar: calendar))
+        #expect(week.done == 0)
+        #expect(week.goal == ReminderPlanner.defaultWeeklyGoal)
+        #expect(ReminderPlanner.weeklyPlan(now: monday, calendar: calendar, week: week).first?.fireDate.day == 8)
+
+        progress.markCompleted(unit1.lessons[0].id)
+        progress.markCompleted(unit1.lessons[1].id)
+        week = AppEntryView.weekProgress(WeeklyPlan.compute(progress: progress, now: monday, calendar: calendar))
+        #expect(week.done == 2)
+        #expect(week.goalMet)
+        let nudges = ReminderPlanner.weeklyPlan(now: monday, calendar: calendar, week: week)
+        #expect(!nudges.contains { $0.fireDate.month == 7 && $0.fireDate.day == 8 })
+        #expect(nudges.first?.fireDate.day == 12)
     }
 }

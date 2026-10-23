@@ -30,7 +30,7 @@ public struct ProgressNudgeView: View {
             Spacer(minLength: BrandSpacing.sm)
             Text("+\(nudge.xp) XP")
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .monospacedDigit()
         }
         .padding(.horizontal, BrandSpacing.md)
