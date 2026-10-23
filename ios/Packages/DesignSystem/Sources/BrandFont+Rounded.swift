@@ -10,6 +10,16 @@ import SwiftUI
 /// Like the base ramp, each token is built from a `Font.TextStyle`, so it scales
 /// with Dynamic Type — including the accessibility sizes.
 public extension BrandFont {
+    #if os(macOS)
+    // The Mac's sizes (`MacTypeRamp`), as in `BrandFont`.
+    static let roundedLargeTitle = Font.system(size: MacTypeRamp.largeTitle, weight: .bold, design: .rounded)
+    static let roundedTitle = Font.system(size: MacTypeRamp.title, weight: .bold, design: .rounded)
+    static let roundedTitle3 = Font.system(size: MacTypeRamp.title3, weight: .bold, design: .rounded)
+    static let roundedHeadline = Font.system(size: MacTypeRamp.subheading, weight: .semibold, design: .rounded)
+    static let roundedBody = Font.system(size: MacTypeRamp.body, weight: .regular, design: .rounded)
+    static let roundedBodyEmphasized = Font.system(size: MacTypeRamp.body, weight: .semibold, design: .rounded)
+    static let roundedCaption = Font.system(size: MacTypeRamp.caption, weight: .semibold, design: .rounded)
+    #else
     /// Big playful display — the path hero, profile header. Scales from `.largeTitle`.
     static let roundedLargeTitle = Font.system(.largeTitle, design: .rounded, weight: .bold)
 
@@ -30,4 +40,5 @@ public extension BrandFont {
 
     /// Supporting text on a rounded surface. Scales from `.footnote`.
     static let roundedCaption = Font.system(.footnote, design: .rounded, weight: .semibold)
+    #endif
 }

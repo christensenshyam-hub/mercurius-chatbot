@@ -30,9 +30,17 @@ public extension BrandFont {
     static var reading: Font {
         switch readingFace {
         case .system(let design):
+            #if os(macOS)
+            return .system(size: MacTypeRamp.reading, design: design)
+            #else
             return .system(.body, design: design)
+            #endif
         case .custom(let name):
+            #if os(macOS)
+            return .custom(name, fixedSize: MacTypeRamp.reading)
+            #else
             return .custom(name, size: 17, relativeTo: .body)
+            #endif
         }
     }
 }

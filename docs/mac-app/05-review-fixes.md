@@ -1,0 +1,82 @@
+# Step 05: the review's findings, fixed
+
+Branch `feat/mac-app-2026-10` (worktree `.claude/worktrees/mac-app`), on top of `fix/ios-student-2026-10` (PR #43). Not pushed, no PR. Run on 2026-10-20 with Xcode 26.4 (Swift 6.3) on macOS 26.3.
+
+The design review found that the window, menus, Settings and Help were native but the screens students use were still the iPhone app at Mac size. The code review found one real Mac-only safety gap (an erase leaving a lesson running) and three low ones. All 18 findings were checked against the code and the step 02 pictures, and all 18 are fixed or, for two, fixed to the extent that's possible without a founder decision. Two more bugs turned up while re-taking the screenshots and are fixed too (end of §1).
+
+## 1. Findings
+
+| # | Sev. | Finding | Verdict | What changed |
+|---|---|---|---|---|
+| 1 | M | Replies 17 pt, everything else 13 pt (captions 10 pt) | Real | One Mac type ramp, `MacTypeRamp` (DesignSystem): body 15, subheading 16, title 22, large title 28, captions 12. `BrandFont` and its rounded and reading companions read it under `#if os(macOS)`; iOS keeps its Dynamic Type text styles. `MessageBubbleView.replyBaseSize` is `MacTypeRamp.reading` (15) on the Mac, so the student's bubble and Merc's reply are the same size. The lesson intro, the celebration's subtitle and the coach card's eyebrow moved to the ramp too. |
+| 2 | M | Crisis screen's supporting text at 10 pt | Real | `MacCrisisNumbers` is one card: every line's service name and the FaceTime/Messages links are body size (15 pt; links semibold), and the note on when those links work is the card's last row, body size, under the links it qualifies. The Copy buttons have tooltips. |
+| 3 | M | iPhone chrome under the Mac toolbar | Real | On the Mac a lesson and a unit check put their title, a subtitle (Unit 1 · Lesson 1 of 4; the unit's title) and the way back (a toolbar back button; "Not now" while the intro shows) in the window's toolbar. The in-content `LessonHeaderBar` and the unit check's header row are iOS-only; the crisis screen's empty "Done" band is gone. The path's phone stats bar (and its house button) is replaced by the streak as a toolbar button, and the path's title is "Learning Path" / "Unit 1 of 8" instead of repeating the banner. Today no longer uses the iPhone Home (finding 10). |
+| 4 | M | 860 pt minimum blocks half-screen tiling | Real | The window's minimum is 700 × 600 pt. Below 860 pt the sidebar folds away by itself and comes back when the window widens, unless the student folded it (`MacShellView.sidebarAfterResize`, tested). Measured first: the split view does *not* fold on its own — at 700 pt with the old 210 + 480 minimums the window's content overflowed and was cut off at both edges — so the minimums are now 200 (sidebar) + 430 (detail). |
+| 5 | M | Harness photographs an inactive window | Real | The harness activates the app and makes the photographed window key before the picture (`-MacSnapshotActivate NO` / `ACTIVATE=NO` opts out), and fails a picture whose close button isn't red. **Couldn't be shown working here:** the screen was locked all night, and a locked Mac can't activate an app. The check itself is tested on synthetic pictures. |
+| 6 | M | Keyboard stops at the composer | Real | Return presses each first-run step's primary button (`macDefaultAction()`; Agree stays off until its box is ticked). Escape leaves a lesson, its intro, a unit check and the support screen — **only when that loses nothing** (not mid-reply, not with an answer or a photo in the composer, not with quiz picks or a written answer, not under the celebration, which takes Escape itself). In the unit check, A–D or 1–4 answer the highlighted question and move to the next, Tab/↑/↓ move between questions (the cards are in the Tab loop whatever the Full Keyboard Access setting), and ⌘Return submits; a line under the instructions says so. |
+| 7 | L | ⌘1–⌘3 switch modes from anywhere, closing a lesson | Real | ⌘1–⌘3 are now Today / Learning Path / Chat (as in Mail and Finder) and ⌥⌘1–⌥⌘3 the modes, which are enabled only while the free chat is in front. Help window, toolbar tooltip and review notes updated. |
+| 8 | L | Weak chat section in the sidebar | Real | Saved threads have a chat-bubble icon and line up with the rows above. New Chat is a row: while the chat shows a thread with nothing saved yet, that row is the thread's and is highlighted; otherwise selecting it starts one. "Learning path" folds (kept across launches), and unit rows are one line where the title fits (the number moved into the icon), so the chats come up the list. The Delete key asks to delete the selected thread through the existing confirmation. |
+| 9 | L | Out-of-order thread opens | Real (reproduced in a test) | `MacShellModel` runs thread opens one at a time, newest last: each waits for the one before it and 150 ms more, and opens only if its thread is still the one selected. While opens are queued, the chat's thread changing doesn't move the sidebar highlight. Holding ↓ through threads opens only where the student stops (and switches the server's mode once, not per thread). The new test fails on the old code: the older Debate thread's open landed last. |
+| 10 | L | Empty space from phone layouts | Real | First-run steps size themselves to their content, centred, with the button directly under the step (and scroll only in a window too short for them). The lesson intro is centred as a group. Today is an overview: Merc's greeting, an **Up next** card (unit, lesson, goal, the unit's progress bar, the button Return presses, Learning Path), **This week** (the ring with words) and **Streak** (never a "0"; it opens Progress), **Recent chats** (the last three, New Chat), and the weekly-nudge offer. |
+| 11 | L | Lines of 100–113 characters | Real | With 15 pt text, the reading column is 620 pt (was 720) and the first-run box 600 pt: about 80 and 75 characters a line. |
+| 12 | L | Copy wrong for a Mac | Real, partly fixed | The network messages are per platform (`NetworkSwitchAdvice`): an iPhone is told about cellular data; a Mac about "another network, like your phone's hotspot". The tests pin both versions. The Help window keeps its own title (the inner page's title is iOS-only now). **Not changed:** the consent screen's "Settings → Delete my data & start over" — it's the versioned consent text, so the founder decides (below). |
+| 13 | L | Toolbar controls not Mac-like | Real | The streak is a plain toolbar button (the flame, the count once there is one) with a tooltip, not a 44 pt capsule. Icon-only controls have tooltips (back buttons, Copy, the composer's send, stop and remove-photo). The pointing hand is gone from buttons and cards (hover tint kept) and stays on links only. |
+| 14 | L | Multi-instance WindowGroup | Real | The main scene is a single `Window("Mercurius", id: "main")`. Closing it keeps the app running; the Dock icon and the Window menu bring it back. |
+| 15 | M | Erase leaves an open lesson running | Real | The Mac's Settings wiring now stops a lesson's reply in flight **before** the server delete and closes the lesson or unit check (`MacShellModel.beforeSettingsErase` / `afterSettingsReset`; the lesson registers its stop as it appears). It covers Delete my data, the device-only reset and both consent withdrawals. The menu's New Chat, modes, Retry, Explain More, Attach and the View destinations are off while Settings erases (`commandsBlocked`). Tests: the lesson is closed and stopped by the time the server delete arrives; a device-only reset closes a unit check and a lesson. |
+| 16 | L | `-UITests` honoured by Release on a Mac | Real | `-UITests`, `-KeepAgeBlock` and `-SeedDemoChat` are read only in DEBUG builds (`AppEnvironment.testHookArguments`). The UI tests and the harness run Debug. As the reviewer said, the consent keys' argument domain stays: `defaults write` reaches the same preferences anyway. |
+| 17 | L | `mac-snapshots.sh` accepts blank pictures | Real | The harness checks its own picture (`MacSnapshotCheck`, tested): the pixel size must be the window's frame at the display's scale, the picture can't be one colour, and (activated) the close button must be red; each failure is a `problem`. The script also compares each PNG's size (`sips`) with the size the harness expected, and fails a shot with no expected size. CI's launch smoke test therefore proves the window was drawn. |
+| 18 | L | Session id not "this device only" on macOS | Real, documented | The `Keychain` comment and PLAN.md say it plainly: on macOS the item is in the login keychain, never syncs through iCloud, but moves with Migration Assistant or a Time Machine restore. Moving to the data-protection keychain needs the app's keychain entitlement (unsigned CI builds have none) plus a read of the old item; it belongs with the iPad-on-Mac question, after a TestFlight build. |
+
+**Found while re-taking the screenshots:**
+
+- **The learning path drew nothing once the sidebar folded.** At 700 and 850 pt the path page was blank (the new one-colour check caught it). Bisected over five builds: not the scroll, the lazy stack, the GeometryReader or the NavigationStack, but the path's top-bar `safeAreaInset`, even with an empty bar, once the split view goes detail-only (macOS 26). The Mac has no top bar any more (the streak is in the toolbar), so the inset is iOS-only now.
+- **The chat's subtitle** ("Socratic mode") repeated the mode picker and pushed the toolbar into its overflow menu. Gone. At 700 pt with the sidebar folded, the picker shows; Explain More and New Chat go to the toolbar's » menu (both are in the menu bar too, ⇧⌘E and ⌘N).
+
+## 2. Verification
+
+| Check | Result |
+|---|---|
+| `swift test`, every package | **1026 / 1026** in 153 suites (994 before; 32 new), ArchitectureTests included. No warnings in package `Sources/`. |
+| macOS Debug build | Succeeded, no compiler warnings. |
+| macOS Release build, unsigned, universal | Succeeded, `x86_64 arm64`, no compiler warnings. `mac-bundle-check.sh` passes for both builds. The harness isn't in it (`MacSnapshot`: 0 occurrences; 50 in Debug). The flag names `-UITests` and the suite names remain as constants, but in Release the hooks are handed no arguments (`testHookArguments` returns `[]`), so they never apply; `-SeedDemoChat` and `-KeepAgeBlock` are gone from the binary. |
+| iOS Simulator build | Succeeded. |
+| iOS `xcodebuild test`, CI's flags, "Audit 16PM" | **31 / 31** (6 unit, 25 UI), result "Passed". It needed CI's retries: with `-test-repetition-relaunch-enabled` the UI suite reran whole, and its first two passes each had one test fail with the simulator's *"Timed out while synthesizing event"* after 5–6 minutes of trying to deliver a tap or drag (`testFirstRunGateCompletesAtLargestTextSize`, then `testFirstRunGateLandsInFirstLesson`), not an assertion. Each passed in the other passes; the third pass was 25 / 25. Many steps were slow throughout (the Mac's screen was locked); step 04's two clean runs suggest a simulator stall, but a rerun on an unlocked Mac is the way to be sure. |
+| Screenshots | 61 pictures in `shots/05/` (not committed): the 15 window states light, dark and at the 700 pt minimum, Debate and Discussion light and dark, Settings and Help light and dark. 11 of them, compressed, in `key-shots/` (committed). Every one passes the harness's new checks; they show an inactive window (§3). |
+
+New tests: `MacTodayTests` (7), `MacLessonChromeTests` (4), `UnitTestKeyboardTests` + `MacPathTitleTests` (4), `MacTypeRampTests` (2), `NetworkSwitchAdviceTests` (1), and in the existing suites: the erase cases, the shortcut and mode-gating rules, the sidebar's fold rule (`MacShellModelTests`), the thread-open race, the New Chat row, the Delete key and the unit icons (`MacSidebarTests`), the harness's picture checks and activation flag (`MacSnapshotOptionsTests`). The tests that pinned the iPhone's network wording now pin both platforms' explicitly.
+
+iOS is unchanged by design: every shared-view change is `#if os(macOS)` or returns the view unchanged on iOS; the moved iOS code paths (`LessonHeaderBar`, the unit check's header, the path's top bar, the gate's scrolling layout) keep their order and modifiers. The iOS app builds, its unit and UI tests pass, and the UI-test anchors (the "Debate" pill, the Settings button) are untouched.
+
+## 3. Screenshots, and why they show an inactive window
+
+The Mac's screen stayed locked for the whole run (from before 01:47 to the end). Step 04 assumed a locked Mac draws nothing. That's true only while the display is asleep: with the display kept awake (`caffeinate -u` every few seconds), the window server draws the window normally behind the lock screen. So the set was taken that way, with `ACTIVATE=NO`, since an app can't become active while the screen is locked:
+
+- every picture is the right size and was drawn (the checks pass);
+- every window is **inactive**: grey traffic lights, a grey window title, lighter sidebar labels than in use, and prominent buttons drawn grey (Today's "Start Lesson 1"). That's the capture, not the app;
+- glass surfaces still blend with whatever is behind the window, as before.
+
+The script run that made them, from `ios/` (a local stub answered `POST /api/mode` for the two mode shots, and nothing listened on :3000 for the rest):
+
+```bash
+ACTIVATE=NO VARIANTS="light dark min" scripts/mac-snapshots.sh ../docs/mac-app/shots/05
+ACTIVATE=NO VARIANTS="light dark" scripts/mac-snapshots.sh ../docs/mac-app/shots/05 chat-debate chat-discussion
+```
+
+On an unlocked Mac, run it without `ACTIVATE=NO`: the harness then activates the app for each shot and fails any picture of an inactive window. That is the set to check sidebar contrast against, and the store set (`mac-store-screenshots.sh`) must be made that way.
+
+`key-shots/` (2000 px wide at most, JPEG quality 82, 1.2 MB in all): Today, the path (dark), a lesson, the lesson-complete card (dark), a chat thread, Debate (dark), the unit check, crisis support, the consent step (dark), the path in a 700 pt window with the sidebar folded, and Settings ▸ Privacy (dark).
+
+## 4. For the founder
+
+- **Consent wording.** The disclosure says "Settings → Delete my data & start over". On a Mac it's Settings ▸ Privacy ▸ Delete My Data & Start Over…. Changing it changes the versioned consent text (`ConsentGate.currentVersion`), which would show the gate again to everyone, so it's yours to decide. A platform-specific line that keeps the version is possible if the change is treated as wording, not substance.
+- **Escape.** It leaves a lesson or check only when nothing would be lost. If you'd rather Escape never leave a lesson (some apps keep Escape for sheets), it's one line per view.
+- **Screenshots and the store set** need an unlocked Mac with nobody typing (each shot takes the keyboard for a few seconds).
+
+## 5. Files
+
+- Notes: `docs/mac-app/05-review-fixes.md` (this file), `PLAN.md`, `VERIFY.md` (findings marked fixed), `FOUNDER_STEPS.md`, `shots/verify/INDEX.md`, `PR.md`, `key-shots/`; `docs/APP_STORE_LISTING.md` §7 (shortcuts, Today, the screenshot rule); `CLAUDE.md` (the Mac's ramp, chrome, shortcuts, window, test-hook arguments).
+- Type and columns: `DesignSystem/Sources/BrandTypography.swift`, `BrandFont+Rounded.swift`, `BrandFont+Reading.swift`, `MacInteraction.swift`, `CrisisSupportView.swift`; `ChatFeature/Sources/MessageBubbleView.swift`, `MercCoachCard.swift`, `LessonCompleteOverlay.swift`.
+- Chrome and keyboard: `ChatFeature/Sources/CurriculumLessonView.swift`, `ChatInputBar.swift`, `ChatView.swift`; `CurriculumFeature/Sources/UnitTestView.swift`, `UnitTestViewModel.swift`, `CurriculumView.swift`, `LearningPathView.swift`; `EngagementFeature/Sources/StreakChip.swift`; `SettingsFeature/Sources/HowMercuriusTeachesView.swift`; `AppFeature/Sources/OnboardingSteps.swift`, `YourPathStep.swift`.
+- Shell: `AppFeature/Sources/Mac/MacShellView.swift`, `MacShellModel.swift`, `MacSidebar.swift`, `MacCommands.swift`, `MacHelpView.swift`, `MacTodayView.swift` (new); `AppFeature/Sources/SettingsSheet.swift`; `ios/MercuriusMac/App/MercuriusMacApp.swift`.
+- Safety and hooks: `AppFeature/Sources/AppEnvironment.swift`, `AppShellView.swift`; `NetworkingKit/Sources/ServerRefusal.swift`, `APIError.swift`, `Keychain.swift`.
+- Harness and CI: `ios/MercuriusMac/App/MacSnapshot.swift`, `AppFeature/Sources/Mac/MacSnapshotOptions.swift`, `ios/scripts/mac-snapshots.sh`, `.github/workflows/ios.yml`.

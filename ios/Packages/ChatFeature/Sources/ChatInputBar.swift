@@ -1,6 +1,9 @@
 import SwiftUI
 import PhotosUI
 import DesignSystem
+#if os(macOS)
+import AppKit
+#endif
 
 /// Message composer. Grows with content up to `maxLines` lines (5 by
 /// default), then scrolls. Supports
@@ -44,6 +47,10 @@ struct ChatInputBar: View {
     var maxLines: Int = 5
     /// Told when the field gains or loses focus (the keyboard rises or falls).
     var onFocusChange: ((Bool) -> Void)? = nil
+    #if os(macOS)
+    /// Increment to open the image file panel (File ▸ Attach Image…, ⇧⌘A).
+    var attachTrigger: Int = 0
+    #endif
 
     @FocusState private var focused: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -60,6 +67,15 @@ struct ChatInputBar: View {
     @State private var attachLoadFailed = false
     /// The last edit (a paste) went over `characterLimit` and was cut.
     @State private var wasCut = false
+    #if os(macOS)
+    /// The open panel for an image file (the Mac's attach button).
+    @State private var showsFilePanel = false
+    /// The ⌘V watcher that turns a pasted image into an attachment, and what
+    /// it reads when a key arrives.
+    @State private var pasteMonitor: Any?
+    @State private var pasteContext = ComposerPasteContext()
+    @Environment(\.isEnabled) private var isEnabled
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -97,6 +113,11 @@ struct ChatInputBar: View {
                           axis: .vertical) {
                     Text(prompt)
                 }
+                    #if os(macOS)
+                    // The capsule below is the field's look; the Mac's own
+                    // bezel drew a dark bar inside it.
+                    .textFieldStyle(.plain)
+                    #endif
                     .lineLimit(1...max(1, maxLines))
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)
@@ -111,7 +132,14 @@ struct ChatInputBar: View {
                     )
                     .focused($focused)
                     .submitLabel(.send)
+                    // Return sends (on the Mac too).
                     .onSubmit(triggerSend)
+                    #if os(macOS)
+                    // Shift-Return: a new line where the cursor is.
+                    .onKeyPress(.return, phases: .down) { press in
+                        MacComposerKeys.handleReturn(modifiers: press.modifiers) ? .handled : .ignored
+                    }
+                    #endif
                     .accessibilityLabel("Message")
                     .onChange(of: focusTrigger) { _, _ in focused = true }
                     .onChange(of: focused) { _, isFocused in onFocusChange?(isFocused) }
@@ -125,6 +153,28 @@ struct ChatInputBar: View {
         .onChange(of: pickerItem) { _, newItem in
             loadPickedImage(newItem)
         }
+        #if os(macOS)
+        .fileImporter(isPresented: $showsFilePanel, allowedContentTypes: [.image]) { result in
+            loadPickedFile(result)
+        }
+        .onChange(of: attachTrigger) { _, _ in
+            if !isSending { showsFilePanel = true }
+        }
+        // The Mac opens a chat or lesson ready to type into, and focuses
+        // the composer again whenever it comes back from being disabled
+        // (a lesson's intro).
+        .onAppear {
+            DispatchQueue.main.async { if isEnabled { focused = true } }
+            installPasteMonitor()
+        }
+        .onChange(of: isEnabled) { _, enabled in
+            if enabled { DispatchQueue.main.async { focused = true } }
+        }
+        .onChange(of: focused, initial: true) { _, isFocused in pasteContext.isFocused = isFocused }
+        .onChange(of: isSending, initial: true) { _, sending in pasteContext.isSending = sending }
+        .background(WindowReader { [pasteContext] in pasteContext.window = $0 })
+        .onDisappear(perform: removePasteMonitor)
+        #endif
         .onChange(of: text) { _, newText in
             let kept = ChatViewModel.clamped(newText, toUTF16: characterLimit)
             if kept.utf16.count < newText.utf16.count {
@@ -163,6 +213,63 @@ struct ChatInputBar: View {
         }
     }
 
+    #if os(macOS)
+    /// The Mac's attach button: an image file from the open panel. A picture
+    /// can also be dragged onto the chat or pasted into the field.
+    private var photoButton: some View {
+        Button { showsFilePanel = true } label: {
+            Image(systemName: "photo.badge.plus")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(isSending ? BrandColor.textSecondary.opacity(0.5) : BrandColor.accent)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .disabled(isSending)
+        .help("Attach an image (⇧⌘A). You can also drag one here or paste it.")
+        .accessibilityLabel("Attach image")
+    }
+
+    /// This bar with the host's attach trigger (File ▸ Attach Image…).
+    func withAttachTrigger(_ trigger: Int) -> ChatInputBar {
+        var bar = self
+        bar.attachTrigger = trigger
+        return bar
+    }
+
+    private func loadPickedFile(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result else { return }
+        attachLoadFailed = false
+        Task {
+            let data = await Task.detached(priority: .userInitiated) {
+                MacImageIntake.readPickedFile(url)
+            }.value
+            if let data { onAttachImage(data) } else { attachLoadFailed = true }
+        }
+    }
+
+    /// ⌘V with an image (and no text) on the pasteboard attaches it, while
+    /// the field has focus. Text pastes as always.
+    private func installPasteMonitor() {
+        guard pasteMonitor == nil else { return }
+        let context = pasteContext
+        pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard MacComposerKeys.isComposerPaste(event, composerFocused: context.isFocused,
+                                                  composerWindow: context.window),
+                  !context.isSending,
+                  let data = MacImageIntake.imageData(from: .general) else { return event }
+            attachLoadFailed = false
+            onAttachImage(data)
+            return nil
+        }
+    }
+
+    private func removePasteMonitor() {
+        if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+        pasteMonitor = nil
+    }
+    #else
     private var photoButton: some View {
         PhotosPicker(selection: $pickerItem, matching: .images) {
             Image(systemName: "photo")
@@ -174,6 +281,7 @@ struct ChatInputBar: View {
         .disabled(isSending)
         .accessibilityLabel("Attach photo")
     }
+    #endif
 
     private var preparingPreview: some View {
         RoundedRectangle(cornerRadius: BrandRadius.md)
@@ -225,6 +333,9 @@ struct ChatInputBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove photo")
+            #if os(macOS)
+            .help("Remove the photo")
+            #endif
         }
         .padding(.leading, 44)  // align past the photo button
         .accessibilityElement(children: .contain)
@@ -240,6 +351,9 @@ struct ChatInputBar: View {
                         .foregroundStyle(BrandColor.textSecondary)
                 }
                 .accessibilityLabel("Stop replying")
+                #if os(macOS)
+                .help("Stop the reply")
+                #endif
             } else if useBrandSend {
                 Button(action: triggerSend) {
                     Circle()
@@ -255,6 +369,9 @@ struct ChatInputBar: View {
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Send")
+                #if os(macOS)
+                .help("Send (Return)")
+                #endif
             } else {
                 Button(action: triggerSend) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -264,14 +381,25 @@ struct ChatInputBar: View {
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Send")
+                #if os(macOS)
+                .help("Send (Return)")
+                #endif
             }
         }
         .frame(minWidth: 44, minHeight: 44)
     }
 
     private var canSend: Bool {
+        Self.canSend(text: text, hasAttachment: attachment != nil,
+                     isSending: isSending, isPreparingAttachment: isPreparingAttachment)
+    }
+
+    /// Whether the send button (and, on the Mac, Return) sends: some text
+    /// that isn't only spaces and line breaks, or a photo; nothing already
+    /// on its way; no photo still being prepared.
+    nonisolated static func canSend(text: String, hasAttachment: Bool, isSending: Bool, isPreparingAttachment: Bool) -> Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return (hasText || attachment != nil) && !isSending && !isPreparingAttachment
+        return (hasText || hasAttachment) && !isSending && !isPreparingAttachment
     }
 
     private func triggerSend() {

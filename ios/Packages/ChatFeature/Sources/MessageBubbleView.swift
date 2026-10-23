@@ -69,7 +69,13 @@ struct MessageBubbleView: View {
     /// The reply's body size before Dynamic Type. MarkdownUI gets this one:
     /// it scales its theme size for Dynamic Type itself, so the scaled
     /// `bodyFontSize` would scale the reply twice.
+    /// On the Mac it is the ramp's reading size (`MacTypeRamp.reading`), the
+    /// same as the student's own text (`BrandFont.body`).
+    #if os(macOS)
+    static let replyBaseSize: CGFloat = MacTypeRamp.reading
+    #else
     static let replyBaseSize: CGFloat = 17
+    #endif
 
     /// The body size scaled for the student's Dynamic Type setting (relative
     /// to `.body`), for what's drawn with fixed-size fonts outside MarkdownUI:
@@ -80,7 +86,15 @@ struct MessageBubbleView: View {
     /// Cap on the assistant text measure. Uncapped lines run ~60+ characters
     /// on wider phones, which reads slower than the ~45-55 character measure
     /// typography guidance targets for the 17pt reading face.
-    private static let assistantMeasureCap: CGFloat = 340
+    private static var assistantMeasureCap: CGFloat {
+        #if os(macOS)
+        // The Mac's reading column is wider than a phone; the line stays
+        // within a comfortable measure there too.
+        MacLayout.replyMeasure
+        #else
+        340
+        #endif
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: shouldShowAvatar ? BrandSpacing.sm : 0) {
@@ -242,11 +256,25 @@ struct MessageBubbleView: View {
         .background(BrandColor.surface, in: lessonAssistantShape)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
         .contextMenu {
+            #if os(macOS)
+            if !message.content.isEmpty {
+                copyMenuItem
+            }
+            #endif
             if !message.content.isEmpty {
                 reportMenu
             }
         }
     }
+
+    #if os(macOS)
+    /// Copy, first in a message's right-click menu on the Mac.
+    private var copyMenuItem: some View {
+        Button("Copy", systemImage: "doc.on.doc") {
+            MacPasteboard.copy(MacMessageCopy.text(for: message))
+        }
+    }
+    #endif
 
     /// "Report response" as a submenu of reasons, so a report always carries
     /// why. Each reason is tagged `report.<rawValue>` for UI tests.
@@ -403,6 +431,9 @@ struct MessageBubbleView: View {
                 ),
                 in: userShape
             )
+            #if os(macOS)
+            .contextMenu { copyMenuItem }
+            #endif
     }
 
     private var assistantBubble: some View {
@@ -437,6 +468,11 @@ struct MessageBubbleView: View {
         }
         .clipShape(assistantShape)
         .contextMenu {
+            #if os(macOS)
+            if !message.content.isEmpty {
+                copyMenuItem
+            }
+            #endif
             if !message.content.isEmpty {
                 reportMenu
             }

@@ -89,3 +89,17 @@ struct ReminderEnablerTests {
         #expect(!reloaded.enabled && !reloaded.weeklyEnabled)
     }
 }
+
+#if os(macOS)
+/// The Mac schedules reminders too, but `swift test` runs outside an app
+/// bundle, where `UNUserNotificationCenter.current()` traps: there is no
+/// center there, so nothing is asked or scheduled.
+@MainActor
+struct NotificationCenterHostTests {
+    @Test("No notification center outside an app bundle")
+    func noCenterInTestHost() async {
+        #expect(NotificationScheduler.center == nil)
+        #expect(await NotificationScheduler().notificationsAuthorized() == false)
+    }
+}
+#endif

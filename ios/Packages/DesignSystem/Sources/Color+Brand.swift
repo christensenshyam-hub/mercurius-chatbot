@@ -2,14 +2,17 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 /// Mercurius brand palette — navy / indigo / purple, derived from the
 /// Mercurius AI logo.
 ///
 /// Colors are defined as semantic tokens ("accent", "background") so
-/// features depend on intent, not appearance. On iOS, dark/light
-/// variants are selected automatically via `UIColor` dynamic providers.
+/// features depend on intent, not appearance. Dark/light variants are
+/// selected automatically via dynamic providers: `UIColor` on iOS,
+/// `NSColor` on the Mac.
 /// On macOS (logic-test host only) we fall back to light-mode values —
 /// the package ships only on iOS.
 ///
@@ -167,6 +170,21 @@ private extension BrandColor {
                 let c = trait.userInterfaceStyle == .dark ? pair.dark : pair.light
                 return UIColor(
                     red: CGFloat(c.r) / 255,
+                    green: CGFloat(c.g) / 255,
+                    blue: CGFloat(c.b) / 255,
+                    alpha: 1
+                )
+            }
+        )
+#elseif canImport(AppKit)
+        // The Mac app follows the window's appearance (and the student's
+        // Light/Dark choice, applied as the SwiftUI colour scheme).
+        return Color(
+            nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                let c = isDark ? pair.dark : pair.light
+                return NSColor(
+                    srgbRed: CGFloat(c.r) / 255,
                     green: CGFloat(c.g) / 255,
                     blue: CGFloat(c.b) / 255,
                     alpha: 1

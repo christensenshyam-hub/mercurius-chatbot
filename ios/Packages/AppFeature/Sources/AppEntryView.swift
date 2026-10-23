@@ -170,7 +170,7 @@ struct AppEntryView: View {
                 scheduler.weekProgress = { [progress = env.progressStore] in
                     Self.weekProgress(WeeklyPlan.compute(progress: progress))
                 }
-                #if os(iOS)
+                #if os(iOS) || os(macOS)
                 // Before this, a reminder tapped at cold launch is held by
                 // the router; setting the handler delivers it.
                 NotificationRouter.shared.onOpenLesson = { [env] lessonId in
@@ -220,30 +220,74 @@ struct AppEntryView: View {
             }
     }
 
+    /// The consent gate / first-run flow — the same one on iPhone and Mac.
+    private var onboardingFlow: some View {
+        OnboardingFlow(
+            mode: hasSeenOnboarding ? .gateOnly : .full,
+            ageBlockStore: env.ageBlockStore,
+            reminderStore: env.reminderStore,
+            scheduler: scheduler,
+            streakStore: env.streakStore,
+            reminderCardStore: env.reminderCardStore,
+            onStartLesson1: {
+                let lesson1 = MercuriusCurriculum.units.first?.lessons.first
+                entryTab = .curriculum
+                entryLesson = lesson1
+                hasEnteredApp = true
+                gateClearedThisLaunch = true
+                #if os(macOS)
+                if let lesson1 { env.macShell.openLesson(lesson1) }
+                #endif
+            },
+            onJustChat: {
+                entryTab = .chat
+                hasEnteredApp = true
+                gateClearedThisLaunch = true
+                #if os(macOS)
+                env.macShell.openChat()
+                #endif
+            },
+            onGateCleared: { gateClearedThisLaunch = true }
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
-        if showsGate {
-            OnboardingFlow(
-                mode: hasSeenOnboarding ? .gateOnly : .full,
-                ageBlockStore: env.ageBlockStore,
-                reminderStore: env.reminderStore,
-                scheduler: scheduler,
-                streakStore: env.streakStore,
-                reminderCardStore: env.reminderCardStore,
-                onStartLesson1: {
-                    entryTab = .curriculum
-                    entryLesson = MercuriusCurriculum.units.first?.lessons.first
-                    hasEnteredApp = true
-                    gateClearedThisLaunch = true
-                },
-                onJustChat: {
-                    entryTab = .chat
-                    hasEnteredApp = true
-                    gateClearedThisLaunch = true
-                },
-                onGateCleared: { gateClearedThisLaunch = true }
+        #if os(macOS)
+        // The Mac window is one NavigationSplitView for its whole life: the
+        // gate shows in its detail column (sidebar hidden) until consent is
+        // current, then Today, the path by unit and the chats take over. No
+        // Home doorman — Today is a sidebar row.
+        MacShellView(
+            shell: env.macShell,
+            gate: showsGate ? AnyView(onboardingFlow) : nil,
+            scheduler: scheduler,
+            onConsentWithdrawn: {
+                ReminderEnabler.disableAll(store: env.reminderStore, scheduler: scheduler)
+                consentVersion = 0
+                gateClearedThisLaunch = false
+                env.lastActivityStore.lastTab = nil
+            },
+            // Today's weekly-nudge offer, decided as for the iPhone's Home.
+            todayReminders: MacTodayReminders(
+                shows: ReminderCardStore.shows(
+                    weeklyEnabled: env.reminderStore.weeklyEnabled,
+                    handled: env.reminderCardStore.isHandled,
+                    onboardingComplete: hasSeenOnboarding,
+                    permission: notificationPermission
+                ),
+                onAccept: acceptReminders,
+                onDismiss: { env.reminderCardStore.markHandled() }
             )
-            .transition(.opacity)
+        )
+        .onAppear { env.macShell.scheduler = scheduler }
+        // A `mercurius://` link (a reminder's lesson) goes to this window
+        // rather than opening a second one.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        #else
+        if showsGate {
+            onboardingFlow
+                .transition(.opacity)
         } else if hasEnteredApp {
             AppShellView(
                 apiClient: env.apiClient,
@@ -308,6 +352,7 @@ struct AppEntryView: View {
             )
             .transition(.opacity)
         }
+        #endif
     }
 
     // MARK: - Home

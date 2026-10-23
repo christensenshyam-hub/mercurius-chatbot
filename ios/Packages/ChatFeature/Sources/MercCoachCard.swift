@@ -29,7 +29,12 @@ struct MercCoachCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mercState: MercState = .idle
+    // The Mac has no Dynamic Type; its eyebrow stays legible at 11 pt.
+    #if os(macOS)
+    @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 11
+    #else
     @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 10
+    #endif
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 15
 
     var body: some View {

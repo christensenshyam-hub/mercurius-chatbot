@@ -12,6 +12,9 @@ import DesignSystem
 /// purely a presentation reshape.
 struct LearningPathView: View {
     let progress: CurriculumProgressStore
+    /// Show only this unit's banner and stops (the Mac sidebar's "Path by
+    /// unit"); nil shows the whole path under its header, as on iOS.
+    var unitId: String? = nil
     let onStartLesson: (Lesson) -> Void
     let onStartUnitTest: (Unit) -> Void
 
@@ -37,7 +40,11 @@ struct LearningPathView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        pathHeader
+                        // One unit's page opens on its own banner; the
+                        // overall header belongs to the whole path.
+                        if unitId == nil {
+                            pathHeader
+                        }
 
                         ForEach(Array(elements.enumerated()), id: \.element.id) { index, element in
                             Group {
@@ -56,6 +63,7 @@ struct LearningPathView: View {
 
                         Color.clear.frame(height: BrandSpacing.xxl)
                     }
+                    .macReadableColumn(MacLayout.pathWidth)
                 }
                 .scrollContentBackground(.hidden)
                 .background(BrandColor.background)
@@ -364,7 +372,7 @@ struct LearningPathView: View {
     private func buildElements() -> [PathElement] {
         var out: [PathElement] = []
         var nodeIndex = 0
-        for unit in MercuriusCurriculum.units {
+        for unit in MercuriusCurriculum.units where unitId == nil || unit.id == unitId {
             out.append(.header(unit))
             for lesson in unit.lessons {
                 out.append(.lesson(lesson, unit, nodeIndex: nodeIndex))

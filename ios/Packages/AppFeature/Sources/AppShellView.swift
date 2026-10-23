@@ -656,7 +656,7 @@ struct AppShellView: View {
     }
 
     private static var isUITesting: Bool {
-        ProcessInfo.processInfo.arguments.contains(AppEnvironment.uiTestArgument)
+        AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument)
     }
 
     /// The server signalled demonstrated proficiency (`[LESSON_COMPLETE]`).

@@ -82,13 +82,13 @@ public struct ServerRefusal: Equatable, Sendable {
     /// (the server's "tomorrow" is UTC midnight, which is the same evening in
     /// the Americas), and a network-scoped one says cellular data works now.
     /// Everything else is the server's copy as written.
-    public func studentMessage(clock: LocalClock = .current) -> String {
+    public func studentMessage(clock: LocalClock = .current, advice: NetworkSwitchAdvice = .current) -> String {
         guard isDailyLimit else { return message }
         let reset = Self.resetPhrase(retryAfter: retryAfter, clock: clock)
         let kept = reset == nil ? message : Self.droppingTomorrow(from: message)
         if isNetworkScoped {
-            guard let reset else { return "\(message) Switch to cellular data and try again." }
-            return "\(kept) Switch to cellular data and try again, or come back \(reset)."
+            guard let reset else { return "\(message) \(advice.switchNetwork) and try again." }
+            return "\(kept) \(advice.switchNetwork) and try again, or come back \(reset)."
         }
         guard let reset else { return message }
         return "\(kept) Try again \(reset)."
@@ -159,5 +159,38 @@ public struct ServerRefusal: Equatable, Sendable {
         return result
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+}
+
+/// Where the copy sends a student whose network blocks or limits Mercurius
+/// (a school's): an iPhone has cellular data; a Mac has none, but can
+/// usually join a phone's hotspot. The platform's own by default
+/// (`current`); the tests pin both.
+public enum NetworkSwitchAdvice: Sendable, CaseIterable {
+    case cellular
+    case hotspot
+
+    public static var current: NetworkSwitchAdvice {
+        #if os(macOS)
+        return .hotspot
+        #else
+        return .cellular
+        #endif
+    }
+
+    /// Before "and try again": a network's daily allowance is used up.
+    public var switchNetwork: String {
+        switch self {
+        case .cellular: return "Switch to cellular data"
+        case .hotspot: return "Switch to another network, like your phone's hotspot,"
+        }
+    }
+
+    /// The last sentence when a network seems to block Mercurius.
+    public var tryAnotherNetwork: String {
+        switch self {
+        case .cellular: return "Try cellular data or a different Wi-Fi."
+        case .hotspot: return "Try a different network, like your phone's hotspot."
+        }
     }
 }

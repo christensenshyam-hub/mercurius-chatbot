@@ -55,6 +55,13 @@ public struct CrisisSupportView: View {
                 }
             }
 
+            #if os(macOS)
+            // A Mac has no phone: tel:/sms: open FaceTime or Messages, which
+            // may not be set up to call or text (or may do nothing). So the
+            // numbers are the content — large, selectable, copyable — and
+            // the call/text links come second.
+            MacCrisisNumbers()
+            #else
             VStack(spacing: BrandSpacing.sm) {
                 resourceLink(
                     title: "Call 988",
@@ -89,6 +96,7 @@ public struct CrisisSupportView: View {
                     identifier: "crisis.call911"
                 )
             }
+            #endif
 
             VStack(alignment: .leading, spacing: BrandSpacing.sm) {
                 if isLargeText {
@@ -168,6 +176,150 @@ public struct CrisisSupportView: View {
         .accessibilityIdentifier(identifier)
     }
 }
+
+#if os(macOS)
+/// The crisis lines on a Mac, in one card: each number large and selectable,
+/// with a Copy button, and the call/text links (FaceTime, Messages) under
+/// it; the card ends with the note on when those links work. Used by
+/// `CrisisSupportView` and the Mac Help window. The links and numbers are
+/// the app's own (`CrisisResources`), never server or model text.
+public struct MacCrisisNumbers: View {
+    @State private var copied: String?
+
+    public init() {}
+
+    /// One crisis line as the Mac shows it.
+    struct Line: Identifiable {
+        let id: String
+        /// What goes before the number ("Text HOME to"), if anything.
+        let lead: String?
+        /// The number, as shown and as copied.
+        let number: String
+        let detail: String
+        /// VoiceOver: the digits spelled out ("9 8 8").
+        let spoken: String
+        let call: URL?
+        let text: URL?
+    }
+
+    static let lines: [Line] = [
+        Line(id: "988", lead: "Call or text", number: "988",
+             detail: "Suicide & Crisis Lifeline · US, 24/7",
+             spoken: "Call or text 9 8 8, the Suicide and Crisis Lifeline. US, 24/7.",
+             call: CrisisResources.call988, text: CrisisResources.text988),
+        Line(id: "741741", lead: "Text HOME to", number: "741741",
+             detail: "Crisis Text Line · 24/7",
+             spoken: "Text HOME to 7 4 1 7 4 1, the Crisis Text Line. 24/7.",
+             call: nil, text: CrisisResources.textHomeTo741741),
+        Line(id: "911", lead: "Call", number: "911",
+             detail: "If you might be in immediate danger",
+             spoken: "Call 9 1 1 if you might be in immediate danger.",
+             call: CrisisResources.call911, text: nil),
+    ]
+
+    /// The caveat for the FaceTime / Messages buttons, inside the card,
+    /// under the buttons it qualifies.
+    static let linksNote = "Use your phone, or the buttons if this Mac is set up to call (FaceTime) or text (Messages)."
+
+    public var body: some View {
+        // One card: the three lines, then the note about the buttons. Every
+        // word in it is body size (15 pt on the Mac) or larger — the 10 pt
+        // footnote was the Mac's smallest text, on the screen that matters
+        // most.
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(Self.lines.enumerated()), id: \.element.id) { index, line in
+                if index > 0 {
+                    Divider().overlay(BrandColor.border)
+                }
+                row(line)
+            }
+            Divider().overlay(BrandColor.border)
+            Label {
+                Text(Self.linksNote)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "info.circle")
+                    .accessibilityHidden(true)
+            }
+            .font(BrandFont.body)
+            .foregroundStyle(BrandColor.textSecondary)
+            .padding(BrandSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(BrandColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BrandRadius.md, style: .continuous)
+                .stroke(BrandColor.border, lineWidth: 1)
+        )
+    }
+
+    private func row(_ line: Line) -> some View {
+        VStack(alignment: .leading, spacing: BrandSpacing.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.md) {
+                VStack(alignment: .leading, spacing: BrandSpacing.xxs) {
+                    if let lead = line.lead {
+                        Text(lead)
+                            .font(BrandFont.bodyEmphasized)
+                            .foregroundStyle(BrandColor.text)
+                    }
+                    // Selectable, so it can be read off, selected and
+                    // copied however the student likes.
+                    Text(line.number)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(BrandColor.text)
+                        .textSelection(.enabled)
+                    Text(line.detail)
+                        .font(BrandFont.body)
+                        .foregroundStyle(BrandColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(line.spoken)
+                .accessibilityAddTraits(.isStaticText)
+                .accessibilityIdentifier("crisis.number\(line.id)")
+                Spacer(minLength: BrandSpacing.sm)
+                Button {
+                    MacPasteboard.copy(line.number)
+                    copied = line.id
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        if copied == line.id { copied = nil }
+                    }
+                } label: {
+                    Label(copied == line.id ? "Copied" : "Copy",
+                          systemImage: copied == line.id ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .help("Copy \(line.number)")
+                .accessibilityLabel("Copy \(line.number)")
+                .accessibilityIdentifier("crisis.copy\(line.id)")
+            }
+            HStack(spacing: BrandSpacing.lg) {
+                if let call = line.call {
+                    Link(destination: call) {
+                        Label("Call with FaceTime", systemImage: "phone.fill")
+                    }
+                    .accessibilityLabel("Call \(line.number) with FaceTime")
+                }
+                if let text = line.text {
+                    Link(destination: text) {
+                        Label("Text with Messages", systemImage: "message.fill")
+                    }
+                    .accessibilityLabel("Text \(line.id == "741741" ? "HOME to 741741" : line.number) with Messages")
+                }
+            }
+            .font(BrandFont.bodyEmphasized)
+            .foregroundStyle(BrandColor.accentText)
+            .macPointingHand()
+        }
+        .padding(BrandSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+    }
+}
+#endif
 
 #Preview("Crisis support") {
     ScrollView {

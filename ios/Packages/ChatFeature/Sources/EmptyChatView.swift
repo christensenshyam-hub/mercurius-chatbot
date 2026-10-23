@@ -72,6 +72,8 @@ struct EmptyChatView: View {
                     Spacer(minLength: compact ? BrandSpacing.md : BrandSpacing.xl)
                 }
                 .padding(.horizontal, BrandSpacing.lg)
+                // The Mac's reading column, centred in a wide window.
+                .macReadableColumn()
                 .frame(maxWidth: .infinity)
             }
         }
@@ -154,6 +156,7 @@ private struct SuggestionButton: View {
             .frame(minHeight: 44)
             .background(BrandColor.surface)
             .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+            .macHoverHighlight(cornerRadius: BrandRadius.md)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(prompt)

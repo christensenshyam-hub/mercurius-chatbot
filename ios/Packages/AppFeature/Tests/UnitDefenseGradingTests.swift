@@ -77,7 +77,7 @@ struct UnitDefenseGradingTests {
             return
         }
         #expect(retryable)
-        #expect(message.contains("cellular"))
+        #expect(message.contains(NetworkSwitchAdvice.current.switchNetwork))
     }
 
     @Test("A school filter's page names the network and leaves the answer free to resend (AUD-32)")

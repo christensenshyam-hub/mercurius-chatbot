@@ -1,11 +1,13 @@
 import Foundation
-#if os(iOS)
+#if os(iOS) || os(macOS)
 import UserNotifications
 #endif
 
-/// Thin wrapper over `UNUserNotificationCenter` for the learning reminders.
-/// Guarded for iOS — the package also compiles for macOS (so `swift test`
-/// runs), where these are no-ops.
+/// Thin wrapper over `UNUserNotificationCenter` for the learning reminders,
+/// on the iPhone and the Mac alike (the same plan, the same notifications).
+/// In a process with no app bundle — the SPM test host that `swift test`
+/// runs on a Mac — there is no notification center (`center` is nil), so
+/// permission is never granted and nothing is scheduled.
 ///
 /// The planning (which days, which Merc line, streak defense, the weekly
 /// nudges) lives in the pure `ReminderPlanner`; this type only requests
@@ -26,7 +28,17 @@ public final class NotificationScheduler {
     /// planned ones.
     private let legacyReminderId = "mercurius.daily.reminder"
 
-    #if os(iOS)
+    #if os(iOS) || os(macOS)
+    /// The notification center, or nil where there can't be one: on the Mac,
+    /// `UNUserNotificationCenter.current()` traps outside an app bundle (the
+    /// `swift test` host). Always the center on iOS.
+    public nonisolated static var center: UNUserNotificationCenter? {
+        #if os(macOS)
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return nil }
+        #endif
+        return UNUserNotificationCenter.current()
+    }
+
     /// The last queued center operation. Each refresh/cancel is a
     /// remove-then-add across several awaits; chaining them keeps a quick
     /// off → on toggle from interleaving into a stale schedule.
@@ -34,14 +46,15 @@ public final class NotificationScheduler {
 
     /// Ask for notification permission. Returns whether it was granted.
     public func requestPermission() async -> Bool {
-        let center = UNUserNotificationCenter.current()
+        guard let center = Self.center else { return false }
         let granted = try? await center.requestAuthorization(options: [.alert, .sound])
         return granted ?? false
     }
 
     /// Whether the system currently lets Mercurius post notifications.
     public func notificationsAuthorized() async -> Bool {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard let center = Self.center else { return false }
+        let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral: return true
         default: return false
@@ -90,7 +103,7 @@ public final class NotificationScheduler {
         week: ReminderPlanner.WeekProgress?,
         nextLessonId: String?
     ) {
-        let center = UNUserNotificationCenter.current()
+        guard let center = Self.center else { return }
         enqueue { [legacyReminderId] in
             let pending = await center.pendingNotificationRequests()
                 .map(\.identifier)
@@ -178,7 +191,7 @@ public final class NotificationScheduler {
     /// link end to end.
     public func scheduleDemo(nextLessonId: String? = nil) {
         Task {
-            let center = UNUserNotificationCenter.current()
+            guard let center = Self.center else { return }
             // Full authorization so the banners actually interrupt (provisional
             // delivers quietly, with no foreground banner). One "Allow" tap on
             // the dialog; timers below start once it's granted.
@@ -206,7 +219,7 @@ public final class NotificationScheduler {
 
     /// Cancel every scheduled Mercurius reminder, daily and weekly.
     public func cancel() {
-        let center = UNUserNotificationCenter.current()
+        guard let center = Self.center else { return }
         enqueue { [legacyReminderId] in
             let pending = await center.pendingNotificationRequests()
                 .map(\.identifier)

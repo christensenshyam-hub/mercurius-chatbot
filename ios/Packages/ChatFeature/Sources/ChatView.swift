@@ -68,6 +68,19 @@ public struct ChatView: View {
     /// isn't blocked by a sheet it can't otherwise reach.
     private let dismissSheetsToken: Int
 
+    #if os(macOS)
+    /// The Mac shell's New Chat (toolbar, ⌘N), set by `macChrome`.
+    private var macOnNewChat: (() -> Void)?
+    /// A mode the menu bar asked for (Chat ▸ Socratic/Debate/Discussion,
+    /// ⌥⌘1–⌥⌘3), handled like a click on the toolbar picker and then cleared.
+    private var macModeRequest: Binding<ChatMode?>?
+    /// The mode explainer the toolbar picker shows the first time a mode is
+    /// chosen (the iPhone's pills show it from `ModeSelectorView`).
+    @State private var pendingModeDescription: ModeDescription?
+    /// Opens the composer's image panel (⇧⌘A).
+    @State private var attachTrigger = 0
+    #endif
+
     public init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
@@ -122,10 +135,15 @@ public struct ChatView: View {
             BrandColor.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                #if os(macOS)
+                // The Mac window's toolbar holds the mode picker, New Chat
+                // and Explain More; Settings is ⌘, and Today is a sidebar row.
+                #else
                 header
                 ModeSelectorView(model: model)
                     .background(BrandColor.background)
                 Divider().overlay(BrandColor.border)
+                #endif
 
                 if model.messages.isEmpty {
                     EmptyChatView(
@@ -168,21 +186,7 @@ public struct ChatView: View {
                     )
                 }
 
-                ChatInputBar(
-                    text: Binding(
-                        get: { model.draft },
-                        set: { model.draft = $0 }
-                    ),
-                    isSending: isSending,
-                    attachment: model.pendingImage,
-                    isPreparingAttachment: model.isPreparingAttachment,
-                    attachmentError: model.attachmentError,
-                    characterLimit: model.draftCharacterLimit,
-                    onSend: { model.send() },
-                    onCancel: { model.cancel() },
-                    onAttachImage: { model.attachImage(data: $0) },
-                    onRemoveAttachment: { model.clearAttachment() }
-                )
+                composer
             }
         }
         // Animate the hint's appearance + dismissal so the transition
@@ -198,7 +202,146 @@ public struct ChatView: View {
             }
         }
         .onChange(of: dismissSheetsToken) { _, _ in activeSheet = nil }
+        #if os(macOS)
+        .toolbar { macToolbar }
+        // On iOS these hang off the header, which the Mac doesn't show.
+        .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        .reportFeedbackAlert(reportFeedback)
+        .sheet(item: $pendingModeDescription) { description in
+            ModeDescriptionSheet(description: description) {
+                Task { await model.switchMode(to: description.mode) }
+            }
+        }
+        .alert(
+            "Couldn't switch modes",
+            isPresented: Binding(
+                get: { model.modeSwitchError != nil },
+                set: { if !$0 { model.clearModeSwitchError() } }
+            )
+        ) {
+            Button("OK", role: .cancel) { model.clearModeSwitchError() }
+        } message: {
+            Text(model.modeSwitchError ?? "")
+        }
+        .macImageDrop(isEnabled: !isSending) { model.attachImage(data: $0) }
+        .focusedSceneValue(\.chatCommandTarget, commandTarget)
+        .onAppear(perform: takeModeRequest)
+        .onChange(of: macModeRequest?.wrappedValue) { _, _ in takeModeRequest() }
+        #endif
     }
+
+    private var composer: some View {
+        let bar = ChatInputBar(
+            text: Binding(
+                get: { model.draft },
+                set: { model.draft = $0 }
+            ),
+            isSending: isSending,
+            attachment: model.pendingImage,
+            isPreparingAttachment: model.isPreparingAttachment,
+            attachmentError: model.attachmentError,
+            characterLimit: model.draftCharacterLimit,
+            onSend: { model.send() },
+            onCancel: { model.cancel() },
+            onAttachImage: { model.attachImage(data: $0) },
+            onRemoveAttachment: { model.clearAttachment() }
+        )
+        #if os(macOS)
+        return bar.withAttachTrigger(attachTrigger).macReadableColumn()
+        #else
+        return bar
+        #endif
+    }
+
+    #if os(macOS)
+    /// The Mac shell's wiring: New Chat for the toolbar, and the mode the
+    /// menu bar asks for. Without it the toolbar has no New Chat button.
+    public func macChrome(onNewChat: @escaping () -> Void, modeRequest: Binding<ChatMode?>) -> ChatView {
+        var view = self
+        view.macOnNewChat = onNewChat
+        view.macModeRequest = modeRequest
+        return view
+    }
+
+    /// The window toolbar: the streak chip, the mode picker in the middle,
+    /// then Explain More and New Chat.
+    @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
+        if let headerAccessory {
+            ToolbarItem(placement: .navigation) {
+                headerAccessory()
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            Picker("Mode", selection: Binding(
+                get: { model.currentMode },
+                set: { requestMode($0) }
+            )) {
+                ForEach(ChatMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            // Same rule as the iPhone's pills: no switching mid-reply or
+            // mid-switch.
+            .disabled(model.modeSwitchInFlight != nil || isSending)
+            .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌥⌘1, ⌥⌘2, ⌥⌘3)")
+            .accessibilityLabel("Mode")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                model.explainMore()
+            } label: {
+                Label("Explain More", systemImage: "text.append")
+            }
+            .buttonStyle(.automatic)
+            .disabled(!MessageListView.offersExplainMore(phase: model.phase, messages: model.messages))
+            .help("Ask Merc to go deeper on the last answer (⇧⌘E)")
+        }
+        if let macOnNewChat {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: macOnNewChat) {
+                    Label("New Chat", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(.automatic)
+                .help("Start a new chat (⌘N)")
+            }
+        }
+    }
+
+    /// What the menu bar's chat commands act on while this chat shows.
+    private var commandTarget: ChatCommandTarget {
+        let canRetry: Bool
+        if case .failed(_, let isRetryable) = model.phase { canRetry = isRetryable } else { canRetry = false }
+        return ChatCommandTarget(
+            currentMode: model.currentMode,
+            canRetry: canRetry,
+            retry: { [model] in model.retry() },
+            canExplainMore: MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
+            explainMore: { [model] in model.explainMore() },
+            canAttach: !isSending,
+            attachImage: { attachTrigger += 1 }
+        )
+    }
+
+    /// A mode from the toolbar picker or the menu bar: the explainer the
+    /// first time, as the iPhone's pills do, then the switch.
+    private func requestMode(_ mode: ChatMode) {
+        guard mode != model.currentMode, model.modeSwitchInFlight == nil, !isSending else { return }
+        if !ModeDescriptionStore.hasSeen(mode) {
+            pendingModeDescription = ModeDescription.description(for: mode)
+        } else {
+            Task { await model.switchMode(to: mode) }
+        }
+    }
+
+    private func takeModeRequest() {
+        guard let request = macModeRequest, let mode = request.wrappedValue else { return }
+        request.wrappedValue = nil
+        requestMode(mode)
+    }
+    #endif
 
     private func dismissChatInputHint() {
         hasSeenChatInputHint = true
@@ -299,32 +442,35 @@ public struct ChatView: View {
         .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .settings:
-                if let settingsPresenter {
-                    settingsPresenter()
-                }
-            case .quiz:
-                // The dormant quiz feature, revived (Presentation P3): a
-                // comprehension quiz generated from THIS conversation via
-                // POST /api/quiz. All the machinery below the entry point
-                // (QuizView, QuizViewModel, APIClient+Tools, quizMaster
-                // achievement) shipped long ago and stayed tested.
-                QuizView(
-                    model: QuizViewModel(
-                        tools: apiClient,
-                        sessionIdProvider: { [sessionIdentity] in try sessionIdentity.current() },
-                        achievementStore: achievementStore
-                    ),
-                    dismissAction: { activeSheet = nil }
-                )
-            }
-        }
+        .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
         .reportFeedbackAlert(reportFeedback)
         // Chat History presentation is owned by `AppShellView`
         // (the TabView host) so the History tab item there can
         // drive it without coupling ChatView to the action.
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: ActiveSheet) -> some View {
+        switch sheet {
+        case .settings:
+            if let settingsPresenter {
+                settingsPresenter()
+            }
+        case .quiz:
+            // The dormant quiz feature, revived (Presentation P3): a
+            // comprehension quiz generated from THIS conversation via
+            // POST /api/quiz. All the machinery below the entry point
+            // (QuizView, QuizViewModel, APIClient+Tools, quizMaster
+            // achievement) shipped long ago and stayed tested.
+            QuizView(
+                model: QuizViewModel(
+                    tools: apiClient,
+                    sessionIdProvider: { [sessionIdentity] in try sessionIdentity.current() },
+                    achievementStore: achievementStore
+                ),
+                dismissAction: { activeSheet = nil }
+            )
+        }
     }
 
     /// Whether the conversation is substantive enough (≥2 user turns, ≥4
@@ -597,6 +743,8 @@ struct MessageListView: View {
                             .id(Self.bottomID)
                             .accessibilityHidden(true)
                     }
+                    // The Mac's reading column, centred in a wide window.
+                    .macReadableColumn()
                     .padding(.vertical, BrandSpacing.md)
                     // Gated like every other explicit animation in the app: under
                     // Reduce Motion the intro just disappears (its transition is
@@ -642,6 +790,25 @@ struct MessageListView: View {
                 geometry.readingAreaHeight = height
                 layoutChanged(geometry, proxy: proxy)
             }
+            #if os(macOS)
+            // The Mac's window builds the chat afresh each time its sidebar
+            // row is chosen, with the thread already loaded: open at the
+            // latest message, as a thread that loads in place does. The lazy
+            // rows only estimate their heights until they are drawn, so one
+            // jump lands short; it repeats (briefly) until the end is in
+            // view, unless the student scrolls first.
+            .task {
+                guard !messages.isEmpty else { return }
+                _ = scroll.policy.latestMessageChanged(isNewReply: false)
+                for _ in 0..<8 {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard !Task.isCancelled, scroll.policy.isFollowing else { return }
+                    let geometry = scroll.policy.geometry
+                    if geometry.contentHeight > 0, geometry.isAtBottom { return }
+                    perform(.scrollToBottom(animated: false), proxy: proxy)
+                }
+            }
+            #endif
             .onChange(of: messages.last?.id) { _, newValue in
                 guard newValue != nil, let last = messages.last else { return }
                 // Merc's empty placeholder means a reply is on its way (a
@@ -778,8 +945,12 @@ struct MessageListView: View {
                     .background(BrandColor.surfaceElevated)
                     .foregroundStyle(BrandColor.accentText)
                     .clipShape(Capsule())
+                    .macHoverHighlight(cornerRadius: 999)
             }
             .frame(minHeight: 44)
+            #if os(macOS)
+            .help("Try again (⌘R)")
+            #endif
             .accessibilityLabel("Retry sending the last message")
             Spacer()
         }
@@ -866,6 +1037,7 @@ struct MessageListView: View {
                         .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)
                 )
                 .clipShape(Capsule())
+                .macHoverHighlight(cornerRadius: 999)
         }
         .frame(minHeight: 44)
         .accessibilityLabel(title)
@@ -878,6 +1050,12 @@ struct MessageListView: View {
     ///     no-ops but the affordance reads as broken),
     ///   - the last message is a non-empty assistant turn.
     private var shouldShowExplainMore: Bool {
+        Self.offersExplainMore(phase: phase, messages: messages)
+    }
+
+    /// The rule for `shouldShowExplainMore`, shared with the Mac's toolbar
+    /// button and menu command.
+    static func offersExplainMore(phase: ChatViewModel.Phase, messages: [ChatMessage]) -> Bool {
         guard case .idle = phase else { return false }
         guard let last = messages.last else { return false }
         guard last.role == .assistant else { return false }

@@ -1,7 +1,7 @@
 name: iOS
 
 # Runs the native-app test suite on every push to main and every PR
-# targeting main. Two jobs in parallel:
+# targeting main. Three jobs in parallel:
 #
 #   * spm       — `swift test` on the macOS host. Covers every SPM
 #                 package test target (the test/suite count is whatever
@@ -18,6 +18,14 @@ name: iOS
 #                 simulator/OS combo, and pixel diffs against a
 #                 runner-simulator would flake without adding value
 #                 until we pin the sim explicitly in a follow-up.
+#
+#   * mac       — the native Mac app (MercuriusMac): Debug and Release
+#                 builds (unsigned; the Release one universal), checks of
+#                 the built bundles, and a launch smoke test through the
+#                 DEBUG -MacSnapshot harness. Its unit tests — the shell,
+#                 the composer keys, the snapshot harness's arguments, the
+#                 release settings — are `#if os(macOS)` package tests that
+#                 the spm job above already runs on the same Xcode.
 #
 # What this workflow intentionally does NOT do yet:
 #   * Run the live-network-dependent tests (none of the committed
@@ -170,3 +178,94 @@ jobs:
           name: TestResults
           path: ios/build/TestResults.xcresult
           retention-days: 7
+
+  mac:
+    name: Mac app
+    # The same runner image and Xcode as the jobs above (Xcode 16.2 /
+    # Swift 6.0 / the macOS 15 SDK at the time of writing). The Mac app's
+    # own target (ios/MercuriusMac) is only compiled here: `swift test`
+    # covers the packages, not the app shell or the screenshot harness.
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Print toolchain
+        run: swift --version && xcodebuild -version && xcrun --sdk macosx --show-sdk-version
+
+      - name: Install toolchain (xcodegen, xcbeautify)
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Mercurius.xcodeproj
+        working-directory: ios
+        run: xcodegen generate
+
+      # Unsigned: the runner has no signing identity, and none is needed to
+      # compile, check the bundle and launch it. (Release signing needs the
+      # team's Apple Distribution certificate and the "Mercurius Mac App
+      # Store" profile; scripts/release.sh --platform mac does that.)
+      - name: Build MercuriusMac (Debug)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Mercurius.xcodeproj \
+            -scheme MercuriusMac \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/mac-dd \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+      # Release compiles without the DEBUG-only code (the screenshot harness,
+      # the launch flags) and for both arm64 and x86_64, as the Mac App Store
+      # build will.
+      - name: Build MercuriusMac (Release, universal)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Mercurius.xcodeproj \
+            -scheme MercuriusMac \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/mac-dd \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+      - name: Check the built bundles
+        working-directory: ios
+        run: |
+          scripts/mac-bundle-check.sh build/mac-dd/Build/Products/Debug/Mercurius.app debug
+          scripts/mac-bundle-check.sh build/mac-dd/Build/Products/Release/Mercurius.app release
+
+      # Launch the Debug app on the runner's desktop and let the harness
+      # photograph two states and quit: the first-run gate (before any
+      # network call) and Today past it. It proves the app starts unsigned,
+      # makes its window, reaches the gate and quits by itself. Isolated as
+      # every harness run is: in-memory chats and session id, the local
+      # server URL — nothing reaches production. 700×600 (the window's
+      # minimum) fits the runner's small screen. The script fails a picture
+      # that is blank (one colour) or the wrong size — so this proves the
+      # window was drawn, not only that it opened. ACTIVATE=NO: a headless
+      # runner has no session that can make the window key, so an inactive
+      # window is expected here (the key-window check is for local runs).
+      - name: Launch smoke test
+        working-directory: ios
+        run: |
+          MAC_APP="$PWD/build/mac-dd/Build/Products/Debug/Mercurius.app" VARIANTS=min ACTIVATE=NO \
+            scripts/mac-snapshots.sh "$RUNNER_TEMP/mac-smoke" gate-meet today
+
+      - name: Upload the smoke-test pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-smoke
+          path: ${{ runner.temp }}/mac-smoke
+          retention-days: 7
+          if-no-files-found: ignore

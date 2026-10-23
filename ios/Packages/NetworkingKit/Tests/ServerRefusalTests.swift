@@ -90,23 +90,28 @@ struct ServerRefusalNetworkScopeTests {
         let clock = LocalClock.pinned(utc: auditNow, zone: "America/Chicago")
         #expect(refusal.isNetworkScoped)
         #expect(refusal.isRetryable)
-        #expect(normalized(refusal.studentMessage(clock: clock))
+        #expect(normalized(refusal.studentMessage(clock: clock, advice: .cellular))
             == "Too many new sessions from this network today. Switch to cellular data and try again, or come back after 7:00 PM.")
+        // A Mac has no cellular data: it points at a phone's hotspot.
+        #expect(normalized(refusal.studentMessage(clock: clock, advice: .hotspot))
+            == "Too many new sessions from this network today. Switch to another network, like your phone's hotspot, and try again, or come back after 7:00 PM.")
     }
 
     @Test("The network's dollar cap loses its 'tomorrow' too")
     func networkUsd() {
         let refusal = ServerRefusal(code: "daily_limit", message: networkUsdCopy, retryAfter: auditWait, scope: "ip")
         let clock = LocalClock.pinned(utc: auditNow, zone: "America/New_York")
-        #expect(normalized(refusal.studentMessage(clock: clock))
+        #expect(normalized(refusal.studentMessage(clock: clock, advice: .cellular))
             == "This network has reached today's usage limit. Switch to cellular data and try again, or come back after 8:00 PM.")
     }
 
     @Test("Without a wait, the network's copy still says cellular works")
     func networkNoWait() {
         let refusal = ServerRefusal(code: "daily_limit", message: newSessionsCopy, retryAfter: nil)
-        #expect(refusal.studentMessage(clock: .pinned(utc: auditNow, zone: "UTC"))
+        #expect(refusal.studentMessage(clock: .pinned(utc: auditNow, zone: "UTC"), advice: .cellular)
             == "Too many new sessions from this network today. Switch to cellular data and try again.")
+        #expect(refusal.studentMessage(clock: .pinned(utc: auditNow, zone: "UTC"), advice: .hotspot)
+            == "Too many new sessions from this network today. Switch to another network, like your phone's hotspot, and try again.")
     }
 
     @Test("A wire scope outranks the copy")
@@ -246,6 +251,25 @@ struct ServerRefusalQuotaContractTests {
             let shown = ServerRefusal(code: "daily_limit", message: copy, retryAfter: auditWait).studentMessage(clock: clock)
             #expect(!shown.lowercased().contains("tomorrow"), "\(reason): \(shown)")
             #expect(normalized(shown).contains("after 7:00 PM"), "\(reason): \(shown)")
+        }
+    }
+}
+
+@Suite("Network advice per platform")
+struct NetworkSwitchAdviceTests {
+    @Test("An iPhone is told about cellular data; a Mac, which has none, about a phone's hotspot")
+    func platformAdvice() {
+        #if os(macOS)
+        #expect(NetworkSwitchAdvice.current == .hotspot)
+        #else
+        #expect(NetworkSwitchAdvice.current == .cellular)
+        #endif
+        #expect(APIError.unreachableOnThisNetwork.userFacingMessage(clock: .current, advice: .cellular)
+            == "This network may be blocking Mercurius. School Wi-Fi often does. Try cellular data or a different Wi-Fi.")
+        #expect(APIError.unreachableOnThisNetwork.userFacingMessage(clock: .current, advice: .hotspot)
+            == "This network may be blocking Mercurius. School Wi-Fi often does. Try a different network, like your phone's hotspot.")
+        for advice in NetworkSwitchAdvice.allCases where advice == .hotspot {
+            #expect(!advice.switchNetwork.contains("cellular") && !advice.tryAnotherNetwork.contains("cellular"))
         }
     }
 }

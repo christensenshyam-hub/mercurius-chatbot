@@ -20,7 +20,8 @@ struct SettingsResetTests {
 
     private func makeSheet(
         reminderStore: ReminderStore,
-        onConsentWithdrawn: (@MainActor () -> Void)? = nil
+        onConsentWithdrawn: (@MainActor () -> Void)? = nil,
+        afterReset: (@MainActor () -> Void)? = nil
     ) -> SettingsSheet {
         let identity = SessionIdentity(keychain: InMemoryKeychain())
         let chatStore = InMemoryChatStore()
@@ -44,7 +45,8 @@ struct SettingsResetTests {
             reminderStore: reminderStore,
             scheduler: NotificationScheduler(),
             sessionDeleter: nil,
-            onConsentWithdrawn: onConsentWithdrawn
+            onConsentWithdrawn: onConsentWithdrawn,
+            afterReset: afterReset
         )
     }
 
@@ -69,6 +71,17 @@ struct SettingsResetTests {
         let model = makeSheet(reminderStore: store).makeModel(dismiss: {})
         #expect(await model.deleteServerDataAndStartOver())
         expectBothOff(store)
+    }
+
+    @Test("The host hears about a reset after the local wipe (the Mac sidebar re-reads its chats)")
+    func afterResetRunsLast() async {
+        let store = remindersOn()
+        var remindersOffWhenCalled: Bool?
+        let model = makeSheet(reminderStore: store, afterReset: {
+            remindersOffWhenCalled = !store.enabled && !store.weeklyEnabled
+        }).makeModel(dismiss: {})
+        #expect(await model.resetSession())
+        #expect(remindersOffWhenCalled == true)
     }
 
     @Test("Reset this device only")

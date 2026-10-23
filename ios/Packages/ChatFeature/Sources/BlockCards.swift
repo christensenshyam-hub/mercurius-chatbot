@@ -204,6 +204,8 @@ struct CheckQuizCard: View {
                     .stroke(stroke, lineWidth: 1)
             )
             .contentShape(Rectangle())
+            // Mac: the pointer says which option a click would pick.
+            .macHoverHighlight(cornerRadius: BrandRadius.sm, isEnabled: isEnabled && !graded)
         }
         .buttonStyle(.plain)
         // A graded card is a result: no taps, but full colour (`.disabled`
