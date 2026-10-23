@@ -78,6 +78,27 @@ struct WeeklyPlanTests {
         #expect(plan.goal == 2)
     }
 
+    @Test("Each course counts its own week: Basics lessons move a Basics plan, never the Deep dive's (review 2026-10-22)")
+    func perCourse() {
+        let cal = calendar()
+        let clock = TestClock(.distantPast)
+        let store = makeStore(clock)
+        complete(["b1_l1", "b1_l2", "b1_l3"], at: date(cal, 2026, 9, 25, 10), in: store, clock: clock)
+        complete(["u1_l1"], at: date(cal, 2026, 9, 26, 10), in: store, clock: clock)
+        let now = date(cal, 2026, 9, 27, 12)
+
+        let basics = WeeklyPlan.compute(progress: store, track: .basics, now: now, calendar: cal)
+        #expect(basics.done == 3)
+        #expect(basics.next == [.lesson(BasicsCurriculum.allLessons[3]), .lesson(BasicsCurriculum.allLessons[4])],
+                "the next stops cross into Unit 2")
+        // 18 lessons, 3 done: 15 left at 2 a week is 8 weeks.
+        #expect(basics.projectedFinish == date(cal, 2026, 11, 19))
+
+        let deep = WeeklyPlan.compute(progress: store, now: now, calendar: cal)
+        #expect(deep.done == 1, "the Deep dive's week ignores Basics lessons")
+        #expect(WeeklyPlan.compute(progress: store, track: .deepDive, now: now, calendar: cal) == deep)
+    }
+
     @Test("Undated (pre-2.3.0) and orphaned completions never count toward this week")
     func undatedAndOrphansNotCounted() {
         let cal = calendar()

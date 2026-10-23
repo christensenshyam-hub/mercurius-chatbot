@@ -10,6 +10,13 @@ import DesignSystem
 public struct UnitTestView: View {
     @State private var model: UnitTestViewModel
     @State private var reportedMastery = false
+    #if os(macOS)
+    /// The question the keyboard answers (A–D, 1–4); Tab, ↑ and ↓ move it.
+    @FocusState private var focusedQuestion: String?
+    @NightSettings private var night
+    #endif
+    /// What the host shows under a passed result (the certificate card).
+    @Environment(\.unitMasteryAccessory) private var masteryAccessory
     private let onMastered: (String) -> Void
     private let onExit: () -> Void
 
@@ -39,20 +46,67 @@ public struct UnitTestView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio's canvas with its indigo pool; flat behind the
+            // support resources (SPEC.md §2.4, §5.9).
+            NightCanvas(pools: model.phase == .support ? .flat : .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
             VStack(spacing: 0) {
+                #if os(iOS)
                 header
                 Divider().overlay(BrandColor.border)
-                ScrollView {
-                    content
-                        .padding(.horizontal, BrandSpacing.lg)
-                        .padding(.vertical, BrandSpacing.lg)
+                #endif
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        content
+                            .padding(.horizontal, BrandSpacing.lg)
+                            .padding(.vertical, BrandSpacing.lg)
+                            // The Mac's reading column, centred in a wide window.
+                            .macReadableColumn()
+                    }
+                    #if os(macOS)
+                    // The question the keyboard moved to comes into view.
+                    .onChange(of: focusedQuestion) { _, id in
+                        guard let id else { return }
+                        // Instant under Reduce Motion (§4.5).
+                        withAnimation(night.reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id) }
+                    }
+                    // A graded quiz opens at its top, on the score and the
+                    // next step.
+                    .onChange(of: model.quizSubmitted) { _, submitted in
+                        guard submitted else { return }
+                        withAnimation(night.reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                            proxy.scrollTo(NightUnitTestContent.topID, anchor: .top)
+                        }
+                    }
+                    #endif
                 }
                 // Each phase is its own screen and opens at its top — the
                 // support view must never appear scrolled past its heading.
                 .id(model.phase)
             }
         }
+        #if os(macOS)
+        // The window's toolbar carries what the iPhone's header row shows:
+        // the title, the unit (subtitle) and the way back.
+        .navigationTitle(model.phase == .support ? "Support" : "Unit \(Int(model.unit.number) ?? 0) Check")
+        .navigationSubtitle(model.phase == .support ? "" : model.unit.title)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { onExit() } label: {
+                    Label("Done", systemImage: "chevron.backward")
+                }
+                .buttonStyle(.automatic)
+                // Escape only when leaving loses nothing (no picks, no
+                // written answer, nothing being graded).
+                .keyboardShortcut(model.exitLosesNothing ? .cancelAction : nil)
+                .help(model.exitLosesNothing ? "Done: back to the path (Esc)" : "Done: back to the path")
+                .accessibilityLabel("Done. Exit unit test.")
+            }
+        }
+        #endif
     }
 
     // MARK: - Header
@@ -92,12 +146,18 @@ public struct UnitTestView: View {
     }
 
     @ViewBuilder private var content: some View {
+        #if os(macOS)
+        // Night Studio (SPEC.md §5.5): the same model, phases and keys.
+        NightUnitTestContent(model: model, focusedQuestion: $focusedQuestion,
+                             reportedMastery: $reportedMastery, onMastered: onMastered, onExit: onExit)
+        #else
         switch model.phase {
         case .quiz: quizPhase
         case .defense: defensePhase
         case .result: resultPhase
         case .support: supportPhase
         }
+        #endif
     }
 
     // MARK: - Support phase
@@ -126,12 +186,13 @@ public struct UnitTestView: View {
                     Text("You got \(model.mcqScore) of \(model.mcqTotal) correct.")
                         .font(BrandFont.bodyEmphasized)
                         .foregroundStyle(BrandColor.text)
-                    primaryButton(model.mcqPassed ? "Continue to the written question" : "See results") {
+                    primaryButton(model.mcqPassed ? "Continue to the written question" : "See results",
+                                  submitsWithCommandReturn: true) {
                         model.continueAfterQuiz()
                     }
                 }
             } else {
-                primaryButton(model.submitTitle, enabled: model.allAnswered) {
+                primaryButton(model.submitTitle, enabled: model.allAnswered, submitsWithCommandReturn: true) {
                     model.submitQuiz()
                 }
             }
@@ -170,6 +231,7 @@ public struct UnitTestView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BrandColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+        .id(question.id)
     }
 
     // MARK: - Defense phase
@@ -239,7 +301,7 @@ public struct UnitTestView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, BrandSpacing.xs)
             } else {
-                primaryButton("Submit for grading", enabled: model.canSubmitDefense) {
+                primaryButton("Submit for grading", enabled: model.canSubmitDefense, submitsWithCommandReturn: true) {
                     Task { await model.submitDefense() }
                 }
             }
@@ -288,6 +350,10 @@ public struct UnitTestView: View {
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if passed, let masteryAccessory {
+                masteryAccessory
             }
 
             if passed {
@@ -350,7 +416,10 @@ public struct UnitTestView: View {
 
     /// Enabled: white on indigo. Not yet enabled: readable secondary text
     /// on a quiet card, not the whole button faded to half (AUD-22).
-    private func primaryButton(_ title: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// `submitsWithCommandReturn`: on the Mac, ⌘Return presses it (the
+    /// quiz's submit, the written answer's submit).
+    private func primaryButton(_ title: String, enabled: Bool = true, submitsWithCommandReturn: Bool = false,
+                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(BrandFont.bodyEmphasized)

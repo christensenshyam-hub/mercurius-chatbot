@@ -1,9 +1,9 @@
-#if os(iOS)
+#if os(iOS) || os(macOS)
 import Foundation
 import UserNotifications
 
-/// The app's `UNUserNotificationCenter` delegate: shows reminders as banners
-/// while the app is open, and turns a tapped reminder into "open this
+/// The app's `UNUserNotificationCenter` delegate (the iPhone's and the
+/// Mac's): shows reminders as banners while the app is open, and turns a tapped reminder into "open this
 /// lesson" via `onOpenLesson`.
 ///
 /// The app must install `shared` as the center's delegate before launch

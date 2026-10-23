@@ -4,13 +4,16 @@ import PackageDescription
 let package = Package(
     name: "LocalPackages",
     // macOS listed alongside iOS so `swift test` can run the logic
-    // tests from the command line. The app itself only ships for iOS.
-    // macOS 14 matches the iOS 17-era SwiftUI API surface we depend on.
+    // tests from the command line — and for the native Mac app
+    // (MercuriusMac in ios/project.yml), whose window lives in AppFeature
+    // behind `#if os(macOS)` (AppFeature/Sources/Mac). macOS 14 matches
+    // the iOS 17-era SwiftUI API surface we depend on.
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
         .library(name: "PersistenceKit", targets: ["PersistenceKit"]),
+        .library(name: "LessonInteractives", targets: ["LessonInteractives"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
@@ -31,10 +34,12 @@ let package = Package(
             name: "DesignSystem",
             path: "DesignSystem/Sources",
             // Reading-font candidates for the tutor's replies (Lexend,
-            // Atkinson Hyperlegible + their OFL licenses). Registered at
-            // runtime by BrandFontRegistrar — no UIAppFonts/project.yml
+            // Atkinson Hyperlegible) and the certificate's faces (Cormorant
+            // Garamond, EB Garamond), each with its OFL license. Registered
+            // at runtime by BrandFontRegistrar — no UIAppFonts/project.yml
             // involvement, so the generated app target stays untouched.
-            resources: [.copy("Fonts")]
+            // CertificateArt holds the mark the certificate prints.
+            resources: [.copy("Fonts"), .copy("CertificateArt")]
         ),
         .testTarget(
             name: "DesignSystemTests",
@@ -65,6 +70,26 @@ let package = Package(
             path: "PersistenceKit/Tests"
         ),
 
+        // MARK: LessonInteractives
+        //
+        // The lesson interactives' content, logic, copy and views (every
+        // card but Lesson 1.1's, which stays in ChatFeature for now), plus
+        // the registry that says which lesson holds which card. DesignSystem
+        // only: no NetworkingKit, no PersistenceKit, so a card can't send or
+        // store anything (DependencyGraphTests enforces it; NoIOTests scans
+        // the sources). Where a card sits in a thread is ChatFeature's
+        // (LessonInteractiveAnchor). See docs/interactives/FRAMEWORK.md.
+        .target(
+            name: "LessonInteractives",
+            dependencies: ["DesignSystem"],
+            path: "LessonInteractives/Sources"
+        ),
+        .testTarget(
+            name: "LessonInteractivesTests",
+            dependencies: ["LessonInteractives"],
+            path: "LessonInteractives/Tests"
+        ),
+
         // MARK: ChatFeature
         .target(
             name: "ChatFeature",
@@ -72,13 +97,14 @@ let package = Package(
                 "DesignSystem",
                 "NetworkingKit",
                 "PersistenceKit",
+                "LessonInteractives",
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             path: "ChatFeature/Sources"
         ),
         .testTarget(
             name: "ChatFeatureTests",
-            dependencies: ["ChatFeature"],
+            dependencies: ["ChatFeature", "LessonInteractives"],
             path: "ChatFeature/Tests"
         ),
 
@@ -142,13 +168,14 @@ let package = Package(
                 "SettingsFeature",
                 "EngagementFeature",
                 "MercuriusActivity",
+                "LessonInteractives",
             ],
             path: "AppFeature/Sources"
         ),
         .testTarget(
             name: "AppFeatureTests",
             dependencies: ["AppFeature", "ChatFeature", "CurriculumFeature", "EngagementFeature",
-                           "NetworkingKit", "PersistenceKit", "SettingsFeature"],
+                           "NetworkingKit", "PersistenceKit", "SettingsFeature", "LessonInteractives"],
             path: "AppFeature/Tests"
         ),
 

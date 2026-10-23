@@ -160,3 +160,110 @@ extension View {
                                       codeBlockBackground: codeBlockBackground))
     }
 }
+
+#if os(macOS)
+/// Night Studio's reading text on the Mac (SPEC.md §5.3.3): Merc's reply as
+/// type on the page, not in a bubble. Lexend 15 on a line spacing of 5, in
+/// `ink`; links in `accentText`; Lexend SemiBold for headings and bold (the
+/// bundle has no bold or black Lexend); lists with lumen markers; quotes on a
+/// lumen bar; code in SF Mono on `surfaceRaised`; a thematic break as a
+/// hairline. The same no-network image providers and link policy as every
+/// reply.
+struct NightReplyMarkdownStyling: ViewModifier {
+    /// The text colour: `ink`, or `ink2` for an example's own text.
+    var color: Color = Night.ink
+
+    func body(content: Content) -> some View {
+        let face = BrandFont.readingFace.markdownFamily
+        return content
+            .markdownImageProvider(NoNetworkImageProvider())
+            .markdownInlineImageProvider(NoNetworkInlineImageProvider())
+            .environment(\.openURL, OpenURLAction { url in
+                ReplyLinkPolicy.allows(url) ? .systemAction : .discarded
+            })
+            .markdownTextStyle {
+                FontFamily(face)
+                ForegroundColor(color)
+                FontSize(NightType.Role.body.size)
+            }
+            .markdownTextStyle(\.strong) { FontWeight(.semibold) }
+            .markdownTextStyle(\.link) { ForegroundColor(Night.accentText) }
+            .markdownTextStyle(\.code) {
+                FontFamily(.system(.monospaced))
+                FontSize(.em(0.93))
+                BackgroundColor(Night.surfaceRaised)
+            }
+            .markdownBlockStyle(\.paragraph) { config in
+                config.label
+                    .fixedSize(horizontal: false, vertical: true)
+                    .relativeLineSpacing(.em(0.33))
+                    .markdownMargin(top: .zero, bottom: .em(0.95))
+            }
+            .markdownBlockStyle(\.codeBlock) { config in
+                config.label
+                    .markdownTextStyle {
+                        FontFamily(.system(.monospaced))
+                        FontSize(.em(0.93))
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Night.surfaceRaised, in: RoundedRectangle(cornerRadius: Night.Radius.row, style: .continuous))
+                    .markdownMargin(top: .zero, bottom: .em(0.95))
+            }
+            .markdownBlockStyle(\.listItem) { config in
+                config.label
+                    .fixedSize(horizontal: false, vertical: true)
+                    .relativeLineSpacing(.em(0.33))
+                    .markdownMargin(top: .em(0.3), bottom: .em(0.3))
+            }
+            .markdownBlockStyle(\.bulletedListMarker) { _ in
+                Circle()
+                    .fill(Night.accent)
+                    .frame(width: 6, height: 6)
+                    .frame(minWidth: 16, alignment: .trailing)
+                    .padding(.top, 8)
+            }
+            .markdownBlockStyle(\.numberedListMarker) { config in
+                Text("\(config.itemNumber).")
+                    .font(NightType.lexend(14, semibold: true))
+                    .monospacedDigit()
+                    .foregroundStyle(Night.accentText)
+                    .frame(minWidth: 18, alignment: .trailing)
+            }
+            .markdownBlockStyle(\.heading2) { config in
+                config.label
+                    .markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.2)) }
+                    .markdownMargin(top: .em(1.1), bottom: .em(0.5))
+            }
+            .markdownBlockStyle(\.heading3) { config in
+                config.label
+                    .markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.07)) }
+                    .markdownMargin(top: .em(1.0), bottom: .em(0.4))
+            }
+            .markdownBlockStyle(\.blockquote) { config in
+                HStack(alignment: .top, spacing: 12) {
+                    Capsule()
+                        .fill(Night.lumen.opacity(0.6))
+                        .frame(width: 3)
+                    config.label
+                        .markdownTextStyle { ForegroundColor(Night.ink2) }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .markdownMargin(top: .em(0.3), bottom: .em(0.95))
+            }
+            .markdownBlockStyle(\.thematicBreak) {
+                Rectangle()
+                    .fill(Night.hairline)
+                    .frame(height: 1)
+                    .markdownMargin(top: .em(0.6), bottom: .em(1.4))
+            }
+    }
+}
+
+extension View {
+    /// Night's reading text for a reply's Markdown (Mac).
+    func nightReplyMarkdown(color: Color = Night.ink) -> some View {
+        modifier(NightReplyMarkdownStyling(color: color))
+    }
+}
+#endif

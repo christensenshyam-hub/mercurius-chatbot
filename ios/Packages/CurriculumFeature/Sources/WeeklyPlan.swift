@@ -6,6 +6,11 @@ import Foundation
 ///
 /// Weeks start Thursday 00:00 local time, so the Wednesday evening nudge
 /// lands on a week's last day.
+///
+/// It counts one course (`track`): the Deep dive by default, or Basics for
+/// a learner who follows it, so the weekly nudge's goal and wording read
+/// that course's lessons (a Basics lesson never counts toward the Deep
+/// dive's week, nor the other way round).
 public struct WeeklyPlan: Equatable, Sendable {
     /// Thursday 00:00 local, at or before `now`.
     public let weekStart: Date
@@ -35,6 +40,7 @@ public struct WeeklyPlan: Equatable, Sendable {
     @MainActor
     public static func compute(
         progress: CurriculumProgressStore,
+        track: CurriculumTrack = .deepDive,
         now: Date = Date(),
         calendar: Calendar = .current,
         goal: Int = 2
@@ -43,19 +49,22 @@ public struct WeeklyPlan: Equatable, Sendable {
         let start = weekStart(containing: now, calendar: calendar)
         let end = addingWeeks(1, to: start, calendar: calendar)
 
-        let lessonIds = Set(MercuriusCurriculum.allLessons.map(\.id))
+        let lessonIds = Set(track.allLessons.map(\.id))
         let done = progress.completions(since: start).filter { id in
             guard lessonIds.contains(id), let at = progress.completedAt(id) else { return false }
             return at < end
         }.count
 
-        let remaining = progress.totalLessons - progress.totalCompleted()
+        let remaining = track.allLessons.count - progress.totalCompleted(in: track)
         let finish = remaining > 0
             ? addingWeeks((remaining + goal - 1) / goal, to: start, calendar: calendar)
             : nil
 
+        let next = track == .basics
+            ? upcomingBasicsStops(progress: progress)
+            : upcomingStops(progress: progress)
         return WeeklyPlan(weekStart: start, done: done, goal: goal,
-                          next: upcomingStops(progress: progress), projectedFinish: finish)
+                          next: next, projectedFinish: finish)
     }
 
     /// The most recent Thursday 00:00 (local to `calendar`) at or before `date`.
@@ -73,6 +82,20 @@ public struct WeeklyPlan: Equatable, Sendable {
         let shifted = calendar.date(byAdding: .day, value: 7 * weeks, to: date)
             ?? date.addingTimeInterval(TimeInterval(7 * weeks) * 86_400)
         return calendar.startOfDay(for: shifted)
+    }
+
+    /// Basics: the next unfinished lessons from its frontier (it has no unit
+    /// checks).
+    @MainActor
+    private static func upcomingBasicsStops(progress: CurriculumProgressStore) -> [MercuriusCurriculum.PathStop] {
+        let lessons = CurriculumTrack.basics.allLessons
+        guard case .lesson(let first)? = progress.frontier(in: .basics),
+              let start = lessons.firstIndex(where: { $0.id == first.id })
+        else { return [] }
+        return lessons[start...]
+            .filter { !progress.isCompleted($0.id) }
+            .prefix(maxNextStops)
+            .map { .lesson($0) }
     }
 
     /// Walk the path from the frontier, skipping completed lessons and

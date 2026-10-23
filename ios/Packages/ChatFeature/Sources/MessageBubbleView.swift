@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import MarkdownUI
 import NetworkingKit
+import LessonInteractives
 
 /// Shared metrics for the free-chat assistant avatar, so the follow-up
 /// footers in `MessageListView` can align with the assistant bubble's
@@ -44,6 +45,15 @@ struct MessageBubbleView: View {
     /// blocks_v1 quiz interaction. Nil (the default) renders any [Q] block
     /// inert — snapshots and free chat unaffected.
     var quizInteraction: QuizInteraction? = nil
+    /// The lesson's interactive (`LessonInteractiveAnchor`): where this
+    /// reply holds it, nil for every other reply (the default draws exactly
+    /// as before). On the iPhone the bubble is then drawn in two around the
+    /// card (`LessonInteractiveSplit`).
+    var interactiveAfter: LessonInteractivePosition? = nil
+    /// Which card that is, and whether it opens spoiled. The list passes the
+    /// placement's; the default is Lesson 1.1's, the one card there was
+    /// before the registry.
+    var interactiveCard: LessonInteractiveCardRef = .tokenizer
 
     /// How a [Q] block behaves in THIS bubble.
     struct QuizInteraction {
@@ -59,6 +69,8 @@ struct MessageBubbleView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.readingFaceOverride) private var readingFaceOverride
+    /// Basics lessons offer Copy on Merc's replies on the iPhone too.
+    @Environment(\.lessonOffersCopy) private var lessonOffersCopy
 
     /// The reply typeface: the app-wide pick (Lexend) unless the DEBUG font
     /// gallery overrides it for a comparison subtree.
@@ -69,7 +81,13 @@ struct MessageBubbleView: View {
     /// The reply's body size before Dynamic Type. MarkdownUI gets this one:
     /// it scales its theme size for Dynamic Type itself, so the scaled
     /// `bodyFontSize` would scale the reply twice.
+    /// On the Mac it is the ramp's reading size (`MacTypeRamp.reading`), the
+    /// same as the student's own text (`BrandFont.body`).
+    #if os(macOS)
+    static let replyBaseSize: CGFloat = MacTypeRamp.reading
+    #else
     static let replyBaseSize: CGFloat = 17
+    #endif
 
     /// The body size scaled for the student's Dynamic Type setting (relative
     /// to `.body`), for what's drawn with fixed-size fonts outside MarkdownUI:
@@ -80,9 +98,75 @@ struct MessageBubbleView: View {
     /// Cap on the assistant text measure. Uncapped lines run ~60+ characters
     /// on wider phones, which reads slower than the ~45-55 character measure
     /// typography guidance targets for the 17pt reading face.
-    private static let assistantMeasureCap: CGFloat = 340
+    private static var assistantMeasureCap: CGFloat {
+        #if os(macOS)
+        // The Mac's reading column is wider than a phone; the line stays
+        // within a comfortable measure there too.
+        MacLayout.replyMeasure
+        #else
+        340
+        #endif
+    }
+
+    /// Which of the reply's blocks a row draws: all of them, or (around
+    /// Lesson 1.1's interactive) the half before the card or the half after.
+    private enum Segment: Equatable {
+        case whole
+        case head([MessageBlock])
+        case tail([MessageBlock])
+
+        var isTail: Bool { if case .tail = self { return true } else { return false } }
+        var isHead: Bool { if case .head = self { return true } else { return false } }
+    }
 
     var body: some View {
+        #if os(iOS)
+        if message.role == .assistant, lessonStyle, let at = interactiveAfter,
+           let halves = LessonInteractiveSplit.halves(of: message.content, at: at) {
+            VStack(alignment: .leading, spacing: BrandSpacing.md) {
+                row(.head(halves.head))
+                if interactiveCard.id == .tokenizer {
+                    LessonTokenizerCard()
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .padding(.horizontal, BrandSpacing.lg)
+                        .id(LessonTokenizerCard.scrollID)
+                        #if DEBUG
+                        // The card's edges, for the shots' `context` and
+                        // `after` jumps.
+                        .overlay(alignment: .top) {
+                            Color.clear.frame(height: 1).id(LessonTokenizerCard.topEdgeScrollID)
+                        }
+                        .overlay(alignment: .bottom) {
+                            Color.clear.frame(height: 1).id(LessonTokenizerCard.bottomEdgeScrollID)
+                        }
+                        #endif
+                } else {
+                    LessonInteractiveCardView(card: interactiveCard)
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .padding(.horizontal, BrandSpacing.lg)
+                        .lessonInteractiveScrollMarks()
+                }
+                if !halves.tail.isEmpty || Self.hasStatusLine(message) {
+                    row(.tail(halves.tail))
+                }
+            }
+        } else {
+            row(.whole)
+        }
+        #else
+        row(.whole)
+        #endif
+    }
+
+    /// A failed or cut-off reply's line under it.
+    private static func hasStatusLine(_ message: ChatMessage) -> Bool {
+        switch message.status {
+        case .failed, .interrupted: return true
+        case .idle, .streaming: return false
+        }
+    }
+
+    private func row(_ segment: Segment) -> some View {
         HStack(alignment: .top, spacing: shouldShowAvatar ? BrandSpacing.sm : 0) {
             if message.role == .user { Spacer(minLength: 48) }
 
@@ -101,20 +185,23 @@ struct MessageBubbleView: View {
                         )
                         .accessibilityLabel("Attached photo")
                 }
-                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure {
+                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure
+                    && !segment.isTail {
                     presenceLine
                 }
                 // Skip an empty text bubble for an image-only user message,
                 // and for a reply that failed before any text arrived — the
                 // error line alone says what happened (AUD-29).
-                if Self.drawsBubble(message) {
-                    bubble
+                if Self.drawsBubble(message), Self.drawsBlocks(segment) {
+                    bubble(segment)
                 }
-                if case .failed(let reason) = message.status, message.role == .assistant {
-                    failureLabel(reason)
-                }
-                if message.status == .interrupted, message.role == .assistant {
-                    interruptedLabel
+                if !segment.isHead {
+                    if case .failed(let reason) = message.status, message.role == .assistant {
+                        failureLabel(reason)
+                    }
+                    if message.status == .interrupted, message.role == .assistant {
+                        interruptedLabel
+                    }
                 }
             }
 
@@ -126,7 +213,15 @@ struct MessageBubbleView: View {
         // Everything else (the student's turns, free chat, a reply still
         // streaming or one that never arrived) reads as one element (AUD-23).
         .accessibilityElement(children: Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? .contain : .combine)
-        .accessibilityLabel(Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? Text("Merc's reply") : accessibilityLabel)
+        .accessibilityLabel(Self.readsAsBlocks(message, lessonStyle: lessonStyle)
+                            ? Text(segment.isTail ? "Merc's reply, continued" : "Merc's reply") : accessibilityLabel)
+    }
+
+    /// A half around Lesson 1.1's interactive with no blocks (the card
+    /// closes the reply) draws no bubble, only its status line.
+    private static func drawsBlocks(_ segment: Segment) -> Bool {
+        if case .tail(let blocks) = segment { return !blocks.isEmpty }
+        return true
     }
 
     /// Whether VoiceOver walks this bubble block by block. A 170-210-word
@@ -172,12 +267,12 @@ struct MessageBubbleView: View {
     // MARK: - Pieces
 
     @ViewBuilder
-    private var bubble: some View {
+    private func bubble(_ segment: Segment) -> some View {
         switch message.role {
         case .user:
             userBubble
         case .assistant:
-            if lessonStyle { lessonAssistantBubble } else { assistantBubble }
+            if lessonStyle { lessonAssistantBubble(segment) } else { assistantBubble }
         }
     }
 
@@ -219,7 +314,7 @@ struct MessageBubbleView: View {
 
     /// The lesson bubble: white/elevated surface, soft shadow, 8/24 corners, and
     /// a tinted italic callout around any `[CHECK]…[/CHECK]` question.
-    private var lessonAssistantBubble: some View {
+    private func lessonAssistantBubble(_ segment: Segment) -> some View {
         Group {
             if isEmptyTyping {
                 typingIndicator
@@ -227,8 +322,14 @@ struct MessageBubbleView: View {
                 // blocks_v1: tokenize into prose + native blocks. A plain
                 // reply yields one .prose block and renders exactly as before;
                 // [CHECK] spans keep their callout; [KEY]/[EX]/[Q] become
-                // cards. Partial markers are withheld by the parser.
-                let blocks = BlockParser.parse(message.content)
+                // cards. Partial markers are withheld by the parser. Around
+                // Lesson 1.1's interactive, one half's blocks.
+                let blocks: [MessageBlock] = {
+                    switch segment {
+                    case .whole: return BlockParser.parse(message.content)
+                    case .head(let half), .tail(let half): return half
+                    }
+                }()
                 VStack(alignment: .leading, spacing: BrandSpacing.sm) {
                     ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                         blockView(block)
@@ -240,13 +341,38 @@ struct MessageBubbleView: View {
         .padding(.horizontal, BrandSpacing.lg)
         .frame(maxWidth: Self.assistantMeasureCap, alignment: .leading)
         .background(BrandColor.surface, in: lessonAssistantShape)
+        // No shadow on the iPhone: it is dark only, and Night Studio casts
+        // none in dark (SPEC.md §2.6). The Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
+        #endif
         .contextMenu {
+            #if os(macOS)
+            if !message.content.isEmpty {
+                copyMenuItem
+            }
+            #else
+            // Basics: Copy first, Report after it (App Store 1.2 keeps it).
+            if lessonOffersCopy, !message.content.isEmpty {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    LessonPasteboard.copy(BlockParser.plainText(message.content))
+                }
+            }
+            #endif
             if !message.content.isEmpty {
                 reportMenu
             }
         }
     }
+
+    #if os(macOS)
+    /// Copy, first in a message's right-click menu on the Mac.
+    private var copyMenuItem: some View {
+        Button("Copy", systemImage: "doc.on.doc") {
+            MacPasteboard.copy(MacMessageCopy.text(for: message))
+        }
+    }
+    #endif
 
     /// "Report response" as a submenu of reasons, so a report always carries
     /// why. Each reason is tagged `report.<rawValue>` for UI tests.
@@ -403,6 +529,9 @@ struct MessageBubbleView: View {
                 ),
                 in: userShape
             )
+            #if os(macOS)
+            .contextMenu { copyMenuItem }
+            #endif
     }
 
     private var assistantBubble: some View {
@@ -437,6 +566,11 @@ struct MessageBubbleView: View {
         }
         .clipShape(assistantShape)
         .contextMenu {
+            #if os(macOS)
+            if !message.content.isEmpty {
+                copyMenuItem
+            }
+            #endif
             if !message.content.isEmpty {
                 reportMenu
             }
@@ -539,6 +673,8 @@ extension MessageBubbleView: Equatable {
             && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex
+            && lhs.interactiveAfter == rhs.interactiveAfter
+            && lhs.interactiveCard == rhs.interactiveCard
     }
 }
 

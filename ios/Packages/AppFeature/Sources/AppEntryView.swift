@@ -166,11 +166,14 @@ struct AppEntryView: View {
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
             .onAppear {
                 // Every re-plan reads this week's lessons, so the weekly
-                // nudges skip a week whose goal is met (AUD-36).
-                scheduler.weekProgress = { [progress = env.progressStore] in
-                    Self.weekProgress(WeeklyPlan.compute(progress: progress))
+                // nudges skip a week whose goal is met (AUD-36). It counts
+                // the course the learner follows, read at each re-plan, so
+                // a Basics learner's lessons count (and the Deep dive's
+                // don't count for them).
+                scheduler.weekProgress = { [progress = env.progressStore, tracks = env.trackStore] in
+                    Self.weekProgress(WeeklyPlan.compute(progress: progress, track: tracks.track))
                 }
-                #if os(iOS)
+                #if os(iOS) || os(macOS)
                 // Before this, a reminder tapped at cold launch is held by
                 // the router; setting the handler delivers it.
                 NotificationRouter.shared.onOpenLesson = { [env] lessonId in
@@ -220,30 +223,77 @@ struct AppEntryView: View {
             }
     }
 
+    /// The consent gate / first-run flow — the same one on iPhone and Mac.
+    private var onboardingFlow: some View {
+        OnboardingFlow(
+            mode: hasSeenOnboarding ? .gateOnly : .full,
+            ageBlockStore: env.ageBlockStore,
+            reminderStore: env.reminderStore,
+            scheduler: scheduler,
+            streakStore: env.streakStore,
+            reminderCardStore: env.reminderCardStore,
+            onStartLesson1: { track in
+                // The card the learner tapped is their course from now on
+                // (switchable on the path, or the Mac's sidebar).
+                env.trackStore.choose(track)
+                let lesson1 = track.units.first?.lessons.first
+                entryTab = .curriculum
+                entryLesson = lesson1
+                hasEnteredApp = true
+                gateClearedThisLaunch = true
+                #if os(macOS)
+                if let lesson1 { env.macShell.openLesson(lesson1) }
+                #endif
+            },
+            onJustChat: {
+                entryTab = .chat
+                hasEnteredApp = true
+                gateClearedThisLaunch = true
+                #if os(macOS)
+                env.macShell.openChat()
+                #endif
+            },
+            onGateCleared: { gateClearedThisLaunch = true }
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
-        if showsGate {
-            OnboardingFlow(
-                mode: hasSeenOnboarding ? .gateOnly : .full,
-                ageBlockStore: env.ageBlockStore,
-                reminderStore: env.reminderStore,
-                scheduler: scheduler,
-                streakStore: env.streakStore,
-                reminderCardStore: env.reminderCardStore,
-                onStartLesson1: {
-                    entryTab = .curriculum
-                    entryLesson = MercuriusCurriculum.units.first?.lessons.first
-                    hasEnteredApp = true
-                    gateClearedThisLaunch = true
-                },
-                onJustChat: {
-                    entryTab = .chat
-                    hasEnteredApp = true
-                    gateClearedThisLaunch = true
-                },
-                onGateCleared: { gateClearedThisLaunch = true }
+        #if os(macOS)
+        // The Mac window is one NavigationSplitView for its whole life: the
+        // gate shows in its detail column (sidebar hidden) until consent is
+        // current, then Today, the path by unit and the chats take over. No
+        // Home doorman — Today is a sidebar row.
+        MacShellView(
+            shell: env.macShell,
+            gate: showsGate ? AnyView(onboardingFlow) : nil,
+            scheduler: scheduler,
+            onConsentWithdrawn: {
+                ReminderEnabler.disableAll(store: env.reminderStore, scheduler: scheduler)
+                consentVersion = 0
+                gateClearedThisLaunch = false
+                env.lastActivityStore.lastTab = nil
+            },
+            // Today's weekly-nudge offer, decided as for the iPhone's Home.
+            todayReminders: MacTodayReminders(
+                shows: ReminderCardStore.shows(
+                    weeklyEnabled: env.reminderStore.weeklyEnabled,
+                    handled: env.reminderCardStore.isHandled,
+                    onboardingComplete: hasSeenOnboarding,
+                    permission: notificationPermission
+                ),
+                onAccept: acceptReminders,
+                onDismiss: { env.reminderCardStore.markHandled() }
             )
-            .transition(.opacity)
+        )
+        .onAppear { env.macShell.scheduler = scheduler }
+        // A `mercurius://` link (a reminder's lesson) goes to this window
+        // rather than opening a second one.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        #else
+        if showsGate {
+            onboardingFlow
+                .transition(.opacity)
         } else if hasEnteredApp {
             AppShellView(
                 apiClient: env.apiClient,
@@ -255,6 +305,7 @@ struct AppEntryView: View {
                 reminderStore: env.reminderStore,
                 progress: env.progressStore,
                 progressSync: env.progressSync,
+                trackStore: env.trackStore,
                 lastActivityStore: env.lastActivityStore,
                 reviewPromptStore: env.reviewPromptStore,
                 scheduler: scheduler,
@@ -297,6 +348,10 @@ struct AppEntryView: View {
                     entryTab = .chat
                     hasEnteredApp = true
                 },
+                onOpenLessons: {
+                    entryTab = .curriculum
+                    hasEnteredApp = true
+                },
                 showsReminderCard: ReminderCardStore.shows(
                     weeklyEnabled: env.reminderStore.weeklyEnabled,
                     handled: env.reminderCardStore.isHandled,
@@ -308,6 +363,7 @@ struct AppEntryView: View {
             )
             .transition(.opacity)
         }
+        #endif
     }
 
     // MARK: - Home
@@ -317,7 +373,8 @@ struct AppEntryView: View {
             // Only a streak the server confirmed recently — a weeks-old cache
             // would make Merc claim a streak that has already died.
             streak: env.streakStore.isCurrentFresh ? env.streakStore.current : 0,
-            progress: env.progressStore
+            progress: env.progressStore,
+            track: env.trackStore.track
         )
     }
 
@@ -346,7 +403,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         }
     }
@@ -369,7 +426,7 @@ struct AppEntryView: View {
                 store: env.reminderStore,
                 scheduler: scheduler,
                 streakStore: env.streakStore,
-                nextLessonId: env.progressStore.frontierLessonId
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track)
             )
         case .cancel:
             scheduler.cancel()

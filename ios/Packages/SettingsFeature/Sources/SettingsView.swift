@@ -8,8 +8,7 @@ import UIKit
 
 /// Settings screen. Presented as a sheet from the chat header.
 ///
-/// Sections:
-/// - Appearance — theme preference
+/// Sections (no Appearance: the app is dark only, `BrandAppearance`):
 /// - Session — full, copyable session id + "Delete my data & start over"
 /// - Privacy — pushes `PrivacyChoicesView` (disclosure + withdraw consent)
 /// - About — version, "How Mercurius teaches", feedback / policy / support links
@@ -42,15 +41,21 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                appearanceSection
-                // Standby gamification toggle — only shown when the client flag
-                // is on, so the default Settings screen is unchanged.
-                if GamificationFlag.clientEnabled {
-                    nudgesSection
+                Group {
+                    // Standby gamification toggle — only shown when the client
+                    // flag is on, so the default Settings screen is unchanged.
+                    if GamificationFlag.clientEnabled {
+                        nudgesSection
+                    }
+                    sessionSection
+                    privacySection
+                    aboutSection
                 }
-                sessionSection
-                privacySection
-                aboutSection
+                // Night's lit surface for the rows: the system's neutral grey
+                // rows sat apart from the ink canvas. Night's hairline
+                // divides them.
+                .listRowBackground(BrandColor.surface)
+                .listRowSeparatorTint(BrandColor.border)
             }
             .scrollContentBackground(.hidden)
             .background(BrandColor.background)
@@ -90,6 +95,9 @@ public struct SettingsView: View {
             ))
             .modifier(ResetFailureAlert(message: $resetFailure))
         }
+        // The pushed pages' back button and the alerts' buttons: the asset
+        // accent (#6366F1) as text is 4.2:1 on the ink canvas.
+        .tint(BrandAppearance.tint)
     }
 
     // MARK: - Actions
@@ -123,6 +131,8 @@ public struct SettingsView: View {
             [[UTType.plainText.identifier: model.sessionId]],
             options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(120)]
         )
+#elseif os(macOS)
+        MacPasteboard.copy(model.sessionId, currentHostOnly: true, concealed: true, clearAfter: 120)
 #endif
         showCopied = true
         Task {
@@ -133,25 +143,16 @@ public struct SettingsView: View {
 
     // MARK: - Sections
 
-    private var appearanceSection: some View {
-        Section("Appearance") {
-            Picker("Theme", selection: $model.theme) {
-                ForEach(ThemePreference.allCases) { theme in
-                    Text(theme.displayName).tag(theme)
-                }
-            }
-            .pickerStyle(.segmented)
-        }
-    }
-
     private var nudgesSection: some View {
         Section {
             Toggle("Show progress nudges", isOn: $model.nudgesEnabled)
                 .tint(BrandColor.accent)
         } header: {
             Text("Progress")
+                .nightSectionCaption()
         } footer: {
             Text("Brief, factual credit when you make a good reasoning move — asking a sharper question, revising your view, catching your own mistake. Turn this off for a quieter experience; your progress still counts.")
+                .nightSectionCaption()
         }
     }
 
@@ -179,7 +180,9 @@ public struct SettingsView: View {
                         }
                     }
                     .buttonStyle(.borderless)
-                    .tint(BrandColor.accent)
+                    // `accentText`: the fill indigo as text was 3.1:1 on the
+                    // dark row.
+                    .tint(BrandColor.accentText)
                     .disabled(!model.canCopySessionId)
                     .accessibilityLabel("Copy session ID")
                 }
@@ -191,6 +194,11 @@ public struct SettingsView: View {
                     .accessibilityLabel("Session identifier: \(model.sessionId)")
             }
             .padding(.vertical, BrandSpacing.xxs)
+#if os(iOS)
+            // The divider below starts at "Session ID", across the row. The
+            // list took its start from the Copy button's label: a stub.
+            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+#endif
 
             Button(role: .destructive) {
                 showDeleteConfirm = true
@@ -210,8 +218,10 @@ public struct SettingsView: View {
             .accessibilityIdentifier("settings.deleteData")
         } header: {
             Text("Session")
+                .nightSectionCaption()
         } footer: {
             Text("Deleting your data erases your chats, lessons, streak and progress on this device and on our server right away, and gives you a new anonymous ID. Your session ID is the only thing that links this device to your data — copy it if you ever need to contact us about it.")
+                .nightSectionCaption()
         }
     }
 
@@ -225,13 +235,15 @@ public struct SettingsView: View {
             .accessibilityIdentifier("settings.privacyChoices")
         } header: {
             Text("Privacy")
+                .nightSectionCaption()
         } footer: {
             Text("Where your messages go, and how to withdraw consent.")
+                .nightSectionCaption()
         }
     }
 
     private var aboutSection: some View {
-        Section("About") {
+        Section {
             LabeledRow(title: "Version", value: "\(model.appVersion) (\(model.buildNumber))")
 
             NavigationLink {
@@ -267,11 +279,29 @@ public struct SettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(BrandColor.textSecondary)
                 .padding(.vertical, 4)
+        } header: {
+            Text("About")
+                .nightSectionCaption()
         }
     }
 }
 
 // MARK: - Small helpers
+
+extension View {
+    /// A Form section's header or footer in Night's secondary ink on the
+    /// iPhone, like the rest of its text: the system's neutral grey sat
+    /// apart from the Night rows. The Mac's Settings window keeps the
+    /// system's styling.
+    @ViewBuilder
+    func nightSectionCaption() -> some View {
+        #if os(iOS)
+        foregroundStyle(BrandColor.textSecondary)
+        #else
+        self
+        #endif
+    }
+}
 
 private struct LabeledRow: View {
     let title: String

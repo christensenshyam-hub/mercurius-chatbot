@@ -60,12 +60,20 @@ public enum Elevation {
 
 public extension View {
     /// Apply one of the brand elevation presets.
+    ///
+    /// On the iPhone it casts nothing: the app is dark only, and Night Studio
+    /// casts no shadows in dark (docs/mac-night-studio/SPEC.md §2.6). The Mac
+    /// keeps its presets.
     func brandShadow(_ elevation: Elevation) -> some View {
-        shadow(
+        #if os(macOS)
+        return shadow(
             color: elevation.color,
             radius: elevation.radius,
             x: elevation.offset.width,
             y: elevation.offset.height
         )
+        #else
+        return self
+        #endif
     }
 }

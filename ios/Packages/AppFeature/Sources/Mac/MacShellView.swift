@@ -1,0 +1,849 @@
+#if os(macOS)
+import SwiftUI
+import DesignSystem
+import ChatFeature
+import CurriculumFeature
+import EngagementFeature
+import NetworkingKit
+import PersistenceKit
+import SettingsFeature
+import LessonInteractives
+
+/// The Mac window: a `NavigationSplitView` whose sidebar is Today, the path
+/// by unit and the chats, and whose detail column hosts the same views the
+/// iPhone shows — Merc's welcome (`HomeView`), a unit's stretch of the path
+/// (`CurriculumView`), the chat (`ChatView`), a lesson
+/// (`CurriculumLessonView`), a unit check (`UnitTestView`) — and, before
+/// anything else, the consent gate / first run (`OnboardingFlow`).
+///
+/// The Mac counterpart of `AppShellView`. `AppEntryView` mounts it for the
+/// whole post-bootstrap life of the window and hands it the gate while the
+/// gate shows, so the gate decision, the reminder re-plan and the consent
+/// withdrawal stay the one shared implementation.
+///
+/// **No network before consent.** While `gate` is non-nil the detail column
+/// is the gate, the sidebar is collapsed with its toggle removed (and
+/// disabled, should it be revealed), the menu commands are off
+/// (`MacShellModel.isGated`), and the tasks that reach the server — the
+/// progress pull, the Progress hub's refresh — only run once it is nil.
+struct MacShellView: View {
+    @EnvironmentObject private var env: AppEnvironment
+    @Bindable var shell: MacShellModel
+
+    /// The consent gate / first-run flow while it shows; nil once consent is
+    /// current.
+    let gate: AnyView?
+
+    /// The entry view's reminder scheduler (it owns the re-plan), shared with
+    /// the Progress hub and Settings.
+    let scheduler: NotificationScheduler
+
+    /// Settings' "withdraw consent": the entry view puts the gate back.
+    let onConsentWithdrawn: @MainActor () -> Void
+
+    /// Today's one-time weekly-nudge offer (the iPhone Home's card), decided
+    /// by the entry view as on iOS.
+    var todayReminders = MacTodayReminders.hidden
+
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    /// The sidebar was folded away because the window got narrow (not by
+    /// the student), so it comes back when the window is wide again.
+    @State private var collapsedForWidth = false
+    /// The window's last width, for re-applying the rule as the gate clears.
+    @State private var windowWidth: CGFloat = 0
+
+    /// Standby gamification cache — default-constructed, so the client gate
+    /// is off: no network calls and nothing rendered (as on iOS).
+    @State private var gamificationStore = GamificationStore()
+
+    /// A saved thread waiting on the delete confirmation.
+    @State private var pendingDelete: ConversationSummary?
+
+    /// The DEBUG launch-argument state has been applied (once per window).
+    @State private var appliedDebugState = false
+
+    /// DEBUG: a certificate shot's sheet (`CertificateDebug`).
+    @State private var debugCertificateSheet: MacCertificateDebugSheet?
+
+    private var isGated: Bool { gate != nil }
+
+    /// The detail column's narrowest: the chat's toolbar (mode picker,
+    /// Explain More, New Chat) and a lesson's reading column still fit, and
+    /// with the sidebar's minimum it stays under the window's 700 pt.
+    static let detailMinWidth: CGFloat = 430
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            MacSidebar(
+                shell: shell,
+                progress: env.progressStore,
+                track: env.trackStore.track,
+                onDelete: { pendingDelete = $0 }
+            )
+            .disabled(isGated)
+            // On the sidebar column, where the split view reads it: no way
+            // to reveal the (empty, disabled) sidebar while the gate shows.
+            .toolbar(removing: isGated ? .sidebarToggle : nil)
+            // Outermost: under `.toolbar(removing:)` the split view ignored
+            // it and opened the sidebar at 148 pt. The sidebar's minimum
+            // plus the detail's (`detailMinWidth`) plus the floating
+            // sidebar's insets must stay under the window's 700 pt minimum,
+            // or the window's content overflows it and is cut off at both
+            // edges (measured at 700 pt with 210 + 480).
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)
+        } detail: {
+            detail
+                .frame(minWidth: Self.detailMinWidth, minHeight: 480)
+                // The shared views' buttons are drawn by the views
+                // themselves; the Mac's default push-button bezel put grey
+                // boxes around their icons and labels.
+                .buttonStyle(.borderless)
+                // Night Studio's toolbar: the system's glass on macOS 26,
+                // the canvas colour before it (SPEC.md §2.8).
+                .nightToolbarBackground()
+                // Progress, in the same trailing place on every screen past
+                // the gate (the leading slot is a lesson's or check's way
+                // back only). ⌘4 does the same from the View menu.
+                .toolbar {
+                    if !isGated {
+                        ToolbarItem(placement: .primaryAction) {
+                            MacProgressButton { shell.showProgress() }
+                        }
+                    }
+                }
+        }
+        // Night's prominent indigo for the system controls (7.9:1 under
+        // white, where `accent` was 4.47:1).
+        .tint(Night.prominent)
+        // A narrow window (tiled beside a browser) folds the sidebar away,
+        // as Mail and Notes do, so the detail keeps its whole toolbar; ⌃⌘S
+        // or the toolbar button brings it back. Widening the window again
+        // restores a sidebar that was folded this way.
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { resized(to: geo.size.width) }
+                    .onChange(of: geo.size.width) { _, width in resized(to: width) }
+            }
+        }
+        // While Settings erases this student's data nothing here may start
+        // a request: it would go out under the old ID.
+        .disabled(shell.isErasing)
+        .onAppear {
+            shell.onConsentWithdrawn = onConsentWithdrawn
+            applyGate(isGated)
+        }
+        .onChange(of: isGated) { _, gated in applyGate(gated) }
+        // Past the gate: the same launch work the iOS shell runs. The launch
+        // hold never fetches before consent, and neither does this.
+        .task(id: isGated) {
+            guard !isGated else { return }
+            shell.refreshConversations()
+            shell.chatModel.configureGamification(store: gamificationStore, provider: env.apiClient)
+            applyDebugStateIfNeeded()
+            presentPendingLesson()
+            await env.progressSync.pullOnLaunch()
+        }
+        .onChange(of: env.pendingLessonId) { _, _ in presentPendingLesson() }
+        // The course-complete card belongs to the check that earned it: any
+        // way out of that check (the sidebar, ⌘1–⌘3, Learning Path, a lesson,
+        // Settings' erase) takes the card with it, not only its Done.
+        .onChange(of: shell.activeUnitTest?.id) { _, _ in env.certificates.justEarned = nil }
+        // Completion, mastery and merges move `revision`; the sync debounces
+        // them into one PUT.
+        .onChange(of: env.progressStore.revision) { _, _ in
+            guard !isGated, Self.debugTodayDemoStreak == nil, !Self.debugCompleteDemo,
+                  Self.debugPathDemo == nil, !Self.debugCertificateDemo else { return }
+            env.progressSync.pushSoon()
+        }
+        .sheet(isPresented: $shell.showsProgress) {
+            ProgressHubView(
+                streakStore: env.streakStore,
+                achievementStore: env.achievementStore,
+                reminderStore: env.reminderStore,
+                scheduler: scheduler,
+                gamificationStore: gamificationStore,
+                nextLessonId: env.progressStore.frontierLessonId(in: env.trackStore.track),
+                certificates: env.certificates,
+                onDone: { shell.showsProgress = false }
+            )
+            .frame(minWidth: 460, idealWidth: 520, minHeight: 560, idealHeight: 680)
+            .tint(Night.prominent)
+        }
+        .confirmationDialog(
+            "Delete this chat?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete
+        ) { conversation in
+            Button("Delete Chat", role: .destructive) { shell.deleteConversation(conversation.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("It's removed from this Mac. This can't be undone.")
+        }
+        .achievementToasts(env.achievementStore)
+        .progressNudge(gamificationStore)
+        .sheet(item: $debugCertificateSheet) { sheet in
+            debugCertificateSheetView(sheet)
+        }
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder private var detail: some View {
+        if let gate {
+            // The flow is laid out for a phone: on a wide window its lines
+            // and buttons stay at a readable width, centred.
+            gate
+                // Each step sizes itself to its content, centred, with its
+                // button right under it (`GateStepContainer`); the box keeps
+                // lines to a readable length and a tall window from
+                // stretching a step that scrolls.
+                .frame(maxWidth: MacLayout.gateWidth, maxHeight: 700)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Night Studio's canvas with its indigo pool and no stars
+                // (SPEC.md §5.7). Drawn, not fetched: nothing here may
+                // reach the network before consent.
+                .background(NightCanvas(pools: .indigo, stars: false))
+                // The canvas runs up under the title bar, as in the shell.
+                .nightCanvasTitleBar()
+                // Kept for the Window menu (the bar shows it, too).
+                .navigationTitle("Welcome to Mercurius")
+        } else if let debugPreview = debugDetailPreview {
+            debugPreview
+        } else if let lesson = shell.activeLesson {
+            lessonView(lesson)
+                // A new lesson (the celebration's "Next lesson") is a fresh
+                // view: a new lesson chat and a re-run of its start.
+                .id(lesson.id)
+        } else if let unit = shell.activeUnitTest {
+            unitTestView(unit)
+                .id(unit.id)
+        } else {
+            switch shell.selection ?? .today {
+            case .today:
+                todayView
+            case .unit(let unitId):
+                unitPath(unitId)
+                    .id(unitId)
+            case .chat:
+                chatView
+            }
+        }
+    }
+
+    /// Today: an overview of the next stop, the week, a question to think
+    /// through and the recent chats (`MacTodayView`), on the same
+    /// `HomeState` as the iPhone's Home.
+    private var todayView: some View {
+        let state = HomeState.build(
+            // Only a streak the server confirmed recently (as Home on iOS).
+            streak: Self.debugTodayDemoStreak
+                ?? (env.streakStore.isCurrentFresh ? env.streakStore.current : 0),
+            progress: env.progressStore,
+            track: env.trackStore.track
+        )
+        return MacTodayView(
+            state: state,
+            progress: env.progressStore,
+            conversations: shell.conversations,
+            // The same one-time weekly-nudge offer as the iPhone's Home: the
+            // Mac schedules the same reminders.
+            reminders: todayReminders,
+            onOpenNext: { shell.open(state.next) },
+            onOpenPath: { shell.showPath() },
+            onOpenChat: { shell.show(.chat($0)) },
+            onNewChat: { shell.newChat() },
+            onShowProgress: { shell.showProgress() },
+            chatMode: shell.currentChatMode,
+            onThinkItThrough: { shell.newChat(draft: $0) }
+        )
+    }
+
+    /// A unit's page of the path, in Night Studio (`MacUnitPage`): its
+    /// cover, the thread of its lessons and check, and the next unit. The
+    /// iPhone pins its stats bar above the path (with a Home button); on
+    /// the Mac Progress is a toolbar button on every screen, and Today is a
+    /// sidebar row.
+    @ViewBuilder
+    private func unitPath(_ unitId: String) -> some View {
+        if let track = CurriculumTrack.of(id: unitId), let unit = track.unit(withId: unitId) {
+            MacUnitPage(
+                unit: unit,
+                track: track,
+                progress: env.progressStore,
+                onStartLesson: { shell.openLesson($0) },
+                onStartUnitTest: { shell.openUnitTest($0) },
+                onOpenUnit: { shell.show(.unit($0)) }
+            )
+        } else {
+            CurriculumView(
+                progress: env.progressStore,
+                unitId: unitId,
+                onStartLesson: { shell.openLesson($0) },
+                onStartUnitTest: { shell.openUnitTest($0) }
+            )
+        }
+    }
+
+    private var chatView: some View {
+        let model = shell.chatModel
+        return ChatView(
+            model: model,
+            apiClient: env.apiClient,
+            sessionIdentity: env.sessionIdentity,
+            achievementStore: env.achievementStore
+            // No Settings or Home buttons in the chat: Settings is ⌘, and
+            // Today is a sidebar row. Progress is the shell's trailing
+            // toolbar button, as on every screen (Night Studio keeps the
+            // streak's number off the chrome).
+        )
+        .macChrome(onNewChat: { shell.newChat() }, modeRequest: $shell.modeRequest)
+        // No subtitle: the toolbar's mode picker already says the mode, and
+        // the room keeps the picker out of the overflow menu down to the
+        // window's 700 pt minimum with the sidebar showing.
+        .navigationTitle("Chat")
+        .onChange(of: model.phase) { _, phase in
+            if phase == .sending { env.lastActivityStore.touch() }
+            // A finished turn may have saved a new thread (or renamed one).
+            if phase == .idle { shell.refreshConversations() }
+        }
+        .onChange(of: model.conversationId) { _, id in
+            // New Chat, a reset or a delete moved the thread: keep the
+            // sidebar's highlight on it. Not while the sidebar's thread opens
+            // are queued: an older open landing must not pull the highlight
+            // back from the newer pick (`MacShellModel.route`).
+            if case .chat = shell.selection, !shell.isOpeningThread { shell.selection = .chat(id) }
+            shell.refreshConversations()
+        }
+    }
+
+    // MARK: - Lesson
+
+    private func lessonView(_ lesson: Lesson) -> some View {
+        let progress = env.progressStore
+        let next = AppShellView.resolvedNextStop(after: lesson.id, progress: progress)
+        let unit = CurriculumTrack.unit(containingLesson: lesson.id)
+        let isBasics = BasicsCurriculum.isBasicsId(lesson.id)
+        return CurriculumLessonView(
+            lessonId: lesson.id,
+            unitLabel: AppShellView.unitLabel(forLessonId: lesson.id),
+            lessonNumber: lesson.number,
+            title: lesson.title,
+            objective: lesson.objective,
+            starter: lesson.starter,
+            resumeConversationId: Self.debugResumeOverride ?? progress.resumeConversationId(for: lesson.id),
+            apiClient: env.apiClient,
+            sessionIdentity: env.sessionIdentity,
+            chatStore: env.chatStore,
+            streakStore: env.streakStore,
+            achievementStore: env.achievementStore,
+            onStarted: { lessonId, conversationId in
+                progress.markInProgress(lessonId, conversationId: conversationId)
+                // "Started a structured curriculum lesson" — at start, as on
+                // iOS. Idempotent. Not in Basics, which has no badges.
+                if !isBasics {
+                    env.achievementStore.award(AchievementCatalog.explorer)
+                }
+            },
+            onLessonComplete: { handleLessonComplete($0) },
+            onExit: { shell.closeActivity() },
+            onAdvanceToNext: { advance(to: next) },
+            completedInUnit: unit.map { progress.completedCount(in: $0) } ?? 0,
+            totalInUnit: unit?.lessons.count ?? 0,
+            nextStop: next.map(AppShellView.celebrationStop),
+            // Settings' erasure stops this lesson's reply in flight.
+            onRegisterStop: { shell.registerLessonStop($0) },
+            // Basics: plain intro, practice chip, "Try this today". (No text
+            // size: the Mac has no Dynamic Type.)
+            basics: isBasics
+                ? BasicsLessonOptions(wrapUp: AppShellView.basicsWrapUp(for: lesson.id))
+                : nil
+        )
+        // The complete card's week row: this week's count, read again as the
+        // completion lands (the progress store is observed). Basics has no
+        // weekly goal (BEGINNER_GUIDE §2.5).
+        .environment(\.nightLessonWeek, isBasics ? nil : Self.lessonWeek(lessonId: lesson.id, progress: progress))
+        // The lesson sets the window's title, subtitle and way back itself.
+    }
+
+    /// This week's lessons for the complete card (`NightLessonWeek`): the
+    /// weekly plan's count and goal, and whether this lesson is one of them
+    /// (first completed this week), so the ring lights its arc.
+    static func lessonWeek(lessonId: String, progress: CurriculumProgressStore,
+                           now: Date = Date(), calendar: Calendar = .current) -> NightLessonWeek {
+        let plan = WeeklyPlan.compute(progress: progress, now: now, calendar: calendar)
+        return NightLessonWeek(done: plan.done, goal: plan.goal,
+                               includesThisLesson: progress.completions(since: plan.weekStart).contains(lessonId))
+    }
+
+    /// The celebration's primary button: the next lesson replaces this one;
+    /// an unlocked unit check opens; otherwise back to the unit's page.
+    private func advance(to stop: MercuriusCurriculum.PathStop?) {
+        switch stop {
+        case .lesson(let lesson):
+            shell.openLesson(lesson)
+        case .unitTest(let unit) where env.progressStore.isUnitTestUnlocked(unit):
+            shell.openUnitTest(unit)
+        case .unitTest, nil:
+            shell.closeActivity()
+        }
+    }
+
+    /// The server reported proficiency (`[LESSON_COMPLETE]`): the same
+    /// bookkeeping as `AppShellView.handleLessonComplete`, minus the Live
+    /// Activity (iOS only) and the App Store review prompt (not wired on the
+    /// Mac yet). All idempotent.
+    private func handleLessonComplete(_ lessonId: String) {
+        env.progressStore.markCompleted(lessonId)
+        env.lastActivityStore.touch()
+        if !BasicsCurriculum.isBasicsId(lessonId) {
+            env.achievementStore.award(AchievementCatalog.explorer)
+        }
+        recordModuleCompleted(sourceType: "lesson", sourceId: lessonId)
+    }
+
+    // MARK: - Unit check
+
+    @ViewBuilder
+    private func unitTestView(_ unit: CurriculumFeature.Unit) -> some View {
+        if let test = MercuriusCurriculum.unitTest(for: unit.id), !Self.debugUnitTestUnavailable {
+            UnitTestView(
+                unit: unit,
+                test: test,
+                gradeDefense: { [env] answer in
+                    let sid = try env.sessionIdentity.current()
+                    // Crisis → support, 404 → unavailable, other API errors →
+                    // their own copy (shared with iOS).
+                    return try await UnitDefenseGrading.grade {
+                        try await env.apiClient.gradeUnitDefense(
+                            sessionId: sid,
+                            unitId: unit.id,
+                            unitTitle: unit.title,
+                            defensePrompt: test.defensePrompt,
+                            answer: answer
+                        )
+                    }
+                },
+                onMastered: { handleUnitMastered($0) },
+                onExit: {
+                    // The course-complete card goes with the check (the
+                    // certificate stays in Progress ▸ Certificates).
+                    env.certificates.justEarned = nil
+                    shell.closeActivity()
+                }
+            )
+            // The pass that completed the course: "Get your certificate" on
+            // the result, and its name sheet.
+            .certificateMasterySlot(env.certificates)
+            // The check sets the window's title, subtitle and way back.
+        } else {
+            MacUnitTestUnavailable(unit: unit) { shell.closeActivity() }
+        }
+    }
+
+    /// The student passed a unit check (as `AppShellView.handleUnitMastered`).
+    private func handleUnitMastered(_ unitId: String) {
+        // The eighth unit's pass completes the course: its moment is kept and
+        // the result shows "Get your certificate".
+        env.certificates.recordingNewlyEarned { env.progressStore.markUnitMastered(unitId) }
+        env.lastActivityStore.touch()
+        env.achievementStore.award(AchievementCatalog.unitMaster)
+        recordModuleCompleted(sourceType: "unit_test", sourceId: unitId)
+    }
+
+    /// Credit a finished module. A no-op unless gamification is on.
+    private func recordModuleCompleted(sourceType: String, sourceId: String) {
+        guard let sid = try? env.sessionIdentity.current() else { return }
+        let store = gamificationStore
+        let client = env.apiClient
+        Task {
+            await store.recordEvent(using: client, sessionId: sid,
+                                    reason: .moduleCompleted, sourceType: sourceType, sourceId: sourceId)
+        }
+    }
+
+    // MARK: - Gate, reminders' lessons
+
+    private func applyGate(_ gated: Bool) {
+        shell.setGated(gated)
+        columnVisibility = gated ? .detailOnly : .all
+        collapsedForWidth = false
+        if !gated { resized(to: windowWidth) }
+    }
+
+    private func resized(to width: CGFloat) {
+        windowWidth = width
+        guard !isGated, width > 0 else { return }
+        let next = Self.sidebarAfterResize(width: width, visibility: columnVisibility,
+                                           collapsedForWidth: collapsedForWidth)
+        if next.visibility != columnVisibility { columnVisibility = next.visibility }
+        collapsedForWidth = next.collapsedForWidth
+    }
+
+    /// Below this window width the sidebar folds away by itself: the chat's
+    /// toolbar (mode picker, Explain More, New Chat) needs the detail's
+    /// whole width there.
+    nonisolated static let sidebarFoldWidth: CGFloat = 860
+
+    /// The sidebar after the window changes width: folded below
+    /// `sidebarFoldWidth` (remembering that the width did it), and back once
+    /// the window is wide again — unless the student folded it.
+    nonisolated static func sidebarAfterResize(
+        width: CGFloat,
+        visibility: NavigationSplitViewVisibility,
+        collapsedForWidth: Bool
+    ) -> (visibility: NavigationSplitViewVisibility, collapsedForWidth: Bool) {
+        if width < sidebarFoldWidth {
+            if visibility == .detailOnly { return (visibility, collapsedForWidth) }
+            return (.detailOnly, true)
+        }
+        if collapsedForWidth { return (.all, false) }
+        return (visibility, false)
+    }
+
+    /// A lesson a reminder or a `mercurius://lesson/<id>` link asked for.
+    /// Unknown or still-locked ids land on their unit's page (or Today).
+    private func presentPendingLesson() {
+        guard !isGated, let lessonId = env.pendingLessonId else { return }
+        env.pendingLessonId = nil
+        guard let unit = CurriculumTrack.unit(containingLesson: lessonId),
+              let lesson = unit.lessons.first(where: { $0.id == lessonId })
+        else {
+            shell.show(.today)
+            return
+        }
+        guard env.progressStore.isLessonUnlocked(lesson, in: unit) else {
+            shell.show(.unit(unit.id))
+            return
+        }
+        if shell.activeLesson?.id != lessonId {
+            shell.openLesson(lesson)
+        }
+    }
+
+    // MARK: - DEBUG launch arguments
+
+    /// DEBUG: the unit test's whole-screen previews, in the detail column
+    /// (`-UnitTestCrisisPreview`: the crisis support view, reached through
+    /// the real grading path with no network; `-UnitTestPreview` with
+    /// `-UnitTestStage <stage>`).
+    private var debugDetailPreview: AnyView? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        guard let unit = MercuriusCurriculum.units.first,
+              let test = MercuriusCurriculum.unitTest(for: unit.id) else { return nil }
+        if args.contains("-UnitTestCrisisPreview") {
+            return AnyView(UnitTestCrisisPreviewHost(unit: unit, test: test,
+                                                     via503: args.contains("-CrisisVia503")))
+        }
+        if CertificateDebug.mode == .card, let last = MercuriusCurriculum.units.last,
+           let lastTest = MercuriusCurriculum.unitTest(for: last.id) {
+            // `-CertificateCardPreview`: the last unit's check passed,
+            // completing the course, with its "Get your certificate" card.
+            let env = self.env
+            return AnyView(UnitTestPreviewHost(unit: last, test: lastTest, stage: "mastered", onMastered: { _ in
+                CertificateDebug.passCourse(env: env)
+            })
+            .certificateMasterySlot(env.certificates))
+        }
+        if args.contains("-UnitTestPreview") {
+            return AnyView(UnitTestPreviewHost(unit: unit, test: test,
+                                               stage: UserDefaults.standard.string(forKey: "UnitTestStage")))
+        }
+        #endif
+        return nil
+    }
+
+    /// DEBUG `-TodayDemo YES` (screenshots of Today with a week in it): a
+    /// 4-day streak shown without touching the streak store, and — in the
+    /// `-UITests` progress suite, which is emptied at every launch — Unit 1's
+    /// first two lessons finished this week (one on the week's second day,
+    /// one today) with Lesson 3 opened. Its progress is never pushed.
+    private static var debugTodayDemoStreak: Int? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-TodayDemo") && args.contains("-UITests") ? 4 : nil
+        #else
+        nil
+        #endif
+    }
+
+    private func seedTodayDemo() {
+        #if DEBUG
+        guard let unit = MercuriusCurriculum.units.first, unit.lessons.count >= 3 else { return }
+        let now = Date()
+        let calendar = Calendar.current
+        let weekStart = WeeklyPlan.compute(progress: env.progressStore, now: now, calendar: calendar).weekStart
+        let secondDay = calendar.date(byAdding: .hour, value: 34, to: weekStart) ?? weekStart
+        let first = min(secondDay, now.addingTimeInterval(-2 * 3600))
+        let second = now.addingTimeInterval(-30 * 60)
+        env.progressStore.merge(
+            completed: [unit.lessons[0].id, unit.lessons[1].id],
+            mastered: [],
+            remoteVersion: MercuriusCurriculum.version,
+            remoteUpdatedAt: [unit.lessons[0].id: first, unit.lessons[1].id: second]
+        )
+        env.progressStore.markOpened(unit.lessons[2].id)
+        #endif
+    }
+
+    /// DEBUG `-NightCompleteDemo YES` (shots of the complete card, with
+    /// `-UITests`, whose progress suite is emptied at every launch): Unit 1
+    /// Lesson 1 counts as finished a minute ago. Its progress is never
+    /// pushed.
+    private static var debugCompleteDemo: Bool {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-NightCompleteDemo") && args.contains("-UITests")
+        #else
+        false
+        #endif
+    }
+
+    /// DEBUG `-NightPathDemo check|mastered` (shots of the unit page, with
+    /// `-UITests`): Unit 1's lessons done, its check open or passed. Never
+    /// pushed.
+    private static var debugPathDemo: String? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-UITests"), let value = UserDefaults.standard.string(forKey: "NightPathDemo"),
+              value == "check" || value == "mastered" else { return nil }
+        return value
+        #else
+        nil
+        #endif
+    }
+
+    /// DEBUG: a certificate shot (`CertificateDebug`, with `-UITests`).
+    private static var debugCertificateDemo: Bool {
+        #if DEBUG
+        CertificateDebug.mode != nil
+        #else
+        false
+        #endif
+    }
+
+    @ViewBuilder
+    private func debugCertificateSheetView(_ sheet: MacCertificateDebugSheet) -> some View {
+        #if DEBUG
+        switch sheet {
+        case .certificate(let kind):
+            CertificateSheet(center: env.certificates, kind: kind, onClose: { debugCertificateSheet = nil })
+        case .list:
+            NavigationStack {
+                CertificatesListView(center: env.certificates)
+            }
+            .frame(minWidth: 460, idealWidth: 520, minHeight: 560, idealHeight: 680)
+            .tint(Night.prominent)
+        }
+        #else
+        EmptyView()
+        #endif
+    }
+
+    /// DEBUG `-NightUnitTestUnavailable YES`: Unit 1's check shows the
+    /// "isn't available" state (shots).
+    private static var debugUnitTestUnavailable: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-NightUnitTestUnavailable")
+        #else
+        false
+        #endif
+    }
+
+    /// DEBUG: a fake resume id skips a fresh lesson's speech-bubble intro
+    /// (`-LessonSkipIntro`, as iOS's `-LessonPreview`); it falls through to a
+    /// fresh start, so with `-LessonReplay` the recorded replies stream in.
+    private static var debugResumeOverride: UUID? {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") || InteractiveLaunchOptions.current.card != nil
+            ? UUID() : nil
+        #else
+        nil
+        #endif
+    }
+
+    /// DEBUG: the states iOS reaches with launch arguments, inside the Mac
+    /// shell (the gate still comes first, as on iOS):
+    /// - `-EnterShell` → Today (the Mac has no Home doorman; Today is it).
+    /// - `-EnterShellCurriculum` → the next stop's unit page.
+    /// - `-LessonPreview` → Unit 1, Lesson 1 in the detail column. Add
+    ///   `-LessonReplay` for the recorded replies (no network) and
+    ///   `-LessonSkipIntro` to start it straight away.
+    /// - `-ChatPreview` → the chat; `-ChatSeed` also sends a starter (this
+    ///   one does reach the server). `-ChatPreviewMode debate|discussion`
+    ///   then switches modes the way the toolbar picker and ⌥⌘2/⌥⌘3 do: the
+    ///   mode's one-time description first, unless seen
+    ///   (`-seenAllModeDescriptions YES`), then the server is asked — so a
+    ///   screenshot run needs a local server that answers `POST /api/mode`.
+    private func applyDebugStateIfNeeded() {
+        #if DEBUG
+        guard !appliedDebugState else { return }
+        appliedDebugState = true
+        let args = ProcessInfo.processInfo.arguments
+        if let mode = CertificateDebug.mode {
+            // The certificate shots: progress that earns them, a sample name,
+            // and the sheet, list or Progress hub open.
+            CertificateDebug.seed(mode, env: env)
+            switch mode {
+            case .sheet(let kind): debugCertificateSheet = .certificate(kind)
+            case .list: debugCertificateSheet = .list
+            case .hub: shell.showProgress()
+            case .card: break
+            }
+        }
+        if Self.debugTodayDemoStreak != nil {
+            seedTodayDemo()
+        } else if Self.debugCompleteDemo, let lesson = MercuriusCurriculum.units.first?.lessons.first {
+            // `-NightCompleteDemo`: the replayed lesson counts as finished
+            // just now, so the complete card's week row reads 1 of 2.
+            env.progressStore.merge(completed: [lesson.id], mastered: [],
+                                    remoteVersion: MercuriusCurriculum.version,
+                                    remoteUpdatedAt: [lesson.id: Date().addingTimeInterval(-60)])
+        }
+        if let demo = Self.debugPathDemo, let unit = MercuriusCurriculum.units.first {
+            // `-NightPathDemo check|mastered`: Unit 1's lessons all done a
+            // day ago, its check open (or passed).
+            let yesterday = Date().addingTimeInterval(-86_400)
+            env.progressStore.merge(
+                completed: unit.lessons.map(\.id),
+                mastered: demo == "mastered" ? [unit.id] : [],
+                remoteVersion: MercuriusCurriculum.version,
+                remoteUpdatedAt: Dictionary(uniqueKeysWithValues: unit.lessons.map { ($0.id, yesterday) })
+            )
+        }
+        if args.contains("-UnitTestCrisisPreview") || args.contains("-UnitTestPreview"),
+           let unit = MercuriusCurriculum.units.first {
+            // The previews show Unit 1's check: its row, as the real check's.
+            shell.selection = .unit(unit.id)
+        } else if RootView.opensLessonPreview, let lesson = RootView.previewLesson?.lesson {
+            // `-Interactive <slug>` opens the card's lesson.
+            shell.openLesson(lesson)
+        } else if args.contains("-ChatPreview") {
+            if MacNightDemo.isRequested, let store = env.chatStore {
+                // `-NightChatDemo`: the recorded Socratic thread, opened from
+                // its sidebar row.
+                let id = MacNightDemo.seed(store)
+                shell.refreshConversations()
+                shell.show(.chat(id))
+            } else {
+                shell.showChat()
+            }
+            if args.contains("-ChatSeed"), shell.chatModel.messages.isEmpty {
+                shell.chatModel.draft = "What is a token in an LLM?"
+                shell.chatModel.send()
+            }
+            if let raw = UserDefaults.standard.string(forKey: "ChatPreviewMode"),
+               let mode = ChatMode(rawValue: raw) {
+                shell.requestMode(mode)
+            }
+        } else if args.contains("-EnterShellCurriculum") {
+            shell.showPath()
+        } else if args.contains("-EnterShell") {
+            shell.show(.today)
+        }
+        if args.contains("-NightUnitTestUnavailable"), let unit = MercuriusCurriculum.units.first {
+            shell.openUnitTest(unit)
+        }
+        // `-NightPathUnit <unit id>`: that unit's page (shots).
+        if let unitId = UserDefaults.standard.string(forKey: "NightPathUnit"),
+           CurriculumTrack.of(id: unitId)?.unit(withId: unitId) != nil {
+            shell.show(.unit(unitId))
+        }
+        #endif
+    }
+}
+
+/// DEBUG: what a certificate shot opens over the window.
+enum MacCertificateDebugSheet: Identifiable, Hashable {
+    case certificate(CertificateKind)
+    case list
+
+    var id: String {
+        switch self {
+        case .certificate(let kind): return kind.rawValue
+        case .list: return "list"
+        }
+    }
+}
+
+/// A unit check that can't be shown (no authored test for the unit): a
+/// line of text and a way back, on a flat canvas (SPEC.md §5.10). No sad
+/// Merc, no illustration, no colour wash.
+struct MacUnitTestUnavailable: View {
+    let unit: CurriculumFeature.Unit
+    let onDone: () -> Void
+
+    static let message = "This unit test isn't available right now."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NightEyebrow("Unit \(Int(unit.number) ?? 0) check", systemImage: "exclamationmark.circle")
+            Text(Self.message)
+                .nightFont(.title2)
+                .foregroundStyle(Night.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Go back to the path. Your lessons and progress are unchanged.")
+                .nightFont(.body)
+                .foregroundStyle(Night.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            NightPrimaryButton("Done", action: onDone)
+                .keyboardShortcut(.defaultAction)
+                .help("Back to the path (Return)")
+                .padding(.top, 4)
+        }
+        .padding(Night.Space.card)
+        .frame(maxWidth: 440, alignment: .leading)
+        .nightLit(radius: Night.Radius.card)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(NightCanvas(pools: .flat, stars: false))
+        .navigationTitle("Unit \(Int(unit.number) ?? 0) Check")
+        .navigationSubtitle(unit.title)
+    }
+}
+
+/// Today's weekly-nudge card: whether it shows and what its buttons do —
+/// the iPhone Home's card, decided the same way (`ReminderCardStore.shows`).
+struct MacTodayReminders {
+    let shows: Bool
+    let onAccept: () -> Void
+    let onDismiss: () -> Void
+
+    static let hidden = MacTodayReminders(shows: false, onAccept: {}, onDismiss: {})
+}
+
+/// Settings with the Mac shell's wiring, for the Settings window
+/// (`MacSettingsView`).
+@MainActor
+func settingsSheet(
+    env: AppEnvironment,
+    shell: MacShellModel,
+    scheduler: NotificationScheduler,
+    onConsentWithdrawn: (@MainActor () -> Void)?
+) -> SettingsSheet {
+    SettingsSheet(
+        sessionIdentity: env.sessionIdentity,
+        themeStore: env.themeStore,
+        chatStore: env.chatStore,
+        chatModel: shell.chatModel,
+        streakStore: env.streakStore,
+        achievementStore: env.achievementStore,
+        progress: env.progressStore,
+        progressSync: env.progressSync,
+        reminderStore: env.reminderStore,
+        scheduler: scheduler,
+        sessionDeleter: env.apiClient,
+        onConsentWithdrawn: onConsentWithdrawn,
+        // The Settings window can erase while a lesson or unit check is open
+        // in the main window (on the iPhone Settings can't be reached then):
+        // its reply in flight stops before the server delete, and the
+        // lesson closes, so nothing of the erased session stays on screen or
+        // goes back to the server under the new ID.
+        beforeErase: { shell.beforeSettingsErase() },
+        afterReset: { shell.afterSettingsReset() },
+        // The certificate name goes with the rest.
+        certificates: env.certificates
+    )
+}
+#endif

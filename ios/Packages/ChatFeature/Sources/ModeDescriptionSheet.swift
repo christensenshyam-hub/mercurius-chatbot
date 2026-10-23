@@ -23,6 +23,10 @@ struct ModeDescriptionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        #if os(macOS)
+        // Night Studio's sheet (SPEC.md §5.4); the same copy and actions.
+        NightModeExplainer(description: description, acknowledge: acknowledge, close: dismiss.callAsFunction)
+        #else
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: BrandSpacing.xl) {
@@ -69,6 +73,7 @@ struct ModeDescriptionSheet: View {
         // accessibility Dynamic Type sizes.
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        #endif
     }
 
     // MARK: - Pieces

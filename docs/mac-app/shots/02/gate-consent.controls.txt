@@ -1,0 +1,5 @@
+CONTROL SwiftUIAppKitButton frame=(304.0, 451.5, 147.0, 18.5) hidden=false alpha=1.0 title=
+CONTROL NSScroller frame=(280.0, 634.0, 0.0, 100.0) hidden=true alpha=1.0 title=
+CONTROL FocusRingNSButton frame=(822.0, 213.5, 16.0, 16.0) hidden=false alpha=1.0 title=
+CONTROL SwiftUIOutlineListView frame=(8.0, 292.0, 250.0, 476.0) hidden=true alpha=1.0 title=
+CONTROL NSScroller frame=(-9.0, 792.0, 17.0, 0.0) hidden=true alpha=1.0 title=

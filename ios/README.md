@@ -6,6 +6,7 @@ Native Swift/SwiftUI iOS app for the Mayo AI Literacy Club's Mercurius tutor. Re
 
 - `Mercurius/` — the thin `@main` app target. Builds `AppEnvironment`, installs the notification delegate, and hands off to `RootView`.
 - `MercuriusWidgets/` — the widget extension that hosts the learning Live Activity.
+- `MercuriusMac/` — the native SwiftUI **Mac app** (scheme `MercuriusMac`): a thin `@main` shell (window, Settings window, menu commands, the DEBUG `-MacSnapshot` harness). Its window — the consent gate, then a sidebar of Today, the path by unit and the chats — is `AppFeature/Sources/Mac`. Same bundle id as the iOS app in Release (a universal purchase); Debug builds use `….macdev`. See `../docs/mac-app/`.
 - `Packages/DesignSystem/` — colors, typography, spacing, reusable UI primitives, the Merc mascot.
 - `Packages/NetworkingKit/` — single `APIClient`, SSE streaming, progress sync, typed errors, session identity (Keychain-backed).
 - `Packages/PersistenceKit/` — the SwiftData chat store and small UserDefaults-backed stores (streak, reminders, last activity, review prompt).
@@ -33,6 +34,8 @@ open Mercurius.xcodeproj
 - **Simulator:** ⌘R in Xcode.
 - **Tests (all):** ⌘U in Xcode.
 - **Tests (package only):** `swift test` inside `Packages/`.
+- **Mac app:** scheme `MercuriusMac` (⌘R), or `xcodebuild build -scheme MercuriusMac -destination 'platform=macOS'`. Screenshots: `scripts/mac-snapshots.sh <dir>` (the app renders its own window; no Screen Recording permission); Mac App Store screenshots: `scripts/mac-store-screenshots.sh <dir>`. A built bundle's store answers: `scripts/mac-bundle-check.sh <Mercurius.app> debug|release`.
+- **Release:** `scripts/provision.sh [--platform mac]` (one-time signing assets; `--check` is read-only), then `scripts/release.sh [--platform mac]` (archive → export → upload; `--no-upload` stops after export). Both stop with a plain explanation when App Store Connect refuses for an unaccepted agreement.
 
 ## Bundle identifier
 

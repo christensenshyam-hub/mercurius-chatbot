@@ -10,6 +10,17 @@ import NetworkingKit
 ///
 /// Best-effort by design: every failure is swallowed. Progress lives on the
 /// device first; the next pull or push catches up.
+///
+/// Both courses sync as one list: Deep-dive `u` ids and Basics `b` ids go
+/// up in the same PUT, under the app's one `MercuriusCurriculum.version`,
+/// and a pull merges both (each count filters by its own course). A server
+/// from before Basics refuses `b` ids — and with them the whole push — so
+/// such a refusal is retried once with the Deep dive's ids alone, keeping
+/// its progress in sync until the server knows Basics. The refusal is
+/// remembered for the session id until the next launch (or a pull that
+/// shows a `b` id): later pushes send the Deep dive's ids alone, and a
+/// snapshot that went up that way counts as synced, so an unchanged one is
+/// never sent again (no repeated 400s, no wasted round trips).
 @MainActor
 final class CurriculumProgressSync {
     private let progress: CurriculumProgressStore
@@ -32,6 +43,8 @@ final class CurriculumProgressSync {
     /// snapshot is skipped — `revision` also moves when a lesson is merely
     /// opened, which changes nothing the server stores.
     private var synced: (sessionId: String, snapshot: CurriculumProgressStore.Snapshot)?
+    /// The session id whose server refused Basics' ids this launch.
+    private var refusesBasicsFor: String?
 
     init(
         progress: CurriculumProgressStore,
@@ -91,6 +104,7 @@ final class CurriculumProgressSync {
         pullInFlight?.cancel()
         synced = nil
         lastPull = nil
+        refusesBasicsFor = nil
     }
 
     // MARK: - Internals
@@ -103,6 +117,10 @@ final class CurriculumProgressSync {
         lastPull = clock.now
 
         let remoteState = Self.remoteState(remoteSnapshot)
+        // The server holds a Basics id, so it knows Basics now.
+        if remoteState.completed.union(remoteState.mastered).contains(where: BasicsCurriculum.isBasicsId) {
+            refusesBasicsFor = nil
+        }
         progress.merge(
             completed: remoteState.completed.sorted(),
             mastered: remoteState.mastered.sorted(),
@@ -131,18 +149,72 @@ final class CurriculumProgressSync {
         if let synced, synced.sessionId == sid, synced.snapshot == snapshot { return }
         let items = Self.items(from: snapshot)
         guard !items.isEmpty else { return }
+        if refusesBasicsFor == sid {
+            await pushDeepDiveOnly(items, snapshot: snapshot, sessionId: sid)
+            return
+        }
         do {
             _ = try await remote.putProgress(
                 sessionId: sid,
                 curriculumVersion: snapshot.curriculumVersion,
                 items: items
             )
-            if (try? sessionId()) == sid {
-                synced = (sid, snapshot)
-            }
+            markSynced(snapshot, sessionId: sid)
         } catch {
             // Best-effort: the next pull re-sends whatever the server lacks.
+            guard Self.isRefusal(error), items.contains(where: { BasicsCurriculum.isBasicsId($0.id) }) else { return }
+            refusesBasicsFor = sid
+            await pushDeepDiveOnly(items, snapshot: snapshot, sessionId: sid)
         }
+    }
+
+    /// For a server that refuses Basics: the Deep dive's ids alone. Once
+    /// they are up (or there were none), the snapshot counts as synced.
+    private func pushDeepDiveOnly(
+        _ items: [ProgressPutItem],
+        snapshot: CurriculumProgressStore.Snapshot,
+        sessionId sid: String
+    ) async {
+        let deepDive = items.filter { !BasicsCurriculum.isBasicsId($0.id) }
+        // Only Basics changed since the last push: the server has the rest.
+        let unchanged = synced.map { synced in
+            synced.sessionId == sid
+                && synced.snapshot.curriculumVersion == snapshot.curriculumVersion
+                && Self.items(from: synced.snapshot).filter { !BasicsCurriculum.isBasicsId($0.id) } == deepDive
+        } ?? false
+        if !deepDive.isEmpty && !unchanged {
+            do {
+                _ = try await remote.putProgress(
+                    sessionId: sid,
+                    curriculumVersion: snapshot.curriculumVersion,
+                    items: deepDive
+                )
+            } catch {
+                return
+            }
+        }
+        markSynced(snapshot, sessionId: sid)
+    }
+
+    private func markSynced(_ snapshot: CurriculumProgressStore.Snapshot, sessionId sid: String) {
+        if (try? sessionId()) == sid {
+            synced = (sid, snapshot)
+        }
+    }
+
+    /// The server refused the request itself (a 400), as one from before
+    /// Basics does for a `b` id.
+    static func isRefusal(_ error: Error) -> Bool {
+        if case APIError.invalidRequest = error { return true }
+        return false
+    }
+
+    /// `items` without Basics' ids, or nil when there were none to drop (or
+    /// nothing else to send).
+    static func withoutBasics(_ items: [ProgressPutItem]) -> [ProgressPutItem]? {
+        let kept = items.filter { !BasicsCurriculum.isBasicsId($0.id) }
+        guard kept.count < items.count, !kept.isEmpty else { return nil }
+        return kept
     }
 
     /// Server items → the sets `merge` takes. A mastered lesson still counts

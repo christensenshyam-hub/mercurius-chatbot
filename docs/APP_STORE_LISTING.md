@@ -124,7 +124,8 @@ Mercurius 2.3 is about trust and clarity.
 
 **Availability**: iPhone and iPad (the build is universal — `TARGETED_DEVICE_FAMILY: "1,2"`). Under *Pricing and Availability → App
 availability* leave **Mac** (Apple silicon) and **Apple Vision** unchecked.
-Free, all territories.
+Free, all territories. Macs get the native Mac app instead, through this same
+record's macOS platform (a universal purchase): see §7.
 
 ---
 
@@ -285,8 +286,9 @@ launch-argument artifacts.
 | 6 | **Disclosure (consent) screen** | The first-launch disclosure: messages and photos go to Anthropic's Claude via our server; Agree / Not now. | *You know where your words go.* |
 
 Keep captions short and literal — a caption is a claim Apple can hold you to.
-Keep the brand navy/violet band; light appearance for all six so the set is
-consistent. Order matters: the first three show in search results.
+Keep the brand navy/violet band. The app is dark only (Night Studio's
+palette, `feat/ios-night-only`), so all six are dark whatever the simulator's
+appearance; retake any set made before that branch, which was light. Order matters: the first three show in search results.
 
 ---
 
@@ -333,3 +335,201 @@ Do these in order. Tick each one.
 - Guideline 1.2 (AI-generated content): point to the in-app report path, the reviewer notes, and the disclosure screen.
 - Guideline 5.1.1 (data collection): point to the age check, the disclosure with required agreement, the nutrition label in §3 and the deletion path.
 - Metadata (2.3): usually a screenshot with staged content or a claim the app does not make — fix the shot, resubmit metadata only.
+
+---
+
+## 7. Mac App Store (the native Mac app)
+
+The Mac app (`ios/MercuriusMac`, a native SwiftUI app, not the iPad app on a
+Mac) ships in **this same App Store Connect record** as a **universal
+purchase**: the same bundle id, `com.mayoailiteracy.mercurius.native`, with
+macOS added as a second platform. The App Store Connect steps are in
+[`mac-app/FOUNDER_STEPS.md`](mac-app/FOUNDER_STEPS.md).
+
+**What is shared and what is the Mac's own.** App Store Connect keeps the
+app-level answers once for every platform: the name and subtitle (§1),
+category, age rating (§2), the App Privacy label (§3), the privacy policy
+URL, price and availability. The Mac app collects the same data for the same
+purposes and ships the same `PrivacyInfo.xcprivacy`, so §2 and §3 need no
+change. Each platform's version page has its own description, keywords,
+promotional text, screenshots, support and marketing URLs, What's New and
+review notes; the Mac's are below.
+
+Product facts for the Mac version, on top of the ones at the top of this
+pack: macOS 14 Sonoma or later; Apple silicon and Intel (the Release build is
+universal); sandboxed (network client, and read-only access to an image file
+the student picks); one main window with a sidebar (Today, the learning path
+by unit, saved chats), a Settings window and a Help window. **The Mac and an
+iPhone or iPad are separate anonymous sessions with separate progress,
+streaks and chats**: there are no accounts and nothing syncs between devices.
+Say so wherever it matters (the description does); don't imply sync.
+
+### 7.1 Metadata for the macOS version
+
+**Promotional Text** — the iOS text works unchanged (165 characters).
+
+**Keywords** — the iOS keywords work unchanged (98 characters).
+
+**Description** (≤4000) — 2,138 characters. The iOS text with Mac wording
+(click, not tap; right-click to report), a "Made for the Mac" block, and the
+separate-progress sentence:
+```
+Mercurius AI is a tutor for understanding artificial intelligence — how it works, where it goes wrong, and how to use it without letting it think for you. It guides with questions instead of handing over answers, and it is built around verification and reflection.
+
+A LEARNING PATH
+Eight units and 35 short lessons take you from "what happens when you type a prompt" to agents and what comes next:
+• How AI Actually Works
+• Bias & Fairness
+• AI in Society
+• Prompt Engineering
+• Ethics & Alignment
+• Spotting AI: Deepfakes & Synthetic Media
+• Using AI Well
+• The Frontier: Agents & What's Next
+
+Each lesson streams in short beats with KEY IDEA, EXAMPLE and CHECK cards. A lesson is marked complete when you show you understand its objective — not when you reach the end of the text. Unit checks tie each unit together.
+
+THREE WAYS TO TALK
+• Socratic (the default): the tutor asks questions that lead you to the idea.
+• Discussion: reflect on a topic and get a scored response on your reasoning.
+• Debate: take a side and argue it against the tutor, with real sources.
+
+MADE FOR THE MAC
+• A sidebar with Today, the learning path by unit, and your saved chats.
+• Return sends, Shift-Return starts a new line.
+• Keyboard shortcuts for a new chat, the three modes, Retry and Explain More.
+• Attach an image with the attach button, by dragging it onto the chat, or by pasting it.
+• One night look: dark, whatever your Mac's appearance.
+
+ALSO
+• Streaks and opt-in reminders help you keep the habit going.
+• Right-click any reply to report it.
+
+HOW IT WORKS
+Responses are generated by Claude, Anthropic's AI model, through Mercurius's own server. Like any AI, it can be wrong — checking claims is part of the curriculum, and the app says so plainly. There are no accounts and no ads. Your session is an anonymous id, and you can delete your data and start over from Settings at any time. Because there are no accounts, your Mac and your iPhone or iPad each keep their own progress and chats.
+
+WHO IT'S FOR
+Students 13 and up, and anyone who wants to use AI well rather than passively. Mercurius AI is built by the Mayo AI Literacy Club, a student club.
+
+Guided, not given.
+```
+
+**URLs**: the same Support, Marketing and Privacy Policy URLs as §1.
+
+**What's New**: not shown for a platform's first version. From the second
+Mac version on, write it for the Mac.
+
+### 7.2 Screenshots (Mac)
+
+**Sizes:** 16:10, one of **1280 × 800, 1440 × 900, 2560 × 1600 or 2880 × 1800**
+pixels, 1 to 10 shots. Ours are **2560 × 1600** (a 1280 × 800-point window on
+a Retina display). 2880 × 1800 needs a 1440 × 900-point window, and macOS
+won't make a window taller than the screen's visible area: the founder's
+14-inch MacBook Pro has 888 points, so it can't be taken there. On a display
+with at least 900 points of visible height, `STORE_SIZE=1440x900` gives
+2880 × 1800. App Store Connect scales either for display.
+
+**How:** build the `MercuriusMac` scheme (Debug), then from `ios/`:
+```bash
+scripts/mac-store-screenshots.sh ~/Desktop/mercurius-mac-store
+```
+It launches the app through the DEBUG `-MacSnapshot` harness, once per
+state, isolated (in-memory chats and session id, the local server URL —
+nothing reaches production), with the window's rounded
+corners filled and no alpha channel. It writes `01-path.png` … `06-chat-thread.png`
+and fails on a wrong size, on alpha, or on anything the harness couldn't do.
+The app is dark only, so the pictures are dark: the harness still asks for
+light, but the windows keep the night look. Retake any set made before
+`feat/ios-night-only`, which was light.
+**The Mac must be unlocked with the display on**: with the screen locked the
+window server draws nothing and the pictures come out blank and the wrong size.
+The harness also activates the app for each shot and fails a picture of an
+inactive window (grey traffic lights, washed-out sidebar text, grey
+prominent buttons), which a locked Mac can't avoid: run it when nobody is
+typing on the Mac, since each shot takes the keyboard for a few seconds.
+
+| # | State | What it shows | Caption (if you add a band) |
+|---|---|---|---|
+| 1 | `path` | Unit 1's stretch of the path in the window, the sidebar with all eight units | *Learn how AI really works — 35 short lessons.* |
+| 2 | `lesson` | A lesson reply with KEY IDEA / EXAMPLE cards at the Mac's reading width | *Short lessons. Show you understand.* |
+| 3 | `chat` | The empty chat: the toolbar's Socratic / Debate / Discussion picker and the prompt cards | *A tutor that asks — so you actually learn.* |
+| 4 | `today` | Today: the next lesson, this week's goal, the streak and recent chats | *Pick up where you left off.* |
+| 5 | `gate-consent` | The first-launch disclosure: where messages and photos go | *You know where your words go.* |
+| 6 | `chat-thread` | A saved thread (see the caution below) | — |
+
+Check every shot by eye before uploading, at full size:
+
+- **The harness can't draw Liquid Glass.** It photographs only the app's
+  window, and glass surfaces blend with whatever is behind the window. The
+  sidebar can come out darker than on screen, and the chat toolbar's band can
+  show the thread's text behind the mode picker instead of blurring it (it
+  does in `chat-thread`). A shot that looks wrong that way is a capture
+  artefact; take that one by hand instead (⇧⌘5, "Capture Selected Window",
+  with the window at 1280 × 800) — and then flatten its rounded corners and
+  shadow, since App Store Connect wants an opaque 16:10 picture.
+- **`chat-thread` is a seeded demo** (`-SeedDemoChat`): its replies explain
+  directly ("A hallucination is when…") rather than asking, which is not how
+  Socratic mode talks. Same rule as §5: real content only. Either replace it
+  with a real Socratic exchange or leave it out; the first five don't need it.
+- **Fresh state:** every run starts at Lesson 1 with nothing done (`0/4` per
+  unit, "This week · 0 of 2"). That is a true picture of a new install, not a
+  staged number. A shot with real progress needs a real lesson finished on
+  that Mac first, outside the isolated harness.
+- No dev artefacts: none of the harness's launch flags show in the window.
+
+### 7.3 App Review notes (macOS version)
+
+Paste into the macOS version's *App Review Information → Notes*. The notes
+describe the Mac build of the same app; the server and the flow are the
+iPhone's.
+
+```
+Mercurius AI for Mac is the native macOS version of our iPhone/iPad app (a universal purchase in the same App Store Connect record). It is an AI-literacy tutor for students 13 and up, built by the Mayo AI Literacy Club (a student club). No account or login exists: the app creates an anonymous session id on this Mac.
+
+WHERE REPLIES COME FROM
+Every tutor reply is generated by Claude, Anthropic's AI model. The app talks only to our own server at https://mercurius-chatbot-production.up.railway.app, which calls Anthropic and streams the reply back. A network connection is required. The app is sandboxed: it uses the network-client entitlement and read-only access to an image file the user picks.
+
+FIRST LAUNCH (in the main window, before anything is sent)
+0. "Meet Merc", a short introduction. Click Continue.
+1. Age check: choose an age from the pop-up menu. It starts on "Select your age", and Continue stays off until you choose. Under 13 shows "Mercurius is for ages 13 and up" instead of the tutor, with no way back to the menu. The Mac remembers the stop for 7 days, keeping only when it happened, never the age; the age is never sent. Please note: on a Mac, deleting the app does not clear this (macOS keeps an app's data after the app is deleted), so if you try an age under 13, continue the review in another macOS user account.
+2. Disclosure: messages and any attached image are sent through our server to Anthropic's Claude; links to the privacy policy and terms. Agree is required ("Not now" pauses here and nothing is sent).
+3. AI limits: the tutor can be wrong, is not a person, and is not for emergencies; it gives the 988 Suicide & Crisis Lifeline and the Crisis Text Line (text HOME to 741741).
+4. "Your path": Lesson 1, and two reminder switches that are off by default (local notifications; macOS asks for permission only if one is turned on).
+Then the window shows a sidebar: Today, the learning path by unit, and Chats.
+
+MODES
+Socratic (default), Discussion and Debate: the segmented control in the chat's toolbar, or the Chat menu (Option-Command-1, -2, -3) while a chat is open. Command-1, -2, -3 open Today, the Learning Path and the chat.
+
+IMAGES
+In a chat or lesson: the image button left of the message field (opens a file panel), dragging an image onto the window, or pasting one. The image goes through our server to Claude with the message.
+
+REPORTING A REPLY (Guideline 1.2)
+Right-click (or Control-click) any tutor reply → Report response → choose a reason. Reports go to our server for review. There is no user-to-user content anywhere in the app.
+
+DATA DELETION
+Mercurius → Settings… (Command-comma) → Privacy → "Delete My Data & Start Over…" erases the session's data on our server and issues a new anonymous id. The same tab shows the full session id and Privacy Choices (withdraw consent, which returns the window to the first-launch flow).
+
+CRISIS SUPPORT
+If a student's answer in a unit check or quiz signals a crisis, the app stops the activity and shows crisis support. On the Mac the numbers (988, HOME to 741741, 911) are large, selectable text with a Copy button, because a Mac may not be set up to place calls or send texts; "Call with FaceTime" / "Text with Messages" links follow. Help → Mercurius Help → Get Help lists them too.
+
+USAGE LIMITS
+Each session has a daily allowance, and we can pause the tutor server-side. If you hit either, the app shows a plain message; contact us and we will lift the limit for your session.
+
+The Mac app and the iPhone/iPad app are separate anonymous sessions: progress made on one does not appear on the other.
+
+Support: support@trymercurius.com
+```
+
+Before submitting, check that step 1 still matches the build (the 7-day stop
+and the pop-up menu), and decide whether you want the "another macOS user
+account" sentence — it is there because a reviewer on a Mac can't clear the
+stop by reinstalling, as the iOS notes tell them to.
+
+### 7.4 Checklist (macOS version)
+
+- [ ] The agreement blocking the App Store Connect API (HTTP 403) is accepted — see `mac-app/FOUNDER_STEPS.md`, step 1.
+- [ ] `./scripts/provision.sh --platform mac` has made the Mac profile and installer certificate (`--check` shows them).
+- [ ] `./scripts/release.sh --platform mac` uploaded a build; it shows under TestFlight → macOS.
+- [ ] Rehearsed on a Mac from TestFlight: the gate, a lesson, a chat, right-click → Report response, Settings → Privacy → Delete My Data, the crisis numbers in Help → Get Help.
+- [ ] macOS version page: description, keywords and promotional text from §7.1, URLs, screenshots from §7.2 (checked by eye), review notes from §7.3.
+- [ ] Version Release: manual. Phased release doesn't apply to a first version.

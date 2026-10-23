@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 
 /// A curriculum lesson in its OWN window — distinct from the three chat modes,
 /// and not a tab. It owns a **persisted but non-hydrating** `ChatViewModel`
@@ -48,6 +49,15 @@ public struct CurriculumLessonView: View {
     private let totalInUnit: Int
     /// Fired once when a real completion's celebration goes away, by any path.
     private let onCelebrationDismissed: (() -> Void)?
+    /// The Mac: hands the host a way to stop a reply this lesson is still
+    /// receiving (Settings' erasure runs in its own window while a lesson
+    /// shows). Called on appear; unused on iOS, where Settings can't be
+    /// reached during a lesson.
+    private let onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)?
+    /// A Basics lesson (BEGINNER_GUIDE §2): plain intro, a labelled way back
+    /// on the leading edge, the practice-line chip, Copy on replies, the
+    /// text-size offer and "Try this today". nil is the Deep dive, unchanged.
+    private let basics: BasicsLessonOptions?
 
     @State private var model: ChatViewModel
     @State private var didBegin = false
@@ -68,13 +78,31 @@ public struct CurriculumLessonView: View {
     @State private var reactionClearTask: Task<Void, Never>?
     /// The composer has focus (the keyboard is up); the coach card makes room.
     @State private var composerFocused = false
+    #if DEBUG
+    /// `-LessonReplayScript`: recorded learner turns sent so far.
+    @State private var scriptedTurnsSent = 0
+    #endif
+    #if os(macOS)
+    /// Opens the composer's image panel (File ▸ Attach Image…, ⇧⌘A).
+    @State private var attachTrigger = 0
+    /// A check on screen holds a pick that isn't locked in (Escape keeps it).
+    @State private var nightUncommittedPick = false
+    /// Where the lesson's keys go while its check waits.
+    @State private var nightCheckRouter = NightCheckKeyRouter()
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // Dynamic Type: the design sizes at the default setting, scaled with it.
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 15
+    // The Mac has no Dynamic Type: its intro is set on the Mac's ramp.
+    #if os(macOS)
+    @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = MacTypeRamp.title
+    @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = MacTypeRamp.body
+    #else
     @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = 17
     @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = 13.5
+    #endif
 
     public init(
         lessonId: String,
@@ -98,7 +126,9 @@ public struct CurriculumLessonView: View {
         completedInUnit: Int = 0,
         totalInUnit: Int = 0,
         nextStop: LessonCompleteOverlay.NextStop? = nil,
-        onCelebrationDismissed: (() -> Void)? = nil
+        onCelebrationDismissed: (() -> Void)? = nil,
+        onRegisterStop: ((@escaping @MainActor () -> Void) -> Void)? = nil,
+        basics: BasicsLessonOptions? = nil
     ) {
         self.lessonId = lessonId
         self.unitLabel = unitLabel
@@ -117,6 +147,8 @@ public struct CurriculumLessonView: View {
         self.totalInUnit = totalInUnit
         self.nextStop = nextStop
         self.onCelebrationDismissed = onCelebrationDismissed
+        self.onRegisterStop = onRegisterStop
+        self.basics = basics
         // Fresh lessons open on the speech-bubble intro; resumed ones skip it.
         _showIntro = State(initialValue: resumeConversationId == nil)
         // Seed the de-dupe high-water mark, CLAMPED to the current count. This
@@ -141,20 +173,36 @@ public struct CurriculumLessonView: View {
             achievementStore: achievementStore
         ))
         #if DEBUG
-        // `-LessonReplay`: recorded replies, no network (see LessonReplay).
-        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel()) }
+        // `-LessonReplay`: recorded replies (stubs for a lesson with no
+        // recording), no network (see LessonReplay).
+        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel(lessonID: lessonId)) }
         #endif
     }
 
     public var body: some View {
+        // Split into steps so the type checker takes them one at a time.
+        windowChrome(completionHandlers(startHandlers(lessonLayers)))
+    }
+
+    /// The lesson, its celebration and its intro, stacked.
+    private var lessonLayers: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio: the ink canvas with the indigo pool (§2.4).
+            NightCanvas(pools: .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             VStack(spacing: 0) {
+                #if os(iOS)
                 // One compact row, so the lesson itself gets the screen
-                // (AUD-08). Done never wraps or scrolls away.
+                // (AUD-08). Done never wraps or scrolls away. On the Mac the
+                // window's toolbar carries the title, the place in the unit
+                // (subtitle) and the way back (`macToolbar`).
                 header
                 Divider().overlay(BrandColor.border)
+                #endif
 
                 MessageListView(
                     messages: model.messages,
@@ -186,34 +234,57 @@ public struct CurriculumLessonView: View {
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
+                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
+                .lesson(id: lessonId)
+                #if os(macOS)
+                .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
+                .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
+                // A waiting check takes the lesson's keys, unless the
+                // composer has the keyboard.
+                .environment(\.nightCheckRouter, nightCheckRouter)
+                // The lesson's interactive holds Return through it too.
+                .environment(\.interactiveKeyRouter, nightCheckRouter)
+                .environment(\.nightComposerFocused, composerFocused)
+                #endif
+                // Basics: Copy on Merc's replies (its notes and emails are
+                // meant to leave the app).
+                .environment(\.lessonOffersCopy, basics != nil)
+                .environment(\.isBasicsLesson, basics != nil)
+
+                // Basics: the reply's practice line as a chip that fills the
+                // box (never sends), so the learner can change the words.
+                if let line = practiceChipLine {
+                    PracticeChip(line: line) {
+                        model.draft = line
+                        inputFocusTrigger += 1
+                    }
+                    .padding(.horizontal, BrandSpacing.md)
+                    .padding(.top, BrandSpacing.xs)
+                    #if os(macOS)
+                    .macReadableColumn()
+                    #endif
+                    .transition(.opacity)
+                }
 
                 // Clean, fixed composer — nothing tucked behind it.
-                ChatInputBar(
-                    text: Binding(get: { model.draft }, set: { model.draft = $0 }),
-                    isSending: isSending,
-                    attachment: model.pendingImage,
-                    isPreparingAttachment: model.isPreparingAttachment,
-                    attachmentError: model.attachmentError,
-                    characterLimit: model.draftCharacterLimit,
-                    onSend: { model.send() },
-                    onCancel: { model.cancel() },
-                    onAttachImage: { model.attachImage(data: $0) },
-                    onRemoveAttachment: { model.clearAttachment() },
-                    useBrandSend: true,
-                    backgroundFade: true,
-                    focusTrigger: inputFocusTrigger,
-                    // Merc asks; the student answers (AUD-44).
-                    placeholder: "Type your answer…",
-                    compactPlaceholder: "Answer…",
-                    // A long answer must not swallow the reading area.
-                    maxLines: 3,
-                    onFocusChange: { composerFocused = $0 }
-                )
+                composer
+                    #if os(macOS)
+                    // Under the complete card the composer steps away, so the
+                    // card never sits on its ring (the card is centred in the
+                    // whole lesson).
+                    .opacity(showCelebration ? 0 : 1)
+                    #endif
             }
             // The intro and the celebration cover the lesson: VoiceOver and a
             // keyboard must not reach (or send from) what's underneath.
             .accessibilityHidden(showIntro || showCelebration)
             .disabled(showIntro)
+            #if os(macOS)
+            // Under the complete card the lesson reads as one calm field, not
+            // as clipped words around the card.
+            .blur(radius: showCelebration ? 8 : 0)
+            .disabled(showCelebration)
+            #endif
 
             if showCelebration {
                 LessonCompleteOverlay(
@@ -234,8 +305,16 @@ public struct CurriculumLessonView: View {
                     },
                     // `didCelebrate` is only set by a real completion, so the
                     // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
-                    onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
+                    onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil,
+                    basicsWrapUp: basics.map { $0.wrapUp ?? BasicsWrapUp(tryThisToday: "") }
                 )
+                #if os(macOS)
+                // The Mac's card recaps the objective and Merc's [KEY] ideas.
+                .environment(\.nightLessonRecap,
+                             NightLessonRecap(objective: objective,
+                                              keyIdeas: NightKeyIdeas.collect(from: model.messages,
+                                                                              standaloneOnly: basics != nil)))
+                #endif
                 .accessibilityAddTraits(.isModal)
                 .transition(.opacity)
                 .zIndex(1)
@@ -248,6 +327,11 @@ public struct CurriculumLessonView: View {
                     .zIndex(2)
             }
         }
+    }
+
+    /// Starting (or resuming) the lesson, and the DEBUG screenshot hooks.
+    private func startHandlers<Content: View>(_ content: Content) -> some View {
+        content
         // Resume a saved thread immediately; a FRESH lesson waits behind the
         // speech-bubble intro and starts when the student taps Continue.
         .task { if resumeConversationId != nil { await beginOrResume() } }
@@ -278,6 +362,30 @@ public struct CurriculumLessonView: View {
             }
         }
         #endif
+        #if DEBUG
+        // `-LessonReplayScript <n>`: answer the replay's replies with the
+        // session's recorded turns (a tap for the check), `n` of them.
+        .onChange(of: model.phase) { _, phase in
+            guard LessonReplay.isRequested, phase == .idle, let steps = LessonReplay.scriptSteps else { return }
+            let turns = LessonReplay.userTurns(lessonId: lessonId)
+            guard scriptedTurnsSent < min(steps, turns.count) else { return }
+            let turn = turns[scriptedTurnsSent]
+            scriptedTurnsSent += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                if turn.hasPrefix("I picked ") {
+                    model.sendQuickReply(turn)
+                } else {
+                    model.draft = turn
+                    model.send()
+                }
+            }
+        }
+        #endif
+    }
+
+    /// The celebration, the coach's progress reactions and the report alert.
+    private func completionHandlers<Content: View>(_ content: Content) -> some View {
+        content
         // The lesson was passed (server flag or a pass marker) → celebrate ONCE.
         // Not again if the student dismissed it to re-read feedback and then
         // re-demonstrates proficiency in the same thread (a fresh lesson gets a
@@ -307,7 +415,189 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if DEBUG
+        // `-Interactive <slug>` with a card past the first reply (a stub
+        // replay): each stub check is answered as a tap would, until the
+        // card's reply has arrived (simctl can't tap).
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, let target = LessonReplay.repliesToReach(lessonID: lessonId),
+                  let last = model.messages.last, last.role == .assistant, last.status == .idle,
+                  model.messages.filter({ $0.role == .assistant }).count < target else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                model.sendQuickReply(LessonReplay.stubAnswer)
+            }
+        }
+        #endif
+        #if DEBUG && os(macOS)
+        // `-NightCompleteAfterReply YES` (shots only): the complete card once
+        // the replay's first reply is in, so it recaps that reply's [KEY]
+        // ideas. Like `-ForceCelebrate`, it never reports a completion.
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, UserDefaults.standard.bool(forKey: "NightCompleteAfterReply"),
+                  model.messages.contains(where: { $0.role == .assistant }), !showCelebration else { return }
+            showIntro = false
+            showCelebration = true
+        }
+        #endif
     }
+
+    /// The Mac window's title, toolbar, keys and drops; nothing on iOS.
+    @ViewBuilder
+    private func windowChrome<Content: View>(_ content: Content) -> some View {
+        #if os(macOS)
+        content
+        .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
+        .nightCheckKeys(nightCheckRouter, isEnabled: !showIntro && !showCelebration)
+        .focusedSceneValue(\.chatCommandTarget, commandTarget)
+        .navigationTitle(title)
+        .navigationSubtitle(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
+                                             totalInUnit: totalInUnit))
+        .toolbar { macToolbar }
+        // The canvas runs up under the title bar at every width (in a
+        // narrow window the lesson's bar turned an opaque grey).
+        .nightCanvasTitleBar()
+        .onAppear {
+            // Settings' erasure stops a reply this lesson is still
+            // receiving, before the server delete (`onRegisterStop`).
+            onRegisterStop?({ [weak model] in
+                guard let model else { return }
+                switch model.phase {
+                case .sending, .streaming: model.cancel()
+                case .idle, .failed: break
+                }
+            })
+        }
+        #else
+        content
+        #endif
+    }
+
+    #if os(macOS)
+    /// The lesson's way back, in the window's toolbar: "Not now" while the
+    /// intro shows (it leaves without starting), Done once the lesson runs.
+    /// Escape takes it too, but only when nothing would be lost: not while
+    /// a reply is coming in or the composer holds an answer, and not under
+    /// the celebration (which takes Escape itself).
+    @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                if showIntro {
+                    onExit()
+                } else {
+                    model.cancel()
+                    onExit()
+                }
+            } label: {
+                Label(basics != nil ? BasicsCopy.back : (showIntro ? "Not now" : "Done"),
+                      systemImage: "chevron.backward")
+            }
+            // A toolbar button's own look (the detail column's views use
+            // borderless buttons).
+            .buttonStyle(.automatic)
+            .keyboardShortcut(escapeLeaves ? .cancelAction : nil)
+            .help(showIntro
+                  ? "Not now: back to \(Self.unitName(unitLabel)) without starting (Esc)"
+                  : "Done: back to \(Self.unitName(unitLabel))\(escapeLeaves ? " (Esc)" : "")")
+            .accessibilityLabel(showIntro ? "Not now. Leave without starting the lesson." : "Done. Exit lesson.")
+            .disabled(showCelebration)
+        }
+    }
+
+    /// Escape leaves the lesson only when that loses nothing.
+    private var escapeLeaves: Bool {
+        if showIntro { return true }
+        return Self.escapeLeaves(isSending: isSending, draft: model.draft,
+                                 hasAttachment: model.pendingImage != nil,
+                                 isCelebrating: showCelebration,
+                                 hasUncommittedPick: nightUncommittedPick)
+    }
+
+    /// Nothing would be lost: no reply coming in, no celebration, no photo,
+    /// no draft, and no check answer picked but not locked in.
+    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool,
+                             hasUncommittedPick: Bool = false) -> Bool {
+        !isSending && !isCelebrating && !hasAttachment && !hasUncommittedPick
+            && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// "Unit 1 · Lesson 1.2", the window's subtitle under the lesson's title
+    /// and the intro's eyebrow: the lesson's code as the path, Today and the
+    /// complete card say it ("2 of 4" is the unit meter's only).
+    static func macSubtitle(unitLabel: String, lessonNumber: Int, totalInUnit: Int) -> String {
+        "\(unitName(unitLabel)) · Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: lessonNumber))"
+    }
+    #endif
+
+    /// "UNIT 01" → "Unit 1"; anything else as it came, capitalised.
+    static func unitName(_ unitLabel: String) -> String {
+        let parts = unitLabel.split(separator: " ")
+        if parts.count == 2, parts[0].uppercased() == "UNIT", let number = Int(parts[1]) {
+            return "Unit \(number)"
+        }
+        return unitLabel.capitalized
+    }
+
+    private var composer: some View {
+        let bar = ChatInputBar(
+            text: Binding(get: { model.draft }, set: { model.draft = $0 }),
+            isSending: isSending,
+            attachment: model.pendingImage,
+            isPreparingAttachment: model.isPreparingAttachment,
+            attachmentError: model.attachmentError,
+            characterLimit: model.draftCharacterLimit,
+            onSend: { model.send() },
+            onCancel: { model.cancel() },
+            onAttachImage: { model.attachImage(data: $0) },
+            onRemoveAttachment: { model.clearAttachment() },
+            useBrandSend: true,
+            backgroundFade: true,
+            focusTrigger: inputFocusTrigger,
+            // Merc asks; the student answers (AUD-44). In Basics the
+            // learner mostly writes practice messages, so it says that.
+            placeholder: basics == nil ? "Type your answer…" : BasicsCopy.placeholder,
+            compactPlaceholder: basics == nil ? "Answer…" : BasicsCopy.compactPlaceholder,
+            // A long answer must not swallow the reading area.
+            maxLines: 3,
+            onFocusChange: { composerFocused = $0 }
+        )
+        #if os(macOS)
+        // While Merc's check waits for an answer, the composer is the other
+        // way to answer (§5.3.3).
+        let checkOpen = NightCheckKeys.hasAnswerableCheck(messages: model.messages, isIdle: model.phase == .idle)
+        // The lesson opens on Merc's reply, not on a focused composer; a
+        // key typed then goes into it. While a check waits, its A–D and
+        // Return are the check's (Tab, a click or ⌘L reach the composer).
+        return bar.withAttachTrigger(attachTrigger)
+            .nightTypeToFocus(!checkOpen)
+            .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder
+                              : (basics == nil ? "Type your answer…" : BasicsCopy.placeholder))
+            .macReadableColumn()
+        #else
+        return bar
+        #endif
+    }
+
+    #if os(macOS)
+    /// What the menu bar's chat commands act on while this lesson shows.
+    /// Nothing while the intro or the celebration covers it.
+    private var commandTarget: ChatCommandTarget {
+        let covered = showIntro || showCelebration
+        let canRetry: Bool
+        if case .failed(_, let isRetryable) = model.phase { canRetry = isRetryable && !covered } else { canRetry = false }
+        return ChatCommandTarget(
+            currentMode: nil,
+            canRetry: canRetry,
+            retry: { [model] in model.retry() },
+            canExplainMore: !covered
+                && MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
+            explainMore: { [model] in model.explainMore() },
+            canAttach: !covered && !isSending,
+            attachImage: { attachTrigger += 1 },
+            canWriteReply: !covered,
+            writeReply: { inputFocusTrigger += 1 }
+        )
+    }
+    #endif
 
     /// Start the lesson the first time the view appears: resume the saved
     /// conversation if we have one (and it still exists), otherwise begin a fresh
@@ -331,6 +621,9 @@ public struct CurriculumLessonView: View {
     /// the first person ("I'll help you …"). Falls back to a generic line.
     private var coachLine: String {
         let goal = objective.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Basics objectives already speak to the learner ("You'll send your
+        // first message to a chatbot."), so they're used as they are.
+        if basics != nil, !goal.isEmpty { return goal }
         guard !goal.isEmpty else {
             return "I'll guide you through this — then check what landed."
         }
@@ -359,14 +652,15 @@ public struct CurriculumLessonView: View {
             eyebrow: eyebrowText,
             title: title,
             accessibilityLabel: headerAccessibilityLabel,
-            exitTitle: "Done",
-            exitAccessibilityLabel: "Done. Exit lesson."
+            exitTitle: basics == nil ? "Done" : BasicsCopy.back,
+            exitAccessibilityLabel: basics == nil ? "Done. Exit lesson." : BasicsCopy.backAccessibility,
+            exitLeading: basics != nil
         ) {
             model.cancel()
             onExit()
         }
-        .padding(.leading, 22)
-        .padding(.trailing, 12)
+        .padding(.leading, basics == nil ? 22 : 8)
+        .padding(.trailing, basics == nil ? 12 : 22)
         .padding(.vertical, BrandSpacing.xs)
     }
 
@@ -381,6 +675,65 @@ public struct CurriculumLessonView: View {
     /// doesn't start the lesson (AUD-33); the speech bubble scrolls when it
     /// outgrows the screen (large text), with Continue pinned below (AUD-08).
     private var lessonIntro: some View {
+        #if os(macOS)
+        macLessonIntro
+        #else
+        phoneLessonIntro
+        #endif
+    }
+
+    #if os(macOS)
+    /// The intro on a Mac, in Night Studio (SPEC.md §5.3.1): one centred group
+    /// in the gate's box: Merc waving in his lamp, the lesson's place, its
+    /// title, the existing line, and Continue (Return). The way out is the
+    /// toolbar's Not now. No speech bubble.
+    private var macLessonIntro: some View {
+        ZStack {
+            NightCanvas(pools: .indigo, stars: false)
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 14) {
+                        NightMercLamp(.wave, size: 96)
+                        NightEyebrow(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
+                                                      totalInUnit: totalInUnit))
+                        Text(title)
+                            .nightFont(.display)
+                            .foregroundStyle(Night.ink)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        if basics != nil {
+                            Text(NightTypography.curlQuotes(objective))
+                                .nightFont(.title2)
+                                .foregroundStyle(Night.ink)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text(basics == nil ? "Ready to dig in? I'll walk you through it — then check what landed."
+                             : BasicsCopy.introLine)
+                            .nightFont(.body)
+                            .foregroundStyle(Night.ink2)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        NightPrimaryButton(basics == nil ? "Continue" : BasicsCopy.start, size: .large,
+                                           action: startFromIntro)
+                            .keyboardShortcut(.defaultAction)
+                            .help("Start the lesson (Return)")
+                            .accessibilityLabel("Continue. Start the lesson.")
+                            .padding(.top, 10)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
+                    .frame(maxWidth: MacLayout.gateWidth)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+        }
+    }
+    #endif
+
+    private var phoneLessonIntro: some View {
         ZStack {
             BrandColor.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
@@ -390,18 +743,30 @@ public struct CurriculumLessonView: View {
                     eyebrow: "\(unitLabel) · Lesson \(lessonNumber)".uppercased(),
                     title: nil,
                     accessibilityLabel: "\(unitLabel.capitalized), Lesson \(lessonNumber)",
-                    exitTitle: "Not now",
-                    exitAccessibilityLabel: "Not now. Leave without starting the lesson."
+                    exitTitle: basics == nil ? "Not now" : BasicsCopy.back,
+                    exitAccessibilityLabel: basics == nil
+                        ? "Not now. Leave without starting the lesson."
+                        : "Back to lessons. Leave without starting the lesson.",
+                    exitLeading: basics != nil
                 ) {
                     onExit()
                 }
-                .padding(.leading, 24)
+                .padding(.leading, basics == nil ? 24 : 10)
                 .padding(.trailing, 14)
                 .padding(.top, BrandSpacing.sm)
 
                 GeometryReader { geo in
                     ScrollView {
-                        introSpeechBubble
+                        VStack(spacing: BrandSpacing.md) {
+                            // Basics, the first time: "Want the words bigger?"
+                            if let basics, basics.offersReadingSize,
+                               basics.readingSize.offersChoice(atFlooredSize: dynamicTypeSize) {
+                                ReadingSizeOffer(current: basics.readingSize,
+                                                 onChoose: basics.onChooseReadingSize,
+                                                 onDismiss: basics.onDismissReadingSizeOffer)
+                            }
+                            introSpeechBubble
+                        }
                             .padding(.horizontal, 24)
                             .padding(.top, BrandSpacing.md)
                             // Room for the bubble's tail and shadow, which
@@ -416,6 +781,9 @@ public struct CurriculumLessonView: View {
 
                 introFooter
             }
+            // The Mac's reading column: the bubble and Merc stay together
+            // in a wide window.
+            .macReadableColumn()
         }
     }
 
@@ -451,15 +819,19 @@ public struct CurriculumLessonView: View {
 
     private var continueButton: some View {
         Button(action: startFromIntro) {
-            Text("Continue")
+            Text(basics == nil ? "Continue" : BasicsCopy.start)
                 .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 28)
                 .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // No glow on the iPhone (dark only; Night casts no shadows
+                // in dark). The Mac keeps its own.
+                #if os(macOS)
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
+                #endif
         }
-        .accessibilityLabel("Continue. Start the lesson.")
+        .accessibilityLabel(basics == nil ? "Continue. Start the lesson." : BasicsCopy.startAccessibility)
     }
 
     private var introSpeechBubble: some View {
@@ -468,7 +840,16 @@ public struct CurriculumLessonView: View {
                 .font(.system(size: introTitleSize, weight: .black, design: .rounded))
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Ready to dig in? I'll walk you through it — then check what landed.")
+            if basics != nil {
+                // Basics: what the learner will do, in their words, and that
+                // stopping is fine (BEGINNER_GUIDE §1.3–1.5).
+                Text(objective)
+                    .font(.system(size: introBodySize, weight: .bold, design: .rounded))
+                    .foregroundStyle(BrandColor.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(basics == nil ? "Ready to dig in? I'll walk you through it — then check what landed."
+                 : BasicsCopy.introLine)
                 .font(.system(size: introBodySize, weight: .bold, design: .rounded))
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -487,7 +868,11 @@ public struct CurriculumLessonView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(BrandColor.accent.opacity(0.16), lineWidth: 2)
         )
+        // No shadow on the iPhone (dark only; Night casts none in dark). The
+        // Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 18, y: 12)
+        #endif
     }
 
     private func startFromIntro() {
@@ -554,6 +939,12 @@ public struct CurriculumLessonView: View {
         return "\(completed) down, \(left) to go."
     }
 
+    /// The chip above the box: the latest reply's practice line (Basics only).
+    private var practiceChipLine: String? {
+        guard basics != nil, !showIntro, !showCelebration else { return nil }
+        return PracticeLine.chip(messages: model.messages, isIdle: model.phase == .idle, draft: model.draft)
+    }
+
     private var isSending: Bool {
         switch model.phase {
         case .sending, .streaming: return true
@@ -585,6 +976,9 @@ struct LessonHeaderBar: View {
     let accessibilityLabel: String
     let exitTitle: String
     let exitAccessibilityLabel: String
+    /// Basics: the way out is a labelled back button ("‹ Lessons") on the
+    /// leading edge, where a beginner looks for it (BEGINNER_GUIDE §2.4).
+    var exitLeading: Bool = false
     let onExit: () -> Void
 
     /// Below accessibility sizes the title sits in the bar, on up to two
@@ -599,7 +993,7 @@ struct LessonHeaderBar: View {
     var body: some View {
         Content(eyebrow: eyebrow, title: title, accessibilityLabel: accessibilityLabel,
                 exitTitle: exitTitle, exitAccessibilityLabel: exitAccessibilityLabel,
-                onExit: onExit)
+                exitLeading: exitLeading, onExit: onExit)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
@@ -609,6 +1003,7 @@ struct LessonHeaderBar: View {
         let accessibilityLabel: String
         let exitTitle: String
         let exitAccessibilityLabel: String
+        let exitLeading: Bool
         let onExit: () -> Void
 
         @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -618,6 +1013,7 @@ struct LessonHeaderBar: View {
 
         var body: some View {
             HStack(alignment: .center, spacing: BrandSpacing.md) {
+                if exitLeading { exitButton }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(eyebrow)
                         .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
@@ -641,21 +1037,31 @@ struct LessonHeaderBar: View {
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityAddTraits(.isHeader)
 
-                Button(action: onExit) {
+                if !exitLeading { exitButton }
+            }
+        }
+
+        private var exitButton: some View {
+            Button(action: onExit) {
+                HStack(spacing: 3) {
+                    if exitLeading {
+                        Image(systemName: "chevron.backward")
+                            .font(.system(size: buttonSize, weight: .heavy))
+                    }
                     Text(exitTitle)
                         .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
-                        .foregroundStyle(BrandColor.accentText)
                         .lineLimit(1)
                         .fixedSize()
-                        .padding(.horizontal, 10)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .layoutPriority(1)
-                .accessibilityLabel(exitAccessibilityLabel)
-                .accessibilityShowsLargeContentViewer()
+                .foregroundStyle(BrandColor.accentText)
+                .padding(.horizontal, exitLeading ? 6 : 10)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+            .accessibilityLabel(exitAccessibilityLabel)
+            .accessibilityShowsLargeContentViewer()
         }
     }
 }

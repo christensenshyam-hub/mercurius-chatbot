@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 
 /// The root chat screen. Owns the view model and composes the message
 /// list, input bar, and empty state.
@@ -68,6 +69,24 @@ public struct ChatView: View {
     /// isn't blocked by a sheet it can't otherwise reach.
     private let dismissSheetsToken: Int
 
+    #if os(macOS)
+    /// The Mac shell's New Chat (toolbar, ⌘N), set by `macChrome`.
+    private var macOnNewChat: (() -> Void)?
+    /// A mode the menu bar asked for (Chat ▸ Socratic/Debate/Discussion,
+    /// ⌥⌘1–⌥⌘3), handled like a click on the toolbar picker and then cleared.
+    private var macModeRequest: Binding<ChatMode?>?
+    /// The mode explainer the toolbar picker shows the first time a mode is
+    /// chosen (the iPhone's pills show it from `ModeSelectorView`).
+    @State private var pendingModeDescription: ModeDescription?
+    /// Opens the composer's image panel (⇧⌘A).
+    @State private var attachTrigger = 0
+    /// Focuses the composer (Chat ▸ Write a Reply, ⌘L).
+    @State private var composerFocusTrigger = 0
+    /// The detail column's width: a narrow one folds the mode switch into a
+    /// menu (`macCompactToolbar`).
+    @State private var macDetailWidth: CGFloat = 0
+    #endif
+
     public init(
         apiClient: APIClient,
         sessionIdentity: SessionIdentity,
@@ -119,13 +138,23 @@ public struct ChatView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio: the ink canvas with the indigo pool (§2.4).
+            NightCanvas(pools: .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             VStack(spacing: 0) {
+                #if os(macOS)
+                // The Mac window's toolbar holds the mode picker, New Chat
+                // and Explain More; Settings is ⌘, and Today is a sidebar row.
+                #else
                 header
                 ModeSelectorView(model: model)
                     .background(BrandColor.background)
                 Divider().overlay(BrandColor.border)
+                #endif
 
                 if model.messages.isEmpty {
                     EmptyChatView(
@@ -141,6 +170,9 @@ public struct ChatView: View {
                             model.send()
                         }
                     )
+                    #if os(macOS)
+                    .nightMode(model.currentMode)
+                    #endif
                     // Re-key the view on the active mode so a mode
                     // switch crossfades the prompt chips rather than
                     // snap-replacing them. Cheap and obvious to the
@@ -166,23 +198,12 @@ public struct ChatView: View {
                         mercMood: focalMercState.mood,
                         mercActivity: focalMercState.activity
                     )
+                    #if os(macOS)
+                    .nightChat(yourTurn: NightYourTurn.modes.contains(model.currentMode))
+                    #endif
                 }
 
-                ChatInputBar(
-                    text: Binding(
-                        get: { model.draft },
-                        set: { model.draft = $0 }
-                    ),
-                    isSending: isSending,
-                    attachment: model.pendingImage,
-                    isPreparingAttachment: model.isPreparingAttachment,
-                    attachmentError: model.attachmentError,
-                    characterLimit: model.draftCharacterLimit,
-                    onSend: { model.send() },
-                    onCancel: { model.cancel() },
-                    onAttachImage: { model.attachImage(data: $0) },
-                    onRemoveAttachment: { model.clearAttachment() }
-                )
+                composer
             }
         }
         // Animate the hint's appearance + dismissal so the transition
@@ -198,7 +219,174 @@ public struct ChatView: View {
             }
         }
         .onChange(of: dismissSheetsToken) { _, _ in activeSheet = nil }
+        #if os(macOS)
+        .toolbar { macToolbar }
+        .nightHidesToolbarTitle(macCompactToolbar)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { macDetailWidth = $0 }
+        // On iOS these hang off the header, which the Mac doesn't show.
+        .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        #if DEBUG
+        // `-NightOpenQuiz YES` (shots only): the Quiz me sheet, as its chip
+        // opens it. Without a local server it shows its failure state.
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("-NightOpenQuiz") else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            activeSheet = .quiz
+        }
+        #endif
+        .reportFeedbackAlert(reportFeedback)
+        .sheet(item: $pendingModeDescription) { description in
+            ModeDescriptionSheet(description: description) {
+                Task { await model.switchMode(to: description.mode) }
+            }
+        }
+        .alert(
+            "Couldn't switch modes",
+            isPresented: Binding(
+                get: { model.modeSwitchError != nil },
+                set: { if !$0 { model.clearModeSwitchError() } }
+            )
+        ) {
+            Button("OK", role: .cancel) { model.clearModeSwitchError() }
+        } message: {
+            Text(model.modeSwitchError ?? "")
+        }
+        .macImageDrop(isEnabled: !isSending) { model.attachImage(data: $0) }
+        .focusedSceneValue(\.chatCommandTarget, commandTarget)
+        .onAppear(perform: takeModeRequest)
+        .onChange(of: macModeRequest?.wrappedValue) { _, _ in takeModeRequest() }
+        #endif
     }
+
+    private var composer: some View {
+        let bar = ChatInputBar(
+            text: Binding(
+                get: { model.draft },
+                set: { model.draft = $0 }
+            ),
+            isSending: isSending,
+            attachment: model.pendingImage,
+            isPreparingAttachment: model.isPreparingAttachment,
+            attachmentError: model.attachmentError,
+            characterLimit: model.draftCharacterLimit,
+            onSend: { model.send() },
+            onCancel: { model.cancel() },
+            onAttachImage: { model.attachImage(data: $0) },
+            onRemoveAttachment: { model.clearAttachment() }
+        )
+        #if os(macOS)
+        return bar.withAttachTrigger(attachTrigger)
+            .withFocusTrigger(composerFocusTrigger)
+            .nightPlaceholder(NightModeCopy.chatPlaceholder(messages: model.messages, mode: model.currentMode))
+            .macReadableColumn()
+        #else
+        return bar
+        #endif
+    }
+
+    #if os(macOS)
+    /// The Mac shell's wiring: New Chat for the toolbar, and the mode the
+    /// menu bar asks for. Without it the toolbar has no New Chat button.
+    public func macChrome(onNewChat: @escaping () -> Void, modeRequest: Binding<ChatMode?>) -> ChatView {
+        var view = self
+        view.macOnNewChat = onNewChat
+        view.macModeRequest = modeRequest
+        return view
+    }
+
+    /// Below this detail width the mode switch folds into a pop-up menu and
+    /// the window title steps aside (at the window's 700 pt minimum the
+    /// segmented switch pushed New Chat into the toolbar's overflow).
+    static let macCompactToolbarWidth: CGFloat = 860
+
+    private var macCompactToolbar: Bool { macDetailWidth > 0 && macDetailWidth < Self.macCompactToolbarWidth }
+
+    /// The window toolbar: the streak chip, the mode picker in the middle,
+    /// then Explain More and New Chat.
+    @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
+        if let headerAccessory {
+            ToolbarItem(placement: .navigation) {
+                headerAccessory()
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            // Night Studio's mode switch. Same rule as the iPhone's pills:
+            // no switching mid-reply or mid-switch. In a narrow detail column
+            // it is a pop-up menu, so New Chat and Explain More stay in the
+            // toolbar instead of its overflow.
+            Group {
+                if macCompactToolbar {
+                    NightModeMenu(
+                        current: model.currentMode,
+                        isEnabled: model.modeSwitchInFlight == nil && !isSending,
+                        onSelect: { requestMode($0) }
+                    )
+                } else {
+                    NightModeSwitcher(
+                        current: model.currentMode,
+                        isEnabled: model.modeSwitchInFlight == nil && !isSending,
+                        onSelect: { requestMode($0) }
+                    )
+                    .fixedSize()
+                }
+            }
+            .help("Socratic asks you questions, Debate argues the other side, Discussion talks it through (⌥⌘1, ⌥⌘2, ⌥⌘3)")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                model.explainMore()
+            } label: {
+                Label("Explain More", systemImage: "text.append")
+            }
+            .buttonStyle(.automatic)
+            .disabled(!MessageListView.offersExplainMore(phase: model.phase, messages: model.messages))
+            .help("Ask Merc to go deeper on the last answer (⇧⌘E)")
+        }
+        if let macOnNewChat {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: macOnNewChat) {
+                    Label("New Chat", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(.automatic)
+                .help("Start a new chat (⌘N)")
+            }
+        }
+    }
+
+    /// What the menu bar's chat commands act on while this chat shows.
+    private var commandTarget: ChatCommandTarget {
+        let canRetry: Bool
+        if case .failed(_, let isRetryable) = model.phase { canRetry = isRetryable } else { canRetry = false }
+        return ChatCommandTarget(
+            currentMode: model.currentMode,
+            canRetry: canRetry,
+            retry: { [model] in model.retry() },
+            canExplainMore: MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
+            explainMore: { [model] in model.explainMore() },
+            canAttach: !isSending,
+            attachImage: { attachTrigger += 1 },
+            canWriteReply: true,
+            writeReply: { composerFocusTrigger += 1 }
+        )
+    }
+
+    /// A mode from the toolbar picker or the menu bar: the explainer the
+    /// first time, as the iPhone's pills do, then the switch.
+    private func requestMode(_ mode: ChatMode) {
+        guard mode != model.currentMode, model.modeSwitchInFlight == nil, !isSending else { return }
+        if !ModeDescriptionStore.hasSeen(mode) {
+            pendingModeDescription = ModeDescription.description(for: mode)
+        } else {
+            Task { await model.switchMode(to: mode) }
+        }
+    }
+
+    private func takeModeRequest() {
+        guard let request = macModeRequest, let mode = request.wrappedValue else { return }
+        request.wrappedValue = nil
+        requestMode(mode)
+    }
+    #endif
 
     private func dismissChatInputHint() {
         hasSeenChatInputHint = true
@@ -299,32 +487,44 @@ public struct ChatView: View {
         .padding(.trailing, 4)
         .padding(.vertical, BrandSpacing.sm)
         .background(BrandColor.background)
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .settings:
-                if let settingsPresenter {
-                    settingsPresenter()
-                }
-            case .quiz:
-                // The dormant quiz feature, revived (Presentation P3): a
-                // comprehension quiz generated from THIS conversation via
-                // POST /api/quiz. All the machinery below the entry point
-                // (QuizView, QuizViewModel, APIClient+Tools, quizMaster
-                // achievement) shipped long ago and stayed tested.
-                QuizView(
-                    model: QuizViewModel(
-                        tools: apiClient,
-                        sessionIdProvider: { [sessionIdentity] in try sessionIdentity.current() },
-                        achievementStore: achievementStore
-                    ),
-                    dismissAction: { activeSheet = nil }
-                )
-            }
+        .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        #if DEBUG
+        // `-OpenSettings YES` (shots only): the Settings sheet, as the gear
+        // opens it (simctl can't tap).
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("-OpenSettings"), settingsPresenter != nil else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            activeSheet = .settings
         }
+        #endif
         .reportFeedbackAlert(reportFeedback)
         // Chat History presentation is owned by `AppShellView`
         // (the TabView host) so the History tab item there can
         // drive it without coupling ChatView to the action.
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: ActiveSheet) -> some View {
+        switch sheet {
+        case .settings:
+            if let settingsPresenter {
+                settingsPresenter()
+            }
+        case .quiz:
+            // The dormant quiz feature, revived (Presentation P3): a
+            // comprehension quiz generated from THIS conversation via
+            // POST /api/quiz. All the machinery below the entry point
+            // (QuizView, QuizViewModel, APIClient+Tools, quizMaster
+            // achievement) shipped long ago and stayed tested.
+            QuizView(
+                model: QuizViewModel(
+                    tools: apiClient,
+                    sessionIdProvider: { [sessionIdentity] in try sessionIdentity.current() },
+                    achievementStore: achievementStore
+                ),
+                dismissAction: { activeSheet = nil }
+            )
+        }
     }
 
     /// Whether the conversation is substantive enough (≥2 user turns, ≥4
@@ -357,11 +557,21 @@ private struct ThreadStack<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
+        #if os(macOS)
+        // Night Studio: turns breathe on the page (no bubbles to separate
+        // them).
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: 22) { content }
+        } else {
+            VStack(alignment: .leading, spacing: 22) { content }
+        }
+        #else
         if lazy {
             LazyVStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
         } else {
             VStack(alignment: .leading, spacing: BrandSpacing.sm) { content }
         }
+        #endif
     }
 }
 
@@ -445,6 +655,34 @@ struct MessageListView: View {
     @State private var showsJumpPill = false
     @State private var coachHiddenForTyping = false
 
+    /// Lessons: the lesson's id, for its interactive (the registry's,
+    /// placed by `LessonInteractiveAnchor`). Nil: no interactive.
+    var lessonID: String?
+    @State private var crisisIndex = LessonCrisisIndex()
+    @State private var interactiveIndex = LessonInteractiveIndex()
+    /// Lesson 1.1's interactive: the opening picked (and the Mac's opened
+    /// card, the iPhone's shown map), for the whole thread.
+    @State private var tokenizer = TokenizerState()
+    /// Every other card: what the student has done with it, for the whole
+    /// thread (in memory only).
+    @State private var interactives = InteractiveStateStore()
+    #if os(iOS)
+    /// The iPhone card's "Try it": its step 4 to the top of the reading area.
+    @State private var interactiveJump = LessonInteractiveJump()
+    #endif
+
+    #if os(macOS)
+    /// Night Studio, free chat: the latest completed reply's closing
+    /// question becomes the Your turn card (the chat's mode allows it).
+    var nightYourTurn = false
+    /// Night Studio, lessons: the lesson is complete, so the part strip's
+    /// dashed "more may come" segment goes.
+    var nightLessonComplete = false
+    @State private var nightParts = NightPartIndex()
+    @State private var nightMarks = NightPartMarks()
+    @State private var nightCurrentPart = 1
+    #endif
+
     private static let bottomID = "message-list-bottom"
     private static let coachID = "lesson-coach"
 
@@ -510,6 +748,19 @@ struct MessageListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
+                #if os(macOS)
+                if lessonStyle, !nightPlan.parts.isEmpty {
+                    NightPartStrip(parts: nightPlan.parts,
+                                   current: min(nightCurrentPart, nightPlan.parts.count),
+                                   moreMayFollow: !nightLessonComplete) { number in
+                        nightJump(toPart: number, proxy: proxy)
+                    }
+                    .padding(.horizontal, NightRowMetrics.gutter)
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+                    .macReadableColumn()
+                }
+                #endif
                 ScrollView {
                     ThreadStack(lazy: !lessonStyle) {
                         if let threadTitle {
@@ -550,7 +801,37 @@ struct MessageListView: View {
                                     : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                         }
 
+                        let interactive = interactivePlacement
                         ForEach(messages) { message in
+                            #if os(macOS)
+                            NightMessageRow(
+                                message: message,
+                                style: lessonStyle ? .lesson : .chat,
+                                sections: lessonStyle ? nightParts.sections(for: message) : [],
+                                firstPart: nightPlan.starts[message.id] ?? 1,
+                                showsYourTurn: nightYourTurn && message.id == messages.last?.id
+                                    && message.role == .assistant && message.status == .idle,
+                                crisisThread: nightCrisisReplies.contains(message.id),
+                                showsMercLabel: !lessonStyle && message.id == nightFirstReplyId,
+                                mercMood: message.id == focalAssistantId && !showsCoachIntro ? mercMood : .neutral,
+                                mercActivity: message.id == focalAssistantId && !showsCoachIntro ? mercActivity : .idle,
+                                quizInteraction: quizInteraction(for: message),
+                                onReport: { reason in onReport(message, reason) },
+                                onCheckTap: onCheckTap,
+                                coordinateSpace: messageListSpace,
+                                onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) },
+                                interactiveAfter: interactive?.messageID == message.id
+                                    ? interactive?.position : nil,
+                                interactiveCard: interactive?.cardRef ?? .tokenizer
+                            )
+                            .equatable()
+                            .id(message.id)
+                            .onGeometryChange(for: CGFloat.self) { geo in
+                                geo.frame(in: .named(messageListSpace)).minY
+                            } action: { minY in
+                                if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
+                            }
+                            #else
                             let isFocal = message.id == focalAssistantId
                             // One live Merc at a time: while the coach intro is up
                             // it carries the thinking/speaking motion and the
@@ -566,7 +847,12 @@ struct MessageListView: View {
                                 avatarActivity: isLive ? mercActivity : .idle,
                                 avatarIdleLife: isLive,
                                 onCheckTap: onCheckTap,
-                                quizInteraction: quizInteraction(for: message)
+                                quizInteraction: quizInteraction(for: message),
+                                // The lesson's interactive, between this
+                                // reply's blocks (`LessonInteractiveSplit`).
+                                interactiveAfter: interactive?.messageID == message.id
+                                    ? interactive?.position : nil,
+                                interactiveCard: interactive?.cardRef ?? .tokenizer
                             )
                             .equatable()
                             .id(message.id)
@@ -575,6 +861,7 @@ struct MessageListView: View {
                             } action: { minY in
                                 if message.id == messages.last?.id { scroll.policy.latestMessageMoved(minY: minY) }
                             }
+                            #endif
                         }
 
                         if case .failed(_, let isRetryable) = phase, isRetryable {
@@ -597,7 +884,15 @@ struct MessageListView: View {
                             .id(Self.bottomID)
                             .accessibilityHidden(true)
                     }
+                    // The Mac's reading column, centred in a wide window.
+                    .macReadableColumn()
                     .padding(.vertical, BrandSpacing.md)
+                    #if os(macOS)
+                    // Clear of the bottom fade below (and, under a lesson's
+                    // part strip, the top one).
+                    .padding(.bottom, 12)
+                    .padding(.top, nightFadesTop ? 12 : 0)
+                    #endif
                     // Gated like every other explicit animation in the app: under
                     // Reduce Motion the intro just disappears (its transition is
                     // already opacity-only) instead of sliding the thread up.
@@ -613,6 +908,54 @@ struct MessageListView: View {
                     }
                 }
                 .coordinateSpace(.named(messageListSpace))
+                #if os(macOS)
+                // Night Studio: the thread fades into the canvas over its last
+                // 18 pt instead of stopping at a hard edge (§2.8), and, under a
+                // lesson's part strip, over its first 22 pt: text passes under
+                // the strip and fades rather than being sliced by it.
+                .mask { NightScrollFade(top: nightFadesTop ? 22 : 0) }
+                // macOS 26: the toolbar's edge over the reader stays soft (it
+                // turned an opaque grey in a narrow window).
+                .nightSoftScrollEdge()
+                #endif
+                // Lesson 1.1's interactive keeps its opening for the thread,
+                // and every other card its state.
+                .environment(tokenizer)
+                .environment(interactives)
+                #if os(iOS)
+                // Its "Try it" jumps to its openings: a move of the
+                // student's own, as the Mac strip's jump to a part is.
+                .environment(\.lessonInteractiveJump, interactiveJump)
+                .onAppear {
+                    interactiveJump.perform = { animated in
+                        scroll.policy.partJumped()
+                        withAnimation(animated ? .smooth(duration: 0.45) : nil) {
+                            proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+                        }
+                    }
+                }
+                #endif
+                // A card brings a part of itself into view (Patch the
+                // Reward's track while a run plays, out of sight above the
+                // chip the student tapped): the least scroll that shows it,
+                // counted as the student's own move. On the next turn of the
+                // main queue: a card asks from `onChange`, in the update that
+                // resizes the part (Patch the Reward's panel opens its
+                // question), and the proxy scrolls to the part's laid-out
+                // frame: asked inside that update, it could aim at the frame
+                // from before it. (ScrollViewReader and its scrollTo are
+                // older than the iOS 17 target; nothing here is newer.)
+                .environment(\.interactiveScrollIntoView,
+                             InteractiveScrollAction(key: "lesson-list") { [scroll] id, animated in
+                                 scroll.policy.partJumped()
+                                 DispatchQueue.main.async {
+                                     if animated {
+                                         withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: nil) }
+                                     } else {
+                                         proxy.scrollTo(id, anchor: nil)
+                                     }
+                                 }
+                             })
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
                 })
@@ -642,6 +985,25 @@ struct MessageListView: View {
                 geometry.readingAreaHeight = height
                 layoutChanged(geometry, proxy: proxy)
             }
+            #if os(macOS)
+            // The Mac's window builds the chat afresh each time its sidebar
+            // row is chosen, with the thread already loaded: open at the
+            // latest message, as a thread that loads in place does. The lazy
+            // rows only estimate their heights until they are drawn, so one
+            // jump lands short; it repeats (briefly) until the end is in
+            // view, unless the student scrolls first.
+            .task {
+                guard !messages.isEmpty else { return }
+                _ = scroll.policy.latestMessageChanged(isNewReply: false)
+                for _ in 0..<8 {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard !Task.isCancelled, scroll.policy.isFollowing else { return }
+                    let geometry = scroll.policy.geometry
+                    if geometry.contentHeight > 0, geometry.isAtBottom { return }
+                    perform(.scrollToBottom(animated: false), proxy: proxy)
+                }
+            }
+            #endif
             .onChange(of: messages.last?.id) { _, newValue in
                 guard newValue != nil, let last = messages.last else { return }
                 // Merc's empty placeholder means a reply is on its way (a
@@ -667,6 +1029,57 @@ struct MessageListView: View {
                     AccessibilityNotification.Announcement(line).post()
                 }
             }
+            // The interactive left the thread from above the reading place
+            // (a crisis line arrived): a reply held at its top stays there.
+            .onChange(of: interactivePlacement) { old, new in
+                guard old != nil, new == nil, !scroll.policy.isFollowing,
+                      scroll.policy.didHoldCurrentReply else { return }
+                perform(.showLatestMessageTop, proxy: proxy)
+            }
+            #if DEBUG
+            // `-InteractiveScroll top|reveal|after` (shots only, both
+            // platforms): once a reply settles, the lesson's card's top,
+            // its reveal or its end.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle, let target = InteractiveLaunchOptions.current.scroll else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    scroll.policy.partJumped()
+                    proxy.scrollTo(InteractiveScrollID.id(for: target),
+                                   anchor: target == .reveal ? .top : UnitPoint(x: 0.5, y: 0.45))
+                }
+            }
+            // `-NightScrollToInteractive top|map` (shots only, both
+            // platforms; `context` on the iPhone): once a reply settles,
+            // Lesson 1.1's interactive (or its map) at the top of the
+            // reading area.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle,
+                      let target = UserDefaults.standard.string(forKey: "NightScrollToInteractive") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    scrollToInteractive(target, proxy: proxy)
+                }
+            }
+            #endif
+            #if os(macOS) && DEBUG
+            // `-NightScrollToPart <n>` (shots only): each time a reply
+            // settles, the part strip's jump to part n.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle,
+                      let part = Int(UserDefaults.standard.string(forKey: "NightScrollToPart") ?? "") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { nightJump(toPart: part, proxy: proxy) }
+            }
+            #endif
+            #if DEBUG
+            // `-LessonJumpToLatest YES` (shots only): each time a lesson
+            // reply settles, the "Jump to latest" pill's jump, so a check at
+            // the end of a long reply is on screen.
+            .onChange(of: phase) { _, new in
+                guard new == .idle, lessonStyle, UserDefaults.standard.bool(forKey: "LessonJumpToLatest") else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    perform(scroll.policy.jumpToLatest(), proxy: proxy)
+                }
+            }
+            #endif
             .onChange(of: composerFocused) { _, focused in
                 let geometry = scroll.policy.geometry
                 let coachOnScreen = hasCoachRow && !coachHiddenForTyping
@@ -721,6 +1134,27 @@ struct MessageListView: View {
     /// Sits in its own strip under the list whenever the end of the thread
     /// is out of view — after a long reply was held at its top, or when the
     /// student scrolled up to re-read.
+    #if os(macOS)
+    private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
+        // Night Studio: a pill of floating chrome (§5.4).
+        Button {
+            perform(scroll.policy.jumpToLatest(), proxy: proxy)
+        } label: {
+            Label("Jump to latest", systemImage: "arrow.down")
+                .nightFont(.calloutStrong)
+                .foregroundStyle(Night.accentText)
+                .padding(.horizontal, 14)
+                .frame(height: 32)
+                .nightChrome(in: Capsule(), interactive: true)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .nightFocusRing(Capsule())
+        .padding(.vertical, 6)
+        .help("Scroll to the newest message")
+        .accessibilityHint("Scrolls to the newest message")
+    }
+    #else
     private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
         Button {
             perform(scroll.policy.jumpToLatest(), proxy: proxy)
@@ -732,7 +1166,8 @@ struct MessageListView: View {
                 .padding(.horizontal, BrandSpacing.md)
                 .background(BrandColor.surfaceElevated, in: Capsule())
                 .overlay(Capsule().strokeBorder(BrandColor.accent.opacity(0.35), lineWidth: 1))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                // No shadow: the iPhone is dark only, and Night casts none
+                // in dark (SPEC.md §2.6). The stroke carries the edge.
         }
         .buttonStyle(.plain)
         .frame(minHeight: 44)
@@ -745,10 +1180,29 @@ struct MessageListView: View {
         .accessibilityHint("Scrolls to the newest message")
     }
 
+    #endif
+
     /// The larger Merc coach moment above a brand-new thread — the handoff
     /// beat between the empty-state intro ("Hi, I'm Merc") and the compact
     /// per-message avatars. Carries the live thinking/speaking motion while
     /// Merc works on his first reply.
+    #if os(macOS)
+    private var coachIntro: some View {
+        // Night Studio: Merc in his lamp, on the page.
+        VStack(spacing: 10) {
+            NightMercLamp(.idle, size: 64, mood: mercMood, activity: mercActivity, antics: true)
+            Text("Let’s sharpen this question together.")
+                .nightFont(.callout)
+                .foregroundStyle(Night.ink2)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, BrandSpacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Merc, your tutor: Let’s sharpen this question together.")
+    }
+
+    #else
     private var coachIntro: some View {
         VStack(spacing: BrandSpacing.sm) {
             MercMascot(.idle, size: 84, emphasis: .softGlow,
@@ -767,6 +1221,22 @@ struct MessageListView: View {
         .accessibilityLabel("Merc, your tutor: Let’s sharpen this question together.")
     }
 
+    #endif
+
+    #if os(macOS)
+    private var retryFooter: some View {
+        // Night Studio: under the failure line, a secondary button (§5.10).
+        HStack {
+            NightSecondaryButton("Retry", systemImage: "arrow.clockwise", action: onRetry)
+                .help("Try again (⌘R)")
+                .accessibilityLabel("Retry sending the last message")
+            Spacer()
+        }
+        .padding(.horizontal, NightRowMetrics.gutter)
+        .padding(.bottom, BrandSpacing.sm)
+    }
+
+    #else
     private var retryFooter: some View {
         HStack {
             Spacer()
@@ -778,13 +1248,19 @@ struct MessageListView: View {
                     .background(BrandColor.surfaceElevated)
                     .foregroundStyle(BrandColor.accentText)
                     .clipShape(Capsule())
+                    .macHoverHighlight(cornerRadius: 999)
             }
             .frame(minHeight: 44)
+            #if os(macOS)
+            .help("Try again (⌘R)")
+            #endif
             .accessibilityLabel("Retry sending the last message")
             Spacer()
         }
         .padding(.bottom, BrandSpacing.sm)
     }
+
+    #endif
 
     /// Visible when the conversation is idle and the most recent reply
     /// was from the assistant — invites the user to ask for more depth
@@ -794,6 +1270,26 @@ struct MessageListView: View {
     /// In the free chat the chip leads-aligns with the assistant bubble's
     /// text edge (past the Merc avatar) so it reads as part of Merc's turn;
     /// lessons have no avatar column, so it stays centered there.
+    #if os(macOS)
+    private var explainMoreFooter: some View {
+        // Night Studio: the real reply chips, as floating chrome under the
+        // latest reply (§5.4). No "hint": there is no such feature.
+        HStack(spacing: 10) {
+            NightReplyChip(title: "Explain more", systemImage: "text.alignleft", action: onExplainMore)
+                .help("Ask Merc to go deeper on the last answer (⇧⌘E)")
+                .accessibilityHint("Asks Mercurius to expand on the previous answer in more depth")
+            if let onQuizMe, messages.filter({ $0.role == .user }).count >= 2 {
+                NightReplyChip(title: "Quiz me", systemImage: "checklist", action: onQuizMe)
+                    .help("A short quiz on this conversation")
+                    .accessibilityHint("Generates a short quiz from this conversation")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, NightRowMetrics.gutter)
+        .padding(.bottom, BrandSpacing.sm)
+    }
+
+    #else
     private var explainMoreFooter: some View {
         HStack {
             if !alignsWithAvatar { Spacer() }
@@ -813,6 +1309,8 @@ struct MessageListView: View {
         .padding(.top, BrandSpacing.xs)
         .padding(.bottom, BrandSpacing.sm)
     }
+
+    #endif
 
     /// blocks_v1 interaction for one lesson bubble: taps live only on the
     /// LATEST assistant message while no reply is in flight; older [Q]s
@@ -866,10 +1364,130 @@ struct MessageListView: View {
                         .strokeBorder(BrandColor.accent.opacity(0.4), lineWidth: 1)
                 )
                 .clipShape(Capsule())
+                .macHoverHighlight(cornerRadius: 999)
         }
         .frame(minHeight: 44)
         .accessibilityLabel(title)
     }
+
+    // MARK: The lesson's interactive (both platforms)
+
+    /// This list in the lesson `id` (the registry says which lessons hold
+    /// an interactive: `InteractiveRegistry`).
+    func lesson(id: String) -> MessageListView {
+        var list = self
+        list.lessonID = id
+        return list
+    }
+
+    /// Where the lesson's interactive sits in this thread, if anywhere. The
+    /// Mac reads the parts its strip already split; the iPhone splits them
+    /// here, only in a lesson with a card and only until the card has its
+    /// place (the index keeps it).
+    private var interactivePlacement: LessonInteractivePlacement? {
+        guard lessonStyle, let spec = InteractiveRegistry.spec(forLesson: lessonID) else { return nil }
+        return interactiveIndex.placement(spec: spec, messages: messages,
+                                          crisisReplies: crisisIndex.guardedReplies(in: messages)) { message in
+            #if os(macOS)
+            nightParts.sections(for: message)
+            #else
+            LessonParts.sections(of: message.content, isStreaming: message.status == .streaming)
+            #endif
+        }
+    }
+
+    #if DEBUG
+    /// The interactive (or its map) to the top of the reading area, as the
+    /// Mac strip's jump does (shots only). On the iPhone also: `context`
+    /// (the card's top under the end of the text before it), `step2`,
+    /// `step3`, `openings`, `sentence`, `panel` (the map), and `after` (the
+    /// card's end, with what follows it).
+    private func scrollToInteractive(_ target: String, proxy: ScrollViewProxy) {
+        scroll.policy.partJumped()
+        #if os(macOS)
+        proxy.scrollTo(target == "map" ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID,
+                       anchor: .top)
+        #else
+        switch target {
+        case "map": proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+        case "context": proxy.scrollTo(LessonTokenizerCard.topEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "step2": proxy.scrollTo(LessonTokenizerCard.stepScrollID(2), anchor: .top)
+        case "step3": proxy.scrollTo(LessonTokenizerCard.stepScrollID(3), anchor: .top)
+        case "after": proxy.scrollTo(LessonTokenizerCard.bottomEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "openings": proxy.scrollTo(LessonTokenizerCard.openingsScrollID, anchor: .top)
+        case "sentence": proxy.scrollTo(LessonTokenizerCard.sentenceScrollID, anchor: .top)
+        case "panel": proxy.scrollTo(LessonTokenizerCard.panelScrollID, anchor: .top)
+        default: proxy.scrollTo(LessonTokenizerCard.scrollID, anchor: .top)
+        }
+        #endif
+    }
+    #endif
+
+    #if os(macOS)
+    // MARK: Night Studio (Mac)
+
+    /// This list with the free chat's Night options.
+    func nightChat(yourTurn: Bool) -> MessageListView {
+        var list = self
+        list.nightYourTurn = yourTurn
+        return list
+    }
+
+    /// This list with the lesson's Night options.
+    func nightLesson(complete: Bool) -> MessageListView {
+        var list = self
+        list.nightLessonComplete = complete
+        return list
+    }
+
+    /// The replies the crisis guard draws plainly (the thread's first crisis
+    /// reply and every reply after it).
+    private var nightCrisisReplies: Set<UUID> { crisisIndex.guardedReplies(in: messages) }
+
+    /// The thread's first reply from Merc: the one "Merc · AI tutor" heads.
+    private var nightFirstReplyId: UUID? { messages.first(where: { $0.role == .assistant })?.id }
+
+    /// A lesson whose part strip shows: the thread fades under it.
+    private var nightFadesTop: Bool { lessonStyle && !nightPlan.parts.isEmpty }
+
+    /// The lesson thread's parts so far (empty in free chat).
+    private var nightPlan: NightPartPlan {
+        lessonStyle ? nightParts.plan(for: messages) : NightPartPlan()
+    }
+
+    /// A part mark moved (a scroll, a layout): maybe the strip's "now
+    /// reading" changed.
+    private func nightPartMarkMoved(_ number: Int, minY: CGFloat) {
+        nightMarks.positions[number] = minY
+        let geometry = scroll.policy.geometry
+        let current = nightMarks.current(partCount: nightPlan.parts.count, viewportHeight: geometry.viewportHeight,
+                                         atBottom: geometry.isAtBottom && geometry.contentHeight > geometry.viewportHeight)
+        if current != nightCurrentPart { nightCurrentPart = current }
+    }
+
+    /// The strip's jump: part `number`'s mark to the top of the reading area
+    /// (part 1: the lesson's start). It stops following a streaming reply,
+    /// as a scroll of the student's own would.
+    private func nightJump(toPart number: Int, proxy: ScrollViewProxy) {
+        let target: AnyHashable
+        if number > 1 {
+            target = NightPartMark.scrollID(number)
+        } else if hasCoachRow {
+            target = Self.coachID
+        } else if let first = messages.first(where: { $0.role == .assistant }) {
+            target = first.id
+        } else {
+            return
+        }
+        scroll.policy.partJumped()
+        nightCurrentPart = number
+        if reduceMotion || Night.debugReduceMotion {
+            proxy.scrollTo(target, anchor: .top)
+        } else {
+            withAnimation(Night.Motion.layout) { proxy.scrollTo(target, anchor: .top) }
+        }
+    }
+    #endif
 
     /// Show the Explain More footer only when:
     ///   - we're not in a failure state (retry footer takes priority),
@@ -878,6 +1496,12 @@ struct MessageListView: View {
     ///     no-ops but the affordance reads as broken),
     ///   - the last message is a non-empty assistant turn.
     private var shouldShowExplainMore: Bool {
+        Self.offersExplainMore(phase: phase, messages: messages)
+    }
+
+    /// The rule for `shouldShowExplainMore`, shared with the Mac's toolbar
+    /// button and menu command.
+    static func offersExplainMore(phase: ChatViewModel.Phase, messages: [ChatMessage]) -> Bool {
         guard case .idle = phase else { return false }
         guard let last = messages.last else { return false }
         guard last.role == .assistant else { return false }

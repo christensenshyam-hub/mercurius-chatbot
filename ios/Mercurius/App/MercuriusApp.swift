@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import UserNotifications
 import AppFeature
+import DesignSystem
 import EngagementFeature
 
 @main
@@ -13,12 +14,12 @@ struct MercuriusApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(environment)
-            // NOTE: do NOT set `.preferredColorScheme` here. `RootView` applies
-            // the user's choice from `ThemePreferenceStore` (System/Light/Dark).
-            // A `.preferredColorScheme(nil)` at this level is nearer the window
-            // root and OVERRIDES RootView's value, pinning the app to the system
-            // appearance — which made the Settings theme toggle appear to do
-            // nothing.
+                // Dark only (`BrandAppearance`): the same scheme `RootView`
+                // applies, here at the window's root too. Info.plist's
+                // `UIUserInterfaceStyle = Dark` covers the launch and the
+                // system's own sheets and keyboard. (There is no student
+                // choice any more for this to override.)
+                .preferredColorScheme(BrandAppearance.colorScheme)
         }
     }
 }

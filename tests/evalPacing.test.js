@@ -989,7 +989,12 @@ describe('eval-pacing audit 2026-10 probes: scenarios and the iOS wire shape', (
     const vm = fs.readFileSync(path.join(ios, 'ChatFeature', 'Sources', 'ChatViewModel.swift'), 'utf8');
     assert.ok(vm.includes(`starter + ${JSON.stringify(LESSON_CONTRACT)}`), 'LESSON_CONTRACT is withCompletionContract verbatim');
     const caps = fs.readFileSync(path.join(ios, 'NetworkingKit', 'Sources', 'ClientCapabilities.swift'), 'utf8');
-    assert.ok(caps.includes(`public static let current = ${JSON.stringify([...IOS_CAPABILITIES])}`), 'capabilities match ClientCapabilities.current');
+    // The app adds its platform token (platform_ios / platform_mac) after the
+    // shared list; only the Basics guide reads it, so every other request is
+    // IOS_CAPABILITIES. The Basics scenarios send [BLOCKS_V1, 'platform_ios'].
+    const shared = IOS_CAPABILITIES.map((c) => JSON.stringify(c)).join(', ');
+    assert.ok(caps.includes(`public static let current = [${shared}, platform]`), 'capabilities match ClientCapabilities.current');
+    assert.ok(caps.includes('return "platform_ios"'), 'the iPhone build sends platform_ios');
   });
 
   test('selectScenarios: --only takes one prefix or a comma-separated union', async () => {

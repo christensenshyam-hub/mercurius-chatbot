@@ -188,9 +188,21 @@ private extension Image {
         self = Image(uiImage: sharedImage)
     }
 }
+#elseif canImport(AppKit)
+import AppKit
+
+// The Mac app ships the same logo assets. On the `swift test` host there
+// are none: nil, and callers fall back to the SwiftUI mark.
+private func platformImage(named name: String) -> NSImage? {
+    NSImage(named: name)
+}
+
+private extension Image {
+    init(sharedImage: NSImage) {
+        self = Image(nsImage: sharedImage)
+    }
+}
 #else
-// macOS test host — image assets don't exist. Return nil so callers
-// fall back to the SwiftUI mark.
 private func platformImage(named name: String) -> Any? { nil }
 
 private extension Image {

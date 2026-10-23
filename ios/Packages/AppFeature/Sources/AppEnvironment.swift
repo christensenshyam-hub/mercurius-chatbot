@@ -1,9 +1,14 @@
 import Foundation
 import OSLog
 import CurriculumFeature
+import EngagementFeature
+import DesignSystem
 import NetworkingKit
 import PersistenceKit
 import SettingsFeature
+#if os(macOS)
+import ChatFeature
+#endif
 
 /// Shared logger for app-level diagnostics. Surfaces in Console.app
 /// under the `com.mayoailiteracy.mercurius` subsystem when filtered
@@ -21,9 +26,9 @@ public final class AppEnvironment: ObservableObject {
     public let apiClient: APIClient
     public let sessionIdentity: SessionIdentity
 
-    /// App-wide theme preference. Observed by `RootView` so the chosen
-    /// color scheme propagates everywhere the moment the user changes
-    /// it in Settings.
+    /// The theme preference earlier versions offered. No longer read: the
+    /// app is dark only (`BrandAppearance`), and Settings no longer shows
+    /// the choice. Kept so the hosts' initialisers don't change.
     public let themeStore: ThemePreferenceStore
 
     /// Disk-backed chat history. `nil` only if SwiftData fails to
@@ -44,6 +49,9 @@ public final class AppEnvironment: ObservableObject {
     public let progressStore: CurriculumProgressStore
     /// Keeps `progressStore` in step with `/api/progress`.
     let progressSync: CurriculumProgressSync
+    /// Which course the learner follows (Basics or the Deep dive) and the
+    /// Basics reading size. Device-local; never synced.
+    public let trackStore: CurriculumTrackStore
     /// When the student last did something, for the cold-launch resume.
     public let lastActivityStore: LastActivityStore
     /// The per-device App Store review prompt budget. Never reset.
@@ -53,9 +61,20 @@ public final class AppEnvironment: ObservableObject {
     /// Whether this device answered under 13 recently.
     let ageBlockStore: AgeBlockStore
 
+    /// The printable certificates: who has earned which, and the name and
+    /// dates they print (kept on this device only; Settings' resets erase
+    /// them).
+    public let certificates: CertificateCenter
+
     /// A lesson a tapped reminder (or a `mercurius://lesson/<id>` link) asked
     /// to open. The shell presents it and clears it.
     @Published public var pendingLessonId: String?
+
+    #if os(macOS)
+    /// The Mac window's navigation state and shared chat model, which the
+    /// menu bar and the Settings window act on too.
+    public let macShell: MacShellModel
+    #endif
 
     /// The streak seed has succeeded this process.
     private var didSeedStreak = false
@@ -80,6 +99,7 @@ public final class AppEnvironment: ObservableObject {
         //   -SeedDemoChat  → InMemoryChatStore preloaded with ~50 msgs
         //                    (used by PerformanceTests for realistic
         //                    scroll / memory measurements).
+        //   (Both are DEBUG-only: `testHookArguments`.)
         //   -UITests YES   → empty InMemoryChatStore. MercuriusUITests
         //                    assumes a clean slate each run — without
         //                    this the disk-backed SwiftData store from a
@@ -108,7 +128,7 @@ public final class AppEnvironment: ObservableObject {
     /// so we have to avoid calling into SwiftData at all in those
     /// contexts.
     public init(environment: APIEnvironment = .production, chatStore: ChatStore?) {
-        let identity = SessionIdentity()
+        let identity = SessionIdentity(keychain: Self.makeKeychain(arguments: ProcessInfo.processInfo.arguments))
         self.sessionIdentity = identity
         self.apiClient = APIClient(
             environment: environment,
@@ -120,10 +140,22 @@ public final class AppEnvironment: ObservableObject {
         self.achievementStore = AchievementStore()
         self.reminderStore = ReminderStore()
 
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = Self.testHookArguments(ProcessInfo.processInfo.arguments)
         let isUITesting = arguments.contains(Self.uiTestArgument)
         let progress = CurriculumProgressStore(preferences: Self.curriculumProgressPreferences)
         self.progressStore = progress
+        #if DEBUG
+        // `-SeedCompleted b1_l1,b1_l2` (screenshots, with -UITests, whose
+        // progress suite is emptied at every launch and never synced): those
+        // lessons count as done.
+        if isUITesting, let raw = UserDefaults.standard.string(forKey: "SeedCompleted") {
+            progress.merge(completed: raw.split(separator: ",").map(String.init), mastered: [],
+                           remoteVersion: MercuriusCurriculum.version)
+        }
+        #endif
+        let tracks = CurriculumTrackStore(preferences: Self.curriculumProgressPreferences)
+        Self.applyDebugTrack(tracks, arguments: arguments)
+        self.trackStore = tracks
         self.progressSync = CurriculumProgressSync(
             progress: progress,
             remote: apiClient,
@@ -142,11 +174,71 @@ public final class AppEnvironment: ObservableObject {
         self.ageBlockStore = AgeBlockStore(
             defaults: Self.makeDefaults(suite: Self.uiTestAgeBlockSuite, arguments: arguments,
                                         wipe: !arguments.contains(Self.keepAgeBlockArgument)))
+        self.certificates = CertificateCenter.make(
+            progress: progress,
+            defaults: Self.makeDefaults(suite: Self.uiTestCertificateSuite, arguments: arguments))
         if isUITesting {
             // Every UI test anchors on Home's CTAs; the card would push them
             // down. Its logic is covered by the AppFeature unit tests.
             reminderCardStore.markHandled()
         }
+        #if os(macOS)
+        let client = apiClient
+        let streak = streakStore
+        let achievements = achievementStore
+        self.macShell = MacShellModel(
+            progress: progress,
+            tracks: tracks,
+            lastActivityStore: lastActivityStore,
+            chatStore: chatStore,
+            makeChatModel: {
+                ChatViewModel(
+                    apiClient: client,
+                    sessionIdentity: identity,
+                    store: chatStore,
+                    streakStore: streak,
+                    achievementStore: achievements
+                )
+            }
+        )
+        #endif
+        #if DEBUG
+        // `-OpenLesson <id>` (screenshots): open that lesson through the same
+        // route a tapped reminder takes, once the gate is clear.
+        if let lessonId = UserDefaults.standard.string(forKey: "OpenLesson") {
+            pendingLessonId = lessonId
+        }
+        #endif
+    }
+
+    /// The Keychain the session id lives in. DEBUG `-EphemeralSession` keeps
+    /// it in memory instead, so screenshot runs (the Mac's `-MacSnapshot`)
+    /// never create or read a real Keychain item on the machine.
+    static func makeKeychain(arguments: [String]) -> KeychainStore {
+        #if DEBUG
+        if arguments.contains(ephemeralSessionArgument) { return EphemeralKeychain() }
+        #endif
+        return Keychain()
+    }
+
+    static let ephemeralSessionArgument = "-EphemeralSession"
+
+    /// DEBUG, for screenshots: `-CurriculumTrack basics|deepDive` picks the
+    /// course at launch, `-BasicsReadingSize standard|larger|largest` sets
+    /// the Basics size (and answers the one-time offer), and
+    /// `-BasicsSizeOffered YES` only answers the offer.
+    static func applyDebugTrack(_ tracks: CurriculumTrackStore, arguments: [String]) {
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: "CurriculumTrack"), let track = CurriculumTrack(rawValue: raw) {
+            tracks.choose(track)
+        }
+        if let raw = defaults.string(forKey: "BasicsReadingSize"), let size = ReadingSize(rawValue: raw) {
+            tracks.setBasicsReadingSize(size)
+        } else if defaults.bool(forKey: "BasicsSizeOffered") {
+            tracks.markReadingSizeOfferHandled()
+        }
+        #endif
     }
 
     /// Seed the streak cache from the server's session row. Runs at most once
@@ -199,11 +291,26 @@ public final class AppEnvironment: ObservableObject {
     static let uiTestArgument = "-UITests"
 
     private static func shouldSeedDemoChat() -> Bool {
-        ProcessInfo.processInfo.arguments.contains(seedDemoChatArgument)
+        testHookArguments(ProcessInfo.processInfo.arguments).contains(seedDemoChatArgument)
     }
 
     private static func shouldUseCleanInMemoryStore() -> Bool {
-        ProcessInfo.processInfo.arguments.contains(uiTestArgument)
+        testHookArguments(ProcessInfo.processInfo.arguments).contains(uiTestArgument)
+    }
+
+    /// The launch arguments the test hooks (`-UITests`, `-KeepAgeBlock`,
+    /// `-SeedDemoChat`) may read: all of them in a DEBUG build — the UI
+    /// tests and the screenshot harness run Debug — and none in Release.
+    /// On a Mac anyone can launch the store build with arguments (`open -a
+    /// Mercurius --args -UITests YES`), and `-UITests` would move the
+    /// under-13 block into a suite wiped at every launch, ending its 7-day
+    /// stop; on iOS an App Store build can't be given arguments at all.
+    static func testHookArguments(_ arguments: [String]) -> [String] {
+        #if DEBUG
+        arguments
+        #else
+        []
+        #endif
     }
 
     /// Where `CurriculumProgressStore` persists. Under `-UITests` this is a
@@ -212,13 +319,14 @@ public final class AppEnvironment: ObservableObject {
     /// hide the lesson intro the first-run UI test anchors on. Evaluated once
     /// per process, so the wipe happens once per launch.
     public static let curriculumProgressPreferences: PreferenceStore =
-        makeCurriculumProgressPreferences(arguments: ProcessInfo.processInfo.arguments)
+        makeCurriculumProgressPreferences(arguments: testHookArguments(ProcessInfo.processInfo.arguments))
 
     static let uiTestProgressSuite = "com.mayoailiteracy.mercurius.uitests.curriculumProgress"
     static let uiTestLastActivitySuite = "com.mayoailiteracy.mercurius.uitests.lastActivity"
     static let uiTestReviewPromptSuite = "com.mayoailiteracy.mercurius.uitests.reviewPrompt"
     static let uiTestReminderCardSuite = "com.mayoailiteracy.mercurius.uitests.reminderCard"
     static let uiTestAgeBlockSuite = "com.mayoailiteracy.mercurius.uitests.ageBlock"
+    static let uiTestCertificateSuite = "com.mayoailiteracy.mercurius.uitests.certificate"
     static let keepAgeBlockArgument = "-KeepAgeBlock"
 
     static func makeCurriculumProgressPreferences(arguments: [String]) -> PreferenceStore {

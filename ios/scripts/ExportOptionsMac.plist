@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The native Mac app (MercuriusMac) for the Mac App Store, as a
+         universal purchase with the iOS app: the same bundle id, in the
+         same App Store Connect record. Used by
+         `scripts/release.sh --platform mac`; the iOS app's options are in
+         ExportOptions.plist.
+
+         "app-store-connect" is the current name of the "app-store" method
+         (Xcode 15.3 renamed it; "app-store" still works, deprecated). For a
+         Mac archive it exports a signed installer package, Mercurius.pkg,
+         which is what App Store Connect takes for macOS. -->
+    <key>method</key>
+    <string>app-store-connect</string>
+
+    <key>teamID</key>
+    <string>TMBPRHZYW2</string>
+
+    <!-- Manual signing, as on iOS: the app is signed with the team's Apple
+         Distribution certificate (one certificate for every platform) and
+         the "Mercurius Mac App Store" profile (MAC_APP_STORE), both made by
+         `scripts/provision.sh --platform mac` and pinned in project.yml. -->
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Apple Distribution</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.mayoailiteracy.mercurius.native</key>
+        <string>Mercurius Mac App Store</string>
+    </dict>
+
+    <!-- The .pkg is signed with the Mac Installer Distribution certificate
+         ("3rd Party Mac Developer Installer: …"); this is Xcode's automatic
+         selector for the newest one installed. -->
+    <key>installerSigningCertificate</key>
+    <string>Mac Installer Distribution</string>
+
+    <!-- dSYMs go up with the build so App Store Connect can symbolicate
+         crash reports. -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- Write the .pkg to disk; release.sh uploads it with altool
+         (`--type macos`). -->
+    <key>destination</key>
+    <string>export</string>
+
+    <!-- Keep the version and build number release.sh set in project.yml;
+         don't let Xcode bump them during export. -->
+    <key>manageAppVersionAndBuildNumber</key>
+    <false/>
+</dict>
+</plist>

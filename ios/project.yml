@@ -3,6 +3,9 @@ options:
   bundleIdPrefix: com.mayoailiteracy
   deploymentTarget:
     iOS: "17.0"
+    # The native Mac app (MercuriusMac). Matches the packages' floor in
+    # Packages/Package.swift — the iOS 17-era SwiftUI surface.
+    macOS: "14.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
   xcodeVersion: "26.0"
@@ -106,6 +109,12 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIStatusBarStyle: UIStatusBarStyleDefault
+        # Dark only (Night Studio, docs/ios-night-only/PR.md): the launch,
+        # alerts, the keyboard and the system's share and print sheets are
+        # dark too, whatever the phone's own appearance. The widget
+        # extension (the Live Activity) has no such key: it follows the
+        # system.
+        UIUserInterfaceStyle: Dark
         # iPhone stays portrait-only — designed for a single full-screen
         # reading/typing context on phone.
         UISupportedInterfaceOrientations:
@@ -217,6 +226,102 @@ targets:
           # way it does the app profile.
           PROVISIONING_PROFILE_SPECIFIER: "Mercurius Widgets App Store"
 
+  MercuriusMac:
+    # The native SwiftUI Mac app (not Catalyst, not the iPad app on Mac).
+    # Ships on the Mac App Store as a UNIVERSAL PURCHASE with the iOS app:
+    # the same bundle id in the same App Store Connect record, so Release
+    # (archive) builds use com.mayoailiteracy.mercurius.native exactly.
+    # Like the iOS target this is a thin shell: the App, the scenes and
+    # the DEBUG screenshot harness. The window's content (bootstrap,
+    # consent gate, NavigationSplitView shell) lives in AppFeature.
+    # See docs/mac-app/.
+    type: application
+    platform: macOS
+    sources:
+      - path: MercuriusMac
+      # The shared brand art (LogoIcon / LogoIconDark / LogoHero, the
+      # LaunchBackground + AccentColor colours) — one copy for both apps.
+      # Its iOS-only AppIcon set is ignored here; the Mac icon is
+      # MacAppIcon (MercuriusMac/Resources/MacAssets.xcassets, made from
+      # the iOS icon by scripts/make-mac-icon.py).
+      - path: Mercurius/Resources/Assets.xcassets
+      # The same privacy manifest as iOS: the Mac app collects the same
+      # data for the same purposes and calls the same required-reason API.
+      - path: Mercurius/Resources/PrivacyInfo.xcprivacy
+    postBuildScripts:
+      - name: Strip extended attributes (macOS workaround for codesign)
+        script: |
+          # Same workaround as the iOS targets: Copy Bundle Resources
+          # re-adds com.apple.FinderInfo / provenance xattrs, which
+          # codesign rejects. Last script phase, right before signing.
+          if [ -d "${TARGET_BUILD_DIR}" ]; then
+            /usr/bin/xattr -cr "${TARGET_BUILD_DIR}"
+          fi
+        basedOnDependencyAnalysis: false
+        runOnlyWhenInstalling: false
+    dependencies:
+      - package: LocalPackages
+        product: AppFeature
+      - package: LocalPackages
+        product: DesignSystem
+    info:
+      path: MercuriusMac/Info.plist
+      properties:
+        CFBundleName: Mercurius
+        CFBundleDisplayName: Mercurius
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        # Same answers as the iOS Info.plist (see the comments there).
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+        LSApplicationCategoryType: public.app-category.education
+        # mercurius://lesson/<id> opens that lesson (AppEntryView.onOpenURL).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mayoailiteracy.mercurius.native
+            CFBundleURLSchemes:
+              - mercurius
+    entitlements:
+      path: MercuriusMac/MercuriusMac.entitlements
+      properties:
+        # The Mac App Store requires the sandbox.
+        com.apple.security.app-sandbox: true
+        # HTTPS to the Railway backend (chat SSE, progress, reports).
+        com.apple.security.network.client: true
+        # A photo the student picks to attach to a chat message (read), and
+        # where they save their certificate's PDF (write): only files the
+        # student picks in an open or save panel.
+        com.apple.security.files.user-selected.read-write: true
+        # Printing the certificate (sandboxed apps need it to print).
+        com.apple.security.print: true
+    settings:
+      base:
+        PRODUCT_NAME: Mercurius
+        # The app module needs its own name: "Mercurius" is the iOS app's.
+        PRODUCT_MODULE_NAME: MercuriusMac
+        PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: MacAppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        Debug:
+          # Local builds only: a separate id, so a Debug run never shares a
+          # sandbox container, Keychain item or URL scheme with an installed
+          # Mercurius (the App Store iPad app on a Mac uses the real id —
+          # and the same ~/Library/Containers folder). Release keeps the
+          # real id for the universal purchase.
+          PRODUCT_BUNDLE_IDENTIFIER: com.mayoailiteracy.mercurius.native.macdev
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          # A Mac App Store profile for com.mayoailiteracy.mercurius.native,
+          # not created yet (docs/mac-app/PLAN.md, release step).
+          PROVISIONING_PROFILE_SPECIFIER: "Mercurius Mac App Store"
+
   MercuriusTests:
     type: bundle.unit-test
     platform: iOS
@@ -302,6 +407,22 @@ schemes:
       targets:
         - MercuriusTests
         - MercuriusUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  MercuriusMac:
+    # The native Mac app. No test targets yet: its logic is covered by
+    # `swift test` (which runs on the macOS host and compiles every
+    # `#if os(macOS)` path in AppFeature).
+    build:
+      targets:
+        MercuriusMac: all
+    run:
+      config: Debug
     profile:
       config: Release
     analyze:

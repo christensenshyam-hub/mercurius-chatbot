@@ -17,6 +17,9 @@ public struct ProgressHubView: View {
     private let gamificationStore: GamificationStore?
     /// The lesson a tapped reminder opens (see `RemindersSection`).
     private let nextLessonId: String?
+    /// The certificates (the Certificates row). Optional so a host without
+    /// them shows the hub as before.
+    private let certificates: CertificateCenter?
     private let onDone: () -> Void
 
     public init(
@@ -26,6 +29,7 @@ public struct ProgressHubView: View {
         scheduler: NotificationScheduler,
         gamificationStore: GamificationStore? = nil,
         nextLessonId: String? = nil,
+        certificates: CertificateCenter? = nil,
         onDone: @escaping () -> Void
     ) {
         self.streakStore = streakStore
@@ -34,6 +38,7 @@ public struct ProgressHubView: View {
         self.scheduler = scheduler
         self.gamificationStore = gamificationStore
         self.nextLessonId = nextLessonId
+        self.certificates = certificates
         self.onDone = onDone
     }
 
@@ -43,6 +48,12 @@ public struct ProgressHubView: View {
                 VStack(spacing: BrandSpacing.xl) {
                     // Streak hero leads the profile.
                     StreakHeroView(streakStore: streakStore)
+
+                    // Earned and not-yet-earned certificates, with what's
+                    // left (a push to the list).
+                    if let certificates, !certificates.kinds.isEmpty {
+                        CertificatesHubRow(center: certificates)
+                    }
 
                     // XP / level surface — present only when explicitly enabled
                     // (client + server flags). Off by default, so the profile

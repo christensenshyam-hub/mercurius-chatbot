@@ -18,6 +18,10 @@ public struct QuizView: View {
     }
 
     public var body: some View {
+        #if os(macOS)
+        // Night Studio's quiz sheet: the same model, copy and crisis branch.
+        NightQuizSheet(model: model, dismissAction: dismissAction)
+        #else
         NavigationStack {
             Group {
                 switch model.phase {
@@ -49,6 +53,7 @@ public struct QuizView: View {
             }
         }
         .task { if case .loading = model.phase { await model.load() } }
+        #endif
     }
 
     // MARK: - States

@@ -41,10 +41,12 @@ public struct HowMercuriusTeachesView: View {
         }
         .background(BrandColor.background)
         .scrollBounceBehavior(.basedOnSize)
-        .navigationTitle("How Mercurius teaches")
 #if os(iOS)
+        .navigationTitle("How Mercurius teaches")
         .navigationBarTitleDisplayMode(.inline)
 #endif
+        // The Mac shows this page in its Help window, whose title is the
+        // window's own (`MacHelpView`); an inner title would override it.
     }
 
     // MARK: - Pieces

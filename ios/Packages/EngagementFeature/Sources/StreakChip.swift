@@ -16,8 +16,49 @@ public struct StreakChip: View {
     }
 
     public var body: some View {
+        #if os(macOS)
+        macToolbarButton
+        #else
+        phoneChip
+        #endif
+    }
+
+    #if os(macOS)
+    /// The Mac: a plain toolbar button — the flame, and the count once there
+    /// is a streak — with a tooltip, sized by the toolbar (the iPhone's 44 pt
+    /// capsule stood bigger than the buttons beside it).
+    private var macToolbarButton: some View {
         let display = StreakDisplay(count: streakStore.current)
-        Button(action: action) {
+        return Button(action: action) {
+            if let countText = display.countText {
+                Label {
+                    Text(countText).monospacedDigit()
+                } icon: {
+                    Image(systemName: "flame.fill")
+                        .foregroundStyle(BrandColor.streakFlame)
+                }
+                .labelStyle(.titleAndIcon)
+            } else {
+                Label("Progress", systemImage: "flame")
+            }
+        }
+        // A toolbar button's own look, whatever the host's button style.
+        .buttonStyle(.automatic)
+        .help(Self.macHelp(display))
+        .accessibilityLabel("Your progress. \(display.spokenStreak)")
+    }
+
+    /// The toolbar button's tooltip.
+    static func macHelp(_ display: StreakDisplay) -> String {
+        display.isZero
+            ? "Your progress and achievements. Finish a lesson to start a streak."
+            : "Your progress and achievements. \(display.spokenStreak)"
+    }
+    #endif
+
+    private var phoneChip: some View {
+        let display = StreakDisplay(count: streakStore.current)
+        return Button(action: action) {
             HStack(spacing: BrandSpacing.xs) {
                 Image(systemName: "flame.fill")
                     .font(.system(size: 13, weight: .semibold))

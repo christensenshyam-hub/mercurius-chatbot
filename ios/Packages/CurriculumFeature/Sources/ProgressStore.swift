@@ -142,11 +142,20 @@ public final class CurriculumProgressStore {
     /// counted — the user can't see a "21 of 20" progress bar just
     /// because a lesson got removed.
     public func totalCompleted() -> Int {
-        let currentIds = Set(MercuriusCurriculum.allLessons.map(\.id))
-        return completedIds.filter { currentIds.contains($0) }.count
+        totalCompleted(in: .deepDive)
     }
 
     public var totalLessons: Int { MercuriusCurriculum.allLessons.count }
+
+    /// Completed lessons of one track. Each track counts only its own ids,
+    /// so Basics lessons never move the Deep dive's "of 35", nor the other
+    /// way round.
+    public func totalCompleted(in track: CurriculumTrack) -> Int {
+        let currentIds = Set(track.allLessons.map(\.id))
+        return completedIds.filter { currentIds.contains($0) }.count
+    }
+
+    public func totalLessons(in track: CurriculumTrack) -> Int { track.allLessons.count }
 
     /// Three-state status of a lesson. `completed` outranks `inProgress` so a
     /// lesson that was in progress and then completed shows only as completed.
@@ -187,14 +196,27 @@ public final class CurriculumProgressStore {
     /// completed; once all of a unit's lessons are done, its test until it is
     /// mastered. Nil when the whole path is finished.
     public func frontier() -> MercuriusCurriculum.PathStop? {
-        for unit in MercuriusCurriculum.units {
+        frontier(in: .deepDive)
+    }
+
+    /// `frontier()` for one track. Basics has no unit checks, so its
+    /// frontier is always a lesson (or nil once every lesson is done).
+    public func frontier(in track: CurriculumTrack) -> MercuriusCurriculum.PathStop? {
+        for unit in track.units {
             for lesson in unit.lessons where !isCompleted(lesson.id) && isLessonUnlocked(lesson, in: unit) {
                 return .lesson(lesson)
             }
-            if !isUnitMastered(unit.id), isUnitTestUnlocked(unit) {
+            if track.hasUnitTests, !isUnitMastered(unit.id), isUnitTestUnlocked(unit) {
                 return .unitTest(unit)
             }
         }
+        return nil
+    }
+
+    /// The frontier's lesson in `track`, nil when it's a unit check or the
+    /// track is finished.
+    public func frontierLessonId(in track: CurriculumTrack) -> String? {
+        if case .lesson(let lesson) = frontier(in: track) { return lesson.id }
         return nil
     }
 

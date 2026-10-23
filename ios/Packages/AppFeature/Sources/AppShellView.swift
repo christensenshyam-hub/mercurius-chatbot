@@ -39,6 +39,8 @@ struct AppShellView: View {
     let reminderStore: ReminderStore
     let progress: CurriculumProgressStore
     let progressSync: CurriculumProgressSync
+    /// The learner's course (Basics or the Deep dive) and Basics text size.
+    let trackStore: CurriculumTrackStore
     let lastActivityStore: LastActivityStore
     let reviewPromptStore: ReviewPromptStore
     /// The entry view's scheduler (it owns the re-plan), shared with the
@@ -81,6 +83,9 @@ struct AppShellView: View {
     @State private var showProgress: Bool = false
 
     @Environment(\.requestReview) private var requestReview
+
+    /// The certificates (the Progress hub's row, the course-complete card).
+    @EnvironmentObject private var env: AppEnvironment
 
     /// Standby gamification (quiet progress) cache. Default-constructed, so
     /// `clientEnabled` is false — it makes no network calls and renders nothing
@@ -137,6 +142,7 @@ struct AppShellView: View {
         reminderStore: ReminderStore,
         progress: CurriculumProgressStore,
         progressSync: CurriculumProgressSync,
+        trackStore: CurriculumTrackStore,
         lastActivityStore: LastActivityStore,
         reviewPromptStore: ReviewPromptStore,
         scheduler: NotificationScheduler,
@@ -156,6 +162,7 @@ struct AppShellView: View {
         self.reminderStore = reminderStore
         self.progress = progress
         self.progressSync = progressSync
+        self.trackStore = trackStore
         self.lastActivityStore = lastActivityStore
         self.reviewPromptStore = reviewPromptStore
         self.scheduler = scheduler
@@ -210,11 +217,16 @@ struct AppShellView: View {
                 .tabItem { Label("New Chat", systemImage: "square.and.pencil") }
                 .tag(Tab.newChat)
 
+            // "Lessons" for a Basics learner (plain words, review
+            // 2026-10-22); the Deep dive keeps "Curriculum".
             curriculumTab
-                .tabItem { Label("Curriculum", systemImage: "book") }
+                .tabItem { Label(trackStore.track == .basics ? BasicsPathCopy.title : "Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
         }
-        .tint(BrandColor.accent)
+        // The selected tab's icon and label, and the text buttons below:
+        // Night's readable indigo. The fill indigo drew the selected label
+        // at 3.2:1 on its highlight.
+        .tint(BrandAppearance.tint)
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
             recordTab(newValue)
@@ -242,60 +254,18 @@ struct AppShellView: View {
         // just the SPM test host (where the lesson window isn't presented).
 #if os(iOS)
         .fullScreenCover(item: $activeLesson, onDismiss: lessonWindowDismissed) { lesson in
-            // One resolved value for the celebration's label AND its action.
-            let next = Self.resolvedNextStop(after: lesson.id, progress: progress)
-            let parentUnit = parentUnit(of: lesson.id)
-            CurriculumLessonView(
-                lessonId: lesson.id,
-                unitLabel: unitLabel(for: lesson),
-                lessonNumber: lesson.number,
-                title: lesson.title,
-                objective: lesson.objective,
-                starter: lesson.starter,
-                resumeConversationId: progress.resumeConversationId(for: lesson.id),
-                apiClient: apiClient,
-                sessionIdentity: sessionIdentity,
-                chatStore: chatStore,
-                streakStore: streakStore,
-                achievementStore: achievementStore,
-                onStarted: { lessonId, convoId in
-                    progress.markInProgress(lessonId, conversationId: convoId)
-                    // Explorer is "Started a structured curriculum lesson"
-                    // (Achievement.swift) — award it at start, matching the
-                    // copy and the web widget's semantics. Idempotent.
-                    achievementStore.award(AchievementCatalog.explorer)
-                    // Surface the session on the Lock Screen / Dynamic Island.
-                    // Started here (not on open) so it only appears once a
-                    // conversation actually exists; re-starting on a later
-                    // lesson simply replaces the running activity.
-                    startLearningActivity(for: lessonId)
-                },
-                onLessonComplete: { lessonId in
-                    handleLessonComplete(lessonId)
-                },
-                onExit: { activeLesson = nil },
-                onAdvanceToNext: { advance(to: next) },
-                completedInUnit: parentUnit.map { progress.completedCount(in: $0) } ?? 0,
-                totalInUnit: parentUnit?.lessons.count ?? 0,
-                nextStop: next.map(Self.celebrationStop)
-            )
-            // Swapping `activeLesson` to the next lesson must give a FRESH view
-            // (new ChatViewModel + re-run of `beginOrResume`), not reuse this
-            // one's @State. Keying on the lesson id forces that re-identity.
-            .id(lesson.id)
-            // Toasts need a presenter in THIS layer too: the cover renders
-            // above the shell's presenter, so awards fired while the lesson
-            // window is up (Explorer, streak milestones) would otherwise
-            // auto-clear unseen behind it.
-            .achievementToasts(achievementStore)
+            lessonCover(lesson)
         }
         // On the same host as the lesson window, so the celebration's "Take
         // the Unit N check" can hand over without switching tabs.
-        .fullScreenCover(item: $activeUnitTest, onDismiss: presentReviewPromptIfDue) { unit in
+        .fullScreenCover(item: $activeUnitTest, onDismiss: unitTestDismissed) { unit in
             unitTestCover(for: unit)
                 // Same as the lesson cover: Unit Master is awarded while this
                 // cover is up, so its toast needs a presenter in this layer.
                 .achievementToasts(achievementStore)
+                // The pass that completed the course: "Get your certificate"
+                // on the result, and its name sheet over the check.
+                .certificateMasterySlot(env.certificates)
         }
 #endif
         .sheet(isPresented: $showChatHistory) {
@@ -329,7 +299,7 @@ struct AppShellView: View {
                     }
                 }
             }
-            .tint(BrandColor.accentText)
+            .tint(BrandAppearance.tint)
         }
         .sheet(isPresented: $showProgress) {
             ProgressHubView(
@@ -338,10 +308,13 @@ struct AppShellView: View {
                 reminderStore: reminderStore,
                 scheduler: scheduler,
                 gamificationStore: gamificationStore,
-                nextLessonId: progress.frontierLessonId,
+                nextLessonId: progress.frontierLessonId(in: trackStore.track),
+                certificates: env.certificates,
                 onDone: { showProgress = false }
             )
-            .tint(BrandColor.accent)
+            // Its Done button reads in Night's indigo; the reminder
+            // switches tint themselves.
+            .tint(BrandAppearance.tint)
         }
         // Achievement-unlocked toasts surface over the whole shell.
         .achievementToasts(achievementStore)
@@ -383,7 +356,8 @@ struct AppShellView: View {
         pendingLessonId = nil
         let delay = Self.pendingLessonDelay(closingUnitTest: activeUnitTest != nil, fromTab: selectedTab)
         selectedTab = .curriculum
-        guard let unit = MercuriusCurriculum.unit(containingLesson: lessonId),
+        // Either course: a Basics reminder or link names a `b` id.
+        guard let unit = CurriculumTrack.unit(containingLesson: lessonId),
               let lesson = unit.lessons.first(where: { $0.id == lessonId }),
               progress.isLessonUnlocked(lesson, in: unit),
               activeLesson?.id != lessonId
@@ -461,7 +435,8 @@ struct AppShellView: View {
             achievementStore: achievementStore,
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
                                   streakStore, achievementStore, progress, progressSync,
-                                  reminderStore, scheduler, onConsentWithdrawn] in
+                                  reminderStore, scheduler, onConsentWithdrawn,
+                                  certificates = env.certificates] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -482,7 +457,9 @@ struct AppShellView: View {
                         scheduler: scheduler,
                         // The server-side erasure behind "Delete my data".
                         sessionDeleter: apiClient,
-                        onConsentWithdrawn: onConsentWithdrawn
+                        onConsentWithdrawn: onConsentWithdrawn,
+                        // The certificate name goes with the rest.
+                        certificates: certificates
                     )
                 )
             },
@@ -497,21 +474,29 @@ struct AppShellView: View {
     private var curriculumTab: some View {
         CurriculumView(
             progress: progress,
+            // The "Basics | Deep dive" switch; the path follows the choice.
+            tracks: trackStore,
             onStartLesson: handleStartLesson,
             onStartUnitTest: handleStartUnitTest,
             // The gamified stats bar is composed here at the app root — the
             // curriculum feature can't depend on EngagementFeature (layering),
             // so it's injected through the path's top-bar slot. Streak is always
             // live; XP/level appear only when the gamification feature is on.
+            // Basics shows no streak (BEGINNER_GUIDE §2.5): a plain bar with
+            // the same way Home.
             topBar: {
-                GamifiedTopBar(
-                    streakStore: streakStore,
-                    gamificationStore: gamificationStore,
-                    onOpenProfile: { showProgress = true },
-                    // Same exit affordance the chat header has — Home was
-                    // unreachable from the curriculum tab.
-                    onGoHome: onGoHome
-                )
+                if trackStore.track == .basics {
+                    BasicsTopBar(onGoHome: onGoHome)
+                } else {
+                    GamifiedTopBar(
+                        streakStore: streakStore,
+                        gamificationStore: gamificationStore,
+                        onOpenProfile: { showProgress = true },
+                        // Same exit affordance the chat header has — Home was
+                        // unreachable from the curriculum tab.
+                        onGoHome: onGoHome
+                    )
+                }
             }
         )
     }
@@ -529,7 +514,9 @@ struct AppShellView: View {
     /// badge. Idempotent, so a duplicate callback is harmless. The curriculum
     /// stays fully open — mastery is a checkpoint, not a gate.
     private func handleUnitMastered(_ unitId: String) {
-        progress.markUnitMastered(unitId)
+        // The eighth unit's pass completes the course: its moment is kept
+        // and the result shows "Get your certificate".
+        env.certificates.recordingNewlyEarned { progress.markUnitMastered(unitId) }
         lastActivityStore.touch()
         achievementStore.award(AchievementCatalog.unitMaster)
         // Credit module completion (idempotent per unit). Gated/no-op when off.
@@ -639,6 +626,13 @@ struct AppShellView: View {
         presentReviewPromptIfDue()
     }
 
+    /// The unit check closed: the course-complete card goes with it (the
+    /// certificate stays in Progress ▸ Certificates), then the review prompt.
+    private func unitTestDismissed() {
+        env.certificates.justEarned = nil
+        presentReviewPromptIfDue()
+    }
+
     /// Ask for an App Store review once nothing is covering the shell. The
     /// system decides whether the sheet actually shows.
     private func presentReviewPromptIfDue() {
@@ -656,7 +650,7 @@ struct AppShellView: View {
     }
 
     private static var isUITesting: Bool {
-        ProcessInfo.processInfo.arguments.contains(AppEnvironment.uiTestArgument)
+        AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument)
     }
 
     /// The server signalled demonstrated proficiency (`[LESSON_COMPLETE]`).
@@ -673,7 +667,11 @@ struct AppShellView: View {
         if isFirstCompletion, reviewPromptStore.recordCompletion(), !Self.isUITesting {
             reviewPrompt.earn()
         }
-        achievementStore.award(AchievementCatalog.explorer)
+        // Basics has no badges or toasts (no game pressure, nothing that
+        // vanishes before it can be read: BEGINNER_GUIDE §2.3, §2.5).
+        if !BasicsCurriculum.isBasicsId(lessonId) {
+            achievementStore.award(AchievementCatalog.explorer)
+        }
         // Push the fresh count into the Live Activity (after markCompleted so
         // it reads the new state). The unit's last lesson completes the
         // activity — the win lingers on the Lock Screen.
@@ -699,7 +697,8 @@ struct AppShellView: View {
     /// authorization).
     private func startLearningActivity(for lessonId: String) {
 #if os(iOS)
-        guard let unit = parentUnit(of: lessonId) else { return }
+        // Basics has no Lock Screen card: it shows the streak and a countdown.
+        guard !BasicsCurriculum.isBasicsId(lessonId), let unit = parentUnit(of: lessonId) else { return }
         activityShowsWin = false
         activityLessonId = lessonId
         LearningActivityController.shared.startSession(
@@ -714,7 +713,7 @@ struct AppShellView: View {
     /// when no activity is running.
     private func refreshLearningActivity(afterCompleting lessonId: String) {
 #if os(iOS)
-        guard let unit = parentUnit(of: lessonId) else { return }
+        guard !BasicsCurriculum.isBasicsId(lessonId), let unit = parentUnit(of: lessonId) else { return }
         let state = learningState(in: unit)
         if state.lessonsDone >= state.lessonsTotal {
             LearningActivityController.shared.complete(state: state)
@@ -753,7 +752,7 @@ struct AppShellView: View {
     }
 
     private func parentUnit(of lessonId: String) -> CurriculumFeature.Unit? {
-        MercuriusCurriculum.unit(containingLesson: lessonId)
+        CurriculumTrack.unit(containingLesson: lessonId)
     }
 
     /// The celebration's next stop, resolved against progress so it never
@@ -768,6 +767,9 @@ struct AppShellView: View {
         after lessonId: String,
         progress: CurriculumProgressStore
     ) -> MercuriusCurriculum.PathStop? {
+        if BasicsCurriculum.isBasicsId(lessonId) {
+            return basicsNextStop(after: lessonId, progress: progress)
+        }
         guard let stop = MercuriusCurriculum.nextStop(after: lessonId),
               let unit = MercuriusCurriculum.unit(containingLesson: lessonId)
         else { return nil }
@@ -786,6 +788,27 @@ struct AppShellView: View {
             return .unitTest(unit)
         }
         if case .lesson = stop { return stop }
+        return nil
+    }
+
+    /// Basics' next lesson after `lessonId` (it has no unit checks): the next
+    /// lesson in the unit while it isn't done; otherwise the first unfinished
+    /// lesson of Basics, so finishing a unit carries on into the next one.
+    /// Nil once every other lesson is done.
+    @MainActor
+    static func basicsNextStop(
+        after lessonId: String,
+        progress: CurriculumProgressStore
+    ) -> MercuriusCurriculum.PathStop? {
+        if let next = CurriculumTrack.basics.lesson(after: lessonId), !progress.isCompleted(next.id) {
+            return .lesson(next)
+        }
+        for unit in BasicsCurriculum.units {
+            for lesson in unit.lessons where lesson.id != lessonId
+                && !progress.isCompleted(lesson.id) && progress.isLessonUnlocked(lesson, in: unit) {
+                return .lesson(lesson)
+            }
+        }
         return nil
     }
 
@@ -838,12 +861,112 @@ struct AppShellView: View {
     }
 #endif
 
-    /// "UNIT 0X" label for the lesson's parent unit, for the lesson header.
+    /// "UNIT 0X" label for the lesson's parent unit, for the lesson header;
+    /// "BASICS UNIT X" for a Basics lesson.
     private func unitLabel(for lesson: Lesson) -> String {
-        if let unit = MercuriusCurriculum.units.first(where: { $0.lessons.contains(lesson) }) {
+        Self.unitLabel(forLessonId: lesson.id)
+    }
+
+    static func unitLabel(forLessonId lessonId: String) -> String {
+        if let unit = BasicsCurriculum.unit(containingLesson: lessonId) {
+            return "BASICS UNIT \(Int(unit.number) ?? 0)"
+        }
+        if let unit = MercuriusCurriculum.unit(containingLesson: lessonId) {
             return "UNIT \(unit.number)"
         }
         return "CURRICULUM"
+    }
+
+    // MARK: - Lesson window
+
+    /// The lesson in its own full-screen window. A Basics lesson gets its
+    /// beginner presentation (`BasicsLessonOptions`) and the learner's text
+    /// size; a Deep-dive lesson is unchanged.
+    @ViewBuilder
+    private func lessonCover(_ lesson: Lesson) -> some View {
+        // One resolved value for the celebration's label AND its action.
+        let next = Self.resolvedNextStop(after: lesson.id, progress: progress)
+        let parentUnit = parentUnit(of: lesson.id)
+        let isBasics = BasicsCurriculum.isBasicsId(lesson.id)
+        CurriculumLessonView(
+            lessonId: lesson.id,
+            unitLabel: unitLabel(for: lesson),
+            lessonNumber: lesson.number,
+            title: lesson.title,
+            objective: lesson.objective,
+            starter: lesson.starter,
+            resumeConversationId: Self.debugResumeOverride ?? progress.resumeConversationId(for: lesson.id),
+            apiClient: apiClient,
+            sessionIdentity: sessionIdentity,
+            chatStore: chatStore,
+            streakStore: streakStore,
+            achievementStore: achievementStore,
+            onStarted: { lessonId, convoId in
+                progress.markInProgress(lessonId, conversationId: convoId)
+                // Explorer is "Started a structured curriculum lesson"
+                // (Achievement.swift) — award it at start, matching the
+                // copy and the web widget's semantics. Idempotent. Not in
+                // Basics, which has no badges.
+                if !isBasics {
+                    achievementStore.award(AchievementCatalog.explorer)
+                }
+                // Surface the session on the Lock Screen / Dynamic Island.
+                // Started here (not on open) so it only appears once a
+                // conversation actually exists; re-starting on a later
+                // lesson simply replaces the running activity.
+                startLearningActivity(for: lessonId)
+            },
+            onLessonComplete: { lessonId in
+                handleLessonComplete(lessonId)
+            },
+            onExit: { activeLesson = nil },
+            onAdvanceToNext: { advance(to: next) },
+            completedInUnit: parentUnit.map { progress.completedCount(in: $0) } ?? 0,
+            totalInUnit: parentUnit?.lessons.count ?? 0,
+            nextStop: next.map(Self.celebrationStop),
+            basics: isBasics ? Self.basicsOptions(for: lesson.id, tracks: trackStore) : nil
+        )
+        // Swapping `activeLesson` to the next lesson must give a FRESH view
+        // (new ChatViewModel + re-run of `beginOrResume`), not reuse this
+        // one's @State. Keying on the lesson id forces that re-identity.
+        .id(lesson.id)
+        // Basics: the learner's text size (a floor; a bigger system size wins).
+        .readingSizeFloor(isBasics ? trackStore.basicsReadingSize : .standard)
+        // Toasts need a presenter in THIS layer too: the cover renders
+        // above the shell's presenter, so awards fired while the lesson
+        // window is up (Explorer, streak milestones) would otherwise
+        // auto-clear unseen behind it.
+        .achievementToasts(achievementStore)
+    }
+
+    /// What a Basics lesson shows beyond the reused lesson screen: the text
+    /// size and its one-time offer, and "Try this today" for the completion.
+    @MainActor
+    static func basicsOptions(for lessonId: String, tracks: CurriculumTrackStore) -> BasicsLessonOptions {
+        BasicsLessonOptions(
+            readingSize: tracks.basicsReadingSize,
+            offersReadingSize: !tracks.readingSizeOfferHandled,
+            onChooseReadingSize: { tracks.setBasicsReadingSize($0) },
+            onDismissReadingSizeOffer: { tracks.markReadingSizeOfferHandled() },
+            wrapUp: basicsWrapUp(for: lessonId)
+        )
+    }
+
+    /// "Try this today" for a Basics lesson, with its message when it quotes one.
+    static func basicsWrapUp(for lessonId: String) -> BasicsWrapUp? {
+        BasicsCurriculum.tryThisToday(for: lessonId).map {
+            BasicsWrapUp(tryThisToday: $0, message: BasicsCurriculum.tryThisTodayMessage(for: lessonId))
+        }
+    }
+
+    /// DEBUG `-LessonSkipIntro`: a fake resume id skips a fresh lesson's
+    /// intro (it falls through to a fresh start), as on the Mac.
+    private static var debugResumeOverride: UUID? {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
+        #else
+        nil
+        #endif
     }
 }
 
@@ -887,6 +1010,34 @@ extension AppShellView {
             guard covered else { return true }
             isDue = true
             return false
+        }
+    }
+}
+
+/// The path's top bar on Basics: no streak, XP or level (BEGINNER_GUIDE
+/// §2.5), only the way Home that the gamified bar carries.
+struct BasicsTopBar: View {
+    let onGoHome: @MainActor () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Button(action: onGoHome) {
+                Label("Home", systemImage: "house")
+                    .font(BrandFont.bodyEmphasized)
+                    .foregroundStyle(BrandColor.accentText)
+                    .padding(.horizontal, BrandSpacing.md)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Return to the Mercurius home screen")
+            .padding(.trailing, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .background(BrandColor.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(BrandColor.border).frame(height: 0.5)
         }
     }
 }
