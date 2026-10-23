@@ -79,7 +79,8 @@ jobs:
           npm --version
 
       - name: Check web widget copies are in sync
-        # mayo-site/widget.{js,css} are generated from public/.
+        # public/widget.{js,css} is the single source; fails on a stale or
+        # unlisted copy anywhere in the repo.
         run: node scripts/sync-widget.mjs --check
 
       - name: Install dependencies

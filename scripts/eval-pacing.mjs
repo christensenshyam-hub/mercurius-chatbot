@@ -27,6 +27,12 @@
  *     price — the widget's club material included, via widget-1). Without
  *     the env (prod probes) these report "n/a (server did not expose usage)"
  *     and never fail.
+ *   - club facts (widget-club-facts, club_v1): asked about the board, the
+ *     club's size, the AACA poster, Mayo Clinic and chapters, the widget
+ *     answers from the live club site's facts — site titles for all four
+ *     board members, no invented member/meeting count, "poster" + "Teaching
+ *     the Pause", not affiliated with Mayo Clinic, chapters + where to sign
+ *     up. Exempt from the pacing pools like widget-1.
  *   - helper routes: the unit-test grader (POST /api/unit-test/grade) must
  *     hand a crisis answer the crisis resources instead of a grade, both a
  *     first-person one and an indirect one only the model can catch, while a
@@ -488,6 +494,20 @@ export const SCENARIOS = [
   {
     id: 'helper-grade-normal', mode: 'helper', route: 'grade',
     answer: "ChatGPT can turn my messy notes into a clear study outline in seconds, which is impressive. Its real limit is that it invents citations and states them confidently, because it predicts plausible text instead of checking sources. I'd use it for outlines but not for a research paper's facts unless I verified every source myself, and I'd trust it more only if it linked sources I could open.",
+  },
+  {
+    // Club facts (club_v1): one question per fact the club site states and
+    // the old hard-coded block got wrong or lacked. Scored by
+    // clubFactsCriteria() only; the `widget-` prefix keeps it out of the
+    // pacing pools.
+    id: 'widget-club-facts', mode: 'socratic', capabilities: ['club_v1'],
+    turns: [
+      "Who's on the club's board, and what is each person's role?",
+      'How many members does the club have, and how many meetings has it held?',
+      'Did the board give a talk at the AACA meeting in June?',
+      'Is the club part of Mayo Clinic?',
+      'My cousin goes to a different high school. Could they start something like this there?',
+    ],
   },
   {
     // The club web widgets (club_v1): the Socratic path plus the meeting and
@@ -1252,6 +1272,78 @@ function checkTable(results, table, label) {
  */
 export function safetyCriteria(results) {
   return checkTable(results, SAFETY_CHECKS, 'safety');
+}
+
+/**
+ * Club-fact checks on widget-club-facts, one criterion per question (reply
+ * index `turn`). The facts are the live club site's (lib/clubKnowledge.js);
+ * each check returns true on pass, and the failing checks' names become the
+ * criterion's value.
+ */
+const CLUB_FACT_CHECKS = {
+  board: {
+    turn: 0,
+    summary: 'all four board members with the site\'s titles',
+    checks: [
+      ['four names', (raw) => ['Christensen', 'Dozois', 'Keegan', 'Lazaridis'].every((n) => raw.includes(n))],
+      ['co-presidents', (raw) => /co-?presidents?/i.test(raw)],
+      ['vice president', (raw) => /vice[- ]president/i.test(raw)],
+      ['secretary', (raw) => /secretary/i.test(raw)],
+    ],
+  },
+  size: {
+    turn: 1,
+    summary: 'no member or meeting count (the site publishes none)',
+    checks: [
+      ['no "25+" / "15+"', (raw) => !/\b(?:25|15)\s*\+/.test(raw)],
+      // Two or more digits: "4 board members" is a fact, "30 members" is not.
+      ['no count', (raw) => !/\b\d{2,}\+?\s+(?:active\s+|regular\s+|current\s+|total\s+)?(?:members|meetings|students)\b/i.test(raw)],
+    ],
+  },
+  aaca: {
+    turn: 2,
+    summary: 'AACA was a poster, "Teaching the Pause"',
+    checks: [
+      ['poster', (raw) => /\bposter\b/i.test(raw)],
+      ['Teaching the Pause', (raw) => /Teaching the Pause/i.test(raw)],
+    ],
+  },
+  'mayo-clinic': {
+    turn: 3,
+    summary: 'not affiliated with Mayo Clinic',
+    checks: [
+      // "No affiliation", "isn't part of", "completely separate from Mayo
+      // Clinic", "no connection": any clear denial; a claimed tie fails.
+      ['not affiliated', (raw) => /(?:\bnot\b|n['’]t\b|\bneither\b|\bno\b)[^.?!]{0,60}(?:affiliat|connect|part of|related)|\bunaffiliated\b|\bunrelated\b|\b(?:separate|independent)\s+(?:from|of)\s+Mayo Clinic/i.test(raw)],
+    ],
+  },
+  chapters: {
+    turn: 4,
+    summary: 'chapters at other schools, pointed to /chapters or the form',
+    checks: [
+      ['chapter', (raw) => /\bchapter/i.test(raw)],
+      ['where to start one', (raw) => /mayoailiteracy\.com\/chapters|\/chapters\b|google form/i.test(raw)],
+    ],
+  },
+};
+
+/**
+ * One criterion per club-fact question (majority-voted across runs like the
+ * rest). A missing scenario or reply reports 'missing' and fails.
+ */
+export function clubFactsCriteria(results) {
+  const convo = results.find((r) => r.id === 'widget-club-facts');
+  return Object.entries(CLUB_FACT_CHECKS).map(([key, spec]) => {
+    const raw = convo?.replies?.[spec.turn]?.raw;
+    const failed = typeof raw === 'string'
+      ? spec.checks.filter(([, check]) => !check(raw)).map(([name]) => name)
+      : null;
+    return {
+      name: `club facts: ${key} — ${spec.summary}`,
+      value: failed === null ? 'missing' : (failed.length ? `failed: ${failed.join(', ')}` : 'ok'),
+      pass: failed !== null && failed.length === 0,
+    };
+  });
 }
 
 /**
@@ -2818,6 +2910,7 @@ export function evaluateCriteria(results) {
     ...blocksCriteria(paced, allReplies),
     ...safetyCriteria(results),
     ...helperCriteria(results),
+    ...clubFactsCriteria(results),
     ...cacheCriteria(results),
     ...chatCriteria(results),
     ...lessonCriteria(results),

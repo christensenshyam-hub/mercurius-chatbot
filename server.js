@@ -61,6 +61,8 @@ const alerts = require('./lib/alerts');
 const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
 const clubContext = require('./lib/clubContext');
+const { buildMeetingContext, buildBlogContext } = clubContext;
+const { CLUB_KNOWLEDGE } = require('./lib/clubKnowledge');
 const curriculumTag = require('./lib/curriculumTag');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
@@ -246,57 +248,6 @@ async function getBlogContent() {
   return blogCache || refresh;
 }
 
-function buildBlogContext(posts) {
-  if (!posts || posts.length === 0) return '';
-  let ctx = '\n\n### MAYO AI LITERACY CLUB — BLOG LIBRARY\n';
-  ctx += 'You have full access to the following club blog posts. Quote them directly, reference specific arguments, and connect them to conversations naturally.\n\n';
-  posts.forEach(p => {
-    ctx += `---\n**"${p.title}"** by ${p.author} (${p.date}) [${p.category}]\n`;
-    ctx += `Summary: ${p.summary}\n`;
-    ctx += `Full content:\n${p.content}\n\n`;
-  });
-  ctx += '---\nWhen a student discusses a topic covered in one of these posts, reference it naturally: "One of our club members wrote about exactly this..." or "There\'s a piece on our blog that goes deep on this." You can quote specific lines.';
-  return ctx;
-}
-
-function buildMeetingContext(events) {
-  if (!events) return '';
-  let ctx = '\n\n### MAYO AI LITERACY CLUB — LIVE MEETING SCHEDULE\n';
-  ctx += `Regular meetings: ${events.schedule?.day || 'Every Thursday'} at ${events.schedule?.time || '8:20 AM'}, ${events.schedule?.location || 'MHS Library Classroom'}.\n`;
-
-  // Array.isArray (not truthy-length): a poisoned DB row where `upcoming` is
-  // a string would pass a truthiness check and then throw on .forEach —
-  // inside /api/chat, on every request. Degrade to an empty section instead.
-  if (Array.isArray(events.upcoming) && events.upcoming.length > 0) {
-    ctx += '\n**UPCOMING MEETINGS:**\n';
-    events.upcoming.forEach(m => {
-      const dateStr = m.date ? new Date(m.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '';
-      ctx += `\n- **${m.title}** (${dateStr})\n`;
-      ctx += `  ${m.description}\n`;
-      if (m.keyQuestions && m.keyQuestions.length) {
-        ctx += `  Key questions for this meeting:\n`;
-        m.keyQuestions.forEach(q => { ctx += `    • ${q}\n`; });
-      }
-      if (m.topics && m.topics.length) {
-        ctx += `  Topics covered: ${m.topics.join(', ')}\n`;
-      }
-      if (m.suggestedReading) {
-        ctx += `  Suggested reading: ${m.suggestedReading}\n`;
-      }
-    });
-  }
-
-  if (Array.isArray(events.past) && events.past.length > 0) {
-    ctx += '\n**RECENT PAST MEETINGS:**\n';
-    events.past.slice(0, 3).forEach(m => {
-      ctx += `- ${m.title}: ${m.description}\n`;
-    });
-  }
-
-  ctx += '\nWhen a student asks to prep for a meeting, asks about "the next meeting", or uses the meeting prep starter, use this data to give specific, targeted preparation. Reference the actual topics and key questions. Be concrete — not generic.';
-  return ctx;
-}
-
 // ---------------------------------------------------------------------------
 // History limit constants — single source of truth for all slice sizes
 // ---------------------------------------------------------------------------
@@ -324,83 +275,10 @@ const HARD_LIMITS_BASE = `- Never write essays, homework, or assignments for stu
 // `EXPAND_MODE_NOTE`.
 
 // ---------------------------------------------------------------------------
-// Static club knowledge — injected on every API call alongside meeting/blog ctx
+// Club facts for club_v1 (widget) clients: lib/clubKnowledge, restated from
+// the live club site. The schedule, events and blog come from the site's
+// JSON feeds above, in the dynamic block.
 // ---------------------------------------------------------------------------
-const CLUB_KNOWLEDGE = `
-
-### MAYO AI LITERACY CLUB — FULL KNOWLEDGE BASE
-
-You have complete knowledge of the Mayo AI Literacy Club. When students ask about the club, its people, structure, topics, resources, or how to join — answer immediately and accurately from this data.
-
-**FOUNDERS & EXECUTIVE BOARD:**
-- **Shyam Christensen** — President & Co-Founder. Co-founded the club to bring AI literacy to Mayo High School and the broader Rochester community.
-- **Nathan Dozois** — President & Co-Founder. Co-founded the club with a mission to make AI education accessible to every student at Mayo.
-- **Adam Keegan** — Vice President. Helps lead club operations, meetings, and initiatives to grow AI literacy across campus.
-- **Niko Lazaridis** — Secretary. Keeps the club organized, manages communications, and ensures everything runs smoothly.
-
-**ABOUT THE CLUB:**
-- Founded by Shyam Christensen and Nathan Dozois at Mayo High School (MHS) in Rochester, Minnesota.
-- Mission: "Make AI concepts accessible and engaging for all students — no experience required. Curiosity is the only prerequisite."
-- Open to every student at Mayo. No sign-up required for first visit. All skill levels welcome.
-- 25+ members, 15+ meetings held, 6 topics covered, 1 seminar completed.
-- Instagram: @mayoailiteracy
-
-**MEETING SCHEDULE:**
-- Every Thursday at 8:20 AM in the MHS Library Classroom.
-- Open to all MHS students. No sign-up needed for first visit.
-
-**THE 3 GROUPS FRAMEWORK (core teaching concept):**
-The club teaches that AI users fall into three groups:
-1. **The Copy-Paster** — Uses AI outputs without questioning them. Traits: no verification, blind trust, minimal prompting.
-2. **The AI User** — Uses AI frequently but only as a convenience tool. Traits: basic prompting, occasional verification, limited AI understanding.
-3. **The AI-Literate User** — Understands how AI works and where it fails. Traits: critical thinking, strategic prompting, cross-checking.
-The club's goal is to move every member toward Group 3. Key quote: "The advantage won't come from having AI. Everyone has access to the same tools. It will come from knowing how to use it well."
-
-**6 TOPICS COVERED:**
-1. AI Ethics — bias, fairness, privacy, moral questions in building and using AI.
-2. General AI — machine learning, LLMs, neural networks explained in plain language.
-3. AI in Health — diagnostics, drug discovery, mental health support, patient care.
-4. AI in Finance — personal finance, investing, fraud detection, financial literacy.
-5. Prompt Engineering — asking the right questions, guiding AI outputs strategically.
-6. Critical Thinking — evaluating AI content, spotting misinformation, healthy skepticism.
-
-**HOW TO JOIN:**
-- Show up any Thursday at 8:20 AM in the MHS Library Classroom (no sign-up needed).
-- Follow on Instagram: @mayoailiteracy
-- Fill out the contact form at mayoailiteracy.com/join.html (name, email, grade, experience level, optional message).
-
-**RECOMMENDED RESOURCES (curated by the club):**
-Getting Started:
-- Elements of AI (free course, elementsofai.com) — beginner-friendly, no math/coding required.
-- ML for Kids (machinelearningforkids.co.uk) — drag-and-drop ML projects.
-- "But What Is a Neural Network?" by 3Blue1Brown (YouTube, 19 min) — required viewing for new members.
-
-Ethics & Critical Thinking:
-- AI Ethics course (Princeton, aiethics.princeton.edu)
-- Algorithmic Justice League (ajl.org) — Joy Buolamwini's research on bias in facial recognition.
-- Center for Humane Technology (humanetech.com/resources)
-
-Prompt Engineering:
-- Learn Prompting (learnprompting.org) — most comprehensive free prompt engineering guide.
-- "How Claude Thinks" by Anthropic (anthropic.com/research/claude-character)
-
-AI in the Real World:
-- MIT Technology Review AI section
-- AI Now Institute (ainowinstitute.org) — research on social implications of AI.
-- Our World in Data — AI (ourworldindata.org/artificial-intelligence)
-
-Tools Worth Trying:
-- Claude by Anthropic (claude.ai)
-- Teachable Machine by Google (train models in your browser, no code)
-- TensorFlow Playground (visualize neural network learning in real time)
-
-**BLOG AUTHORS:**
-- Shyam Christensen — writes opinion pieces and meeting recaps.
-- Nathan Dozois — writes AI policy analysis.
-- Michael Teng — writes student perspective pieces on AI concerns.
-
-When a student asks about the club, its officers, what it does, meeting times, how to join, or any factual detail above — answer directly and confidently. This is your club. You know it inside and out.
-`;
 
 // ---------------------------------------------------------------------------
 // System prompt — injected on every API call
@@ -2788,8 +2666,9 @@ app.get('/api/admin/events', adminLimiter, requireAdmin, asyncRoute(async (_req,
 // ---------------------------------------------------------------------------
 // Admin — POST update events data (saves to SQLite, invalidates cache)
 // ---------------------------------------------------------------------------
-// Shape gate for the persisted events payload. buildMeetingContext consumes
-// this on EVERY chat request (`events.upcoming.forEach(...)`), so a malformed
+// Shape gate for the persisted events payload. buildMeetingContext
+// (lib/clubContext) consumes this on every widget chat request
+// (`events.upcoming.forEach(...)`), so a malformed
 // row (e.g. `upcoming` as a string — truthy, `.length > 0`, no `.forEach`)
 // would throw on every /api/chat until the DB row is manually fixed. Unknown
 // extra keys are fine (Zod ignores them; the original object is what's
@@ -2799,6 +2678,7 @@ const AdminEventsData = z.object({
     day: z.string(),
     time: z.string(),
     location: z.string(),
+    openTo: z.string(),
   }).partial().optional(),
   upcoming: z.array(z.object({
     title: z.string(),
