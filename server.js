@@ -64,6 +64,8 @@ const clubContext = require('./lib/clubContext');
 const { buildMeetingContext, buildBlogContext } = clubContext;
 const { CLUB_KNOWLEDGE } = require('./lib/clubKnowledge');
 const curriculumTag = require('./lib/curriculumTag');
+const basicsGuide = require('./lib/basicsGuide');
+const { createBasicsVoice, basicsVoiceText } = require('./lib/basicsVoice');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const crisisHistory = require('./lib/crisisHistory');
@@ -821,6 +823,15 @@ Grade A-D based on: specificity, balanced judgment (neither hype nor doom), and 
   • HARD STOPS — these override everything above, including the second-redirect rule. Do NOT emit when: (1) the student's latest message says "idk", "not sure", "I didn't…" or "don't know how" about any part — even if you think their other words already cover it; (2) any part is wrong; (3) your reply has to supply a part they skipped or finish one they said "idk" to. Instead, end by asking them to do that one part themselves (a smaller step or a hint is fine). Explaining it for them is teaching, not proof they can do it, and never credit the student with something your own reply supplied.
   Never emit during TEACH, CHECK, or the EXERCISE prompt itself, never while reteaching, and never just because the student replied — it signals proficiency, not participation. Emit at most once per lesson.`;
 
+// ---------------------------------------------------------------------------
+// Basics track guide — the second, separate course (adult beginners, 5 units,
+// 18 lessons), routed by its own opener tag `[BASICS: Unit N, Lesson M]`
+// (lib/curriculumTag.lessonTrack). It is a pure constant module so tests can
+// read it without booting the server: lib/basicsGuide.js. CURRICULUM_PROMPT
+// above is the Deep dive and is byte-identical to before Basics existed.
+// ---------------------------------------------------------------------------
+const BASICS_PROMPT = basicsGuide.BASICS_PROMPT;
+
 const FACTCHECK_PROMPT = `You are Mercurius Ⅰ, an AI literacy tutor. A student has submitted a claim about AI for fact-checking.
 
 Analyze the claim carefully and return ONLY a valid JSON object in this EXACT format (no text before or after):
@@ -1080,6 +1091,22 @@ function curriculumStatic(wantsBlocks) {
       CURRICULUM_PROMPT,
       wantsBlocks ? CURRICULUM_BLOCKS_APPENDIX : null,
       SOURCE_BLOCK,
+      SAFETY_CORE,
+    ]));
+  }
+  return staticPrefixCache.get(key);
+}
+// Basics lessons: their own guide, their own card rules for blocks_v1
+// clients, no source library (the guide names its own WHO TO CALL contacts),
+// app facts + the safety core LAST. Two byte-stable prefixes with their own
+// cache entries; the Deep-dive ones above are untouched. Not in
+// prewarmCaches yet: no shipped client sends a Basics tag.
+function basicsStatic(wantsBlocks) {
+  const key = `basics:${wantsBlocks ? 'blocks' : 'prose'}`;
+  if (!staticPrefixCache.has(key)) {
+    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
+      BASICS_PROMPT,
+      wantsBlocks ? basicsGuide.BASICS_BLOCKS_APPENDIX : null,
       SAFETY_CORE,
     ]));
   }
@@ -1542,17 +1569,19 @@ async function refuseUnseenSession(req, res, sessionId) {
 // 'start' row (a refused or failed opener plus the client's retry must not
 // count as two starts), so a lesson with no row after its start is abandoned.
 let scheduler = null;
-function lessonMetaFor(clientMessages) {
-  const opener = clientMessages.find(
-    (m) => m && m.role === 'user' && typeof m.content === 'string' && curriculumTag.parseCurriculumTag(m.content),
-  );
-  const tag = opener ? curriculumTag.parseCurriculumTag(opener.content) : null;
+// `track` is curriculumTag.lessonTrack: 'deep' reads the first strict
+// `[CURRICULUM: Unit N, Lesson M]` tag (u ids, unchanged), 'basics' the first
+// strict `[BASICS: …]` tag (b ids), so neither track ever records the other's
+// id.
+function lessonMetaFor(clientMessages, track) {
+  const meta = curriculumTag.lessonMetaFromMessages(clientMessages, track);
   const turnIndex = clientMessages.filter((m) => m && m.role === 'user').length;
-  if (!tag) return { unit: null, lesson: null, lessonId: null, turnIndex };
-  return { unit: tag.unit, lesson: tag.lesson, lessonId: curriculumTag.lessonId(tag.unit, tag.lesson), turnIndex };
+  if (!meta || !meta.lessonId) return { track, unit: null, lesson: null, lessonId: null, turnIndex };
+  return { track, unit: meta.unit, lesson: meta.lesson, lessonId: meta.lessonId, turnIndex };
 }
-// A loose `[CURRICULUM:` thread (billed and quota-gated as a lesson) has no
-// parsable lesson id; its row is still written with lesson_id NULL.
+// A loose `[CURRICULUM:` or `[BASICS:` thread (billed and quota-gated as a
+// lesson) has no parsable lesson id; its row is still written with lesson_id
+// NULL.
 function recordLessonEvent(sessionId, meta, event) {
   if (!meta) return;
   Promise.resolve(db.recordLessonEvent({
@@ -1597,8 +1626,8 @@ function noteRefusal(req, kind, stopReason) {
 // device). db.upsertProgress is forward-only, so this can never undo a
 // 'mastered'; the session's stored curriculum version is reused (1 when it
 // has none). Fire-and-forget: a lost row must never fail the student's turn.
-function recordLessonProgress(sessionId, clientMessages) {
-  const id = curriculumTag.lessonIdFromMessages(clientMessages);
+function recordLessonProgress(sessionId, meta) {
+  const id = meta && meta.lessonId;
   if (!id) return;
   Promise.resolve()
     .then(() => db.upsertProgress(sessionId, { items: [{ id, type: 'lesson', status: 'completed' }] }))
@@ -1665,9 +1694,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // what keeps graded follow-ups (where [LESSON_COMPLETE] is emitted) in mode.
   // Computed up front because the quota gate charges lesson and chat turns
   // against different daily allowances.
-  const isCurriculumMsg = curriculumTag.isCurriculumThread(clientMessages);
+  //
+  // Two lesson tracks: the Deep dive (`[CURRICULUM: Unit N, Lesson M]`) and
+  // Basics (`[BASICS: Unit N, Lesson M]`). The most recent tag decides which
+  // guide teaches, so a Basics lesson never falls into CURRICULUM_PROMPT and
+  // a Deep-dive lesson never falls into the Basics guide. For a thread with no
+  // Basics tag, `lessonTrackName` is 'deep' exactly when the old
+  // isCurriculumThread check was true. Both tracks are lessons for billing,
+  // quotas, token budget, windows and [LESSON_COMPLETE].
+  const lessonTrackName = curriculumTag.lessonTrack(clientMessages);
+  const isCurriculumMsg = lessonTrackName !== null;
+  const isBasicsLesson = lessonTrackName === 'basics';
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
-  const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages) : null;
+  const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages, lessonTrackName) : null;
   // The opener is the lesson's start — and so is any lesson thread with no
   // assistant turn yet: a student whose opener got no reply (stop, timeout,
   // refusal) and who types on instead of tapping Retry sends [opener, turn],
@@ -1793,7 +1832,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   let staticText;
   let dynamicText;
-  if (isCurriculumMsg) {
+  if (isBasicsLesson) {
+    // Basics: its own guide (lib/basicsGuide), exempt from the unified prompt
+    // like the Deep dive. The dynamic block holds only what Basics reads per
+    // request (today's date for the Medicare-season rule, the device when the
+    // client says, the "Explain more" note) and no response mode, so a typed
+    // turn and a [Q] tap send the same bytes and the history cache holds.
+    staticText = basicsStatic(wantsBlocks);
+    dynamicText = basicsGuide.basicsRuntimeBlock({
+      currentDate: new Date().toISOString().slice(0, 10),
+      platform: basicsGuide.platformFromCapabilities(capabilities),
+      responseMode,
+    });
+  } else if (isCurriculumMsg) {
     // Curriculum is EXEMPT from the unified prompt (see useUnifiedSystem):
     // mercurius-v2.md carries no lesson machinery, so swapping it in would
     // drop the beat structure AND the [CHECK]/[LESSON_COMPLETE] client
@@ -1913,6 +1964,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Homework turns (see HOMEWORK_THINKING above): adaptive thinking at low
     // effort, no temperature (thinking takes the default), and room for the
     // thinking on top of the reply. Safety-topic turns keep their own path.
+    // Lessons of either track (isCurriculumMsg is true for the Deep dive and
+    // Basics alike) never get it.
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
       && THINKING_MODEL_RE.test(chosenModel)
@@ -1931,6 +1984,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // a distribution product their latest line got wrong (the −12 they still
     // have to find). Any of them → this turn's reply is checked whole before
     // it is sent. Writing threads are held back too, for stripMenu.
+    // Off for a lesson of either track: a Basics practice turn has Merc write
+    // the learner's note or list on purpose, so it must never be guarded,
+    // held back or rewritten (tests/basicsHomeworkExempt.test.js).
     const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD;
     const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];
     const guardNumbers = guardOn ? homeworkGuard.wordProblemNumbers(clientMessages) : null;
@@ -2042,6 +2098,22 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     };
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
+    // Paragraph sentence cap for lib/airyReflow. Basics paragraphs are 1–2
+    // sentences (BEGINNER_GUIDE), so a Basics lesson gets the chat limit, not
+    // the Deep dive's 3, whatever mode the session's free chat is in. Basics
+    // also keeps a short quoted span whole (keepQuotes), so a two-sentence
+    // practice line ("Plan dinner for 6. One is vegetarian, …") is never
+    // split across paragraphs, and treats "1." at a line start as a list
+    // marker (numberedLists), so a numbered step or "My safety rules" item
+    // is never broken mid-item. Every other request reflows exactly as before.
+    const replyReflowLimit = isBasicsLesson
+      ? (responseMode === 'deep' ? 3 : 2)
+      : replyLimit;
+    const reflowOptions = { keepQuotes: isBasicsLesson, numberedLists: isBasicsLesson };
+    // Basics only: drop the filler words the guide bans ("just", "simply")
+    // and any of the guide's own labels ("Safety point:") before the reflow
+    // (lib/basicsVoice). Quoted text and markers pass through; every other
+    // request skips it, so its output is unchanged.
 
     if (wantsStream) {
       // -----------------------------------------------------------------------
@@ -2135,15 +2207,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // streamed bytes always equal the final reply's reflow — clients never
       // see the text change shape at finalize. fullText accumulates the
       // REFLOWED text; markers pass through untouched.
-      const reflow = createReflow({ limit: replyLimit });
+      const reflow = createReflow({ limit: replyReflowLimit, ...reflowOptions });
+      const voice = isBasicsLesson ? createBasicsVoice() : null;
       // A guarded turn (see guardReply) is held back whole and checked first.
+      // Never a lesson of either track: guardOn is off for them.
       const holdBack = guardArmed || writingTurn || problemWork;
 
       // Thinking streams no 'text' for a while: any upstream event is life.
       stream.on('streamEvent', () => touch());
       stream.on('text', (text) => {
         touch();
-        const out = reflow.push(text);
+        const out = reflow.push(voice ? voice.push(text) : text);
         if (!out) return; // held back pending a sentence-boundary decision
         fullText += out;
         if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
@@ -2155,8 +2229,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) return;
-        // Drain the reflow hold-back so the tail reaches the client too.
-        const tail = reflow.flush();
+        // Drain the voice and reflow hold-backs so the tail reaches the
+        // client too.
+        const tail = (voice ? reflow.push(voice.flush()) : '') + reflow.flush();
         if (tail) {
           fullText += tail;
           if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
@@ -2197,7 +2272,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
           if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
         }
-        if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
+        if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, lessonMeta);
 
         try {
           await db.saveMessage(sessionId, 'assistant', reply, callKind);
@@ -2287,7 +2362,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
       // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
-      let reflowed = refused ? REFUSAL_COPY : reflowText(replyText, replyLimit);
+      let reflowed = refused
+        ? REFUSAL_COPY
+        : reflowText(isBasicsLesson ? basicsVoiceText(replyText) : replyText, replyReflowLimit, reflowOptions);
       if (!refused && (guardArmed || writingTurn || problemWork)) reflowed = await guardReply(reflowed);
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
@@ -2300,7 +2377,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
         if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
       }
-      if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, clientMessages);
+      if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, lessonMeta);
 
       // Save assistant reply to DB
       await db.saveMessage(sessionId, 'assistant', reply, callKind);

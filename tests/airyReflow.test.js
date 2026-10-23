@@ -109,3 +109,113 @@ describe('airyReflow', () => {
     assert.equal(reflowText('[LESSON_COMPLETE]', 2), '[LESSON_COMPLETE]');
   });
 });
+
+// keepQuotes (the Basics track, 2026-10): a short quoted span on one line is
+// never split, so a two-sentence practice line stays one chip-able line.
+describe('airyReflow keepQuotes', () => {
+  test('a quoted question in the middle of a sentence is not a sentence end (UX review 2026-10-22)', () => {
+    const text = 'You did well. You asked "what does this mean?" and then "by when?" to get the date. That works.';
+    assert.equal(reflowText(text, 2, { keepQuotes: true }), 'You did well. You asked "what does this mean?" and then "by when?" to get the date.\n\nThat works.');
+    assert.equal(reflowText(text, 2), 'You did well. You asked "what does this mean?"\n\nand then "by when?" to get the date.\n\nThat works.', 'the default mode is unchanged (it breaks mid-sentence)');
+    for (let size = 1; size <= 9; size++) {
+      const r = createReflow({ limit: 2, keepQuotes: true });
+      let out = '';
+      for (let i = 0; i < text.length; i += size) out += r.push(text.slice(i, i + size));
+      assert.equal(out + r.flush(), reflowText(text, 2, { keepQuotes: true }), `chunk ${size}`);
+    }
+    assert.equal(reflowText('One. Two.\nthree. Four.', 2, { keepQuotes: true }), 'One. Two.\n\nthree. Four.', 'a line break still ends it');
+  });
+
+  const { MAX_HELD_QUOTE_CHARS } = require('../lib/airyReflow');
+  const PRACTICE = 'Here is one idea. Try asking me: "Plan dinner for 6. One is vegetarian, one hates anything green." Then we go on. And more here.';
+
+  test('off by default: the same text splits inside the quote, exactly as before', () => {
+    assert.equal(
+      reflowText(PRACTICE, 2),
+      'Here is one idea. Try asking me: "Plan dinner for 6.\n\nOne is vegetarian, one hates anything green." Then we go on.\n\nAnd more here.',
+    );
+  });
+
+  test('on: the quote stays whole and the break moves to the first boundary after it', () => {
+    assert.equal(
+      reflowText(PRACTICE, 2, { keepQuotes: true }),
+      'Here is one idea. Try asking me: "Plan dinner for 6. One is vegetarian, one hates anything green."\n\nThen we go on. And more here.',
+    );
+    // Curly quotes too.
+    assert.equal(
+      reflowText('One. Try asking me: “Is this a scam? What should I do?” Two. Three.', 2, { keepQuotes: true }),
+      'One. Try asking me: “Is this a scam? What should I do?”\n\nTwo. Three.',
+    );
+  });
+
+  test('on: a long quoted span (a letter or an email) reflows as usual', () => {
+    const long = 'x'.repeat(MAX_HELD_QUOTE_CHARS);
+    const text = `Intro. "${long}. More words here. Even more." End.`;
+    assert.ok(reflowText(text, 2, { keepQuotes: true }).includes(`${long}.\n\nMore words here.`));
+  });
+
+  test('on: a short quote never holds a paragraph past MAX_HELD_SENTENCES', () => {
+    const { MAX_HELD_SENTENCES } = require('../lib/airyReflow');
+    assert.equal(MAX_HELD_SENTENCES, 4);
+    const text = '"Hi. Can we talk? It is quick. Let us pick one. Thanks. Bye."';
+    assert.equal(reflowText(text, 2, { keepQuotes: true }), '"Hi. Can we talk? It is quick. Let us pick one.\n\nThanks. Bye."');
+  });
+
+  test('on: a newline ends an unbalanced quote, so it can never hold a whole reply', () => {
+    const text = 'He said "wait. Then.\nOne. Two. Three.';
+    assert.equal(reflowText(text, 2, { keepQuotes: true }), 'He said "wait. Then.\nOne.\n\nTwo. Three.');
+  });
+
+  test('on: lists, [Q] cards and fences are untouched', () => {
+    const text = '- "A. B. C." item\n\n[Q]\nWhy "x. y. z"?\nA) a\nB) b\nC) c\nANS: A\n[/Q]';
+    assert.equal(reflowText(text, 1, { keepQuotes: true }), text);
+  });
+
+  test('on: CHUNK-BOUNDARY INDEPENDENCE', () => {
+    const texts = [
+      PRACTICE,
+      'Last time, you asked a question. Ask me a real question from your week. If nothing comes to mind, try asking me: "What\'s a good card game for 4 people, ages 8 to 80?"',
+      '“Open. Still open.” Out. One. Two. "Again. And." Done.\n\nNext para "q. r." s. t.',
+    ];
+    for (const text of texts) {
+      const once = reflowText(text, 2, { keepQuotes: true });
+      for (const size of [1, 2, 3, 5, 7, 13, 64]) {
+        const r = createReflow({ limit: 2, keepQuotes: true });
+        let out = '';
+        for (let i = 0; i < text.length; i += size) out += r.push(text.slice(i, i + size));
+        assert.equal(out + r.flush(), once, `chunk ${size}`);
+      }
+    }
+  });
+});
+
+// numberedLists (the Basics track, 2026-10): "1." opening a line is a list
+// marker, so numbered lines are exempt like bullets.
+describe('airyReflow numberedLists', () => {
+  const RULES = 'Here are your safety rules:\n\n1. It\'s a program. It can sound kind, but no one is typing back.\n2. Use the postcard rule. If you would not write it on a postcard, do not type it.\n3. Check what matters. Health answers get checked.';
+
+  test('off by default: the known gap, unchanged ("1." counts as a sentence)', () => {
+    assert.equal(
+      reflowText(RULES, 2),
+      "Here are your safety rules:\n\n1. It's a program.\n\nIt can sound kind, but no one is typing back.\n2.\n\nUse the postcard rule. If you would not write it on a postcard, do not type it.\n\n3. Check what matters.\n\nHealth answers get checked.",
+    );
+  });
+
+  test('on: numbered lines pass through untouched; prose after them reflows as usual', () => {
+    assert.equal(reflowText(RULES, 2, { numberedLists: true }), RULES);
+    const text = '1) Step one. Still one.\n12. Step twelve. Still twelve.\n\nAfter. Two. Three.';
+    assert.equal(reflowText(text, 2, { numberedLists: true }), '1) Step one. Still one.\n12. Step twelve. Still twelve.\n\nAfter. Two.\n\nThree.');
+    // A year or a long number opening a line is not a list marker.
+    assert.equal(reflowText('2023. It was a year. And more.', 2, { numberedLists: true }), '2023. It was a year.\n\nAnd more.');
+  });
+
+  test('on: CHUNK-BOUNDARY INDEPENDENCE', () => {
+    const once = reflowText(RULES, 2, { numberedLists: true, keepQuotes: true });
+    for (const size of [1, 2, 3, 5, 8, 64]) {
+      const r = createReflow({ limit: 2, numberedLists: true, keepQuotes: true });
+      let out = '';
+      for (let i = 0; i < RULES.length; i += size) out += r.push(RULES.slice(i, i + size));
+      assert.equal(out + r.flush(), once, `chunk ${size}`);
+    }
+  });
+});
