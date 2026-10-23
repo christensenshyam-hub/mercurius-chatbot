@@ -86,54 +86,14 @@ public struct LessonCompleteOverlay: View {
 
     public var body: some View {
         #if os(macOS)
-        macBody
+        // Night Studio's card (SPEC.md §5.6): the credential, the lesson's
+        // key ideas, the week and the next stop, with "Done for now".
+        NightLessonComplete(lessonTitle: lessonTitle, nextStop: nextStop, unitLabel: unitLabel,
+                            lessonNumber: lessonNumber, reduceMotion: reduceMotion, exits: exits)
         #else
         phoneBody
         #endif
     }
-
-    #if os(macOS)
-    /// In a window the celebration is a card centred over the lesson — a
-    /// bottom sheet as wide as the window read as a stretched phone. Return
-    /// takes the primary button, Escape keeps reading.
-    private var macBody: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.opacity(0.38)
-                    .contentShape(Rectangle())
-                    .onTapGesture { exit(.dismiss) }
-                    .accessibilityLabel("Dismiss")
-                    .accessibilityHint("Keep reading the lesson")
-
-                contentCard
-                    .overlay(alignment: .top) {
-                        MercMascot(.celebrate, size: 128)
-                            .scaleEffect(mercScale)
-                            .offset(y: -72)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(maxWidth: 440)
-                    .frame(maxHeight: max(320, geo.size.height - 150))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 64)
-                    .offset(y: sheetOffset)
-                    .opacity(cardShown ? 1 : 0)
-                    .padding(BrandSpacing.xl)
-
-                // Escape: back to the lesson, as a click on the dimmed
-                // backdrop does.
-                Button("Keep reading") { exit(.dismiss) }
-                    .keyboardShortcut(.cancelAction)
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-                    .accessibilityHidden(true)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-        .onAppear(perform: animateIn)
-        .task { await renderShareCard() }
-    }
-    #endif
 
     private var phoneBody: some View {
         GeometryReader { geo in

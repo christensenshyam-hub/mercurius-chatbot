@@ -24,17 +24,34 @@ import AppKit
 public enum BrandColor {
     // MARK: Surface
 
+    #if os(macOS)
+    // The Mac reads Night Studio's palette (docs/mac-night-studio/SPEC.md
+    // §2.2), so every shared view the Mac hosts takes it without per-view
+    // edits. iOS keeps `BrandPalette` below, unchanged.
+    public static let background = Night.canvasTop
+
+    public static let surface = Night.surface
+
+    public static let surfaceElevated = Night.surfaceRaised
+    #else
     public static let background = adaptive(BrandPalette.background)
 
     public static let surface = adaptive(BrandPalette.surface)
 
     public static let surfaceElevated = adaptive(BrandPalette.surfaceElevated)
+    #endif
 
     // MARK: Content
 
+    #if os(macOS)
+    public static let text = Night.ink
+
+    public static let textSecondary = Night.ink2
+    #else
     public static let text = adaptive(BrandPalette.text)
 
     public static let textSecondary = adaptive(BrandPalette.textSecondary)
+    #endif
 
     // MARK: Accent
 
@@ -45,7 +62,11 @@ public enum BrandColor {
     /// Indigo for text and state glyphs: deeper in light mode, lighter in
     /// dark, so it reads at 4.5:1 or better wherever `accent` text did not
     /// (the check question was 3.95:1 light and 3.53:1 dark).
+    #if os(macOS)
+    public static let accentText = Night.accentText
+    #else
     public static let accentText = adaptive(BrandPalette.accentText)
+    #endif
 
     /// Violet — lighter accent for gradients / highlights.
     public static let accentLight = Color(red: 0x8B / 255, green: 0x5C / 255, blue: 0xF6 / 255)
@@ -65,6 +86,19 @@ public enum BrandColor {
 
     // MARK: Semantic
 
+    #if os(macOS)
+    /// Opaque: Night's hairline flattened over a surface.
+    public static let border = Night.border
+
+    /// Night's red and green fills, adaptive on the Mac.
+    public static let error = Night.error
+
+    public static let errorText = Night.errorText
+
+    public static let success = Night.success
+
+    public static let successText = Night.successText
+    #else
     public static let border = adaptive(BrandPalette.border)
 
     /// Red for fills and strokes. For text or a glyph, use `errorText`.
@@ -80,6 +114,7 @@ public enum BrandColor {
     /// Green for text and state glyphs ("Nailed it!", "Completed", a correct
     /// mark). The fill green was 1.8-2.3:1 as text in light mode.
     public static let successText = adaptive(BrandPalette.successText)
+    #endif
 
     /// The deep violet at the heart of the brand gradient (#7C3AED) — used for
     /// the Merc halo + accents that must match the mascot's skin tone exactly.

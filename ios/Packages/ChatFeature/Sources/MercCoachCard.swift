@@ -37,6 +37,38 @@ struct MercCoachCard: View {
     #endif
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 15
 
+    #if os(macOS)
+    /// Night Studio (SPEC.md §5.3): Merc anchored at the head of the lesson,
+    /// in his lamp on the page (no card), with his line in reading type. A
+    /// progress reaction swaps the line and the eyebrow, as before.
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            NightMercLamp(expression, size: 64, mood: reaction?.mood ?? .neutral,
+                          activity: reaction?.activity ?? liveActivity, antics: true)
+            VStack(alignment: .leading, spacing: 6) {
+                NightEyebrow(reaction == nil ? "Your coach" : "Progress",
+                             color: reaction?.mood == .celebrating ? Night.successText : Night.accentText)
+                Text(displayLine)
+                    .nightFont(.body)
+                    .foregroundStyle(Night.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Your coach, Mercurius. \(displayLine)")
+        .onAppear {
+            guard reaction == nil, !reduceMotion, !Night.debugReduceMotion else { return }
+            mercState = .wave
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+                mercState = .idle
+            }
+        }
+    }
+    #else
     var body: some View {
         HStack(alignment: .center, spacing: BrandSpacing.md) {
             // Large + softGlow so the coach reads cleanly on the dark surface.
@@ -95,6 +127,8 @@ struct MercCoachCard: View {
             }
         }
     }
+
+    #endif
 
     // MARK: - Reaction-aware presentation
 

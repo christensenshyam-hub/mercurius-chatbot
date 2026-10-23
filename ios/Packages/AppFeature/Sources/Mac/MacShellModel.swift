@@ -198,6 +198,27 @@ public final class MacShellModel {
         openChat()
     }
 
+    /// Today's "Think it through": a fresh thread in the current mode with
+    /// `draft` in the composer, **not sent** — nothing reaches the server
+    /// until the student sends it. The composer takes focus as the chat
+    /// appears.
+    public func newChat(draft: String) {
+        guard !isGated else { return }
+        newChat()
+        chatModel.draft = draft
+    }
+
+    /// View ▸ Progress (⌘4) and the toolbar's Progress button: the Progress
+    /// sheet. Not behind the gate.
+    public func showProgress() {
+        guard !isGated else { return }
+        showsProgress = true
+    }
+
+    /// The free chat's mode, for Today's "Think it through", without
+    /// building the chat (it is built past the gate anyway).
+    var currentChatMode: ChatMode { builtChatModel?.currentMode ?? .socratic }
+
     // MARK: - Routing
 
     private func route(to destination: Destination) {

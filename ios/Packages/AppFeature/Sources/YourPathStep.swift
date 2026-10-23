@@ -32,7 +32,11 @@ struct YourPathStep: View {
                         }
                     }
                 }
+                #if os(macOS)
+                .nightLit(radius: Night.Radius.card)
+                #else
                 .background(BrandColor.surface, in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
+                #endif
 
                 RemindersSection(
                     store: reminderStore,
@@ -60,15 +64,30 @@ struct YourPathStep: View {
 
     private func lessonRow(_ lesson: Lesson) -> some View {
         HStack(alignment: .center, spacing: BrandSpacing.md) {
+            #if os(macOS)
+            // The path's node, numbered (no gradient fill: SPEC.md §2.5).
+            Text("\(lesson.number)")
+                .font(NightType.lexend(13, semibold: true))
+                .foregroundStyle(Night.accentText)
+                .frame(width: 30, height: 30)
+                .background(Night.surface, in: Circle())
+                .overlay(Circle().strokeBorder(Night.accentText, lineWidth: 1.5))
+                .accessibilityHidden(true)
+            #else
             Text("\(lesson.number)")
                 .font(BrandFont.bodyEmphasized)
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(BrandGradient.merc, in: Circle())
                 .accessibilityHidden(true)
+            #endif
 
             Text(lesson.title)
+                #if os(macOS)
+                .nightFont(.body)
+                #else
                 .font(BrandFont.body)
+                #endif
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

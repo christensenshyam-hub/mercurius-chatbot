@@ -222,3 +222,15 @@ struct CoachCardPresence: Equatable, Sendable {
         return geometry.isAtBottom
     }
 }
+
+#if os(macOS)
+extension MessageScrollPolicy {
+    /// The lesson's part strip moved the list (a click on a part): a move of
+    /// the student's own, so a streaming reply is no longer followed (the
+    /// next delta would pull them back down). The pill offers the way back.
+    mutating func partJumped() {
+        isFollowing = false
+        didHoldCurrentReply = true
+    }
+}
+#endif

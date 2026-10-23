@@ -110,6 +110,10 @@ struct MacSnapshotOptionsTests {
                                          "-MacSnapshotSize", "600x640"]))
         #expect(help.target == .help)
         #expect(help.problems.isEmpty)
+
+        let sheet = try #require(options(["-MacSnapshot", "/tmp", "-MacSnapshotWindow", "sheet"]))
+        #expect(sheet.target == .sheet)
+        #expect(sheet.problems.isEmpty)
     }
 
     @Test("YES, true and non-zero numbers are yes — as UserDefaults.bool reads them")

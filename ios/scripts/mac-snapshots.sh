@@ -36,6 +36,13 @@
 # on a display whose visible area is at least 900 pt tall). See
 # mac-store-screenshots.sh.
 #
+# Night Studio's accessibility variants, through the app's DEBUG overrides
+# (the Mac's own settings are never touched): hc / hc-dark (Increase
+# Contrast, -NightContrast increased), rt / rt-dark (Reduce Transparency),
+# rm (Reduce Motion), noglass / noglass-dark (the macOS 14–25 and CI-build
+# material fallback, drawn on macOS 26). Each is <shot>-<variant>.png at
+# 1280×800.
+#
 # The harness prints anything it couldn't do as asked ("MacSnapshot:
 # problem …", e.g. a size below the window's minimum) and checks its own
 # picture: the right pixel size, not one colour (blank), and — activated —
@@ -124,7 +131,7 @@ snap() {
   # The control dump and the composer log once per state (the light,
   # full-size shot), not once per variant.
   case $name in
-    *-dark|*-min|*-store) ;;
+    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass) ;;
     *)
       grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
       grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
@@ -143,17 +150,28 @@ window_shot() {
       min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 700x600 ;;
       min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 700x600 ;;
       store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
+      hc)       snap "$name-hc"       "$@" -MacSnapshotAppearance light -NightContrast increased ;;
+      hc-dark)  snap "$name-dark-hc"  "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
+      rt)       snap "$name-rt"       "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
+      rt-dark)  snap "$name-dark-rt"  "$@" -MacSnapshotAppearance dark -NightReduceTransparency YES ;;
+      rm)       snap "$name-rm"       "$@" -MacSnapshotAppearance light -NightReduceMotion YES ;;
+      noglass)  snap "$name-noglass"  "$@" -MacSnapshotAppearance light -NightNoGlass YES ;;
+      noglass-dark) snap "$name-dark-noglass" "$@" -MacSnapshotAppearance dark -NightNoGlass YES ;;
     esac
   done
 }
 
-# The Settings or Help window: its own size, light and dark.
+# The Settings or Help window, or a sheet: its own size, light and dark.
 panel_shot() {
   local name=$1; shift
   for variant in $VARIANTS; do
     case $variant in
       light) snap "$name"      "$@" -MacSnapshotAppearance light ;;
       dark)  snap "$name-dark" "$@" -MacSnapshotAppearance dark ;;
+      hc)    snap "$name-hc"   "$@" -MacSnapshotAppearance light -NightContrast increased ;;
+      hc-dark) snap "$name-dark-hc" "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
+      rt)    snap "$name-rt"   "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
+      rt-dark) snap "$name-dark-rt" "$@" -MacSnapshotAppearance dark -NightReduceTransparency YES ;;
     esac
   done
 }
@@ -165,13 +183,54 @@ run() {
     gate-meet)       window_shot "$1" "${GATE[@]}" -GateStep meet ;;
     gate-age)        window_shot "$1" "${GATE[@]}" -GateStep age -MacSnapshotDumpControls YES ;;
     gate-consent)    window_shot "$1" "${GATE[@]}" -GateStep disclosure -MacSnapshotDumpControls YES ;;
+    gate-limits)     window_shot "$1" "${GATE[@]}" -GateStep limits ;;
+    gate-paused)     window_shot "$1" "${GATE[@]}" -GateStep paused ;;
+    gate-under13)    window_shot "$1" "${GATE[@]}" -GateStep underThirteen ;;
+    gate-path)       window_shot "$1" "${GATE[@]}" -GateStep path ;;
     today)           window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES ;;
+    # Today with a week in it: two lessons this week, Lesson 3 opened, a
+    # 4-day streak and a saved chat (DEBUG -TodayDemo; nothing is pushed).
+    today-week)      window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -TodayDemo YES -SeedDemoChat YES ;;
     path)            window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES ;;
+    # Night Studio's unit page (DEBUG seeds in the -UITests progress suite,
+    # never pushed): two lessons done and 1.3 lit; every lesson done and the
+    # check open; the check passed (-NightPathUnit keeps Unit 1 on screen).
+    path-week)       window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES -TodayDemo YES ;;
+    path-check)      window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES -NightPathDemo check ;;
+    path-mastered)   window_shot "$1" "${PAST_GATE[@]}" -EnterShellCurriculum YES -NightPathDemo mastered -NightPathUnit unit_1 ;;
     lesson-intro)    window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES ;;
     lesson)          window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -MacSnapshotDelay 10 ;;
-    lesson-complete) window_shot "$1" "${PAST_GATE[@]}" -LessonPreview YES -ForceCelebrate YES -MacSnapshotDelay 5 ;;
+    # Night Studio's check (DEBUG -NightCheckState, -NightScrollToPart): the
+    # recorded first reply's check with B picked and Lock it in showing; then
+    # locked in, which sends "I picked B) …" through the real path and
+    # replays Merc's second reply, the part strip's jump back to the check.
+    lesson-top)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 1 -MacSnapshotDelay 10 ;;
+    # AUD-29 in Night: the first reply (its opening paragraphs) drops
+    # mid-stream and is kept, with its failure line and Retry.
+    lesson-cut)      window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -LessonReplayCut YES -LessonReplayShort YES -MacSnapshotDelay 8 ;;
+    # Lesson 1.1's interactive, "How a model reads “bank”" (DEBUG
+    # -NightScrollToInteractive): the replay's first reply settles with the
+    # card closing its Tokenization part, before the check. The card's top;
+    # its map, with no opening and with each opening picked (-NightTokenizer);
+    # the compact "Try it" card (-NightTokenizerCompact, as a card narrower
+    # than 440 pt starts).
+    lesson-interactive)         window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -MacSnapshotDelay 11 ;;
+    lesson-interactive-map)     window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -MacSnapshotDelay 11 ;;
+    lesson-interactive-money)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer money -MacSnapshotDelay 11 ;;
+    lesson-interactive-river)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer river -MacSnapshotDelay 11 ;;
+    lesson-interactive-compact) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -NightTokenizerCompact YES -MacSnapshotDelay 11 ;;
+    lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
+    lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
+    # Night Studio's complete card: the replay's first reply streams in
+    # (its two key ideas), then the card shows (-NightCompleteAfterReply);
+    # -NightCompleteDemo counts Lesson 1 as finished a minute ago, so the
+    # week row reads 1 of 2. Nothing is pushed.
+    lesson-complete) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightCompleteAfterReply YES -NightCompleteDemo YES -MacSnapshotDelay 12 ;;
     chat)            window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES ;;
     chat-thread)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -SeedDemoChat YES ;;
+    # A real recorded Socratic thread (DEBUG -NightChatDemo): Merc's last
+    # reply cites a source and ends on a question (the source chip, Your turn).
+    chat-socratic)   window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -NightChatDemo YES -MacSnapshotDelay 6 ;;
     # The toolbar's mode switch (as ⌘2/⌘3): Debate's one-time description,
     # then the chat in Debate and in Discussion. The switch asks the server
     # first, so the last two need a local server on :3000 that answers
@@ -183,10 +242,23 @@ run() {
     chat-typing)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "Why do chatbots sound so sure?|Even when they're wrong?" -MacSnapshotDelay 6 ;;
     chat-failed)     window_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -MacSnapshotType "What is a token?" -MacSnapshotSubmit YES -MacSnapshotDelay 8 ;;
     unit-test)       window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage review ;;
+    unit-test-quiz)  window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage partial ;;
+    unit-test-written) window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage written ;;
+    unit-test-mastered) window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage mastered ;;
+    unit-test-almost) window_shot "$1" "${PAST_GATE[@]}" -UnitTestPreview YES -UnitTestStage almost ;;
+    unit-test-unavailable) window_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -NightUnitTestUnavailable YES ;;
+    # The chat's Quiz me sheet (DEBUG -NightOpenQuiz). With no local server
+    # the quiz request fails fast: its failure state and Try again.
+    chat-quiz)       panel_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -NightChatDemo YES -NightOpenQuiz YES -MacSnapshotWindow sheet -MacSnapshotDelay 7 ;;
+    # The mode explainer sheet itself (chat-mode-intro shows the window
+    # under it).
+    chat-mode-sheet) panel_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode debate -seenModeDescription.debate NO -MacSnapshotWindow sheet ;;
+    start-failure)   window_shot "$1" "${PAST_GATE[@]}" -NightStartFailure YES ;;
     crisis)          window_shot "$1" "${PAST_GATE[@]}" -UnitTestCrisisPreview YES -MacSnapshotDelay 5 ;;
     settings-general) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab general ;;
     settings-privacy) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab privacy ;;
     settings-about)   panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab about ;;
+    settings-gated)   panel_shot "$1" "${GATE[@]}" -MacOpenWindow settings -MacSnapshotWindow settings ;;
     help)            panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 ;;
     help-mac)        panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 -MacHelpTab mac ;;
     help-support)    panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow help -MacSnapshotWindow help -MacSnapshotSize 600x640 -MacHelpTab help ;;
@@ -194,7 +266,7 @@ run() {
   esac
 }
 
-ALL="gate-meet gate-age gate-consent today path lesson-intro lesson lesson-complete chat chat-thread chat-mode-intro chat-typing chat-failed unit-test crisis settings-general settings-privacy settings-about help help-mac help-support"
+ALL="gate-meet gate-age gate-consent gate-limits gate-paused gate-under13 gate-path today today-week path path-week path-check path-mastered lesson-intro lesson lesson-top lesson-cut lesson-interactive lesson-interactive-map lesson-interactive-money lesson-interactive-river lesson-interactive-compact lesson-check lesson-answered lesson-complete chat chat-thread chat-socratic chat-mode-intro chat-mode-sheet chat-typing chat-failed chat-quiz unit-test unit-test-quiz unit-test-written unit-test-mastered unit-test-almost unit-test-unavailable crisis start-failure settings-general settings-privacy settings-about settings-gated help help-mac help-support"
 if [ $# -eq 0 ]; then
   # shellcheck disable=SC2086
   set -- $ALL

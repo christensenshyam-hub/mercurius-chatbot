@@ -13,6 +13,14 @@ import PersistenceKit
 /// lesson and opens a saved thread; code that routes on its own (opening a
 /// lesson under its unit) sets the selection directly and isn't undone here.
 ///
+/// Night Studio (SPEC.md §5.0): the rows keep the system's type, height and
+/// selection; secondary text (counts, a chat's mode, section headers) is
+/// Night's `ink3` — the system's secondary label is 3.86:1 on the light
+/// sidebar — and turns to the system's own on a selected row. On macOS 26
+/// the sidebar is the system's glass, with Today's canvas extended under it;
+/// on macOS 14–25, every CI build, and under Reduce Transparency or Increase
+/// Contrast it is an opaque `Night.sidebar`.
+///
 /// New Chat is a row, not a button: while the chat shows a thread with no
 /// saved message yet, that row is the thread's (`unsavedChatId`) and is
 /// highlighted; otherwise selecting it starts one. The Delete key asks to
@@ -26,6 +34,7 @@ struct MacSidebar: View {
 
     /// The Learning path section is open (kept across launches).
     @AppStorage("mac.sidebar.pathExpanded") private var pathExpanded = true
+    @NightSettings private var night
 
     var body: some View {
         List(selection: selection) {
@@ -34,14 +43,16 @@ struct MacSidebar: View {
                     .tag(MacShellModel.Destination.today)
             }
 
-            Section("Learning path", isExpanded: $pathExpanded) {
+            Section(isExpanded: $pathExpanded) {
                 ForEach(MercuriusCurriculum.units) { unit in
                     UnitRow(unit: unit, progress: progress)
                         .tag(MacShellModel.Destination.unit(unit.id))
                 }
+            } header: {
+                SectionHeader(title: "Learning path")
             }
 
-            Section("Chats") {
+            Section {
                 Label("New Chat", systemImage: "square.and.pencil")
                     .tag(MacShellModel.Destination.chat(shell.unsavedChatId))
                     .help("Start a new chat (⌘N)")
@@ -53,9 +64,12 @@ struct MacSidebar: View {
                             Button("Delete Chat…", role: .destructive) { onDelete(conversation) }
                         }
                 }
+            } header: {
+                SectionHeader(title: "Chats")
             }
         }
         .listStyle(.sidebar)
+        .nightSidebarBackground(night)
         .onDeleteCommand {
             if let conversation = Self.deletableConversation(selection: shell.selection,
                                                             in: shell.conversations) {
@@ -102,12 +116,35 @@ struct MacSidebar: View {
     }
 }
 
+/// A sidebar section's title in Night's `ink3`.
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .foregroundStyle(Night.ink3)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Secondary text on a sidebar row: Night's `ink3`, or the system's own
+/// secondary label on a selected row (it turns light on the selection's
+/// fill, where `ink3` would vanish).
+private struct SidebarSecondary: ViewModifier {
+    @Environment(\.backgroundProminence) private var prominence
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(prominence == .increased ? AnyShapeStyle(.secondary) : AnyShapeStyle(Night.ink3))
+    }
+}
+
 /// A unit: its number in the icon, its title, and its lessons done — or a
 /// seal once its check is mastered. One line per unit where the title
 /// fits, so the chats below stay in view.
 private struct UnitRow: View {
     let unit: CurriculumFeature.Unit
     let progress: CurriculumProgressStore
+    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         let done = progress.completedCount(in: unit)
@@ -119,12 +156,12 @@ private struct UnitRow: View {
                     .lineLimit(2)
             } icon: {
                 Image(systemName: MacSidebar.unitSymbol(number: Self.number(unit), mastered: mastered))
-                    .foregroundStyle(mastered ? BrandColor.successText : BrandColor.accentText)
+                    .foregroundStyle(iconStyle(mastered: mastered))
             }
             Spacer(minLength: 0)
             Text("\(done)/\(total)")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .modifier(SidebarSecondary())
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(MacSidebar.unitAccessibilityLabel(
@@ -132,6 +169,13 @@ private struct UnitRow: View {
     }
 
     static func number(_ unit: CurriculumFeature.Unit) -> Int { MacSidebar.unitNumber(unit) }
+
+    /// Night's accent (a mastered seal in its green); white on a selected
+    /// row, like the row's text.
+    private func iconStyle(mastered: Bool) -> AnyShapeStyle {
+        if prominence == .increased { return AnyShapeStyle(.primary) }
+        return AnyShapeStyle(mastered ? Night.successText : Night.accentText)
+    }
 }
 
 /// A saved thread: a chat bubble, its title, and its mode underneath —
@@ -146,7 +190,7 @@ private struct ConversationRow: View {
                     .lineLimit(1)
                 Text(mode)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .modifier(SidebarSecondary())
             }
         } icon: {
             Image(systemName: "bubble.left")

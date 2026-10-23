@@ -34,21 +34,21 @@ public struct MacSettingsView: View {
             }
         }
         .preferredColorScheme(env.themeStore.theme.colorScheme)
-        .tint(BrandColor.accent)
+        .tint(Night.prominent)
     }
 
     private var beforeConsent: some View {
         VStack(spacing: BrandSpacing.md) {
-            MercMascot(.idle, size: 72)
-                .accessibilityHidden(true)
+            NightMercLamp(.idle, size: 64)
             Text("Settings open once you've finished setting up Mercurius in the main window.")
-                .font(BrandFont.body)
-                .foregroundStyle(BrandColor.text)
+                .nightFont(.body)
+                .foregroundStyle(Night.ink)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(BrandSpacing.xl)
         .frame(width: 420, height: 240)
+        .background(NightCanvas(pools: .indigo, stars: false))
     }
 }
 

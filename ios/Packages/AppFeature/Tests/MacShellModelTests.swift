@@ -180,6 +180,48 @@ struct MacShellModelTests {
         #expect(MacCommands.destinationKey(.chat) == KeyboardShortcut("3", modifiers: .command))
     }
 
+    @Test("⌘4 is View ▸ Progress, after the three destinations")
+    func progressKey() {
+        #expect(MacCommands.progressKey == KeyboardShortcut("4", modifiers: .command))
+        #expect(MacCommands.Destination.allCases.map { MacCommands.destinationKey($0) }
+            .allSatisfy { $0 != MacCommands.progressKey })
+    }
+
+    @Test("Progress (⌘4, the toolbar button) opens the Progress sheet, but never behind the gate")
+    func showProgress() {
+        let gated = makeShell(gated: true)
+        gated.showProgress()
+        #expect(!gated.showsProgress)
+        let shell = makeShell()
+        shell.showProgress()
+        #expect(shell.showsProgress)
+    }
+
+    @Test("Think it through opens a new chat with the prompt in the composer, not sent")
+    func newChatWithDraft() {
+        let shell = makeShell()
+        shell.newChat(draft: "How does an LLM actually work?")
+        #expect(shell.selection == .chat(shell.chatModel.conversationId))
+        #expect(shell.chatModel.draft == "How does an LLM actually work?")
+        #expect(shell.chatModel.messages.isEmpty, "nothing is sent until the student sends it")
+        #expect(shell.chatModel.phase == .idle)
+    }
+
+    @Test("Think it through does nothing behind the gate")
+    func newChatWithDraftGated() {
+        let shell = makeShell(gated: true)
+        shell.newChat(draft: "How does an LLM actually work?")
+        #expect(shell.selection == .today)
+        #expect(chatStore.listConversations().isEmpty)
+    }
+
+    @Test("Today reads the chat's mode without building the chat")
+    func currentChatModeDefault() {
+        let shell = makeShell()
+        #expect(shell.currentChatMode == .socratic)
+        #expect(shell.unsavedChatId == nil, "reading the mode must not build the chat")
+    }
+
     @Test("The mode items work only on the free chat — never on a lesson, behind the gate or mid-erase")
     func modeItemsOnlyInTheChat() {
         #expect(MacCommands.modesEnabled(blocked: false, chatMode: .socratic))

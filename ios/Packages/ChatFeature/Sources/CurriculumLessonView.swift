@@ -76,6 +76,10 @@ public struct CurriculumLessonView: View {
     #if os(macOS)
     /// Opens the composer's image panel (File ▸ Attach Image…, ⇧⌘A).
     @State private var attachTrigger = 0
+    /// A check on screen holds a pick that isn't locked in (Escape keeps it).
+    @State private var nightUncommittedPick = false
+    /// Where the lesson's keys go while its check waits.
+    @State private var nightCheckRouter = NightCheckKeyRouter()
     #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -165,7 +169,12 @@ public struct CurriculumLessonView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            #if os(macOS)
+            // Night Studio: the ink canvas with the indigo pool (§2.4).
+            NightCanvas(pools: .indigo, stars: false)
+            #else
             BrandColor.background.ignoresSafeArea()
+            #endif
 
             VStack(spacing: 0) {
                 #if os(iOS)
@@ -207,14 +216,36 @@ public struct CurriculumLessonView: View {
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
+                #if os(macOS)
+                .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
+                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
+                .nightLesson(id: lessonId)
+                .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
+                // A waiting check takes the lesson's keys, unless the
+                // composer has the keyboard.
+                .environment(\.nightCheckRouter, nightCheckRouter)
+                .environment(\.nightComposerFocused, composerFocused)
+                #endif
 
                 // Clean, fixed composer — nothing tucked behind it.
                 composer
+                    #if os(macOS)
+                    // Under the complete card the composer steps away, so the
+                    // card never sits on its ring (the card is centred in the
+                    // whole lesson).
+                    .opacity(showCelebration ? 0 : 1)
+                    #endif
             }
             // The intro and the celebration cover the lesson: VoiceOver and a
             // keyboard must not reach (or send from) what's underneath.
             .accessibilityHidden(showIntro || showCelebration)
             .disabled(showIntro)
+            #if os(macOS)
+            // Under the complete card the lesson reads as one calm field, not
+            // as clipped words around the card.
+            .blur(radius: showCelebration ? 8 : 0)
+            .disabled(showCelebration)
+            #endif
 
             if showCelebration {
                 LessonCompleteOverlay(
@@ -237,6 +268,12 @@ public struct CurriculumLessonView: View {
                     // DEBUG `-ForceCelebrate` overlay never reports a dismissal.
                     onCelebrationDismissed: didCelebrate ? onCelebrationDismissed : nil
                 )
+                #if os(macOS)
+                // The Mac's card recaps the objective and Merc's [KEY] ideas.
+                .environment(\.nightLessonRecap,
+                             NightLessonRecap(objective: objective,
+                                              keyIdeas: NightKeyIdeas.collect(from: model.messages)))
+                #endif
                 .accessibilityAddTraits(.isModal)
                 .transition(.opacity)
                 .zIndex(1)
@@ -308,13 +345,28 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if DEBUG && os(macOS)
+        // `-NightCompleteAfterReply YES` (shots only): the complete card once
+        // the replay's first reply is in, so it recaps that reply's [KEY]
+        // ideas. Like `-ForceCelebrate`, it never reports a completion.
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, UserDefaults.standard.bool(forKey: "NightCompleteAfterReply"),
+                  model.messages.contains(where: { $0.role == .assistant }), !showCelebration else { return }
+            showIntro = false
+            showCelebration = true
+        }
+        #endif
         #if os(macOS)
         .macImageDrop(isEnabled: !isSending && !showIntro && !showCelebration) { model.attachImage(data: $0) }
+        .nightCheckKeys(nightCheckRouter, isEnabled: !showIntro && !showCelebration)
         .focusedSceneValue(\.chatCommandTarget, commandTarget)
         .navigationTitle(title)
         .navigationSubtitle(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
                                              totalInUnit: totalInUnit))
         .toolbar { macToolbar }
+        // The canvas runs up under the title bar at every width (in a
+        // narrow window the lesson's bar turned an opaque grey).
+        .nightCanvasTitleBar()
         .onAppear {
             // Settings' erasure stops a reply this lesson is still
             // receiving, before the server delete (`onRegisterStop`).
@@ -364,18 +416,23 @@ public struct CurriculumLessonView: View {
         if showIntro { return true }
         return Self.escapeLeaves(isSending: isSending, draft: model.draft,
                                  hasAttachment: model.pendingImage != nil,
-                                 isCelebrating: showCelebration)
+                                 isCelebrating: showCelebration,
+                                 hasUncommittedPick: nightUncommittedPick)
     }
 
-    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool) -> Bool {
-        !isSending && !isCelebrating && !hasAttachment
+    /// Nothing would be lost: no reply coming in, no celebration, no photo,
+    /// no draft, and no check answer picked but not locked in.
+    static func escapeLeaves(isSending: Bool, draft: String, hasAttachment: Bool, isCelebrating: Bool,
+                             hasUncommittedPick: Bool = false) -> Bool {
+        !isSending && !isCelebrating && !hasAttachment && !hasUncommittedPick
             && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// "Unit 1 · Lesson 2 of 4", the window's subtitle under the lesson's
-    /// title (the iPhone's eyebrow, in title case).
+    /// "Unit 1 · Lesson 1.2", the window's subtitle under the lesson's title
+    /// and the intro's eyebrow: the lesson's code as the path, Today and the
+    /// complete card say it ("2 of 4" is the unit meter's only).
     static func macSubtitle(unitLabel: String, lessonNumber: Int, totalInUnit: Int) -> String {
-        "\(unitName(unitLabel)) · \(place(lessonNumber: lessonNumber, totalInUnit: totalInUnit))"
+        "\(unitName(unitLabel)) · Lesson \(NightLessonCode.code(unitLabel: unitLabel, lessonNumber: lessonNumber))"
     }
     #endif
 
@@ -411,7 +468,16 @@ public struct CurriculumLessonView: View {
             onFocusChange: { composerFocused = $0 }
         )
         #if os(macOS)
-        return bar.withAttachTrigger(attachTrigger).macReadableColumn()
+        // While Merc's check waits for an answer, the composer is the other
+        // way to answer (§5.3.3).
+        let checkOpen = NightCheckKeys.hasAnswerableCheck(messages: model.messages, isIdle: model.phase == .idle)
+        // The lesson opens on Merc's reply, not on a focused composer; a
+        // key typed then goes into it. While a check waits, its A–D and
+        // Return are the check's (Tab, a click or ⌘L reach the composer).
+        return bar.withAttachTrigger(attachTrigger)
+            .nightTypeToFocus(!checkOpen)
+            .nightPlaceholder(checkOpen ? NightReplyCopy.checkPlaceholder : "Type your answer…")
+            .macReadableColumn()
         #else
         return bar
         #endif
@@ -432,7 +498,9 @@ public struct CurriculumLessonView: View {
                 && MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
             explainMore: { [model] in model.explainMore() },
             canAttach: !covered && !isSending,
-            attachImage: { attachTrigger += 1 }
+            attachImage: { attachTrigger += 1 },
+            canWriteReply: !covered,
+            writeReply: { inputFocusTrigger += 1 }
         )
     }
     #endif
@@ -517,20 +585,38 @@ public struct CurriculumLessonView: View {
     }
 
     #if os(macOS)
-    /// The intro on a Mac: the speech bubble, Merc and Continue as one group,
-    /// centred in the window (on a phone it sits at the bottom, by the
-    /// thumb). The way out is the toolbar's Not now.
+    /// The intro on a Mac, in Night Studio (SPEC.md §5.3.1): one centred group
+    /// in the gate's box: Merc waving in his lamp, the lesson's place, its
+    /// title, the existing line, and Continue (Return). The way out is the
+    /// toolbar's Not now. No speech bubble.
     private var macLessonIntro: some View {
         ZStack {
-            BrandColor.background.ignoresSafeArea()
+            NightCanvas(pools: .indigo, stars: false)
             GeometryReader { geo in
                 ScrollView {
-                    VStack(spacing: 0) {
-                        introSpeechBubble
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, Self.introBubbleTailRoom)
-                        introFooter
+                    VStack(spacing: 14) {
+                        NightMercLamp(.wave, size: 96)
+                        NightEyebrow(Self.macSubtitle(unitLabel: unitLabel, lessonNumber: lessonNumber,
+                                                      totalInUnit: totalInUnit))
+                        Text(title)
+                            .nightFont(.display)
+                            .foregroundStyle(Night.ink)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Ready to dig in? I'll walk you through it — then check what landed.")
+                            .nightFont(.body)
+                            .foregroundStyle(Night.ink2)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        NightPrimaryButton("Continue", size: .large, action: startFromIntro)
+                            .keyboardShortcut(.defaultAction)
+                            .help("Start the lesson (Return)")
+                            .accessibilityLabel("Continue. Start the lesson.")
+                            .padding(.top, 10)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
                     .frame(maxWidth: MacLayout.gateWidth)
                     .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }
@@ -623,11 +709,6 @@ public struct CurriculumLessonView: View {
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
         }
         .accessibilityLabel("Continue. Start the lesson.")
-        #if os(macOS)
-        .buttonStyle(.plain)
-        .keyboardShortcut(.defaultAction)
-        .help("Start the lesson (Return)")
-        #endif
     }
 
     private var introSpeechBubble: some View {

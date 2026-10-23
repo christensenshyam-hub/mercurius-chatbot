@@ -38,6 +38,18 @@ public struct DuoButton: View {
     }
 
     public var body: some View {
+        #if os(macOS)
+        // Night Studio on the Mac (SPEC.md §3.2): no 3D plate and no
+        // gradient face. A first-run or path action is Night's large (44 pt)
+        // prominent or secondary capsule, with the same title, action and
+        // enabled state.
+        switch style {
+        case .primary, .reward:
+            NightPrimaryButton(title, size: .large, action: action).disabled(!isEnabled)
+        case .secondary:
+            NightSecondaryButton(title, size: .large, action: action).disabled(!isEnabled)
+        }
+        #else
         Button(action: action) {
             Text(title)
                 // A title that wraps at the largest text sizes stays centred
@@ -47,6 +59,7 @@ public struct DuoButton: View {
         }
         .buttonStyle(DuoButtonStyle(style: style))
         .disabled(!isEnabled)
+        #endif
     }
 }
 
