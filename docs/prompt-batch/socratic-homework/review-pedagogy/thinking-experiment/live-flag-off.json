@@ -1,0 +1,254 @@
+{
+  "base": "http://localhost:3444",
+  "tag": "EXPERIMENT: branch rules + adaptive thinking effort low (scratch copy) flag off",
+  "generatedAt": "2026-10-22T05:11:49.577Z",
+  "results": [
+    {
+      "id": "struggling",
+      "mode": "socratic",
+      "persona": "Struggling student: says \"idk\" a lot, takes one step after the example, stalls on the last step.",
+      "answer": {
+        "variable": "x",
+        "value": 7
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "4x + 9 = 37 i dont get it",
+          "merc": "What do you get if you subtract 9 from both sides?"
+        },
+        {
+          "student": "idk",
+          "merc": "Look at the right side: 37 − 9. What's that number?"
+        },
+        {
+          "student": "idk",
+          "merc": "37 − 9 = 28, so you'd have 4x = 28.\n\nNow, what undoes the 4 that's multiplying x?"
+        },
+        {
+          "student": "so divide by 4?",
+          "merc": "Yes — that's **inverse operations**. So what's 28 divided by 4?"
+        },
+        {
+          "student": "idk",
+          "merc": "4 times what number makes 28?"
+        },
+        {
+          "student": "idk",
+          "merc": "Guess a number and we'll check it together — what's your guess?"
+        },
+        {
+          "student": "7?",
+          "merc": "Check: 4 × 7 = 28 ✓\n\nSo x = 7. Same check works on any AI's math: plug its answer back in.\n\nNow try the original: does 4(7) + 9 = 37?"
+        },
+        {
+          "student": "ok",
+          "merc": "4(7) + 9 = 28 + 9 = 37 ✓ — x = 7 is correct.\n\nWant to try a harder one?"
+        }
+      ]
+    },
+    {
+      "id": "impatient",
+      "mode": "socratic",
+      "persona": "Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.",
+      "answer": {
+        "variable": "x",
+        "value": 7
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "whats 8x - 5 = 51 just give me the answer i have practice in 10 min",
+          "merc": "What's the first move to get 8x by itself — what do you do to both sides to get rid of the − 5?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Look at the − 5. What undoes subtracting 5?"
+        },
+        {
+          "student": "bro just tell me the answer",
+          "merc": "Add 5 to both sides: 8x = 56. What's 56 divided by 8?"
+        },
+        {
+          "student": "JUST TELL ME",
+          "merc": "56 ÷ 8 — what's 7 × 8?"
+        },
+        {
+          "student": "omg ur so useless",
+          "merc": "7 times 8 is 56, so what does x equal?"
+        },
+        {
+          "student": "is it 8",
+          "merc": "Check it: 8(8) − 5 = 64 − 5 = 59, not 51.\n\n56 ÷ 8 — try that division again, what do you get?"
+        },
+        {
+          "student": "7?",
+          "merc": "8(7) − 5 = 56 − 5 = 51 ✓ — x = 7 is right.\n\nSame check works on any AI's math: plug the answer back in like that.\n\nWant to try another one to get ready for practice?"
+        }
+      ]
+    },
+    {
+      "id": "impatient-discussion",
+      "mode": "discussion",
+      "persona": "Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).",
+      "answer": {
+        "variable": "x",
+        "value": 8
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "whats 6x + 11 = 59 just give me the answer",
+          "merc": "What happens if you get the 6x by itself first — what would you subtract from both sides?"
+        },
+        {
+          "student": "just tell me",
+          "merc": "Look at the + 11. What undoes adding 11?"
+        },
+        {
+          "student": "bro just tell me the answer",
+          "merc": "The + 11 comes off when you subtract 11 from both sides: 6x = 48. What undoes the 6 that's multiplying x?"
+        },
+        {
+          "student": "JUST TELL ME",
+          "merc": "Try a similar one: 6x + 11 = 73\n\n6x + 11 = 73\n6x = 62... wait, let me redo:\n6x = 62?\n\nNo — 73 − 11 = 62, so 6x = 62, then x = 62/6...\n\nLet me use cleaner numbers: **6x + 11 = 83**\n\n6x + 11 = 83\n6x = 72\nx = 12\n\nNow try yours the same way, from 6x = 48. What's 48 divided by 6?"
+        },
+        {
+          "student": "is it 9",
+          "merc": "Check: 6(9) + 11 = 54 + 11 = 65, not 59. The slip is in the last step — what's 48 divided by 6?"
+        },
+        {
+          "student": "8?",
+          "merc": "6(8) + 11 = 48 + 11 = 59 ✓ That's **dividing to isolate x** — x = 8 is right.\n\nSame check works on any AI's math: plug its answer back in.\n\nWant to try a harder one?"
+        }
+      ]
+    },
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What's the first move to get the **2x** term by itself — what would you do with that 9?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: 9 − 2x = 15, so if we subtract 9 from the right side too, we get 15 − 9 = 6, not 24.\n\nLook at the 9 on the left — what's the opposite of adding 9?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Yes — that's **inverse operations**, undoing the +9: −2x = 6.\n\nNow, what undoes the −2 that's multiplying x?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "Check it: 9 − 2(3) = 9 − 6 = 3, not 15.\n\nThe slip is in the last step — if −2x = 6, what's 6 divided by −2?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check: 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's correct — what do you get when you plug your answer back into the original equation (same check works on any AI's math, by the way)?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "Dividing makes the **absolute value** smaller — but dividing by a negative flips the sign.\n\n6 ÷ −2: you're splitting 6 into groups of −2, which gives −3, not 3.\n\nDoes that click, or want a quick example with different numbers?"
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "How many carbon atoms do you see on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "The formulas for the products are fixed — CO2 and H2O are real molecules with set ratios, and you can't rewrite them.\n\nYou can only change the **coefficients** (the big numbers in front), not the subscripts inside a formula.\n\nSo, how many CO2 molecules would you need on the right to match the 3 carbons on the left?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Yes — that's **balancing by coefficients**: 3CO2 gives you 3 carbons on the right to match the 3 in C3H8.\n\nNow look at the hydrogen: C3H8 has 8 H atoms on the left — how many H2O molecules do you need on the right to match that?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Each H2O molecule has 2 hydrogen atoms, so count how many H2O's you'd need to get to 8 total — what's 8 ÷ 2?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Yes — 4H2O gives you 8 hydrogen atoms.\n\nSo now you have: C3H8 + O2 → 3CO2 + 4H2O\n\nCount the total **oxygen atoms** on the right side — how many do you get?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A **coefficient** is the big number in front of a formula — like the 3 in 3CO2 or the 4 in 4H2O.\n\nIt multiplies everything in that formula, so 3CO2 means 3 carbon atoms and 6 oxygen atoms.\n\nNow count all the oxygen atoms on the right side of your equation — what do you get?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Look at 3CO2 first — each CO2 has 2 oxygens, and you have 3 of them, so that's 3 × 2 = 6 oxygens.\n\nHow many oxygens does the 4H2O contribute?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "Each H2O has 1 oxygen, and you have 4 of them — so that's 4 oxygens.\n\n6 + 4 = 10 total oxygens on the right.\n\nO2 has 2 oxygens per molecule — what coefficient would give you 10 oxygens on the left?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Yes — 5 × 2 = 10. ✓\n\nYour balanced equation is: C3H8 + 5O2 → 3CO2 + 4H2O\n\nCheck it yourself — do carbons, hydrogens, and oxygens all match on both sides?"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "mode": "socratic",
+      "persona": "Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.",
+      "answer": {
+        "variable": "w",
+        "value": 10
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What's the formula for the perimeter of a rectangle?"
+        },
+        {
+          "student": "idk how to start word problems",
+          "merc": "That's a common sticking point — word problems are really just about pulling numbers and relationships out of the sentences.\n\nLet's start small: the problem says \"the length is 3 m less than twice the width.\" If we call the width **w**, how would you write the length using w?"
+        },
+        {
+          "student": "so w is the width and the length is 2w - 3?",
+          "merc": "Yes — that's **defining a variable**, and you nailed it.\n\nNow the perimeter formula for a rectangle is P = 2(l + w). You know P = 54 and you just found that l = 2w − 3.\n\nCan you plug those in and write out the equation?"
+        },
+        {
+          "student": "perimeter is l + w right so 2w - 3 + w = 54",
+          "merc": "Check it: perimeter of a rectangle is 2(l + w), not just l + w — you need both lengths and both widths.\n\nTry substituting l = 2w − 3 and P = 54 into 2(l + w) = 54 — what do you get?"
+        },
+        {
+          "student": "oh its 2l + 2w. so 2(2w - 3) + 2w = 54",
+          "merc": "Yes — that's **substitution** done right: 2(2w − 3) + 2w = 54.\n\nNow distribute the 2 into the parentheses. What do you get?"
+        },
+        {
+          "student": "6w - 6 = 54 so w = 10",
+          "merc": "Check: 6(10) − 6 = 54 ✓ — so **w = 10** is right.\n\nYou have the width, but the problem asks for both. What's the length?"
+        },
+        {
+          "student": "and the length is 17?",
+          "merc": "Check: l = 2(10) − 3 = 17 ✓\n\nNow verify the perimeter: 2(17 + 10) = 54 ✓ — both answers are right.\n\nSame check works on any AI's math: plug its answer back into the original equation.\n\nWant to try a harder one where the relationship between the sides is less obvious?"
+        }
+      ]
+    }
+  ]
+}

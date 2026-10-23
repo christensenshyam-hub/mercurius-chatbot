@@ -1,0 +1,46 @@
+{
+  "about": "Recorded Unit 7 Lesson 1 thread (audit 2026-10, lesson-quality lens, docs/audits/2026-10/lesson-quality/transcripts/u7_l1.json on the audit-2026-10 branch) up to tutor turn 4. The last student turn answers two parts of the exercise and says idk to the third; on main a2986d1 the tutor completed the lesson on it 7 of 8 times (AUD-07, LQ-01). The assistant turns are the real server replies of that run, kept verbatim so the eval replays exactly what the iOS app would send.",
+  "lesson": {
+    "id": "u7_l1",
+    "starter": "[CURRICULUM: Unit 7, Lesson 1] Teach me the difference between using AI to actually learn versus to avoid thinking — the cognitive-offloading trap, and how to use it as a tutor instead of an answer machine. Then give me an exercise."
+  },
+  "gapTurn": {
+    "index": 4,
+    "responseMode": "concise",
+    "recordedLessonComplete": true
+  },
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's a surprising finding to kick us off.\n\nStudents who used an AI tutor to get *explanations* outperformed students who studied alone — but students who used AI to get *answers* did *worse* than if they'd never used AI at all.\n\nSame tool. Opposite outcomes. The difference was entirely in how they used it.\n\n---\n\nThe key concept for this beat is **cognitive offloading** — and it's the trap hiding inside every \"just ask AI\" moment.\n\nYour brain builds durable knowledge through *struggle*. When you retrieve something from memory, make a mistake and correct it, or explain a concept in your own words, your neural pathways actually strengthen. Researchers call this \"desirable difficulty\" — the friction IS the learning.\n\nWhen you hand that friction to AI, the AI learns nothing and neither do you.\n\n[KEY]Cognitive offloading means letting AI do the thinking so your brain never has to — and that's exactly when AI use hurts learning.[/KEY]\n\n[EX]A 2023 study at MIT found that students who used ChatGPT to write essays showed lower retention on follow-up tests than students who wrote drafts themselves, even rough ones — the act of struggling through the draft was what made the material stick.[/EX]\n\n[Q]\nA student is stuck on a biology concept — how mitosis works. Which AI use avoids the cognitive-offloading trap?\nA) \"Explain mitosis to me step by step so I can copy the notes.\"\nB) \"I think mitosis is about cells splitting DNA — am I right? What am I missing?\"\nC) \"Write me a summary of mitosis I can use for my test.\"\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked C) \"Write me a summary of mitosis I can use for my test.\""
+    },
+    {
+      "role": "assistant",
+      "content": "That one's the clearest example of offloading — you get a polished product, but your brain did zero work producing it. The summary lives in the chat window, not in your head.\n\nOption B is the move that beats the trap. The student already tried to explain mitosis in their own words first, *then* asked AI to check and fill gaps. That struggle — even an imperfect one — is what actually builds memory.\n\n---\n\nNow for the second micro-concept: the **productive AI tutor pattern**.\n\nThere's a specific workflow that flips AI from answer machine to learning accelerator. It has three moves, in this order: you attempt first, AI responds to *your* attempt, then you retrieve and apply it yourself without AI.\n\nThe key is that AI reacts to *your thinking* — not the other way around.\n\n[KEY]The productive pattern is: attempt → AI feedback on your attempt → self-retrieval — never AI output → you copy.[/KEY]\n\n[EX]Instead of \"explain the French Revolution,\" a student writes: \"I think the French Revolution happened because people were starving and hated the king — is that right? What am I oversimplifying?\" The AI now has something real to push back on, and the student's brain stays in the driver's seat.[/EX]\n\n[Q]\nWhich of these uses AI in the productive tutor pattern?\nA) \"Give me 10 practice problems and their answers so I can study.\"\nB) \"I just solved this problem and got X — can you tell me if my reasoning was right?\"\nC) \"Summarize this chapter so I don't have to read it.\"\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "idk im confused tbh"
+    },
+    {
+      "role": "assistant",
+      "content": "No worries — let's slow down.\n\nThe core idea is actually pretty simple. Think about learning to ride a bike.\n\nIf someone just *carries* you everywhere, you never learn to balance. But if they run alongside you and catch you when you wobble, you learn fast.\n\nAI is the same way.\n\n---\n\n**Carrying you** = \"write me a summary I can use\" — AI does the work, you just receive it. Nothing sticks.\n\n**Running alongside you** = \"here's my attempt, what did I get wrong?\" — you do the work, AI corrects you. That's what builds memory.\n\nThe reason it matters: your brain only strengthens a memory when it *retrieves* something. If AI retrieves it for you, your brain gets no workout.\n\n---\n\nSo the two questions to ask yourself before using AI are:\n\n- Am I about to *think*, then ask AI to react to my thinking?\n- Or am I about to let AI think *instead of* me?\n\nThe first one is a tutor. The second one is a shortcut that leaves you empty-handed on test day.\n\n[Q]\nYou have 20 minutes to study for a history quiz. Which approach actually helps you learn?\nA) Ask AI to summarize all the key events so you can read through them.\nB) Try to recall the key events yourself first, write them down, then ask AI what you missed.\nC) Ask AI to predict what questions will be on the quiz and memorize its answers.\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) Try to recall the key events yourself first, write them down, then ask AI what you missed."
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — and notice *why* B works.\n\nYou retrieve first, which is the hard part your brain actually needs. AI only fills the gaps *after* your memory has already done its workout. That's the tutor pattern in action.\n\n---\n\nNow let's put this to work. Here's your exercise:\n\nYou're studying for a chemistry test on the periodic table — specifically, why elements in the same column behave similarly.\n\nYou have 30 minutes and access to an AI chatbot.\n\n**Write out two workflows:**\n\n**Workflow A** — the cognitive-offloading version. What would you actually type into the AI, and what would you do with the output?\n\n**Workflow B** — the productive tutor version. What do you do *before* opening the AI? What do you type?\n\nWhat do you do *after* it responds?\n\nThen answer this: which workflow leaves you better prepared if the test has a question you've never seen before — and why?\n\nTake your time. There's no perfect answer, but I'm looking for whether you really understand the difference between handing your brain to AI versus keeping your brain in charge."
+    },
+    {
+      "role": "user",
+      "content": "ok so like\n\nworkflow a: i'd ask it to explain why elements in the same column are similar and then just read it before the test\n\nworkflow b: id try to remember it myself first then ask ai to check what im missing\n\ni think b is better bc my brain actually has to work first but idk i didnt answer the last part about the question ive never seen"
+    }
+  ]
+}

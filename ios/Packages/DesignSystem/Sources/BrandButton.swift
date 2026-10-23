@@ -69,7 +69,7 @@ private struct BrandButtonStyle: ButtonStyle {
         switch style {
         case .primary: return .white
         case .secondary: return BrandColor.text
-        case .ghost: return BrandColor.accent
+        case .ghost: return BrandColor.accentText   // text-only: the text token (AUD-21)
         }
     }
 

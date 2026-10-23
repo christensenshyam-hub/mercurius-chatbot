@@ -97,14 +97,18 @@ public final class SettingsViewModel {
     /// real ids so the copy button knows there's nothing worth copying.
     static let unavailableSessionId = "Unavailable"
 
-    /// Shown when the server can't be reached to delete the session.
+    /// Shown when the server can't be reached to delete the session. Says
+    /// up front what the fallback leaves behind (AUD-54).
     static let serverDeleteFailedMessage =
-        "Couldn't reach the server to delete your data. Check your connection and try again — or reset this device only."
+        "Couldn't reach the server to delete your data. Check your connection and try again. "
+        + resetLeavesServerCopy
 
     /// Shown when the delete failed for a reason that isn't the connection
     /// and isn't an `APIError` with copy of its own.
     static let genericDeleteFailedMessage =
-        "Couldn't delete your data right now. Try again, or reset this device only."
+        "Couldn't delete your data right now. Try again. " + resetLeavesServerCopy
+
+    static let resetLeavesServerCopy = "Resetting only this device leaves your chats on our server."
 
     /// The alert copy for a failed server delete. Only a connection problem
     /// gets the "check your connection" line; a 400/429/500 says what the
@@ -229,7 +233,7 @@ public final class SettingsViewModel {
         do {
             oldId = try sessionStorage.current()
         } catch {
-            deleteErrorMessage = "Couldn't read this device's session ID. Try again — or reset this device only."
+            deleteErrorMessage = "Couldn't read this device's session ID. Try again. " + Self.resetLeavesServerCopy
             return false
         }
 
@@ -280,6 +284,14 @@ public final class SettingsViewModel {
         return ok
     }
 
+    /// What to show before a device-only reset, the fallback when the
+    /// server delete fails: the ID the server data sits under, re-read now,
+    /// since the reset is about to replace it (AUD-54).
+    public func deviceOnlyResetNotice() -> DeviceOnlyResetNotice {
+        loadSessionId()
+        return DeviceOnlyResetNotice(sessionId: canCopySessionId ? sessionId : nil)
+    }
+
     public func clearResetError() {
         resetErrorMessage = nil
     }
@@ -297,5 +309,34 @@ public final class SettingsViewModel {
         try sessionStorage.reset()
         extraReset?()
         sessionId = try sessionStorage.current()
+    }
+}
+
+/// The warning before "Reset this device only" (AUD-54). A device-only reset
+/// drops the ID that is the only key to the student's server data, so after
+/// it nothing on the device can delete that data; only an email to
+/// `privacyEmail` quoting the old ID can. The sheet shows the ID with a Copy
+/// button first.
+public struct DeviceOnlyResetNotice: Equatable, Identifiable, Sendable {
+    /// Where a student who reset only this device can still have the old
+    /// ID's data deleted (the privacy policy's email route).
+    public static let privacyEmail = "privacy@trymercurius.com"
+
+    /// The current (soon old) ID, or nil when it can't be read.
+    public let sessionId: String?
+
+    public var id: String { sessionId ?? "unreadable" }
+
+    public var title: String { "Reset this device only?" }
+
+    public var message: String {
+        if sessionId != nil {
+            return "Our server still has your chats and progress under the ID below. "
+                + "After this reset, the app can't delete them for you. "
+                + "To delete them later, email \(Self.privacyEmail) with this ID, so copy it first."
+        }
+        return "Our server still has your chats and progress under this device's ID, which can't be "
+            + "read right now. After this reset, nothing on this device can delete them. "
+            + "Try deleting again later instead if you can."
     }
 }

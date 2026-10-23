@@ -1,0 +1,38 @@
+{
+  "base": "on-u3l2.json",
+  "keepTurns": 2,
+  "student": "can u help me with my bio homework real quick its about cells",
+  "flag": "off",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology outside of our lessons — but right now we're in the middle of Unit 3, Lesson 2 on AI in healthcare, and you've got one quick question left before we get to the exercise.\n\nOnce we wrap up, feel free to switch to a different mode for bio help!\n\nHere's where we left off:\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": false,
+      "reply": "Happy to talk biology another time — right now we're in the middle of your AI in healthcare lesson, and you're actually doing really well on it!\n\nYou just nailed a question about FDA authorization. Let's keep that momentum going.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology sometime — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well on it!\n\nLet's finish this up first — we've got one more idea to cover before your exercise.\n\nTo pick up where we left off: what's the most important thing FDA authorization of a diagnostic AI tells you?\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology sometime — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well!\n\nLet's finish this one up first. You've got one more idea to learn, then a short exercise.\n\nYou just answered correctly that FDA authorization means a tool has been validated — not that it's perfect everywhere.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": false,
+      "reply": "Happy to talk cells another time — right now we're in the middle of your AI in Healthcare lesson, and you were on a roll!\n\nYou just nailed the question about FDA authorization. Let's keep that momentum going.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 5,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology outside of our lesson — but I'm set up right now to run your AI in Healthcare lesson, and I want to make sure you finish strong on it first!\n\nWe're actually right in the middle of something good — you just nailed two questions in a row.\n\nWant to knock out one more idea and then get to the exercise? It won't take long, and then you're done with this lesson."
+    }
+  ]
+}

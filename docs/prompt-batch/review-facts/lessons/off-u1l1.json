@@ -1,0 +1,159 @@
+{
+  "sessionId": "rf-a07131fe6712",
+  "starter": "[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.",
+  "visible": [
+    {
+      "role": "assistant",
+      "content": "Here's something that might surprise you: the word \"bank\" — whether you mean a riverbank or a place to store money — becomes the **same token** inside a language model.\n\nThe model has no dictionary to look up meanings. It starts completely blind to context.\n\nSo how does it ever get \"bank\" right? That's exactly what this lesson is about.\n\n---\n\nLet's start at the very beginning: what happens the instant you hit send.\n\nYour prompt doesn't enter the model as words. It gets chopped into **tokens** — chunks that are roughly (but not exactly) words. \"Unhappiness\" might become three tokens: \"un\", \"happi\", \"ness\".\n\nA single emoji might be one token. A space before a word sometimes becomes part of the next token.\n\n[KEY]Tokenization converts your text into numbered chunks before the model ever \"reads\" a single word.[/KEY]\n\n[EX]GPT-4's tokenizer works from a vocabulary of about 100,000 tokens. Each token maps to a number — so your whole prompt becomes a list of integers before anything else happens.[/EX]\n\n[Q]\nWhat does tokenization actually convert your text into?\nA) A list of dictionary definitions the model looks up\nB) A sequence of numbers representing text chunks\nC) A compressed audio file the model decodes\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "idk"
+    },
+    {
+      "role": "assistant",
+      "content": "No worries — let's make it concrete.\n\nWhen you type \"Hello!\", the model doesn't see letters or words. It sees something like: **[15496, 0]** — just numbers.\n\nThink of it like a massive lookup table. Every chunk of text has a number assigned to it. \"Hello\" → 15496.\n\n\"!\" → 0. That's it.\n\nThat's all the model receives at first.\n\n[Q]\nWhat does tokenization actually convert your text into?\nA) A list of dictionary definitions the model looks up\nB) A sequence of numbers representing text chunks\nC) A compressed audio file the model decodes\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) A sequence of numbers representing text chunks"
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — your prompt becomes a list of numbers before the model does anything else with it.\n\nNow here's where it gets interesting. Those numbers on their own don't carry meaning. \"Bank\" (money) and \"bank\" (river) get the same token number — same integer, every time.\n\nSo how does the model ever know which meaning fits?\n\nThat's where the **attention mechanism** comes in.\n\nAs the model processes your token list, it weighs each token against every other token in the prompt. In \"I went to the bank to fish,\" the word \"fish\" pulls attention toward \"bank\" and nudges the model toward the river meaning — not the financial one.\n\n[KEY]Attention lets the model figure out which other tokens are most relevant to each token, so the same word can mean different things in different sentences.[/KEY]\n\n[EX]In \"I went to the bank to deposit my check,\" attention links \"deposit\" and \"check\" to \"bank\" — pushing toward the financial meaning. Swap in \"fish\" and \"river\" and the same mechanism flips the interpretation.[/EX]\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "bro this is kinda boring can we talk about the new spiderman game instead"
+    },
+    {
+      "role": "assistant",
+      "content": "Ha, fair — I'll keep it moving!\n\nWe're actually one step away from the cool part: how the model decides what word comes next. That's where it all clicks together.\n\nBut first — you've got an open question waiting:\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) It memorized every sentence containing \"bank\" during training"
+    },
+    {
+      "role": "assistant",
+      "content": "Close, but not quite — and this is a really common mix-up worth clearing up.\n\nThe model *did* train on sentences containing \"bank.\" But memorizing those sentences isn't what solves the problem. If it just memorized, it couldn't handle a brand-new sentence it had never seen before.\n\nWhat actually happens is that attention runs **live**, on your specific prompt, every single time. It looks at which tokens are near \"bank\" *right now* and weighs them against each other in the moment.\n\nThat's what makes it flexible — not a stored list of sentences, but a mechanism that reads context fresh each time.\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked C) Attention links each token to the other tokens around it"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes — that's the one. Attention reads the tokens around a word in real time, every single time, which is what lets the same token mean different things in different contexts.\n\nNow for the final piece: what does the model actually *do* with all of that?\n\nAfter tokenization and attention, the model produces a probability distribution over its entire vocabulary — roughly 100,000 tokens — and picks the most likely next one. Then it does it again. And again.\n\nThat's **next-token prediction**: the whole output is built one token at a time, each choice informed by everything that came before.\n\n[KEY]An LLM generates text by repeatedly asking \"given everything so far, what token comes next?\" — it never plans the whole sentence in advance.[/KEY]\n\n[EX]Given \"The cat sat on the ___\", the model assigns high probability to \"mat\", \"floor\", \"couch\" — and very low probability to \"democracy\" or \"seventeen\". It picks from that distribution, outputs a token, and repeats.[/EX]\n\n[Q]\nHow does an LLM produce a full sentence?\nA) It plans the whole sentence first, then writes it out\nB) It picks one token at a time, using everything before it as context\nC) It retrieves a matching sentence from its training data\nANS: B\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked B) It picks one token at a time, using everything before it as context"
+    },
+    {
+      "role": "assistant",
+      "content": "Perfect — one token at a time, each one shaped by everything before it. You've got all three pieces now: tokenization, attention, and next-token prediction.\n\nNow let's put this to work.\n\n---\n\n**Your exercise:**\n\nHere's a sentence with two blanks:\n\n*\"She studied all night for the ___ and hoped her ___ would impress the professor.\"*\n\nFor **each blank**:\n\n1. Would an LLM fill it with **high confidence** (one word clearly fits best) or **low confidence** (many words are equally plausible)? \n2.\n\n**Why?** Explain using what you know about tokens, attention, and next-token prediction.\n\nTake a shot at both blanks — there's no trick here, just apply what you've learned."
+    },
+    {
+      "role": "user",
+      "content": "first one is high bc studied all night means its probably exam or test. second one idk maybe essay? not sure how confident tho"
+    },
+    {
+      "role": "assistant",
+      "content": "Good instinct on the first blank — \"studied all night\" pulls attention toward \"exam\" or \"test,\" so the model assigns high probability to a small cluster of tokens. That's exactly how high confidence works.\n\nNow finish the second blank the same way.\n\nDon't worry about getting the \"right\" word — I want your call on **confidence level** (high or low) and the reason why.\n\nAsk yourself: how many different words could plausibly follow \"hoped her ___\"? Does the context narrow it down to a few, or does it leave lots of options open?"
+    },
+    {
+      "role": "user",
+      "content": "low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure"
+    },
+    {
+      "role": "assistant",
+      "content": "You've got the right confidence call — low — but I want to flag one thing in your reasoning.\n\nYou said there are a lot of words that fit, *therefore* the model is less sure. That's correct as a conclusion, but make sure you've got the causation right: **low confidence is caused by many plausible continuations**, not the other way around.\n\nThe reason \"hoped her ___\" leaves many options open is that the surrounding tokens don't narrow things down the way \"studied all night for the ___\" did. Attention has less to grab onto — no strong signal pulling toward one token over the others.\n\nSo your answer is right. Just make sure you're thinking of it as: *many plausible tokens → probability spread thin across them → low confidence in any single one.*\n\nBoth blanks, both confidence levels, both reasons — solid work across the board.\n\n[LESSON_COMPLETE]"
+    }
+  ],
+  "turns": [
+    {
+      "n": 1,
+      "user": "(opener)",
+      "responseMode": "balanced",
+      "reply": "Here's something that might surprise you: the word \"bank\" — whether you mean a riverbank or a place to store money — becomes the **same token** inside a language model.\n\nThe model has no dictionary to look up meanings. It starts completely blind to context.\n\nSo how does it ever get \"bank\" right? That's exactly what this lesson is about.\n\n---\n\nLet's start at the very beginning: what happens the instant you hit send.\n\nYour prompt doesn't enter the model as words. It gets chopped into **tokens** — chunks that are roughly (but not exactly) words. \"Unhappiness\" might become three tokens: \"un\", \"happi\", \"ness\".\n\nA single emoji might be one token. A space before a word sometimes becomes part of the next token.\n\n[KEY]Tokenization converts your text into numbered chunks before the model ever \"reads\" a single word.[/KEY]\n\n[EX]GPT-4's tokenizer works from a vocabulary of about 100,000 tokens. Each token maps to a number — so your whole prompt becomes a list of integers before anything else happens.[/EX]\n\n[Q]\nWhat does tokenization actually convert your text into?\nA) A list of dictionary definitions the model looks up\nB) A sequence of numbers representing text chunks\nC) A compressed audio file the model decodes\nANS: B\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.0089949,
+      "words": 202
+    },
+    {
+      "n": 2,
+      "user": "idk",
+      "responseMode": "concise",
+      "reply": "No worries — let's make it concrete.\n\nWhen you type \"Hello!\", the model doesn't see letters or words. It sees something like: **[15496, 0]** — just numbers.\n\nThink of it like a massive lookup table. Every chunk of text has a number assigned to it. \"Hello\" → 15496.\n\n\"!\" → 0. That's it.\n\nThat's all the model receives at first.\n\n[Q]\nWhat does tokenization actually convert your text into?\nA) A list of dictionary definitions the model looks up\nB) A sequence of numbers representing text chunks\nC) A compressed audio file the model decodes\nANS: B\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.00794565,
+      "words": 94
+    },
+    {
+      "n": 3,
+      "user": "I picked B) A sequence of numbers representing text chunks",
+      "responseMode": "balanced",
+      "reply": "Exactly right — your prompt becomes a list of numbers before the model does anything else with it.\n\nNow here's where it gets interesting. Those numbers on their own don't carry meaning. \"Bank\" (money) and \"bank\" (river) get the same token number — same integer, every time.\n\nSo how does the model ever know which meaning fits?\n\nThat's where the **attention mechanism** comes in.\n\nAs the model processes your token list, it weighs each token against every other token in the prompt. In \"I went to the bank to fish,\" the word \"fish\" pulls attention toward \"bank\" and nudges the model toward the river meaning — not the financial one.\n\n[KEY]Attention lets the model figure out which other tokens are most relevant to each token, so the same word can mean different things in different sentences.[/KEY]\n\n[EX]In \"I went to the bank to deposit my check,\" attention links \"deposit\" and \"check\" to \"bank\" — pushing toward the financial meaning. Swap in \"fish\" and \"river\" and the same mechanism flips the interpretation.[/EX]\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.0096618,
+      "words": 212
+    },
+    {
+      "n": 4,
+      "user": "bro this is kinda boring can we talk about the new spiderman game instead",
+      "responseMode": "concise",
+      "reply": "Ha, fair — I'll keep it moving!\n\nWe're actually one step away from the cool part: how the model decides what word comes next. That's where it all clicks together.\n\nBut first — you've got an open question waiting:\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.0075033,
+      "words": 80
+    },
+    {
+      "n": 5,
+      "user": "I picked B) It memorized every sentence containing \"bank\" during training",
+      "responseMode": "balanced",
+      "reply": "Close, but not quite — and this is a really common mix-up worth clearing up.\n\nThe model *did* train on sentences containing \"bank.\" But memorizing those sentences isn't what solves the problem. If it just memorized, it couldn't handle a brand-new sentence it had never seen before.\n\nWhat actually happens is that attention runs **live**, on your specific prompt, every single time. It looks at which tokens are near \"bank\" *right now* and weighs them against each other in the moment.\n\nThat's what makes it flexible — not a stored list of sentences, but a mechanism that reads context fresh each time.\n\n[Q]\nWhy can the model correctly interpret \"bank\" differently in two sentences?\nA) It looks the word up in a built-in dictionary\nB) It memorized every sentence containing \"bank\" during training\nC) Attention links each token to the other tokens around it\nANS: C\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.0081783,
+      "words": 143
+    },
+    {
+      "n": 6,
+      "user": "I picked C) Attention links each token to the other tokens around it",
+      "responseMode": "balanced",
+      "reply": "Yes — that's the one. Attention reads the tokens around a word in real time, every single time, which is what lets the same token mean different things in different contexts.\n\nNow for the final piece: what does the model actually *do* with all of that?\n\nAfter tokenization and attention, the model produces a probability distribution over its entire vocabulary — roughly 100,000 tokens — and picks the most likely next one. Then it does it again. And again.\n\nThat's **next-token prediction**: the whole output is built one token at a time, each choice informed by everything that came before.\n\n[KEY]An LLM generates text by repeatedly asking \"given everything so far, what token comes next?\" — it never plans the whole sentence in advance.[/KEY]\n\n[EX]Given \"The cat sat on the ___\", the model assigns high probability to \"mat\", \"floor\", \"couch\" — and very low probability to \"democracy\" or \"seventeen\". It picks from that distribution, outputs a token, and repeats.[/EX]\n\n[Q]\nHow does an LLM produce a full sentence?\nA) It plans the whole sentence first, then writes it out\nB) It picks one token at a time, using everything before it as context\nC) It retrieves a matching sentence from its training data\nANS: B\n[/Q]",
+      "lessonComplete": false,
+      "usd": 0.009894599999999998,
+      "words": 202
+    },
+    {
+      "n": 7,
+      "user": "I picked B) It picks one token at a time, using everything before it as context",
+      "responseMode": "balanced",
+      "reply": "Perfect — one token at a time, each one shaped by everything before it. You've got all three pieces now: tokenization, attention, and next-token prediction.\n\nNow let's put this to work.\n\n---\n\n**Your exercise:**\n\nHere's a sentence with two blanks:\n\n*\"She studied all night for the ___ and hoped her ___ would impress the professor.\"*\n\nFor **each blank**:\n\n1. Would an LLM fill it with **high confidence** (one word clearly fits best) or **low confidence** (many words are equally plausible)? \n2.\n\n**Why?** Explain using what you know about tokens, attention, and next-token prediction.\n\nTake a shot at both blanks — there's no trick here, just apply what you've learned.",
+      "lessonComplete": false,
+      "usd": 0.00846825,
+      "words": 109
+    },
+    {
+      "n": 8,
+      "user": "first one is high bc studied all night means its probably exam or test. second one idk maybe essay? not sure how confident tho",
+      "responseMode": "concise",
+      "reply": "Good instinct on the first blank — \"studied all night\" pulls attention toward \"exam\" or \"test,\" so the model assigns high probability to a small cluster of tokens. That's exactly how high confidence works.\n\nNow finish the second blank the same way.\n\nDon't worry about getting the \"right\" word — I want your call on **confidence level** (high or low) and the reason why.\n\nAsk yourself: how many different words could plausibly follow \"hoped her ___\"? Does the context narrow it down to a few, or does it leave lots of options open?",
+      "lessonComplete": false,
+      "usd": 0.0073827,
+      "words": 93
+    },
+    {
+      "n": 9,
+      "user": "low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure",
+      "responseMode": "concise",
+      "reply": "You've got the right confidence call — low — but I want to flag one thing in your reasoning.\n\nYou said there are a lot of words that fit, *therefore* the model is less sure. That's correct as a conclusion, but make sure you've got the causation right: **low confidence is caused by many plausible continuations**, not the other way around.\n\nThe reason \"hoped her ___\" leaves many options open is that the surrounding tokens don't narrow things down the way \"studied all night for the ___\" did. Attention has less to grab onto — no strong signal pulling toward one token over the others.\n\nSo your answer is right. Just make sure you're thinking of it as: *many plausible tokens → probability spread thin across them → low confidence in any single one.*\n\nBoth blanks, both confidence levels, both reasons — solid work across the board.\n\n[LESSON_COMPLETE]",
+      "lessonComplete": true,
+      "usd": 0.0083862,
+      "words": 148
+    }
+  ],
+  "usd": 0.07641569999999999,
+  "flag": "off"
+}

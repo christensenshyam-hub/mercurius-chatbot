@@ -1,0 +1,424 @@
+[
+ {
+  "claim": "1 U1L3 GPT-4 calibration",
+  "verdict": "confirmed",
+  "note": "GPT-4 Technical Report: 'the pre-trained model is highly calibrated ... after the post-training process, the calibration is reduced (Figure 8)'",
+  "sources": [
+   "https://ar5iv.labs.arxiv.org/html/2303.08774"
+  ]
+ },
+ {
+  "claim": "2 U3L2 Epic Sepsis Model (Wong 2021)",
+  "verdict": "confirmed",
+  "note": "Primary abstract: alerts for 6971 of 38,455 hospitalized patients (18%); did not identify 1709 sepsis patients (67%). Sensitivity 33%, PPV 12% per secondary summaries. The factcheck's 'Check the 18%' is resolved.",
+  "sources": [
+   "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID:34152373%20AND%20SRC:MED&resultType=core&format=json",
+   "https://www.healthday.com/healthpro-news/infectious-disease/epic-sepsis-model-has-poor-discrimination-of-sepsis-2653467079.html"
+  ]
+ },
+ {
+  "claim": "3 U3L2 Sjoding 2020 pulse oximetry",
+  "verdict": "confirmed",
+  "note": "11.7% vs 3.6% occult hypoxemia at SpO2 92-96% (Michigan cohort), NEJM 2020;383:2477",
+  "sources": [
+   "https://psnet.ahrq.gov/issue/racial-bias-pulse-oximetry-measurement",
+   "https://depts.washington.edu/pandemicalliance/2020/12/18/racial-bias-in-pulse-oximetry-measurement"
+  ]
+ },
+ {
+  "claim": "3b U3L2 Obermeyer 2019",
+  "verdict": "confirmed",
+  "note": "17.7% -> 46.5% is the modeled share of Black patients flagged for extra help if the bias were removed",
+  "sources": [
+   "https://media.nature.com/original/magazine-assets/d41586-019-03228-6/d41586-019-03228-6.pdf",
+   "https://www.govtech.com/health/Health-Care-in-the-US-Has-an-Algorithm-Bias-Problem.html"
+  ]
+ },
+ {
+  "claim": "4 U7L1 Kosmyna 'Your Brain on ChatGPT'",
+  "verdict": "confirmed",
+  "note": "Still an arXiv preprint (v1 June 2025, v2 Dec 2025); no journal version found as of Oct 2026, so 'not peer reviewed' still holds",
+  "sources": [
+   "https://arxiv.org/abs/2506.08872v1",
+   "https://www.media.mit.edu/projects/your-brain-on-chatgpt/publications/"
+  ]
+ },
+ {
+  "claim": "5 U7L1 Bastani PNAS 2025",
+  "verdict": "confirmed",
+  "note": "48% / 127% practice gains; GPT Base -17% on exam; tutor 'about the same' as control; ~1,000 students in Turkey",
+  "sources": [
+   "https://papers.ssrn.com/abstract=4895486",
+   "https://knowledge.wharton.upenn.edu/article/without-guardrails-generative-ai-can-harm-education"
+  ]
+ },
+ {
+  "claim": "5b U7L1 Kestin Sci Rep 2025",
+  "verdict": "confirmed",
+  "note": "Harvard PS2; tutor told to give away one step at a time; learned more in less time",
+  "sources": [
+   "https://hechingerreport.org/proof-points-ai-tutor-harvard-physics/"
+  ]
+ },
+ {
+  "claim": "10 U1L2 Common Crawl",
+  "verdict": "confirmed",
+  "note": "'over 300 billion web pages'",
+  "sources": [
+   "https://commoncrawl.org/blog/common-crawl-celebrates-world-digital-preservation-day"
+  ]
+ },
+ {
+  "claim": "11 U1L2 InstructGPT",
+  "verdict": "confirmed",
+  "note": "1.3B InstructGPT preferred over 175B GPT-3",
+  "sources": [
+   "https://arxiv.org/abs/2203.02155v1"
+  ]
+ },
+ {
+  "claim": "13 U1L3 Mata v. Avianca",
+  "verdict": "confirmed",
+  "note": "June 22 2023, Judge Castel, $5,000 on both lawyers and the firm",
+  "sources": [
+   "https://www.lawnext.com/2023/06/court-imposes-sanctions-on-lawyers-who-filed-bogus-cases-after-relying-on-chatgpt-for-legal-research.html"
+  ]
+ },
+ {
+  "claim": "14 U2L1 ImageNet geodiversity",
+  "verdict": "confirmed",
+  "note": "~45% US; China 1%, India 2.1% in the geolocated sample",
+  "sources": [
+   "https://arxiv.org/pdf/1711.08536"
+  ]
+ },
+ {
+  "claim": "15 U2L1 Bolukbasi 2016",
+  "verdict": "confirmed",
+  "note": "Google News embeddings; paper title is the homemaker analogy",
+  "sources": [
+   "https://proceedings.neurips.cc/paper/2016/hash/a486cd07e4ac3d270571622f4f316ec5-Abstract.html"
+  ]
+ },
+ {
+  "claim": "18 U2L2 ProPublica COMPAS",
+  "verdict": "confirmed",
+  "note": "44.9/23.5 and 47.7/28.0",
+  "sources": [
+   "https://opencourse.inf.ed.ac.uk/node/983",
+   "https://arxiv.org/pdf/2007.02890"
+  ]
+ },
+ {
+  "claim": "19-20 U2L2 Northpointe, Kleinberg",
+  "verdict": "confirmed",
+  "note": "Northpointe argued predictive parity; Kleinberg et al.: only perfect prediction or equal base rates",
+  "sources": [
+   "https://arxiv.org/abs/1609.05807",
+   "https://www.college-de-france.fr/media/claire-mathieu/UPL8987154333826643969_KleinbergColle__geDeFrance.pdf"
+  ]
+ },
+ {
+  "claim": "21 U2L3 Gender Shades",
+  "verdict": "confirmed",
+  "note": "34.7% darker-skinned women vs <=0.8% lighter-skinned men, three commercial classifiers",
+  "sources": [
+   "https://proceedings.mlr.press/v81/buolamwini18a.html"
+  ]
+ },
+ {
+  "claim": "22 U2L3 NIST FRVT/FRTE",
+  "verdict": "confirmed",
+  "note": "FRVT split and renamed FRTE/FATE on 2023-08-18",
+  "sources": [
+   "https://www.nist.gov/programs-projects/face-technology-evaluations-frtefate"
+  ]
+ },
+ {
+  "claim": "23 U2L3 Clearview fines",
+  "verdict": "confirmed",
+  "note": "Italy EUR20M (2022), Netherlands EUR30.5M (2024), UK GBP7.5M (2022): First-tier Tribunal overturned it 2023, Upper Tribunal reinstated the ICO's case Oct 2025, Court of Appeal permission Dec 2025 - 'have fined it' holds; UK fine still in litigation",
+  "sources": [
+   "https://ico.org.uk/about-the-ico/media-centre/news-and-blogs/2025/10/uk-upper-tribunal-hands-down-judgment-on-clearview-ai-inc",
+   "https://www.techzine.eu/news/privacy-compliance/74451/italy-fines-clearview-ai-e20-million/",
+   "https://idtechwire.com/dutch-regulator-slaps-clearview-ai-with-e30-millions-in-fines-and-penalties"
+  ]
+ },
+ {
+  "claim": "24 U3L1 Amazon (Reuters 2018)",
+  "verdict": "confirmed",
+  "note": "Built from 2014; team disbanded 'by the start of last year' (2017)",
+  "sources": [
+   "https://www.euronews.com/2018/10/10/amazon-scraps-secret-ai-recruiting-tool-that-showed-bias-against-women"
+  ]
+ },
+ {
+  "claim": "25 U3L1 HireVue",
+  "verdict": "confirmed",
+  "note": "EPIC FTC complaint Nov 2019; facial analysis dropped Jan 12 2021",
+  "sources": [
+   "https://epic.org/hirevue-facing-ftc-complaint-from-epic-halts-use-of-facial-recognition/"
+  ]
+ },
+ {
+  "claim": "26 U3L1 Illinois AI Video Interview Act",
+  "verdict": "confirmed",
+  "note": "Effective Jan 1 2020; notice, explanation, consent, delete within 30 days of request",
+  "sources": [
+   "https://www.winston.com/en/blogs-and-podcasts/privacy-law-corner/illinois-regulates-the-use-of-ai-in-video-interviews"
+  ]
+ },
+ {
+  "claim": "27 U3L1 NYC Local Law 144",
+  "verdict": "confirmed",
+  "note": "Enforced from July 5 2023; audit within a year before use; public summary",
+  "sources": [
+   "https://www.osc.ny.gov/state-agencies/audits/2025/12/02/enforcement-local-law-144-automated-employment-decision-tools"
+  ]
+ },
+ {
+  "claim": "28 U3L2 IDx-DR / DermaSensor",
+  "verdict": "confirmed, wording nit",
+  "note": "IDx-DR De Novo April 2018, no clinician needed to interpret. DermaSensor was authorized through the De Novo pathway (Jan 17 2024); the company and press say 'cleared', but in FDA terms De Novo is a grant/authorization, not 510(k) clearance - the guide's own approved/authorized distinction makes 'FDA-cleared' slightly off. Not material for students.",
+  "sources": [
+   "https://www.biospace.com/fda-permits-marketing-of-idx-dr-for-automated-detection-of-diabetic-retinopathy-in-primary-care",
+   "https://www.fiercebiotech.com/medtech/fda-clears-handheld-ai-powered-optical-probe-evaluating-lesions-skin-cancer",
+   "https://www.dermasensor.com/learnings-from-the-first-ai-enabled-skin-cancer-device/"
+  ]
+ },
+ {
+  "claim": "30 U3L3 Turnitin / Vanderbilt / Liang",
+  "verdict": "confirmed",
+  "note": "Turnitin: <1% document FPR at >=20% AI, ~4% sentence; Vanderbilt Aug 16 2023, 75,000 papers -> ~750 (extrapolation); Liang: seven detectors, average FPR 61.22% on TOEFL essays (factcheck says 61.3%; guide's '61%' is fine), near-perfect on US 8th-grade essays",
+  "sources": [
+   "https://www.turnitin.ca/blog/understanding-the-false-positive-rate-for-sentences-of-our-ai-writing-detection-capability",
+   "https://www.vanderbilt.edu/brightspace/2023/08/16/guidance-on-ai-detection-and-why-were-disabling-turnitins-ai-detector/",
+   "https://arxiv.org/html/2304.02819"
+  ]
+ },
+ {
+  "claim": "31 U4L2 Kojima 2022",
+  "verdict": "confirmed",
+  "note": "MultiArith 17.7% -> 78.7%, text-davinci-002",
+  "sources": [
+   "https://papers.nips.cc/paper/2022/hash/8bb0d291acd4acf06ef112099c16f326-Abstract-Conference.html"
+  ]
+ },
+ {
+  "claim": "33-35 U5L1 CoastRunners, grasping arm, DeepMind list",
+  "verdict": "confirmed",
+  "note": "OpenAI Dec 21 2016 'repeatedly catching on fire'; DeepMind Apr 21 2020: 'hovering between the camera and the object', 'around 60 examples'",
+  "sources": [
+   "https://openai.com/index/faulty-reward-functions/",
+   "https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/"
+  ]
+ },
+ {
+  "claim": "36 U5L1 OpenAI CoT monitoring 2025",
+  "verdict": "confirmed",
+  "note": "Mar 10 2025; 'make verify always return true'; penalizing bad thoughts -> obfuscated reward hacking",
+  "sources": [
+   "https://openai.com/index/chain-of-thought-monitoring/",
+   "https://arxiv.org/html/2503.11926v1"
+  ]
+ },
+ {
+  "claim": "37 U5L2 Stop Killer Robots",
+  "verdict": "confirmed",
+  "note": "Launched London Apr 22-23 2013",
+  "sources": [
+   "https://article36.org/statements-updates/campaign-to-ban-killer-robots-launched-in-london"
+  ]
+ },
+ {
+  "claim": "38 U5L2 Kargu-2",
+  "verdict": "confirmed",
+  "note": "UN Panel of Experts (Mar 2021) on a 2020 Libya engagement; no confirmed deaths; STM denial",
+  "sources": [
+   "https://www.npr.org/2021/06/01/1002196245/a-un-report-suggests-libya-saw-the-first-battlefield-killing-by-an-autonomous-d",
+   "https://shephardmedia.com/news/uv-online/turkish-drone-maker-denies-autonomous-strike-capab"
+  ]
+ },
+ {
+  "claim": "39 U5L2 no binding treaty (as of 2026)",
+  "verdict": "confirmed",
+  "note": "GGE mandate ends 2026; Seventh CCW Review Conference 16-20 Nov 2026 - recheck after it",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Group_of_Governmental_Experts_on_Lethal_Autonomous_Weapons_Systems",
+   "https://www.icrc.org/sites/default/files/2026-08/4937_002_Autonomous_weapons_advocacy_paper_EN.pdf"
+  ]
+ },
+ {
+  "claim": "40 U5L3 Llama open-weight / OSI",
+  "verdict": "confirmed",
+  "note": "OSAID 1.0 Oct 2024; OSI says Llama license fails OSD points 5 and 6",
+  "sources": [
+   "https://itsfoss.com/osi-meta-ai/",
+   "https://gigazine.net/gsc_news/en/20241030-open-source-ai-definition"
+  ]
+ },
+ {
+  "claim": "41 U5L3 RSP/PF/FSF 'voluntary policies each company wrote for itself'",
+  "verdict": "DATED (new finding)",
+  "note": "Dates OK (RSP Sept 2023). But since Jan 1 2026 California SB 53 requires large frontier developers (incl. Anthropic, OpenAI, Google DeepMind, Meta, Microsoft) to write, publish and comply with a frontier AI framework; Anthropic published a separate Frontier Compliance Framework (Dec 19 2025) and now calls the RSP its 'voluntary safety policy'. EU AI Act GPAI obligations apply since Aug 2 2025 (Code of Practice signed by Anthropic, OpenAI, Google). No court has enjoined SB 53 (searches to Oct 2026).",
+  "sources": [
+   "https://www.anthropic.com/news/compliance-framework-SB53",
+   "https://natlawreview.com/article/californias-sb-53-understanding-obligations-effect-now-and-2027",
+   "https://www.brookings.edu/articles/what-is-californias-ai-safety-law",
+   "https://digital-strategy.ec.europa.eu/en/policies/gpai-code-practice"
+  ]
+ },
+ {
+  "claim": "42 U6L1 VALL-E",
+  "verdict": "confirmed",
+  "note": "Jan 2023, 3-second sample",
+  "sources": [
+   "https://techxplore.com/news/2023-01-microsoft-vall-e-faithfully-voice.amp"
+  ]
+ },
+ {
+  "claim": "43-44 U6L1-2 GPT-4o text; OpenAI C2PA",
+  "verdict": "confirmed",
+  "note": "4o image generation Mar 25 2025 renders legible text; C2PA on DALL-E 3 images Feb 6 2024; OpenAI: metadata 'can easily be removed', most social platforms strip it",
+  "sources": [
+   "https://openai.com/index/introducing-4o-image-generation/",
+   "https://the-decoder.com/openai-equips-dall-e-3-with-c2pa-metadata-to-increase-transparency-of-ai-images/"
+  ]
+ },
+ {
+  "claim": "45 U6L3 Arup",
+  "verdict": "confirmed",
+  "note": "HK$200M (~US$25.6M), 15 transfers, Jan 2024; CFO and colleagues deepfaked",
+  "sources": [
+   "https://scmp.com/news/hong-kong/law-and-crime/article/3263151/uk-multinational-arup-confirmed-victim-hk200-million-deepfake-scam-used-digital-version-cfo-dupe"
+  ]
+ },
+ {
+  "claim": "46 U6L3 DeStefano",
+  "verdict": "confirmed",
+  "note": "Senate Judiciary subcommittee, June 13 2023",
+  "sources": [
+   "https://www.judiciary.senate.gov/download/2023-06-13-pm-testimony-destefano?download=1"
+  ]
+ },
+ {
+  "claim": "47 U6L3 Westfield / Beverly Vista",
+  "verdict": "confirmed",
+  "note": "Westfield Oct 2023; Beverly Vista: five 8th-graders expelled Mar 6 2024",
+  "sources": [
+   "https://www.cbsnews.com/amp/news/5-beverly-hills-middle-school-students-expelled-following-ai-generated-nude-photo-scandal",
+   "https://globalnews.ca/news/10073305/ai-nude-images-deepfakes-westfield-high-school-classmates-new-jersey/"
+  ]
+ },
+ {
+  "claim": "48 U6L3 TAKE IT DOWN Act; 'many states'",
+  "verdict": "confirmed",
+  "note": "Signed May 19 2025; criminal provisions immediate; 48-hour takedown enforceable May 19 2026 (FTC). 'Many states': ~45 states have sexual-deepfake laws (Ballotpedia via secondary) - factcheck's Check resolved",
+  "sources": [
+   "https://wilmerhale.com/en/insights/client-alerts/20260615-the-take-it-down-act-goes-live",
+   "https://search.ftc.gov/news-events/news/press-releases/2026/05/ftc-begins-enforcing-take-it-down-act",
+   "https://www.resemble.ai/laws-and-regulations/us-state-deepfake-landscape"
+  ]
+ },
+ {
+  "claim": "49 U6L4 Biden robocall / Kramer",
+  "verdict": "confirmed",
+  "note": "Two days before the Jan 23 2024 primary; FCC $6M (Sept 2024); acquitted June 13 2025",
+  "sources": [
+   "https://www.wshu.org/2025-06-13/political-operative-fake-biden-robocalls-nh-primary-found-not-guilty"
+  ]
+ },
+ {
+  "claim": "50 U6L4 liar's dividend",
+  "verdict": "confirmed",
+  "note": "Chesney & Citron, SSRN 2018, 107 Calif. L. Rev. (2019)",
+  "sources": [
+   "https://www.bespacific.com/?p=65762"
+  ]
+ },
+ {
+  "claim": "53 U7L2 hallucinated-citation decisions",
+  "verdict": "confirmed",
+  "note": "~712 decisions by Dec 29 2025 (Charlotin database) - 'hundreds' holds",
+  "sources": [
+   "https://news.bloomberglaw.com/litigation/ai-faked-cases-become-core-issue-irritating-overworked-judges"
+  ]
+ },
+ {
+  "claim": "55 U7L4 ChatGPT / Claude training settings",
+  "verdict": "confirmed (OpenAI FAQ page itself returned 403)",
+  "note": "'Improve the model for everyone' in Data Controls; Claude: choose; 5 years if training allowed, else 30 days (decision deadline Sept 28 2025, later extended). One Aug 2026 report says personalized Temporary Chats now exist; single source, not verified",
+  "sources": [
+   "https://www.techcrunch.com/2025/08/28/anthropic-users-face-a-new-choice-opt-out-or-share-your-data-for-ai-training",
+   "https://help.openai.com/en/articles/7730893",
+   "https://www.notebookcheck.net/ChatGPT-Temporary-chat-can-now-use-your-saved-memories.1382374.0.html"
+  ]
+ },
+ {
+  "claim": "56 U7L4 Samsung",
+  "verdict": "confirmed",
+  "note": "Leaks in April 2023; generative-AI ban on company devices from May 1 2023",
+  "sources": [
+   "https://amp.kedglobal.com/newsAmp/ked202305020022"
+  ]
+ },
+ {
+  "claim": "57 U7L4 memory",
+  "verdict": "confirmed",
+  "note": "ChatGPT chat-history memory Apr 10 2025; Claude memory Sept 2025 (Team/Enterprise), Oct 23 2025 (Pro/Max)",
+  "sources": [
+   "https://www.anthropic.com/news/memory",
+   "https://community.openai.com/t/chatgpt-can-now-reference-all-past-conversations-april-10-2025/1229453"
+  ]
+ },
+ {
+  "claim": "59 U8L1 Guardian hidden-text test",
+  "verdict": "confirmed",
+  "note": "Dec 24 2024; hidden instructions turned a balanced camera assessment entirely positive",
+  "sources": [
+   "https://www.searchenginejournal.com/chatgpt-search-manipulated-with-hidden-instructions/536390/"
+  ]
+ },
+ {
+  "claim": "61 U8L3 Dell'Acqua 2023",
+  "verdict": "confirmed",
+  "note": "12.2% more tasks, 25.1% faster, >40% quality; outside the frontier AI users less often correct",
+  "sources": [
+   "https://thecrimson.com/article/2023/10/13/jagged-edge-ai-bcg",
+   "https://www.oneusefulthing.org/p/centaurs-and-cyborgs-on-the-jagged"
+  ]
+ },
+ {
+  "claim": "SL EO 14110 revoked",
+  "verdict": "confirmed",
+  "note": "Revoked by EO 14148, Jan 20 2025",
+  "sources": [
+   "https://www.govinfo.gov/content/pkg/CDOC-119hdoc28/html/CDOC-119hdoc28.htm"
+  ]
+ },
+ {
+  "claim": "SL EU AI Act / NIST AI RMF",
+  "verdict": "confirmed",
+  "note": "In force Aug 1 2024, phased obligations; AI RMF 1.0 Jan 26 2023, voluntary",
+  "sources": [
+   "https://www.hsfkramer.com/notes/ip/2024-08/THE-EU-AI-ACT-IS-IN-FORCE-FROM-TODAY-%281-August-2024%29-",
+   "https://www.nist.gov/news-events/events/2023/01/nist-ai-risk-management-framework-ai-rmf-10-launch"
+  ]
+ },
+ {
+  "claim": "Lesson reply (not guide) 'it never plans the whole sentence in advance' (off-u1l1 turn 6 [KEY])",
+  "verdict": "overstated",
+  "note": "Anthropic 2025 circuit tracing: Claude picks the rhyme word ahead and writes the line toward it",
+  "sources": [
+   "https://www.anthropic.com/news/tracing-thoughts-language-model"
+  ]
+ },
+ {
+  "claim": "Lesson reply (not guide) token IDs [15496, 0] for 'Hello!' presented right after GPT-4's vocabulary (off-u1l1 turn 2)",
+  "verdict": "recalled figure, wrong tokenizer",
+  "note": "15496 is GPT-2's ID for 'Hello' (HF: 'Hello world' -> [15496, 995]); not in the guide (FACT RULES: never recall a figure the guide doesn't give)",
+  "sources": [
+   "https://textflint.readthedocs.io/en/latest/_modules/transformers/models/gpt2/tokenization_gpt2.html"
+  ]
+ }
+]

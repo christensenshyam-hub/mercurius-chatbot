@@ -979,3 +979,544 @@ p:last-child { margin-bottom: 0; }
 @media (min-width: 1440px) {
   .hero-logo { max-width: 560px; }
 }
+
+/* ============================================================
+   Lesson replay (index.html #demo)
+   ============================================================
+   The panel mirrors the iOS lesson view: colours are the
+   DesignSystem BrandColor values, radii BrandRadius, and the cards
+   copy ChatFeature/BlockCards.swift (KEY IDEA, EXAMPLE, the check).
+   Where an iOS colour misses WCAG AA as text on the web — accent
+   #6366F1 (4.47:1 on white), success #22C55E, error #EF4444 — text,
+   icons and strokes use BrandColor.accentDark or a darker shade of
+   the same hue; tints keep the iOS colours. The student bubble runs
+   accentDark → mercViolet (both BrandColor) so white text passes.
+   Markup comes from scripts/build-demo-replay.mjs; behaviour from
+   demo.js. Without JS the whole replay renders as plain HTML. */
+.demo-section {
+  --demo-bg: #F7FAFC;           /* BrandColor.background */
+  --demo-surface: #FFFFFF;      /* BrandColor.surface */
+  --demo-elevated: #EEF0F7;     /* BrandColor.surfaceElevated */
+  --demo-text: #0F142A;         /* BrandColor.text */
+  --demo-text-2: #5D6A8A;       /* BrandColor.textSecondary */
+  --demo-border: #D9DEEC;       /* BrandColor.border */
+  --demo-accent: #6366F1;       /* BrandColor.accent (non-text only) */
+  --demo-accent-ink: #4C51BF;   /* BrandColor.accentDark: accent text, 5.7:1 on the tints */
+  --demo-violet: #7C3AED;       /* BrandColor.mercViolet */
+  --demo-success: #22C55E;      /* BrandColor.success: tints */
+  --demo-success-ink: #166534;  /* success text/strokes, 6.3:1 on its tint */
+  --demo-error: #EF4444;        /* BrandColor.error: tints */
+  --demo-error-ink: #B91C1C;    /* error text/strokes, 5.3:1 on its tint */
+  --demo-r-sm: 6px;             /* BrandRadius.sm */
+  --demo-r-lg: 16px;            /* BrandRadius.lg */
+  --demo-r-xl: 22px;            /* BrandRadius.xl */
+  --demo-rounded: ui-rounded, "SF Pro Rounded", var(--font-body);
+
+  /* SF Symbols stand-ins (lightbulb.fill, sparkles,
+     questionmark.bubble.fill, checkmark/xmark.circle.fill), as masks
+     so they take currentColor. */
+  --demo-icon-key: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5a7.2 7.2 0 0 0-4.2 13.05V17a1 1 0 0 0 1 1h6.4a1 1 0 0 0 1-1v-2.45A7.2 7.2 0 0 0 12 1.5zM8.8 19.6h6.4v.9a2 2 0 0 1-2 2h-2.4a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+  --demo-icon-example: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10 1.5l2.2 6.3 6.3 2.2-6.3 2.2L10 18.5l-2.2-6.3L1.5 10l6.3-2.2zM18.5 13.5l1.1 3.1 3.1 1.1-3.1 1.1-1.1 3.1-1.1-3.1-3.1-1.1 3.1-1.1z'/%3E%3C/svg%3E");
+  --demo-icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cmask id='m'%3E%3Crect width='24' height='24' fill='white'/%3E%3Cpath d='M9.6 8.7a2.45 2.45 0 0 1 4.8.7c0 1.55-2.4 1.95-2.4 3.5' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='15.6' r='1.2'/%3E%3C/mask%3E%3Cpath mask='url(%23m)' d='M12 2.5C6.48 2.5 2 6.31 2 11c0 2.43 1.2 4.62 3.13 6.17L4.2 21.5l4.6-2.16c1 .28 2.08.43 3.2.43 5.52 0 10-3.81 10-8.5S17.52 2.5 12 2.5z'/%3E%3C/svg%3E");
+  --demo-icon-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cmask id='m'%3E%3Crect width='24' height='24' fill='white'/%3E%3Cpath d='M7.4 12.4l3.1 3.1 6.1-6.4' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/mask%3E%3Ccircle mask='url(%23m)' cx='12' cy='12' r='10'/%3E%3C/svg%3E");
+  --demo-icon-wrong: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cmask id='m'%3E%3Crect width='24' height='24' fill='white'/%3E%3Cpath d='M8.6 8.6l6.8 6.8M15.4 8.6l-6.8 6.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/mask%3E%3Ccircle mask='url(%23m)' cx='12' cy='12' r='10'/%3E%3C/svg%3E");
+
+  padding-top: var(--space-5);
+}
+
+/* `hidden` must win over the display values below. */
+.demo-section [hidden] { display: none !important; }
+
+.demo-sr {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.demo-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.demo-intro { max-width: 640px; }
+/* The site eyebrow violet (#7B4DFF) is 4.39:1 on --bg; mercViolet is 5.2:1. */
+.demo-intro .eyebrow { color: var(--demo-violet); }
+.demo-intro .section-title { margin-bottom: var(--space-4); }
+.demo-intro .section-sub { margin: 0 0 var(--space-4); }
+.demo-honesty,
+.demo-howto {
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-3);
+}
+.demo-honesty { font-weight: 600; color: var(--navy); }
+
+/* --- The panel: the app's lesson screen, no device frame --- */
+.demo {
+  width: 100%;
+  max-width: 680px;
+  margin: 0;
+  background: var(--demo-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.demo-head {
+  padding: var(--space-4) 22px var(--space-3);
+  border-bottom: 1px solid var(--demo-border);
+}
+.demo-unit {
+  margin: 0 0 6px;
+  font-family: var(--demo-rounded);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--demo-accent-ink);
+}
+.demo-title {
+  margin: 0;
+  font-family: var(--demo-rounded);
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--demo-text);
+}
+
+.demo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-height: 44px;
+  margin-top: var(--space-3);
+}
+.demo-progress {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.demo-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.demo-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--navy);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.demo-btn:hover:not(:disabled) {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+.demo-btn:disabled {
+  cursor: default;
+  color: var(--ink-soft);
+  background: transparent;
+}
+.demo-btn:focus-visible,
+.demo-continue:focus-visible,
+.demo-answer summary:focus-visible,
+.demo-badge:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+/* --- Thread --- */
+.demo-thread {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.demo-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.demo-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  scroll-margin-top: calc(var(--header-h) + var(--space-4));
+}
+.demo-msg:focus { outline: none; }
+.demo-msg:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+  border-radius: var(--demo-r-lg);
+}
+.demo-msg--merc { align-items: flex-start; padding-right: 48px; }
+.demo-msg--student { align-items: flex-end; padding-left: 48px; }
+
+/* "● Mercurius" sender line (the app's lesson presence line). The app's
+   dot is green for "here now"; a replay isn't live, so it's the accent. */
+.demo-sender {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 0 4px;
+  font-family: var(--demo-rounded);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--demo-text-2);
+}
+.demo-sender-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--demo-accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.demo-bubble { margin: 0; }
+
+/* Lesson bubble: surface, soft shadow, 8/24 corners (MessageBubbleView). */
+.demo-bubble--merc {
+  width: 100%;
+  max-width: 34rem;
+  padding: var(--space-3) var(--space-4);
+  background: var(--demo-surface);
+  border-radius: 8px 24px 24px 24px;
+  box-shadow: 0 1px 2px rgba(11, 19, 48, 0.05), 0 8px 24px rgba(11, 19, 48, 0.09);
+  color: var(--demo-text);
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+.demo-bubble--merc > * { margin: 0; }
+.demo-bubble--merc > * + * { margin-top: 0.9em; }
+.demo-bubble--merc strong { font-weight: 700; }
+.demo-bubble--merc > .demo-rule {
+  margin: 1.1em 0;
+  border: 0;
+  border-top: 1px solid var(--demo-border);
+}
+.demo-bubble--merc > .demo-rule + * { margin-top: 0; }
+
+/* Student bubble: gradient, 22/22/6/22 corners (userShape). */
+.demo-bubble--student {
+  max-width: 30rem;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--demo-accent-ink) 0%, var(--demo-violet) 100%);
+  border-radius: var(--demo-r-xl) var(--demo-r-xl) var(--demo-r-sm) var(--demo-r-xl);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+/* --- Cards (BlockCards.swift) --- */
+.demo-card {
+  padding: 13px 14px;
+  border-radius: var(--demo-r-lg);
+}
+.demo-card-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px;
+  font-family: var(--demo-rounded);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+.demo-card-label::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: var(--demo-icon) center / contain no-repeat;
+          mask: var(--demo-icon) center / contain no-repeat;
+}
+.demo-card-text { margin: 0; }
+
+.demo-card--key { background: rgba(99, 102, 241, 0.08); }
+.demo-card--key .demo-card-label { color: var(--demo-accent-ink); --demo-icon: var(--demo-icon-key); }
+
+.demo-card--example {
+  background: var(--demo-elevated);
+  border: 1px solid var(--demo-border);
+}
+.demo-card--example .demo-card-label { color: var(--demo-text-2); --demo-icon: var(--demo-icon-example); }
+
+.demo-card--check { background: rgba(99, 102, 241, 0.10); }
+.demo-check-stem {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+  color: var(--demo-accent-ink);
+}
+.demo-check-stem::before {
+  content: "";
+  flex: none;
+  width: 1.05em;
+  height: 1.05em;
+  margin-top: 0.28em;
+  background: currentColor;
+  -webkit-mask: var(--demo-icon-check) center / contain no-repeat;
+          mask: var(--demo-icon-check) center / contain no-repeat;
+}
+
+.demo-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* An option row: the <li> without JS, the radio <button> with it. */
+.demo-options:not([role]) > .demo-option,
+.demo-option-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-border);
+  border-radius: var(--demo-r-sm);
+  color: var(--demo-text);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  text-align: left;
+}
+.demo-option-btn {
+  margin: 0;
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.demo-option-btn:hover:not([aria-disabled="true"]) {
+  border-color: var(--demo-accent);
+  background: #FAFAFF;
+}
+.demo-option-btn[aria-disabled="true"] { cursor: default; }
+.demo-option-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.demo-option-letter {
+  flex: none;
+  min-width: 1.1em;
+  font-family: var(--demo-rounded);
+  font-weight: 800;
+  color: var(--demo-accent-ink);
+}
+.demo-option-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* Graded: the answer turns success, a wrong pick turns error. The 15%
+   tints sit on the white row, not on the card's lavender, so they stay
+   clean green and red. */
+.demo-option.is-answer > .demo-option-btn,
+.demo-options:not([role]) > .demo-option.is-answer {
+  background: linear-gradient(rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.15)), var(--demo-surface);
+  border-color: var(--demo-success-ink);
+}
+.demo-option.is-wrong > .demo-option-btn,
+.demo-options:not([role]) > .demo-option.is-wrong {
+  background: linear-gradient(rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.15)), var(--demo-surface);
+  border-color: var(--demo-error-ink);
+}
+.demo-option.is-answer .demo-option-letter { color: var(--demo-success-ink); }
+.demo-option.is-wrong .demo-option-letter { color: var(--demo-error-ink); }
+
+.demo-option.is-answer > .demo-option-btn::after,
+.demo-options:not([role]) > .demo-option.is-answer::after,
+.demo-option.is-wrong > .demo-option-btn::after,
+.demo-options:not([role]) > .demo-option.is-wrong::after {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 0.2em;
+  background: var(--demo-success-ink);
+  -webkit-mask: var(--demo-icon-right) center / contain no-repeat;
+          mask: var(--demo-icon-right) center / contain no-repeat;
+}
+.demo-option.is-wrong > .demo-option-btn::after,
+.demo-options:not([role]) > .demo-option.is-wrong::after {
+  background: var(--demo-error-ink);
+  -webkit-mask-image: var(--demo-icon-wrong);
+          mask-image: var(--demo-icon-wrong);
+}
+
+.demo-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-border);
+  font-family: var(--demo-rounded);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  color: var(--demo-text-2);
+}
+
+/* --- Replay notes: what the page says, never Mercurius --- */
+.demo-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+.demo-note > p { margin: 0; }
+.demo-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.demo-feedback::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--demo-icon-right) center / contain no-repeat;
+          mask: var(--demo-icon-right) center / contain no-repeat;
+}
+.demo-feedback.is-correct { color: var(--demo-success-ink); }
+.demo-feedback.is-incorrect { color: var(--demo-error-ink); }
+.demo-feedback.is-incorrect::before {
+  -webkit-mask-image: var(--demo-icon-wrong);
+          mask-image: var(--demo-icon-wrong);
+}
+.demo-recorded {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(11, 19, 48, 0.05);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.demo-continue { min-height: 44px; }
+
+.demo-answer { font-size: var(--fs-small); color: var(--ink-soft); }
+.demo-answer summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--demo-accent-ink);
+}
+.demo-answer p { margin: var(--space-2) 0 0; }
+
+/* --- End panel --- */
+.demo-end {
+  margin: 0 var(--space-4) var(--space-4);
+  padding: var(--space-6) var(--space-5);
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-border);
+  border-radius: var(--demo-r-lg);
+  text-align: center;
+  scroll-margin-top: calc(var(--header-h) + var(--space-4));
+}
+.demo-end-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.demo-end-title:focus { outline: none; }
+.demo-end-title:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+}
+.demo-end p { color: var(--ink-soft); margin: 0 auto var(--space-4); max-width: 30rem; }
+.demo-badge { display: inline-block; border-radius: 8px; }
+.demo-badge img { display: block; }
+.demo-end .demo-end-fine { margin: var(--space-3) auto 0; font-size: var(--fs-small); }
+.demo-end .demo-btn { margin-top: var(--space-4); }
+
+/* Reveal: a short fade; instant when the visitor asks for less motion. */
+.demo-turn.is-entering,
+.demo-end.is-entering { animation: fadeIn 0.3s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .demo-turn.is-entering,
+  .demo-end.is-entering { animation: none; }
+  .demo-btn,
+  .demo-option-btn { transition: none; }
+}
+
+/* Phones: one column, panel nearly edge to edge, full-width bubbles. */
+@media (max-width: 559px) {
+  .demo {
+    width: auto;
+    margin-left: calc(var(--space-3) - var(--space-5));
+    margin-right: calc(var(--space-3) - var(--space-5));
+  }
+  .demo-head { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .demo-thread { padding: var(--space-4) var(--space-3); }
+  .demo-msg--merc { padding-right: 0; }
+  .demo-msg--student { padding-left: var(--space-6); }
+  .demo-bubble--merc { padding: var(--space-3) 12px; }
+  /* Nested paddings (bubble, card, row) add up fast at 360px. */
+  .demo-card { padding: 12px 10px; }
+  .demo-options:not([role]) > .demo-option,
+  .demo-option-btn { padding: 10px; }
+  .demo-end { margin: 0 var(--space-3) var(--space-3); padding: var(--space-5) var(--space-4); }
+}
+
+@media (min-width: 720px) {
+  .demo-bubble--merc { font-size: 1.0625rem; }
+}
+
+@media (min-width: 1024px) {
+  .demo-section { padding-top: var(--space-6); }
+  .demo-grid {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: var(--space-8);
+    align-items: start;
+  }
+  .demo-intro {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-6));
+  }
+}

@@ -8,6 +8,9 @@
 //      fact-check: deterministically for a first-person unit-test answer or
 //      claim (no model call), and via the model's hand-off otherwise (the
 //      mock follows rule 1 in prose when the safety block is present).
+//      Every chat, lesson and widget static prefix carries the app facts
+//      (lib/appFacts) once, directly before the safety core; the helper
+//      routes never do.
 //   2. The chat/lesson thread carries ONE message-level breakpoint, on the
 //      last replayed message, and the prefix up to it is byte-identical on
 //      the next turn, including the iOS lesson wire shape (hidden opener,
@@ -30,6 +33,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = require('../lib/safetyCore');
+const { APP_FACTS, APP_FACTS_TAGGED } = require('../lib/appFacts');
 const { CLUB_KNOWLEDGE } = require('../lib/clubKnowledge');
 
 const ROOT = path.join(__dirname, '..');
@@ -212,7 +216,10 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
     assert.ok(Array.isArray(map.json.nodes));
     const helperCalls = captured(servers.on, n).filter((c) => typeof c.system === 'string');
     assert.equal(helperCalls.length, 3);
-    for (const call of helperCalls) assert.ok(endsWithSafety(call.system), call.system.slice(0, 80));
+    for (const call of helperCalls) {
+      assert.ok(endsWithSafety(call.system), call.system.slice(0, 80));
+      assert.ok(!call.system.includes(APP_FACTS), 'JSON helper routes never take the app facts');
+    }
   });
 
   test('a quiz over a chat that disclosed a crisis returns the resources instead of a quiz', async () => {
@@ -262,6 +269,49 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
     assert.match(call.system, /LIVE MEETING SCHEDULE/, 'meeting material stays ahead of the safety block');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 1b. App facts on the wire (audit 2026-10, AUD-03/-20/-43): every chat,
+//     lesson and widget static prefix carries lib/appFacts exactly once,
+//     directly before the safety core, which stays LAST — in both flag states.
+// ---------------------------------------------------------------------------
+for (const flag of ['on', 'off']) {
+  describe(`app facts sit just before the safety core (USE_UNIFIED_PROMPT ${flag})`, () => {
+    const server = () => servers[flag];
+    const countOf = (haystack, needle) => haystack.split(needle).length - 1;
+    const variants = [
+      { name: 'socratic (app)', mode: 'socratic', text: 'What is a token?' },
+      { name: 'debate (app)', mode: 'debate', text: 'Debate me: AI art is real art.' },
+      { name: 'discussion (app)', mode: 'discussion', text: 'Should schools allow AI for homework?' },
+      { name: 'socratic (widget, club_v1)', mode: 'socratic', text: 'What is a token?', capabilities: ['club_v1'] },
+      { name: 'lesson (prose)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.` },
+      { name: 'lesson (blocks_v1)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.`, capabilities: ['blocks_v1'] },
+    ];
+    for (const v of variants) {
+      test(v.name, async () => {
+        const n = nonce();
+        const s = sid();
+        if (v.mode) assert.equal((await post(server(), '/api/mode', { sessionId: s, mode: v.mode })).status, 200);
+        const body = { sessionId: s, messages: [{ role: 'user', content: `${v.text} (${n})` }] };
+        if (v.capabilities) body.capabilities = v.capabilities;
+        await chatSse(server(), body);
+        const [call] = captured(server(), n);
+        assert.ok(call, 'the model was called');
+        const staticText = call.system[0].text;
+        assert.ok(call.system[0].cache_control, 'the static block is the cached one');
+        // Lessons always use CURRICULUM_PROMPT + the plain safety core; v2
+        // free chat uses the XML-tagged forms.
+        const tagged = flag === 'on' && !v.lesson;
+        const facts = tagged ? APP_FACTS_TAGGED : APP_FACTS;
+        const safety = tagged ? SAFETY_CORE_TAGGED : SAFETY_CORE;
+        assert.ok(staticText.endsWith(`\n\n${facts}\n\n${safety}`), 'app facts, then the safety core LAST');
+        assert.equal(countOf(staticText, APP_FACTS), 1, 'the facts appear exactly once');
+        assert.equal(countOf(staticText, safety), 1, 'the safety core appears exactly once');
+        for (const block of call.system.slice(1)) assert.ok(!block.text.includes(APP_FACTS), 'never in the dynamic block');
+      });
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 2. History breakpoint + widget club block, in both flag states

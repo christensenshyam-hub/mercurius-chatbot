@@ -13,3 +13,6 @@ ios/build/
 # Personal dev-env launch config (e.g. hard-coded home paths for node).
 # launch.json contents are developer-specific, not team-wide.
 .claude/launch.json
+
+# Local screenshots (marketing demo work)
+.shots/

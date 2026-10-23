@@ -41,7 +41,7 @@ public struct RecentCreditsView: View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: "checkmark")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
             Text(credit.label)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.text)
