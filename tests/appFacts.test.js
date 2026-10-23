@@ -137,8 +137,9 @@ describe('the facts still match the server, the privacy page and the apps', () =
     assert.match(html, /forwarded to Anthropic's Claude API to generate the reply/);
     assert.match(html, /There are no accounts\./);
     assert.match(html, /Delete my data &amp; start over/);
-    // The in-app button ships in iOS 2.3; older versions use the email.
-    assert.match(html, /Available in app version 2\.3 and later; on an older version, update the app or use the email option below/);
+    // The in-app button ships in iOS 2.3; older versions use the email (or,
+    // once the TestFlight link reopens, install the current version: #55).
+    assert.match(html, /Available in app version 2\.3 and later; on an older version, (use the email option below|install the current version)/);
     assert.match(html, /privacy@trymercurius\.com/);
   });
 
