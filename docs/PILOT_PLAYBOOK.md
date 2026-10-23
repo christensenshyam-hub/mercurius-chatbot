@@ -604,7 +604,10 @@ line only when I have seen the result myself.
       and off (REVIEW_REHEARSAL steps 10–11) and see both messages in the
       alerts channel. Alerts channel notifications on, on my phone.
 - [ ] `STREAK_TZ=America/Chicago`. Rochester is Central; the default is
-      New York, which ends a streak day at 11 PM here.
+      New York, which ends a streak day at 11 PM here. Since the AUD-30
+      server fix the daily quotas and `DAILY_BUDGET_USD` turn over at the
+      same midnight, so this also decides when "tomorrow" starts for a
+      student who hit a limit.
 - [ ] `DAILY_BUDGET_USD`: 25 students × the $0.75 per-session daily cap is
       $18.75 worst case. Set it to `25` for kickoff week so a good morning
       cannot 503 the room; put it back to `15` on Fri Oct 9.
@@ -612,7 +615,8 @@ line only when I have seen the result myself.
       and one IP is capped at `IP_DAILY_USD` (default $10) whatever the
       global budget says: past $10 of combined spend, every phone on the
       school Wi-Fi gets "This network has reached today's usage limit"
-      until 7 PM Central. Set it to `25` for kickoff week and back to `15`
+      until midnight in `STREAK_TZ` (it was 7 PM Central, UTC midnight,
+      before the AUD-30 fix). Set it to `25` for kickoff week and back to `15`
       on Fri Oct 9, together with `DAILY_BUDGET_USD`. Each variable change
       restarts the server (and resets the per-IP counters), so make both
       changes by Wednesday night.

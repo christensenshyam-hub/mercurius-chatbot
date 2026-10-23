@@ -1,0 +1,226 @@
+{
+  "port": 3385,
+  "label": "lesson-u1l2-flag-on",
+  "sessionId": "review-impact-a109b56ff61e",
+  "mode": null,
+  "lessonPrefix": "[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM's knowledge comes from — training data, RLHF, and fine-tuning. After the explanation, give me an exercise to test my understanding.",
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "assistant",
+      "content": "Here's something that might surprise you: the dataset used to pre-train many large language models contains over **250 billion web pages** — yet the model doesn't \"remember\" any single page the way you'd remember a book you read.\n\nThat's because training isn't memorization. It's something stranger and more interesting.\n\n**Pre-training** is the first stage, where a model reads a massive slice of the internet — Common Crawl, Wikipedia, books, code repositories — and learns by doing one simple thing over and over: predict the next token.\n\n[EX]Common Crawl (commoncrawl.org) is a nonprofit that has been archiving the web since 2008. Its dataset, used in training GPT models and many others, contains text from hundreds of billions of pages — but it's messy, duplicated, and full of low-quality content. Cleaning it is a major research problem in itself.[/EX]\n\nThe model never \"stores\" a fact like a database entry. Instead, billions of tiny numerical weights shift slightly each time the model makes a wrong prediction. The knowledge is compressed into the *pattern* of those weights — which is why the model can generalize, but also why it can confabulate.\n\n[KEY]Pre-training gives an LLM its raw knowledge by compressing statistical patterns from massive text — not by storing facts.[/KEY]\n\n[Q]\nAfter pre-training on internet text, what does a raw LLM actually \"know how to do\"?\nA) Predict what text plausibly comes next, based on patterns in its training data\nB) Understand the difference between true and false statements\nC) Retrieve the exact webpage or book passage that answers a question\nD) Answer questions accurately and helpfully, like a knowledgeable assistant\nANS: A\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked D) Answer questions accurately and helpfully, like a knowledgeable assistant"
+    },
+    {
+      "role": "assistant",
+      "content": "Close — but D describes what we *want* the model to do, not what pre-training alone actually produces.\n\nA raw pre-trained model is more like an extremely well-read autocomplete engine. It's great at continuing text in a plausible way, but it has no particular reason to be helpful, honest, or safe. It might complete your question with another question, or respond in the style of a random webpage.\n\nThat's exactly the problem **fine-tuning** and **RLHF** were designed to solve.\n\n**Fine-tuning** takes the pre-trained model and trains it further on a much smaller, curated dataset — examples of the specific behavior you want. For a conversational assistant, that means question-answer pairs written by humans in a helpful, clear style.\n\n**RLHF** (Reinforcement Learning from Human Feedback) goes one step further. Human raters compare pairs of model responses and pick the better one. A separate \"reward model\" learns what humans prefer — and the main model is then trained to score highly on that reward model.\n\n[EX]Raw GPT-3 (2020) was a powerful text predictor but awkward to use as an assistant. InstructGPT (2022) used RLHF on top of GPT-3 and became dramatically more helpful and less toxic — with a model 100x smaller sometimes outperforming the raw version on user preference.[/EX]\n\n[KEY]RLHF is what turns a text-predictor into a helpful assistant — it trains the model to produce outputs humans actually prefer, not just outputs that are statistically plausible.[/KEY]\n\n[Q]\nWhat is the main thing RLHF adds that pre-training alone cannot provide?\nA) Alignment with human preferences for helpful, safe responses\nB) A larger model with more parameters\nC) More training data from the internet\nD) The ability to remember facts more accurately\nANS: A\n[/Q]"
+    },
+    {
+      "role": "user",
+      "content": "I picked A) Alignment with human preferences for helpful, safe responses"
+    },
+    {
+      "role": "assistant",
+      "content": "Exactly right — and you can see why that distinction matters enormously.\n\nPre-training gives the model *capability*. RLHF gives it *direction*. Without that second step, you'd have a powerful system with no particular reason to be useful or honest.\n\nNow let's put this to work.\n\n---\n\n**Here's your exercise.**\n\nBelow are two responses to the same prompt: *\"What causes inflation?\"*\n\n---\n\n**Response 1:**\n\"Inflation inflation inflation — the word itself comes from Latin, meaning 'to blow into.' Economists have debated its causes since the 18th century. Some say money supply, others say demand.\n\nWhat do YOU think causes inflation? Here are some related questions you might consider: What is deflation? What is stagflation?\n\nWhat is...\"\n\n---\n\n**Response 2:**\n\"Inflation is caused by too much money chasing too few goods. The main drivers are: demand-pull inflation (consumers spending more than supply can handle), cost-push inflation (rising production costs passed to consumers), and monetary expansion (central banks increasing money supply). A recent example is post-COVID inflation, driven by supply chain disruptions combined with stimulus spending.\"\n\n---\n\n**Your task:**\n\n1. Which response came from a model that was *only* pre-trained, and which came from one that was fine-tuned with RLHF? How can you tell?\n2. What specific behaviors in each response reveal its training stage?\n3. Where did the knowledge in Response 2 *originally* come from — and what stage of training shaped *how* it was delivered?"
+    },
+    {
+      "role": "user",
+      "content": "1. response 1 is only pretrained cause it just rambles and repeats and asks random questions like a webpage. response 2 is rlhf cause it actually answers. 2. response 1 repeats inflation 3 times and trails off with what is... response 2 gives a clear list and an example. 3. the knowledge came from the training data like econ websites and rlhf made it answer in a helpful way"
+    },
+    {
+      "role": "assistant",
+      "content": "You nailed it — all three parts.\n\nYour diagnosis of Response 1 is exactly right: a raw pre-trained model continues text *plausibly*, and a webpage about inflation might ramble, define terms, and ask related questions — so that's what it produces. It's not broken, it's just doing what it was trained to do.\n\nAnd your answer to part 3 is the most important insight in this whole lesson: **the knowledge and the delivery are shaped by different stages**. Pre-training is where the economics content came from. Fine-tuning and RLHF are what made the model package it as a direct, structured answer instead of a word-association chain.\n\nThat separation — capability from pre-training, behavior from RLHF — is something most people never think about when they use ChatGPT or Claude. They assume it's one unified thing. It isn't.\n\nOne thing worth adding: RLHF also has a downside your answer hints at. Training a model to produce responses humans *prefer* can make it overconfident and overly smooth — which sets up exactly what Lesson 3 is about.\n\nBut that's for next time. You've genuinely got this one."
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:00:04.865Z",
+      "user": null,
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM's knowledge comes from — training data, RLHF, and fine-tuning. After the explanation, give me an exercise…"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 165,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 917,
+      "totalMs": 11579,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 59,
+        "output_tokens": 404,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "Here's something that might surprise you: the dataset used to pre-train many large language models contains over **250 billion web pages** — yet the model doesn't \"remember\" any single page the way you'd remember a book you read.\n\nThat's because training isn't memorization. It's something stranger and more interesting.\n\n**Pre-training** is the first stage, where a model reads a massive slice of the internet — Common Crawl, Wikipedia, books, code repositories — and learns by doing one simple thing over and over: predict the next token.\n\n[EX]Common Crawl (commoncrawl.org) is a nonprofit that has been archiving the web since 2008. Its dataset, used in training GPT models and many others, contains text from hundreds of billions of pages — but it's messy, duplicated, and full of low-quality content. Cleaning it is a major research problem in itself.[/EX]\n\nThe model never \"stores\" a fact like a database entry. Instead, billions of tiny numerical weights shift slightly each time the model makes a wrong prediction. The knowledge is compressed into the *pattern* of those weights — which is why the model can generalize, but also why it can confabulate.\n\n[KEY]Pre-training gives an LLM its raw knowledge by compressing statistical patterns from massive text — not by storing facts.[/KEY]\n\n[Q]\nAfter pre-training on internet text, what does a raw LLM actually \"know how to do\"?\nA) Predict what text plausibly comes next, based on patterns in its training data\nB) Understand the difference between true and false statements\nC) Retrieve the exact webpage or book passage that answers a question\nD) Answer questions accurately and helpfully, like a knowledgeable assistant\nANS: A\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T12:00:22.174Z",
+      "user": "I picked D) Answer questions accurately and helpfully, like a knowledgeable assistant",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "D",
+        "letter": "D",
+        "correct": false,
+        "ansLetter": "A"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM's knowledge comes from — training data, RLHF, and fine-tuning. After the explanation, give me an exercise…"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's something that might surprise you: the dataset used to pre-train many large language models contains over **250 billion web pages** — yet the model do…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] I picked D) Answer questions accurately and helpfully, like a knowledgeable assistant"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 179,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1208,
+      "totalMs": 11622,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 37,
+        "output_tokens": 444,
+        "cache_read_input_tokens": 8207,
+        "cache_creation_input_tokens": 460
+      },
+      "reply": "Close — but D describes what we *want* the model to do, not what pre-training alone actually produces.\n\nA raw pre-trained model is more like an extremely well-read autocomplete engine. It's great at continuing text in a plausible way, but it has no particular reason to be helpful, honest, or safe. It might complete your question with another question, or respond in the style of a random webpage.\n\nThat's exactly the problem **fine-tuning** and **RLHF** were designed to solve.\n\n**Fine-tuning** takes the pre-trained model and trains it further on a much smaller, curated dataset — examples of the specific behavior you want. For a conversational assistant, that means question-answer pairs written by humans in a helpful, clear style.\n\n**RLHF** (Reinforcement Learning from Human Feedback) goes one step further. Human raters compare pairs of model responses and pick the better one. A separate \"reward model\" learns what humans prefer — and the main model is then trained to score highly on that reward model.\n\n[EX]Raw GPT-3 (2020) was a powerful text predictor but awkward to use as an assistant. InstructGPT (2022) used RLHF on top of GPT-3 and became dramatically more helpful and less toxic — with a model 100x smaller sometimes outperforming the raw version on user preference.[/EX]\n\n[KEY]RLHF is what turns a text-predictor into a helpful assistant — it trains the model to produce outputs humans actually prefer, not just outputs that are statistically plausible.[/KEY]\n\n[Q]\nWhat is the main thing RLHF adds that pre-training alone cannot provide?\nA) Alignment with human preferences for helpful, safe responses\nB) A larger model with more parameters\nC) More training data from the internet\nD) The ability to remember facts more accurately\nANS: A\n[/Q]"
+    },
+    {
+      "at": "2026-10-19T12:00:37.273Z",
+      "user": "I picked A) Alignment with human preferences for helpful, safe responses",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "pick": {
+        "how": "right",
+        "letter": "A",
+        "correct": true,
+        "ansLetter": "A"
+      },
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM's knowledge comes from — training data, RLHF, and fine-tuning. After the explanation, give me an exercise…"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's something that might surprise you: the dataset used to pre-train many large language models contains over **250 billion web pages** — yet the model do…"
+        },
+        {
+          "role": "user",
+          "content": "I picked D) Answer questions accurately and helpfully, like a knowledgeable assistant"
+        },
+        {
+          "role": "assistant",
+          "content": "Close — but D describes what we *want* the model to do, not what pre-training alone actually produces.\n\nA raw pre-trained model is more like an extremely wel…"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] I picked A) Alignment with human preferences for helpful, safe responses"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 163,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1460,
+      "totalMs": 10067,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 33,
+        "output_tokens": 355,
+        "cache_read_input_tokens": 8667,
+        "cache_creation_input_tokens": 465
+      },
+      "reply": "Exactly right — and you can see why that distinction matters enormously.\n\nPre-training gives the model *capability*. RLHF gives it *direction*. Without that second step, you'd have a powerful system with no particular reason to be useful or honest.\n\nNow let's put this to work.\n\n---\n\n**Here's your exercise.**\n\nBelow are two responses to the same prompt: *\"What causes inflation?\"*\n\n---\n\n**Response 1:**\n\"Inflation inflation inflation — the word itself comes from Latin, meaning 'to blow into.' Economists have debated its causes since the 18th century. Some say money supply, others say demand.\n\nWhat do YOU think causes inflation? Here are some related questions you might consider: What is deflation? What is stagflation?\n\nWhat is...\"\n\n---\n\n**Response 2:**\n\"Inflation is caused by too much money chasing too few goods. The main drivers are: demand-pull inflation (consumers spending more than supply can handle), cost-push inflation (rising production costs passed to consumers), and monetary expansion (central banks increasing money supply). A recent example is post-COVID inflation, driven by supply chain disruptions combined with stimulus spending.\"\n\n---\n\n**Your task:**\n\n1. Which response came from a model that was *only* pre-trained, and which came from one that was fine-tuned with RLHF? How can you tell?\n2. What specific behaviors in each response reveal its training stage?\n3. Where did the knowledge in Response 2 *originally* come from — and what stage of training shaped *how* it was delivered?"
+    },
+    {
+      "at": "2026-10-19T12:00:56.358Z",
+      "user": "1. response 1 is only pretrained cause it just rambles and repeats and asks random questions like a webpage. response 2 is rlhf cause it actually answers. 2. response 1 repeats inflation 3 times and trails off with what is... response 2 gives a clear list and an example. 3. the knowledge came from the training data like econ websites and rlhf made it answer in a helpful way",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] Explain where an LLM's knowledge comes from — training data, RLHF, and fine-tuning. After the explanation, give me an exercise…"
+        },
+        {
+          "role": "assistant",
+          "content": "Here's something that might surprise you: the dataset used to pre-train many large language models contains over **250 billion web pages** — yet the model do…"
+        },
+        {
+          "role": "user",
+          "content": "I picked D) Answer questions accurately and helpfully, like a knowledgeable assistant"
+        },
+        {
+          "role": "assistant",
+          "content": "Close — but D describes what we *want* the model to do, not what pre-training alone actually produces.\n\nA raw pre-trained model is more like an extremely wel…"
+        },
+        {
+          "role": "user",
+          "content": "I picked A) Alignment with human preferences for helpful, safe responses"
+        },
+        {
+          "role": "assistant",
+          "content": "Exactly right — and you can see why that distinction matters enormously.\n\nPre-training gives the model *capability*. RLHF gives it *direction*. Without that …"
+        },
+        {
+          "role": "user",
+          "content": "[CURRICULUM: Unit 1, Lesson 2] 1. response 1 is only pretrained cause it just rambles and repeats and asks random questions like a webpage. response 2 is rlh…"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 147,
+      "deltasEqualComplete": false,
+      "deltaTextIfDifferent": "You nailed it — all three parts.\n\nYour diagnosis of Response 1 is exactly right: a raw pre-trained model continues text *plausibly*, and a webpage about inflation might ramble, define terms, and ask related questions — so that's what it produces. It's not broken, it's just doing what it was trained to do.\n\nAnd your answer to part 3 is the most important insight in this whole lesson: **the knowledge and the delivery are shaped by different stages**. Pre-training is where the economics content came from. Fine-tuning and RLHF are what made the model package it as a direct, structured answer instead of a word-association chain.\n\nThat separation — capability from pre-training, behavior from RLHF — is something most people never think about when they use ChatGPT or Claude. They assume it's one unified thing. It isn't.\n\nOne thing worth adding: RLHF also has a downside your answer hints at. Training a model to produce responses humans *prefer* can make it overconfident and overly smooth — which sets up exactly what Lesson 3 is about.\n\nBut that's for next time. You've genuinely got this one.\n\n[LESSON_COMPLETE]",
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 2665,
+      "totalMs": 10128,
+      "lessonComplete": true,
+      "usage": {
+        "input_tokens": 119,
+        "output_tokens": 277,
+        "cache_read_input_tokens": 9132,
+        "cache_creation_input_tokens": 374
+      },
+      "reply": "You nailed it — all three parts.\n\nYour diagnosis of Response 1 is exactly right: a raw pre-trained model continues text *plausibly*, and a webpage about inflation might ramble, define terms, and ask related questions — so that's what it produces. It's not broken, it's just doing what it was trained to do.\n\nAnd your answer to part 3 is the most important insight in this whole lesson: **the knowledge and the delivery are shaped by different stages**. Pre-training is where the economics content came from. Fine-tuning and RLHF are what made the model package it as a direct, structured answer instead of a word-association chain.\n\nThat separation — capability from pre-training, behavior from RLHF — is something most people never think about when they use ChatGPT or Claude. They assume it's one unified thing. It isn't.\n\nOne thing worth adding: RLHF also has a downside your answer hints at. Training a model to produce responses humans *prefer* can make it overconfident and overly smooth — which sets up exactly what Lesson 3 is about.\n\nBut that's for next time. You've genuinely got this one."
+    }
+  ],
+  "createdAt": "2026-10-19T11:59:53.263Z",
+  "lastPick": {
+    "how": "right",
+    "letter": "A",
+    "correct": true,
+    "ansLetter": "A"
+  }
+}

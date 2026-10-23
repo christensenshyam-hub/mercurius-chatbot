@@ -1,0 +1,52 @@
+{
+  "port": 3385,
+  "label": "limit-newsession-3-chicago",
+  "sessionId": "review-impact-9441745522b9",
+  "mode": null,
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey! What's on your mind — AI question, something you're working on, or just curious where to start?"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:08:03.426Z",
+      "user": "hi",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 14,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1075,
+      "totalMs": 1713,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 56,
+        "output_tokens": 27,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "Hey! What's on your mind — AI question, something you're working on, or just curious where to start?"
+    }
+  ],
+  "createdAt": "2026-10-19T12:08:01.689Z"
+}

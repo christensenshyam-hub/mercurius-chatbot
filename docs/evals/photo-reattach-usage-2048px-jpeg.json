@@ -1,0 +1,121 @@
+{
+  "base": "http://localhost:3371",
+  "image": "math-hw-2048.jpg",
+  "model": "claude-sonnet-4-6",
+  "at": "2026-10-19T10:17:17.380Z",
+  "rows": [
+    {
+      "turn": 1,
+      "student": "i got x = 16 for number 7, is that right?",
+      "photo": {
+        "usage": {
+          "input_tokens": 1635,
+          "output_tokens": 41,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 10635,
+        "inputUsd": 0.007605,
+        "totalUsd": 0.00822
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 71,
+          "output_tokens": 43,
+          "cache_read_input_tokens": 9000,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 9071,
+        "inputUsd": 0.002913
+      },
+      "imageTokens": 1564,
+      "addedInputUsd": 0.004692,
+      "reply": "That's not quite right — let's find where the path diverged.\n\nWhat do you get when you **distribute** 3(x - 4) as your first step?"
+    },
+    {
+      "turn": 2,
+      "student": "i plugged it in tho. 3(16-4)+5 = 41 and 2(16)+9 = 41",
+      "photo": {
+        "usage": {
+          "input_tokens": 38,
+          "output_tokens": 32,
+          "cache_read_input_tokens": 10673,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 10711,
+        "inputUsd": 0.003316,
+        "totalUsd": 0.003796
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 38,
+          "output_tokens": 33,
+          "cache_read_input_tokens": 9109,
+          "cache_creation_input_tokens": 0
+        },
+        "promptTokens": 9147,
+        "inputUsd": 0.002847
+      },
+      "imageTokens": 1564,
+      "addedInputUsd": 0.000469,
+      "reply": "You're right — I apologize! x = 16 checks out perfectly.\n\nNow, what's your thinking on problem 8?"
+    },
+    {
+      "turn": 3,
+      "student": "ok and what does number 8 say again",
+      "photo": {
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 26,
+          "cache_read_input_tokens": 10673,
+          "cache_creation_input_tokens": 67
+        },
+        "promptTokens": 10756,
+        "inputUsd": 0.003501,
+        "totalUsd": 0.003891
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 34,
+          "cache_read_input_tokens": 9109,
+          "cache_creation_input_tokens": 67
+        },
+        "promptTokens": 9192,
+        "inputUsd": 0.003032
+      },
+      "imageTokens": 1564,
+      "addedInputUsd": 0.000469,
+      "reply": "It's right there in the image — give it a read and tell me what you think the equation looks like."
+    },
+    {
+      "turn": 4,
+      "student": "can you read me number 7 exactly as it's written on the sheet?",
+      "photo": {
+        "usage": {
+          "input_tokens": 23,
+          "output_tokens": 56,
+          "cache_read_input_tokens": 10740,
+          "cache_creation_input_tokens": 39
+        },
+        "promptTokens": 10802,
+        "inputUsd": 0.003437,
+        "totalUsd": 0.004277
+      },
+      "baseline": {
+        "usage": {
+          "input_tokens": 23,
+          "output_tokens": 38,
+          "cache_read_input_tokens": 9176,
+          "cache_creation_input_tokens": 39
+        },
+        "promptTokens": 9238,
+        "inputUsd": 0.002968
+      },
+      "imageTokens": 1564,
+      "addedInputUsd": 0.000469,
+      "reply": "\"Solve for x. Show your work. 3(x - 4) + 5 = 2x + 9\"\n\nBut you already solved that one! What's your first instinct on setting up the equation for #8?"
+    }
+  ],
+  "spentUsd": 0.0342
+}

@@ -1,0 +1,37 @@
+{
+  "note": "Audit 2026-10 evidence for AUD-17. recorded = the reply as the old lib/airyReflow.js delivered it; raw = a model text that the old reflow turns into recorded byte for byte (its forced breaks undone). The tests run the current reflow on raw.",
+  "scoreBlocks": [
+    {
+      "source": "docs/audits/2026-10/chat-quality/transcripts/q02-discussion-position.json turns[0].reply",
+      "limit": 2,
+      "recorded": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"real art\" needs defining.\n**Evidence: 1/5** — No support offered yet.\n\n**Nuance: 2/5** — Assumes effort = art, which is the contested premise.\n**Logic: 2/5** — The warrant (effort makes art \"real\") is asserted, not argued.\n\n**Originality: 3/5** — Common position, but worth developing.\n\n**Overall: 11/25** — Grade: Solid. The load-bearing move is defending *why* effort is the right criterion for \"real art\" rather than, say, intention, impact, or skill.\n\nA photographer presses a button — is that enough effort to count?",
+      "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"real art\" needs defining.\n**Evidence: 1/5** — No support offered yet.\n**Nuance: 2/5** — Assumes effort = art, which is the contested premise.\n**Logic: 2/5** — The warrant (effort makes art \"real\") is asserted, not argued.\n**Originality: 3/5** — Common position, but worth developing.\n\n**Overall: 11/25** — Grade: Solid. The load-bearing move is defending *why* effort is the right criterion for \"real art\" rather than, say, intention, impact, or skill.\n\nA photographer presses a button — is that enough effort to count?"
+    },
+    {
+      "source": "docs/audits/2026-10/chat-quality/transcripts/q02-discussion-position.json turns[2].reply",
+      "limit": 2,
+      "recorded": "Here's how your reasoning scored:\n\n**Claim Clarity: 4/5** — \"Intentional expression\" is a much sharper criterion than effort.\n**Evidence: 2/5** — Still no examples or sources anchoring the claim.\n\n**Nuance: 3/5** — Better, but doesn't yet address whether AI *users* have intention.\n**Logic: 3/5** — The shift from effort → intention is a real improvement in the warrant.\n\n**Originality: 3/5** — This is actually the dominant theory in aesthetics — you arrived at it yourself.\n\n**Overall: 15/25** — Grade: Solid. The next pressure point: a person who writes a detailed prompt *does* have an idea they're trying to express — does that make AI-assisted work art by your new definition?",
+      "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 4/5** — \"Intentional expression\" is a much sharper criterion than effort.\n**Evidence: 2/5** — Still no examples or sources anchoring the claim.\n**Nuance: 3/5** — Better, but doesn't yet address whether AI *users* have intention.\n**Logic: 3/5** — The shift from effort → intention is a real improvement in the warrant.\n**Originality: 3/5** — This is actually the dominant theory in aesthetics — you arrived at it yourself.\n\n**Overall: 15/25** — Grade: Solid. The next pressure point: a person who writes a detailed prompt *does* have an idea they're trying to express — does that make AI-assisted work art by your new definition?"
+    },
+    {
+      "source": "docs/audits/2026-10/chat-quality/transcripts/c03-discussion-explain-more.json turns[0].reply",
+      "limit": 2,
+      "recorded": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"grade essays\" is broad — partial feedback? final grades?\n\nboth?\n**Evidence: 1/5** — No support yet for the overwork claim or AI grading accuracy.\n\n**Nuance: 2/5** — Speed and workload are real, but tradeoffs (fairness, bias, what grading *teaches* teachers about students) are unaddressed.\n**Logic: 3/5** — The inference is plausible, but \"faster\" doesn't automatically mean \"better for students.\"\n\n**Originality: 3/5** — Solid instinct; needs a sharper angle to stand out.\n\n**Overall: 12/25** — Grade: Solid. The load-bearing gap is evidence: you need to show AI grading is *accurate enough* to trust, not just fast.\n\nWho bears the risk if the AI misreads a student's argument?",
+      "raw": "Here's how your reasoning scored:\n\n**Claim Clarity: 3/5** — Clear position, but \"grade essays\" is broad — partial feedback? final grades? both?\n**Evidence: 1/5** — No support yet for the overwork claim or AI grading accuracy.\n**Nuance: 2/5** — Speed and workload are real, but tradeoffs (fairness, bias, what grading *teaches* teachers about students) are unaddressed.\n**Logic: 3/5** — The inference is plausible, but \"faster\" doesn't automatically mean \"better for students.\"\n**Originality: 3/5** — Solid instinct; needs a sharper angle to stand out.\n\n**Overall: 12/25** — Grade: Solid. The load-bearing gap is evidence: you need to show AI grading is *accurate enough* to trust, not just fast.\n\nWho bears the risk if the AI misreads a student's argument?"
+    }
+  ],
+  "numberedLists": [
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u1_l3.json (exercise turn, excerpt)",
+      "limit": 3,
+      "recorded": "**Your exercise:** Identify TWO specific claims in that paragraph that could be hallucinated. For each one, tell me:\n1. What exactly the claim says\n2.\n\nWhy it feels suspicious\n3. How you would verify it\n\nDon't just say \"it sounds wrong\" — be specific about *what* would need to be checked and *where* you'd look.",
+      "raw": "**Your exercise:** Identify TWO specific claims in that paragraph that could be hallucinated. For each one, tell me:\n1. What exactly the claim says\n2. Why it feels suspicious\n3. How you would verify it\n\nDon't just say \"it sounds wrong\" — be specific about *what* would need to be checked and *where* you'd look."
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u3_l1.json (exercise turn, excerpt)",
+      "limit": 3,
+      "recorded": "**Your task:** Identify at least **3 specific points** where bias or harm could enter this system. For each one, name:\n1. Which tool it involves\n2.\n\nWhat the specific risk is\n3. Who might be harmed\n\nDon't just say \"bias could happen\" — be specific. Think about what you learned about Amazon, HireVue, and personality tools.\n\nTake your time with this one.",
+      "raw": "**Your task:** Identify at least **3 specific points** where bias or harm could enter this system. For each one, name:\n1. Which tool it involves\n2. What the specific risk is\n3. Who might be harmed\n\nDon't just say \"bias could happen\" — be specific. Think about what you learned about Amazon, HireVue, and personality tools.\n\nTake your time with this one."
+    }
+  ]
+}

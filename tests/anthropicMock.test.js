@@ -143,6 +143,25 @@ describe('refusals, like the real API', () => {
   });
 });
 
+describe('MOCK_REPLY: an exact reply for route tests', () => {
+  const client = createMockClient({ delayMs: 1 });
+  const reply = 'Teach.\n\n[Q]\nWhat is a token?\nA) A word\nB) A chunk of text\nANS: B\n[/Q]';
+  const params = (content) => ({ model: 'm', max_tokens: 50, system: CURRICULUM_SYSTEM, messages: [{ role: 'user', content }] });
+
+  test('the text after the tag comes back verbatim, on create() and in 12-character stream chunks', async () => {
+    const content = `[CURRICULUM: Unit 1, Lesson 1] go\nMOCK_REPLY:\n${reply}`;
+    const m = await client.messages.create(params(content));
+    assert.equal(m.content[0].text, reply);
+    assert.equal(m.stop_reason, 'end_turn');
+    const s = client.messages.stream(params(content));
+    const chunks = [];
+    s.on('text', (t) => chunks.push(t));
+    await new Promise((resolve) => s.on('end', resolve));
+    assert.equal(chunks.join(''), reply);
+    assert.ok(chunks.length > 3 && chunks.every((c) => c.length <= 12));
+  });
+});
+
 // ---------------------------------------------------------------------------
 // create() — reply shapes
 // ---------------------------------------------------------------------------

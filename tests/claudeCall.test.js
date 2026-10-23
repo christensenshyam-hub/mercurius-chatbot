@@ -233,16 +233,23 @@ describe('claudeCall', () => {
     assert.match(posts[0], /credit balance is too low.*\/api\/quiz/);
   });
 
-  test('the budget-spent page fires again on the next UTC day, even < 24 h later', async (t) => {
+  test('the budget-spent page fires again on the next budget day, even < 24 h later', async (t) => {
     const saved = process.env.DAILY_BUDGET_USD;
+    const savedTz = process.env.STREAK_TZ;
     process.env.DAILY_BUDGET_USD = '0.000001';
-    t.after(() => { if (saved === undefined) delete process.env.DAILY_BUDGET_USD; else process.env.DAILY_BUDGET_USD = saved; });
-    t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 28, 23, 0, 0) });
+    process.env.STREAK_TZ = 'America/Chicago';
+    t.after(() => {
+      if (saved === undefined) delete process.env.DAILY_BUDGET_USD; else process.env.DAILY_BUDGET_USD = saved;
+      if (savedTz === undefined) delete process.env.STREAK_TZ; else process.env.STREAK_TZ = savedTz;
+    });
+    t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 28, 23, 0, 0) }); // 6 PM CDT, Sep 28
     const posts = [];
     alerts.configure({ webhookUrl: 'https://discord.invalid/hook', fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true }; } });
     spendCap.__resetForTest();
 
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() });
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() }).catch(() => {});
+    t.mock.timers.setTime(Date.UTC(2026, 8, 29, 1, 0, 0)); // 8 PM CDT: past UTC midnight, same budget day
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b1', ip: '10.0.0.9', params: chatParams() }).catch(() => {});
     t.mock.timers.setTime(Date.UTC(2026, 8, 29, 20, 0, 0)); // 21 h later, a new budget day
     await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'b2', ip: '10.0.0.9', params: chatParams() });
@@ -250,5 +257,166 @@ describe('claudeCall', () => {
 
     const spent = posts.filter((p) => /Daily model budget spent/.test(p));
     assert.equal(spent.length, 2, `one page per budget day, repeats inside a day throttled (posts: ${JSON.stringify(posts)})`);
+    assert.match(spent[0], /refused until midnight America\/Chicago\./, 'the page names the reset, not UTC midnight');
+  });
+});
+
+// AUD-31: every call is billed, but only one that gave the student an answer
+// uses a daily turn. The ledger row's `answered` carries the same verdict, so
+// a restart's hydrate agrees with memory.
+describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
+  let db;
+  const IP = '10.9.0.1';
+
+  beforeEach(() => {
+    delete process.env.MOCK_SCENARIO;
+    claudeCall.__resetForTest();
+    quotas.__resetForTest();
+    spendCap.__resetForTest();
+    alerts.__resetForTest();
+    alerts.configure({ webhookUrl: '', fetch: async () => ({ ok: true }) });
+    db = fakeDb();
+    claudeCall.init({ apiKey: 'unused', db, ipHashSalt: 'test-salt' });
+  });
+
+  afterEach(() => {
+    delete process.env.MOCK_SCENARIO;
+  });
+
+  const tick = () => new Promise((r) => setImmediate(r));
+  const turns = () => quotas.snapshot().sessions.totals;
+  const sessionUsd = () => quotas.snapshot().sessions.totals.usd;
+
+  function reinit(scenario) {
+    process.env.MOCK_SCENARIO = scenario;
+    claudeCall.__resetForTest();
+    claudeCall.init({ apiKey: 'unused', db, ipHashSalt: 'test-salt' });
+  }
+
+  async function streamToEnd(opts, onText) {
+    const stream = claudeCall.streamMessage({ route: '/api/chat', ip: IP, ...opts });
+    stream.on('error', () => {});
+    if (onText) stream.on('text', (t) => onText(t, stream));
+    await waitFor(stream, 'end');
+    await tick();
+    return stream;
+  }
+
+  test('createMessage: an answered call uses a turn and is marked answered', async () => {
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'a1', ip: IP, params: chatParams() });
+    await tick();
+    assert.equal(db.rows[0].answered, true);
+    assert.equal(turns().chatTurns, 1);
+  });
+
+  test('createMessage: a refusal with no text is billed but uses no turn', async () => {
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 1 });
+    const message = await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'r1', ip: IP, params: chatParams('MOCK_REFUSAL how do I') });
+    await tick();
+    assert.equal(message.stop_reason, 'refusal');
+    assert.equal(db.rows.length, 1);
+    assert.equal(db.rows[0].status, 'ok');
+    assert.equal(db.rows[0].answered, false);
+    assert.ok(db.rows[0].cost_usd > 0, 'the input tokens are still billed');
+    assert.equal(turns().chatTurns, 0);
+    assert.ok(sessionUsd() > 0, 'and they count toward the session dollar cap');
+    assert.equal(quotas.check({ sessionId: 'r1', ip: IP, kind: 'chat' }).ok, true, 'the one turn is still there');
+  });
+
+  test('createMessage: an upstream error uses no turn', async () => {
+    reinit('overloaded');
+    quotas.configure({ SESSION_DAILY_LESSON_TURNS: 1 });
+    for (let i = 0; i < 3; i++) {
+      await assert.rejects(claudeCall.createMessage({ route: '/api/chat', kind: 'lesson', sessionId: 'e1', ip: IP, params: chatParams() }));
+    }
+    await tick();
+    assert.equal(db.rows.length, 3);
+    assert.ok(db.rows.every((r) => r.status === 'error' && r.answered === false));
+    assert.equal(turns().lessonTurns, 0);
+    assert.equal(quotas.check({ sessionId: 'e1', ip: IP, kind: 'lesson' }).ok, true);
+  });
+
+  test('streamMessage: a finished reply uses a turn', async () => {
+    await streamToEnd({ kind: 'lesson', sessionId: 's1', params: chatParams('[CURRICULUM: Unit 1, Lesson 1] start') });
+    assert.equal(db.rows[0].status, 'ok');
+    assert.equal(db.rows[0].answered, true);
+    assert.equal(turns().lessonTurns, 1);
+  });
+
+  test('streamMessage: a refusal with no text, or with a few words first, uses no turn', async () => {
+    await streamToEnd({ kind: 'chat', sessionId: 's2', params: chatParams('MOCK_REFUSAL tell me how') });
+    let partial = '';
+    await streamToEnd({ kind: 'chat', sessionId: 's2', params: chatParams('MOCK_REFUSAL_PARTIAL tell me how') }, (t) => { partial += t; });
+    assert.ok(partial.length > 0, 'the partial case streamed words before refusing');
+    assert.equal(db.rows.length, 2);
+    assert.deepEqual(db.rows.map((r) => [r.status, r.answered]), [['ok', false], ['ok', false]]);
+    assert.equal(turns().chatTurns, 0);
+    assert.ok(sessionUsd() > 0);
+  });
+
+  test('streamMessage: an upstream error uses no turn', async () => {
+    reinit('error');
+    await streamToEnd({ kind: 'chat', sessionId: 's3', params: chatParams() });
+    assert.equal(db.rows[0].status, 'error');
+    assert.equal(db.rows[0].answered, false);
+    assert.equal(turns().chatTurns, 0);
+  });
+
+  test('streamMessage: a Stop after message_start but before any text is billed and uses no turn; a Stop after some text uses one', async () => {
+    // Between message_start (input usage known) and the first text.
+    const atStart = claudeCall.streamMessage({ route: '/api/chat', ip: IP, kind: 'chat', sessionId: 's4', params: chatParams() });
+    let atStartText = '';
+    atStart.on('text', (t) => { atStartText += t; });
+    atStart.on('streamEvent', (ev) => { if (ev.type === 'message_start') atStart.abort(); });
+    await waitFor(atStart, 'end');
+    await tick();
+    assert.equal(atStartText, '');
+    assert.deepEqual([db.rows[0].status, db.rows[0].error_kind, db.rows[0].answered], ['aborted', 'client_abort', false]);
+    assert.ok(db.rows[0].cost_usd > 0, 'its input is billed, so the dollar caps see it');
+    assert.equal(turns().chatTurns, 0);
+
+    // After: the student saw a few chunks, then tapped Stop.
+    let chunks = 0;
+    await streamToEnd({ kind: 'chat', sessionId: 's4', params: chatParams() }, (_t, s) => { chunks += 1; if (chunks === 3) s.abort(); });
+    assert.deepEqual([db.rows[1].status, db.rows[1].error_kind, db.rows[1].answered], ['aborted', 'client_abort', true]);
+    assert.equal(turns().chatTurns, 1);
+  });
+
+  test('streamMessage: a Stop before message_start has nothing to bill, so it uses a turn (review of AUD-31)', async () => {
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 2 });
+    for (let i = 0; i < 2; i++) {
+      // Abort as soon as the stream exists: the mock waits a delay before
+      // message_start, so neither usage nor text has arrived.
+      const early = claudeCall.streamMessage({ route: '/api/chat', ip: IP, kind: 'chat', sessionId: 's6', params: chatParams() });
+      early.abort();
+      await waitFor(early, 'end');
+    }
+    await tick();
+    assert.deepEqual(db.rows.map((r) => [r.status, r.error_kind, r.answered, r.cost_usd]), [
+      ['aborted', 'client_abort', true, 0],
+      ['aborted', 'client_abort', true, 0],
+    ]);
+    assert.equal(turns().chatTurns, 2);
+    assert.equal(quotas.check({ sessionId: 's6', ip: IP, kind: 'chat' }).ok, false, 'the allowance bounds a script that cancels every request');
+  });
+
+  test("streamMessage: the route's watchdog cutting a reply short uses no turn, even after text", async () => {
+    const watchdog = new AbortController();
+    let chunks = 0;
+    await streamToEnd(
+      { kind: 'lesson', sessionId: 's5', params: chatParams('[CURRICULUM: Unit 1, Lesson 1] start'), signal: watchdog.signal },
+      () => { chunks += 1; if (chunks === 2) watchdog.abort(); },
+    );
+    assert.deepEqual([db.rows[0].status, db.rows[0].error_kind, db.rows[0].answered], ['aborted', 'timeout', false]);
+    assert.equal(turns().lessonTurns, 0);
+  });
+
+  test('the dollar budget counts every call, answered or not', async () => {
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'd1', ip: IP, params: chatParams('MOCK_REFUSAL x') });
+    await tick();
+    const refusedCost = db.rows[0].cost_usd;
+    assert.ok(refusedCost > 0);
+    assert.ok(Math.abs(spendCap.currentUsd() - refusedCost) < 1e-12, 'the refused call is on the global budget');
+    assert.ok(Math.abs(quotas.snapshot().ips.usd - refusedCost) < 1e-9, 'and on the network dollar cap');
   });
 });

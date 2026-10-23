@@ -1,0 +1,29 @@
+{
+  "note": "Real [Q] checks from the audit 2026-10 lesson transcripts (AUD-18 evidence): every one has its answer at B, and the answer is the longest option.",
+  "blocks": [
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u1_l1.json turns[0].raw",
+      "block": "[Q]\nWhat is a token in an LLM?\nA) A single word, always — the model splits on spaces\nB) A chunk of text converted to a number — could be a word, part of a word, or punctuation\nC) A copy of the original sentence stored in the model's memory\nANS: B\n[/Q]"
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u2_l1.json turns[0].raw",
+      "block": "[Q]\nA student says: \"If we just collect MORE data, we can eliminate data bias.\" What's the flaw in that reasoning?\nA) More data always fixes bias — the student is right\nB) More data helps only if the new data is more representative; scale alone doesn't fix skewed sampling\nC) Data size doesn't matter at all — only the algorithm matters\nANS: B\n[/Q]"
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u4_l1.json turns[0].raw",
+      "block": "[Q]\nWhy does adding a role (\"You are a doctor…\") change an AI's output so dramatically?\nA) It unlocks a special medical database the AI normally hides\nB) It shifts which patterns from training data the model treats as most relevant to continue\nC) It makes the AI more careful because it fears legal liability\nANS: B\n[/Q]"
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u6_l1.json turns[0].raw",
+      "block": "[Q]\nWhat is a diffusion model actually doing when it creates an image from your prompt?\nA) Searching the internet for a matching photo and remixing it\nB) Starting from random noise and gradually denoising toward your prompt\nC) Combining pieces of real photos it memorized during training\nANS: B\n[/Q]"
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u7_l1.json turns[0].raw",
+      "block": "[Q]\nA student is stuck on a biology concept — how mitosis works. Which AI use avoids the cognitive-offloading trap?\nA) \"Explain mitosis to me step by step so I can copy the notes.\"\nB) \"I think mitosis is about cells splitting DNA — am I right? What am I missing?\"\nC) \"Write me a summary of mitosis I can use for my test.\"\nANS: B\n[/Q]"
+    },
+    {
+      "source": "docs/audits/2026-10/lesson-quality/transcripts/u3_l2.json turns[0].raw",
+      "block": "[Q]\nWhy does \"narrow\" matter so much when evaluating an AI diagnostic tool?\nA) Because narrow tools are cheaper to build\nB) Because high accuracy on one specific task doesn't mean the tool works well on related tasks\nC) Because the FDA only approves tools for rare diseases\nANS: B\n[/Q]"
+    }
+  ]
+}

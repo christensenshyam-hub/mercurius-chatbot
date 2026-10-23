@@ -190,6 +190,8 @@ async function assertCurrentSchema() {
   assert.ok(msg.has('kind'), 'messages.kind added');
   const rep = await columns('reports');
   for (const c of ['user_message', 'context', 'resolved_at']) assert.ok(rep.has(c), `reports.${c} added`);
+  const img = await columns('images');
+  for (const c of ['turn_key', 'turn_anchor', 'turn_reply']) assert.ok(img.has(c), `images.${c} added`);
   const ses = await columns('sessions');
   for (const c of ['difficulty_level', 'struggled_topics', 'streak', 'last_session_date', 'total_session_count', 'display_name']) {
     assert.ok(ses.has(c), `sessions.${c} present`);
@@ -365,6 +367,27 @@ await step('C3 images: saveImage / getImage (bytes round-trip) / purgeImagesBefo
   assert.ok(await db.getImage(id), 'recent image kept');
 });
 
+await step('C3b photo re-attach: linkImageTurn (session-scoped) / linkedImages (typed, no bytes)', async () => {
+  // Its own session, so the cascade counts in C14 stay as they were.
+  const L = 'smoke-link-' + hex(8);
+  const id = 'imglink' + hex(10);
+  await db.saveImage({ id, sessionId: L, contentType: 'image/png', sizeBytes: 5, data: Buffer.from([1, 2, 3, 4, 5]), createdAt: now });
+  const keys = { turnKey: 'k'.repeat(40), anchorKey: 'a'.repeat(40), replyKey: 'r'.repeat(40) };
+  assert.equal(await db.linkImageTurn(id, S, keys), false, 'another session cannot link it');
+  assert.equal(await db.linkImageTurn(id, L, keys), true);
+  const rows = await db.linkedImages(L, { sinceMs: now - 1000 });
+  const row = rows.find((r) => r.id === id);
+  assert.ok(row, 'listed');
+  assert.deepEqual(Object.keys(row).sort(), ['anchorKey', 'createdAt', 'id', 'replyKey', 'sizeBytes', 'turnKey']);
+  assert.equal(row.replyKey, keys.replyKey);
+  assertNum(row.sizeBytes, 'linkedImages.sizeBytes');
+  assertNum(row.createdAt, 'linkedImages.createdAt');
+  assert.equal(row.sizeBytes, 5);
+  assert.equal(row.turnKey, keys.turnKey);
+  assert.deepEqual(await db.linkedImages(L, { sinceMs: now + 1000 }), [], 'sinceMs bounds the age');
+  assert.deepEqual(await db.linkedImages(S, { sinceMs: 0 }), [], 'and only that session');
+});
+
 let reportIds = [];
 await step('C4 reports: saveReport (context) / listReports / resolveReport twice', async () => {
   const r1 = await db.saveReport({ sessionId: S, content: 'bad reply', reason: 'wrong', userMessage: 'what?', context: { surface: 'lesson', lessonId: 'u1_l1' } });
@@ -402,7 +425,8 @@ await step('C5 usage ledger: recordUsage / sumCostSince (spend-cap hydrate) / se
   assert.equal(await db.recordUsage({ session_id: S, ip_hash: 'h1', route: '/api/chat', kind: 'lesson', cost_usd: 0.0075, status: 'ok' }), true, 'snake_case keys');
   assert.equal(await db.recordUsage({ sessionId: S, route: '/api/quiz', kind: 'helper', costUsd: 0, status: 'error', errorKind: 'overloaded' }), true);
   assert.equal(await db.recordUsage({}), true, 'defaults fill the NOT NULL columns');
-  // The exact boot-time hydrate server.js runs: db.sumCostSince(UTC midnight).
+  // The boot-time hydrate's query. server.js passes the start of the
+  // STREAK_TZ day; any window start exercises the same SQL.
   const spent = await db.sumCostSince(midnight);
   assertNum(spent, 'sumCostSince');
   assert.ok(Math.abs(spent - baseline - 0.02) < 1e-9, `spent ${spent} - baseline ${baseline} should be 0.02`);
@@ -412,6 +436,17 @@ await step('C5 usage ledger: recordUsage / sumCostSince (spend-cap hydrate) / se
   assert.equal(lesson.count, 2);
   assertNum(lesson.usd, 'sessionUsageSince.usd');
   assert.ok(Math.abs(lesson.usd - 0.02) < 1e-9);
+  // AUD-31: an unanswered call (refused, failed, stopped before any text) is
+  // billed but uses no turn; a row with answered unset still counts. Its own
+  // session, so C14's cascade receipt for S is unchanged.
+  const A = newSid('answered');
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.004, status: 'ok' }), true);
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.001, status: 'error', errorKind: 'overloaded', answered: false }), true);
+  assert.equal(await db.recordUsage({ sessionId: A, route: '/api/chat', kind: 'lesson', costUsd: 0.002, status: 'ok', answered: true }), true);
+  const answeredLesson = (await db.sessionUsageSince(A, midnight)).find((r) => r.kind === 'lesson');
+  assertNum(answeredLesson.count, 'sessionUsageSince.count (answered)');
+  assert.equal(answeredLesson.count, 2, 'answered = false is not a turn');
+  assert.ok(Math.abs(answeredLesson.usd - 0.007) < 1e-9, 'but it is billed');
   const sum = await db.usageSummarySince(midnight);
   assertNum(sum.calls, 'usageSummarySince.calls');
   assert.ok(sum.calls >= 4);
@@ -438,12 +473,17 @@ await step('C7 events blob: setEventsInDB upsert / getEventsFromDB / getEventsUp
   assert.ok(updatedAt > 0);
 });
 
-await step('C8 lesson_events: start / turn / complete, complete deduped per attempt, retake completes again', async () => {
+await step('C8 lesson_events: start / turn / complete, complete deduped per attempt, retake completes again, lastLessonMilestone', async () => {
   const L = newSid('lesson');
   await db.ensureSession(L);
+  assert.equal(await db.lastLessonMilestone(L, 'u2_l3'), null, 'no milestone yet');
   assert.equal(await db.recordLessonEvent({ ts: now - 5000, sessionId: L, lessonId: 'u2_l3', event: 'start', turnIndex: 1 }), true);
   assert.equal(await db.recordLessonEvent({ ts: now - 4000, sessionId: L, unit: 2, lesson: 3, event: 'turn', turnIndex: 2 }), true);
+  const open = await db.lastLessonMilestone(L, 'u2_l3');
+  assert.deepEqual(open, { event: 'start', turnIndex: 1, ts: now - 5000 }, "a 'turn' is not a milestone");
+  assertNum(open.ts, 'lastLessonMilestone.ts'); assertNum(open.turnIndex, 'lastLessonMilestone.turnIndex');
   assert.equal(await db.recordLessonEvent({ ts: now - 3000, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 2 }), true);
+  assert.deepEqual(await db.lastLessonMilestone(L, 'u2_l3'), { event: 'complete', turnIndex: 2, ts: now - 3000 });
   assert.equal(await db.recordLessonEvent({ ts: now - 2000, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 3 }), false, 'second complete in the same attempt');
   assert.equal(await db.recordLessonEvent({ ts: now - 1000, sessionId: L, lessonId: 'u2_l3', event: 'start', turnIndex: 1 }), true);
   assert.equal(await db.recordLessonEvent({ ts: now, sessionId: L, lessonId: 'u2_l3', event: 'complete', turnIndex: 4 }), true, 'retake');

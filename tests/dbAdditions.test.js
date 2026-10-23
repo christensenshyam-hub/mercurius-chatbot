@@ -91,6 +91,29 @@ describe('usage ledger', () => {
     );
   });
 
+  test('sessionUsageSince counts only answered calls as turns, but sums every call (AUD-31)', async () => {
+    const s = sid();
+    const t0 = Date.now();
+    const rec = (i, kind, status, answered, costUsd) =>
+      db.recordUsage({ ts: t0 + i, sessionId: s, route: '/api/chat', kind, costUsd, status, answered });
+    await rec(1, 'lesson', 'ok', true, 0.01);
+    await rec(2, 'lesson', 'ok', false, 0.002);       // refusal
+    await rec(3, 'lesson', 'error', false, 0.001);    // upstream error
+    await rec(4, 'lesson', 'aborted', false, 0.001);  // Stop before any text
+    await rec(5, 'lesson', 'aborted', true, 0.004);   // Stop after some text
+    await rec(6, 'chat', 'error', false, 0);
+    await rec(7, 'chat', 'ok', undefined, 0.02);      // a row from before the column: counted
+    const perKind = await db.sessionUsageSince(s, t0);
+    const lesson = perKind.find((r) => r.kind === 'lesson');
+    const chat = perKind.find((r) => r.kind === 'chat');
+    assert.equal(lesson.count, 2, 'the answer and the Stop after text');
+    assert.ok(Math.abs(lesson.usd - 0.018) < 1e-9, `every call billed (${lesson.usd})`);
+    assert.equal(chat.count, 1);
+
+    const rows = await db.queryRaw('SELECT ts, answered FROM usage WHERE session_id = ? ORDER BY ts', [s]);
+    assert.deepEqual(rows.map((r) => r.answered), [1, 0, 0, 0, 1, 0, null]);
+  });
+
   test('recordUsage fills defaults and never throws', async () => {
     const t0 = Date.now();
     // No ts/route/kind/status at all → defaults instead of a NOT NULL violation.
@@ -186,6 +209,59 @@ describe('initSchema drops the legacy student_memory table', () => {
     assert.equal(idx.length, 0, 'its index went with it');
     await db.initSchema();
     assert.equal(await exists(), false, 'idempotent');
+  });
+});
+
+describe('boot migration of a usage table from before usage.answered (AUD-31)', () => {
+  test('initSchema adds the column once; the old rows still count as turns', () => {
+    const oldPath = path.join(os.tmpdir(), `merc-usage-old-${crypto.randomBytes(4).toString('hex')}.db`);
+    const resultPath = `${oldPath}.json`;
+    const Database = require('better-sqlite3');
+    const old = new Database(oldPath);
+    old.exec(`
+      CREATE TABLE usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, session_id TEXT, ip_hash TEXT,
+        route TEXT NOT NULL, kind TEXT NOT NULL, model TEXT, input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0, cache_read_tokens INTEGER DEFAULT 0, cache_write_tokens INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0, status TEXT NOT NULL, error_kind TEXT, duration_ms INTEGER, trace_id TEXT
+      );
+    `);
+    const ins = old.prepare('INSERT INTO usage (ts, session_id, route, kind, cost_usd, status) VALUES (?, ?, ?, ?, ?, ?)');
+    ins.run(1000, 'old_s', '/api/chat', 'lesson', 0.01, 'ok');
+    ins.run(1001, 'old_s', '/api/chat', 'lesson', 0.001, 'error');
+    old.close();
+    const script = `
+      const fs = require('node:fs');
+      const db = require(${JSON.stringify(path.join(__dirname, '..', 'db.js'))});
+      (async () => {
+        await db.initSchema();
+        await db.initSchema();
+        const cols = (await db.queryRaw('PRAGMA table_info(usage)')).map((c) => c.name);
+        await db.recordUsage({ ts: 1002, sessionId: 'old_s', route: '/api/chat', kind: 'lesson', costUsd: 0.002, status: 'ok', answered: false });
+        const per = await db.sessionUsageSince('old_s', 0);
+        fs.writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ cols, per }));
+      })().catch((e) => { console.error(e && e.stack || e); process.exit(1); });
+    `;
+    const env = { ...process.env, SQLITE_PATH: oldPath };
+    delete env.DATABASE_URL;
+    let r;
+    try {
+      const { execFileSync } = require('node:child_process');
+      execFileSync(process.execPath, ['-e', script], { env, cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
+      r = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+    } catch (e) {
+      assert.fail(`child initSchema failed:\n${String(e.stderr || e.message)}`);
+    } finally {
+      for (const f of [oldPath, `${oldPath}-wal`, `${oldPath}-shm`, resultPath]) {
+        try { fs.rmSync(f, { force: true }); } catch { /* ignore */ }
+      }
+    }
+    assert.equal(r.cols.filter((c) => c === 'answered').length, 1, 'added exactly once');
+    // Both pre-column rows (an ok and an error) count, as every call did
+    // before; the new unanswered row doesn't.
+    assert.equal(r.per.length, 1);
+    assert.equal(r.per[0].count, 2);
+    assert.ok(Math.abs(r.per[0].usd - 0.013) < 1e-9);
   });
 });
 

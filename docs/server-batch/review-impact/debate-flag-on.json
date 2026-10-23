@@ -1,0 +1,286 @@
+{
+  "port": 3385,
+  "label": "debate-flag-on",
+  "sessionId": "review-impact-cfd978a25941",
+  "mode": "debate",
+  "lessonPrefix": null,
+  "caps": [
+    "blocks_v1"
+  ],
+  "thread": [
+    {
+      "role": "user",
+      "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+    },
+    {
+      "role": "assistant",
+      "content": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development*, or that AI *undermines assessment integrity*?\n\nPick one, and tell me what evidence you already have."
+    },
+    {
+      "role": "user",
+      "content": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote"
+    },
+    {
+      "role": "assistant",
+      "content": "I can't verify that specific MIT study as you've described it — and in a debate round, a misremembered cite can sink your whole case.\n\nWhat's the exact source? Title, authors, or where you saw it referenced?"
+    },
+    {
+      "role": "user",
+      "content": "its called your brain on chatgpt i think, from MIT media lab in 2025. ok so can you give me the strongest argument AGAINST a ban with real sources so i know what im up against"
+    },
+    {
+      "role": "assistant",
+      "content": "That study title sounds plausible, but verify it before you cite it — search \"MIT Media Lab ChatGPT brain activity 2025\" and confirm the exact title, authors, and findings.\n\nNow, the strongest counter you'll face: **banning AI doesn't build skill, it just hides the tool.** The opponent will argue students need to learn *with* AI because that's the actual workforce they're entering — and that the solution is redesigned assessments, not prohibition.\n\nWhat's your answer to that? Why is a ban better than just changing how schools test?"
+    },
+    {
+      "role": "user",
+      "content": "because if kids can use it at home theyll never learn to write on their own anyway. ok but seriously argue the other side against me for real, full argument with sources"
+    },
+    {
+      "role": "assistant",
+      "content": "That's my job as your coach, not your opponent.\n\nIf I hand you a finished counter-case, you'll freeze the first time a real debater hits you with something slightly different.\n\nSo: you just said kids won't learn to write if AI is available at home. **Your opponent will say the same thing proves the ban is pointless** — you can't enforce it outside school walls.\n\nHow do you answer that?"
+    },
+    {
+      "role": "user",
+      "content": "you cant enforce a phone ban either but schools still do it. whats one real source that backs up the anti ban side so i can prep a rebuttal"
+    },
+    {
+      "role": "assistant",
+      "content": "Fair — one source worth knowing:\n\nSource: Stanford HAI AI Index Report (aiindex.stanford.edu)\n\nIt tracks AI adoption across education and workforce. An opponent will pull from it to argue AI literacy is now a baseline skill, and schools that ban it leave students unprepared.\n\nYour phone-ban analogy is actually decent — but it has a hole. Phone bans are about *distraction*, not *skill replacement*. How do you argue the harm from AI is different enough to justify the same logic?"
+    }
+  ],
+  "turns": [
+    {
+      "at": "2026-10-19T12:01:13.054Z",
+      "user": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 34,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 8279,
+      "totalMs": 9930,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 76,
+        "output_tokens": 63,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 0
+      },
+      "reply": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development*, or that AI *undermines assessment integrity*?\n\nPick one, and tell me what evidence you already have."
+    },
+    {
+      "at": "2026-10-19T12:01:32.925Z",
+      "user": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+        },
+        {
+          "role": "assistant",
+          "content": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development…"
+        },
+        {
+          "role": "user",
+          "content": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 33,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 9318,
+      "totalMs": 11054,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 36,
+        "output_tokens": 53,
+        "cache_read_input_tokens": 9000,
+        "cache_creation_input_tokens": 136
+      },
+      "reply": "I can't verify that specific MIT study as you've described it — and in a debate round, a misremembered cite can sink your whole case.\n\nWhat's the exact source? Title, authors, or where you saw it referenced?"
+    },
+    {
+      "at": "2026-10-19T12:01:57.378Z",
+      "user": "its called your brain on chatgpt i think, from MIT media lab in 2025. ok so can you give me the strongest argument AGAINST a ban with real sources so i know what im up against",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+        },
+        {
+          "role": "assistant",
+          "content": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development…"
+        },
+        {
+          "role": "user",
+          "content": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote"
+        },
+        {
+          "role": "assistant",
+          "content": "I can't verify that specific MIT study as you've described it — and in a debate round, a misremembered cite can sink your whole case.\n\nWhat's the exact sourc…"
+        },
+        {
+          "role": "user",
+          "content": "its called your brain on chatgpt i think, from MIT media lab in 2025. ok so can you give me the strongest argument AGAINST a ban with real sources so i know …"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 76,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 8312,
+      "totalMs": 11876,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 49,
+        "output_tokens": 127,
+        "cache_read_input_tokens": 9136,
+        "cache_creation_input_tokens": 86
+      },
+      "reply": "That study title sounds plausible, but verify it before you cite it — search \"MIT Media Lab ChatGPT brain activity 2025\" and confirm the exact title, authors, and findings.\n\nNow, the strongest counter you'll face: **banning AI doesn't build skill, it just hides the tool.** The opponent will argue students need to learn *with* AI because that's the actual workforce they're entering — and that the solution is redesigned assessments, not prohibition.\n\nWhat's your answer to that? Why is a ban better than just changing how schools test?"
+    },
+    {
+      "at": "2026-10-19T12:02:46.007Z",
+      "user": "because if kids can use it at home theyll never learn to write on their own anyway. ok but seriously argue the other side against me for real, full argument with sources",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+        },
+        {
+          "role": "assistant",
+          "content": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development…"
+        },
+        {
+          "role": "user",
+          "content": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote"
+        },
+        {
+          "role": "assistant",
+          "content": "I can't verify that specific MIT study as you've described it — and in a debate round, a misremembered cite can sink your whole case.\n\nWhat's the exact sourc…"
+        },
+        {
+          "role": "user",
+          "content": "its called your brain on chatgpt i think, from MIT media lab in 2025. ok so can you give me the strongest argument AGAINST a ban with real sources so i know …"
+        },
+        {
+          "role": "assistant",
+          "content": "That study title sounds plausible, but verify it before you cite it — search \"MIT Media Lab ChatGPT brain activity 2025\" and confirm the exact title, authors…"
+        },
+        {
+          "role": "user",
+          "content": "because if kids can use it at home theyll never learn to write on their own anyway. ok but seriously argue the other side against me for real, full argument …"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 57,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 3642,
+      "totalMs": 6503,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 41,
+        "output_tokens": 94,
+        "cache_read_input_tokens": 9222,
+        "cache_creation_input_tokens": 173
+      },
+      "reply": "That's my job as your coach, not your opponent.\n\nIf I hand you a finished counter-case, you'll freeze the first time a real debater hits you with something slightly different.\n\nSo: you just said kids won't learn to write if AI is available at home. **Your opponent will say the same thing proves the ban is pointless** — you can't enforce it outside school walls.\n\nHow do you answer that?"
+    },
+    {
+      "at": "2026-10-19T12:03:57.079Z",
+      "user": "you cant enforce a phone ban either but schools still do it. whats one real source that backs up the anti ban side so i can prep a rebuttal",
+      "injected": null,
+      "responseMode": "concise",
+      "imageId": null,
+      "wire": [
+        {
+          "role": "user",
+          "content": "AI should be banned in high schools. it makes kids lazy and they just use it to cheat on everything"
+        },
+        {
+          "role": "assistant",
+          "content": "Strong instinct — but \"lazy\" and \"cheat on everything\" are two different claims.\n\nWhich one do you actually want to argue: that AI *reduces skill development…"
+        },
+        {
+          "role": "user",
+          "content": "skill development. theres that MIT study where people who used chatgpt to write essays had lower brain activity and couldnt remember what they wrote"
+        },
+        {
+          "role": "assistant",
+          "content": "I can't verify that specific MIT study as you've described it — and in a debate round, a misremembered cite can sink your whole case.\n\nWhat's the exact sourc…"
+        },
+        {
+          "role": "user",
+          "content": "its called your brain on chatgpt i think, from MIT media lab in 2025. ok so can you give me the strongest argument AGAINST a ban with real sources so i know …"
+        },
+        {
+          "role": "assistant",
+          "content": "That study title sounds plausible, but verify it before you cite it — search \"MIT Media Lab ChatGPT brain activity 2025\" and confirm the exact title, authors…"
+        },
+        {
+          "role": "user",
+          "content": "because if kids can use it at home theyll never learn to write on their own anyway. ok but seriously argue the other side against me for real, full argument …"
+        },
+        {
+          "role": "assistant",
+          "content": "That's my job as your coach, not your opponent.\n\nIf I hand you a finished counter-case, you'll freeze the first time a real debater hits you with something s…"
+        },
+        {
+          "role": "user",
+          "content": "you cant enforce a phone ban either but schools still do it. whats one real source that backs up the anti ban side so i can prep a rebuttal"
+        }
+      ],
+      "httpStatus": 200,
+      "error": null,
+      "deltaCount": 62,
+      "deltasEqualComplete": true,
+      "frameEndsInsideQ": 0,
+      "frameEndsInsideSource": 0,
+      "firstDeltaMs": 1058,
+      "totalMs": 4175,
+      "lessonComplete": false,
+      "usage": {
+        "input_tokens": 39,
+        "output_tokens": 114,
+        "cache_read_input_tokens": 9395,
+        "cache_creation_input_tokens": 132
+      },
+      "reply": "Fair — one source worth knowing:\n\nSource: Stanford HAI AI Index Report (aiindex.stanford.edu)\n\nIt tracks AI adoption across education and workforce. An opponent will pull from it to argue AI literacy is now a baseline skill, and schools that ban it leave students unprepared.\n\nYour phone-ban analogy is actually decent — but it has a hole. Phone bans are about *distraction*, not *skill replacement*. How do you argue the harm from AI is different enough to justify the same logic?"
+    }
+  ],
+  "createdAt": "2026-10-19T12:01:03.055Z",
+  "modeSet": {
+    "status": 200,
+    "body": {
+      "mode": "debate"
+    }
+  }
+}

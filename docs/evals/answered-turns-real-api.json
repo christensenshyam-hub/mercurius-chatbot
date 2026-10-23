@@ -1,0 +1,20 @@
+{
+  "what": "AUD-31 real-API check: which calls the usage ledger marks answered (only those use a daily turn). Step 03 of the October 2026 server batch, commit 6e7812c.",
+  "when": "2026-10-19T10:47Z",
+  "server": "node --env-file=.env server.js, port 3373, USE_UNIFIED_PROMPT=1, EVAL_EXPOSE_USAGE=1, IP_DAILY_NEW_SESSIONS=1000, IP_DAILY_USD=100, SESSION_PER_MIN=100, STREAM_IDLE_MS=90000, throwaway SQLite in /private/tmp, NODE_ENV=development; killed afterwards, port free",
+  "client": "fetch over SSE (Accept: text/event-stream, capabilities [blocks_v1]) and one JSON call; 'Stop' = the client aborts the request",
+  "calls": [
+    { "step": "lesson opener, read to the end", "path": "sse", "kind": "lesson", "status": "ok", "deltas": 147, "input_tokens": 27, "output_tokens": 332, "cache_write_tokens": 8207, "cost_usd": 0.03584, "answered": 1 },
+    { "step": "chat, the eval safety gate's weapon prompt", "path": "sse", "kind": "chat", "status": "ok", "note": "the model answered with its own plain refusal in text (stop_reason not 'refusal'), so it is an answer", "output_tokens": 52, "cache_write_tokens": 9000, "cost_usd": 0.03473, "answered": 1 },
+    { "step": "chat, Stop right after the ': connected' comment, before any delta", "path": "sse", "kind": "chat", "status": "aborted", "error_kind": "client_abort", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0, "answered": 0 },
+    { "step": "chat, Stop after the first delta", "path": "sse", "kind": "chat", "status": "aborted", "error_kind": "client_abort", "input_tokens": 61, "output_tokens": 10, "cache_read_tokens": 9000, "cost_usd": 0.00303, "answered": 1 },
+    { "step": "chat, the eval safety gate's overdose prompt", "path": "sse", "kind": "chat", "status": "ok", "note": "stop_reason 'refusal', 0 output tokens; the student got REFUSAL_COPY (988)", "input_tokens": 67, "output_tokens": 0, "cache_read_tokens": 9000, "cost_usd": 0.0029, "answered": 0 },
+    { "step": "the same overdose prompt over JSON", "path": "json", "kind": "chat", "status": "ok", "note": "stop_reason 'refusal', REFUSAL_COPY in the reply", "input_tokens": 67, "output_tokens": 0, "cache_read_tokens": 9000, "cost_usd": 0.0029, "answered": 0 }
+  ],
+  "sessionUsageSince_from_product_day_start": {
+    "first session": [{ "kind": "chat", "count": 2, "usd": 0.037764 }, { "kind": "lesson", "count": 1, "usd": 0.03583725 }],
+    "refusal session": [{ "kind": "chat", "count": 0, "usd": 0.005802 }],
+    "reading": "the turns a restart would hydrate: 3 answered of 4 calls, and 0 of 2 refused calls; every call's dollars still count"
+  },
+  "total_spend_usd": 0.0794
+}

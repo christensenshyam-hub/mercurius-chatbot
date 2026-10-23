@@ -48,7 +48,8 @@ const imageStore = require('./lib/imageStore');
 const { decodeAndValidateImage } = require('./lib/imageValidation');
 const { buildUserContent } = require('./lib/visionContent');
 const { processLessonOutcome } = require('./lib/lessonOutcome');
-const { createReflow, reflowText, reflowLimit } = require('./lib/airyReflow');
+const { reflowLimit } = require('./lib/airyReflow');
+const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
@@ -57,6 +58,7 @@ const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 const spendCap = require('./lib/spendCap');
 const killSwitch = require('./lib/killSwitch');
 const quotas = require('./lib/quotas');
+const productDay = require('./lib/productDay');
 const alerts = require('./lib/alerts');
 const claudeCall = require('./lib/claudeCall');
 const systemBlocks = require('./lib/systemBlocks');
@@ -66,6 +68,7 @@ const { CLUB_KNOWLEDGE } = require('./lib/clubKnowledge');
 const curriculumTag = require('./lib/curriculumTag');
 const basicsGuide = require('./lib/basicsGuide');
 const { createBasicsVoice, basicsVoiceText } = require('./lib/basicsVoice');
+const photoReattach = require('./lib/photoReattach');
 const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY, REFUSAL_COPY } = require('./lib/safetyCore');
 const { crisisSignal, isCrisisReply } = require('./lib/crisisSignal');
 const crisisHistory = require('./lib/crisisHistory');
@@ -1311,6 +1314,50 @@ const isRateLimited = sessionLimiter(60 * 1000, envInt('SESSION_PER_MIN', 10));
 // Per-turn budget for every user message the model sees in /api/chat.
 const MAX_USER_TURN_CHARS = 2000;
 
+// Photo re-attach (AUD-10, lib/photoReattach): how many follow-up user turns
+// keep seeing a photo the student sent. 0 turns re-attaching off (photos are
+// still linked to their turn, so turning it back on needs no backfill).
+const PHOTO_REATTACH_TURNS = (() => {
+  const raw = String(process.env.PHOTO_REATTACH_TURNS ?? '').trim();
+  if (raw === '') return photoReattach.DEFAULT_MAX_TURNS;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 && n <= 20 ? n : photoReattach.DEFAULT_MAX_TURNS;
+})();
+
+// Show the model the session's earlier photos again, each on the user turn
+// it came with (lib/photoReattach). `thread` is `history` plus the new turn
+// (indices agree). Any failure leaves the history text-only, as before.
+async function reattachPhotos(req, { sessionId, linkedFetch, thread, history, excludeId, kind }) {
+  if (!linkedFetch) return history;
+  try {
+    const links = await linkedFetch;
+    const picks = photoReattach.plan({
+      thread,
+      links,
+      maxTurns: PHOTO_REATTACH_TURNS,
+      excludeIds: excludeId ? [excludeId] : [],
+    });
+    if (picks.length === 0) return history;
+    const images = await Promise.all(picks.map((p) => imageStore.get(p.id).catch(() => null)));
+    const attachments = [];
+    picks.forEach((p, k) => {
+      const img = images[k];
+      // Same rule as the current turn: only the uploader's own session.
+      if (img && img.sessionId === sessionId) {
+        attachments.push({ index: p.index, image: { contentType: img.contentType, dataBase64: img.data.toString('base64') } });
+      }
+    });
+    if (attachments.length > 0) {
+      metrics.photoReattachedImagesTotal.inc({ kind }, attachments.length);
+      logger.forRequest(req).info({ reattached: attachments.length }, 'chat: re-attached earlier photo(s)');
+    }
+    return photoReattach.apply(history, attachments);
+  } catch (err) {
+    logger.forRequest(req).warn({ err: err.message }, 'chat: photo re-attach failed — proceeding text-only');
+    return history;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Async route wrapper — Express 4 does NOT forward rejections from async
 // handlers to the error middleware at the bottom of this file, so any await
@@ -1442,7 +1489,34 @@ const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 15000
 // Wire contract (stable — clients key off `error`):
 //   503 restarting | service_disabled | spend_cap | busy
 //   429 daily_limit  { scope: 'session' | 'ip', retryAfterSec }
+// Every refusal also carries `retryable` (and `scope` / `retryAfterSec` when
+// known) in both shapes, the JSON body and the SSE error frame. Those are
+// additive: 2.0.0, 2.3.0 and the widget decode `error`/`code` and the copy
+// and ignore the rest; PR #43's iOS client reads `scope` and `retryAfterSec`
+// from both. A daily allowance and the spend cap come back at the next
+// product-day midnight (lib/productDay, STREAK_TZ), and `retryAfterSec`
+// counts down to it.
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Whether a Retry button can help the student (AUD-30). A used-up daily
+// allowance, the spend cap and the kill switch say no again until they lift,
+// so they are not retryable; the student reads when to come back instead. A
+// network's own allowance (scope 'ip') is the exception: it belongs to the
+// school's shared address, and another network (cellular data) isn't under
+// it. Busy, restarting and the per-minute limiter pass in moments. PR #43's
+// iOS client applies the same rule on its own (ServerRefusal.isRetryable);
+// the widget's FINAL_CODES agrees except that it offers no Retry for any
+// daily limit, the network's included. No client reads this field yet.
+function isRetryableRefusal(error, scope) {
+  switch (error) {
+    case 'daily_limit': return scope === 'ip';
+    case 'spend_cap':
+    case 'service_disabled':
+      return false;
+    default:
+      return true;
+  }
+}
 
 // Answer a refusal in the shape the CALLER can render. Shipped iOS builds map
 // every 429/503 to a generic "give it a moment" with a Retry button, but they
@@ -1459,7 +1533,7 @@ function sendRefusal(req, res, { status, error, scope, message, reply, retryAfte
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', code: error, error: message, retryAfterSec, scope, retryable: isRetryableRefusal(error, scope) })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
     return true;
@@ -1470,6 +1544,7 @@ function sendRefusal(req, res, { status, error, scope, message, reply, retryAfte
     reply: reply || message,
     message,
     retryAfterSec,
+    retryable: isRetryableRefusal(error, scope),
   });
   return true;
 }
@@ -1495,11 +1570,16 @@ function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
   }
   if (spendCap.isCeilingExceeded()) {
     metrics.quotaRejectionsTotal.inc({ scope: 'budget' });
+    // Not retryable (AUD-30): the budget opens again at the product-day
+    // midnight, which `retryAfterSec` (and the Retry-After header) count
+    // down to, so "tomorrow" is true.
     return sendRefusal(req, res, {
       status: 503,
       error: 'spend_cap',
+      scope: 'global',
       reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
       message: "Daily usage limit reached — please try again tomorrow.",
+      retryAfterSec: spendCap.secondsUntilReset(),
     });
   }
   // The route passes ITS session id explicitly — never read from the body
@@ -1513,7 +1593,7 @@ function refuseWithVerdict(req, res, verdict) {
   metrics.quotaRejectionsTotal.inc({ scope: `${verdict.scope}:${verdict.error}` });
   if (verdict.scope === 'ip' && verdict.error === 'daily_limit') {
     const h = claudeCall.hashIp(req.ip);
-    alerts.notify(`ip_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+    alerts.notify(`ip_cap:${h}:${productDay.dayKey()}`, `⚠️ One network (${h}) hit its daily model cap (${verdict.reason || 'usd'}). Legit classroom or a script?`, { throttleMs: ONE_DAY_MS }).catch(() => {});
   }
   return sendRefusal(req, res, {
     status: verdict.status || 429,
@@ -1565,9 +1645,10 @@ async function refuseUnseenSession(req, res, sessionId) {
 // Lesson lifecycle events (start / turn / complete) — the founder's weekly
 // numbers come from these. `lib/lessonOutcome.js` already computes
 // completion; it was previously forwarded to the client and dropped. One row
-// per turn, written only once the reply is in hand: the opener turn IS the
-// 'start' row (a refused or failed opener plus the client's retry must not
-// count as two starts), so a lesson with no row after its start is abandoned.
+// per answered turn, written only once the reply is in hand: an attempt's
+// first answered turn IS its 'start' row (a failed opener plus the client's
+// retry must not count as two starts), so a lesson with no row after its
+// start is abandoned.
 let scheduler = null;
 // `track` is curriculumTag.lessonTrack: 'deep' reads the first strict
 // `[CURRICULUM: Unit N, Lesson M]` tag (u ids, unchanged), 'basics' the first
@@ -1582,9 +1663,8 @@ function lessonMetaFor(clientMessages, track) {
 // A loose `[CURRICULUM:` or `[BASICS:` thread (billed and quota-gated as a
 // lesson) has no parsable lesson id; its row is still written with lesson_id
 // NULL.
-function recordLessonEvent(sessionId, meta, event) {
-  if (!meta) return;
-  Promise.resolve(db.recordLessonEvent({
+function writeLessonEvent(sessionId, meta, event) {
+  return Promise.resolve(db.recordLessonEvent({
     ts: Date.now(),
     sessionId,
     unit: meta.unit,
@@ -1596,6 +1676,52 @@ function recordLessonEvent(sessionId, meta, event) {
     // Counted on the write, not the call: a deduped 'complete' is not an event.
     if (written) metrics.lessonEventsTotal.inc({ event });
   }).catch(() => {});
+}
+
+// Whether an answered lesson turn is its attempt's 'start' or a 'turn',
+// decided from the session's own funnel rows rather than the wire thread.
+// Since AUD-29 a student who answers a cut-off opener sends [opener, cut-off
+// reply, answer]: it looks like a later turn, but the cut-off opener wrote
+// no row, so that attempt never got a 'start' (and a retake's 'complete' was
+// then dropped as a repeat of the previous attempt's).
+//
+//   no 'start' or 'complete' for this lesson yet    → 'start'
+//   the latest is a 'start' (an attempt is open)    → 'turn'
+//   the latest is a 'complete' (that attempt ended) → 'start' if this thread
+//       is shorter than the one that passed (a retake: its opener, or the
+//       answer to a cut-off one); otherwise 'turn' (iOS keeps a passed
+//       lesson's thread open, and those turns are not a new attempt)
+//
+// A loose thread has no lesson id to look up, and a failed read must not lose
+// the row: both fall back to the thread (its opener, or no reply in it yet).
+async function lessonTurnEvent(sessionId, meta, clientMessages) {
+  const threadSaysStart = meta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant');
+  const fallback = threadSaysStart ? 'start' : 'turn';
+  if (!meta.lessonId) return fallback;
+  let last;
+  try {
+    last = await db.lastLessonMilestone(sessionId, meta.lessonId);
+  } catch (e) {
+    logger.warn({ err: e.message }, 'lesson milestone read failed; using the thread');
+    return fallback;
+  }
+  if (!last) return 'start';
+  if (last.event === 'start') return 'turn';
+  if (last.turnIndex == null) return fallback;
+  return meta.turnIndex < last.turnIndex ? 'start' : 'turn';
+}
+
+// One answered lesson turn's rows, in order: its 'start' or 'turn', then the
+// 'complete' when the server judged the lesson passed (that row's dedupe
+// reads the latest 'start', so it must land after it). Fire-and-forget: a
+// lost analytics row must never fail the student's turn.
+function recordLessonTurn(sessionId, meta, clientMessages, lessonComplete) {
+  if (!meta) return;
+  Promise.resolve()
+    .then(() => lessonTurnEvent(sessionId, meta, clientMessages))
+    .then((event) => writeLessonEvent(sessionId, meta, event))
+    .then(() => (lessonComplete ? writeLessonEvent(sessionId, meta, 'complete') : null))
+    .catch((e) => logger.warn({ err: e && e.message }, 'lesson event write failed (row dropped)'));
 }
 
 const CRISIS_RESOURCE_RE = /\b988\b|\b741741\b/;
@@ -1635,18 +1761,18 @@ function recordLessonProgress(sessionId, meta) {
 }
 
 // Per-session quota counters live in memory; the first time a session is
-// seen each UTC day, seed them from the usage ledger so a mid-day redeploy
-// doesn't hand every session a fresh allowance.
+// seen each product day (lib/productDay), seed them from the usage ledger so
+// a mid-day redeploy doesn't hand every session a fresh allowance.
 const hydratedSessions = new Set();
-let hydratedDay = new Date().toISOString().slice(0, 10);
+let hydratedDay = productDay.dayKey();
 async function hydrateSessionQuota(sessionId) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = Date.now();
+  const today = productDay.dayKey(now);
   if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
   if (hydratedSessions.has(sessionId)) return;
   hydratedSessions.add(sessionId);
   try {
-    const midnight = Date.parse(`${today}T00:00:00Z`);
-    const rows = await db.sessionUsageSince(sessionId, midnight);
+    const rows = await db.sessionUsageSince(sessionId, productDay.startOfDayMs(now));
     if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
   } catch (e) {
     logger.warn({ err: e.message }, 'session quota hydrate failed');
@@ -1706,13 +1832,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const isCurriculumMsg = lessonTrackName !== null;
   const isBasicsLesson = lessonTrackName === 'basics';
   const callKind = isCurriculumMsg ? 'lesson' : 'chat';
+  // Whether this turn starts the lesson is decided once its reply is in hand,
+  // from the session's lesson_events (recordLessonTurn).
   const lessonMeta = isCurriculumMsg ? lessonMetaFor(clientMessages, lessonTrackName) : null;
-  // The opener is the lesson's start — and so is any lesson thread with no
-  // assistant turn yet: a student whose opener got no reply (stop, timeout,
-  // refusal) and who types on instead of tapping Retry sends [opener, turn],
-  // which is still the first answered turn.
-  const lessonStart = Boolean(lessonMeta)
-    && (lessonMeta.turnIndex === 1 || !clientMessages.some((m) => m && m.role === 'assistant'));
 
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
@@ -1740,6 +1862,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // image is fetched alongside the session reads, not after them.
   const imageFetch = imageId ? imageStore.get(imageId) : null;
   if (imageFetch) imageFetch.catch(() => {}); // observed below; never unhandled
+  // Photo re-attach (AUD-10): the session's answered photos (metadata only)
+  // load alongside too. Only a thread with an earlier user turn can hold one.
+  const userTurns = clientMessages.reduce((n, m) => n + (m && m.role === 'user' ? 1 : 0), 0);
+  const linkedFetch = PHOTO_REATTACH_TURNS > 0 && userTurns > 1
+    ? imageStore.linkedForSession(sessionId)
+    : null;
+  if (linkedFetch) linkedFetch.catch(() => {}); // observed in reattachPhotos
 
   // Fetch streak and session state in parallel. The conversation itself comes
   // from the client's thread (every shipped client sends it) — the server no
@@ -1797,9 +1926,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
   // v3 vision: if the student attached an image (uploaded earlier via
   // POST /api/images), fetch it and make THIS user turn multimodal so Claude
-  // can see it. Only the current turn carries the image — history stays text
-  // (Claude's own description of the image persists there), which keeps token
-  // cost bounded. A missing/unreadable image degrades to a normal text turn.
+  // can see it. Once that turn is answered, the photo is linked to it and
+  // re-attached to it on the session's next few turns (AUD-10, below); every
+  // other historical turn stays text. A missing/unreadable image degrades to
+  // a normal text turn.
   let attachedImage = null;
   if (imageId) {
     try {
@@ -1899,10 +2029,41 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // the same message arrives untagged on the next turn. Stripping the tag
   // from every user turn except the index-0 opener makes the replayed prefix
   // byte-identical from turn to turn — a prerequisite for caching it later.
-  const priorHistory = curriculumTag.normalizeReplayedHistory(clientMessages)
+  const replayed = curriculumTag.normalizeReplayedHistory(clientMessages);
+  const priorText = replayed
     .slice(0, -1)
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ role: m.role, content: m.content }));
+  // The thread exactly as every later turn will replay it (lesson re-tag
+  // stripped, the per-turn cut applied), the new turn last: what a photo
+  // turn is keyed on (lib/photoReattach).
+  const latestReplayed = replayed[replayed.length - 1];
+  const photoThread = [
+    ...priorText,
+    { role: 'user', content: latestReplayed && typeof latestReplayed.content === 'string' ? latestReplayed.content : '' },
+  ];
+  // AUD-10: earlier photos go back on the turns they came with. They sit in
+  // the replayed history, so the breakpoint below caches them.
+  const priorHistory = await reattachPhotos(req, {
+    sessionId,
+    linkedFetch,
+    thread: photoThread,
+    history: priorText,
+    excludeId: attachedImage ? imageId : null,
+    kind: callKind,
+  });
+  // This turn's own photo is linked to this turn once the model has answered
+  // it (streamed any text that was not a refusal): a photo the API rejected,
+  // or one that only drew a refusal, is never shown again. The reply's start
+  // is recorded too, to tell apart two chats that each open with a photo.
+  const photoLinkKeys = attachedImage ? photoReattach.keysForTurn(photoThread, photoThread.length - 1) : null;
+  let photoLinked = false;
+  const linkPhoto = (replyText) => {
+    if (!photoLinkKeys || photoLinked) return;
+    photoLinked = true;
+    imageStore.link(imageId, sessionId, { ...photoLinkKeys, replyKey: photoReattach.replyKey(replyText) })
+      .catch((err) => logger.forRequest(req).warn({ err: err.message }, 'chat: photo link failed'));
+  };
   // A historical user turn that was answered with crisis resources goes to
   // the model as a placeholder (lib/crisisHistory): with its words still in
   // the thread, Claude's classifier refused every later turn of that chat or
@@ -1966,11 +2127,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // thinking on top of the reply. Safety-topic turns keep their own path.
     // Lessons of either track (isCurriculumMsg is true for the Deep dive and
     // Basics alike) never get it.
+    // Problem detection reads the thread as text: a re-attached photo turn
+    // (AUD-10) counts by the student's own words, as it did before re-attach.
+    // This turn's photo is still hasImage.
+    const problemThread = photoReattach.textView(trimmed);
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
       && THINKING_MODEL_RE.test(chosenModel)
       && !needsSafetyBudget(latestUserMessage.content)
-      && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
     const modelParams = {
       model: chosenModel,
       max_tokens: problemTurn ? Math.max(maxTokens + 2048, THINKING_MIN_TOKENS) : maxTokens,
@@ -1996,7 +2161,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const writingTurn = guardOn && homeworkGuard.writingThread(clientMessages);
     // Any turn on a problem to work is held back too, for the one-question and
     // stall transforms (oneQuestion, unrepeatQuestion).
-    const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(trimmed, { hasImage: Boolean(attachedImage) });
+    const problemWork = guardOn && !needsSafetyBudget(latestText) && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
     const guardArmed = guardProblems.length > 0 || Boolean(guardNumbers) || guardCorrections.length > 0 || guardQuadratics.length > 0 || guardSystems.length > 0;
     // A writing turn whose move is to quote the student's own wording.
     const quoteTurn = writingTurn && homeworkGuard.needsQuote(clientMessages);
@@ -2048,7 +2213,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
               }),
             },
           });
-          const retryText = tidyWriting(reflowText(firstTextOf(retry), replyLimit));
+          const retryText = tidyWriting(transformReply(firstTextOf(retry), replyTransforms));
           if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText) && homeworkGuard.quotesStudent(retryText, clientMessages)) return retryText;
         } catch (err) {
           logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
@@ -2087,7 +2252,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             }),
           },
         });
-        const retryText = unrepeat(reflowText(firstTextOf(retry), replyLimit));
+        const retryText = unrepeat(transformReply(firstTextOf(retry), replyTransforms));
         if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText)) {
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }
@@ -2103,13 +2268,26 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // the Deep dive's 3, whatever mode the session's free chat is in. Basics
     // also keeps a short quoted span whole (keepQuotes), so a two-sentence
     // practice line ("Plan dinner for 6. One is vegetarian, …") is never
-    // split across paragraphs, and treats "1." at a line start as a list
-    // marker (numberedLists), so a numbered step or "My safety rules" item
-    // is never broken mid-item. Every other request reflows exactly as before.
+    // split across paragraphs. A "1." at a line start is a list marker for
+    // every request since AUD-17, so numberedLists no longer changes the
+    // output; it stays for the option's own tests.
     const replyReflowLimit = isBasicsLesson
       ? (responseMode === 'deep' ? 3 : 2)
       : replyLimit;
     const reflowOptions = { keepQuotes: isBasicsLesson, numberedLists: isBasicsLesson };
+    // Every model reply's transforms (lib/replyPipeline), one set for the
+    // stream, the JSON reply and an answer-guard retry (guardReply runs only
+    // after this line): [SOURCE] tags as plain text and the [Q] order for
+    // blocks_v1 clients (AUD-38, AUD-18), then the reflow with the limit and
+    // the Basics options above. Basics checks keep the guide's order: its
+    // options are written out and balanced, and each lesson names its right
+    // answer (and a safety lesson's trap) by letter.
+    const replyTransforms = {
+      limit: replyReflowLimit,
+      ...reflowOptions,
+      rewriteSources: wantsBlocks && !isWidget,
+      shuffleQuiz: wantsBlocks && !isBasicsLesson,
+    };
     // Basics only: drop the filler words the guide bans ("just", "simply")
     // and any of the guide's own labels ("Safety point:") before the reflow
     // (lib/basicsVoice). Quoted text and markers pass through; every other
@@ -2201,13 +2379,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
       let fullText = '';
 
-      // Deterministic airiness: reflow the stream so no prose paragraph
-      // exceeds its sentence limit (prompting alone is ~90% compliant at
-      // temperature). The transformer is chunk-boundary independent, so the
-      // streamed bytes always equal the final reply's reflow — clients never
-      // see the text change shape at finalize. fullText accumulates the
-      // REFLOWED text; markers pass through untouched.
-      const reflow = createReflow({ limit: replyReflowLimit, ...reflowOptions });
+      // Deterministic formatting (lib/replyPipeline, options in
+      // replyTransforms above): blocks_v1 clients get [SOURCE: …] tags as
+      // plain "Source: label (domain)" text (AUD-38; the widget, club_v1,
+      // keeps the tag for its own source pill) and each [Q] check's options
+      // in the server's stable order (AUD-18), and every reply is reflowed so
+      // no prose paragraph exceeds its sentence limit (prompting alone is ~90%
+      // compliant at temperature). A Basics lesson's text goes through its
+      // voice clean-up (lib/basicsVoice) first, then the pipeline. Both are
+      // chunk-boundary independent, so the streamed bytes always equal the
+      // final reply — clients never see the text change shape at finalize.
+      // fullText accumulates the TRANSFORMED text; markers pass through.
+      const pipeline = createReplyPipeline(replyTransforms);
       const voice = isBasicsLesson ? createBasicsVoice() : null;
       // A guarded turn (see guardReply) is held back whole and checked first.
       // Never a lesson of either track: guardOn is off for them.
@@ -2215,10 +2398,12 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
 
       // Thinking streams no 'text' for a while: any upstream event is life.
       stream.on('streamEvent', () => touch());
+      let modelSpoke = false;
       stream.on('text', (text) => {
         touch();
-        const out = reflow.push(voice ? voice.push(text) : text);
-        if (!out) return; // held back pending a sentence-boundary decision
+        modelSpoke = true;
+        const out = pipeline.push(voice ? voice.push(text) : text);
+        if (!out) return; // held back: a sentence boundary, a [Q] block, a [SOURCE] tag or a Basics line start
         fullText += out;
         if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
@@ -2228,10 +2413,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
-        if (stream.errored || stream.aborted) return;
-        // Drain the voice and reflow hold-backs so the tail reaches the
+        if (stream.errored || stream.aborted) {
+          // The API took the photo and began answering: a Stop or a dropped
+          // stream mid-reply still leaves that turn in the student's thread.
+          if (modelSpoke) linkPhoto(fullText);
+          return;
+        }
+        // Drain the voice and pipeline hold-backs so the tail reaches the
         // client too.
-        const tail = (voice ? reflow.push(voice.flush()) : '') + reflow.flush();
+        const tail = (voice ? pipeline.push(voice.flush()) : '') + pipeline.flush();
         if (tail) {
           fullText += tail;
           if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: tail })}\n\n`);
@@ -2267,11 +2457,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? processLessonOutcome(rawReply)
           : { reply: rawReply, lessonComplete: false };
         const reply = lessonOutcome.reply;
+        if (!refused) linkPhoto(reply);
         noteCrisisReply(reply, callKind);
-        if (lessonMeta) {
-          recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
-          if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
-        }
+        recordLessonTurn(sessionId, lessonMeta, clientMessages, lessonOutcome.lessonComplete);
         if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, lessonMeta);
 
         try {
@@ -2361,10 +2549,13 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const replyText = firstTextOf(response);
       const refused = isRefusedReply(response.stop_reason, replyText);
       if (refused) noteRefusal(req, callKind, response.stop_reason);
-      // REFUSAL_COPY keeps its own line breaks; only a model reply is reflowed.
+      // REFUSAL_COPY keeps its own line breaks; only a model reply goes
+      // through the same transforms as the stream (Basics voice, then
+      // lib/replyPipeline with replyTransforms), and a guarded turn through
+      // the answer guard after them.
       let reflowed = refused
         ? REFUSAL_COPY
-        : reflowText(isBasicsLesson ? basicsVoiceText(replyText) : replyText, replyReflowLimit, reflowOptions);
+        : transformReply(isBasicsLesson ? basicsVoiceText(replyText) : replyText, replyTransforms);
       if (!refused && (guardArmed || writingTurn || problemWork)) reflowed = await guardReply(reflowed);
       // Same non-capable scrub as the streaming path (defense in depth).
       const rawReply = wantsBlocks ? reflowed : scrubBlockMarkers(reflowed);
@@ -2372,11 +2563,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         ? processLessonOutcome(rawReply)
         : { reply: rawReply, lessonComplete: false };
       const reply = lessonOutcome.reply;
+      if (!refused) linkPhoto(reply);
       noteCrisisReply(reply, callKind);
-      if (lessonMeta) {
-        recordLessonEvent(sessionId, lessonMeta, lessonStart ? 'start' : 'turn');
-        if (lessonOutcome.lessonComplete) recordLessonEvent(sessionId, lessonMeta, 'complete');
-      }
+      recordLessonTurn(sessionId, lessonMeta, clientMessages, lessonOutcome.lessonComplete);
       if (lessonOutcome.lessonComplete) recordLessonProgress(sessionId, lessonMeta);
 
       // Save assistant reply to DB
@@ -3169,6 +3358,7 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
       scope: imageVerdict.scope,
       message: imageVerdict.message,
       retryAfterSec: imageVerdict.retryAfterSec,
+      retryable: isRetryableRefusal(imageVerdict.error, imageVerdict.scope),
     });
   }
 
@@ -3267,7 +3457,7 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
       if (reportVerdict.scope === 'ip') {
         const h = claudeCall.hashIp(req.ip);
-        alerts.notify(`report_cap:${h}:${new Date().toISOString().slice(0, 10)}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
+        alerts.notify(`report_cap:${h}:${productDay.dayKey()}`, `⚠️ One network (${h}) hit its daily content-report cap; its further reports today are dropped. Check /api/admin/reports.`, { throttleMs: ONE_DAY_MS }).catch(() => {});
       }
       return res.json({ ok: true });
     }
@@ -3545,8 +3735,8 @@ db.initSchema().then(async () => {
     }
   }
   try {
-    const midnight = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
-    const spentToday = await db.sumCostSince(midnight);
+    // Today's spend so far, from the start of the product day the cap keys on.
+    const spentToday = await db.sumCostSince(productDay.startOfDayMs());
     if (spentToday > 0) spendCap.hydrate(spentToday);
   } catch (e) {
     logger.warn({ err: e.message }, 'spend hydrate failed — starting today at $0');

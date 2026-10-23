@@ -2,6 +2,7 @@
 
 const logger = require('./lib/logger');
 const { PROGRESS_STATUS_RANK, INT4_MAX } = require('./lib/schemas');
+const productDay = require('./lib/productDay');
 
 // ─── Database abstraction: PostgreSQL (production) or SQLite (local dev) ───
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -161,6 +162,14 @@ async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_images_created ON images(created_at);
+      -- Photo re-attach (AUD-10, lib/photoReattach): which user turn of the
+      -- client's thread an answered photo belongs to, as hashes of that
+      -- turn's text, of the message before it and of the reply it got (never
+      -- the text itself). NULL until the photo's turn is answered. The
+      -- ALTERs migrate databases created before the columns.
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS turn_key TEXT DEFAULT NULL;
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS turn_anchor TEXT DEFAULT NULL;
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS turn_reply TEXT DEFAULT NULL;
 
       -- User reports of objectionable AI responses (App Store Guideline 1.2).
       -- user_message = the student's turn that preceded the reported reply,
@@ -227,10 +236,19 @@ async function initSchema() {
         status TEXT NOT NULL,
         error_kind TEXT,
         duration_ms INTEGER,
-        trace_id TEXT
+        trace_id TEXT,
+        answered INTEGER DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
+      -- usage.answered (AUD-31): 1 when the call uses a daily turn (it gave
+      -- the student an answer, or the client stopped it before the API's
+      -- message_start, when it has no usage to bill); 0 when it was refused,
+      -- failed, or stopped after message_start but before any text. The
+      -- per-session hydrate counts only the 1s. NULL = written before the
+      -- column existed (counted, as every call was then). The ALTER migrates
+      -- older databases.
+      ALTER TABLE usage ADD COLUMN IF NOT EXISTS answered INTEGER DEFAULT NULL;
 
       -- Read-path indexes for the admin/ops queries (recent sessions, per-session
       -- report lookups, time-windowed message counts).
@@ -345,7 +363,8 @@ async function initSchema() {
         status TEXT NOT NULL,
         error_kind TEXT,
         duration_ms INTEGER,
-        trace_id TEXT
+        trace_id TEXT,
+        answered INTEGER DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
@@ -390,6 +409,15 @@ async function initSchema() {
     if (!reportCols.includes('user_message')) sqliteDb.exec('ALTER TABLE reports ADD COLUMN user_message TEXT DEFAULT NULL');
     if (!reportCols.includes('context'))      sqliteDb.exec('ALTER TABLE reports ADD COLUMN context TEXT DEFAULT NULL');
     if (!reportCols.includes('resolved_at'))  sqliteDb.exec('ALTER TABLE reports ADD COLUMN resolved_at INTEGER DEFAULT NULL');
+    // images.turn_key / turn_anchor / turn_reply (photo re-attach) — see the
+    // pg block above.
+    const imageCols = sqliteDb.prepare('PRAGMA table_info(images)').all().map(c => c.name);
+    if (!imageCols.includes('turn_key'))    sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_key TEXT DEFAULT NULL');
+    if (!imageCols.includes('turn_anchor')) sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_anchor TEXT DEFAULT NULL');
+    if (!imageCols.includes('turn_reply'))  sqliteDb.exec('ALTER TABLE images ADD COLUMN turn_reply TEXT DEFAULT NULL');
+    // usage.answered (AUD-31) — see the pg block above.
+    const usageCols = sqliteDb.prepare('PRAGMA table_info(usage)').all().map(c => c.name);
+    if (!usageCols.includes('answered')) sqliteDb.exec('ALTER TABLE usage ADD COLUMN answered INTEGER DEFAULT NULL');
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -528,10 +556,12 @@ function rankSql(col) {
 // timezone (default America/New_York, override with STREAK_TZ) instead of the
 // server's UTC date — with UTC the day flips at 5-8pm local (prime
 // after-school time), letting a streak tick twice in one evening while the
-// next-morning session earns nothing. 'en-CA' formats as YYYY-MM-DD, the same
-// string shape last_session_date has always stored.
+// next-morning session earns nothing. The day comes from lib/productDay
+// (YYYY-MM-DD, the same string shape last_session_date has always stored),
+// which the daily quotas and the spend cap share, so a streak day and a
+// student's daily allowance turn over at the same midnight.
 function streakDay(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.STREAK_TZ || 'America/New_York' }).format(now);
+  return productDay.dayKey(now.getTime());
 }
 
 // ─── Recently erased ids ───
@@ -638,6 +668,46 @@ module.exports = {
     );
   },
 
+  // Photo re-attach (AUD-10, lib/photoReattach). Contract:
+  //   linkImageTurn(id, sessionId, { turnKey, anchorKey, replyKey })
+  //       → true when the row exists AND belongs to sessionId (the keys are
+  //         then stored, replacing earlier ones); false otherwise, or when
+  //         turnKey / anchorKey is not a string. replyKey is optional (NULL).
+  //         An UPDATE only: a link landing after an erasure finds no row and
+  //         writes nothing.
+  //   linkedImages(sessionId, { sinceMs, limit = 20 })
+  //       → that session's linked images created at or after sinceMs, newest
+  //         first (created_at DESC, id DESC), metadata only — never the bytes:
+  //         [{ id, turnKey, anchorKey, replyKey, sizeBytes, createdAt }] with
+  //         numbers as numbers on both drivers and replyKey null when unset.
+  //         `limit` is clamped to 1..50.
+  async linkImageTurn(id, sessionId, { turnKey, anchorKey, replyKey = null } = {}) {
+    if (typeof turnKey !== 'string' || typeof anchorKey !== 'string') return false;
+    const n = await execCount(
+      'UPDATE images SET turn_key = ?, turn_anchor = ?, turn_reply = ? WHERE id = ? AND session_id = ?',
+      [turnKey, anchorKey, typeof replyKey === 'string' ? replyKey : null, id, sessionId],
+    );
+    return n > 0;
+  },
+
+  async linkedImages(sessionId, { sinceMs = 0, limit = 20 } = {}) {
+    const lim = Math.min(50, Math.max(1, Math.round(Number(limit)) || 20));
+    const rows = await query(
+      'SELECT id, turn_key, turn_anchor, turn_reply, size_bytes, created_at FROM images'
+        + ' WHERE session_id = ? AND turn_key IS NOT NULL AND created_at >= ?'
+        + ' ORDER BY created_at DESC, id DESC LIMIT ?',
+      [sessionId, num(sinceMs), lim],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      turnKey: r.turn_key,
+      anchorKey: r.turn_anchor,
+      replyKey: r.turn_reply ?? null,
+      sizeBytes: num(r.size_bytes),
+      createdAt: num(r.created_at),
+    }));
+  },
+
   // ─── Content reports (App Store Guideline 1.2 + admin review queue) ───
   // A student flags an AI reply; an admin reviews it and resolves it. Contract:
   //   saveReport({ sessionId, content, reason, userMessage, context, createdAt })
@@ -726,6 +796,10 @@ module.exports = {
   //         'start') can complete again.
   //   lessonEventsSince(tsMs) → [{ id, ts, session_id, unit, lesson,
   //         lesson_id, event, turn_index }] with ts >= tsMs, oldest first.
+  //   lastLessonMilestone(sessionId, lessonId) → { event, turnIndex, ts } of
+  //         the session's latest 'start' or 'complete' row for that lesson
+  //         (latest by ts, then id), or null when it has neither. server.js
+  //         decides from it whether an answered turn starts an attempt.
   async recordLessonEvent(row = {}) {
     try {
       const event = String(row.event || '');
@@ -770,6 +844,14 @@ module.exports = {
       logger.error({ err: e, event: row && row.event }, 'recordLessonEvent failed (row dropped)');
       return false;
     }
+  },
+
+  async lastLessonMilestone(sessionId, lessonId) {
+    const r = await queryOne(
+      "SELECT event, turn_index, ts FROM lesson_events WHERE session_id = ? AND lesson_id = ? AND event IN ('start', 'complete') ORDER BY ts DESC, id DESC LIMIT 1",
+      [String(sessionId), String(lessonId)],
+    );
+    return r ? { event: r.event, turnIndex: numOrNull(r.turn_index), ts: num(r.ts) } : null;
   },
 
   async lessonEventsSince(tsMs) {
@@ -900,7 +982,13 @@ module.exports = {
   //   sumCostSince(tsMs)                → number: USD summed over rows with
   //                                       ts >= tsMs (0 when none).
   //   sessionUsageSince(sessionId, tsMs) → [{ kind, count, usd }] per kind,
-  //                                       for per-session throttles.
+  //                                       for per-session throttles. `count`
+  //                                       is the turns used (rows with
+  //                                       answered = 0 don't count, AUD-31);
+  //                                       `usd` sums every row.
+  //   A row's `answered` (true/false) says whether the call uses a turn (it
+  //   gave the student an answer, or a client stopped it before
+  //   message_start); omitted → NULL, which counts as a turn.
   //   usageSummarySince(tsMs)           → { calls, usd, byRoute: [{ route,
   //                                       calls, usd }], errors: [{ route,
   //                                       error_kind, count }] } for the admin
@@ -911,12 +999,14 @@ module.exports = {
       const int = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : 0; };
       const optInt = (v) => { const n = Number(v); return v != null && Number.isFinite(n) ? Math.round(n) : null; };
       const str = (v, fallback = null) => (v == null || v === '' ? fallback : String(v));
+      // true/1 → 1, false/0 → 0, anything else → NULL (unknown = counted).
+      const flag = (v) => (v === true || v === 1 ? 1 : v === false || v === 0 ? 0 : null);
       const tsRaw = Number(row.ts);
       const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
       const cost = Number(pick('costUsd', 'cost_usd'));
       await query(
-        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id, answered)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ts,
           wasErased(pick('sessionId', 'session_id')) ? null : str(pick('sessionId', 'session_id')),
@@ -933,6 +1023,7 @@ module.exports = {
           str(pick('errorKind', 'error_kind')),
           optInt(pick('durationMs', 'duration_ms')),
           str(pick('traceId', 'trace_id')),
+          flag(row.answered),
         ],
       );
       return true;
@@ -948,8 +1039,10 @@ module.exports = {
   },
 
   async sessionUsageSince(sessionId, tsMs) {
+    // `count` is the turns used: answered calls only (AUD-31), with a NULL
+    // (pre-column) row counted as before. `usd` is every call's cost.
     const rows = await query(
-      'SELECT kind, COUNT(*) AS count, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE session_id = ? AND ts >= ? GROUP BY kind ORDER BY kind',
+      'SELECT kind, SUM(CASE WHEN answered = 0 THEN 0 ELSE 1 END) AS count, COALESCE(SUM(cost_usd), 0) AS usd FROM usage WHERE session_id = ? AND ts >= ? GROUP BY kind ORDER BY kind',
       [sessionId, num(tsMs)],
     );
     return rows.map((r) => ({ kind: r.kind, count: num(r.count), usd: num(r.usd) }));

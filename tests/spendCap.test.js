@@ -6,8 +6,8 @@
 //   1. Unit — the in-memory USD accumulator (lib/spendCap): pricing by model,
 //      the cache weighting (read 0.1×, write 1.25×), the estimate fallback for
 //      calls that never yield a usage object, both recordUsage shapes, hydrate
-//      only ever raising, the UTC-midnight rollover, and DAILY_BUDGET_USD=0 as
-//      the "closed" lever.
+//      only ever raising, the product-day rollover (midnight in STREAK_TZ,
+//      AUD-30), and DAILY_BUDGET_USD=0 as the "closed" lever.
 //   2. Integration — with the budget forced to zero (DAILY_BUDGET_USD=0),
 //      POST /api/chat returns 503 and makes ZERO Anthropic calls. "Zero calls"
 //      is proven by the response body: the only code path that emits
@@ -24,6 +24,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 const spendCap = require('../lib/spendCap');
+const productDay = require('../lib/productDay');
 const { PRICES } = require('../lib/pricing');
 
 const SONNET = PRICES['claude-sonnet-4-6'];
@@ -239,7 +240,8 @@ describe('spendCap USD accumulator', () => {
     spendCap.recordUsage({ model: 'claude-sonnet-4-6', usage: { input_tokens: M, output_tokens: 100_000 } });
     const s = spendCap.state();
     assert.match(s.day, /^\d{4}-\d{2}-\d{2}$/);
-    assert.equal(s.day, new Date().toISOString().slice(0, 10));
+    assert.equal(s.day, productDay.dayKey(), 'the product day, not the UTC date');
+    assert.equal(s.timeZone, productDay.timeZone());
     close(s.usd, 4.5);
     assert.equal(s.budgetUsd, 20);
     close(s.fraction, 0.225);
@@ -252,19 +254,33 @@ describe('spendCap USD accumulator', () => {
     assert.equal(spendCap.currentTokens(), 0);
   });
 
-  // --- UTC day rollover -----------------------------------------------------
+  // --- product-day rollover (AUD-30) ----------------------------------------
 
-  test('the accumulator zeroes itself on the first touch of a new UTC day', () => {
+  test('the accumulator zeroes itself at the product-day midnight, not at UTC midnight', () => {
     process.env.DAILY_BUDGET_USD = '1';
-    mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-23T23:59:00Z') });
+    const savedTz = process.env.STREAK_TZ;
+    process.env.STREAK_TZ = 'America/Chicago';
+    mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-23T23:59:00Z') }); // 6:59 PM CDT
     try {
       spendCap.__resetForTest();
       spendCap.recordUsage({ model: 'claude-sonnet-4-6', usage: { input_tokens: M } }); // $3 >= $1
       spendCap.hydrate(2.5); // lower than $3 → no-op, but proves hydrate is day-scoped too
       assert.equal(spendCap.state().day, '2026-09-23');
+      assert.equal(spendCap.state().timeZone, 'America/Chicago');
       assert.equal(spendCap.isCeilingExceeded(), true);
+      assert.equal(spendCap.secondsUntilReset(), 5 * 3600 + 60, 'until 05:00Z, midnight in Chicago');
 
+      // UTC midnight is 7 PM in Chicago: still the same budget day, so the
+      // "please try again tomorrow" refusal stays true.
       mock.timers.setTime(new Date('2026-09-24T00:01:00Z').getTime());
+      assert.equal(spendCap.isCeilingExceeded(), true, 'UTC midnight no longer reopens the gate');
+      assert.equal(spendCap.state().day, '2026-09-23');
+
+      mock.timers.setTime(new Date('2026-09-24T04:59:59Z').getTime());
+      assert.equal(spendCap.isCeilingExceeded(), true);
+      assert.equal(spendCap.secondsUntilReset(), 1);
+
+      mock.timers.setTime(new Date('2026-09-24T05:00:00Z').getTime());
 
       assert.equal(spendCap.isCeilingExceeded(), false, 'new day → gate reopens');
       assert.equal(spendCap.currentUsd(), 0);
@@ -275,6 +291,8 @@ describe('spendCap USD accumulator', () => {
       assert.deepEqual(s.tokens, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
     } finally {
       mock.timers.reset();
+      if (savedTz === undefined) delete process.env.STREAK_TZ;
+      else process.env.STREAK_TZ = savedTz;
     }
   });
 });
@@ -318,5 +336,35 @@ describe('spend cap closes the chat handler', () => {
       json && json.error === 'spend_cap',
       `expected {error:'spend_cap'} (proves the pre-call gate fired, no Anthropic call), got ${JSON.stringify(json)}`
     );
+    // AUD-30: not retryable, and it says when the budget opens again (the
+    // server's product day; the test server runs in the default zone).
+    assert.equal(json.retryable, false);
+    assert.equal(json.scope, 'global');
+    const expected = Math.ceil((productDay.nextDayStartMs() - Date.now()) / 1000);
+    assert.ok(Math.abs(json.retryAfterSec - expected) <= 5, `retryAfterSec ${json.retryAfterSec} vs ${expected}`);
+    assert.equal(res.headers.get('retry-after'), String(json.retryAfterSec));
+    assert.match(json.message, /tomorrow/);
+  });
+
+  test('the streamed refusal frame carries the same fields (AUD-30)', async () => {
+    const res = await fetch(`${BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: 'test_' + crypto.randomBytes(6).toString('hex'),
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    assert.equal(res.status, 200);
+    const raw = await res.text();
+    const frames = raw.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6));
+    assert.equal(frames.at(-1), '[DONE]');
+    const frame = JSON.parse(frames[0]);
+    assert.equal(frame.type, 'error');
+    assert.equal(frame.code, 'spend_cap');
+    assert.equal(frame.error, 'Daily usage limit reached — please try again tomorrow.');
+    assert.equal(frame.scope, 'global');
+    assert.equal(frame.retryable, false);
+    assert.ok(Number.isInteger(frame.retryAfterSec) && frame.retryAfterSec > 0 && frame.retryAfterSec <= 25 * 3600);
   });
 });
