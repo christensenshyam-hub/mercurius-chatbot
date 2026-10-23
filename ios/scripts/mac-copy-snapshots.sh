@@ -26,17 +26,22 @@
 #
 # Usage, from ios/, after building MercuriusMac into the derived data below:
 #   scripts/mac-copy-snapshots.sh <out-dir> [shot ...]
-# Environment: N (copy number, default 1), SRC_APP, COPY_DIR, VARIANTS and
-# ACTIVATE (passed through to mac-snapshots.sh; ACTIVATE defaults to NO).
+# Environment: N (copy number, default 1), SUFFIX (the bundle id's last
+# label before N, default macns: SUFFIX=macnight N=1 gives ….macnight1),
+# SRC_APP, COPY_DIR, VARIANTS and ACTIVATE (passed through to
+# mac-snapshots.sh; ACTIVATE defaults to NO). AQUA=YES gives the copy
+# NSRequiresAquaSystemAppearance, so it runs as on a Mac in light mode
+# without touching the Mac's own setting (pair it with VARIANTS=system).
 set -euo pipefail
 
 OUT=${1:?usage: mac-copy-snapshots.sh <out-dir> [shot ...]}
 shift || true
 N=${N:-1}
+SUFFIX=${SUFFIX:-macns}
 SRC_APP=${SRC_APP:-/private/tmp/merc-mac-ns-dd/Build/Products/Debug/Mercurius.app}
 COPY_DIR=${COPY_DIR:-/private/tmp/merc-mac-ns-copies}
-BUNDLE_ID="com.mayoailiteracy.mercurius.native.macns$N"
-COPY="$COPY_DIR/Mercurius-macns$N.app"
+BUNDLE_ID="com.mayoailiteracy.mercurius.native.$SUFFIX$N"
+COPY="$COPY_DIR/Mercurius-$SUFFIX$N.app"
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 case $(cd "$SRC_APP" 2>/dev/null && pwd -P) in
@@ -54,6 +59,10 @@ mkdir -p "$COPY_DIR"
 rm -rf "$COPY"
 ditto "$SRC_APP" "$COPY"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$COPY/Contents/Info.plist"
+if [ "${AQUA:-NO}" = YES ]; then
+  /usr/libexec/PlistBuddy -c "Add :NSRequiresAquaSystemAppearance bool true" "$COPY/Contents/Info.plist"
+  echo "the copy runs as on a Mac in light mode (NSRequiresAquaSystemAppearance)"
+fi
 
 ENTITLEMENTS=$(mktemp)
 codesign -d --entitlements - --xml "$SRC_APP" > "$ENTITLEMENTS" 2>/dev/null || true

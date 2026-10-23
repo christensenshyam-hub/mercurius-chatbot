@@ -217,7 +217,10 @@ struct AppShellView: View {
                 .tabItem { Label("Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
         }
-        .tint(BrandColor.accent)
+        // The selected tab's icon and label, and the text buttons below:
+        // Night's readable indigo. The fill indigo drew the selected label
+        // at 3.2:1 on its highlight.
+        .tint(BrandAppearance.tint)
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
             recordTab(newValue)
@@ -335,7 +338,7 @@ struct AppShellView: View {
                     }
                 }
             }
-            .tint(BrandColor.accentText)
+            .tint(BrandAppearance.tint)
         }
         .sheet(isPresented: $showProgress) {
             ProgressHubView(
@@ -348,7 +351,9 @@ struct AppShellView: View {
                 certificates: env.certificates,
                 onDone: { showProgress = false }
             )
-            .tint(BrandColor.accent)
+            // Its Done button reads in Night's indigo; the reminder
+            // switches tint themselves.
+            .tint(BrandAppearance.tint)
         }
         // Achievement-unlocked toasts surface over the whole shell.
         .achievementToasts(achievementStore)

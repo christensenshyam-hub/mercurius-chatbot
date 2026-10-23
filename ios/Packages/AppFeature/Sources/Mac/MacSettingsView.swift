@@ -33,7 +33,7 @@ public struct MacSettingsView: View {
                 })
             }
         }
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
         .tint(Night.prominent)
     }
 

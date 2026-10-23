@@ -130,7 +130,9 @@ struct OnboardingFlow: View {
         .tint(Night.prominent)
         #else
         .animation(.easeInOut(duration: 0.3), value: step)
-        .tint(BrandColor.accent)
+        // Night's readable indigo for text buttons and links; the consent
+        // switch tints itself with the fill indigo.
+        .tint(BrandAppearance.tint)
         #endif
         .onAppear { OnboardingTelemetry.gateShown(mode: mode == .full ? "full" : "gateOnly") }
     }

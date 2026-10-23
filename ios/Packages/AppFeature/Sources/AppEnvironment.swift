@@ -25,9 +25,9 @@ public final class AppEnvironment: ObservableObject {
     public let apiClient: APIClient
     public let sessionIdentity: SessionIdentity
 
-    /// App-wide theme preference. Observed by `RootView` so the chosen
-    /// color scheme propagates everywhere the moment the user changes
-    /// it in Settings.
+    /// The theme preference earlier versions offered. No longer read: the
+    /// app is dark only (`BrandAppearance`), and Settings no longer shows
+    /// the choice. Kept so the hosts' initialisers don't change.
     public let themeStore: ThemePreferenceStore
 
     /// Disk-backed chat history. `nil` only if SwiftData fails to

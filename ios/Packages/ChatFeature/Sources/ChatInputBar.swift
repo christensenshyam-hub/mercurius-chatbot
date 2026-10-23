@@ -538,7 +538,11 @@ struct ChatInputBar: View {
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundStyle(.white)
                         )
+                        // No glow on the iPhone (dark only; Night casts no
+                        // shadows in dark). The Mac keeps its own.
+                        #if os(macOS)
                         .shadow(color: BrandColor.accent.opacity(0.5), radius: 9, y: 6)
+                        #endif
                         .opacity(canSend ? 1 : 0.45)
                 }
                 .disabled(!canSend)

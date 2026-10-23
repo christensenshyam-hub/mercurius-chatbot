@@ -706,7 +706,11 @@ public struct CurriculumLessonView: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 28)
                 .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // No glow on the iPhone (dark only; Night casts no shadows
+                // in dark). The Mac keeps its own.
+                #if os(macOS)
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
+                #endif
         }
         .accessibilityLabel("Continue. Start the lesson.")
     }
@@ -736,7 +740,11 @@ public struct CurriculumLessonView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(BrandColor.accent.opacity(0.16), lineWidth: 2)
         )
+        // No shadow on the iPhone (dark only; Night casts none in dark). The
+        // Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 18, y: 12)
+        #endif
     }
 
     private func startFromIntro() {

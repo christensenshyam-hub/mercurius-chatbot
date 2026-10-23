@@ -2,8 +2,9 @@
 # Mac App Store screenshots of the native Mac app.
 #
 # Takes each main-window state through the DEBUG -MacSnapshot harness
-# (mac-snapshots.sh, VARIANTS=store): light, the window's rounded corners
-# filled, no alpha channel, at STORE_SIZE points.
+# (mac-snapshots.sh, VARIANTS=store): the harness's light flag (the app is
+# dark only, so the windows keep the night look anyway), the window's rounded
+# corners filled, no alpha channel, at STORE_SIZE points.
 #
 # Sizes. The Mac App Store takes four 16:10 sizes: 1280×800, 1440×900,
 # 2560×1600 and 2880×1800 px. The harness photographs the real window at the
