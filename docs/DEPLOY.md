@@ -198,8 +198,8 @@ connect; the build is not on that clock), a 35 s drain window
 `watchPatterns` limits which merges deploy: only a change under
 `server.js`, `db.js`, `lib/`, `prompts/`, `public/`, `migrations/`,
 `scripts/`, `package*.json`, `railway.toml` or the Node/npm/Nixpacks
-config files starts a production build. Docs-, iOS-, marketing- and
-mayo-site-only merges are skipped and do not restart the server. Two
+config files starts a production build. Docs-, iOS- and marketing-only
+merges are skipped and do not restart the server. Two
 consequences: a new runtime directory must be added to the list, and a
 docs-only merge no longer retries a failed deploy — after changing
 Railway variables, press **Redeploy** in the dashboard.
@@ -346,7 +346,8 @@ first deploy since July (it turns on PRs #21–#31 at once).
    → `401`.
 5. **The erasure route is live.** `curl -s -o /dev/null -w '%{http_code}\n' -X DELETE $HOST/api/session/abc`
    → `400` (a short id is refused). The July build answered `404`
-   because the route did not exist.
+   because the route did not exist. Deletion requests that arrive at
+   privacy@ use this route too: `docs/PRIVACY_DELETION_RUNBOOK.md`.
 6. **Drain window.** Delete `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` from
    Variables if it is set; `railway.toml` now sets `drainingSeconds`.
 7. Set any still-pending variables from "Running one replica" above

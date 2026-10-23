@@ -170,6 +170,16 @@ Must match `ios/Mercurius/Resources/PrivacyInfo.xcprivacy`. If the manifest
 and this label ever disagree, review will bounce the build — update both
 together.
 
+**Linked = Yes (AUD-57, October 2026 audit).** Apple counts data stored under
+a user ID as linked to the user, and everything here is stored under the
+session id, so all four rows are **Linked: Yes, Tracking: No**. These App
+Privacy answers can be changed in App Store Connect without a new build.
+Known gap: build 16's `PrivacyInfo.xcprivacy` still says
+`NSPrivacyCollectedDataTypeLinked = false` for these four types; the iOS
+batch flips them to `true` for the next build. The audit judged a review
+bounce over that mismatch possible but speculative, and advised not to hold
+build 16 for it.
+
 **Do you collect data from this app?** Yes.
 
 | Data type (ASC category → type) | Collected | Linked to the user's identity | Used for tracking | Purpose |
@@ -190,12 +200,15 @@ together.
   first-launch disclosure screen.
 - **Linked: Yes** for all four (AUD-57). Apple counts data kept under a user
   ID as linked to the user, and everything we keep is stored under the
-  session id so it can be shown back, synced and deleted. "Linked" means
-  linked to that random id only: it is a random string in the Keychain and
-  is never tied to a name, email, phone number or Apple ID — none of those
-  are ever asked for. The privacy manifest says Linked = true from the build
-  after 2.3.0 (16); the App Store Connect answers can be changed without a
-  new build.
+  session id so it can be shown back, synced and deleted. The session id is a
+  random string in the Keychain and is never tied to a name, email, phone
+  number or Apple ID — none of those are ever asked for. The privacy page says
+  the same thing in plain words: "What we keep is filed under a random ID,
+  never your name or an account. Usage rows also carry the scrambled network
+  address described above." (Not "linked only": the `usage` table stores the
+  salted IP hash next to the session id.) The privacy manifest says Linked =
+  true from the build after 2.3.0 (16); the App Store Connect answers can be
+  changed without a new build.
 
 ---
 
@@ -287,7 +300,7 @@ Do these in order. Tick each one.
 - [ ] `ios/project.yml`: `MARKETING_VERSION` is `2.3.0`, `CURRENT_PROJECT_VERSION` is higher than the last uploaded build, `TARGETED_DEVICE_FAMILY` is still `"1,2"` (universal) for both the app and the widgets target.
 - [ ] `xcodegen generate`, then `swift test` in `ios/Packages` and the `xcodebuild test` run pass.
 - [ ] Archive and upload with `ios/scripts/release.sh`; wait for processing.
-- [ ] `PrivacyInfo.xcprivacy` lists User ID, Other User Content, Photos or Videos and Product Interaction — the same four types, purposes and "linked / not tracking" answers as §3.
+- [ ] `PrivacyInfo.xcprivacy` lists User ID, Other User Content, Photos or Videos and Product Interaction — the same four types, purposes and "linked / not tracking" answers as §3. (Build 16 still says "not linked"; see the AUD-57 note in §3.)
 
 **Rehearsal**
 - [ ] Every step in [`REVIEW_REHEARSAL.md`](REVIEW_REHEARSAL.md) passes on the exact build you will submit (same build number).

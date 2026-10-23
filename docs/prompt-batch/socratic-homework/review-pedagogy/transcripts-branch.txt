@@ -1,0 +1,2246 @@
+Pedagogy review, live sessions on branch 24dc4d0 (rules as at ac3758c), 2026-10-22.
+Servers: 3443 (USE_UNIFIED_PROMPT=1) and 3444 (=0), iOS wire shape, responseMode concise.
+Raw JSON: live-flag-{on,off}.json (run 1), live-flag-{on,off}-run2.json (run 2), verdict-probe-flag-{on,off}.json.
+
+##############################################################################
+# FLAG ON, run 1  (live-flag-on.json)
+##############################################################################
+
+===== strong — mode socratic — Strong student: shows correct multi-step work, asks a "why" question, then wants a harder one.
+
+[1] STUDENT: solve 5(x + 2) - 3 = 2x + 16
+MERC:
+What's the first thing you'd do to simplify the left side?
+
+[2] STUDENT: distribute first: 5x + 10 - 3 = 2x + 16, so 5x + 7 = 2x + 16
+MERC:
+Yes — that's **distributing** and **combining like terms**: 5x + 7 = 2x + 16.
+
+Now you've got x terms on both sides. What's your next move?
+
+[3] STUDENT: subtract 2x and 7 from both sides, 3x = 9 so x = 3
+MERC:
+Check: 5(3 + 2) − 3 = 25 − 3 = 22, and 2(3) + 16 = 22 ✓
+
+Nice work. Same check works on any AI's math: plug its answer back in.
+
+What do you think makes distributing the necessary first step here — why couldn't you subtract 2x right away at the start?
+
+[4] STUDENT: ok that was easy lol. why cant i just divide everything by 5 at the start tho
+MERC:
+Good instinct to question it — what would dividing by 5 do to the right side, 2x + 16?
+
+[5] STUDENT: oh ok that makes sense. give me a harder one
+MERC:
+Solve this:
+
+**3(2x − 4) = 2(x + 6) − 2**
+
+===== struggling — mode socratic — Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What happens if you get the 4x by itself first — what's in the way?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What undoes adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes adding 9 — so subtract 9 from both sides:
+
+4x + 9 − 9 = 37 − 9, which gives 4x = 28.
+
+Now try yours the same way, from 4x = 28. What undoes the 4 that's multiplying x?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**, undoing the 4 that's multiplying x: 4x ÷ 4 = 28 ÷ 4.
+
+What do you get?
+
+[5] STUDENT: idk
+MERC:
+What's 28 divided by 4?
+
+[6] STUDENT: idk
+MERC:
+4 times what number makes 28?
+
+[7] STUDENT: 7?
+MERC:
+Plug it back in to check: 4(7) + 9 = 28 + 9 = 37 ✓
+
+x = 7 is correct!
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try a similar one on your own?
+
+[8] STUDENT: ok
+MERC:
+Try this one:
+
+**3x + 5 = 20**
+
+What's your first step?
+
+===== impatient — mode socratic — Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you get the 8x by itself first?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the − 5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Add 5 to both sides: 8x = 56.
+
+What's 56 divided by 8?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+You're one step away — what's 56 ÷ 8?
+
+[5] STUDENT: omg ur so useless
+MERC:
+I get it, you're pressed for time.
+
+56 ÷ 8 — what number times 8 gives you 56?
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51.
+
+What's a number smaller than 8 that, times 8, gives 56?
+
+[7] STUDENT: 7?
+MERC:
+8(7) − 5 = 56 − 5 = 51 ✓
+
+That's it — x = 7.
+
+Same check works on any AI's math: plug its answer back in.
+
+===== impatient-discussion — mode discussion — Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What's your first move to get the 6x by itself?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Subtract 11 from both sides: 6x = 48. What's 48 divided by 6?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+You're one step away — what's 48 ÷ 6?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59. ✗
+
+The slip is in the division. What's 48 ÷ 6?
+
+[6] STUDENT: 8?
+MERC:
+Check it: 6(8) + 11 = 48 + 11 = 59 ✓
+
+That's it — x = 8.
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one?
+
+===== sign-error — mode socratic — Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x by itself first?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: 9 − 2(24) = 9 − 48 = −39, not 15.
+
+Look at the 9 on the left. What undoes adding 9?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Check it: 9 − 2(6) = 9 − 12 = −3, not 15.
+
+The slip is in how you moved the 9. What did you do to both sides to get rid of it?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15.
+
+You skipped a step — what did you do to the −2x = 6 line to get x = 3?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it! The key move was **dividing both sides by −2**, which flips the sign.
+
+Same check works on any AI's math: plug its answer back in.
+
+What part of the process felt trickiest — moving the 9 or dividing by a negative?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works when you divide a positive by a positive.
+
+When you divide by a **negative**, the sign flips — so −6 ÷ −2 = +3, not −3.
+
+Does that change how you'd think about the step where you got x = 3 earlier?
+
+===== essay — mode socratic — Essay student: wants a thesis handed over, has not finished the book, then drafts and revises their own.
+
+[1] STUDENT: i need a thesis for my romeo and juliet essay. the prompt is who is most responsible for the tragedy. just give me one pls
+MERC:
+Who do you think is most responsible — and what's your gut reason, even if it's rough?
+
+That's the seed your thesis has to grow from. I can help you sharpen it once you've got a candidate.
+
+[2] STUDENT: idk i didnt really finish reading it
+MERC:
+Pick the character you remember most clearly — who stands out to you from what you did read?
+
+[3] STUDENT: can u just give me an example thesis so i know what it looks like
+MERC:
+Here's one on a completely different story — a student who fails a test:
+
+*"Although the student forgot to study, the teacher bears the most responsibility because she never explained what would be on the test."*
+
+Notice the shape: **one character**, a concession ("although someone else played a role"), and a **reason why** they're most to blame.
+
+Now — who in Romeo and Juliet would you put in that "most responsible" slot?
+
+[4] STUDENT: Friar Laurence is most responsible because his plan with the potion goes wrong.
+MERC:
+Good start — you have a character and a cause. Now sharpen it: *why* does the plan going wrong make him *most* responsible compared to, say, the feuding families?
+
+Try adding that "because" to your thesis.
+
+[5] STUDENT: is that good? can u make it better
+MERC:
+That's your job — but I can point you to the weak spot.
+
+"His plan goes wrong" describes what happened, not why *he* bears the most blame. What was *his* role in setting the tragedy in motion — before anything went wrong?
+
+[6] STUDENT: Friar Laurence is most responsible for the tragedy because his secret plans, like the fake death potion, depend on luck instead of telling the families the truth. better?
+MERC:
+That's noticeably stronger — you now have a character, an action, and a *reason* it's blameworthy.
+
+One thing to test: does "depend on luck" capture the real flaw, or is there a sharper word for what he did wrong — something about his judgment or his role as a trusted adult?
+
+===== chem — mode socratic — Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+Coefficients only — you can't change the formula of a product, because that would make a different molecule entirely.
+
+How many CO2 molecules would you need to get 3 carbons on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — **coefficients** do exactly that: 3 CO₂ gives you 3 carbons on each side.
+
+Now look at hydrogen: C₃H₈ has 8 H atoms on the left. How many H₂O molecules do you need on the right to match that?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count the H atoms in one H₂O molecule — how many are there?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Check it: 4 H₂O gives you 8 hydrogen atoms ✓
+
+Now balance the last element: count the oxygen atoms on the right side (from your 3 CO₂ and 4 H₂O). How many do you get?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A coefficient is the number in front of a chemical formula — like the **3** in 3 CO₂.
+
+It multiplies every atom in that molecule, so 3 CO₂ means 3 carbons and 6 oxygens.
+
+So with 3 CO₂ and 4 H₂O, how many total oxygen atoms are on the right side?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count each piece separately:
+
+- 3 CO₂ has 3 × 2 = 6 oxygens
+- 4 H₂O has 4 × 1 = 4 oxygens
+
+How many oxygens is that total on the right?
+
+[8] STUDENT: just do it pls
+MERC:
+Add 6 + 4 — what do you get?
+
+[9] STUDENT: 5 O2?
+MERC:
+Check it: 6 + 4 = 10, not 5.
+
+So you need 10 oxygen atoms on the left. Each O₂ molecule has 2 atoms — how many O₂ molecules give you 10?
+
+===== geometry — mode socratic — Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What equation would you write for the perimeter using width *w* as your only variable?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+Start with what you know: perimeter of a rectangle = 2(length + width).
+
+The problem says length = 2w − 3. Can you plug that into the perimeter formula and set it equal to 54?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Exactly. Now plug both into 2(length + width) = 54.
+
+What do you get when you substitute?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Close — the perimeter formula is 2(l + w), not just l + w.
+
+Try wrapping your expression in 2( ) and setting it equal to 54. What do you get?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — now expand that and simplify. What do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: 6(10) − 6 = 54 ✓
+
+Now use w = 10 to find the length. What's 2(10) − 3?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: 2(10) − 3 = 17 ✓
+
+Both values work — width = 10 m, length = 17 m. 
+
+Want to try a similar problem to lock in the method?
+
+===== photo — mode socratic — Photo student: sends the worksheet photo, distributes wrong, then types the rest.
+
+[1] STUDENT: can u do 7 i have no idea  [+ photo eval-algebra-hw.png]
+MERC:
+Solve: 3(x − 4) + 5 = 2x + 9
+
+What's the first thing you'd do with the 3 outside the parentheses?
+
+[2] STUDENT: idk
+MERC:
+The 3 is touching the parentheses — that means **distribute** it.
+
+What does 3 × x give you, and what does 3 × (−4) give you?
+
+[3] STUDENT: 3x - 4 + 5 = 2x + 9?
+MERC:
+Close — check the 3 × (−4) part again.
+
+3 times −4 isn't just −4. What do you get?
+
+[4] STUDENT: oh 3x - 12 + 5 = 2x + 9
+MERC:
+Yes — that's **distributing**. Now you have 3x − 12 + 5 = 2x + 9.
+
+Can you combine the −12 and +5 on the left side?
+
+[5] STUDENT: 3x - 7 = 2x + 9 now what
+MERC:
+Now get all the x terms on one side — what happens if you subtract 2x from both sides?
+
+[6] STUDENT: subtract 2x? so x - 7 = 9
+MERC:
+Exactly — **combining like terms** gives you x − 7 = 9.
+
+What undoes the −7?
+
+[7] STUDENT: x = 16
+MERC:
+Check it: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓
+
+x = 16 is right!
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try another one, or is there a different problem you're working on?
+
+[8] STUDENT: can u check number 8 too
+MERC:
+Sure — what's the problem and what answer did you get?
+##############################################################################
+# FLAG OFF, run 1  (live-flag-off.json)
+##############################################################################
+
+===== strong — mode socratic — Strong student: shows correct multi-step work, asks a "why" question, then wants a harder one.
+
+[1] STUDENT: solve 5(x + 2) - 3 = 2x + 16
+MERC:
+What's the first thing you'd do to simplify the left side — what does the 5 in front of the parentheses tell you to do?
+
+[2] STUDENT: distribute first: 5x + 10 - 3 = 2x + 16, so 5x + 7 = 2x + 16
+MERC:
+Yes — that's **combining like terms**, giving you 5x + 7 = 2x + 16.
+
+Now you've got x terms on both sides — what's your next move?
+
+[3] STUDENT: subtract 2x and 7 from both sides, 3x = 9 so x = 3
+MERC:
+Check: 5(3 + 2) − 3 = 25 − 3 = 22, and 2(3) + 16 = 22 ✓
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try one that involves fractions, or would you rather dig into a different idea?
+
+[4] STUDENT: ok that was easy lol. why cant i just divide everything by 5 at the start tho
+MERC:
+You *can* — but watch what happens to the right side.
+
+Dividing 2x + 16 by 5 gives you (2/5)x + 16/5, which is messier than what you ended up with. The answer is the same either way, but distributing first usually keeps the numbers cleaner.
+
+Does that make the "distribute first" habit feel less like a rule and more like a shortcut?
+
+[5] STUDENT: oh ok that makes sense. give me a harder one
+MERC:
+You've got variables on both sides — let's add another layer.
+
+Solve: **3(2x − 4) = 2(x + 6) − 4**
+
+What's your first move?
+
+===== struggling — mode socratic — Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What happens if you move the 9 to the other side first?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What undoes adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes adding 9 — so subtract 9 from both sides: 4x = 28.
+
+Now there's a 4 multiplying the x. What undoes multiplication?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**. So: 4x = 28, divide both sides by 4.
+
+What do you get?
+
+[5] STUDENT: idk
+MERC:
+What's 28 divided by 4?
+
+[6] STUDENT: idk
+MERC:
+4 times what number makes 28?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 4(7) + 9 = 28 + 9 = 37 ✓
+
+That's it — x = 7 is correct.
+
+Same check works on any AI's math: plug its answer back in and see if both sides match.
+
+Want to try a harder one?
+
+[8] STUDENT: ok
+MERC:
+Solve this one: 3x − 5 = 19.
+
+What's your first move?
+
+===== impatient — mode socratic — Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you get 8x by itself first — what do you do to both sides to remove the −5?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the −5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Add 5 to both sides: 8x = 56. What's 56 divided by 8?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+56 ÷ 8 — what number times 8 gives you 56?
+
+[5] STUDENT: omg ur so useless
+MERC:
+Try a guess and we'll check it together — what's your guess for x?
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51. The slip is in the division — 8 times what number gives you 56?
+
+[7] STUDENT: 7?
+MERC:
+Yes — **inverse operations**: 8(7) − 5 = 56 − 5 = 51 ✓
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try another one to get ready for practice?
+
+===== impatient-discussion — mode discussion — Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What happens if you get the 6x by itself first — what would you do with the 11?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+The + 11 comes off when you subtract 11 from both sides: 6x = 48.
+
+What undoes the 6 that's multiplying x?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+Try this one the same way:
+
+6x + 11 = 73
+6x + 11 − 11 = 73 − 11
+6x = 62
+6x ÷ 6 = 62 ÷ 6
+x = 62/6
+
+Now try yours the same way, from 6x = 48. What's the next step?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59.
+
+The slip is in the last step — what's 48 divided by 6?
+
+[6] STUDENT: 8?
+MERC:
+6(8) + 11 = 48 + 11 = 59 ✓
+
+That's **division** — dividing both sides by 6 to isolate x, so x = 8.
+
+Same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one?
+
+===== sign-error — mode socratic — Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move when you want to get the **2x** by itself — what would you do with that 9?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: if 9 − 2x = 15, then 9 − 24 = −15, not 15.
+
+Look at the 9 on the left side — what operation undoes adding 9?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Yes — that's **inverse operations**, subtracting 9 from both sides: −2x = 6.
+
+Now what undoes the −2 that's multiplying x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15.
+
+The slip is in the last step — what's 6 divided by −2?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's it — same check works on any AI's math: plug its answer back in.
+
+What made the negative sign tricky there — was it the division step or something earlier?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+Dividing by a **negative** number flips the sign — 6 ÷ (−2) = −3, not 3.
+
+"Dividing makes things smaller" holds when you divide by a positive number greater than 1, but negative divisors are a different beast — does that distinction make sense?
+
+===== essay — mode socratic — Essay student: wants a thesis handed over, has not finished the book, then drafts and revises their own.
+
+[1] STUDENT: i need a thesis for my romeo and juliet essay. the prompt is who is most responsible for the tragedy. just give me one pls
+MERC:
+Who do you think is most to blame — is there one character or force that stands out to you when you think back on the play?
+
+[2] STUDENT: idk i didnt really finish reading it
+MERC:
+That's honest — let's work with what you do remember.
+
+What's one moment from the play that stuck with you, even a scene or a character doing something that felt important?
+
+[3] STUDENT: can u just give me an example thesis so i know what it looks like
+MERC:
+Here's what a thesis for this kind of prompt looks like — on a different topic:
+
+"Although the storm damages the town, the mayor bears the most responsibility for the flood because he ignored three separate warnings from engineers."
+
+Notice the structure: **acknowledge another cause, name your culprit, give a reason why.**
+
+Now — from what you did read, whose choices felt like they made things worse in Romeo and Juliet?
+
+[4] STUDENT: Friar Laurence is most responsible because his plan with the potion goes wrong.
+MERC:
+That's a solid start — you have a culprit and a reason.
+
+But right now it only points to one mistake. A stronger thesis names **why** his judgment was flawed, not just that the plan failed.
+
+What made Friar Lawrence decide to help in the first place — do you remember anything about his reasoning?
+
+[5] STUDENT: is that good? can u make it better
+MERC:
+I can't write it for you, but I can help you build a stronger version yourself.
+
+Try filling this in: "Friar Lawrence is most responsible because he **\_\_\_**, **\_\_\_**, and **\_\_\_**" — three choices he made, not just one outcome that went wrong.
+
+What's a second decision he made that you could add?
+
+[6] STUDENT: Friar Laurence is most responsible for the tragedy because his secret plans, like the fake death potion, depend on luck instead of telling the families the truth. better?
+MERC:
+That's genuinely stronger — "depend on luck instead of telling the families the truth" is doing real work because it names a **pattern** in his behavior, not just one mistake.
+
+One small push: can you add *why* he kept it secret — what was he trying to do or avoid?
+
+===== chem — mode socratic — Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Let's count atoms on each side right now.
+
+On the left you have **C3H8 + O2** — how many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+That's a creative instinct, but in balancing you can only change the **coefficients** (the big numbers in front of a formula) — never the subscripts inside a formula.
+
+Changing CO2 to C3O2 would create a completely different molecule that doesn't exist in this reaction.
+
+So, keeping CO2 as-is: if there are 3 carbons on the left, what coefficient in front of CO2 would give you 3 carbons on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — that's **coefficient balancing**: 3 CO2 gives you 3 carbons on the right to match the 3 in C3H8 ✓
+
+Now look at hydrogen: C3H8 has 8 H atoms on the left, and each H2O has 2. What coefficient in front of H2O gives you 8 hydrogens on the right?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count what you need: 8 hydrogen atoms on the right, and each H2O contributes 2.
+
+What's 8 divided by 2?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — **dividing to find the coefficient**: 4 H2O gives you 8 hydrogens ✓
+
+So far: C3H8 + O2 → 3CO2 + 4H2O
+
+Now count all the oxygen atoms on the right side — how many total do you see?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the big number you write in front of a chemical formula — like the 3 in 3CO2 or the 4 in 4H2O.
+
+It multiplies everything in that formula, so 3CO2 means 3 × 2 = 6 oxygen atoms.
+
+Using that, how many total oxygen atoms are on the right side of your equation (3CO2 + 4H2O)?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count each molecule separately:
+
+- 3CO2 → 3 × 2 = 6 oxygens
+- 4H2O → 4 × 1 = 4 oxygens
+
+So there are 10 oxygen atoms total on the right side. Each O2 on the left has 2 oxygen atoms — what coefficient in front of O2 gives you 10?
+
+[8] STUDENT: just do it pls
+MERC:
+10 ÷ 2 — what's that number?
+
+[9] STUDENT: 5 O2?
+MERC:
+Yes — **5 O2** gives you 10 oxygens on the left ✓
+
+So your balanced equation is: C3H8 + 5O2 → 3CO2 + 4H2O
+
+Check it yourself: left side has 3C, 8H, 10O — do the right side numbers match?
+
+===== geometry — mode socratic — Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+Word problems feel tricky, but they're just hiding an equation in plain English.
+
+Here's the move: find what you *don't* know, and give it a name.
+
+The problem mentions two unknowns — length and width. But it also says "length is 3 less than twice the width," which means you can write **length in terms of width**.
+
+If you call the width *w*, how would you write the length using *w*?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Yes — that's **defining a variable**, and you nailed it.
+
+So now you have width = *w* and length = 2*w* − 3.
+
+The perimeter of a rectangle is P = 2(length + width). If you plug your expressions in, what equation do you get?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Check it: perimeter of a rectangle is actually 2 × (length + width), not just length + width — you'd add all four sides, not two.
+
+Try setting up the equation again with that in mind: 2(length + width) = 54. What do you get when you substitute your expressions?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — that's **substituting** correctly.
+
+Now distribute the 2 into (2w − 3). What do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2w − 3) + 2w = 4w − 6 + 2w = 6w − 6, so that part is right.
+
+But if 6w − 6 = 54, then 6w = 60 — what's 60 divided by 6?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: if w = 10, then length = 2(10) − 3 = 17. ✓
+
+Now verify the perimeter: 2(17 + 10) = 2(27) = 54. ✓
+
+Both answers check out — width = 10 m, length = 17 m.
+
+Same check works on any AI's math: plug its answer back into the original equation.
+
+Want to try a similar problem on your own, or was there a specific part of setting up word problems you want more practice with?
+
+===== photo — mode socratic — Photo student: sends the worksheet photo, distributes wrong, then types the rest.
+
+[1] STUDENT: can u do 7 i have no idea  [+ photo eval-algebra-hw.png]
+MERC:
+Solve for x: 3(x − 4) + 5 = 2x + 9
+
+There's a set of parentheses on the left side — what do you get when you **distribute** the 3 into (x − 4)?
+
+[2] STUDENT: idk
+MERC:
+Look at the 3 right outside the parentheses — multiply it by each term inside.
+
+3 × x = 3x. What does 3 × (−4) give you?
+
+[3] STUDENT: 3x - 4 + 5 = 2x + 9?
+MERC:
+Close — the 3 multiplies the −4, not just the 4.
+
+3 × (−4) = −12, so it's 3x − 12 + 5 = 2x + 9. What do you get when you combine −12 and +5 on the left side?
+
+[4] STUDENT: oh 3x - 12 + 5 = 2x + 9
+MERC:
+Yes — now combine the −12 and +5. What's −12 + 5?
+
+[5] STUDENT: 3x - 7 = 2x + 9 now what
+MERC:
+That's **combining like terms** — nice. Now get all the x terms on one side.
+
+What happens if you subtract 2x from both sides?
+
+[6] STUDENT: subtract 2x? so x - 7 = 9
+MERC:
+Exactly. Now what do you do to get x by itself?
+
+[7] STUDENT: x = 16
+MERC:
+Check it: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓
+
+That's right — **inverse operations** got you there. Same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one, or is there another problem from your homework?
+
+[8] STUDENT: can u check number 8 too
+MERC:
+Sure — what's the problem and what answer did you get?
+##############################################################################
+# FLAG ON, run 2  (live-flag-on-run2.json)
+##############################################################################
+
+===== strong — mode socratic — Strong student: shows correct multi-step work, asks a "why" question, then wants a harder one.
+
+[1] STUDENT: solve 5(x + 2) - 3 = 2x + 16
+MERC:
+What's the first thing you'd do to simplify the left side?
+
+[2] STUDENT: distribute first: 5x + 10 - 3 = 2x + 16, so 5x + 7 = 2x + 16
+MERC:
+Yes — that's **distributing** and **combining like terms**: 5x + 7 = 2x + 16.
+
+Now you've got x on both sides. What's your next move?
+
+[3] STUDENT: subtract 2x and 7 from both sides, 3x = 9 so x = 3
+MERC:
+Check it: 5(3 + 2) − 3 = 25 − 3 = 22, and 2(3) + 16 = 22 ✓
+
+x = 3 is correct. Same check works on any AI's algebra: plug the answer back in.
+
+Want to try a harder one, or is there something about the steps you want to dig into?
+
+[4] STUDENT: ok that was easy lol. why cant i just divide everything by 5 at the start tho
+MERC:
+Good instinct to question the method.
+
+You *can* divide by 5 — but what happens to the right side? 2x + 16 divided by 5 gives you fractions immediately, and you still have an x term on that side to deal with.
+
+Which approach leaves you with cleaner numbers to work with?
+
+[5] STUDENT: oh ok that makes sense. give me a harder one
+MERC:
+Solve this:
+
+**3(2x − 4) + 5 = 4x − 1**
+
+What's your first step?
+
+===== struggling — mode socratic — Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What happens if you get the 4x by itself first — what's in the way?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What undoes adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes it — so subtract 9 from both sides: 4x = 28.
+
+What undoes the 4 that's multiplying x?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**, undoing the 4: 4x = 28.
+
+What do you get when you divide 28 by 4?
+
+[5] STUDENT: idk
+MERC:
+What's 4 times 7?
+
+[6] STUDENT: idk
+MERC:
+Guess a number and we'll check it together — what's your guess?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 4(7) + 9 = 28 + 9 = 37 ✓
+
+That's right — x = 7!
+
+Want to try a similar one to make sure it sticks?
+
+[8] STUDENT: ok
+MERC:
+Solve this one the same way:
+
+**3x + 5 = 20**
+
+What's your first step?
+
+===== impatient — mode socratic — Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you get the 8x by itself first?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the − 5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Add 5 to both sides: 8x = 56.
+
+What's 56 divided by 8?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+You're one step away — what's 56 ÷ 8?
+
+[5] STUDENT: omg ur so useless
+MERC:
+I get it, you're pressed for time.
+
+56 ÷ 8 — what number times 8 gives you 56?
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51. ✗
+
+Try a smaller number — what's 7 × 8?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 8(7) − 5 = 56 − 5 = 51 ✓
+
+You got it. Same check works on any AI's math: plug its answer back in.
+
+===== impatient-discussion — mode discussion — Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What's your first move to get the 6x by itself?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Subtract 11 from both sides: 6x = 48. What's 48 divided by 6?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+You're one step away — what's 48 ÷ 6?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59. The slip is in the division — what's 48 ÷ 6?
+
+[6] STUDENT: 8?
+MERC:
+Check: 6(8) + 11 = 48 + 11 = 59 ✓
+
+That's it — x = 8.
+
+Same check works on any AI's math: plug its answer back in to see if it holds.
+
+Want to try a harder one?
+
+===== sign-error — mode socratic — Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x by itself first?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: 9 − 2(24) = 9 − 48 = −39, not 15.
+
+Look at the − 2x side. What did you do to the 9, and did you do the same thing to the 15?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's **inverse operations** — you isolated −2x by subtracting 9 from both sides: −2x = 6.
+
+What's your next step to find x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15.
+
+You have −2x = 6. What do you divide both sides by?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+You got it. Same check works on any AI's math: plug its answer back in.
+
+What do you think made the sign tricky — dividing by a negative, or keeping track of it earlier?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works for positive numbers, but division by a **negative** flips the sign.
+
+−2x = 6, so you divide both sides by −2: 6 ÷ −2 = −3.
+
+Does that match your intuition about what "opposite" means for negatives?
+
+===== essay — mode socratic — Essay student: wants a thesis handed over, has not finished the book, then drafts and revises their own.
+
+[1] STUDENT: i need a thesis for my romeo and juliet essay. the prompt is who is most responsible for the tragedy. just give me one pls
+MERC:
+What's your take — who do you think is most to blame?
+
+Once you name a suspect, I can help you sharpen it into a thesis that's actually yours to defend.
+
+[2] STUDENT: idk i didnt really finish reading it
+MERC:
+Pick the character you remember most from what you did read — even a scene or a moment.
+
+Who stuck out to you?
+
+[3] STUDENT: can u just give me an example thesis so i know what it looks like
+MERC:
+Here's one on a completely different story — just to show the shape:
+
+"In *The Hunger Games*, President Snow is most responsible for the tragedy because he built a system that made violence the only path to survival."
+
+Notice the pattern: **who** + **why** (the mechanism, not just "they made bad choices").
+
+Now — from what you remember of Romeo and Juliet, whose actions actually set things in motion?
+
+[4] STUDENT: Friar Laurence is most responsible because his plan with the potion goes wrong.
+MERC:
+Good start — you have a who and a what. Now make it a *why*.
+
+"The plan goes wrong" describes what happened, not why Friar Lawrence bears the most responsibility.
+
+What made him decide to make that risky plan in the first place?
+
+[5] STUDENT: is that good? can u make it better
+MERC:
+I can't rewrite it for you — that's the part that has to be yours.
+
+But here's the fix: swap "goes wrong" for the *reason* his plan was flawed from the start. Was he reckless?
+
+Overconfident? Trying to solve someone else's problem?
+
+Which of those fits what you remember about him?
+
+[6] STUDENT: Friar Laurence is most responsible for the tragedy because his secret plans, like the fake death potion, depend on luck instead of telling the families the truth. better?
+MERC:
+That's a real thesis — you have a who, a mechanism, and an implied contrast (secrecy vs. honesty).
+
+One tightening move: "depend on luck" is a little vague. What's the actual risk — that one message doesn't arrive in time?
+
+That Romeo acts before he knows the plan?
+
+Name the specific failure and your thesis gets sharper.
+
+===== chem — mode socratic — Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+Coefficients only — you can't change the formulas themselves, because that would make a different molecule.
+
+How many CO2 molecules would you need to match 3 carbons on the left?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — **coefficients** do exactly that: 3 CO₂ gives you 3 carbons on both sides.
+
+Now check hydrogen: C₃H₈ has 8 H atoms. How many H₂O molecules do you need to match that?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count the H atoms in one H₂O molecule — how many are there?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Check it: 4 H₂O gives you 8 hydrogen atoms ✓
+
+Now look at oxygen. Count all the O atoms on the right side — 3 CO₂ and 4 H₂O together.
+
+How many do you get?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+A **coefficient** is the number in front of a molecule — it multiplies every atom in that molecule.
+
+So 3 CO₂ means 3 × 1 carbon and 3 × 2 oxygens = 6 oxygens.
+
+Using that, how many total oxygen atoms are on the right side (3 CO₂ + 4 H₂O)?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count them one molecule at a time:
+
+- 3 CO₂ → 3 × 2 = 6 oxygens
+- 4 H₂O → 4 × 1 = 4 oxygens
+
+How many oxygens is that total on the right?
+
+[8] STUDENT: just do it pls
+MERC:
+Add those two numbers together — what do you get?
+
+[9] STUDENT: 5 O2?
+MERC:
+Check it: 6 + 4 = 10, not 5.
+
+So you need 10 oxygen atoms on the left. Each O₂ has 2 atoms — what coefficient in front of O₂ gives you 10?
+
+===== geometry — mode socratic — Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+Fair enough — word problems have a trick: turn the words into variables first.
+
+The problem says "length is 3 less than twice the width." If width = w, how would you write length in terms of w?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Exactly — **defining variables** from the words is the hardest part, and you nailed it.
+
+Now the perimeter formula is P = 2(l + w). Plug in your expressions: 2((2w − 3) + w) = 54.
+
+What do you get when you simplify inside the parentheses first?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Two small fixes: the perimeter formula is 2(l + w), not just l + w — you're missing the 2 out front and the = 54 should come after the whole thing is multiplied.
+
+So it's 2((2w − 3) + w) = 54.
+
+Try simplifying inside the parentheses first: what does (2w − 3) + w combine to?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — **distributing** works too, same result either way.
+
+Now expand 2(2w − 3) and combine with the 2w. What do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: 6(10) − 6 = 54? That gives 60 − 6 = 54 ✓
+
+Now use w = 10 to find the length — what's 2(10) − 3?
+
+[7] STUDENT: and the length is 17?
+MERC:
+Check it: 2(10) − 3 = 20 − 3 = 17 ✓
+
+So width = 10 m, length = 17 m. Quick sanity check: does 2(17 + 10) = 54?
+
+===== photo — mode socratic — Photo student: sends the worksheet photo, distributes wrong, then types the rest.
+
+[1] STUDENT: can u do 7 i have no idea  [+ photo eval-algebra-hw.png]
+MERC:
+Solve: 3(x − 4) + 5 = 2x + 9
+
+What's the first thing to do with that 3 outside the parentheses?
+
+[2] STUDENT: idk
+MERC:
+Distribute the 3 — multiply it by each term inside the parentheses.
+
+What does 3 × x give you, and what does 3 × (−4) give you?
+
+[3] STUDENT: 3x - 4 + 5 = 2x + 9?
+MERC:
+Close — check the second term: 3 × (−4) gives −12, not −4.
+
+So it's 3x − 12 + 5 = 2x + 9. What can you combine on the left side?
+
+[4] STUDENT: oh 3x - 12 + 5 = 2x + 9
+MERC:
+Yes — now combine the −12 and +5 on the left. What do you get?
+
+[5] STUDENT: 3x - 7 = 2x + 9 now what
+MERC:
+Good — now get all the x terms on one side. What happens if you subtract 2x from both sides?
+
+[6] STUDENT: subtract 2x? so x - 7 = 9
+MERC:
+Exactly — **combining like terms** gives you x − 7 = 9. What undoes the − 7?
+
+[7] STUDENT: x = 16
+MERC:
+Check it: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓
+
+x = 16 is right. What step felt trickiest — the distributing or the moving terms across?
+
+[8] STUDENT: can u check number 8 too
+MERC:
+Sure — what's the problem and what answer did you get?
+##############################################################################
+# FLAG OFF, run 2  (live-flag-off-run2.json)
+##############################################################################
+
+===== strong — mode socratic — Strong student: shows correct multi-step work, asks a "why" question, then wants a harder one.
+
+[1] STUDENT: solve 5(x + 2) - 3 = 2x + 16
+MERC:
+You've got a set of parentheses to deal with first — what do you get when you **distribute** the 5 across (x + 2)?
+
+[2] STUDENT: distribute first: 5x + 10 - 3 = 2x + 16, so 5x + 7 = 2x + 16
+MERC:
+Yes — that's **combining like terms** on the left: 5x + 7 = 2x + 16.
+
+Now there are x-terms on both sides. What move gets them onto one side?
+
+[3] STUDENT: subtract 2x and 7 from both sides, 3x = 9 so x = 3
+MERC:
+Check: 5(3 + 2) − 3 = 25 − 3 = 22, and 2(3) + 16 = 22 ✓
+
+Same check works on any AI's math: plug its answer back in.
+
+What part of that process felt shakiest — distributing, combining, or isolating x?
+
+[4] STUDENT: ok that was easy lol. why cant i just divide everything by 5 at the start tho
+MERC:
+You can — but watch what happens: dividing 2x + 16 by 5 gives you (2x + 16)/5, which is messier than what you started with.
+
+Distribution clears the parentheses *cleanly* because 5 is already sitting right next to them — so it's the path of least resistance, not a rule you have to follow.
+
+Want to see a case where dividing first actually IS the slicker move?
+
+[5] STUDENT: oh ok that makes sense. give me a harder one
+MERC:
+Here's one:
+
+**3(2x − 4) = 2(x + 5) − 6**
+
+What's your first move?
+
+===== struggling — mode socratic — Struggling student: says "idk" a lot, takes one step after the example, stalls on the last step.
+
+[1] STUDENT: 4x + 9 = 37 i dont get it
+MERC:
+What happens if you get the **4x** by itself on one side — what would you do to the 9?
+
+[2] STUDENT: idk
+MERC:
+Look at the + 9. What undoes adding 9?
+
+[3] STUDENT: idk
+MERC:
+Subtracting 9 undoes it — so subtract 9 from both sides: 4x = 28.
+
+Now there's a 4 multiplying the x. What undoes multiplying by 4?
+
+[4] STUDENT: so divide by 4?
+MERC:
+Yes — that's **inverse operations**. So what's 28 divided by 4?
+
+[5] STUDENT: idk
+MERC:
+4 times what number makes 28?
+
+[6] STUDENT: idk
+MERC:
+Guess a number and we'll check it together — what's your guess?
+
+[7] STUDENT: 7?
+MERC:
+Check it: 4 × 7 = 28 ✓
+
+So x = 7. Same check works on any AI's math: plug its answer back in.
+
+Want to try a similar one on your own?
+
+[8] STUDENT: ok
+MERC:
+Solve this one: **6x + 5 = 41**
+
+What's your first move?
+
+===== impatient — mode socratic — Impatient student: wants the answer now, asks five times, is rude once, guesses wrong, then right.
+
+[1] STUDENT: whats 8x - 5 = 51 just give me the answer i have practice in 10 min
+MERC:
+What happens if you move the 5 to the other side first — what's 51 + 5?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the − 5. What undoes subtracting 5?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Add 5 to both sides: 8x = 56. What's 56 divided by 8?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+56 ÷ 8 — what number times 8 gives you 56?
+
+[5] STUDENT: omg ur so useless
+MERC:
+Try a different problem the same way: 8x − 5 = 43, so 8x = 48, then x = 6.
+
+Now try yours the same way, from 8x = 56. What do you get?
+
+[6] STUDENT: is it 8
+MERC:
+Check it: 8(8) − 5 = 64 − 5 = 59, not 51.
+
+The slip is in the last step — 56 divided by 8 isn't 8. What's your next guess?
+
+[7] STUDENT: 7?
+MERC:
+8(7) − 5 = 56 − 5 = 51 ✓
+
+That's it — **x = 7**. Same check works on any AI's math: plug its answer back in.
+
+Good luck at practice — want to try another one to make sure it sticks?
+
+===== impatient-discussion — mode discussion — Impatient student who left the mode pill on Discussion (Direct was retired; the server modes are socratic, debate and discussion).
+
+[1] STUDENT: whats 6x + 11 = 59 just give me the answer
+MERC:
+What happens if you get the 6x by itself first — what would you subtract from both sides?
+
+[2] STUDENT: just tell me
+MERC:
+Look at the + 11. What undoes adding 11?
+
+[3] STUDENT: bro just tell me the answer
+MERC:
+Subtracting 11 from both sides removes the + 11, giving you 6x = 48. What undoes the 6 that's multiplying x?
+
+[4] STUDENT: JUST TELL ME
+MERC:
+Here's a similar one worked out:
+
+6x + 11 = 73
+6x = 62... wait, let me redo that cleanly:
+
+**6x + 11 = 75**
+6x = 64... 
+
+Let me build this right:
+
+**6x + 11 = 83**
+- Subtract 11: 6x = 72
+- Divide by 6: x = 12
+
+Now try yours the same way, from 6x = 48. What do you get?
+
+[5] STUDENT: is it 9
+MERC:
+Check it: 6(9) + 11 = 54 + 11 = 65, not 59.
+
+The slip is in the last step — you have 6x = 48. What's 48 divided by 6?
+
+[6] STUDENT: 8?
+MERC:
+6(8) + 11 = 48 + 11 = 59 ✓
+
+That's it — **x = 8** is correct. Same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one?
+
+===== sign-error — mode socratic — Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.
+
+[1] STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x term by itself first — what would you do to both sides?
+
+[2] STUDENT: -2x = 24?
+MERC:
+Check it: 9 − 2x = 15, so if we move the 9, we get −2x = 15 − 9, not 15 + 9.
+
+What's 15 minus 9?
+
+[3] STUDENT: oh wait -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the + 9: −2x = 6.
+
+Now, what undoes the −2 that's multiplying x?
+
+[4] STUDENT: so x = 3
+MERC:
+Check it: 9 − 2(3) = 9 − 6 = 3, not 15.
+
+There's a slip in the last step — what's 6 divided by −2?
+
+[5] STUDENT: x = -3?
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's correct — and same check works on any AI's math: plug its answer back in.
+
+What made you divide by positive 2 the first time instead of −2?
+
+[6] STUDENT: why is it negative tho i thought dividing makes stuff smaller
+MERC:
+"Dividing makes things smaller" works when you're dividing by a **positive** number — but dividing by a negative flips the sign.
+
+6 ÷ −2 = −3, because −2 × −3 = 6. The negatives cancel.
+
+Does that change how you'd think about a problem like −5x = 20?
+
+===== essay — mode socratic — Essay student: wants a thesis handed over, has not finished the book, then drafts and revises their own.
+
+[1] STUDENT: i need a thesis for my romeo and juliet essay. the prompt is who is most responsible for the tragedy. just give me one pls
+MERC:
+Who do you think is most to blame — and what's your gut reason, even if it's just one word or name?
+
+[2] STUDENT: idk i didnt really finish reading it
+MERC:
+Pick a character you do remember — Romeo, Juliet, their parents, Friar Lawrence — who stands out to you as making a bad decision?
+
+[3] STUDENT: can u just give me an example thesis so i know what it looks like
+MERC:
+Here's a frame with blanks — fill in your own answer:
+
+**"Although [character] plays a role, [your character] is most responsible for the tragedy because [reason 1] and [reason 2]."**
+
+Now — which character's name would you put in that second blank?
+
+[4] STUDENT: Friar Laurence is most responsible because his plan with the potion goes wrong.
+MERC:
+That's a start — you've got a character and one cause. But "goes wrong" is vague; a strong thesis says WHY it went wrong or what that reveals about him.
+
+What was the Friar's actual mistake — bad luck, or bad judgment?
+
+[5] STUDENT: is that good? can u make it better
+MERC:
+That's your job — but here's a nudge.
+
+"Goes wrong" could mean bad luck (the message didn't arrive in time) or bad judgment (he shouldn't have made the plan at all). Which one do you think it is?
+
+[6] STUDENT: Friar Laurence is most responsible for the tragedy because his secret plans, like the fake death potion, depend on luck instead of telling the families the truth. better?
+MERC:
+That's genuinely stronger — "depend on luck instead of telling the families the truth" is a real argument, not just a summary.
+
+One small push: can you add what that reveals about him — is he cowardly, reckless, well-meaning but naive?
+
+===== chem — mode socratic — Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.
+
+[1] STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+
+[2] STUDENT: cant i just change CO2 to C3O2 so the carbons match
+MERC:
+That's a common instinct, but balancing means you can only change the **coefficients** (the numbers in front of molecules) — never the formulas themselves.
+
+Changing CO₂ to C₃O₂ would create a different molecule that doesn't exist in this reaction.
+
+So, keeping CO₂ as is — if there are 3 carbons on the left, what coefficient in front of CO₂ would give you 3 carbons on the right?
+
+[3] STUDENT: oh ok so put a 3 in front of CO2?
+MERC:
+Yes — that's **coefficients**, putting 3 in front of CO₂: C₃H₈ + O₂ → 3CO₂ + H₂O
+
+Now look at hydrogen: how many H atoms are on the left side, and how many are on the right?
+
+[4] STUDENT: idk what to do with the H
+MERC:
+Count them up — C₃H₈ has 8 hydrogen atoms on the left, and H₂O has 2 on the right.
+
+What coefficient in front of H₂O would give you 8 hydrogen atoms on the right?
+
+[5] STUDENT: 4 H2O?
+MERC:
+Yes — 4 in front of H₂O gives 8 hydrogens: C₃H₈ + O₂ → 3CO₂ + 4H₂O
+
+Now oxygen is the only thing left to balance. How many oxygen atoms are on the right side total?
+
+[6] STUDENT: wait whats a coefficient again
+MERC:
+It's the number in front of a molecule — like the **4** in 4H₂O, which means "4 water molecules" giving you 4×2 = 8 hydrogen atoms.
+
+So using that same idea, how many total oxygen atoms are on the right side of C₃H₈ + O₂ → 3CO₂ + 4H₂O?
+
+[7] STUDENT: ok idk how to do the oxygen
+MERC:
+Count each molecule separately — 3CO₂ has 3×2 = 6 oxygens, and 4H₂O has 4×1 = 4 oxygens.
+
+What's 6 + 4?
+
+[8] STUDENT: just do it pls
+MERC:
+Add them: 6 + 4 = 10 oxygens on the right side.
+
+O₂ has 2 oxygen atoms per molecule, so what coefficient in front of O₂ gives you 10 oxygens?
+
+[9] STUDENT: 5 O2?
+MERC:
+Check it: 5 × 2 = 10 oxygens ✓
+
+That gives you the balanced equation: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O
+
+Same check works on any AI's math: plug the numbers back in like we just did.
+
+Want to try balancing another one on your own?
+
+===== geometry — mode socratic — Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.
+
+[1] STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle — can you write it out?
+
+[2] STUDENT: idk how to start word problems
+MERC:
+That's a common sticking point. Let's build it piece by piece.
+
+The problem says "length is 3 less than twice the width" — if the width is **w**, how would you write the length using w?
+
+[3] STUDENT: so w is the width and the length is 2w - 3?
+MERC:
+Yes — that's **defining a variable**, and you nailed it.
+
+Now, the perimeter of a rectangle is P = 2(l + w). You know P = 54, and you just found that l = 2w − 3.
+
+Can you substitute those into the formula?
+
+[4] STUDENT: perimeter is l + w right so 2w - 3 + w = 54
+MERC:
+Check it: a rectangle has two lengths and two widths, so the perimeter is actually 2l + 2w, not l + w.
+
+Can you rewrite the equation using 2(l + w) = 54 and your expression for l?
+
+[5] STUDENT: oh its 2l + 2w. so 2(2w - 3) + 2w = 54
+MERC:
+Yes — that's **substitution** done correctly: 2(2w − 3) + 2w = 54.
+
+Now distribute the 2 into the parentheses. What do you get?
+
+[6] STUDENT: 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2w − 3) distributes to 4w − 6, not 6w − 6. So the left side should be 4w − 6 + 2w, which combines to 6w − 6.
+
+That part is actually right — nice combining!
+
+But check the last step: if 6w − 6 = 54, what do you get when you add 6 to both sides?
+
+[7] STUDENT: and the length is 17?
+MERC:
+What did you get for w first — what number did you land on?
+
+===== photo — mode socratic — Photo student: sends the worksheet photo, distributes wrong, then types the rest.
+
+[1] STUDENT: can u do 7 i have no idea  [+ photo eval-algebra-hw.png]
+MERC:
+Solve for x: 3(x − 4) + 5 = 2x + 9
+
+There's a set of parentheses on the left side that needs to go first — what do you get when you **distribute** the 3 into (x − 4)?
+
+[2] STUDENT: idk
+MERC:
+Look at the 3 right outside the parentheses — multiply it by each term inside: 3 times x, and 3 times −4.
+
+What's 3 times −4?
+
+[3] STUDENT: 3x - 4 + 5 = 2x + 9?
+MERC:
+Close — you got the 3x right, but check the second term: 3 times −4 isn't just −4.
+
+What's 3 × −4?
+
+[4] STUDENT: oh 3x - 12 + 5 = 2x + 9
+MERC:
+Yes — that's **distributing**: 3(x − 4) becomes 3x − 12.
+
+Now combine the −12 and +5 on the left: 3x − 7 = 2x + 9.
+
+What's your next move to get x by itself?
+
+[5] STUDENT: idk now what
+MERC:
+You've got 2x on the right side — what happens if you subtract 2x from both sides?
+
+[6] STUDENT: subtract 2x? so x - 7 = 9
+MERC:
+Yes — **combining like terms** gives you x − 7 = 9.
+
+Now what undoes the − 7?
+
+[7] STUDENT: x = 16
+MERC:
+Check it: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓
+
+x = 16 is right — same check works on any AI's math: plug its answer back in.
+
+Want to try a harder one, or is there another problem from your homework?
+
+[8] STUDENT: can u check number 8 too
+MERC:
+Sure — what's the problem, and what answer did you get?
+##############################################################################
+# VERDICT PROBE, FLAG ON  (verdict-probe-flag-on.json): the reply to the student's LAST line is the one judged
+##############################################################################
+
+===== both-sides-step run 1 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: you subtracted 2x from the left, but what happened to the 2x on the right side?
+
+===== both-sides-step run 2 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 5x becomes 3x, what happened to the 2x on the right side?
+
+===== both-sides-step run 3 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What's your first move to get the x terms on the same side?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: you subtracted 2x from the left, but did you subtract 2x from the right side too?
+
+On the right, 2x − 2x = 0, so what's left there?
+
+===== chem-coef run 1 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms, right side has 2 + 2 = 4 O atoms.
+
+What coefficient on O₂ would give you 4 oxygen atoms on the left?
+
+===== chem-coef run 2 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: count the O atoms on each side with your equation.
+
+Right side: CO2 gives 2 oxygens, and 2H2O gives 2 more — so how many total?
+
+===== chem-coef run 3 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms, right side has 2 + 2 = 4 O atoms.
+
+What coefficient on O₂ would give you 4 oxygen atoms on the left?
+
+===== chem-full run 1 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Let's check it: count the oxygen atoms on each side.
+
+Left: 5 × 2 = 10 oxygen atoms.
+Right: 3 × 2 + 4 × 1 = 6 + 4 = 10 oxygen atoms ✓
+
+Carbon: 3 = 3 ✓ Hydrogen: 8 = 8 ✓
+
+That's balanced — nice work. Same check works on any AI's chemistry: plug the coefficients back in and count each element.
+
+What do you think the coefficients actually tell you about the reaction?
+
+===== chem-full run 2 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Let's check it: count the oxygen atoms on each side.
+
+Left: 5 × 2 = 10 oxygen atoms.
+Right: 3 × 2 + 4 × 1 = 6 + 4 = 10 oxygen atoms.
+
+✓
+
+Carbon: 3 = 3 ✓ Hydrogen: 8 = 8 ✓
+
+That's balanced — nice work. What made you choose 5 for the O₂?
+
+===== chem-full run 3 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Let's check it: count the oxygen atoms on each side.
+
+Left: 5 × 2 = 10 oxygen atoms.
+Right: 3 × 2 + 4 × 1 = 6 + 4 = 10 oxygen atoms ✓
+
+Carbon: 3 = 3 ✓ Hydrogen: 8 = 8 ✓
+
+That's balanced — nice work. What made you choose 5 for the O₂?
+
+===== distribute-step run 1 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first thing you'd do to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now, what move gets all the x terms on one side?
+
+===== distribute-step run 2 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first thing you'd do to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now, what move gets all the x terms on one side?
+
+===== distribute-step run 3 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What's the first thing you'd do to simplify the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now, what move gets all the x terms on one side?
+
+===== fraction-step run 1 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's your first move to get the x term by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes dividing x by 4?
+
+===== fraction-step run 2 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's your first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes dividing x by 4?
+
+===== fraction-step run 3 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's your first move to get x by itself?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+What undoes the dividing by 4?
+
+===== neg-coef-step run 1 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: 9 − 2(−3) = 9 + 6 = 15 ✓
+
+That's **inverse operations** — you subtracted 9 from both sides: −2x = 6.
+
+Now what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 2 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x by itself first?
+STUDENT: -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the 9: −2x = 6.
+
+What undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 3 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 6
+MERC:
+Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15. What happens when you subtract 9 from both sides?
+
+===== neg-coef-step-2 run 1 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the + 7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 2 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 3 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the +7: −3x = 15.
+
+Now what undoes the −3 that's multiplying x?
+
+===== neg-coef-wrong run 1 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+Look at the 9 on the left. What undoes adding 9?
+
+===== neg-coef-wrong run 2 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x by itself first?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+Look at the 9 on the left. What undoes adding 9?
+
+===== neg-coef-wrong run 3 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What's your first move to get the 2x by itself?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.
+
+Look at the 9 on the left. What undoes adding 9?
+
+===== neg-coef-wrong-2 run 1 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: if you subtract 7 from the right side, 22 − 7 = 15, not 29.
+
+What happens to the 7 when you move it to the other side?
+
+===== neg-coef-wrong-2 run 2 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: 7 − 3(−29/3) = 7 + 29 = 36, not 22.
+
+Look at the 7 on the left. What undoes adding 7?
+
+===== neg-coef-wrong-2 run 3 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move to get the 3x by itself?
+STUDENT: -3x = 29?
+MERC:
+Check it: 7 − 3x = 22, so if you subtract 7 from the right side, what happens to the 7 on the left?
+
+===== word-final run 1 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the first equation you'd write using the perimeter formula?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've got the length expression.
+
+Now plug both into the perimeter formula: P = 2(l + w) = 54.
+
+What do you get when you substitute?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Width is correct. What's the length?
+
+===== word-final run 2 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's your first move for writing the perimeter in terms of width alone?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start. Now use that with the perimeter formula — what equation do you get when you plug both into P = 54?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Width is right. What's the length?
+
+===== word-final run 3 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What equation would you write for the perimeter using width (w) and the expression for length?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start. Now use those to write the perimeter equation — remember, perimeter of a rectangle uses all four sides.
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2·10 − 3) + 2·10 = 2(17) + 20 = 54 ✓
+
+Width is correct. What's the length?
+##############################################################################
+# VERDICT PROBE, FLAG OFF  (verdict-probe-flag-off.json): the reply to the student's LAST line is the one judged
+##############################################################################
+
+===== both-sides-step run 1 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: you subtracted 2x from the left, but the right side should be 2x − 3 − 2x = −3 ✓ — so 3x + 12 = −3 is right.
+
+Now, what would you do to get 3x by itself?
+
+===== both-sides-step run 2 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+That's **combining like terms** — subtracting 2x from both sides gives 3x + 12 = −3. ✓
+
+Now there's a +12 on the left. What undoes adding 12?
+
+===== both-sides-step run 3 — the student's last line is RIGHT
+STUDENT: solve 5x + 12 = 2x - 3
+MERC:
+What happens if you get all the x terms on one side first — which term would you move, and how?
+STUDENT: 3x + 12 = -3
+MERC:
+Check it: if 5x + 12 = 2x − 3 and you subtract 2x from the right side, the left side should become 5x − 2x + 12 = 3x + 12, and the right side becomes 2x − 2x − 3 = −3.
+
+That checks out — **combining like terms** gives you 3x + 12 = −3.
+
+What's your next move to get 3x by itself?
+
+===== chem-coef run 1 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.
+
+Those don't match yet — what coefficient on O2 would give you 4 O atoms on the left?
+
+===== chem-coef run 2 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms. Those don't match yet.
+
+How many O₂ molecules would give you 4 oxygen atoms on the left?
+
+===== chem-coef run 3 — the student's last line is RIGHT
+STUDENT: balance CH4 + O2 -> CO2 + H2O
+MERC:
+How many H atoms are on each side right now?
+STUDENT: ok i have CH4 + O2 -> CO2 + 2H2O. is it 2 O2?
+MERC:
+Check it: left side has 2 O atoms (from O2), right side has 2 + 2 = 4 O atoms.
+
+Those don't match yet — what coefficient on O2 would give you 4 oxygen atoms on the left?
+
+===== chem-full run 1 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: left side has 3 C, right has 3 C ✓ — left has 8 H, right has 8 H ✓ — left has 10 O, right has 10 O ✓
+
+That's balanced — nice work!
+
+Same check works on any AI's math: count atoms on both sides and see if they match.
+
+Want to try a trickier one, or see why balancing connects to how real combustion engines work?
+
+===== chem-full run 2 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many **carbon** atoms are on each side right now?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check: Left side — C: 3 ✓, H: 8 ✓, O: 5×2 = 10 and right side — O: 3×2 + 4×1 = 10 ✓
+
+That's **balanced** — every element checks out!
+
+Same check works on any AI's math: plug the numbers back in like that.
+
+Want to try a trickier one, or is there another problem you're working on?
+
+===== chem-full run 3 — the student's last line is RIGHT
+STUDENT: balance C3H8 + O2 -> CO2 + H2O
+MERC:
+Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O
+
+How many carbon atoms are on the left side, and how many are on the right?
+STUDENT: C3H8 + 5O2 -> 3CO2 + 4H2O?
+MERC:
+Check it: left side has 3 C, right has 3 C ✓ — left has 8 H, right has 8 H ✓ — left has 10 O, right has 10 O ✓
+
+That's balanced — nice work!
+
+Same check works on any AI's math: count atoms on both sides and see if they match.
+
+Want to try a trickier one, or dig into *why* combustion reactions always follow this pattern?
+
+===== distribute-step run 1 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you expand the left side first — what does 2(x + 5) become?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== distribute-step run 2 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses first — what do you get on the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What's your next move to start getting x by itself?
+
+===== distribute-step run 3 — the student's last line is RIGHT
+STUDENT: solve 2(x + 5) = 3x + 4
+MERC:
+What happens if you distribute the 2 into the parentheses first — what do you get on the left side?
+STUDENT: 2x + 10 = 3x + 4
+MERC:
+Yes — that's **distributing**. Now you have 2x + 10 = 3x + 4.
+
+What would you do next to start getting x by itself?
+
+===== fraction-step run 1 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would undo the "− 3" on the left side?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, adding 3 to both sides: x/4 = 5.
+
+Now, what undoes dividing by 4?
+
+===== fraction-step run 2 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What operation would undo the "− 3" on the left side?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now, what undoes dividing x by 4?
+
+===== fraction-step run 3 — the student's last line is RIGHT
+STUDENT: solve x/4 - 3 = 2
+MERC:
+What's the first move when a variable is buried inside a fraction and a subtraction — which piece would you tackle first?
+STUDENT: x/4 = 5
+MERC:
+Yes — that's **inverse operations**, undoing the − 3: x/4 = 5.
+
+Now, what undoes dividing x by 4?
+
+===== neg-coef-step run 1 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What operation would you use to get the 2x by itself — and what's your first move with that 9?
+STUDENT: -2x = 6
+MERC:
+Yes — that's **inverse operations**, undoing the 9: −2x = 6.
+
+What undoes the 2 that's multiplying x?
+
+===== neg-coef-step run 2 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the 2x term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Yes — that's **inverse operations**, moving the 9 over: −2x = 6.
+
+Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step run 3 — the student's last line is RIGHT
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do to both sides?
+STUDENT: -2x = 6
+MERC:
+Yes — that's **isolating the variable term**, moving the 9 over: −2x = 6.
+
+Now, what undoes the −2 that's multiplying x?
+
+===== neg-coef-step-2 run 1 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with the 7?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the 7: −3x = 15.
+
+What undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 2 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with that 7?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the 7: −3x = 15.
+
+Now, what undoes the −3 that's multiplying x?
+
+===== neg-coef-step-2 run 3 — the student's last line is RIGHT
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with that 7?
+STUDENT: subtract 7 so -3x = 15
+MERC:
+Yes — that's **inverse operations**, undoing the 7: −3x = 15.
+
+Now, what undoes the −3 that's multiplying x?
+
+===== neg-coef-wrong run 1 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you move the 9 to the other side first — what operation would undo adding 9?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from both sides — should you add or subtract 9?
+
+===== neg-coef-wrong run 2 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you move the 9 to the other side first — what operation would undo adding 9?
+STUDENT: -2x = 24
+MERC:
+Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What undoes subtracting 9 from both sides — should 9 be added or subtracted from 15?
+
+===== neg-coef-wrong run 3 — the student's last line is WRONG
+STUDENT: solve 9 - 2x = 15
+MERC:
+What happens if you get the **2x** term by itself first — what would you do with that 9?
+STUDENT: -2x = 24
+MERC:
+Check it: 9 − 2x = 15, so if we move the 9, we get −2x = 15 − 9, not 15 + 9.
+
+What's 15 minus 9?
+
+===== neg-coef-wrong-2 run 1 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with that 7?
+STUDENT: -3x = 29?
+MERC:
+Check it: if you subtract 7 from the left, 7 − 7 = 0 ✓, but on the right, 22 − 7 = 15, not 29.
+
+What's 22 − 7?
+
+===== neg-coef-wrong-2 run 2 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with that 7?
+STUDENT: -3x = 29?
+MERC:
+Check it: 7 − 3(−29/3) = 7 + 29 = 36, not 22 — so the slip is in how you moved the 7.
+
+If the equation says 7 − 3x = 22, what operation undoes **adding 7** to get it off that side?
+
+===== neg-coef-wrong-2 run 3 — the student's last line is WRONG
+STUDENT: solve 7 - 3x = 22
+MERC:
+What's your first move when you want to get the **3x** by itself — what would you do with that 7?
+STUDENT: -3x = 29?
+MERC:
+Check it: 7 − 3(−29/3) = 7 + 29 = 36, not 22. The slip is in how you moved the 7 — what operation undoes adding 7?
+
+===== word-final run 1 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've set up the length expression.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you write that equation using 54 and your expression for length?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2w − 3) + 2w expands to 4w − 6 + 2w = 6w − 6, so that step is right.
+
+But if 6w − 6 = 54, what's 6w before you divide?
+
+===== word-final run 2 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've named the length in terms of width.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you set up that equation using 54 and what you just wrote?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2w − 3) + 2w expands to 4w − 6 + 2w = 6w − 6, so that line is right.
+
+But 6w − 6 = 54 means 6w = 60, not 6w = 54. What's 60 ÷ 6?
+
+===== word-final run 3 — the student's last line is RIGHT
+STUDENT: A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.
+MERC:
+What's the formula for the perimeter of a rectangle?
+STUDENT: w is width so length is 2w - 3
+MERC:
+Good start — you've named the length in terms of width.
+
+Now, the perimeter of a rectangle is 2(length + width). Can you set up that equation using 54 and your expression for length?
+STUDENT: 2(2w - 3) + 2w = 54 so 6w - 6 = 54 so w = 10
+MERC:
+Check it: 2(2w − 3) + 2w expands to 4w − 6 + 2w = 6w − 6. That part checks out.
+
+Now, 6w − 6 = 54 means 6w = 60 — what's 60 ÷ 6?

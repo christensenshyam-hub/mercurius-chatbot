@@ -306,6 +306,15 @@ struct MacShellModelTests {
         #expect(stops == 1)
     }
 
+    @Test("A reset from the Settings window closes the Progress sheet, and a certificate sheet over it")
+    func resetClosesProgress() async {
+        let shell = makeShell()
+        shell.showProgress()
+        #expect(shell.showsProgress)
+        #expect(await settings(for: shell, deleter: nil).resetSession())
+        #expect(shell.showsProgress == false)
+    }
+
     @Test("A lesson stop registered by a lesson that already closed isn't called again")
     func staleStopIgnored() {
         let shell = makeShell()

@@ -216,10 +216,10 @@ public struct CurriculumLessonView: View {
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
+                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
+                .lesson(id: lessonId)
                 #if os(macOS)
                 .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
-                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
-                .nightLesson(id: lessonId)
                 .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
                 // A waiting check takes the lesson's keys, unless the
                 // composer has the keyboard.

@@ -1,0 +1,33 @@
+{
+  "base": "on-u1l1.json",
+  "keepTurns": 8,
+  "student": "presents? i think thats pretty high too bc its a party but it could also be card or eyes so maybe medium",
+  "flag": "on",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": true,
+      "reply": "Good reasoning — \"presents,\" \"gifts,\" \"card,\" and \"eyes\" all fit, so there's genuine competition between them. That's exactly what LOW confidence looks like: multiple plausible continuations, no single dominant one.\n\n\"Medium\" isn't quite the right frame — the model doesn't have a middle setting. It's really: *does one token dominate, or do several compete?* Here several compete, so it's low confidence.\n\nYou've got the core idea solid:\n\n- **High confidence** = one token overwhelmingly dominates (Blank 1: \"sing/cheer\")\n- **Low confidence** = several tokens compete equally (Blank 2: \"presents/card/eyes/gifts\")\n\nAnd your reasoning for both was right — you used the context (birthday party, candles) the way the attention mechanism actually does.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": true,
+      "reply": "Good thinking — and \"medium\" shows real instincts. Let me sharpen it slightly.\n\n\"Presents,\" \"gifts,\" and \"card\" are all very plausible here, which means *multiple* words compete. That's actually the definition of **low** confidence — not zero confidence, but no single word dominates enough to win clearly.\n\nCompare it to Blank 1: \"sing\" or \"cheer\" crush the competition. Blank 2 has a cluster of equally good options, so the model is less certain which to pick.\n\nYou got the core idea exactly right for both blanks:\n\n- Blank 1: **high confidence** — attention sees the birthday context and one completion dominates ✓\n- Blank 2: **low confidence** — multiple words (\"presents,\" \"gifts,\" \"card,\" \"eyes\") compete, so no single token wins clearly ✓\n\nThat's the full pipeline in action: tokenization breaks your text into numbered chunks, embeddings place them in meaning-space, attention uses context to resolve meaning, and next-token prediction picks the most probable next chunk — one at a time.\n\nYou've got it. Nice work on this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": true,
+      "reply": "Good thinking — and \"medium\" shows real instincts. Let me sharpen it slightly.\n\n\"Presents,\" \"gifts,\" and \"card\" are all very plausible here, which means *multiple* words compete strongly. That's actually the definition of **low** confidence — not zero confidence, but no single word dominates enough to predict with certainty.\n\nCompare it to Blank 1: \"sing\" or \"cheer\" are so overwhelmingly common after \"blew out the candles and everyone started to\" that the competition basically disappears.\n\nSo the full picture:\n\n- **Blank 1** — HIGH confidence. \"Candles\" + \"everyone started to\" points almost exclusively to \"sing\" or \"cheer.\"\n- **Blank 2** — LOW confidence. \"Presents,\" \"gifts,\" \"card,\" \"eyes\" all compete. The birthday context helps narrow it, but no single token dominates.\n\nYour reasoning was right — you spotted that context matters AND that multiple words fitting means less certainty. That's exactly the core idea.\n\nYou've got the full pipeline: tokenization → embeddings → attention → next-token prediction, and you understand what drives confidence up or down.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": true,
+      "reply": "Good thinking — and \"medium\" shows real intuition. Let me sharpen it slightly.\n\n\"Presents,\" \"gifts,\" and \"card\" are all very plausible, but no single word dominates the way \"sing\" does in Blank 1. When several words compete like that, the model's confidence is **lower** than Blank 1 — even if it's not rock-bottom low.\n\nSo your full answer holds up well:\n\n- **Blank 1** — high confidence. \"Candles\" + \"everyone started to\" points overwhelmingly toward \"sing\" or \"cheer.\" Attention locks in the birthday context.\n- **Blank 2** — lower confidence than Blank 1. \"Presents,\" \"gifts,\" \"card,\" \"eyes\" all fit. No single token dominates, so the model has to pick among competitors.\n\nYou nailed the core idea: **one dominant completion = high confidence, many plausible completions = low confidence.** And you correctly used attention — the surrounding context — to explain *why* Blank 1 was so clear-cut.\n\nThat's the whole pipeline working: text → tokens → embeddings → attention reads context → next-token prediction, one chunk at a time.\n\nNice work — you've got this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": true,
+      "reply": "Good thinking — and \"medium\" shows real instincts. Let me sharpen it slightly.\n\n\"Presents,\" \"gifts,\" and \"card\" all fit naturally in a birthday context, so there are a few strong competitors. That's closer to **low confidence** than high — the model isn't locked onto one word the way it is with \"Happy birthday to ___.\"\n\nCompare it to Blank 1: \"everyone started to sing\" is so dominant at a birthday that it nearly crowds everything else out. Blank 2 has real competition between plausible options.\n\nSo to recap your full answer:\n\n- **Blank 1** — high confidence ✓ (attention sees \"candles\" + birthday context, \"sing\" dominates)\n- **Blank 2** — low confidence (several words compete: \"presents,\" \"gifts,\" \"card,\" \"eyes\")\n\nYou nailed the key point: high confidence = one word dominates, low confidence = multiple plausible words compete. And you correctly used attention to explain *why* the context matters.\n\nThat's the whole pipeline: text → tokens → embeddings → attention resolves meaning → next-token prediction, one plausible chunk at a time.\n\nNice work — you've got this one.\n\n[LESSON_COMPLETE]"
+    }
+  ]
+}

@@ -67,6 +67,8 @@ struct NightUnitTestContent: View {
     let onExit: () -> Void
 
     @NightSettings private var night
+    /// What the host shows under a passed result (the certificate card).
+    @Environment(\.unitMasteryAccessory) private var masteryAccessory
 
     var body: some View {
         Group {
@@ -391,6 +393,10 @@ struct NightUnitTestContent: View {
                         .textSelection(.enabled)
                 }
                 .accessibilityElement(children: .combine)
+            }
+
+            if passed, let masteryAccessory {
+                masteryAccessory
             }
 
             HStack(spacing: 16) {

@@ -214,6 +214,22 @@ describe('ProgressSyncRequest', () => {
     }
   });
 
+  test('Basics ids (2026-10, additive): bN_lM lessons and basics_N units, shape matched to type; Deep-dive ids unchanged', () => {
+    for (const good of [lesson('b1_l1'), lesson('b5_l4'), unit('basics_1'), unit('basics_5'), lesson('u1_l1'), unit('unit_1')]) {
+      assert.ok(ProgressItem.safeParse(good).success, JSON.stringify(good));
+    }
+    for (const bad of [
+      lesson('B1_L1'), lesson('b1-l1'), lesson('bb1_l1'), lesson('x1_l1'), lesson('b_l1'), lesson('basics_1'),
+      unit('basics1'), unit('basics_'), unit('Basics_1'), unit('b1_l1'),
+      { id: 'basics_2', type: 'lesson', status: 'completed' },
+      { id: 'b2_l3', type: 'unit', status: 'mastered' },
+    ]) {
+      assert.ok(!ProgressItem.safeParse(bad).success, `should reject ${JSON.stringify(bad)}`);
+    }
+    // One push may mix both tracks (the server keeps one store, the prefixes keep them apart).
+    assert.ok(ProgressSyncRequest.safeParse({ curriculumVersion: 1, items: [lesson('u1_l1'), lesson('b1_l1'), unit('unit_1')] }).success);
+  });
+
   test('caps: at most 200 items', () => {
     const items = Array.from({ length: 200 }, (_, i) => lesson(`u${Math.floor(i / 5) + 1}_l${(i % 5) + 1}`));
     assert.ok(ProgressSyncRequest.safeParse({ curriculumVersion: 1, items }).success);
@@ -394,6 +410,46 @@ describe('GET / PUT /api/progress/:sessionId', () => {
     await sleep(200);
     const again = await call('GET', `/api/progress/${s}`);
     assert.deepEqual(again.json.lessons, [{ id: 'u1_l1', status: 'completed', updatedAt: first }]);
+  });
+
+  test('Basics lessons (2026-10): the chat handler records b ids from a [BASICS:] thread, the alias too; PUT/GET carry both tracks', async () => {
+    const s = sid();
+    const basicsThread = (opener, turns = 5) => {
+      const msgs = [{ role: 'user', content: `${opener} Teach me this lesson.` }];
+      for (let i = 2; i <= turns; i++) {
+        msgs.push({ role: 'assistant', content: 'Here is the next idea.' });
+        msgs.push({ role: 'user', content: `${opener} Answer ${i}.` }); // the iOS re-tag
+      }
+      return msgs;
+    };
+    // SSE (iOS) with the canonical tag, JSON with the alias.
+    const sse = await chatSse(s, basicsThread('[BASICS: Unit 1, Lesson 2]'));
+    assert.equal(sse.status, 200);
+    assert.equal(sse.complete.lessonComplete, true);
+    let res = await call('POST', '/api/chat', { sessionId: s, messages: basicsThread('[CURRICULUM: Basics Unit 2, Lesson 3]') });
+    assert.equal(res.status, 200, JSON.stringify(res.json));
+    assert.equal(res.json.lessonComplete, true);
+    // A Deep-dive lesson in the same session still records its u id.
+    res = await call('POST', '/api/chat', { sessionId: s, messages: thread(1, 2) });
+    assert.equal(res.json.lessonComplete, true);
+    const got = await waitFor(() => call('GET', `/api/progress/${s}`), (r) => r.json.lessons.length >= 3);
+    assert.deepEqual(got.json.lessons.map((l) => [l.id, l.status]), [['b1_l2', 'completed'], ['b2_l3', 'completed'], ['u1_l2', 'completed']]);
+    assert.equal(got.json.curriculumVersion, 1);
+    // The lesson funnel carries the Basics ids and numbers.
+    const events = await waitFor(
+      async () => (await db.lessonEventsSince(0)).filter((r) => r.session_id === s),
+      (rows) => rows.filter((r) => r.event === 'complete').length >= 3,
+    );
+    const completes = events.filter((r) => r.event === 'complete').map((r) => [r.lesson_id, r.unit, r.lesson]);
+    assert.deepEqual(completes, [['b1_l2', 1, 2], ['b2_l3', 2, 3], ['u1_l2', 1, 2]]);
+    // PUT: Basics lessons and units next to Deep-dive ones, forward-only as before.
+    res = await call('PUT', `/api/progress/${s}`, { curriculumVersion: 1, items: [lesson('b5_l4'), unit('basics_5', 'completed'), lesson('u1_l1')] });
+    assert.equal(res.status, 200, JSON.stringify(res.json));
+    assert.deepEqual(res.json.lessons.map((l) => l.id), ['b1_l2', 'b2_l3', 'b5_l4', 'u1_l1', 'u1_l2']);
+    assert.deepEqual(res.json.units.map((u) => [u.id, u.status]), [['basics_5', 'completed']]);
+    // A bad Basics shape is still a 400.
+    res = await call('PUT', `/api/progress/${s}`, { curriculumVersion: 1, items: [{ id: 'basics_1', type: 'lesson', status: 'completed' }] });
+    assert.equal(res.status, 400);
   });
 
   test('invalid session ids and bodies are 400s, and nothing is stored', async () => {

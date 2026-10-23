@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Certificate · Laurel · AI Basics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&amp;family=EB+Garamond:ital,wght@0,400;1,400&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#7A5F27}a:hover{color:#5C4718}
+</style>
+</helmet>
+<div style="width: 1056px; height: 816px; box-sizing: border-box; position: relative; background: #FDFDFB; color: #141A3D; font-family: 'EB Garamond', Garamond, 'Times New Roman', serif; overflow: hidden">
+  <div style="position: absolute; inset: 40px; border: 1.5px solid #1B2350; box-sizing: border-box"></div>
+  <div style="position: absolute; inset: 50px; border: 1px solid #8A6D2F; box-sizing: border-box"></div>
+
+  <div style="position: absolute; inset: 86px 96px 72px; display: flex; flex-direction: column; align-items: center; text-align: center">
+    <img src="/_blob/aa01cff3d2132ec482e52fc785ee4866" alt="Mercurius AI mark" style="width: 62px; height: 55px; object-fit: contain">
+    <div style="font-family: 'Cormorant Garamond', Garamond, serif; font-size: 14px; font-weight: 600; letter-spacing: 0.34em; text-transform: uppercase; color: #1B2350; margin-top: 10px">Mercurius AI</div>
+    <div style="font-family: 'Cormorant Garamond', Garamond, serif; font-size: 52px; font-weight: 600; line-height: 1.05; color: #141A3D; margin-top: 18px">Certificate of Completion</div>
+    <div style="font-family: 'Cormorant Garamond', Garamond, serif; font-size: 20px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: #7A5F27; margin-top: 10px">AI Basics</div>
+    <div style="font-style: italic; font-size: 20px; color: #3A4068; margin-top: 26px">is proudly presented to</div>
+    <div style="font-family: 'Cormorant Garamond', Garamond, serif; font-style: italic; font-weight: 600; font-size: 72px; line-height: 1.05; color: #141A3D; margin-top: 2px; text-wrap: balance">{{name}}</div>
+    <div style="width: 440px; height: 1px; background: #8A6D2F; margin-top: 10px"></div>
+    <p style="margin: 18px 0 0; width: 660px; font-size: 20px; line-height: 1.45; color: #2A3058; text-wrap: balance">for completing AI Basics with Mercurius, a beginner's course in using AI chatbots safely, clearly and with confidence.</p>
+
+    <div style="margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px">
+      <div style="width: 100%; display: flex; align-items: flex-end; justify-content: space-between">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 250px">
+          <span style="font-size: 20px; color: #141A3D">[Date]</span>
+          <div style="width: 100%; height: 1px; background: #1B2350"></div>
+          <span style="font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: #4B5280">Date</span>
+        </div>
+        <div style="position: relative; width: 140px; height: 140px">
+          <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Seal: Mercurius AI, AI Basics">
+            <defs><path id="sealRingBasics" d="M70,70 m-56,0 a56,56 0 1,1 112,0 a56,56 0 1,1 -112,0"></path></defs>
+            <circle cx="70" cy="70" r="68" fill="none" stroke="#8A6D2F" stroke-width="1.5"></circle>
+            <circle cx="70" cy="70" r="45" fill="none" stroke="#8A6D2F" stroke-width="1"></circle>
+            <text font-family="'Cormorant Garamond', Garamond, serif" font-size="12" font-weight="600" letter-spacing="2" fill="#7A5F27">
+              <textPath href="#sealRingBasics" textLength="345">MERCURIUS AI · AI BASICS · MERCURIUS AI · AI BASICS ·</textPath>
+            </text>
+          </svg>
+          <img src="/_blob/aa01cff3d2132ec482e52fc785ee4866" alt="" style="position: absolute; left: 39px; top: 43px; width: 62px; height: 55px; object-fit: contain">
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 250px">
+          <span style="font-size: 20px; color: transparent">signature</span>
+          <div style="width: 100%; height: 1px; background: #1B2350"></div>
+          <span style="font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: #4B5280">Instructor or family member</span>
+        </div>
+      </div>
+      <div style="font-size: 14px; color: #5A6080">Mercurius is made by the Mayo AI Literacy Club · trymercurius.com</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"name":{"editor":"text","default":"[Learner Name]"},"$preview":{"width":1056,"height":816}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { name: this.props.name ?? '[Learner Name]' };
+  }
+}
+</script>
+</body>
+</html>

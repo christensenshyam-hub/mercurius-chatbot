@@ -75,6 +75,8 @@ public struct RootView: View {
             unitTestCrisisPreview
         } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") && !Self.shellHostsPreviews {
             unitTestPreview
+        } else if let mode = CertificateDebug.mode, !Self.shellHostsPreviews {
+            certificatePreview(mode)
         } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
             QuizView(
                 model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
@@ -136,6 +138,17 @@ public struct RootView: View {
         } else {
             mainBody
         }
+    }
+
+    /// DEBUG-only: the certificate shots (`CertificateDebug`): on the Mac
+    /// they open inside the shell.
+    @ViewBuilder private func certificatePreview(_ mode: CertificateDebug.Mode) -> some View {
+        #if os(iOS)
+        CertificateDebugHost(mode: mode)
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
+        #else
+        mainBody
+        #endif
     }
 
     /// DEBUG-only: Unit 1's test at a stage (`-UnitTestStage`), for
@@ -406,8 +419,10 @@ private struct ChatPreviewHost: View {
 struct UnitTestPreviewHost: View {
     @State private var model: UnitTestViewModel
     private let stage: String?
+    private let onMastered: (String) -> Void
 
-    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?) {
+    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?, onMastered: @escaping (String) -> Void = { _ in }) {
+        self.onMastered = onMastered
         let pass = stage == "mastered"
         _model = State(initialValue: UnitTestViewModel(unit: unit, test: test, shuffleSeed: 42) { _ in
             .init(grade: pass ? "A" : "C", pass: pass,
@@ -417,7 +432,7 @@ struct UnitTestPreviewHost: View {
     }
 
     var body: some View {
-        UnitTestView(model: model, onMastered: { _ in }, onExit: {})
+        UnitTestView(model: model, onMastered: onMastered, onExit: {})
             .task {
                 guard model.phase == .quiz, !model.quizSubmitted, let stage else { return }
                 switch stage {

@@ -1,0 +1,14 @@
+--- server.js	2026-10-21 16:35:35
++++ server.js	2026-10-22 00:09:56
+@@ -1999,8 +1999,9 @@
+           signal: streamAbort.signal,
+           params: {
+             model: chosenModel,
+-            max_tokens: maxTokens,
+-            temperature,
++            // REVIEW EXPERIMENT ONLY (scratch copy): adaptive thinking on chat turns.
++            max_tokens: 'low' ? Math.max(maxTokens, 3000) : maxTokens,
++            ...('low' ? { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } } : { temperature }),
+             system: systemForApi,
+             messages: messagesForApi,
+           },

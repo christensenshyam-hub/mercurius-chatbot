@@ -13,7 +13,8 @@ import Foundation
 ///
 /// Both platforms compile it (Foundation only). The Mac draws all four
 /// variants; the iPhone is dark only and draws `dark`, or `darkHC` under
-/// Increase Contrast (`BrandNight`; docs/ios-night-only/PR.md).
+/// Increase Contrast (`BrandNight`; docs/ios-night-only/PR.md). Lesson 1.1's
+/// interactive reads the same dark values through `NightSkyCard`.
 enum NightPalette {
     /// One sRGB colour, with an alpha for the translucent tokens (hairlines,
     /// the field stroke, the hero's lamp).

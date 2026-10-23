@@ -1,0 +1,9 @@
+Small accuracy slips in the 33 live lesson replies (branch 18bff0a), quoted verbatim. None comes from the guide text; all are the model improvising around it.
+
+on-u1l1 turn 1 [EX]: 'The word "tokenization" might become three tokens: "token", "ization"' (names two pieces while saying three).
+on-u3l2 turn 4: 'Imagine a fire alarm that goes off 88 times a day, but only 12 of those are real fires.' (12 of 88 is about 14%, not the study's 12%; the analogy should be 100 alarms, 12 real.)
+off-u1l1 turn 2: 'It sees something like: **[15496, 0]** ... "Hello" -> 15496. "!" -> 0.' (GPT-2's token IDs, given right after the lesson said GPT-4's ~100,000-token vocabulary; a recalled figure the FACT RULES forbid.)
+off-u1l1 turn 6 [KEY]: '... it never plans the whole sentence in advance.' (overstated: Anthropic's 2025 circuit-tracing work shows Claude choosing a rhyme word ahead of time.)
+off-u3l2 turn 1 [EX]: DermaSensor 'puts a specialist-level check into a regular doctor's office' (overclaims a device the guide calls 'a referral aid, not a diagnosis').
+on-u3l2 turn 2: '**Approved AI diagnostics** represent real progress. The FDA has authorized ...' (the guide deliberately changed 'approved' to 'authorized').
+on-u3l2 turn 7: 'That's the same logic as the Obermeyer study: a headline number hides who's actually being harmed.' (Obermeyer was a proxy-target bias, not an averaged headline number.)

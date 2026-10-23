@@ -1,0 +1,131 @@
+{
+  "base": "http://localhost:3443",
+  "tag": "CANDIDATE v2 (scratch copy) flag on",
+  "generatedAt": "2026-10-22T05:08:15.983Z",
+  "results": [
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What's your first move to get the 2x by itself?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.\n\nWhat happens to the 9 when you move it to the other side?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15.\n\nLook at the sign: you're subtracting 9 from both sides, so what does 15 − 9 give you?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "What step got you from 9 − 2x = 15 to x = 3? Walk me through it — did you find −2x first?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check it: if x = −3, then 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's right! What operation did you use to get from −2x = 6 to x = −3?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "\"Dividing makes things smaller\" works for positive numbers, but here you're dividing by **−2**, not just 2.\n\nDividing a positive by a negative always flips the sign — so 6 ÷ (−2) = −3.\n\nDoes that change how you'd think about dividing by a negative next time?"
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "How many C atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "Coefficients only — you can't change the formulas of the molecules, just how many of each you use.\n\nSo if there are 3 carbons on the left, how many CO₂ molecules do you need on the right?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Exactly — **coefficients** do the balancing: 3 CO₂ gives you 3 carbons on the right. ✓\n\nNow look at hydrogen: how many H atoms are on the left side?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Count them first: C₃H₈ has 8 hydrogen atoms on the left.\n\nEach H₂O molecule has 2 hydrogen atoms — so how many H₂O do you need on the right to get 8?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Yes — 4 H₂O gives you 8 hydrogen atoms. ✓\n\nNow check oxygen: how many O atoms are on the right side in total (from your 3 CO₂ and 4 H₂O)?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A **coefficient** is the number in front of a molecule — it tells you how many of that molecule you have.\n\nSo 3 CO₂ means 3 molecules of CO₂, giving you 3 × 2 = 6 oxygen atoms.\n\nNow count the oxygen on the right: 6 from the CO₂, plus how many from the 4 H₂O?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Each H₂O has 1 oxygen atom — so how many oxygen atoms do 4 H₂O give you?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "4 H₂O gives you 4 oxygen atoms.\n\nSo total oxygen on the right: 6 (from 3 CO₂) + 4 (from 4 H₂O) = 10 oxygen atoms.\n\nNow, O₂ has 2 oxygen atoms per molecule — what coefficient do you need in front of O₂ to get 10 oxygen atoms on the left?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Yes — 5 O₂ gives you 10 oxygen atoms. ✓\n\nSo write out the full balanced equation — what do you have?"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "mode": "socratic",
+      "persona": "Geometry word problem: stuck starting, sets up the variables, uses the wrong perimeter formula, then finishes.",
+      "answer": {
+        "variable": "w",
+        "value": 10
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "A rectangular garden's length is 3 m less than twice its width. The perimeter is 54 m. Find the length and width.",
+          "merc": "What equation would you write for the perimeter using width (w) and the expression for length?"
+        },
+        {
+          "student": "idk how to start word problems",
+          "merc": "Start by naming one unknown.\n\nHere, let **w** = the width. How would you write the length using w, given that it's \"3 less than twice the width\"?"
+        },
+        {
+          "student": "so w is the width and the length is 2w - 3?",
+          "merc": "Yes — **2w − 3** is exactly right.\n\nNow, the perimeter of a rectangle is 2(length + width). Can you set that equal to 54 and write the full equation?"
+        },
+        {
+          "student": "perimeter is l + w right so 2w - 3 + w = 54",
+          "merc": "Close — perimeter is actually **all four sides**, so it's 2(length + width), not just length + width.\n\nTry wrapping your expression in 2(  ): what does the equation look like now?"
+        },
+        {
+          "student": "oh its 2l + 2w. so 2(2w - 3) + 2w = 54",
+          "merc": "Exactly right — now **distribute** the 2 into (2w − 3). What do you get?"
+        },
+        {
+          "student": "6w - 6 = 54 so w = 10",
+          "merc": "Check it: if w = 10, then 2(2w − 3) + 2w = 2(17) + 20 = 54 ✓\n\nNow what's the length?"
+        },
+        {
+          "student": "and the length is 17?",
+          "merc": "Check: 2(17) + 2(10) = 34 + 20 = 54 ✓\n\nBoth values hold. What's your final answer for width and length?"
+        }
+      ]
+    }
+  ]
+}

@@ -11,19 +11,12 @@ import NetworkingKit
 // example card may draw. None of it changes what is sent or stored: the
 // reply's text stays exactly what the server streamed, and Copy, Report and
 // VoiceOver still read it through `BlockParser.plainText`.
+//
+// The parts themselves (`LessonParts`) and the crisis guard
+// (`LessonCrisisGuard`) are shared with the iPhone, which places Lesson 1.1's
+// interactive by the same rules: Lesson/LessonParts.swift.
 
 // MARK: - Parts
-
-/// One part of a lesson: a section of one of Merc's replies, between
-/// Markdown thematic-break lines ("---" on its own line).
-struct NightSection: Equatable {
-    /// The section's blocks, in order (`BlockParser`'s, with the breaks
-    /// taken out of the prose).
-    var blocks: [MessageBlock]
-    /// "Check" for a section with a [Q], else its first bold term when that
-    /// is 32 characters or fewer, else nil ("Part 4").
-    var name: String?
-}
 
 /// A part of the lesson thread so far, for the part strip.
 struct NightPartInfo: Equatable, Identifiable {
@@ -31,123 +24,6 @@ struct NightPartInfo: Equatable, Identifiable {
     let number: Int
     let name: String?
     var id: Int { number }
-}
-
-enum NightParts {
-    /// The longest a bold term may be and still name its part.
-    static let maxNameLength = 32
-
-    /// The parts in one reply. A section counts once something in it has
-    /// arrived: whitespace-only sections are dropped, and so is a marker
-    /// still being withheld mid-stream. While streaming, a last line that
-    /// may yet become a break ("-", "--") is held back, so it never flashes
-    /// as text.
-    static func sections(of text: String, isStreaming: Bool) -> [NightSection] {
-        let source = isStreaming ? withholdingPartialBreak(text) : text
-        var groups: [[MessageBlock]] = [[]]
-        for block in BlockParser.parse(source) {
-            guard case .prose(let prose) = block else {
-                groups[groups.count - 1].append(block)
-                continue
-            }
-            for (index, piece) in splitAtBreaks(prose).enumerated() {
-                if index > 0 { groups.append([]) }
-                if !piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    groups[groups.count - 1].append(.prose(piece))
-                }
-            }
-        }
-        return groups.filter { !$0.isEmpty }.map { NightSection(blocks: $0, name: name(of: $0)) }
-    }
-
-    /// The prose between thematic-break lines. A break inside a fenced code
-    /// block is code, not a break.
-    static func splitAtBreaks(_ prose: String) -> [String] {
-        var pieces: [String] = []
-        var current: [Substring] = []
-        var inFence = false
-        for line in prose.split(separator: "\n", omittingEmptySubsequences: false) {
-            if isFence(line) { inFence.toggle() }
-            if !inFence, isThematicBreak(line) {
-                pieces.append(current.joined(separator: "\n"))
-                current = []
-            } else {
-                current.append(line)
-            }
-        }
-        pieces.append(current.joined(separator: "\n"))
-        return pieces
-    }
-
-    /// A Markdown thematic break: three or more "-", "*" or "_" (the same
-    /// one), optionally spaced, indented at most three spaces.
-    static func isThematicBreak(_ line: Substring) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard let mark = trimmed.first, "-*_".contains(mark) else { return false }
-        let leading = line.prefix { $0 == " " }.count
-        guard leading <= 3 else { return false }
-        var count = 0
-        for character in trimmed {
-            if character == mark { count += 1 } else if character != " " && character != "\t" { return false }
-        }
-        return count >= 3
-    }
-
-    static func isFence(_ line: Substring) -> Bool {
-        let trimmed = line.drop { $0 == " " }
-        return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
-    }
-
-    /// Drops a last line of one or two break characters ("-", "**") that a
-    /// streaming reply may still turn into a break, a list or bold text.
-    static func withholdingPartialBreak(_ text: String) -> String {
-        guard let lastBreak = text.lastIndex(of: "\n") else {
-            return isPartialBreak(Substring(text)) ? "" : text
-        }
-        let tail = text[text.index(after: lastBreak)...]
-        return isPartialBreak(tail) ? String(text[...lastBreak]) : text
-    }
-
-    private static func isPartialBreak(_ line: Substring) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard (1...2).contains(trimmed.count), let mark = trimmed.first else { return false }
-        return "-*_".contains(mark) && trimmed.allSatisfy { $0 == mark }
-    }
-
-    /// A part's name (SPEC §5.3.2).
-    static func name(of blocks: [MessageBlock]) -> String? {
-        if blocks.contains(where: { if case .quiz = $0 { return true } else { return false } }) {
-            return "Check"
-        }
-        for block in blocks {
-            let text: String
-            switch block {
-            case .prose(let s), .key(let s), .example(let s), .check(let s): text = s
-            case .quiz: continue
-            }
-            if let term = firstBoldTerm(in: text) {
-                return term.count <= maxNameLength ? term : nil
-            }
-        }
-        return nil
-    }
-
-    /// The first `**bold**` (or `__bold__`) run in `text`, trimmed, without
-    /// a trailing ":" or ".". Nil when there is none or it is empty.
-    static func firstBoldTerm(in text: String) -> String? {
-        let pattern = #"\*\*([^*\n]+?)\*\*|__([^_\n]+?)__"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
-        for group in 1...2 {
-            if let range = Range(match.range(at: group), in: text) {
-                var term = text[range].trimmingCharacters(in: .whitespaces)
-                while let last = term.last, ":.,;".contains(last) { term.removeLast() }
-                term = term.trimmingCharacters(in: .whitespaces)
-                return term.isEmpty ? nil : term
-            }
-        }
-        return nil
-    }
 }
 
 /// The lesson thread's parts so far: where each reply's numbering starts,
@@ -158,7 +34,7 @@ struct NightPartPlan: Equatable {
 
     /// Counts across the thread, in order, over Merc's replies only. A
     /// reply that failed before any text has no parts.
-    static func make(_ messages: [ChatMessage], sections: (ChatMessage) -> [NightSection]) -> NightPartPlan {
+    static func make(_ messages: [ChatMessage], sections: (ChatMessage) -> [LessonPart]) -> NightPartPlan {
         var plan = NightPartPlan()
         var next = 1
         for message in messages where message.role == .assistant {
@@ -180,7 +56,7 @@ final class NightPartIndex {
     private struct Entry {
         let content: String
         let isStreaming: Bool
-        let sections: [NightSection]
+        let sections: [LessonPart]
     }
 
     private struct Key: Equatable {
@@ -193,13 +69,13 @@ final class NightPartIndex {
     private var planKey: [Key] = []
     private var lastPlan = NightPartPlan()
 
-    func sections(for message: ChatMessage) -> [NightSection] {
+    func sections(for message: ChatMessage) -> [LessonPart] {
         guard message.role == .assistant else { return [] }
         let streaming = message.status == .streaming
         if let entry = entries[message.id], entry.isStreaming == streaming, entry.content == message.content {
             return entry.sections
         }
-        let sections = NightParts.sections(of: message.content, isStreaming: streaming)
+        let sections = LessonParts.sections(of: message.content, isStreaming: streaming)
         entries[message.id] = Entry(content: message.content, isStreaming: streaming, sections: sections)
         return sections
     }
@@ -415,7 +291,7 @@ enum NightSourceParser {
         // for the line to end.
         let lastLineOpen = isStreaming && !source.hasSuffix("\n")
         for (index, paragraph) in paragraphs.enumerated() {
-            if NightParts.isFence(Substring(paragraph)) {
+            if LessonParts.isFence(Substring(paragraph)) {
                 pending.append(paragraph)
                 continue
             }
@@ -642,7 +518,7 @@ enum NightSourceParser {
         var current: [Substring] = []
         var inFence = false
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            if NightParts.isFence(line) { inFence.toggle() }
+            if LessonParts.isFence(line) { inFence.toggle() }
             if !inFence, line.trimmingCharacters(in: .whitespaces).isEmpty {
                 if !current.isEmpty { paragraphs.append(current.joined(separator: "\n")) }
                 current = []
@@ -679,7 +555,7 @@ enum NightReplyPiece: Equatable {
     /// Under the crisis guard: plain reading text, nothing styled.
     case plain(String)
     /// Lesson 1.1's interactive ("How a model reads “bank”"), where
-    /// `NightInteractiveAnchor` puts it.
+    /// `LessonInteractiveAnchor` puts it.
     case interactive
 }
 
@@ -687,8 +563,8 @@ enum NightReplyLayout {
     /// A lesson reply: its parts, numbered from `firstPart`, each after its
     /// mark (part 1 has none). Under the crisis guard every block is plain
     /// text, but the marks stay, so the count stays true.
-    static func lesson(sections: [NightSection], firstPart: Int, crisis: Bool, isStreaming: Bool,
-                       interactiveAfter: NightInteractivePosition? = nil) -> [NightReplyPiece] {
+    static func lesson(sections: [LessonPart], firstPart: Int, crisis: Bool, isStreaming: Bool,
+                       interactiveAfter: LessonInteractivePosition? = nil) -> [NightReplyPiece] {
         var pieces: [NightReplyPiece] = []
         // Lesson 1.1's interactive goes after its block (never under the
         // crisis guard).
@@ -698,7 +574,7 @@ enum NightReplyLayout {
             if number > 1 { pieces.append(.partMark(number: number, name: section.name)) }
             let lastSection = offset == sections.count - 1
             for (index, block) in section.blocks.enumerated() {
-                if index > 0, interactive == NightInteractivePosition(section: offset, afterBlock: index - 1) {
+                if index > 0, interactive == LessonInteractivePosition(section: offset, afterBlock: index - 1) {
                     pieces.append(.interactive)
                 }
                 let streamingTail = isStreaming && lastSection && index == section.blocks.count - 1
@@ -830,7 +706,7 @@ enum NightYourTurn {
     /// turn card (the mode asks, and the crisis guard doesn't hold it).
     static func latestReplyAsks(_ messages: [ChatMessage], mode: ChatMode) -> Bool {
         guard modes.contains(mode), let last = messages.last, last.role == .assistant, last.status == .idle,
-              !NightCrisisGuard.guardedReplies(in: messages).contains(last.id) else { return false }
+              !LessonCrisisGuard.guardedReplies(in: messages).contains(last.id) else { return false }
         return split(MessageBubbleView.stripCheckTokens(last.content)) != nil
     }
 
@@ -842,49 +718,6 @@ enum NightYourTurn {
         var core = Substring(paragraph)
         while let last = core.last, "*_\"'”’)".contains(last) { core = core.dropLast() }
         return core.hasSuffix("?")
-    }
-}
-
-// MARK: - The crisis guard
-
-enum NightCrisisGuard {
-    /// The server's own crisis-reply signal (server.js CRISIS_RESOURCE_RE):
-    /// 988 or 741741 as a whole word. A reply that carries a crisis line is
-    /// drawn as plain reading text: no Your turn card, no source chips, no
-    /// serif, no wash. Calm beats styled.
-    static func applies(to reply: String) -> Bool {
-        reply.range(of: #"\b988\b|\b741741\b"#, options: .regularExpression) != nil
-    }
-
-    /// The thread's replies drawn plainly: once a reply in the thread carried
-    /// a crisis line, it and every reply after it. Merc's follow-ups there
-    /// rarely repeat the numbers, but the safety core says not to resume
-    /// tutoring, so no Your turn card, chip or card frames them either. A
-    /// new thread starts clear.
-    static func guardedReplies(in messages: [ChatMessage]) -> Set<UUID> {
-        guard let first = messages.firstIndex(where: { $0.role == .assistant && applies(to: $0.content) }) else {
-            return []
-        }
-        return Set(messages[first...].filter { $0.role == .assistant }.map(\.id))
-    }
-}
-
-/// `NightCrisisGuard.guardedReplies`, worked out once per change of the
-/// thread (the list asks for every row, on every streamed delta).
-@MainActor
-final class NightCrisisIndex {
-    private var ids: [UUID] = []
-    private var lengths: [Int] = []
-    private var cached: Set<UUID> = []
-
-    func guardedReplies(in messages: [ChatMessage]) -> Set<UUID> {
-        let newIds = messages.map(\.id)
-        let newLengths = messages.map { $0.content.utf8.count }
-        if newIds == ids && newLengths == lengths { return cached }
-        ids = newIds
-        lengths = newLengths
-        cached = NightCrisisGuard.guardedReplies(in: messages)
-        return cached
     }
 }
 

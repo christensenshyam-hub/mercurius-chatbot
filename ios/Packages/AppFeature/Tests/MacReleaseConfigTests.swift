@@ -102,13 +102,17 @@ struct MacReleaseConfigTests {
         #expect(values("ASSETCATALOG_COMPILER_APPICON_NAME", in: block) == ["MacAppIcon"])
     }
 
-    @Test("Entitlements: the sandbox (the Mac App Store requires it), the network and a picked file — nothing else")
+    @Test("Entitlements: the sandbox (the Mac App Store requires it), the network, printing and the files the student picks — nothing else")
     func entitlements() throws {
         let entitlements = try #require(plist("MercuriusMac/MercuriusMac.entitlements"))
         #expect(Set(entitlements.keys) == [
             "com.apple.security.app-sandbox",
             "com.apple.security.network.client",
-            "com.apple.security.files.user-selected.read-only",
+            // A photo to attach (read), and the certificate's Save as PDF…
+            // (write), both only where the student picks in the panel.
+            "com.apple.security.files.user-selected.read-write",
+            // The certificate's Print… (a sandboxed app can't print without it).
+            "com.apple.security.print",
         ])
         #expect(entitlements.values.allSatisfy { ($0 as? Bool) == true })
     }

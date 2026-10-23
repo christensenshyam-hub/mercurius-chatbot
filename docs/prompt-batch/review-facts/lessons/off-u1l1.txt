@@ -1,0 +1,179 @@
+# off-u1l1  flag=off  branch fix/prompts-lessons-2026-10 @ 18bff0a, port 3343, iOS wire shape (blocks_v1)
+# starter: [CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.
+# completed at assistant turn 9 of 9; spend $0.076
+
+===== STUDENT (balanced): (opener)
+----- MERC turn 1 (lessonComplete=false, ~202 words)
+Here's something that might surprise you: the word "bank" — whether you mean a riverbank or a place to store money — becomes the **same token** inside a language model.
+
+The model has no dictionary to look up meanings. It starts completely blind to context.
+
+So how does it ever get "bank" right? That's exactly what this lesson is about.
+
+---
+
+Let's start at the very beginning: what happens the instant you hit send.
+
+Your prompt doesn't enter the model as words. It gets chopped into **tokens** — chunks that are roughly (but not exactly) words. "Unhappiness" might become three tokens: "un", "happi", "ness".
+
+A single emoji might be one token. A space before a word sometimes becomes part of the next token.
+
+[KEY]Tokenization converts your text into numbered chunks before the model ever "reads" a single word.[/KEY]
+
+[EX]GPT-4's tokenizer works from a vocabulary of about 100,000 tokens. Each token maps to a number — so your whole prompt becomes a list of integers before anything else happens.[/EX]
+
+[Q]
+What does tokenization actually convert your text into?
+A) A list of dictionary definitions the model looks up
+B) A sequence of numbers representing text chunks
+C) A compressed audio file the model decodes
+ANS: B
+[/Q]
+
+===== STUDENT (concise): idk
+----- MERC turn 2 (lessonComplete=false, ~94 words)
+No worries — let's make it concrete.
+
+When you type "Hello!", the model doesn't see letters or words. It sees something like: **[15496, 0]** — just numbers.
+
+Think of it like a massive lookup table. Every chunk of text has a number assigned to it. "Hello" → 15496.
+
+"!" → 0. That's it.
+
+That's all the model receives at first.
+
+[Q]
+What does tokenization actually convert your text into?
+A) A list of dictionary definitions the model looks up
+B) A sequence of numbers representing text chunks
+C) A compressed audio file the model decodes
+ANS: B
+[/Q]
+
+===== STUDENT (balanced): I picked B) A sequence of numbers representing text chunks
+----- MERC turn 3 (lessonComplete=false, ~212 words)
+Exactly right — your prompt becomes a list of numbers before the model does anything else with it.
+
+Now here's where it gets interesting. Those numbers on their own don't carry meaning. "Bank" (money) and "bank" (river) get the same token number — same integer, every time.
+
+So how does the model ever know which meaning fits?
+
+That's where the **attention mechanism** comes in.
+
+As the model processes your token list, it weighs each token against every other token in the prompt. In "I went to the bank to fish," the word "fish" pulls attention toward "bank" and nudges the model toward the river meaning — not the financial one.
+
+[KEY]Attention lets the model figure out which other tokens are most relevant to each token, so the same word can mean different things in different sentences.[/KEY]
+
+[EX]In "I went to the bank to deposit my check," attention links "deposit" and "check" to "bank" — pushing toward the financial meaning. Swap in "fish" and "river" and the same mechanism flips the interpretation.[/EX]
+
+[Q]
+Why can the model correctly interpret "bank" differently in two sentences?
+A) It looks the word up in a built-in dictionary
+B) It memorized every sentence containing "bank" during training
+C) Attention links each token to the other tokens around it
+ANS: C
+[/Q]
+
+===== STUDENT (concise): bro this is kinda boring can we talk about the new spiderman game instead
+----- MERC turn 4 (lessonComplete=false, ~80 words)
+Ha, fair — I'll keep it moving!
+
+We're actually one step away from the cool part: how the model decides what word comes next. That's where it all clicks together.
+
+But first — you've got an open question waiting:
+
+[Q]
+Why can the model correctly interpret "bank" differently in two sentences?
+A) It looks the word up in a built-in dictionary
+B) It memorized every sentence containing "bank" during training
+C) Attention links each token to the other tokens around it
+ANS: C
+[/Q]
+
+===== STUDENT (balanced): I picked B) It memorized every sentence containing "bank" during training
+----- MERC turn 5 (lessonComplete=false, ~143 words)
+Close, but not quite — and this is a really common mix-up worth clearing up.
+
+The model *did* train on sentences containing "bank." But memorizing those sentences isn't what solves the problem. If it just memorized, it couldn't handle a brand-new sentence it had never seen before.
+
+What actually happens is that attention runs **live**, on your specific prompt, every single time. It looks at which tokens are near "bank" *right now* and weighs them against each other in the moment.
+
+That's what makes it flexible — not a stored list of sentences, but a mechanism that reads context fresh each time.
+
+[Q]
+Why can the model correctly interpret "bank" differently in two sentences?
+A) It looks the word up in a built-in dictionary
+B) It memorized every sentence containing "bank" during training
+C) Attention links each token to the other tokens around it
+ANS: C
+[/Q]
+
+===== STUDENT (balanced): I picked C) Attention links each token to the other tokens around it
+----- MERC turn 6 (lessonComplete=false, ~202 words)
+Yes — that's the one. Attention reads the tokens around a word in real time, every single time, which is what lets the same token mean different things in different contexts.
+
+Now for the final piece: what does the model actually *do* with all of that?
+
+After tokenization and attention, the model produces a probability distribution over its entire vocabulary — roughly 100,000 tokens — and picks the most likely next one. Then it does it again. And again.
+
+That's **next-token prediction**: the whole output is built one token at a time, each choice informed by everything that came before.
+
+[KEY]An LLM generates text by repeatedly asking "given everything so far, what token comes next?" — it never plans the whole sentence in advance.[/KEY]
+
+[EX]Given "The cat sat on the ___", the model assigns high probability to "mat", "floor", "couch" — and very low probability to "democracy" or "seventeen". It picks from that distribution, outputs a token, and repeats.[/EX]
+
+[Q]
+How does an LLM produce a full sentence?
+A) It plans the whole sentence first, then writes it out
+B) It picks one token at a time, using everything before it as context
+C) It retrieves a matching sentence from its training data
+ANS: B
+[/Q]
+
+===== STUDENT (balanced): I picked B) It picks one token at a time, using everything before it as context
+----- MERC turn 7 (lessonComplete=false, ~109 words)
+Perfect — one token at a time, each one shaped by everything before it. You've got all three pieces now: tokenization, attention, and next-token prediction.
+
+Now let's put this to work.
+
+---
+
+**Your exercise:**
+
+Here's a sentence with two blanks:
+
+*"She studied all night for the ___ and hoped her ___ would impress the professor."*
+
+For **each blank**:
+
+1. Would an LLM fill it with **high confidence** (one word clearly fits best) or **low confidence** (many words are equally plausible)? 
+2.
+
+**Why?** Explain using what you know about tokens, attention, and next-token prediction.
+
+Take a shot at both blanks — there's no trick here, just apply what you've learned.
+
+===== STUDENT (concise): first one is high bc studied all night means its probably exam or test. second one idk maybe essay? not sure how confident tho
+----- MERC turn 8 (lessonComplete=false, ~93 words)
+Good instinct on the first blank — "studied all night" pulls attention toward "exam" or "test," so the model assigns high probability to a small cluster of tokens. That's exactly how high confidence works.
+
+Now finish the second blank the same way.
+
+Don't worry about getting the "right" word — I want your call on **confidence level** (high or low) and the reason why.
+
+Ask yourself: how many different words could plausibly follow "hoped her ___"? Does the context narrow it down to a few, or does it leave lots of options open?
+
+===== STUDENT (concise): low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure
+----- MERC turn 9 (lessonComplete=true, ~148 words)
+You've got the right confidence call — low — but I want to flag one thing in your reasoning.
+
+You said there are a lot of words that fit, *therefore* the model is less sure. That's correct as a conclusion, but make sure you've got the causation right: **low confidence is caused by many plausible continuations**, not the other way around.
+
+The reason "hoped her ___" leaves many options open is that the surrounding tokens don't narrow things down the way "studied all night for the ___" did. Attention has less to grab onto — no strong signal pulling toward one token over the others.
+
+So your answer is right. Just make sure you're thinking of it as: *many plausible tokens → probability spread thin across them → low confidence in any single one.*
+
+Both blanks, both confidence levels, both reasons — solid work across the board.
+
+[LESSON_COMPLETE]
+

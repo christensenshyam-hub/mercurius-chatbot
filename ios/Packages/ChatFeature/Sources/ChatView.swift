@@ -654,6 +654,19 @@ struct MessageListView: View {
     @State private var showsJumpPill = false
     @State private var coachHiddenForTyping = false
 
+    /// Lessons: the lesson's id, for Lesson 1.1's interactive
+    /// (`LessonInteractiveAnchor`). Nil: no interactive.
+    var lessonID: String?
+    @State private var crisisIndex = LessonCrisisIndex()
+    @State private var interactiveIndex = LessonInteractiveIndex()
+    /// Lesson 1.1's interactive: the opening picked (and the Mac's opened
+    /// card, the iPhone's shown map), for the whole thread.
+    @State private var tokenizer = TokenizerState()
+    #if os(iOS)
+    /// The iPhone card's "Try it": its step 4 to the top of the reading area.
+    @State private var interactiveJump = LessonInteractiveJump()
+    #endif
+
     #if os(macOS)
     /// Night Studio, free chat: the latest completed reply's closing
     /// question becomes the Your turn card (the chat's mode allows it).
@@ -661,14 +674,7 @@ struct MessageListView: View {
     /// Night Studio, lessons: the lesson is complete, so the part strip's
     /// dashed "more may come" segment goes.
     var nightLessonComplete = false
-    /// Night Studio, lessons: the lesson's id, for Lesson 1.1's interactive
-    /// (`NightInteractiveAnchor`). Nil: no interactive.
-    var nightLessonID: String?
     @State private var nightParts = NightPartIndex()
-    @State private var nightCrisis = NightCrisisIndex()
-    @State private var nightInteractiveIndex = NightInteractiveIndex()
-    /// The interactive's opening and opened state, for the whole thread.
-    @State private var nightTokenizer = NightTokenizerState()
     @State private var nightMarks = NightPartMarks()
     @State private var nightCurrentPart = 1
     #endif
@@ -791,9 +797,7 @@ struct MessageListView: View {
                                     : .opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                         }
 
-                        #if os(macOS)
-                        let nightInteractive = nightInteractivePlacement
-                        #endif
+                        let interactive = interactivePlacement
                         ForEach(messages) { message in
                             #if os(macOS)
                             NightMessageRow(
@@ -812,8 +816,8 @@ struct MessageListView: View {
                                 onCheckTap: onCheckTap,
                                 coordinateSpace: messageListSpace,
                                 onPartMarkMoved: { number, minY in nightPartMarkMoved(number, minY: minY) },
-                                interactiveAfter: nightInteractive?.messageID == message.id
-                                    ? nightInteractive?.position : nil
+                                interactiveAfter: interactive?.messageID == message.id
+                                    ? interactive?.position : nil
                             )
                             .equatable()
                             .id(message.id)
@@ -838,7 +842,11 @@ struct MessageListView: View {
                                 avatarActivity: isLive ? mercActivity : .idle,
                                 avatarIdleLife: isLive,
                                 onCheckTap: onCheckTap,
-                                quizInteraction: quizInteraction(for: message)
+                                quizInteraction: quizInteraction(for: message),
+                                // Lesson 1.1's interactive, between this
+                                // reply's blocks (`LessonInteractiveSplit`).
+                                interactiveAfter: interactive?.messageID == message.id
+                                    ? interactive?.position : nil
                             )
                             .equatable()
                             .id(message.id)
@@ -903,8 +911,21 @@ struct MessageListView: View {
                 // macOS 26: the toolbar's edge over the reader stays soft (it
                 // turned an opaque grey in a narrow window).
                 .nightSoftScrollEdge()
+                #endif
                 // Lesson 1.1's interactive keeps its opening for the thread.
-                .environment(nightTokenizer)
+                .environment(tokenizer)
+                #if os(iOS)
+                // Its "Try it" jumps to its openings: a move of the
+                // student's own, as the Mac strip's jump to a part is.
+                .environment(\.lessonInteractiveJump, interactiveJump)
+                .onAppear {
+                    interactiveJump.perform = { animated in
+                        scroll.policy.partJumped()
+                        withAnimation(animated ? .smooth(duration: 0.45) : nil) {
+                            proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+                        }
+                    }
+                }
                 #endif
                 .modifier(StudentScrollTracking { scrolling in
                     scroll.policy.studentScrolling(scrolling)
@@ -979,26 +1000,27 @@ struct MessageListView: View {
                     AccessibilityNotification.Announcement(line).post()
                 }
             }
-            #if os(macOS)
             // The interactive left the thread from above the reading place
             // (a crisis line arrived): a reply held at its top stays there.
-            .onChange(of: nightInteractivePlacement) { old, new in
+            .onChange(of: interactivePlacement) { old, new in
                 guard old != nil, new == nil, !scroll.policy.isFollowing,
                       scroll.policy.didHoldCurrentReply else { return }
                 perform(.showLatestMessageTop, proxy: proxy)
             }
-            #endif
-            #if os(macOS) && DEBUG
-            // `-NightScrollToInteractive top|map` (shots only): once a reply
-            // settles, Lesson 1.1's interactive (or its map) at the top of
-            // the reading area.
+            #if DEBUG
+            // `-NightScrollToInteractive top|map` (shots only, both
+            // platforms; `context` on the iPhone): once a reply settles,
+            // Lesson 1.1's interactive (or its map) at the top of the
+            // reading area.
             .onChange(of: phase) { _, new in
                 guard new == .idle, lessonStyle,
                       let target = UserDefaults.standard.string(forKey: "NightScrollToInteractive") else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    nightScrollToInteractive(map: target == "map", proxy: proxy)
+                    scrollToInteractive(target, proxy: proxy)
                 }
             }
+            #endif
+            #if os(macOS) && DEBUG
             // `-NightScrollToPart <n>` (shots only): each time a reply
             // settles, the part strip's jump to part n.
             .onChange(of: phase) { _, new in
@@ -1297,6 +1319,58 @@ struct MessageListView: View {
         .accessibilityLabel(title)
     }
 
+    // MARK: Lesson 1.1's interactive (both platforms)
+
+    /// This list in the lesson `id` (Lesson 1.1 holds the interactive).
+    func lesson(id: String) -> MessageListView {
+        var list = self
+        list.lessonID = id
+        return list
+    }
+
+    /// Where Lesson 1.1's interactive sits in this thread, if anywhere. The
+    /// Mac reads the parts its strip already split; the iPhone splits them
+    /// here, only in Lesson 1.1 and only until the card has its place (the
+    /// index keeps it).
+    private var interactivePlacement: LessonInteractivePlacement? {
+        guard lessonStyle, TokenizerInteractive.belongs(toLesson: lessonID) else { return nil }
+        return interactiveIndex.placement(lessonID: lessonID, messages: messages,
+                                          crisisReplies: crisisIndex.guardedReplies(in: messages)) { message in
+            #if os(macOS)
+            nightParts.sections(for: message)
+            #else
+            LessonParts.sections(of: message.content, isStreaming: message.status == .streaming)
+            #endif
+        }
+    }
+
+    #if DEBUG
+    /// The interactive (or its map) to the top of the reading area, as the
+    /// Mac strip's jump does (shots only). On the iPhone also: `context`
+    /// (the card's top under the end of the text before it), `step2`,
+    /// `step3`, `openings`, `sentence`, `panel` (the map), and `after` (the
+    /// card's end, with what follows it).
+    private func scrollToInteractive(_ target: String, proxy: ScrollViewProxy) {
+        scroll.policy.partJumped()
+        #if os(macOS)
+        proxy.scrollTo(target == "map" ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID,
+                       anchor: .top)
+        #else
+        switch target {
+        case "map": proxy.scrollTo(LessonTokenizerCard.mapScrollID, anchor: .top)
+        case "context": proxy.scrollTo(LessonTokenizerCard.topEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "step2": proxy.scrollTo(LessonTokenizerCard.stepScrollID(2), anchor: .top)
+        case "step3": proxy.scrollTo(LessonTokenizerCard.stepScrollID(3), anchor: .top)
+        case "after": proxy.scrollTo(LessonTokenizerCard.bottomEdgeScrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+        case "openings": proxy.scrollTo(LessonTokenizerCard.openingsScrollID, anchor: .top)
+        case "sentence": proxy.scrollTo(LessonTokenizerCard.sentenceScrollID, anchor: .top)
+        case "panel": proxy.scrollTo(LessonTokenizerCard.panelScrollID, anchor: .top)
+        default: proxy.scrollTo(LessonTokenizerCard.scrollID, anchor: .top)
+        }
+        #endif
+    }
+    #endif
+
     #if os(macOS)
     // MARK: Night Studio (Mac)
 
@@ -1314,32 +1388,9 @@ struct MessageListView: View {
         return list
     }
 
-    /// This list in the lesson `id` (Lesson 1.1 holds the interactive).
-    func nightLesson(id: String) -> MessageListView {
-        var list = self
-        list.nightLessonID = id
-        return list
-    }
-
-    /// Where Lesson 1.1's interactive sits in this thread, if anywhere.
-    private var nightInteractivePlacement: NightInteractivePlacement? {
-        guard lessonStyle else { return nil }
-        return nightInteractiveIndex.placement(lessonID: nightLessonID, messages: messages,
-                                               crisisReplies: nightCrisisReplies) { nightParts.sections(for: $0) }
-    }
-
-    #if DEBUG
-    /// The interactive (or its map) to the top of the reading area, as the
-    /// strip's jump does (shots only).
-    private func nightScrollToInteractive(map: Bool, proxy: ScrollViewProxy) {
-        scroll.policy.partJumped()
-        proxy.scrollTo(map ? NightInteractiveCard.mapScrollID : NightInteractiveCard.scrollID, anchor: .top)
-    }
-    #endif
-
     /// The replies the crisis guard draws plainly (the thread's first crisis
     /// reply and every reply after it).
-    private var nightCrisisReplies: Set<UUID> { nightCrisis.guardedReplies(in: messages) }
+    private var nightCrisisReplies: Set<UUID> { crisisIndex.guardedReplies(in: messages) }
 
     /// The thread's first reply from Merc: the one "Merc · AI tutor" heads.
     private var nightFirstReplyId: UUID? { messages.first(where: { $0.role == .assistant })?.id }

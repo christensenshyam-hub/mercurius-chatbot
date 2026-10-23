@@ -258,6 +258,17 @@ run() {
     # under it).
     chat-mode-sheet) panel_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode debate -seenModeDescription.debate NO -MacSnapshotWindow sheet ;;
     start-failure)   window_shot "$1" "${PAST_GATE[@]}" -NightStartFailure YES ;;
+    # The certificates (DEBUG CertificateDebug: progress seeded in the
+    # -UITests suites, a sample name, nothing pushed). The name sheet for
+    # each certificate; the Certificates list (Deep dive earned, AI Basics
+    # part way, through the Basics seam's demo lessons); the Progress sheet's
+    # Certificates row; the last unit's check passed with its "Get your
+    # certificate" card.
+    certificate-sheet)        panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview deepDive -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-sheet-basics) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview basics -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-list)         panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateList YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-hub)          panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateHub YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-card)         window_shot "$1" "${PAST_GATE[@]}" -CertificateCardPreview YES -MacSnapshotDelay 6 ;;
     crisis)          window_shot "$1" "${PAST_GATE[@]}" -UnitTestCrisisPreview YES -MacSnapshotDelay 5 ;;
     settings-general) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab general ;;
     settings-privacy) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab privacy ;;

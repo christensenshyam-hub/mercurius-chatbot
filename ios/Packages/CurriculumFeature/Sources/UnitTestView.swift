@@ -15,6 +15,8 @@ public struct UnitTestView: View {
     @FocusState private var focusedQuestion: String?
     @NightSettings private var night
     #endif
+    /// What the host shows under a passed result (the certificate card).
+    @Environment(\.unitMasteryAccessory) private var masteryAccessory
     private let onMastered: (String) -> Void
     private let onExit: () -> Void
 
@@ -348,6 +350,10 @@ public struct UnitTestView: View {
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if passed, let masteryAccessory {
+                masteryAccessory
             }
 
             if passed {
