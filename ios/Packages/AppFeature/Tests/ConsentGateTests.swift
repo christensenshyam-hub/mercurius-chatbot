@@ -52,10 +52,25 @@ struct AgeGateTests {
         #expect(AgeGate.isEligible(age: 99))
     }
 
-    @Test("Picker choices run 12…18, youngest first, with exactly one blocked row")
+    @Test("Picker choices run 18…12, oldest first, with exactly one blocked row")
     func choices() {
-        #expect(AgeGate.choices == [12, 13, 14, 15, 16, 17, 18])
+        #expect(AgeGate.choices == [18, 17, 16, 15, 14, 13, 12])
         #expect(AgeGate.choices.filter { !AgeGate.isEligible(age: $0) } == [12])
+    }
+
+    @Test("The row under the placeholder is eligible; the blocked row is the last one (AUD-28)")
+    func blockedRowIsFarFromThePlaceholder() throws {
+        // The wheel rests on the placeholder, so a one-row nudge picks the
+        // first choice. It must never be the answer that blocks the device.
+        let first = try #require(AgeGate.choices.first)
+        #expect(AgeGate.isEligible(age: first))
+        #expect(AgeGate.label(for: first) == "18 or older")
+        let last = try #require(AgeGate.choices.last)
+        #expect(!AgeGate.isEligible(age: last))
+        #expect(AgeGate.label(for: last) == "12 or younger")
+        // Every eligible row comes before the blocked one.
+        let blockedIndex = try #require(AgeGate.choices.firstIndex { !AgeGate.isEligible(age: $0) })
+        #expect(blockedIndex == AgeGate.choices.count - 1)
     }
 
     @Test("Picker labels: open buckets at both ends, plain numbers between")

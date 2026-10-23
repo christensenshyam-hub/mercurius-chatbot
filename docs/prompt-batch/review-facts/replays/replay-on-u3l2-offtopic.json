@@ -1,0 +1,38 @@
+{
+  "base": "on-u3l2.json",
+  "keepTurns": 2,
+  "student": "can u help me with my bio homework real quick its about cells",
+  "flag": "on",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology sometime — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well on it!\n\nLet's finish this up first — we're almost to the exercise.\n\nYou just answered correctly that FDA authorization means a tool has been validated, not that it's perfect everywhere. That's an important nuance.\n\n---\n\nNow for the third piece: what happens when a well-validated AI tool meets the messy reality of a busy hospital?\n\n**Alert fatigue** is one of the most dangerous failure modes — when a system flags so many patients that clinicians start ignoring the alerts.\n\n[EX]When Michigan Medicine tested Epic's Sepsis Model on its own patients (Wong et al., JAMA Internal Medicine, 2021), it missed about two-thirds of sepsis cases. About 88% of its alerts were false alarms — and it flagged 18% of *all* hospitalized patients. When nearly 1 in 5 patients triggers an alert, clinicians tune them out — including the real ones.[/EX]\n\n[KEY]**Alert fatigue** happens when an AI generates so many false alarms that clinicians stop trusting it — and real emergencies get missed alongside the false ones.[/KEY]\n\n[Q]\nWhat makes alert fatigue especially dangerous in a clinical setting?\nA) It causes the AI model to retrain itself on bad data over time\nB) It means clinicians may ignore real emergencies because they've learned to distrust the alerts\nC) It forces hospitals to switch off the AI entirely, losing all its benefits\nANS: B\n[/Q]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": false,
+      "reply": "Ha, I wish I could — but I'm your AI literacy tutor here, so cells are a bit outside my lane right now!\n\nYou've still got one more idea to pick up in this lesson before the exercise. Let's finish strong — it's a good one.\n\nYou picked A on the last question, which is exactly right. FDA authorization means validated for a specific use, not universally perfect.\n\n---\n\nNow for the third piece: what happens when a well-validated tool meets the chaos of a real hospital?\n\n**Alert fatigue** is one of the most dangerous failure modes in clinical AI — when a system cries wolf so often that clinicians start ignoring it.\n\n[EX]Michigan Medicine tested Epic's Sepsis Model on its own patients (Wong et al., JAMA Internal Medicine, 2021). It missed about two-thirds of sepsis cases. About 88% of its alerts were false alarms — meaning only 12 out of every 100 alerts pointed to a real case. It flagged 18% of *all* hospitalized patients. Epic disputed the study's definition of sepsis, but the core concern — that constant false alarms train clinicians to tune out warnings — is widely recognized.[/EX]\n\n[KEY]Even a technically sophisticated clinical AI can cause harm through **alert fatigue** — so many false alarms that real warnings get ignored.[/KEY]\n\n[CHECK]In your own words: why is a very high false-alarm rate potentially dangerous, even if the AI does catch some real cases?[/CHECK]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": false,
+      "reply": "Happy to talk cells another time — but right now we're in the middle of your AI in Healthcare lesson, and you were on a roll!\n\nYou just nailed the question about FDA authorization. Let's keep that momentum going.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology sometime — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well on it!\n\nLet's finish this one up first. You've got one more idea to cover, then a quick exercise, and you'll be done.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology another time — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well!\n\nLet me bring you back: you just nailed why FDA authorization matters (validated, not perfect). There's one more idea to cover before your exercise.\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    },
+    {
+      "run": 5,
+      "lessonComplete": false,
+      "reply": "Happy to help with biology another time — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well!\n\nWe've got one more idea to cover before your exercise. Want to keep going?\n\n[Q]\nWhat's the most important thing FDA authorization of a diagnostic AI tells you?\nA) The tool has been validated for its intended use, but real-world performance can still vary\nB) The tool is more accurate than any human specialist at the same task\nC) The tool can be used for any diagnostic purpose without further review\nANS: A\n[/Q]"
+    }
+  ]
+}

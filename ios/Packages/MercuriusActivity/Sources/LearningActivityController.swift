@@ -104,8 +104,8 @@ public final class LearningActivityController {
 
     #if DEBUG
     /// `-LiveActivityPreview`: the handoff's sample data — streak 24,
-    /// 3 of 5 done, 2 lessons left in Unit 6, 2h 40m left — so every
-    /// surface can be eyeballed without running a real session.
+    /// 3 of 5 done in Unit 6, one lesson done this week — so every surface
+    /// can be eyeballed without running a real session.
     public func startDemo() {
         startSession(
             title: "Unit 06 · Spotting AI: Deepfakes & Synthetic Media",
@@ -118,7 +118,10 @@ public final class LearningActivityController {
                 level: 7,
                 lessonsToLevel: 2,
                 deadline: Date().addingTimeInterval(2 * 3600 + 40 * 60),
-                lastUpdated: Date()
+                lastUpdated: Date(),
+                weekDone: 1,
+                weekGoal: 2,
+                streakAtRisk: false
             )
         )
     }

@@ -228,6 +228,27 @@ describe('create(): curriculum reply', () => {
     assert.ok(text.includes('Unit 2, Lesson 3'), 'lesson tag is echoed');
   });
 
+  test('a Basics tag ([BASICS: …] or the [CURRICULUM: Basics …] alias) is a lesson too, with the tag echoed and the topic stripped', async () => {
+    for (const opener of ['[BASICS: Unit 2, Lesson 3] Teach me what never to share.', '[CURRICULUM: Basics Unit 2, Lesson 3] Teach me what never to share.']) {
+      const msg = await client.messages.create(chat(opener));
+      const text = msg.content[0].text;
+      assert.match(text, /\[CHECK\].*\[\/CHECK\]/, opener);
+      assert.ok(text.includes('Unit 2, Lesson 3'), 'lesson tag is echoed');
+    }
+    const BASICS_SYSTEM = 'A message that starts with [BASICS: Unit N, Lesson M] opens a Basics lesson.';
+    const sys = await client.messages.create(chat('hello', { system: BASICS_SYSTEM }));
+    assert.match(sys.content[0].text, /\[CHECK\]/, 'a Basics system prompt is a lesson prompt');
+    const five = await client.messages.create(conversation(5, { system: BASICS_SYSTEM, opener: '[BASICS: Unit 1, Lesson 1] Go.' }));
+    assert.ok(five.content[0].text.endsWith('[LESSON_COMPLETE]'));
+  });
+
+  test('a [BASICS: …] thread gets one slip line for the server\'s clean-up; a Deep-dive thread never does', async () => {
+    const basics = await client.messages.create(chat('[BASICS: Unit 1, Lesson 1] Go.'));
+    assert.ok(basics.content[0].text.includes('\n\n**Safety point:** Just leave private details out.\n\n[CHECK]'));
+    const deep = await client.messages.create(chat('[CURRICULUM: Unit 1, Lesson 1] Go.'));
+    assert.ok(!deep.content[0].text.includes('Safety point'));
+  });
+
   test('[LESSON_COMPLETE] is appended once the conversation has ≥5 user turns', async () => {
     const four = await client.messages.create(conversation(4, { system: CURRICULUM_SYSTEM, opener: '[CURRICULUM: Unit 1, Lesson 1] Go.' }));
     assert.doesNotMatch(four.content[0].text, /\[LESSON_COMPLETE\]/);

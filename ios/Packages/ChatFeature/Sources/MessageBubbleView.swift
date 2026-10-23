@@ -66,11 +66,16 @@ struct MessageBubbleView: View {
         readingFaceOverride ?? BrandFont.readingFace
     }
 
-    /// Numeric size of the body text. MarkdownUI needs a `CGFloat`, and
-    /// SwiftUI's `Font` type doesn't expose its size, so we keep the value
-    /// here. `@ScaledMetric` makes it grow with the user's Dynamic Type
-    /// setting (relative to `.body`), so reading text stays accessible.
-    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = 17
+    /// The reply's body size before Dynamic Type. MarkdownUI gets this one:
+    /// it scales its theme size for Dynamic Type itself, so the scaled
+    /// `bodyFontSize` would scale the reply twice.
+    static let replyBaseSize: CGFloat = 17
+
+    /// The body size scaled for the student's Dynamic Type setting (relative
+    /// to `.body`), for what's drawn with fixed-size fonts outside MarkdownUI:
+    /// the key-idea and example cards, the check question, the quiz card and
+    /// the list markers.
+    @ScaledMetric(relativeTo: .body) private var bodyFontSize: CGFloat = MessageBubbleView.replyBaseSize
 
     /// Cap on the assistant text measure. Uncapped lines run ~60+ characters
     /// on wider phones, which reads slower than the ~45-55 character measure
@@ -96,23 +101,40 @@ struct MessageBubbleView: View {
                         )
                         .accessibilityLabel("Attached photo")
                 }
-                if message.role == .assistant && lessonStyle && !isEmptyTyping {
+                if message.role == .assistant && lessonStyle && !isEmptyTyping && !isEmptyFailure {
                     presenceLine
                 }
-                // Skip an empty text bubble for an image-only user message.
-                if message.role == .assistant || !message.content.isEmpty {
+                // Skip an empty text bubble for an image-only user message,
+                // and for a reply that failed before any text arrived — the
+                // error line alone says what happened (AUD-29).
+                if Self.drawsBubble(message) {
                     bubble
                 }
                 if case .failed(let reason) = message.status, message.role == .assistant {
                     failureLabel(reason)
+                }
+                if message.status == .interrupted, message.role == .assistant {
+                    interruptedLabel
                 }
             }
 
             if message.role == .assistant { Spacer(minLength: 48) }
         }
         .padding(.horizontal, BrandSpacing.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
+        // A settled lesson reply is a container: each paragraph run, card and
+        // [Q] option is its own stop, and the options stay real buttons.
+        // Everything else (the student's turns, free chat, a reply still
+        // streaming or one that never arrived) reads as one element (AUD-23).
+        .accessibilityElement(children: Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? .contain : .combine)
+        .accessibilityLabel(Self.readsAsBlocks(message, lessonStyle: lessonStyle) ? Text("Merc's reply") : accessibilityLabel)
+    }
+
+    /// Whether VoiceOver walks this bubble block by block. A 170-210-word
+    /// lesson turn used to be one swipe stop with its quiz buttons folded in.
+    static func readsAsBlocks(_ message: ChatMessage, lessonStyle: Bool) -> Bool {
+        guard lessonStyle, message.role == .assistant else { return false }
+        if case .streaming = message.status { return false }
+        return !isEmptyFailure(message)
     }
 
     // MARK: - Avatar
@@ -124,7 +146,7 @@ struct MessageBubbleView: View {
     /// accent line takes over as the assistant attribution there.
     private var shouldShowAvatar: Bool {
         showAvatar && message.role == .assistant && !lessonStyle
-            && !dynamicTypeSize.isAccessibilitySize
+            && !dynamicTypeSize.isAccessibilitySize && !isEmptyFailure
     }
 
     private var avatarView: some View {
@@ -163,6 +185,21 @@ struct MessageBubbleView: View {
     private var isEmptyTyping: Bool {
         if message.content.isEmpty, case .streaming = message.status { return true }
         return false
+    }
+
+    /// A reply that failed before any text arrived: nothing to draw but the
+    /// error line.
+    private var isEmptyFailure: Bool { Self.isEmptyFailure(message) }
+
+    static func isEmptyFailure(_ message: ChatMessage) -> Bool {
+        guard message.role == .assistant, case .failed = message.status else { return false }
+        return message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Whether the message draws a text bubble: never an empty one for an
+    /// image-only user turn, nor for a reply that failed before any text.
+    static func drawsBubble(_ message: ChatMessage) -> Bool {
+        message.role == .assistant ? !isEmptyFailure(message) : !message.content.isEmpty
     }
 
     /// "● Merc" sender line above the lesson bubble (green dot + soft ring).
@@ -226,26 +263,34 @@ struct MessageBubbleView: View {
         Markdown(text)
             .replyMarkdownStyling(
                 face: activeReadingFace,
-                bodySize: bodyFontSize,
+                baseSize: Self.replyBaseSize,
+                scaledSize: bodyFontSize,
                 codeBlockBackground: BrandColor.surfaceElevated
             )
     }
 
-    /// Render one parsed block of a lesson reply.
+    /// Render one parsed block of a lesson reply. Each is one VoiceOver stop
+    /// carrying the report actions, since the long-press menu belongs to the
+    /// bubble, which VoiceOver now walks into rather than lands on.
     @ViewBuilder
     private func blockView(_ block: MessageBlock) -> some View {
         switch block {
         case .prose(let text):
             // Defensive re-strip: stray tokens the parser normalized away.
             lessonMarkdown(Self.stripCheckTokens(text))
+                .accessibilityElement(children: .combine)
+                .modifier(ReportActions(enabled: !message.content.isEmpty, onReport: onReport))
         case .check(let question):
             calloutCard(question)
+                .modifier(ReportActions(enabled: !message.content.isEmpty, onReport: onReport))
         case .key(let text):
             KeyIdeaCard(text: text, bodySize: bodyFontSize,
                         font: readingFont(size: bodyFontSize, weight: .regular))
+                .modifier(ReportActions(enabled: !message.content.isEmpty, onReport: onReport))
         case .example(let text):
             ExampleCard(text: text, bodySize: bodyFontSize,
                         font: readingFont(size: bodyFontSize, weight: .regular))
+                .modifier(ReportActions(enabled: !message.content.isEmpty, onReport: onReport))
         case .quiz(let quiz):
             if quiz.isComplete && !quiz.isWellFormed {
                 // Malformed degradation: worst case is exactly the pre-blocks
@@ -273,9 +318,12 @@ struct MessageBubbleView: View {
         if let onCheckTap {
             Button(action: onCheckTap) { calloutContent(text) }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Question: \(text)")
                 .accessibilityHint("Double-tap to answer")
         } else {
             calloutContent(text)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Question: \(text)")
         }
     }
 
@@ -283,11 +331,11 @@ struct MessageBubbleView: View {
         HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
             Image(systemName: "questionmark.bubble.fill")
                 .font(.system(size: bodyFontSize * 0.9, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
             Text(text)
                 .font(readingFont(size: bodyFontSize, weight: .semibold))
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
                 .multilineTextAlignment(.leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -367,7 +415,8 @@ struct MessageBubbleView: View {
                 Markdown(Self.stripCheckTokens(message.content))
                     .replyMarkdownStyling(
                         face: activeReadingFace,
-                        bodySize: bodyFontSize,
+                        baseSize: Self.replyBaseSize,
+                        scaledSize: bodyFontSize,
                         codeBlockBackground: BrandColor.surface
                     )
             }
@@ -418,7 +467,16 @@ struct MessageBubbleView: View {
     private func failureLabel(_ reason: String) -> some View {
         Label(reason, systemImage: "exclamationmark.circle.fill")
             .font(BrandFont.caption)
-            .foregroundStyle(BrandColor.error)
+            .foregroundStyle(BrandColor.errorText)
+            .padding(.horizontal, BrandSpacing.sm)
+    }
+
+    /// Under a cut-off reply the student answered anyway: a quiet note, not
+    /// an error — the conversation carried on from here.
+    private var interruptedLabel: some View {
+        Label("Reply cut off here", systemImage: "scissors")
+            .font(BrandFont.caption)
+            .foregroundStyle(BrandColor.textSecondary)
             .padding(.horizontal, BrandSpacing.sm)
     }
 
@@ -452,9 +510,15 @@ struct MessageBubbleView: View {
         if case .streaming = message.status {
             return Text("Mercurius is replying")
         }
+        if isEmptyFailure, case .failed(let reason) = message.status {
+            return Text("Merc's reply didn't arrive. \(reason)")
+        }
         // Speak the reply with questions flagged and never a raw marker — and
         // never the [Q] answer key (plainText drops ANS lines).
         let spoken = BlockParser.plainText(message.content)
+        if message.status == .interrupted {
+            return Text("\(roleLabel), cut off: \(spoken)")
+        }
         return Text("\(roleLabel): \(spoken)")
     }
 }
@@ -475,6 +539,26 @@ extension MessageBubbleView: Equatable {
             && (lhs.quizInteraction == nil) == (rhs.quizInteraction == nil)
             && lhs.quizInteraction?.isEnabled == rhs.quizInteraction?.isEnabled
             && lhs.quizInteraction?.answeredIndex == rhs.quizInteraction?.answeredIndex
+    }
+}
+
+// MARK: - Report actions
+
+/// "Report response" as VoiceOver actions, one per reason, on each block of
+/// a lesson reply (the bubble's long-press menu, for a student who can't
+/// long-press a block they're focused on).
+private struct ReportActions: ViewModifier {
+    let enabled: Bool
+    let onReport: (ReportReason) -> Void
+
+    func body(content: Content) -> some View {
+        content.accessibilityActions {
+            if enabled {
+                ForEach(ReportReason.allCases, id: \.self) { reason in
+                    Button("Report response: \(reason.title)") { onReport(reason) }
+                }
+            }
+        }
     }
 }
 

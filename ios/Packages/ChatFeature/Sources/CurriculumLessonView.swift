@@ -41,7 +41,9 @@ public struct CurriculumLessonView: View {
     /// Advance to the next stop — the host swaps the presented lesson or opens
     /// the unit check.
     private let onAdvanceToNext: () -> Void
-    /// Unit progress for the header bar (lessons completed / total in this unit).
+    /// Unit progress (lessons completed / total in this unit). The count of
+    /// lessons places this one ("Lesson 2 of 4") in the header; the completed
+    /// count drives the coach card's progress reactions.
     private let completedInUnit: Int
     private let totalInUnit: Int
     /// Fired once when a real completion's celebration goes away, by any path.
@@ -64,13 +66,13 @@ public struct CurriculumLessonView: View {
     /// value never re-triggers a reaction on re-render / re-entry.
     @State private var lastReactedProgress: Int
     @State private var reactionClearTask: Task<Void, Never>?
+    /// The composer has focus (the keyboard is up); the coach card makes room.
+    @State private var composerFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // Dynamic Type: the design sizes at the default setting, scaled with it.
-    @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 11
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 15
-    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 22
-    @ScaledMetric(relativeTo: .caption) private var progressLabelSize: CGFloat = 12
     @ScaledMetric(relativeTo: .headline) private var introTitleSize: CGFloat = 17
     @ScaledMetric(relativeTo: .subheadline) private var introBodySize: CGFloat = 13.5
 
@@ -138,6 +140,10 @@ public struct CurriculumLessonView: View {
             streakStore: streakStore,
             achievementStore: achievementStore
         ))
+        #if DEBUG
+        // `-LessonReplay`: recorded replies, no network (see LessonReplay).
+        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel()) }
+        #endif
     }
 
     public var body: some View {
@@ -145,15 +151,10 @@ public struct CurriculumLessonView: View {
             BrandColor.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // One compact row, so the lesson itself gets the screen
+                // (AUD-08). Done never wraps or scrolls away.
                 header
                 Divider().overlay(BrandColor.border)
-
-                // Merc as the lesson's coach — large, fully visible, and out of
-                // the composer's way (replaces the old peek behind the input bar).
-                // Live activity keeps the coach in sync with the conversation
-                // (thinking pulse while a reply streams; antics only at rest).
-                MercCoachCard(line: coachLine, reaction: coachReaction,
-                              liveActivity: coachActivity)
 
                 MessageListView(
                     messages: model.messages,
@@ -172,7 +173,18 @@ public struct CurriculumLessonView: View {
                     onCheckTap: { inputFocusTrigger += 1 },
                     // blocks_v1: a tapped [Q] option grades locally, then
                     // auto-sends as a normal visible user turn.
-                    onQuizPick: { model.sendQuickReply($0) }
+                    onQuizPick: { model.sendQuickReply($0) },
+                    // Merc as the lesson's coach: the list's first row, so
+                    // it scrolls away with the lesson; it also steps aside
+                    // while the student types and at accessibility sizes.
+                    // Live activity keeps it in sync with the conversation
+                    // (thinking pulse while a reply streams; antics at rest).
+                    coach: LessonCoach(line: coachLine, reaction: coachReaction,
+                                       activity: coachActivity),
+                    // Where the header drops the title (accessibility
+                    // sizes), the thread opens with it, in full.
+                    threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
+                    composerFocused: composerFocused
                 )
 
                 // Clean, fixed composer — nothing tucked behind it.
@@ -189,7 +201,13 @@ public struct CurriculumLessonView: View {
                     onRemoveAttachment: { model.clearAttachment() },
                     useBrandSend: true,
                     backgroundFade: true,
-                    focusTrigger: inputFocusTrigger
+                    focusTrigger: inputFocusTrigger,
+                    // Merc asks; the student answers (AUD-44).
+                    placeholder: "Type your answer…",
+                    compactPlaceholder: "Answer…",
+                    // A long answer must not swallow the reading area.
+                    maxLines: 3,
+                    onFocusChange: { composerFocused = $0 }
                 )
             }
             // The intro and the celebration cover the lesson: VoiceOver and a
@@ -239,6 +257,25 @@ public struct CurriculumLessonView: View {
                 showIntro = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showCelebration = true }
             }
+            // `-LessonFocusComposer`: focus the composer once the first reply
+            // is in (or after `-LessonFocusDelay <seconds>`), for keyboard-up
+            // screenshots (simctl can't tap).
+            if ProcessInfo.processInfo.arguments.contains("-LessonFocusComposer") {
+                let delay = UserDefaults.standard.double(forKey: "LessonFocusDelay")
+                DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 6)) {
+                    inputFocusTrigger += 1
+                }
+            }
+            // `-LessonAutoAnswer <text>` (+ `-LessonAutoAnswerDelay <s>`):
+            // send a typed answer, as the student would, for screenshots of
+            // the next turn (with `-LessonReplayCut`: answering a cut-off reply).
+            if let answer = UserDefaults.standard.string(forKey: "LessonAutoAnswer") {
+                let delay = UserDefaults.standard.double(forKey: "LessonAutoAnswerDelay")
+                DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 6)) {
+                    model.draft = answer
+                    model.send()
+                }
+            }
         }
         #endif
         // The lesson was passed (server flag or a pass marker) → celebrate ONCE.
@@ -251,7 +288,11 @@ public struct CurriculumLessonView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                 showCelebration = true
             }
-            AccessibilityNotification.Announcement("Lesson complete").post()
+            // High priority: it lands with the reply's own announcement and
+            // must not be cut off by it.
+            var line = AttributedString("Lesson complete")
+            line.accessibilitySpeechAnnouncementPriority = .high
+            AccessibilityNotification.Announcement(line).post()
         }
         // INTERMEDIATE progress reacts cleanly on lesson ENTRY (when the learner
         // opens the next lesson) — never buried under the completion overlay. Only
@@ -297,98 +338,128 @@ public struct CurriculumLessonView: View {
         return "I'll help you " + lowered
     }
 
+    /// "UNIT 01 · LESSON 2 OF 4": where this lesson sits in its unit. It
+    /// replaced an unlabelled unit-progress bar ("0/4") that read like steps
+    /// in this lesson and never moved during it (AUD-51).
+    private var eyebrowText: String {
+        Self.eyebrow(unitLabel: unitLabel, lessonNumber: lessonNumber, totalInUnit: totalInUnit)
+    }
+
+    static func eyebrow(unitLabel: String, lessonNumber: Int, totalInUnit: Int) -> String {
+        "\(unitLabel) · \(place(lessonNumber: lessonNumber, totalInUnit: totalInUnit))".uppercased()
+    }
+
+    private static func place(lessonNumber: Int, totalInUnit: Int) -> String {
+        totalInUnit > 0 ? "Lesson \(lessonNumber) of \(totalInUnit)" : "Lesson \(lessonNumber)"
+    }
+
+    /// The lesson's header: eyebrow and the title beside Done (AUD-08).
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(unitLabel) · Lesson \(lessonNumber)".uppercased())
-                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
-                    .tracking(0.4)
-                    .foregroundStyle(BrandColor.accent)
-                Spacer(minLength: BrandSpacing.sm)
-                Button("Done") {
-                    model.cancel()
-                    onExit()
-                }
-                .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(BrandColor.accent)
-                .accessibilityLabel("Done. Exit lesson.")
-            }
-            Text(title)
-                .font(.system(size: titleSize, weight: .black, design: .rounded))
-                .foregroundStyle(BrandColor.text)
-                .fixedSize(horizontal: false, vertical: true)
-            if totalInUnit > 0 { progressBar.padding(.top, 2) }
+        LessonHeaderBar(
+            eyebrow: eyebrowText,
+            title: title,
+            accessibilityLabel: headerAccessibilityLabel,
+            exitTitle: "Done",
+            exitAccessibilityLabel: "Done. Exit lesson."
+        ) {
+            model.cancel()
+            onExit()
         }
-        .padding(.horizontal, 22)
-        .padding(.top, BrandSpacing.md)
-        .padding(.bottom, BrandSpacing.md)
+        .padding(.leading, 22)
+        .padding(.trailing, 12)
+        .padding(.vertical, BrandSpacing.xs)
     }
 
-    private var progressBar: some View {
-        HStack(spacing: 9) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(BrandColor.accent.opacity(0.16))
-                    Capsule()
-                        .fill(BrandGradient.mercHorizontal)
-                        .frame(width: max(0, min(geo.size.width, geo.size.width * progressFraction)))
-                }
-            }
-            .frame(height: 8)
-            Text("\(completedInUnit)/\(totalInUnit)")
-                .font(.system(size: progressLabelSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(BrandColor.accent)
-                .monospacedDigit()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Unit progress: \(completedInUnit) of \(totalInUnit) lessons complete")
-    }
-
-    private var progressFraction: CGFloat {
-        guard totalInUnit > 0 else { return 0 }
-        return min(1, CGFloat(completedInUnit) / CGFloat(totalInUnit))
+    private var headerAccessibilityLabel: String {
+        let place = Self.place(lessonNumber: lessonNumber, totalInUnit: totalInUnit)
+        return "\(unitLabel.capitalized), \(place): \(title)"
     }
 
     // MARK: - Speech-bubble intro
 
+    /// Shown before a fresh lesson starts. Its top bar has a way out that
+    /// doesn't start the lesson (AUD-33); the speech bubble scrolls when it
+    /// outgrows the screen (large text), with Continue pinned below (AUD-08).
     private var lessonIntro: some View {
         ZStack {
             BrandColor.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(unitLabel) · Lesson \(lessonNumber)".uppercased())
-                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
-                    .tracking(0.4)
-                    .foregroundStyle(BrandColor.accent)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-
-                Spacer()
-
-                introSpeechBubble
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 14)
-
-                ZStack(alignment: .bottomTrailing) {
-                    HStack {
-                        MercMascot(.wave, size: 150).accessibilityHidden(true)
-                        Spacer()
-                    }
-                    Button(action: startFromIntro) {
-                        Text("Continue")
-                            .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 28)
-                            .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
-                    }
-                    .padding(.bottom, 16)
-                    .accessibilityLabel("Continue. Start the lesson.")
+                // Leaves without `beginOrResume`: no model call, no start row,
+                // and the lesson isn't marked in progress (AUD-33).
+                LessonHeaderBar(
+                    eyebrow: "\(unitLabel) · Lesson \(lessonNumber)".uppercased(),
+                    title: nil,
+                    accessibilityLabel: "\(unitLabel.capitalized), Lesson \(lessonNumber)",
+                    exitTitle: "Not now",
+                    exitAccessibilityLabel: "Not now. Leave without starting the lesson."
+                ) {
+                    onExit()
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .padding(.leading, 24)
+                .padding(.trailing, 14)
+                .padding(.top, BrandSpacing.sm)
+
+                GeometryReader { geo in
+                    ScrollView {
+                        introSpeechBubble
+                            .padding(.horizontal, 24)
+                            .padding(.top, BrandSpacing.md)
+                            // Room for the bubble's tail and shadow, which
+                            // the scroll view would otherwise clip.
+                            .padding(.bottom, Self.introBubbleTailRoom)
+                            // Sits low, just above Merc, as before; scrolls
+                            // once it is taller than the space.
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .bottom)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                }
+
+                introFooter
             }
         }
+    }
+
+    /// Merc waving beside Continue; at accessibility sizes Merc (decoration)
+    /// steps out so Continue always fits on screen.
+    @ViewBuilder private var introFooter: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            HStack {
+                Spacer(minLength: 0)
+                continueButton
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, BrandSpacing.sm)
+            .padding(.bottom, BrandSpacing.lg)
+        } else {
+            ZStack(alignment: .bottomTrailing) {
+                HStack {
+                    MercMascot(.wave, size: 150).accessibilityHidden(true)
+                    Spacer()
+                }
+                continueButton
+                    .padding(.bottom, 16)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+            // Merc's art is clear at the top: tuck it up into the bubble's
+            // tail room so the bubble sits just above his head, as before.
+            .padding(.top, 14 - Self.introBubbleTailRoom)
+        }
+    }
+
+    private static let introBubbleTailRoom: CGFloat = 42
+
+    private var continueButton: some View {
+        Button(action: startFromIntro) {
+            Text("Continue")
+                .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 28)
+                .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
+        }
+        .accessibilityLabel("Continue. Start the lesson.")
     }
 
     private var introSpeechBubble: some View {
@@ -497,6 +568,94 @@ public struct CurriculumLessonView: View {
         case .sending:   return .aiThinking
         case .streaming: return .aiSpeaking
         case .idle, .failed: return .idle
+        }
+    }
+}
+
+/// The top row of a lesson (and of its intro): the eyebrow, optionally a
+/// title of up to two lines, and the exit on the trailing edge — a 44 pt
+/// target that never truncates, wraps or scrolls away (AUD-08). At
+/// accessibility sizes the title steps out (it stays in the VoiceOver label,
+/// and the thread's first row shows it in full) and the row's text
+/// stops growing at AX2, like the system's own bars; long-pressing the exit
+/// shows it large. Its own view so the size cap reaches its scaled metrics.
+struct LessonHeaderBar: View {
+    let eyebrow: String
+    let title: String?
+    let accessibilityLabel: String
+    let exitTitle: String
+    let exitAccessibilityLabel: String
+    let onExit: () -> Void
+
+    /// Below accessibility sizes the title sits in the bar, on up to two
+    /// lines. At accessibility sizes it steps out of the bar (AUD-08's
+    /// reading room) and the thread opens with it instead.
+    static func showsTitle(at size: DynamicTypeSize) -> Bool {
+        !size.isAccessibilitySize
+    }
+
+    static let titleLineLimit = 2
+
+    var body: some View {
+        Content(eyebrow: eyebrow, title: title, accessibilityLabel: accessibilityLabel,
+                exitTitle: exitTitle, exitAccessibilityLabel: exitAccessibilityLabel,
+                onExit: onExit)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+    }
+
+    private struct Content: View {
+        let eyebrow: String
+        let title: String?
+        let accessibilityLabel: String
+        let exitTitle: String
+        let exitAccessibilityLabel: String
+        let onExit: () -> Void
+
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+        @ScaledMetric(relativeTo: .caption2) private var eyebrowSize: CGFloat = 11
+        @ScaledMetric(relativeTo: .headline) private var titleSize: CGFloat = 17
+        @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 15
+
+        var body: some View {
+            HStack(alignment: .center, spacing: BrandSpacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(eyebrow)
+                        .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
+                        .tracking(0.4)
+                        .foregroundStyle(BrandColor.accentText)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                        .minimumScaleFactor(0.85)
+                    if let title, LessonHeaderBar.showsTitle(at: dynamicTypeSize) {
+                        Text(title)
+                            .font(.system(size: titleSize, weight: .black, design: .rounded))
+                            .foregroundStyle(BrandColor.text)
+                            // Two lines: at one, every title truncated at the
+                            // default size ("What happens when you typ…").
+                            .lineLimit(LessonHeaderBar.titleLineLimit)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityAddTraits(.isHeader)
+
+                Button(action: onExit) {
+                    Text(exitTitle)
+                        .font(.system(size: buttonSize, weight: .heavy, design: .rounded))
+                        .foregroundStyle(BrandColor.accentText)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 10)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .layoutPriority(1)
+                .accessibilityLabel(exitAccessibilityLabel)
+                .accessibilityShowsLargeContentViewer()
+            }
         }
     }
 }

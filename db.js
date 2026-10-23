@@ -541,7 +541,8 @@ function isoDay(dayIndex) {
 
 // ─── Curriculum progress helpers ───
 // Lesson ids are 'uN_lM', unit ids 'unit_N' (ios/…/Curriculum.swift).
-const PROGRESS_ID_RE = /^(u\d+_l\d+|unit_\d+)$/;
+// Deep-dive (u1_l3, unit_1) and Basics (b1_l3, basics_1) ids; lib/schemas is the gate.
+const PROGRESS_ID_RE = /^(?:[ub]\d+_l\d+|(?:unit|basics)_\d+)$/;
 // `CASE <col> WHEN 'completed' THEN 1 WHEN 'mastered' THEN 2 ELSE 0 END` —
 // the forward-only comparison, generated from PROGRESS_STATUS_RANK (a fixed
 // code-level map, never request input) so SQL and validator agree.
@@ -783,8 +784,10 @@ module.exports = {
   //         `event` must be 'start' | 'turn' | 'complete' and `sessionId` is
   //         required — anything else is dropped. `ts` defaults to now.
   //         `lessonId` ('u1_l3') is derived from unit+lesson when absent, and
-  //         unit/lesson are parsed from a 'uN_lM' lessonId when absent, so a
-  //         caller may pass either form.
+  //         unit/lesson are parsed from a 'uN_lM' (Deep dive) or 'bN_lM'
+  //         (Basics) lessonId when absent, so a caller may pass either form.
+  //         A Basics row must pass its lessonId: unit+lesson alone derive a
+  //         Deep-dive 'u' id.
   //         A 'complete' is recorded once per ATTEMPT: when the same session +
   //         lesson_id already has a 'complete' at or after its latest 'start'
   //         (ts 0 when there is none), the row is skipped (false, not logged).
@@ -816,7 +819,7 @@ module.exports = {
       let lessonId = row.lessonId != null && row.lessonId !== '' ? String(row.lessonId) : null;
       if (lessonId == null && unit != null && lesson != null) lessonId = `u${unit}_l${lesson}`;
       if (lessonId != null && (unit == null || lesson == null)) {
-        const m = /^u(\d+)_l(\d+)$/.exec(lessonId);
+        const m = /^[ub](\d+)_l(\d+)$/.exec(lessonId);
         if (m) { if (unit == null) unit = Number(m[1]); if (lesson == null) lesson = Number(m[2]); }
       }
       const tsRaw = Number(row.ts);

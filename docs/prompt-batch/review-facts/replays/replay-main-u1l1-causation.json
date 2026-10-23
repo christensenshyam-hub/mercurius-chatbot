@@ -1,0 +1,33 @@
+{
+  "base": "off-u1l1.json",
+  "keepTurns": 8,
+  "student": "low i think, it could be essay or answers or work or presentation, theres a lot of words that fit so the model isnt as sure",
+  "flag": "main-off",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": true,
+      "reply": "You nailed it.\n\n\"Hoped her ___\" leaves the door open to \"essay,\" \"answers,\" \"work,\" \"presentation,\" \"performance\" — the context doesn't strongly favor any one token, so the probability gets spread across many options. Low confidence, exactly right.\n\nAnd notice what you just did: you used attention (what tokens are nearby?) and next-token prediction (how does probability distribute across options?) to reason about both blanks correctly.\n\nThat's the whole engine in a nutshell:\n\n- Text → tokens → numbers\n- Attention weighs each token against the others in context\n- The model picks the next token by probability, one at a time\n\nYou've got it. Nice work on this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 1,
+      "lessonComplete": true,
+      "reply": "You nailed it.\n\n\"Hoped her ___\" leaves the door open — \"essay,\" \"answers,\" \"work,\" \"presentation,\" \"performance\" all fit grammatically and contextually. The attention mechanism doesn't find a strong signal pulling toward one token, so probability gets spread across many options. Low confidence, exactly right.\n\nCompare that to blank one: \"studied all night for the ___\" funnels attention hard toward \"exam\" and \"test.\" High confidence because context eliminates almost everything else.\n\nThat's next-token prediction working exactly as designed — high confidence when context is specific, low confidence when many tokens are equally plausible.\n\nYou've demonstrated all three core ideas cleanly:\n- **Tokenization** — text becomes numbers before anything else happens\n- **Attention** — tokens weigh each other to resolve meaning in context\n- **Next-token prediction** — one token at a time, probability shaped by everything before it\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 2,
+      "lessonComplete": true,
+      "reply": "You nailed it.\n\n\"Hoped her ___\" leaves the door open — \"essay,\" \"answers,\" \"work,\" \"presentation,\" \"performance\" all fit grammatically and contextually. The attention mechanism doesn't find a strong anchor the way \"studied all night\" anchors the first blank. So the probability gets spread across many tokens instead of concentrating on one.\n\nThat's exactly what low confidence looks like inside an LLM: a flat distribution instead of a sharp peak.\n\nYou've now correctly applied all three concepts:\n\n- **Tokenization** — text becomes numbers before anything else happens\n- **Attention** — context tokens pull meaning toward the right interpretation\n- **Next-token prediction** — confidence depends on how much the surrounding context narrows the options\n\nThat's the full picture of what happens when you hit send.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 3,
+      "lessonComplete": true,
+      "reply": "You nailed it.\n\n\"Hoped her ___\" leaves the door open — \"essay,\" \"answers,\" \"work,\" \"presentation,\" \"performance\" all fit grammatically and make sense in context. Attention doesn't find a strong anchor to narrow it down, so probability gets spread across many tokens. Low confidence, exactly right.\n\nCompare that to the first blank: \"studied all night for the ___\" pulls hard toward \"exam\" or \"test.\" Attention links \"studied,\" \"all night,\" and \"professor\" together and concentrates probability on a tight cluster. High confidence.\n\nYou just described next-token prediction from the inside — the model isn't choosing randomly, it's reading context through attention and betting on whichever token the surrounding words make most likely.\n\nThat's the whole engine: text → tokens → numbers → attention weighs context → probability distribution → pick the next token → repeat.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": true,
+      "reply": "You nailed it.\n\n\"Hoped her ___\" leaves the door open to \"essay,\" \"answers,\" \"work,\" \"presentation,\" \"performance,\" \"argument\" — the context doesn't narrow it down much, so probability gets spread across many tokens. Low confidence, exactly right.\n\nAnd notice what you just did: you used attention (what tokens are nearby?) and next-token prediction (how does probability distribute across options?) to reason about both blanks correctly.\n\nThat's the whole engine in a nutshell — tokenize, attend to context, predict the next most likely token.\n\nNice work — you've nailed this one.\n\n[LESSON_COMPLETE]"
+    }
+  ]
+}

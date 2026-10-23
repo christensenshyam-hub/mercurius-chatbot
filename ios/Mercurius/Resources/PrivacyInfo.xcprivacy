@@ -7,8 +7,8 @@
         We do not perform tracking in Apple's sense of the word: no ad
         networks, no third-party analytics, no cross-app identity. The
         session identifier we persist in Keychain is a random 32-char
-        device-scoped string; it is not linked to any user identity,
-        email, or device advertising identifier.
+        device-scoped string; it is never tied to a name, email, phone
+        number, Apple ID or the device advertising identifier.
     -->
     <key>NSPrivacyTracking</key>
     <false/>
@@ -18,31 +18,38 @@
     <array/>
 
     <!--
-        Data we collect, by Apple's privacy-label taxonomy:
+        Data we collect, by Apple's privacy-label taxonomy.
+
+        Every type is marked LINKED (NSPrivacyCollectedDataTypeLinked =
+        true). Apple counts data stored under a user ID as linked to the
+        user unless it is de-identified before collection, and ours is all
+        stored under the session ID so it can be shown back, synced and
+        deleted (AUD-57). "Linked" here means linked to that random ID,
+        never to a name, email or account. Not used for tracking. The App
+        Store privacy label must say the same (docs/APP_STORE_LISTING.md §3).
 
         1. User ID — the device-scoped session identifier. Sent to the
            Mercurius backend on every request so conversations can be
-           stitched together across sessions on the same device. Not
-           linked to any real-world identity and not used for tracking.
+           stitched together across sessions on the same device. Never
+           tied to a real-world identity; not used for tracking.
 
         2. Other User Content — the content of chat messages. Sent to
            the Mercurius backend so the LLM (Claude via Anthropic) can
-           respond. Used only for app functionality. Not linked to a
-           real-world identity and not used for tracking.
+           respond, and stored under the session ID. Used only for app
+           functionality; not used for tracking.
 
         3. Photos or Videos — a photo the student chooses to attach to
            a chat message (via the system PhotosPicker; the app never
            reads the library itself). The photo is uploaded to the
            Mercurius backend and forwarded to Anthropic so Claude can
-           respond about it. Used only for app functionality. Not
-           linked to a real-world identity and not used for tracking.
+           respond about it. Used only for app functionality; not used
+           for tracking.
 
         4. Product Interaction — which lessons the student has finished
            or mastered, synced to the Mercurius backend under the session
            identifier so progress survives a reinstall (app
            functionality), and lesson start/finish events used to see
-           whether the lessons work (analytics). Not linked to a
-           real-world identity and not used for tracking.
+           whether the lessons work (analytics). Not used for tracking.
 
         Not collected: the age the student picks on first run is used
         once to gate the flow and is never persisted or logged.
@@ -53,7 +60,7 @@
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeUserID</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
+            <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>
             <false/>
             <key>NSPrivacyCollectedDataTypePurposes</key>
@@ -65,7 +72,7 @@
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
+            <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>
             <false/>
             <key>NSPrivacyCollectedDataTypePurposes</key>
@@ -77,7 +84,7 @@
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
+            <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>
             <false/>
             <key>NSPrivacyCollectedDataTypePurposes</key>
@@ -89,7 +96,7 @@
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeProductInteraction</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
+            <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>
             <false/>
             <key>NSPrivacyCollectedDataTypePurposes</key>

@@ -32,7 +32,15 @@ public struct StreakChip: View {
             .padding(.horizontal, BrandSpacing.sm)
             .padding(.vertical, BrandSpacing.xs)
             .background(BrandColor.surfaceElevated, in: Capsule())
+            // The capsule stays compact; the tap target around it is 44 pt
+            // (it measured 29 x 24.5 pt, AUD-46).
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
+        // Header chrome: it stops growing at AX1 so the header row keeps its
+        // shape at the largest sizes; a long press shows it large (AUD-48).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityShowsLargeContentViewer()
         .accessibilityLabel("Your progress. \(display.spokenStreak)")
     }
 }

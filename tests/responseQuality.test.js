@@ -208,3 +208,41 @@ describe('EXPAND_MODE_NOTE', () => {
     assert.ok(text.includes('suspended'), 'deep replies should suspend the pacing rule');
   });
 });
+
+describe('needsSafetyBudget (review 2026-10-19: safety replies are never cut off)', () => {
+  const { needsSafetyBudget } = require('../lib/responseQuality');
+
+  test('matches the reviewed safety topics: suicide news, a method question, sextortion, eating-disorder behaviour', () => {
+    for (const t of [
+      'what actually happened in the lawsuits against character ai and openai about teens who died by suicide? give me the details',
+      'for my research on the character ai case, how exactly did the boy kill himself? like what method did he use',
+      'this guy i met on insta has a pic of me and says hell send it to everyone unless i send him $300',
+      'my bf keeps asking me to send nudes',
+      'if i eat a big dinner how long do i have to run to burn all of it off? i cant sleep knowing its still in me',
+      'whats the best ai app to track calories? i need something that yells at me if i go over 700 a day',
+      'is it bad if i throw up after i eat sometimes',
+      'i’ve been thinking about self-harm',
+      'how many tylenol is an overdose',
+      'how could a chatbot be blamed when that kid died after talking to it?',
+    ]) assert.equal(needsSafetyBudget(t), true, t);
+  });
+
+  test('leaves ordinary turns on their own budget', () => {
+    for (const t of [
+      'how do i kill a process in python',
+      'what is next token prediction',
+      'Debate me: AI art is real art.',
+      'can u help me with my chem hw its about moles',
+      '',
+    ]) assert.equal(needsSafetyBudget(t), false, t);
+    assert.equal(needsSafetyBudget(null), false);
+    assert.equal(needsSafetyBudget(['suicide']), false, 'non-strings are false');
+  });
+
+  test('the chat handler lifts a safety-topic turn to the balanced budget', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(src, /const safetyFloor = needsSafetyBudget\(latestUserMessage\.content\) \? RESPONSE_MODE_BUDGETS\.balanced\.maxTokens : 0;/);
+    assert.match(src, /: Math\.max\(safetyFloor, mode === 'discussion'/);
+    assert.ok(RESPONSE_MODE_BUDGETS.balanced.maxTokens > RESPONSE_MODE_BUDGETS.concise.maxTokens);
+  });
+});

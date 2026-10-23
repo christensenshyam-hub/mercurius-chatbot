@@ -2,7 +2,8 @@ import SwiftUI
 import PhotosUI
 import DesignSystem
 
-/// Message composer. Grows with content up to 5 lines, then scrolls. Supports
+/// Message composer. Grows with content up to `maxLines` lines (5 by
+/// default), then scrolls. Supports
 /// attaching one photo (shown as a thumbnail above the field). Disables the
 /// send button while a request is in flight or a photo is still preparing.
 /// Holds at most `characterLimit` characters — what the server reads — and
@@ -29,8 +30,29 @@ struct ChatInputBar: View {
     /// lesson check-question callout). A counter rather than a Bool so every
     /// tap re-focuses even if the field was focused-then-dismissed.
     var focusTrigger: Int = 0
+    /// What the empty field says. Free chat invites a question; a lesson
+    /// passes its own ("Type your answer…"), since there Merc is the one
+    /// asking (AUD-44).
+    var placeholder: String = "Ask Mercurius…"
+    /// A shorter placeholder for accessibility sizes, where the field fits
+    /// only a few characters ("Type yo…", even "Your an…", at AX5 on an
+    /// SE). Nil keeps
+    /// `placeholder` at every size.
+    var compactPlaceholder: String? = nil
+    /// The most lines the field grows to before it scrolls. A lesson caps it
+    /// lower so a long answer can't swallow the reading area above.
+    var maxLines: Int = 5
+    /// Told when the field gains or loses focus (the keyboard rises or falls).
+    var onFocusChange: ((Bool) -> Void)? = nil
 
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The placeholder for this text size.
+    static func placeholder(_ placeholder: String, compact: String?, at size: DynamicTypeSize) -> String {
+        if size.isAccessibilitySize, let compact { return compact }
+        return placeholder
+    }
     @State private var pickerItem: PhotosPickerItem?
     /// A picked photo failed to load (e.g. an iCloud-optimized original while
     /// offline, or a corrupt asset). Without this the picker dismisses and
@@ -56,7 +78,7 @@ struct ChatInputBar: View {
             if let note = ComposerLimit.note(count: text.utf16.count, limit: characterLimit, wasCut: wasCut) {
                 Text(note)
                     .font(BrandFont.caption)
-                    .foregroundStyle(wasCut ? BrandColor.error : BrandColor.textSecondary)
+                    .foregroundStyle(wasCut ? BrandColor.errorText : BrandColor.textSecondary)
                     .monospacedDigit()
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityIdentifier("composer.limit")
@@ -65,8 +87,17 @@ struct ChatInputBar: View {
             HStack(alignment: .bottom, spacing: BrandSpacing.sm) {
                 photoButton
 
-                TextField("Ask Mercurius…", text: $text, axis: .vertical)
-                    .lineLimit(1...5)
+                // The placeholder in the secondary text token, not the
+                // system's faint one (1.7:1 in light mode): in a lesson it
+                // is the instruction (AUD-44). 4.7:1 light, 6.3:1 dark on
+                // the field.
+                let prompt = Self.placeholder(placeholder, compact: compactPlaceholder, at: dynamicTypeSize)
+                TextField(text: $text,
+                          prompt: Text(prompt).foregroundStyle(BrandColor.textSecondary),
+                          axis: .vertical) {
+                    Text(prompt)
+                }
+                    .lineLimit(1...max(1, maxLines))
                     .font(BrandFont.body)
                     .foregroundStyle(BrandColor.text)
                     .tint(BrandColor.accent)
@@ -83,6 +114,7 @@ struct ChatInputBar: View {
                     .onSubmit(triggerSend)
                     .accessibilityLabel("Message")
                     .onChange(of: focusTrigger) { _, _ in focused = true }
+                    .onChange(of: focused) { _, isFocused in onFocusChange?(isFocused) }
 
                 actionButton
             }
@@ -109,7 +141,7 @@ struct ChatInputBar: View {
     private func attachmentFailure(_ message: String, clear: @escaping () -> Void) -> some View {
         Text(message)
             .font(BrandFont.caption)
-            .foregroundStyle(BrandColor.error)
+            .foregroundStyle(BrandColor.errorText)
             .padding(.leading, 44)  // align past the photo button
             .task(id: message) {
                 try? await Task.sleep(for: .seconds(3))
@@ -185,8 +217,13 @@ struct ChatInputBar: View {
                     .font(.system(size: 20))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, .black.opacity(0.5))
+                    // The glyph stays small in the thumbnail's corner; the
+                    // target around it is 44 pt (AUD-46).
+                    .padding(4)
+                    .frame(width: 44, height: 44, alignment: .topTrailing)
+                    .contentShape(Rectangle())
             }
-            .padding(4)
+            .buttonStyle(.plain)
             .accessibilityLabel("Remove photo")
         }
         .padding(.leading, 44)  // align past the photo button

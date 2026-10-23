@@ -41,7 +41,7 @@ extension APIClient {
                 return
             }
 
-            let delegate = SSEDataDelegate(continuation: continuation)
+            let delegate = SSEDataDelegate(continuation: continuation, pathSatisfied: pathSatisfied)
             let config = URLSessionConfiguration.ephemeral
             config.timeoutIntervalForRequest = streamingTimeout
             // Whole-reply cap (240 s in production). The server lets a

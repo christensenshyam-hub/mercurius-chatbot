@@ -40,6 +40,9 @@ public struct DuoButton: View {
     public var body: some View {
         Button(action: action) {
             Text(title)
+                // A title that wraps at the largest text sizes stays centred
+                // ("Start / Lesson 1" sat flush left).
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(DuoButtonStyle(style: style))
