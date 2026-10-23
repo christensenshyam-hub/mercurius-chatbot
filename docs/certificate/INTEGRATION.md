@@ -1,5 +1,20 @@
 # AI Basics certificate: integrating the Basics course
 
+**Status: wired (`feat/basics-certificate`, 2026-10-22).** Basics is on main (PR #52 clients, PR #54 server), and the certificate is on, on the iPhone and the Mac:
+
+- `CertificateCourses.basicsLessons` returns `BasicsCurriculum`'s 18 lessons in course order, titled "Unit N · <lesson>".
+- `AppShellView.handleLessonComplete` and `MacShellView.handleLessonComplete` mark every lesson inside `recordingNewlyEarned`. A Deep-dive lesson earns nothing there, so they don't branch.
+- The card is on the lesson's complete screen. ChatFeature can't see CurriculumFeature's `\.unitMasteryAccessory`, so the screen has its own slot, `\.lessonCompleteAccessory`, under the headline (`LessonCompleteOverlay`, `NightLessonComplete`).
+- `.certificateLessonSlot(env.certificates)` on the lesson fills the slot and presents `CertificateSheet`. On the iPhone the card is compact (a small preview beside the words), so the sheet keeps room for "Try this today"; when the sheet still has to scroll, the line under its pinned buttons fades out.
+- The card stays while the complete screen does, even after its sheet has opened and closed. Basics lets nothing disappear before the learner is done with it, and on the iPhone neither Home nor the Basics path leads to Progress ▸ Certificates. So on the iPhone, while the card shows, only the screen's buttons close it: a tap on the dimmed lesson doesn't. On the Mac, Escape or a click beside the card still closes it, and Progress (⌘4) is in every toolbar.
+- The Certificates list names only the next Basics lesson still to finish ("Next: Unit 4 · Meals, plans and lists"), under "12 of 18 lessons finished". The real titles hold commas and "and", so two of them in one comma list ran together.
+- `justEarned` is cleared when the lesson goes:
+  - iPhone: in the cover's `onDismiss`, `lessonWindowDismissed`;
+  - Mac: on a change of `shell.activeLesson?.id`.
+- `CertificateDebug.demoBasicsLessons` is gone; the DEBUG shots use the real lessons.
+
+The rest of this note is the plan as written before the merge.
+
 The AI Basics certificate (`LaurelBasics.dc.html`) is built and tested on `feat/certificate`, but the Basics course itself lives on another branch. Until that branch hands its lessons in, this build doesn't offer the Basics certificate. The Progress hub and the Certificates list show only the Deep dive.
 
 This note says what the Basics branch needs to do. There are two calls and one card.

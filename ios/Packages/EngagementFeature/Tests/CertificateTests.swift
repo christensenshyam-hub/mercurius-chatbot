@@ -14,7 +14,8 @@ private let units = CertificateEligibility.deepDiveUnitIds.enumerated().map {
     CertificateRequirement(id: $0.element, title: "Unit \($0.offset + 1)")
 }
 
-/// The Basics lessons, injected as the Basics branch will (b1_l1 … b5_l4).
+/// The Basics lessons, injected as the app does (b1_l1 … b5_l4; EngagementFeature
+/// can't see the curriculum).
 private let basicsLessons: [CertificateRequirement] = {
     var lessons: [CertificateRequirement] = []
     for (u, count) in [3, 4, 3, 4, 4].enumerated() {
@@ -70,7 +71,8 @@ struct CertificateEligibilityTests {
         #expect(!partial.isEarned)
         #expect(partial.progressText == "12 of 18 lessons finished")
         #expect(partial.remaining.first?.id == "b4_l3")
-        #expect(partial.remainingText == "Still to finish: B4.3, B4.4 and 4 more")
+        // Only the next one: Basics titles hold commas and "and".
+        #expect(partial.remainingText == "Next: B4.3")
 
         let all = Set(basicsLessons.map(\.id) + ["u1_l1"])
         let complete = CertificateEligibility.basics(lessons: basicsLessons, completedLessonIds: all)
@@ -235,6 +237,49 @@ struct CertificateCenterTests {
         #expect(newly == [.basics])
         // No lesson dates: the moment this device saw it stands in.
         #expect(c.status(.basics)?.lastMetAt == c.store.earnedAt(.basics))
+    }
+
+    @Test("The 18th Basics lesson is the moment: recorded, the card is due, and it prints that lesson's day")
+    func eighteenthBasicsLesson() {
+        let progress = FakeProgress()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let c = center(progress, basics: basicsLessons, now: now)
+        for (index, lesson) in basicsLessons.dropLast().enumerated() {
+            #expect(c.recordingNewlyEarned {
+                progress.completed.insert(lesson.id)
+                progress.dates[lesson.id] = now.addingTimeInterval(Double(index - 20) * 86_400)
+            }.isEmpty)
+        }
+        #expect(c.justEarned == nil)
+        #expect(c.store.earnedAt(.basics) == nil)
+        let finished = now.addingTimeInterval(-3_600)
+        let newly = c.recordingNewlyEarned {
+            progress.completed.insert("b5_l4")
+            progress.dates["b5_l4"] = finished
+        }
+        #expect(newly == [.basics])
+        #expect(c.justEarned == .basics)
+        #expect(c.store.earnedAt(.basics) == now)
+        #expect(c.completionDate(.basics) == finished)
+        #expect(c.store.completionDate(.basics) == finished)
+    }
+
+    @Test("Deep-dive lessons and checks never earn AI Basics")
+    func deepDiveNeverEarnsBasics() {
+        let progress = FakeProgress()
+        let c = center(progress, basics: basicsLessons)
+        for lesson in basicsLessons.dropLast() { progress.completed.insert(lesson.id) }
+        for unit in 1...8 {
+            for lesson in 1...5 {
+                #expect(c.recordingNewlyEarned { progress.completed.insert("u\(unit)_l\(lesson)") }.isEmpty)
+            }
+        }
+        #expect(c.justEarned == nil)
+        #expect(c.status(.basics)?.isEarned == false)
+        #expect(c.store.earnedAt(.basics) == nil)
+        let newly = c.recordingNewlyEarned { progress.mastered.formUnion(CertificateEligibility.deepDiveUnitIds) }
+        #expect(newly == [.deepDive])
+        #expect(c.store.earnedAt(.basics) == nil)
     }
 
     @Test("Not earned: no date is fixed")

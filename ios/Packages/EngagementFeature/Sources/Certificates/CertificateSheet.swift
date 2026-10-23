@@ -145,7 +145,7 @@ public struct CertificateSheet: View {
                 }
             }
         }
-        .tint(BrandColor.accentText)
+        .tint(BrandAppearance.tint)
     }
 
     private var privacyNote: some View {

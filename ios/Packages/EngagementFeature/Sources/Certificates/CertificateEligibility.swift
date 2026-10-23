@@ -39,16 +39,21 @@ public struct CertificateStatus: Equatable, Sendable {
     }
 
     /// What's left, short: "Still to pass: Unit 4 · Prompt Engineering, Unit
-    /// 7 · Using AI Well and 1 more". Nil once earned.
+    /// 7 · Using AI Well and 1 more"; for AI Basics only the next lesson,
+    /// "Next: Unit 4 · Meals, plans and lists" (its titles hold commas and
+    /// "and", so two in a list run together; `progressText` gives the
+    /// count). Nil once earned.
     public var remainingText: String? {
-        guard !remaining.isEmpty else { return nil }
-        let shown = remaining.prefix(2).map(\.title)
-        let more = remaining.count - shown.count
-        var list = shown.joined(separator: ", ")
-        if more > 0 { list += " and \(more) more" }
+        guard let next = remaining.first else { return nil }
         switch kind {
-        case .deepDive: return "Still to pass: \(list)"
-        case .basics: return "Still to finish: \(list)"
+        case .deepDive:
+            let shown = remaining.prefix(2).map(\.title)
+            let more = remaining.count - shown.count
+            var list = shown.joined(separator: ", ")
+            if more > 0 { list += " and \(more) more" }
+            return "Still to pass: \(list)"
+        case .basics:
+            return "Next: \(next.title)"
         }
     }
 }

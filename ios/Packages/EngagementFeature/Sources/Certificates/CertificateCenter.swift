@@ -7,12 +7,12 @@ import DesignSystem
 /// hands it the curriculum's units and readers onto `CurriculumProgressStore`
 /// (EngagementFeature can't see the curriculum).
 ///
-/// **The Basics seam.** AI Basics lives on another branch. Until its lessons
-/// are handed in (`basicsLessons`), the Basics certificate isn't offered.
-/// The Basics branch:
-/// 1. sets `basicsLessons` to its lessons in course order (ids `b1_l1` …
-///    `b5_l4`, with titles for "what's left") when the app is composed;
-/// 2. wraps the call that marks a Basics lesson finished in
+/// **The Basics seam.** Without lessons handed in (`basicsLessons`), the
+/// Basics certificate isn't offered. The app:
+/// 1. sets `basicsLessons` to AI Basics' lessons in course order (ids
+///    `b1_l1` … `b5_l4`, with titles for "what's left") when it's composed
+///    (`CertificateCourses.basicsLessons`);
+/// 2. wraps the call that marks a lesson finished in
 ///    `recordingNewlyEarned { … }`, so the moment the last one lands is
 ///    recorded and its course-complete card can show (`justEarned`).
 /// See `docs/certificate/INTEGRATION.md`.
@@ -41,8 +41,8 @@ public final class CertificateCenter {
     /// The Deep dive's unit checks, in course order.
     public let deepDiveUnits: [CertificateRequirement]
 
-    /// AI Basics' lessons, in course order; nil until the Basics course
-    /// exists in this build (the certificate is then not offered).
+    /// AI Basics' lessons, in course order; nil (or empty) and the
+    /// certificate isn't offered.
     public var basicsLessons: [CertificateRequirement]?
 
     /// A certificate earned a moment ago, in this session: the unit check's

@@ -146,10 +146,12 @@ struct MacShellView: View {
             await env.progressSync.pullOnLaunch()
         }
         .onChange(of: env.pendingLessonId) { _, _ in presentPendingLesson() }
-        // The course-complete card belongs to the check that earned it: any
-        // way out of that check (the sidebar, ⌘1–⌘3, Learning Path, a lesson,
-        // Settings' erase) takes the card with it, not only its Done.
+        // The course-complete card belongs to the check (or the Basics
+        // lesson) that earned it: any way out of it (the sidebar, ⌘1–⌘3,
+        // Learning Path, another lesson, Settings' erase) takes the card with
+        // it, not only its Done.
         .onChange(of: shell.activeUnitTest?.id) { _, _ in env.certificates.justEarned = nil }
+        .onChange(of: shell.activeLesson?.id) { _, _ in env.certificates.justEarned = nil }
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT.
         .onChange(of: env.progressStore.revision) { _, _ in
@@ -364,6 +366,9 @@ struct MacShellView: View {
         // completion lands (the progress store is observed). Basics has no
         // weekly goal (BEGINNER_GUIDE §2.5).
         .environment(\.nightLessonWeek, isBasics ? nil : Self.lessonWeek(lessonId: lesson.id, progress: progress))
+        // The completion that finished AI Basics: "You finished AI Basics"
+        // on the complete card, and the certificate's name sheet.
+        .certificateLessonSlot(env.certificates)
         // The lesson sets the window's title, subtitle and way back itself.
     }
 
@@ -395,7 +400,9 @@ struct MacShellView: View {
     /// Activity (iOS only) and the App Store review prompt (not wired on the
     /// Mac yet). All idempotent.
     private func handleLessonComplete(_ lessonId: String) {
-        env.progressStore.markCompleted(lessonId)
+        // The 18th Basics lesson completes AI Basics (as on iOS; a Deep-dive
+        // lesson earns nothing here).
+        env.certificates.recordingNewlyEarned { env.progressStore.markCompleted(lessonId) }
         env.lastActivityStore.touch()
         if !BasicsCurriculum.isBasicsId(lessonId) {
             env.achievementStore.award(AchievementCatalog.explorer)
