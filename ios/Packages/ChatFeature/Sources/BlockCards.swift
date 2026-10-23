@@ -21,7 +21,7 @@ struct KeyIdeaCard: View {
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .tracking(1.2)
             }
-            .foregroundStyle(BrandColor.accent)
+            .foregroundStyle(BrandColor.accentText)
             .accessibilityHidden(true)
             Text(text)
                 .font(font)
@@ -99,11 +99,11 @@ struct CheckQuizCard: View {
             HStack(alignment: .firstTextBaseline, spacing: BrandSpacing.sm) {
                 Image(systemName: "questionmark.bubble.fill")
                     .font(.system(size: bodySize * 0.9, weight: .semibold))
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .accessibilityHidden(true)
                 Text(quiz.stem)
                     .font(stemFont)
-                    .foregroundStyle(BrandColor.accent)
+                    .foregroundStyle(BrandColor.accentText)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -116,9 +116,38 @@ struct CheckQuizCard: View {
         .padding(.horizontal, 14)
         .background(BrandColor.accent.opacity(0.10),
                     in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
-        .sensoryFeedback(.impact, trigger: localPick)
+        // Right and wrong feel different, not just look different (AUD-23).
+        .sensoryFeedback(trigger: localPick) { _, pick in
+            guard let pick else { return nil }
+            return pick == quiz.answerIndex ? .success : .error
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Question: \(quiz.stem)")
+    }
+
+    /// How VoiceOver reads one option: "Option B: …", then once graded which
+    /// was right and what became of the pick (AUD-23).
+    static func optionAccessibility(index: Int, option: String, pick: Int?,
+                                    answerIndex: Int?) -> (label: String, value: String?) {
+        let label = "Option \(ChatAnnouncement.letter(index)): \(option)"
+        guard let pick else { return (label, nil) }
+        let isAnswer = answerIndex == index
+        let isPick = pick == index
+        switch (isAnswer, isPick) {
+        case (true, true):   return (label, "Correct answer, your answer")
+        case (true, false):  return (label, "Correct answer")
+        case (false, true):  return (label, "Your answer, incorrect")
+        case (false, false): return (label, nil)
+        }
+    }
+
+    /// The option letter is text, so it takes a text token in the row's
+    /// grading hue (AUD-21).
+    private func letterColor(isAnswer: Bool, isPick: Bool) -> Color {
+        guard graded else { return BrandColor.accentText }
+        if isAnswer { return BrandColor.successText }
+        if isPick { return BrandColor.errorText }
+        return BrandColor.accentText
     }
 
     private func optionRow(index: Int, option: String) -> some View {
@@ -135,15 +164,18 @@ struct CheckQuizCard: View {
             bg = BrandColor.surface; stroke = BrandColor.border
         }
 
+        let spoken = Self.optionAccessibility(index: index, option: option, pick: effectivePick,
+                                              answerIndex: quiz.answerIndex)
         return Button {
             guard isEnabled, localPick == nil, answeredIndex == nil else { return }
             localPick = index
+            AccessibilityNotification.Announcement(ChatAnnouncement.quizPick(index: index, quiz: quiz)).post()
             onSelect(index)
         } label: {
             HStack(alignment: .top, spacing: BrandSpacing.sm) {
                 Text(String(UnicodeScalar(65 + index)!))
                     .font(.system(size: bodySize * 0.8, weight: .bold, design: .rounded))
-                    .foregroundStyle(graded && (isAnswer || isPick) ? stroke : BrandColor.accent)
+                    .foregroundStyle(letterColor(isAnswer: isAnswer, isPick: isPick))
                 Text(option)
                     .font(.system(size: bodySize * 0.85))
                     .foregroundStyle(BrandColor.text)
@@ -153,25 +185,36 @@ struct CheckQuizCard: View {
                 if graded && isAnswer {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(BrandColor.success)
+                        .foregroundStyle(BrandColor.successText)
                 } else if graded && isPick {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(BrandColor.error)
+                        .foregroundStyle(BrandColor.errorText)
                 }
             }
             .padding(.vertical, 10)
             .padding(.horizontal, BrandSpacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // 44 pt rows, tappable edge to edge: one tap grades and sends, so
+            // a near miss on a 37 pt row picked the neighbour (AUD-46).
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(bg)
             .clipShape(RoundedRectangle(cornerRadius: BrandRadius.sm))
             .overlay(
                 RoundedRectangle(cornerRadius: BrandRadius.sm)
                     .stroke(stroke, lineWidth: 1)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled || graded)
+        // A graded card is a result: no taps, but full colour (`.disabled`
+        // faded the green and red review). An unanswered card on an older
+        // reply stays visibly inert.
+        .disabled(!isEnabled && !graded)
+        .allowsHitTesting(isEnabled && !graded)
+        .accessibilityRemoveTraits(graded ? .isButton : [])
+        .accessibilityLabel(spoken.label)
+        .accessibilityValue(spoken.value ?? "")
+        .accessibilityAddTraits(effectivePick == index ? .isSelected : [])
         .accessibilityHint(isEnabled && !graded ? "Double-tap to pick this answer" : "")
     }
 }

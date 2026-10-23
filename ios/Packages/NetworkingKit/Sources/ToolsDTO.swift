@@ -80,17 +80,58 @@ public struct ReportCard: Decodable, Sendable, Equatable {
 /// Result of `POST /api/unit-test/grade` — the server's grade of the student's
 /// open-ended "defense" answer for a unit test. `pass` is the server's verdict
 /// (grade A or B). A decode failure is treated by the caller as "not passed."
+///
+/// When the answer reads as a student in crisis (a first-person disclosure,
+/// or the grader's own rule-1 hand-off) the server answers 200 with
+/// `{"grade":"—","pass":false,"feedback":<CRISIS_COPY>,"crisis":true}` — the
+/// grade shape, so apps that predate `crisis` still decode it — and this
+/// result has `crisis == true`. That is not a grade: the app shows support
+/// resources instead of a result, never a letter, a score or a retake.
 public struct UnitDefenseResult: Decodable, Sendable, Equatable {
-    /// Letter grade, "A"–"D".
+    /// Letter grade, "A"–"D" ("—" on a crisis answer).
     public let grade: String
     /// Whether the defense passed (the server sets this = grade ∈ {A, B}).
+    /// Always false when `crisis` is set.
     public let pass: Bool
-    /// Short written feedback shown to the student.
+    /// Short written feedback shown to the student (the crisis resources on a
+    /// crisis answer).
     public let feedback: String
+    /// The server's crisis signal. Absent on every normal grade and on
+    /// servers that predate it, which reads as false.
+    public let crisis: Bool
 
-    public init(grade: String, pass: Bool, feedback: String) {
+    public init(grade: String, pass: Bool, feedback: String, crisis: Bool = false) {
         self.grade = grade
         self.pass = pass
         self.feedback = feedback
+        self.crisis = crisis
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case grade, pass, feedback, crisis, message
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let crisis = try container.decode(LenientFlag.self, forKey: .crisis).wrappedValue
+        if crisis {
+            // The crisis signal outranks everything else in the body: it can
+            // never pass, and a missing or odd grade field must not turn
+            // support into a decoding error.
+            self.init(
+                grade: (try? container.decodeIfPresent(String.self, forKey: .grade)) ?? "—",
+                pass: false,
+                feedback: (try? container.decodeIfPresent(String.self, forKey: .feedback))
+                    ?? (try? container.decodeIfPresent(String.self, forKey: .message))
+                    ?? "",
+                crisis: true
+            )
+        } else {
+            self.init(
+                grade: try container.decode(String.self, forKey: .grade),
+                pass: try container.decode(Bool.self, forKey: .pass),
+                feedback: try container.decode(String.self, forKey: .feedback)
+            )
+        }
     }
 }

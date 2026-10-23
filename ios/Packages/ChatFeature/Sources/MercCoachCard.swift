@@ -69,7 +69,7 @@ struct MercCoachCard: View {
                 .fill(BrandColor.surfaceElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
-                        .strokeBorder(reaction == nil ? BrandColor.border : eyebrowColor.opacity(0.5),
+                        .strokeBorder(reaction == nil ? BrandColor.border : strokeColor.opacity(0.5),
                                       lineWidth: 1)
                 )
                 .brandShadow(.card)
@@ -107,7 +107,14 @@ struct MercCoachCard: View {
 
     private var eyebrow: String { reaction == nil ? "YOUR COACH" : "PROGRESS" }
 
+    /// The eyebrow is text, so it takes the text tokens (AUD-21); the card's
+    /// outline keeps the fill hues.
     private var eyebrowColor: Color {
+        guard let reaction else { return BrandColor.accentText }
+        return reaction.mood == .celebrating ? BrandColor.successText : BrandColor.accentText
+    }
+
+    private var strokeColor: Color {
         guard let reaction else { return BrandColor.accent }
         return reaction.mood == .celebrating ? BrandColor.success : BrandColor.accent
     }

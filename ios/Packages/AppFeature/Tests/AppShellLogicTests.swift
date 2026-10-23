@@ -123,3 +123,43 @@ struct PendingLessonDelayTests {
         #expect(AppShellView.pendingLessonDelay(closingUnitTest: true, fromTab: .curriculum) == .milliseconds(600))
     }
 }
+
+// AUD-37: the Live Activity counts down only while a live streak ends tonight.
+@Suite("Live Activity streak countdown")
+struct StreakEndsTonightTests {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }
+
+    private func day(_ d: Int, hour: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 7, day: d, hour: hour))!
+    }
+
+    private func endsTonight(streak: Int = 4, fresh: Bool = true, confirmedToday: Bool = false,
+                             streakDay: Date?, now: Date) -> Bool {
+        AppShellView.streakEndsTonight(streak: streak, isFresh: fresh, confirmedToday: confirmedToday,
+                                       streakDay: streakDay, now: now, calendar: calendar)
+    }
+
+    @Test("Confirmed Monday: Wednesday is the last save day, so only Wednesday counts down")
+    func lastSaveDay() {
+        let monday = day(6)
+        #expect(!endsTonight(streakDay: monday, now: day(6, hour: 20)))
+        #expect(!endsTonight(streakDay: monday, now: day(7, hour: 20)))
+        #expect(endsTonight(streakDay: monday, now: day(8, hour: 9)))
+        // Thursday: already lapsed, nothing to count down to.
+        #expect(!endsTonight(streakDay: monday, now: day(9, hour: 9)))
+    }
+
+    @Test("No countdown once today is saved, without a streak, or on a stale cache")
+    func noCountdown() {
+        let monday = day(6)
+        let wednesday = day(8, hour: 9)
+        #expect(!endsTonight(confirmedToday: true, streakDay: monday, now: wednesday))
+        #expect(!endsTonight(streak: 0, streakDay: monday, now: wednesday))
+        #expect(!endsTonight(fresh: false, streakDay: monday, now: wednesday))
+        #expect(!endsTonight(streakDay: nil, now: wednesday))
+    }
+}

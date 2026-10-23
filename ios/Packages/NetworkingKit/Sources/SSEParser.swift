@@ -100,8 +100,9 @@ func parseChatEvent(from payload: String) throws -> ChatStreamEvent? {
         if let code = decoded.code, ServerRefusalCode.isRefusal(code) {
             return .refusal(
                 code: code,
-                message: decoded.error ?? "Mercurius can't answer right now. Please try again soon.",
-                retryAfter: decoded.retryAfterSec
+                message: decoded.error ?? ServerRefusal.fallbackMessage,
+                retryAfter: decoded.retryAfterSec,
+                scope: decoded.scope
             )
         }
         return .streamError(message: decoded.error ?? "Unknown server error")

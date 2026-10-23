@@ -4,7 +4,9 @@ import DesignSystem
 /// The cumulative unit-test experience: a multiple-choice quiz (scored
 /// on-device), then one open-ended "defense" question (graded by the server via
 /// the injected `gradeDefense` closure), then a combined result. On an overall
-/// pass it calls `onMastered(unitId)` exactly once.
+/// pass it calls `onMastered(unitId)` exactly once. When the server answers the
+/// written defense with crisis support, the test is set aside for
+/// `CrisisSupportView`: no grade, no score, no retake.
 public struct UnitTestView: View {
     @State private var model: UnitTestViewModel
     @State private var reportedMastery = false
@@ -23,6 +25,18 @@ public struct UnitTestView: View {
         self.onExit = onExit
     }
 
+    /// Hosts a model the caller already holds (DEBUG previews drive one to a
+    /// given phase).
+    public init(
+        model: UnitTestViewModel,
+        onMastered: @escaping (String) -> Void,
+        onExit: @escaping () -> Void
+    ) {
+        _model = State(initialValue: model)
+        self.onMastered = onMastered
+        self.onExit = onExit
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             BrandColor.background.ignoresSafeArea()
@@ -34,6 +48,9 @@ public struct UnitTestView: View {
                         .padding(.horizontal, BrandSpacing.lg)
                         .padding(.vertical, BrandSpacing.lg)
                 }
+                // Each phase is its own screen and opens at its top — the
+                // support view must never appear scrolled past its heading.
+                .id(model.phase)
             }
         }
     }
@@ -42,20 +59,32 @@ public struct UnitTestView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: BrandSpacing.md) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("UNIT \(model.unit.number) · UNIT TEST")
-                    .font(BrandFont.caption)
-                    .tracking(1.2)
-                    .foregroundStyle(BrandColor.accent)
-                Text(model.unit.title)
-                    .font(BrandFont.subheading)
-                    .foregroundStyle(BrandColor.text)
+            // On the support screen the test is set aside: no unit/test
+            // title, just the way out, so the hotlines sit higher.
+            if model.phase != .support {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("UNIT \(model.unit.number) · UNIT TEST")
+                        .font(BrandFont.caption)
+                        .tracking(1.2)
+                        .foregroundStyle(BrandColor.accentText)
+                    Text(model.unit.title)
+                        .font(BrandFont.subheading)
+                        .foregroundStyle(BrandColor.text)
+                }
+                // One heading for VoiceOver's rotor (AUD-49).
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
             }
             Spacer(minLength: BrandSpacing.sm)
-            Button("Done") { onExit() }
-                .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(BrandColor.accent)
-                .accessibilityLabel("Done. Exit unit test.")
+            Button { onExit() } label: {
+                Text("Done")
+                    .font(BrandFont.bodyEmphasized)
+                    .foregroundStyle(BrandColor.accentText)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Done. Exit unit test.")
         }
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.top, BrandSpacing.md)
@@ -67,7 +96,16 @@ public struct UnitTestView: View {
         case .quiz: quizPhase
         case .defense: defensePhase
         case .result: resultPhase
+        case .support: supportPhase
         }
+    }
+
+    // MARK: - Support phase
+
+    /// The written answer read as a crisis: support resources instead of a
+    /// result. The header's Done and this view's button both leave the test.
+    private var supportPhase: some View {
+        CrisisSupportView(closeTitle: "Back to your path", onClose: onExit)
     }
 
     // MARK: - Quiz phase
@@ -75,7 +113,7 @@ public struct UnitTestView: View {
     private var quizPhase: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.lg) {
             Text("Answer all \(model.mcqTotal) questions, then submit. You need \(model.mcqCorrectNeeded) of \(model.mcqTotal) correct to move on.")
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -93,17 +131,20 @@ public struct UnitTestView: View {
                     }
                 }
             } else {
-                primaryButton("Submit answers", enabled: model.allAnswered) {
+                primaryButton(model.submitTitle, enabled: model.allAnswered) {
                     model.submitQuiz()
                 }
             }
+        }
+        .onChange(of: model.quizSubmitted) { _, submitted in
+            if submitted, let line = model.scoreAnnouncement { announce(line) }
         }
     }
 
     private func questionCard(index: Int, question: UnitTestQuestion) -> some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
             Text("Question \(index + 1)")
-                .font(.caption2)
+                .font(BrandFont.caption)
                 .tracking(1.1)
                 .foregroundStyle(BrandColor.textSecondary)
             Text(question.q)
@@ -111,13 +152,15 @@ public struct UnitTestView: View {
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(Array(question.options.enumerated()), id: \.offset) { i, option in
-                optionRow(question: question, index: i, option: option)
+            ForEach(question.options.indices, id: \.self) { i in
+                UnitTestOptionRow(state: model.optionState(for: question, index: i)) {
+                    model.select(UnitTestViewModel.optionLetter(i), for: question.id)
+                }
             }
 
             if model.quizSubmitted {
                 Text(question.explanation)
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -129,66 +172,6 @@ public struct UnitTestView: View {
         .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
     }
 
-    private func optionRow(question: UnitTestQuestion, index: Int, option: String) -> some View {
-        let letter = UnitTestViewModel.optionLetter(index)
-        let isSelected = model.selectedLetter(for: question.id) == letter
-        let submitted = model.quizSubmitted
-        let isAnswer = question.answer.uppercased() == letter
-
-        let bg: Color
-        let stroke: Color
-        let fg: Color
-        if submitted {
-            if isAnswer {
-                bg = BrandColor.success.opacity(0.15); stroke = BrandColor.success; fg = BrandColor.text
-            } else if isSelected {
-                bg = BrandColor.error.opacity(0.15); stroke = BrandColor.error; fg = BrandColor.text
-            } else {
-                bg = BrandColor.surfaceElevated; stroke = BrandColor.border; fg = BrandColor.textSecondary
-            }
-        } else if isSelected {
-            bg = BrandColor.accent.opacity(0.15); stroke = BrandColor.accent; fg = BrandColor.text
-        } else {
-            bg = BrandColor.surfaceElevated; stroke = BrandColor.border; fg = BrandColor.text
-        }
-
-        return Button {
-            model.select(letter, for: question.id)
-        } label: {
-            HStack(alignment: .top, spacing: BrandSpacing.sm) {
-                Text(letter)
-                    .font(BrandFont.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(stroke)
-                Text(option)
-                    .font(BrandFont.caption)
-                    .foregroundStyle(fg)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                if submitted && isAnswer {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(BrandColor.success)
-                } else if submitted && isSelected {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(BrandColor.error)
-                }
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, BrandSpacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(bg)
-            .clipShape(RoundedRectangle(cornerRadius: BrandRadius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: BrandRadius.sm)
-                    .stroke(stroke, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(submitted)
-    }
-
     // MARK: - Defense phase
 
     private var defensePhase: some View {
@@ -196,9 +179,9 @@ public struct UnitTestView: View {
             Text("WRITTEN DEFENSE")
                 .font(BrandFont.caption)
                 .tracking(1.2)
-                .foregroundStyle(BrandColor.accent)
+                .foregroundStyle(BrandColor.accentText)
             Text("Nice — \(model.mcqScore)/\(model.mcqTotal) on the quiz. One written question left, graded by Mercurius.")
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -216,6 +199,20 @@ public struct UnitTestView: View {
                 .foregroundStyle(BrandColor.text)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 160)
+                // An empty editor says what goes in it; VoiceOver hears a
+                // name instead of "text view" (AUD-22).
+                .overlay(alignment: .topLeading) {
+                    if model.defenseAnswer.isEmpty {
+                        Text("Type your answer here…")
+                            .font(BrandFont.body)
+                            .foregroundStyle(BrandColor.textSecondary)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityLabel("Your written answer")
                 .padding(BrandSpacing.sm)
                 .background(BrandColor.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
@@ -227,8 +224,8 @@ public struct UnitTestView: View {
 
             if let error = model.defenseError {
                 Text(error)
-                    .font(BrandFont.caption)
-                    .foregroundStyle(BrandColor.error)
+                    .font(BrandFont.body)
+                    .foregroundStyle(BrandColor.errorText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -254,14 +251,23 @@ public struct UnitTestView: View {
     private var resultPhase: some View {
         let passed = model.overallPassed
         return VStack(spacing: BrandSpacing.lg) {
-            Image(systemName: passed ? "checkmark.seal.fill" : "arrow.counterclockwise.circle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(passed ? BrandColor.success : BrandColor.accent)
-                .padding(.top, BrandSpacing.md)
+            if passed {
+                // Mastery gets its Merc moment (AUD-22).
+                MercMascot(.celebrate, size: 120)
+                    .padding(.top, BrandSpacing.md)
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "arrow.counterclockwise.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(BrandColor.accentText)
+                    .padding(.top, BrandSpacing.md)
+                    .accessibilityHidden(true)
+            }
 
             Text(passed ? "Unit mastered" : "Almost there")
                 .font(BrandFont.title)
                 .foregroundStyle(BrandColor.text)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: BrandSpacing.sm) {
                 resultRow(label: "Quiz", detail: "\(model.mcqScore)/\(model.mcqTotal)", ok: model.mcqPassed)
@@ -278,7 +284,7 @@ public struct UnitTestView: View {
 
             if let defense = model.defenseResult {
                 Text(defense.feedback)
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,7 +292,7 @@ public struct UnitTestView: View {
 
             if passed {
                 Text("You've shown real command of \(model.unit.title). This unit is now marked mastered.")
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -295,14 +301,21 @@ public struct UnitTestView: View {
                 Text(model.mcqPassed
                      ? "Your written answer needs more depth. Revisit the unit and try the test again."
                      : "Review the unit's lessons, then retake the test when you're ready.")
-                    .font(BrandFont.caption)
+                    .font(BrandFont.body)
                     .foregroundStyle(BrandColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                primaryButton("Retake test") { model.retake() }
-                Button("Done") { onExit() }
-                    .font(BrandFont.bodyEmphasized)
-                    .foregroundStyle(BrandColor.accent)
+                if model.offersRetake {
+                    primaryButton("Retake test") { model.retake() }
+                }
+                Button { onExit() } label: {
+                    Text("Done")
+                        .font(BrandFont.bodyEmphasized)
+                        .foregroundStyle(BrandColor.accentText)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
@@ -312,36 +325,52 @@ public struct UnitTestView: View {
                 reportedMastery = true
                 onMastered(model.unit.id)
             }
+            if let line = model.resultAnnouncement { announce(line) }
         }
     }
 
     private func resultRow(label: String, detail: String, ok: Bool) -> some View {
         HStack(spacing: BrandSpacing.sm) {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(ok ? BrandColor.success : BrandColor.error)
+                .foregroundStyle(ok ? BrandColor.successText : BrandColor.errorText)
             Text(label)
                 .font(BrandFont.body)
                 .foregroundStyle(BrandColor.text)
             Spacer()
             Text(detail)
-                .font(BrandFont.caption)
+                .font(BrandFont.body)
                 .foregroundStyle(BrandColor.textSecondary)
         }
+        // "Quiz, 4/5, passed": the mark's meaning in words, not colour.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label), \(detail), \(ok ? "passed" : "not passed")")
     }
 
     // MARK: - Shared
 
+    /// Enabled: white on indigo. Not yet enabled: readable secondary text
+    /// on a quiet card, not the whole button faded to half (AUD-22).
     private func primaryButton(_ title: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(BrandFont.bodyEmphasized)
-                .foregroundStyle(.white)
+                .foregroundStyle(enabled ? Color.white : BrandColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, BrandSpacing.md)
+                .padding(.vertical, BrandSpacing.sm)
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(BrandColor.accent)
+                .background(enabled ? BrandColor.accent : BrandColor.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: BrandRadius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BrandRadius.md)
+                        .stroke(enabled ? Color.clear : BrandColor.border, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
-        .opacity(enabled ? 1 : 0.5)
         .disabled(!enabled)
+    }
+
+    private func announce(_ line: String) {
+        AccessibilityNotification.Announcement(line).post()
     }
 }

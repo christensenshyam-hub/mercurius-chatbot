@@ -103,6 +103,8 @@
           your data would make a poor lesson. So here is the full picture, in
           plain language, for students and for parents.
         </p>
+        <!-- FOUNDER-TODO (AUD-56/57/55/53 wording): set this date to the day the
+             reworded page is deployed. -->
         <p class="lede" style="font-size: var(--fs-small); margin-top: var(--space-4);">
           Effective: September 27, 2026 · We update this page whenever the facts change.
         </p>
@@ -166,7 +168,9 @@
           <strong>Photos you attach.</strong> If you attach a photo to a
           message (a worksheet, a screenshot), it takes the same path as a
           message: to our server, then to Anthropic to generate the reply.
-          Photos are deleted from our server after 24 hours.
+          Photos are deleted from our server after 24 hours. Mercurius's
+          reply about your photo can quote what the photo shows. That reply
+          is part of the chat, so it is kept for 90 days like any message.
         </p>
 
         <p class="lede">
@@ -248,14 +252,19 @@
       </div>
     </section>
 
-    <section class="section section-soft" aria-label="What not linked to you means">
+    <!-- AUD-57: Apple counts data stored under a user ID as "linked to you",
+         so the page no longer says "not linked". Not "linked only" either:
+         usage rows also carry the scrambled network address (db.js usage.ip_hash). -->
+    <section class="section section-soft" aria-label="What linked to a random ID means">
       <div class="container" style="max-width: 760px;">
-        <h2 class="section-title">What "not linked to you" means in practice</h2>
+        <h2 class="section-title">What "linked to a random ID" means in practice</h2>
         <p class="lede">
-          On our server, your conversations sit under a random string of
-          letters and numbers. There is no name, email, or phone number next
-          to it. If someone looked at the database, they would see what was
-          said, but not who said it.
+          What we keep is filed under a random ID, never your name or an
+          account. Usage rows also carry the scrambled network address
+          described above. On our server, your conversations sit under a
+          random string of letters and numbers. There is no name, email, or
+          phone number next to it. If someone looked at the database, they
+          would see what was said, but not who said it.
         </p>
         <p class="lede">
           The exception is you. If you type your full name, your school, or
@@ -285,6 +294,26 @@
             API to generate a response. Their terms are at
             <a href="https://www.anthropic.com/legal/commercial-terms" style="color: var(--violet);">anthropic.com/legal</a>.
             Anthropic does not train future models on API requests by default.
+            <!-- AUD-56. Source: Anthropic's commercial data retention article
+                 (privacy.claude.com/en/articles/7996866, "Last updated July 1, 2026",
+                 read 2026-10-18 and again 2026-10-19): API inputs and outputs are
+                 deleted within 30 days, except under a different agreement (e.g.
+                 zero data retention), to enforce the Usage Policy (flagged chats:
+                 up to 2 years), or as the law requires. Our models
+                 (claude-sonnet-4-6, claude-haiku-4-5) are not "Covered Models"
+                 (support.claude.com/en/articles/15425695 lists only Mythos 5/5.1
+                 and Fable 5/5.1, which keep data for at least 30 days).
+                 FOUNDER-TODO: confirm the Anthropic org has no zero data retention
+                 or other retention agreement, and that Railway's model variables
+                 don't point at a Covered Model. If either is wrong, reword this. -->
+            Anthropic's
+            <a href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data" style="color: var(--violet);">published policy</a>
+            for API customers like us is to delete what we send it, and its
+            replies, within 30 days. It can keep them longer when the law
+            requires it or to enforce its usage policy: messages its automated
+            safety systems flag can be kept for up to 2 years. Deleting your
+            data in Mercurius erases our copy; Anthropic's copy follows
+            Anthropic's schedule.
           </li>
           <li>
             <strong>Railway — hosting.</strong> Hosts our server and database
@@ -375,8 +404,7 @@
             photos, reports, usage rows, lesson events and your lesson
             checklist — and gives you a brand-new ID. From the server's point
             of view you have never been here before. Available in app version
-            2.3 and later; on an older version, update the app or use the
-            email option below.
+            2.3 and later; on an older version, use the email option below.
           </li>
           <li>
             <strong>Withdraw consent.</strong> Settings → Privacy choices →
@@ -386,12 +414,15 @@
           <li>
             <strong>Or email us.</strong> Write to
             <strong>privacy@trymercurius.com</strong> and paste your session
-            ID, which is shown in Settings. We delete the data within 7 days.
+            ID, which is shown in Settings. Versions before 2.3 show only the
+            first 8 characters, so send those; if they don't match exactly
+            one session, we'll write back. We delete the data within 7 days.
           </li>
           <li>
             <strong>Deleting the app is not enough.</strong> Removing Mercurius
-            from your phone does not delete what is on the server. Use one of
-            the options above, or wait for the automatic limits in the table.
+            from your phone, or moving to a new phone, does not delete what is
+            on the server. Use one of the options above, or wait for the
+            automatic limits in the table.
           </li>
         </ul>
       </div>
@@ -403,18 +434,28 @@
         <p class="lede">
           There is no account to review and no name on file, so we cannot
           look up a student by name. What we can tell you: the app is for
-          ages 13 and up, it asks for an age at first launch and shows anyone
-          who picks one under 13 a stop screen instead of the tutor for 7 days
-          (the check takes the student's word for it, and the device keeps only
-          when the stop happened, never the age), it collects no contacts or
+          ages 13 and up. Starting with app version 2.3, it asks for an age at
+          first launch and shows anyone who picks one under 13 a stop screen
+          instead of the tutor for 7 days (the check takes the student's word
+          for it, and the device keeps only when the stop happened, never the
+          age); earlier versions don't ask. It collects no contacts or
           location, it shows no ads, and everything it stores is deleted on
           the schedule above or on request.
         </p>
         <p class="lede">
           If you want a student's data deleted, ask them to use the button in
-          Settings, or email us their session ID. Questions from a parent or
-          school go to <strong>privacy@trymercurius.com</strong> and we answer
-          them ourselves.
+          Settings (app version 2.3 and later), or email us their session ID.
+          Questions from a parent or school go to
+          <strong>privacy@trymercurius.com</strong> and we answer them
+          ourselves.
+        </p>
+        <p class="lede">
+          If your child is under 13 and used Mercurius before the app asked
+          for an age, what they sent then may still be on our server, and the
+          stop screen keeps Settings and its delete button out of reach. Email
+          <strong>privacy@trymercurius.com</strong>. With no names on file, we
+          need the session ID to find that data; without it, the data is still
+          deleted on the schedule above.
         </p>
       </div>
     </section>

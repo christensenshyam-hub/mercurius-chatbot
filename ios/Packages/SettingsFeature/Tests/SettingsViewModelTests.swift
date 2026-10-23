@@ -278,7 +278,7 @@ struct SettingsViewModelDeleteTests {
         #expect(model.sessionId == "old-id")
         // A non-APIError gets the neutral copy, not the connection line.
         #expect(model.deleteErrorMessage == SettingsViewModel.genericDeleteFailedMessage)
-        #expect(model.deleteErrorMessage?.contains("reset this device only") == true)
+        #expect(model.deleteErrorMessage?.contains("Resetting only this device leaves your chats on our server") == true)
         #expect(model.isDeleteInProgress == false)
     }
 
@@ -555,5 +555,63 @@ struct SettingsViewModelConsentTests {
         #expect(!ok)
         #expect(notified == 0)
         #expect(model.resetErrorMessage != nil)
+    }
+}
+
+// AUD-54: "Reset this device only" leaves the server copy under an ID the
+// device then forgets; the student is told so and shown the ID first.
+@Suite("Device-only reset warning")
+@MainActor
+struct DeviceOnlyResetNoticeTests {
+    struct E: Error {}
+
+    @Test("After a failed server delete, the notice shows the ID the server data is still under")
+    func showsTheOldId() async {
+        let storage = FakeSessionStorage()
+        storage.storedId = "old-id-1234567890abcdef"
+        let deleter = FakeSessionDeleter()
+        deleter.error = APIError.offline
+        let model = makeModel(storage: storage, deleter: deleter)
+
+        let ok = await model.deleteServerDataAndStartOver()
+        #expect(!ok)
+        let notice = model.deviceOnlyResetNotice()
+        #expect(notice.sessionId == "old-id-1234567890abcdef")
+        #expect(notice.title == "Reset this device only?")
+        #expect(notice.message.contains("still has your chats"))
+        // Plain words for a 14-year-old: who can't delete it, how to later,
+        // and what to do now.
+        #expect(notice.message.contains("After this reset, the app can't delete them for you."))
+        #expect(notice.message.contains("To delete them later, email privacy@trymercurius.com with this ID"))
+        #expect(notice.message.hasSuffix("so copy it first."))
+        // Showing the notice changes nothing: the reset is a separate tap.
+        #expect(storage.resetCount == 0)
+    }
+
+    @Test("An unreadable ID gets no Copy button and says nothing can delete the data after a reset")
+    func unreadableId() {
+        let storage = FakeSessionStorage()
+        storage.behavior = .throwOnCurrent(E())
+        let model = makeModel(storage: storage)
+        let notice = model.deviceOnlyResetNotice()
+        #expect(notice.sessionId == nil)
+        #expect(notice.message.contains("can't be read"))
+        #expect(notice.message.contains("nothing on this device can delete them"))
+        #expect(!notice.message.localizedCaseInsensitiveContains("copy it"))
+    }
+
+    @Test("The session ID's Copy button is its icon alone at accessibility sizes, where the word wrapped")
+    func copyButtonAtLargeText() {
+        #expect(!SettingsView.copyShowsIconOnly(at: .large))
+        #expect(!SettingsView.copyShowsIconOnly(at: .xxxLarge))
+        #expect(SettingsView.copyShowsIconOnly(at: .accessibility1))
+        #expect(SettingsView.copyShowsIconOnly(at: .accessibility5))
+    }
+
+    @Test("The failure alert itself says what resetting only this device leaves behind")
+    func failureCopy() {
+        for message in [SettingsViewModel.serverDeleteFailedMessage, SettingsViewModel.genericDeleteFailedMessage] {
+            #expect(message.hasSuffix("Resetting only this device leaves your chats on our server."))
+        }
     }
 }

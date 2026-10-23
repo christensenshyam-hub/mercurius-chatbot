@@ -11,7 +11,7 @@ extension LearningActivityAttributes.ContentState {
 
     func headline(for phase: Phase) -> String {
         switch phase {
-        case .active:    return "On a roll"
+        case .active:    return ActivityMetaCopy.activeHeadline(weekDone: weekDone, lessonsDone: lessonsDone)
         case .completed: return "Streak banked"
         case .stale:     return "Still there?"
         case .error:     return "Can't sync"
@@ -20,24 +20,30 @@ extension LearningActivityAttributes.ContentState {
 
     func progressLine(for phase: Phase) -> String {
         switch phase {
-        case .active, .completed: return "\(lessonsDone) of \(lessonsTotal) done"
+        case .active:
+            return ActivityMetaCopy.activeProgressPhrase(
+                lessonsDone: lessonsDone, lessonsTotal: lessonsTotal, unitNumber: unitNumber)
+        case .completed:          return "\(lessonsDone) of \(lessonsTotal) done"
         case .stale:              return "Paused · \(lessonsDone) of \(lessonsTotal) done"
         case .error:              return "We'll retry automatically"
         }
     }
 
-    /// The countdown is the ONLY live value — a system timer from
-    /// `deadline`, never a pre-formatted string. Hidden when stale.
-    /// `compact` is the lock card's short form, so the countdown isn't
-    /// truncated off its narrow text column.
+    /// The weekly frame, or — only while a live streak ends tonight — a
+    /// labelled countdown (AUD-37). The countdown is the ONLY live value: a
+    /// system timer to `deadline`, never a pre-formatted string. Hidden when
+    /// stale. `compact` is the lock card's short form.
     func metaLine(for phase: Phase, compact: Bool = false) -> Text {
         switch phase {
         case .active:
-            let phrase = ActivityMetaCopy.lessonsLeftPhrase(
-                lessonsLeft: lessonsToLevel, unitNumber: unitNumber, compact: compact)
-            return Text(phrase + ActivityMetaCopy.separator)
-                + Text(timerInterval: countdownRange, countsDown: true)
-                + Text(ActivityMetaCopy.countdownSuffix)
+            switch ActivityMetaCopy.activeMeta(
+                weekDone: weekDone, weekGoal: weekGoal, streakAtRisk: streakAtRisk == true,
+                lessonsLeft: lessonsToLevel, unitNumber: unitNumber, compact: compact) {
+            case .countdown(let prefix):
+                return Text(prefix) + Text(timerInterval: countdownRange, countsDown: true)
+            case .text(let line):
+                return Text(line)
+            }
         case .completed:
             return Text(unitNumber > 0 ? "Unit \(unitNumber) complete" : "All lessons done")
         case .stale:
