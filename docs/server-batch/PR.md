@@ -13,6 +13,23 @@ Notes for each step, with evidence: `docs/server-batch/01-transforms.md`, `02-ph
 3. **Decide on the two model-visible strings** below (the crisis placeholder and the re-attached-photo note). Both were measured; both are one constant each to change.
 4. Read **"What a human must check"** at the end.
 
+## Merged with `main`, 2026-10-22
+
+`main` gained #45 (the same crisis-history change as `5789879`), #43, #42, #44 (prompts and Socratic homework coaching), #39 (club facts), #54 (Basics) and the Mac/iOS PRs #47–#53 and #52. This branch now contains all of them (`4707929`, then a second merge for the client PRs).
+
+- **31 conflict hunks in 7 files**, resolved to keep both sides: photo re-attach before the crisis placeholder and the history breakpoint; one `replyTransforms` object (reflow limit + the Basics reflow options + `[SOURCE]` rewrite + `[Q]` order) for the stream, the JSON reply and the homework guard's retries; the Basics voice runs before the pipeline; main's hold-back of guarded homework turns kept; lesson events use this branch's `recordLessonTurn` with main's track-aware `lessonMeta` (b ids). AUD-17 now treats "1." as a list marker for every caller, so Basics' `numberedLists` option no longer changes anything.
+- **Three interactions fixed after an independent review of the merge** (each with a test that fails without it):
+  1. The pipeline dropped Basics' `keepQuotes`, so a quoted practice line was split mid-quote (`3e7d101`).
+  2. The AUD-18 shuffle reordered Basics checks, whose guide names each right answer and safety trap by letter. Basics now keeps its order (`c248d4f`).
+  3. Homework detection (`looksLikeProblemWork`) skipped re-attached photo turns, which are arrays. `photoReattach.textView` gives it the student's words (`c248d4f`).
+- **Full suite with the mock:** 1460/1460. No live eval has run on the merged code (it needs a budget; see below).
+- **Known, not changed** (low severity, from the review):
+  - In a homework photo thread, main's per-turn homework notes sit in the system's dynamic block, before the messages, so the re-attached photo is written to the cache again on each follow-up (about $0.005 per image per follow-up on Sonnet 4.6) instead of read back at 0.1×. Moving the notes after the history breakpoint is a prompt change and needs the eval gate.
+  - A guarded homework turn can use two daily turns (the held draft and the retry both count as answered), and a Stop during hold-back uses one. Main's guard predates AUD-31's counting rule.
+  - A Stop on a held-back photo turn links the photo to text the student never saw; re-attach then falls back to the anchor rule. Fails safe.
+  - The runtime date in the Basics and v2 runtime blocks is still the UTC date (not changed by either side).
+- **Worth a live check after merge** (about $1–3, with your OK): `--only safety-followup,chat-photo,hw-photo,basics-b2l4 --runs 3` in both flag states, and the two-turn suicide-news follow-up from "Rebase notes" below.
+
 ## What changes, by AUD id
 
 ### AUD-01 follow-up: one crisis message no longer stalls the chat or lesson (new, from the gate)
