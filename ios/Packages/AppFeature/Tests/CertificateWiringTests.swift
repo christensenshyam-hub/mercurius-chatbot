@@ -25,12 +25,91 @@ struct CertificateWiringTests {
         #expect(CertificateCopy.unitLines(.deepDive).joined(separator: " · ").components(separatedBy: " · ").count == 8)
     }
 
-    @Test("AI Basics isn't in this build: no Basics certificate until the seam gets its lessons")
-    func basicsSeam() {
-        #expect(CertificateCourses.basicsLessons == nil)
+    @Test("AI Basics asks for its 18 lessons, b1_l1 … b5_l4, in course order, as the progress store records them")
+    func basicsLessons() {
+        let lessons = CertificateCourses.basicsLessons
+        #expect(lessons.count == 18)
+        #expect(lessons.map { $0.id } == BasicsCurriculum.allLessons.map(\.id))
+        #expect(lessons.first?.id == "b1_l1")
+        #expect(lessons.last?.id == "b5_l4")
+        #expect(lessons.allSatisfy { CurriculumTrack.of(id: $0.id) == .basics })
+        // Named for "what's left": "Unit N · <lesson>".
+        #expect(lessons.first?.title == "Unit 1 · What is an AI chatbot?")
+        #expect(lessons.map { $0.title }.contains("Unit 2 · Following up"))
+        #expect(lessons.last?.title == "Unit 5 · On your own")
         let center = CertificateCenter.make(progress: CurriculumProgressStore(preferences: InMemoryPreferenceStore()),
                                             defaults: freshDefaults("wiring.basics"))
-        #expect(center.kinds == [.deepDive])
+        #expect(center.kinds == [.deepDive, .basics])
+        #expect(center.status(.basics)?.progressText == "0 of 18 lessons finished")
+    }
+
+    @Test("What's left of AI Basics names one real lesson, never a run of titles with commas and \"and\"")
+    func basicsRemainingText() {
+        let lessons = CertificateCourses.basicsLessons
+        func remaining(finished: [String]) -> String? {
+            CertificateEligibility.basics(lessons: lessons, completedLessonIds: Set(finished)).remainingText
+        }
+        #expect(remaining(finished: []) == "Next: Unit 1 · What is an AI chatbot?")
+        // Twelve in course order: the next is "Meals, plans and lists", and
+        // "Learn something new, with a photo" (after it) isn't run into it.
+        let twelve = remaining(finished: lessons.prefix(12).map { $0.id })
+        #expect(twelve == "Next: Unit 4 · Meals, plans and lists")
+        #expect(twelve?.contains("with a photo") == false)
+        // Out of order: the first one not finished, in course order.
+        #expect(remaining(finished: lessons.map { $0.id }.filter { $0 != "b1_l3" && $0 != "b5_l2" })
+                == "Next: Unit 1 · What chatbots get wrong")
+        #expect(remaining(finished: lessons.dropLast().map { $0.id }) == "Next: Unit 5 · On your own")
+        #expect(remaining(finished: lessons.map { $0.id }) == nil)
+    }
+
+    @Test("Finishing the 18th Basics lesson through the progress store earns AI Basics, then and there")
+    func basicsEarnedThroughProgress() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())
+        let center = CertificateCenter.make(progress: progress, defaults: freshDefaults("wiring.basics.18th"))
+        // Out of order: the 18th to finish needn't be b5_l4.
+        let ids = BasicsCurriculum.allLessons.map(\.id)
+        let last = "b3_l2"
+        for id in ids where id != last {
+            #expect(center.recordingNewlyEarned { progress.markCompleted(id) }.isEmpty)
+        }
+        #expect(center.justEarned == nil)
+        #expect(center.status(.basics)?.remaining.map { $0.id } == [last])
+        #expect(center.store.earnedAt(.basics) == nil)
+        let newly = center.recordingNewlyEarned { progress.markCompleted(last) }
+        #expect(newly == [.basics])
+        #expect(center.justEarned == .basics)
+        #expect(center.store.earnedAt(.basics) != nil)
+        // It prints the day the 18th lesson was finished, fixed from then on.
+        let finished = progress.completedAt(last)
+        #expect(finished != nil)
+        #expect(center.status(.basics)?.lastMetAt == finished)
+        #expect(center.completionDate(.basics) == finished)
+        #expect(center.store.completionDate(.basics) == finished)
+        // Finishing a lesson again doesn't re-earn it.
+        center.justEarned = nil
+        #expect(center.recordingNewlyEarned { progress.markCompleted(last) }.isEmpty)
+        #expect(center.justEarned == nil)
+    }
+
+    @Test("A Deep-dive completion never earns AI Basics")
+    func deepDiveNeverEarnsBasics() {
+        let progress = CurriculumProgressStore(preferences: InMemoryPreferenceStore())
+        let center = CertificateCenter.make(progress: progress, defaults: freshDefaults("wiring.basics.deepdive"))
+        // Every Basics lesson but one done, then the whole Deep dive.
+        for lesson in BasicsCurriculum.allLessons.dropLast() { progress.markCompleted(lesson.id) }
+        for lesson in MercuriusCurriculum.allLessons {
+            #expect(center.recordingNewlyEarned { progress.markCompleted(lesson.id) }.isEmpty)
+        }
+        #expect(center.justEarned == nil)
+        #expect(center.status(.basics)?.isEarned == false)
+        #expect(center.status(.basics)?.remaining.map { $0.id } == ["b5_l4"])
+        #expect(center.store.earnedAt(.basics) == nil)
+        // The Deep dive's own certificate comes from its checks only.
+        for unit in MercuriusCurriculum.units {
+            center.recordingNewlyEarned { progress.markUnitMastered(unit.id) }
+        }
+        #expect(center.justEarned == .deepDive)
+        #expect(center.status(.basics)?.isEarned == false)
     }
 
     @Test("Mastering the eighth unit through the progress store earns the Deep dive, then and there")

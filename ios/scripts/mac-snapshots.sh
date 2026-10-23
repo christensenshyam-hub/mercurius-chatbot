@@ -184,6 +184,8 @@ LESSON=(-LessonPreview YES -LessonReplay YES -LessonSkipIntro YES)
 # A Basics lesson (docs/basics/CLIENTS.md): Basics 1.1 opened the way a
 # reminder opens a lesson, replaying a real recorded Basics session.
 BASICS_LESSON=(-CurriculumTrack basics -OpenLesson b1_l1 -LessonReplay YES -LessonSkipIntro YES)
+# Every Basics lesson but 1.1, so the replay's completion finishes AI Basics.
+BASICS_ALL_BUT_FIRST=b1_l2,b1_l3,b2_l1,b2_l2,b2_l3,b2_l4,b3_l1,b3_l2,b3_l3,b4_l1,b4_l2,b4_l3,b4_l4,b5_l1,b5_l2,b5_l3,b5_l4
 
 run() {
   case $1 in
@@ -288,14 +290,17 @@ run() {
     # The certificates (DEBUG CertificateDebug: progress seeded in the
     # -UITests suites, a sample name, nothing pushed). The name sheet for
     # each certificate; the Certificates list (Deep dive earned, AI Basics
-    # part way, through the Basics seam's demo lessons); the Progress sheet's
-    # Certificates row; the last unit's check passed with its "Get your
-    # certificate" card.
+    # part way); the Progress sheet's Certificates row; the last unit's
+    # check passed with its "Get your certificate" card; and AI Basics'
+    # card, the real way: the other 17 lessons seeded, Basics 1.1's replay
+    # completes the 18th.
     certificate-sheet)        panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview deepDive -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
     certificate-sheet-basics) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview basics -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
     certificate-list)         panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateList YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
     certificate-hub)          panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateHub YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
     certificate-card)         window_shot "$1" "${PAST_GATE[@]}" -CertificateCardPreview YES -MacSnapshotDelay 6 ;;
+    certificate-card-basics)  window_shot "$1" "${PAST_GATE[@]}" "${BASICS_LESSON[@]}" -SeedCompleted "$BASICS_ALL_BUT_FIRST" \
+                                -LessonReplayScript 3 -MacSnapshotDelay 19 ;;
     crisis)          window_shot "$1" "${PAST_GATE[@]}" -UnitTestCrisisPreview YES -MacSnapshotDelay 5 ;;
     settings-general) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab general ;;
     settings-privacy) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab privacy ;;

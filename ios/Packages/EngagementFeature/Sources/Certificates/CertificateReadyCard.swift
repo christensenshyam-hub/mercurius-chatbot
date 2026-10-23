@@ -7,11 +7,17 @@ import DesignSystem
 public struct CertificateReadyCard: View {
     private let kind: CertificateKind
     private let name: String
+    private let compact: Bool
     private let onOpen: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
-    public init(kind: CertificateKind, name: String, onOpen: @escaping () -> Void) {
+    /// `compact` (iPhone): a small preview beside the words, as the Mac's
+    /// card always has it, for the lesson-complete sheet, which also holds
+    /// the headline, "Try this today" and the way on.
+    public init(kind: CertificateKind, name: String, compact: Bool = false, onOpen: @escaping () -> Void) {
         self.kind = kind
         self.name = name
+        self.compact = compact
         self.onOpen = onOpen
     }
 
@@ -44,20 +50,19 @@ public struct CertificateReadyCard: View {
         .accessibilityElement(children: .contain)
         #else
         VStack(spacing: BrandSpacing.md) {
-            CertificatePreview(kind: kind, name: name, date: nil)
-                .frame(maxWidth: 280)
-                .accessibilityHidden(true)
-            VStack(spacing: BrandSpacing.xs) {
-                Text(CertificateReadyCopy.headline(kind))
-                    .font(BrandFont.subheading)
-                    .foregroundStyle(BrandColor.text)
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
-                Text(CertificateReadyCopy.detail(kind))
-                    .font(BrandFont.body)
-                    .foregroundStyle(BrandColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            if compact {
+                // Beside the words, or above them at the largest text sizes.
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: BrandSpacing.md))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: BrandSpacing.md))
+                layout {
+                    preview.frame(width: 112)
+                    words(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                preview.frame(maxWidth: 280)
+                words(.center)
             }
             BrandButton(CertificateReadyCopy.button, style: .secondary, action: onOpen)
                 .accessibilityHint("Add your name, then print or save your certificate")
@@ -71,6 +76,30 @@ public struct CertificateReadyCard: View {
         .accessibilityIdentifier("certificate.ready")
         #endif
     }
+
+    #if !os(macOS)
+    private var preview: some View {
+        CertificatePreview(kind: kind, name: name, date: nil)
+            .accessibilityHidden(true)
+    }
+
+    private func words(_ alignment: HorizontalAlignment) -> some View {
+        let textAlignment: TextAlignment = alignment == .leading ? .leading : .center
+        return VStack(alignment: alignment, spacing: BrandSpacing.xs) {
+            Text(CertificateReadyCopy.headline(kind))
+                .font(BrandFont.subheading)
+                .foregroundStyle(BrandColor.text)
+                .multilineTextAlignment(textAlignment)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text(CertificateReadyCopy.detail(kind))
+                .font(BrandFont.body)
+                .foregroundStyle(BrandColor.textSecondary)
+                .multilineTextAlignment(textAlignment)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    #endif
 }
 
 public enum CertificateReadyCopy {

@@ -13,12 +13,18 @@ enum CertificateCourses {
         }
     }
 
-    /// **The Basics seam.** AI Basics' lessons in course order (ids `b1_l1`
-    /// … `b5_l4`), once its curriculum is in this build; nil until then, and
-    /// the Basics certificate isn't offered. The Basics branch returns its
-    /// lessons here (see `docs/certificate/INTEGRATION.md`), and wraps its
-    /// "lesson finished" call in `CertificateCenter.recordingNewlyEarned`.
-    static var basicsLessons: [CertificateRequirement]? { nil }
+    /// **The Basics seam.** AI Basics' 18 lessons in course order, under the
+    /// ids the progress store records (`b1_l1` … `b5_l4`), named for "what's
+    /// left" ("Unit 2 · Following up"). The lesson-complete handlers mark
+    /// them inside `CertificateCenter.recordingNewlyEarned` (see
+    /// `docs/certificate/INTEGRATION.md`).
+    static var basicsLessons: [CertificateRequirement] {
+        BasicsCurriculum.units.flatMap { unit in
+            unit.lessons.map {
+                CertificateRequirement(id: $0.id, title: "Unit \(Int(unit.number) ?? 0) · \($0.title)")
+            }
+        }
+    }
 }
 
 extension CertificateCenter {
@@ -64,9 +70,49 @@ struct CertificateMasterySlot: ViewModifier {
     }
 }
 
+/// A lesson's host: the "You finished AI Basics" card on its complete
+/// screen when the lesson's completion finished the course, and the name
+/// sheet it opens, over the lesson. The card stays as long as that screen
+/// does, also once its sheet has opened and closed (the sheet clears
+/// `justEarned`): in Basics nothing goes before the learner is done with it
+/// (BEGINNER_GUIDE §2.3). On the iPhone only the screen's buttons close it
+/// while the card shows (a tap on the dimmed lesson doesn't), since neither
+/// Home nor the path leads a Basics learner to Progress ▸ Certificates; on
+/// the Mac, Escape and a click beside it still do, with Progress (⌘4) in
+/// every toolbar.
+struct CertificateLessonSlot: ViewModifier {
+    let center: CertificateCenter
+    @State private var sheet: CertificateKind?
+    /// The certificate this lesson's completion earned.
+    @State private var earned: CertificateKind?
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.lessonCompleteAccessory, earned.map { kind in
+                // Compact on the iPhone, so the sheet keeps room for "Try
+                // this today" under it.
+                AnyView(CertificateReadyCard(kind: kind, name: center.store.name ?? "", compact: true,
+                                             onOpen: { sheet = kind }))
+            })
+            .onChange(of: center.justEarned) { _, kind in
+                if let kind { earned = kind }
+            }
+            // Settings' erase (the Mac's Settings window, with the lesson
+            // open) takes the certificate, and the card with it.
+            .onChange(of: center.store.resetCount) { _, _ in earned = nil }
+            .sheet(item: $sheet) { kind in
+                CertificateSheet(center: center, kind: kind, onClose: { sheet = nil })
+            }
+    }
+}
+
 extension View {
     func certificateMasterySlot(_ center: CertificateCenter) -> some View {
         modifier(CertificateMasterySlot(center: center))
+    }
+
+    func certificateLessonSlot(_ center: CertificateCenter) -> some View {
+        modifier(CertificateLessonSlot(center: center))
     }
 }
 
@@ -84,8 +130,10 @@ extension View {
 /// - `-CertificateCardPreview YES`: the last unit's check passed, completing
 ///   the course: its result with the "Get your certificate" card.
 ///
-/// AI Basics isn't in this build, so these hand the certificates a demo
-/// lesson list through the Basics seam (`demoBasicsLessons`).
+/// AI Basics' card is reached the real way: `-CurriculumTrack basics
+/// -OpenLesson b1_l1 -LessonReplay YES -LessonSkipIntro YES
+/// -LessonReplayScript 3` with the other 17 lessons in `-SeedCompleted`
+/// (the Mac's `certificate-card-basics` shot).
 @MainActor
 enum CertificateDebug {
     enum Mode: Equatable {
@@ -112,33 +160,20 @@ enum CertificateDebug {
         UserDefaults.standard.string(forKey: "CertificateName") ?? "Alexandria Montgomery-Vasquez"
     }
 
-    /// AI Basics' 18 lessons as the Basics branch names them (`b1_l1` …
-    /// `b5_l4`), titled by position only.
-    static let demoBasicsLessons: [CertificateRequirement] = {
-        let lessonsPerUnit = [3, 4, 3, 4, 4]
-        var lessons: [CertificateRequirement] = []
-        for (u, count) in lessonsPerUnit.enumerated() {
-            for l in 1...count {
-                lessons.append(CertificateRequirement(id: "b\(u + 1)_l\(l)", title: "Basics \(u + 1).\(l)"))
-            }
-        }
-        return lessons
-    }()
-
     /// Seed the state `mode` shows.
     @MainActor
     static func seed(_ mode: Mode, env: AppEnvironment) {
         let center = env.certificates
         let progress = env.progressStore
-        center.basicsLessons = demoBasicsLessons
         let units = MercuriusCurriculum.units
-        let lessonDates = Dictionary(uniqueKeysWithValues: demoBasicsLessons.map { ($0.id, Date().addingTimeInterval(-86_400)) })
+        let basics = CertificateCourses.basicsLessons
+        let lessonDates = Dictionary(uniqueKeysWithValues: basics.map { ($0.id, Date().addingTimeInterval(-86_400)) })
         switch mode {
         case .sheet, .list, .hub:
             center.recordingNewlyEarned {
                 progress.merge(completed: [], mastered: units.map(\.id), remoteVersion: MercuriusCurriculum.version)
             }
-            let basicsDone = mode == .sheet(.basics) ? demoBasicsLessons : Array(demoBasicsLessons.prefix(12))
+            let basicsDone = mode == .sheet(.basics) ? basics : Array(basics.prefix(12))
             progress.merge(completed: basicsDone.map(\.id), mastered: [], remoteVersion: MercuriusCurriculum.version,
                            remoteUpdatedAt: lessonDates)
             center.justEarned = nil
@@ -193,7 +228,7 @@ struct CertificateDebugHost: View {
             NavigationStack {
                 CertificatesListView(center: env.certificates)
             }
-            .tint(BrandColor.accentText)
+            .tint(BrandAppearance.tint)
         case .hub:
             ProgressHubView(
                 streakStore: env.streakStore,
@@ -203,7 +238,7 @@ struct CertificateDebugHost: View {
                 certificates: env.certificates,
                 onDone: {}
             )
-            .tint(BrandColor.accent)
+            .tint(BrandAppearance.tint)
         case .card:
             if let unit = MercuriusCurriculum.units.last, let test = MercuriusCurriculum.unitTest(for: unit.id) {
                 UnitTestPreviewHost(unit: unit, test: test, stage: "mastered", onMastered: { _ in

@@ -249,6 +249,8 @@ struct NightLessonComplete: View {
 
     @Environment(\.nightLessonRecap) private var recap
     @Environment(\.nightLessonWeek) private var week
+    /// What this completion unlocked, under the headline (the host's slot).
+    @Environment(\.lessonCompleteAccessory) private var accessory
     @Environment(\.colorScheme) private var scheme
     @NightSettings private var night
 
@@ -372,6 +374,7 @@ struct NightLessonComplete: View {
             }
             .frame(maxWidth: .infinity)
 
+            if let accessory { accessory }
             if !keys.shown.isEmpty {
                 keyIdeas(keys.shown, more: keys.more)
             }

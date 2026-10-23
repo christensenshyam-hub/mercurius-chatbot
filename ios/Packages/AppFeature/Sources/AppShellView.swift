@@ -610,6 +610,9 @@ struct AppShellView: View {
     /// finished unit's win, which lingers by design. Then the queued unit
     /// check, or the review prompt.
     private func lessonWindowDismissed() {
+        // The course-complete card goes with the lesson that earned it, by
+        // any way out (the certificate stays in Progress ▸ Certificates).
+        env.certificates.justEarned = nil
         guard activeLesson == nil else { return }
 #if os(iOS)
         if !activityShowsWin {
@@ -660,7 +663,11 @@ struct AppShellView: View {
     /// and taps Done; the curriculum row updates underneath them.
     private func handleLessonComplete(_ lessonId: String) {
         let isFirstCompletion = !progress.isCompleted(lessonId)
-        progress.markCompleted(lessonId)
+        // The 18th Basics lesson completes AI Basics: its moment is kept and
+        // the complete screen shows "You finished AI Basics". A Deep-dive
+        // lesson earns nothing here (its certificate is the unit checks'),
+        // so every completion goes through it.
+        env.certificates.recordingNewlyEarned { progress.markCompleted(lessonId) }
         lastActivityStore.touch()
         // Only a first completion counts toward the review prompt (the 3rd
         // and 10th); UI tests never ask.
@@ -926,6 +933,10 @@ struct AppShellView: View {
             nextStop: next.map(Self.celebrationStop),
             basics: isBasics ? Self.basicsOptions(for: lesson.id, tracks: trackStore) : nil
         )
+        // The completion that finished AI Basics: "You finished AI Basics"
+        // on the complete screen, and the certificate's name sheet over the
+        // lesson. Inside the `.id`, so the next lesson starts without it.
+        .certificateLessonSlot(env.certificates)
         // Swapping `activeLesson` to the next lesson must give a FRESH view
         // (new ChatViewModel + re-run of `beginOrResume`), not reuse this
         // one's @State. Keying on the lesson id forces that re-identity.

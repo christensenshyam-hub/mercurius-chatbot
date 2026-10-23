@@ -31,6 +31,8 @@ public struct LessonCompleteOverlay: View {
     let basics: BasicsWrapUp?
     @State private var copiedMessage = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// What this completion unlocked, under the headline (the host's slot).
+    @Environment(\.lessonCompleteAccessory) private var accessory
 
     #if os(macOS)
     /// The Mac's card rises a little as it fades in, rather than sliding up
@@ -108,13 +110,17 @@ public struct LessonCompleteOverlay: View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Dimmed scrim. Tapping it keeps the celebration out of the way
-                // so the student can re-read the final feedback.
+                // so the student can re-read the final feedback. Not while the
+                // sheet holds what this completion unlocked (AI Basics'
+                // certificate): the celebration doesn't come back, so a stray
+                // tap would take the card for good. Its buttons still close it.
                 Color.black.opacity(0.38)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture { exit(.dismiss) }
+                    .onTapGesture { if accessory == nil { exit(.dismiss) } }
                     .accessibilityLabel("Dismiss")
                     .accessibilityHint("Keep reading the lesson")
+                    .accessibilityHidden(accessory != nil)
 
                 sheet
                     // Cap the sheet so a long title at large Dynamic Type scrolls
@@ -181,6 +187,7 @@ public struct LessonCompleteOverlay: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilitySummary)
 
+                if let accessory { accessory }
                 if let upNextLabel { upNext(upNextLabel) }
                 buttons
             }
@@ -221,6 +228,17 @@ public struct LessonCompleteOverlay: View {
                         .frame(maxWidth: .infinity)
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicatorsFlash(onAppear: true)
+                // A line running under the pinned choices fades out rather
+                // than being cut mid-line, so it reads as "there's more" (as
+                // on the Mac's card).
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [BrandColor.surface.opacity(0), BrandColor.surface],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 24)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
                 Divider()
                 basicsChoices
                     .padding(.horizontal, BrandSpacing.xl)
@@ -234,7 +252,8 @@ public struct LessonCompleteOverlay: View {
         }
     }
 
-    /// The headline and "Try this today".
+    /// The headline, what the completion unlocked (the course's last lesson:
+    /// "You finished AI Basics") and "Try this today".
     private func basicsSummary(_ wrapUp: BasicsWrapUp) -> some View {
         VStack(spacing: BrandSpacing.lg) {
             // Room for Merc, when he shows.
@@ -255,6 +274,7 @@ public struct LessonCompleteOverlay: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(basicsAccessibilitySummary)
 
+            if let accessory { accessory }
             if !wrapUp.tryThisToday.isEmpty {
                 tryThisTodayCard(wrapUp)
             }
@@ -499,6 +519,23 @@ struct LessonCompleteExits {
         case .dismiss: onDismiss()
         }
         if reportDismissal { onCelebrationDismissed?() }
+    }
+}
+
+private struct LessonCompleteAccessoryKey: EnvironmentKey {
+    static var defaultValue: AnyView? { nil }
+}
+
+public extension EnvironmentValues {
+    /// Shown on a lesson's complete screen, under its headline (both
+    /// platforms): the host's slot for what this completion unlocked
+    /// (AppFeature puts the "You finished AI Basics" card here when the
+    /// course's last lesson earned its certificate). ChatFeature can't see
+    /// the certificates, so the host fills it, as a unit check's
+    /// `unitMasteryAccessory` is filled.
+    var lessonCompleteAccessory: AnyView? {
+        get { self[LessonCompleteAccessoryKey.self] }
+        set { self[LessonCompleteAccessoryKey.self] = newValue }
     }
 }
 
