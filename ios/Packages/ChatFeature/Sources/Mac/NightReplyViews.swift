@@ -20,13 +20,13 @@ struct NightMessageRow: View {
     let style: Style
     /// Lessons: this reply's parts (split once by the list, which counts
     /// them across the thread) and the number of the first.
-    var sections: [NightSection] = []
+    var sections: [LessonPart] = []
     var firstPart: Int = 1
     /// Free chat: the latest completed reply's closing question becomes the
     /// Your turn card.
     var showsYourTurn = false
     /// The thread carried a crisis line at or before this reply
-    /// (`NightCrisisGuard.guardedReplies`): drawn as plain text.
+    /// (`LessonCrisisGuard.guardedReplies`): drawn as plain text.
     var crisisThread = false
     /// Free chat: "Merc · AI tutor" heads the thread's first reply only.
     var showsMercLabel = false
@@ -40,8 +40,8 @@ struct NightMessageRow: View {
     var coordinateSpace = ""
     var onPartMarkMoved: (Int, CGFloat) -> Void = { _, _ in }
     /// Lesson 1.1: where this reply holds the interactive
-    /// (`NightInteractiveAnchor`), nil for every other reply.
-    var interactiveAfter: NightInteractivePosition?
+    /// (`LessonInteractiveAnchor`), nil for every other reply.
+    var interactiveAfter: LessonInteractivePosition?
 
     var body: some View {
         switch message.role {
@@ -57,7 +57,7 @@ struct NightMessageRow: View {
     private var isEmptyTyping: Bool { message.content.isEmpty && isStreaming }
 
     private var pieces: [NightReplyPiece] {
-        let crisis = crisisThread || NightCrisisGuard.applies(to: message.content)
+        let crisis = crisisThread || LessonCrisisGuard.applies(to: message.content)
         switch style {
         case .lesson:
             return NightReplyLayout.lesson(sections: sections, firstPart: firstPart, crisis: crisis,

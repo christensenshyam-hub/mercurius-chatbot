@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 
 /// Night Studio's raw colour values on the Mac: the one source the `Night`
@@ -11,7 +10,10 @@ import Foundation
 /// and the tests hold the same pairs to the same minimums. Change a value
 /// in all three places, or none.
 ///
-/// Mac only: iOS keeps `BrandPalette` until it adopts Night Studio.
+/// The Mac's palette. iOS keeps `BrandPalette` until it adopts Night
+/// Studio; the one exception is Lesson 1.1's interactive, a night-sky card
+/// in both of the iPhone's appearances, which reads the dark (and dark HC)
+/// values here through `NightSkyCard`. So this file compiles on iOS too.
 enum NightPalette {
     /// One sRGB colour, with an alpha for the translucent tokens (hairlines,
     /// the field stroke, the hero's lamp).
@@ -219,4 +221,3 @@ enum NightPalette {
                     || forcedIncreasedContrast)
     }
 }
-#endif
