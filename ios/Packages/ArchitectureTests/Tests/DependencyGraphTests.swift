@@ -104,6 +104,15 @@ private let infraModules: Set<String> = [
     "PersistenceKit",
 ]
 
+/// Content modules: leaf modules any feature may use, each allowed to
+/// reach only the modules listed here (BUILD_PLAN.md §1.1, lesson
+/// interactives). `LessonInteractives` depends on DesignSystem alone, so no
+/// card can reach the network or storage: "no network, nothing stored" is
+/// enforced by construction for every card.
+private let contentModules: [String: Set<String>] = [
+    "LessonInteractives": ["DesignSystem"],
+]
+
 /// Composition root. Only this module is allowed to fan out across
 /// every feature.
 private let appModule = "AppFeature"
@@ -139,6 +148,7 @@ struct DependencyGraphTests {
         for target in manifest.targets where featureModules.contains(target.name) {
             let depNames = Set(target.dependencies.compactMap(\.resolvedName))
             let allowed = infraModules
+                .union(contentModules.keys)
                 .union(allowedExternalProducts)
                 .union(allowedCrossFeatureDeps[target.name] ?? [])
 
@@ -171,6 +181,28 @@ struct DependencyGraphTests {
                 depNames.contains(infra),
                 "AppFeature should depend on infra module \(infra)"
             )
+        }
+    }
+
+    @Test("Content modules depend only on what they're allowed (LessonInteractives: DesignSystem)")
+    func contentModulesStayLeaves() throws {
+        let manifest = try loadManifest()
+        for (name, allowed) in contentModules {
+            guard let target = manifest.targets.first(where: { $0.name == name }) else {
+                Issue.record("\(name) target missing from manifest")
+                continue
+            }
+            let depNames = Set(target.dependencies.compactMap(\.resolvedName))
+            let unauthorized = depNames.subtracting(allowed)
+            #expect(
+                unauthorized.isEmpty,
+                "\(name) may depend on \(allowed.sorted()) only, but lists \(unauthorized.sorted()). A lesson interactive must not reach the network or storage."
+            )
+        }
+        // And no infra module reaches up into one.
+        for target in manifest.targets where infraModules.contains(target.name) {
+            let depNames = Set(target.dependencies.compactMap(\.resolvedName))
+            #expect(depNames.isDisjoint(with: contentModules.keys), "\(target.name) depends on a content module")
         }
     }
 
@@ -235,6 +267,7 @@ struct DependencyGraphTests {
         let present = Set(manifest.targets.filter(\.isLibrary).map(\.name))
         let expected = featureModules
             .union(infraModules)
+            .union(contentModules.keys)
             .union([appModule])
         let missing = expected.subtracting(present)
         #expect(missing.isEmpty, "Expected modules missing from manifest: \(missing.sorted())")

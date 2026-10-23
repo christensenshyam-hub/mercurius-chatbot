@@ -1,0 +1,210 @@
+
+== u1_l1-r2 — What happens when you type a prompt | completedAt=7 | studentTurns=7
+  t0 [opener] balanced out=293 words=185 FK=9.7 Q:B   HR
+  t1 [idk] concise out=206 words=124 FK=5.5 Q:B   
+  t2 [pickWrong] balanced out=160 words=101 FK=9.3 Q:B   
+  t3 [brief] concise out=301 words=194 FK=7.6 Q:B   
+  t4 [attempt] concise out=330 words=209 FK=8.3 Q:B   
+  t5 [good] concise out=270 words=172 FK=5.6    HR
+  t6 [good] concise out=223 words=151 FK=9.3  CHECK  
+  t7 [good] concise out=248 words=155 FK=10.1   COMPLETE DELTA≠REPLY
+  cost=$0.073
+
+== u1_l1 — What happens when you type a prompt | completedAt=6 | studentTurns=6
+  t0 [opener] balanced out=290 words=179 FK=8.3 Q:B   HR
+  t1 [pickWrong] balanced out=157 words=104 FK=10.1 Q:B   HR
+  t2 [idk] concise out=210 words=123 FK=7.4 Q:B   HR
+  t3 [pickRight] balanced out=289 words=190 FK=10.8 Q:A   HR
+  t4 [attempt] concise out=354 words=231 FK=10.2 Q:B   HR
+  t5 [good] concise out=222 words=141 FK=7.1    HR
+  t6 [good] concise out=340 words=203 FK=7.8   COMPLETE HR DELTA≠REPLY
+  cost=$0.109
+
+== u1_l3-r2 — Why AI sounds confident but can be wrong | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=364 words=213 FK=7.5 Q:B   HR
+  t1 [brief] concise out=402 words=250 FK=8.1 Q:B   HR
+  t2 [pickRight] balanced out=314 words=195 FK=6.8    ROADMAP:three parts HR
+  t3 [wrong] concise out=221 words=151 FK=7.5    ROADMAP:three parts HR
+  t4 [attempt] concise out=100 words=73 FK=3.7    
+  t5 [good] concise out=294 words=173 FK=10.2   COMPLETE VISIBLE_BRACKETS:[SOURCE: OpenAI, "GPT-4 Technical Report" (2023) — arxiv.org] HR DELTA≠REPLY
+  cost=$0.057
+
+== u1_l3 — Why AI sounds confident but can be wrong | completedAt=4 | studentTurns=4
+  t0 [opener] balanced out=376 words=227 FK=8.6 Q:B   
+  t1 [pickRight] balanced out=341 words=208 FK=10.6 Q:B   
+  t2 [brief] concise out=322 words=213 FK=6.6    ROADMAP:three parts HR
+  t3 [offtopic] concise out=136 words=97 FK=6.2    ROADMAP:three parts
+  t4 [attempt] concise out=324 words=214 FK=8.3   COMPLETE ROADMAP:three parts DELTA≠REPLY
+  cost=$0.093
+
+== u1_l4-r2 — Unit review and application | completedAt=7 | studentTurns=7
+  t0 [opener] balanced out=352 words=240 FK=8    HR
+  t1 [idk] concise out=62 words=44 FK=1    
+  t2 [wrong] concise out=128 words=90 FK=7.6    
+  t3 [brief] concise out=189 words=138 FK=7    
+  t4 [attempt] concise out=157 words=112 FK=6.3    ROADMAP:three steps
+  t5 [good] concise out=246 words=155 FK=6.2    
+  t6 [good] concise out=244 words=168 FK=6.5    
+  t7 [good] concise out=351 words=224 FK=7.6   COMPLETE JARGON:Step 1 HR DELTA≠REPLY
+  cost=$0.067
+
+== u2_l1-r2 — Where bias enters AI systems | completedAt=7 | studentTurns=7
+  t0 [opener] balanced out=337 words=228 FK=14 Q:B   
+  t1 [pickRight] balanced out=368 words=242 FK=11.9 Q:C   
+  t2 [pickWrong] balanced out=211 words=135 FK=16.3 Q:B   
+  t3 [idk] concise out=277 words=169 FK=8.1 Q:C   
+  t4 [attempt] concise out=342 words=234 FK=10.6 Q:C   
+  t5 [good] concise out=335 words=218 FK=8.2 Q:B   
+  t6 [good] concise out=195 words=146 FK=10.6    
+  t7 [good] concise out=220 words=158 FK=7.4   COMPLETE DELTA≠REPLY
+  cost=$0.078
+
+== u2_l1 — Where bias enters AI systems | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=314 words=212 FK=12.8 Q:B   
+  t1 [idk] concise out=193 words=128 FK=9.1 Q:A   
+  t2 [pickWrong] balanced out=406 words=280 FK=12.1 Q:B   
+  t3 [brief] concise out=317 words=211 FK=9.6 Q:C   
+  t4 [attempt] concise out=209 words=139 FK=7    HR
+  t5 [good] concise out=214 words=145 FK=8.1   COMPLETE DELTA≠REPLY
+  cost=$0.101
+
+== u3_l1-r2 — AI in hiring and employment | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=331 words=219 FK=10.7 Q:B   
+  t1 [pickWrong] balanced out=222 words=157 FK=8 Q:B   
+  t2 [idk] concise out=268 words=172 FK=6.9 Q:B   
+  t3 [pickRight] balanced out=356 words=232 FK=13.9 Q:B   
+  t4 [attempt] concise out=370 words=256 FK=7.3    
+  t5 [good] concise out=327 words=234 FK=9.4   COMPLETE DELTA≠REPLY
+  cost=$0.060
+
+== u3_l1 — AI in hiring and employment | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=312 words=210 FK=11.2 Q:B   
+  t1 [brief] concise out=356 words=241 FK=12.4 Q:C   
+  t2 [pickRight] balanced out=394 words=285 FK=7.2    HR
+  t3 [wrong] concise out=172 words=127 FK=4.8    
+  t4 [attempt] concise out=310 words=219 FK=9    
+  t5 [good] concise out=289 words=189 FK=5.9   COMPLETE HR DELTA≠REPLY
+  cost=$0.104
+
+== u3_l2-r2 — AI in healthcare | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=364 words=249 FK=9.9 Q:malformed   BLOCKS:malformed [Q] (stem="What is the main reason a well-trained A", options=4, ans=null)
+  t1 [good] concise out=396 words=270 FK=10.1 Q:malformed   BLOCKS:malformed [Q] (stem="Why did the care-allocation algorithm di", options=4, ans=null)
+  t2 [brief] concise out=381 words=245 FK=8.1    HR
+  t3 [offtopic] concise out=141 words=96 FK=4.6    
+  t4 [attempt] concise out=316 words=213 FK=7.9    
+  t5 [good] concise out=320 words=209 FK=6.8   COMPLETE ROADMAP:three parts DELTA≠REPLY
+  cost=$0.062
+
+== u3_l2 — AI in healthcare | completedAt=6 | studentTurns=6
+  t0 [opener] balanced out=294 words=199 FK=12.5 Q:B   HR
+  t1 [pickRight] balanced out=305 words=188 FK=8.6 Q:B   HR
+  t2 [pickWrong] balanced out=163 words=105 FK=10.4 Q:B   
+  t3 [idk] concise out=236 words=162 FK=5.6 Q:B   
+  t4 [attempt] concise out=338 words=218 FK=8.2 Q:B   HR
+  t5 [good] concise out=271 words=185 FK=6.5    ROADMAP:three pieces HR
+  t6 [good] concise out=270 words=179 FK=7.6   COMPLETE ROADMAP:three parts DELTA≠REPLY
+  cost=$0.110
+
+== u4_l1-r2 — How framing changes everything | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=365 words=238 FK=9.3 Q:B   
+  t1 [idk] concise out=231 words=148 FK=8.6 Q:B   
+  t2 [pickWrong] balanced out=192 words=128 FK=8 Q:A   
+  t3 [brief] concise out=367 words=221 FK=8.5 Q:B   
+  t4 [attempt] concise out=239 words=170 FK=6.6    
+  t5 [good] concise out=254 words=168 FK=6.6   COMPLETE DELTA≠REPLY
+  cost=$0.056
+
+== u4_l1 — How framing changes everything | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=332 words=204 FK=8.5 Q:B   
+  t1 [pickWrong] balanced out=339 words=229 FK=8 Q:B   
+  t2 [idk] concise out=195 words=131 FK=7.7 Q:B   
+  t3 [pickRight] balanced out=298 words=209 FK=5.8    
+  t4 [attempt] concise out=145 words=108 FK=2.8    
+  t5 [good] concise out=319 words=217 FK=7.1   COMPLETE DELTA≠REPLY
+  cost=$0.056
+
+== u5_l1-r2 — The alignment problem | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=385 words=263 FK=8.8 Q:B   HR
+  t1 [brief] concise out=356 words=229 FK=10.2 Q:B   
+  t2 [pickRight] balanced out=253 words=177 FK=6.3    HR
+  t3 [wrong] concise out=187 words=136 FK=6.7    
+  t4 [attempt] concise out=233 words=147 FK=5.4    
+  t5 [good] concise out=321 words=196 FK=10.6   COMPLETE HR DELTA≠REPLY
+  cost=$0.058
+
+== u5_l1 — The alignment problem | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=357 words=235 FK=9.3 Q:B   HR
+  t1 [pickRight] balanced out=386 words=256 FK=8.8 Q:B   HR
+  t2 [brief] concise out=205 words=125 FK=8.1 Q:B   
+  t3 [offtopic] concise out=170 words=108 FK=10.5 Q:B   
+  t4 [attempt] concise out=319 words=222 FK=7.3    HR
+  t5 [good] concise out=360 words=245 FK=7.5   COMPLETE HR DELTA≠REPLY
+  cost=$0.059
+
+== u6_l1-r2 — How AI makes images, voice, and video | completedAt=6 | studentTurns=6
+  t0 [opener] balanced out=299 words=188 FK=10 Q:C   
+  t1 [pickRight] balanced out=355 words=226 FK=7.8 Q:B   
+  t2 [pickWrong] balanced out=170 words=107 FK=11.2 Q:B   
+  t3 [idk] concise out=182 words=118 FK=8.9 Q:B   
+  t4 [attempt] concise out=286 words=188 FK=5.6    HR
+  t5 [good] concise out=256 words=177 FK=6.3    
+  t6 [good] concise out=282 words=202 FK=7.5   COMPLETE DELTA≠REPLY
+  cost=$0.064
+
+== u6_l1 — How AI makes images, voice, and video | completedAt=7 | studentTurns=7
+  t0 [opener] balanced out=285 words=179 FK=10 Q:C   
+  t1 [idk] concise out=196 words=123 FK=6.5 Q:C   
+  t2 [pickWrong] balanced out=365 words=228 FK=9.7 Q:B   
+  t3 [brief] concise out=232 words=155 FK=8.6 Q:B   
+  t4 [attempt] concise out=334 words=210 FK=9 Q:B   
+  t5 [good] concise out=288 words=211 FK=7.6    
+  t6 [good] concise out=292 words=211 FK=9.3    
+  t7 [good] concise out=204 words=144 FK=13.5   COMPLETE DELTA≠REPLY
+  cost=$0.076
+
+== u6_l5-r2 — Unit review: verify a viral claim | completedAt=2 | studentTurns=2
+  t0 [opener] balanced out=322 words=200 FK=5.6    HR
+  t1 [brief] concise out=159 words=112 FK=9.3    
+  t2 [good] concise out=513 words=319 FK=9.7   COMPLETE HR DELTA≠REPLY
+  cost=$0.030
+
+== u7_l1-r2 — Thinking partner, not a crutch | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=337 words=218 FK=7.7 Q:B   
+  t1 [pickWrong] balanced out=149 words=100 FK=11.7 Q:B   
+  t2 [idk] concise out=197 words=134 FK=7.8 Q:B   
+  t3 [pickRight] balanced out=308 words=201 FK=7.2 Q:B   
+  t4 [attempt] concise out=236 words=161 FK=6    ROADMAP:three parts HR
+  t5 [good] concise out=307 words=206 FK=5.8   COMPLETE DELTA≠REPLY
+  cost=$0.054
+
+== u7_l1 — Thinking partner, not a crutch | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=358 words=236 FK=7.6 Q:B   HR
+  t1 [brief] concise out=360 words=223 FK=6.1 Q:B   HR
+  t2 [pickRight] balanced out=263 words=189 FK=6.1    ROADMAP:three parts HR
+  t3 [wrong] concise out=245 words=177 FK=5.3    HR
+  t4 [attempt] concise out=145 words=101 FK=6.2    HR
+  t5 [good] concise out=194 words=136 FK=6.9   COMPLETE HR DELTA≠REPLY
+  cost=$0.055
+
+== u8_l1-r2 — From chatbots to agents | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=380 words=250 FK=8.1 Q:B   
+  t1 [pickRight] balanced out=409 words=272 FK=9.3 Q:B   
+  t2 [brief] concise out=243 words=178 FK=5    ROADMAP:three parts HR
+  t3 [offtopic] concise out=73 words=52 FK=4.9    
+  t4 [attempt] concise out=253 words=167 FK=5.2    
+  t5 [good] concise out=183 words=113 FK=9.8   COMPLETE ROADMAP:three parts DELTA≠REPLY
+  cost=$0.054
+
+== u8_l1 — From chatbots to agents | completedAt=5 | studentTurns=5
+  t0 [opener] balanced out=360 words=231 FK=7.9 Q:B   
+  t1 [pickRight] balanced out=392 words=264 FK=8.6 Q:B   JARGON:Step 3
+  t2 [pickWrong] balanced out=221 words=154 FK=11 Q:B   
+  t3 [idk] concise out=259 words=173 FK=6.7 Q:B   
+  t4 [attempt] concise out=239 words=174 FK=7.5    ROADMAP:three parts HR
+  t5 [good] concise out=319 words=214 FK=7.6   COMPLETE DELTA≠REPLY
+  cost=$0.059
+
+Turns: 139; words median=188 max=319; FK median=8 max=16.3
+Openers: words=185,179,213,227,240,228,212,219,210,249,199,238,204,263,235,188,179,200,218,236,250,231
+[Q] well-formed: 69; ANS letters: {"B":58,"A":3,"C":8}; correct option is the (tied-)longest: 62/69
+Total tutor cost: $1.533

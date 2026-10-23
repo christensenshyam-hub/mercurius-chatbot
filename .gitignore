@@ -16,3 +16,7 @@ ios/build/
 
 # Local screenshots (marketing demo work)
 .shots/
+
+# Lesson interactives: each card's full shot runs stay local (key shots
+# live in docs/interactives/key-shots/).
+docs/interactives/*/shots/

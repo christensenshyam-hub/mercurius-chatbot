@@ -173,6 +173,22 @@ describe('lesson events', () => {
     assert.equal((await db.lessonEventsSince(t0 + 3)).filter((r) => r.session_id === s).length, 1, 'since is inclusive');
   });
 
+  test('Basics (2026-10): unit/lesson are parsed from a bN_lM lessonId; a Basics row with no lessonId stays unparsed', async () => {
+    const s = sid();
+    const t0 = 1_600_220_000_000;
+    await db.getOrCreateSession(s);
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 1, sessionId: s, lessonId: 'b2_l4', event: 'start', turnIndex: 1 }), true);
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 2, sessionId: s, lessonId: 'b2_l4', event: 'complete', turnIndex: 4 }), true);
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 3, sessionId: s, lessonId: 'b2_l4', event: 'complete', turnIndex: 5 }), false, 'once per attempt, like u ids');
+    assert.equal(await db.recordLessonEvent({ ts: t0 + 4, sessionId: s, lessonId: 'x2_l4', event: 'turn' }), true);
+    const rows = (await db.lessonEventsSince(t0)).filter((r) => r.session_id === s);
+    assert.deepEqual(rows.map(({ lesson_id, unit, lesson, event }) => ({ lesson_id, unit, lesson, event })), [
+      { lesson_id: 'b2_l4', unit: 2, lesson: 4, event: 'start' },
+      { lesson_id: 'b2_l4', unit: 2, lesson: 4, event: 'complete' },
+      { lesson_id: 'x2_l4', unit: null, lesson: null, event: 'turn' },
+    ]);
+  });
+
   test('complete is recorded once per attempt: a repeat is dropped, a re-take (new start) can complete again', async () => {
     const s = sid();
     const t0 = 1_600_250_000_000;

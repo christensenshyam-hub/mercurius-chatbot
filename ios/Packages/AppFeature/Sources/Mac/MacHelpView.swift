@@ -58,7 +58,7 @@ public struct MacHelpView: View {
         .frame(minWidth: 520, idealWidth: 600, minHeight: 520, idealHeight: 640)
         .background(BrandColor.background)
         .navigationTitle(Self.title(tab))
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
         .tint(BrandColor.accent)
     }
 

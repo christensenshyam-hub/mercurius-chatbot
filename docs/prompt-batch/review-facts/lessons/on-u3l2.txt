@@ -1,0 +1,170 @@
+# on-u3l2  flag=on  branch fix/prompts-lessons-2026-10 @ 18bff0a, port 3343, iOS wire shape (blocks_v1)
+# starter: [CURRICULUM: Unit 3, Lesson 2] Walk me through how AI is used in healthcare — diagnostics, drug discovery, triage. What are the stakes when it fails? Give me an exercise after.
+# completed at assistant turn 7 of 7; spend $0.072
+
+===== STUDENT (balanced): (opener)
+----- MERC turn 1 (lessonComplete=false, ~303 words)
+Here's something that might surprise you: an AI system used by hospitals to decide which patients needed extra care was quietly rating Black patients as healthier than equally sick white patients — not because anyone programmed it to, but because of what it was trained to predict.
+
+That's the kind of high-stakes failure this lesson is about.
+
+---
+
+Let's start with the most important idea: **what a health AI is actually trained to predict matters enormously.**
+
+An AI doesn't automatically learn "who is sick." It learns to predict whatever number you give it as a target — and if that number is a flawed stand-in for health, the AI inherits the flaw.
+
+[EX]Obermeyer et al. (Science, 2019) studied a widely used commercial algorithm for identifying patients who need extra care. The algorithm used past health-care *cost* as its target — a reasonable-sounding proxy for health need. But because less money had historically been spent on Black patients (due to systemic barriers to care), the model rated them as healthier than equally sick white patients. Fixing it would have raised the share of Black patients flagged for extra care from 17.7% to 46.5%.[/EX]
+
+[KEY]A health AI learns to predict its *training target* — and if that target is a biased proxy for what you actually care about, the bias flows silently into every decision the model makes.[/KEY]
+
+[Q]
+Why did the algorithm in the Obermeyer study underestimate how sick Black patients were?
+A) It was trained on data from hospitals that only served white patients, so it had never seen Black patients before
+B) It used past health-care cost as a stand-in for health need, and less had been spent on Black patients due to systemic barriers
+C) Its designers deliberately excluded race from the inputs, which caused it to ignore racial health disparities entirely
+ANS: B
+[/Q]
+
+===== STUDENT (balanced): I picked B) It used past health-care cost as a stand-in for health need, and less had been spent on Black patients due to systemic barriers
+----- MERC turn 2 (lessonComplete=false, ~203 words)
+Exactly right — the flaw wasn't in the model's math, it was in what the math was *optimizing for*. A biased proxy poisons the whole system, quietly.
+
+---
+
+Now let's look at the other side of AI in healthcare: the genuine promise — and where even well-intentioned tools can fail in practice.
+
+**Approved AI diagnostics** represent real progress. The FDA has authorized AI systems to screen for serious conditions, sometimes without a doctor needing to review the result first.
+
+[EX]IDx-DR (2018) was the first FDA-authorized AI system to screen for diabetic retinopathy — damage to the eye from diabetes — without a doctor reading the image. A primary-care clinic could run it without an ophthalmologist on site, potentially catching blindness-causing damage much earlier.[/EX]
+
+[KEY]FDA-authorized AI diagnostics can expand access to screening — but authorization means the tool was validated, not that it's perfect in every real-world setting.[/KEY]
+
+[Q]
+What's the most important thing FDA authorization of a diagnostic AI tells you?
+A) The tool has been validated for its intended use, but real-world performance can still vary
+B) The tool is more accurate than any human specialist at the same task
+C) The tool can be used for any diagnostic purpose without further review
+ANS: A
+[/Q]
+
+===== STUDENT (concise): can u help me with my bio homework real quick its about cells
+----- MERC turn 3 (lessonComplete=false, ~242 words)
+Happy to help with biology another time — but right now we're in the middle of your AI in Healthcare lesson, and you're actually doing really well!
+
+Let's finish this one up first. You've got one more idea to learn, then a quick exercise.
+
+You just nailed that FDA authorization means a tool is validated — not perfect. Here's where that matters most in practice:
+
+---
+
+Even a validated tool can fail badly when it hits the real world. **Alert fatigue** is one of the most dangerous failure modes in clinical AI.
+
+When an AI flags too many false alarms, clinicians start ignoring alerts — including the real ones.
+
+[EX]When Michigan Medicine tested Epic's Sepsis Model on its own patients (Wong et al., JAMA Internal Medicine, 2021), it missed about two-thirds of sepsis cases. About 88% of its alerts were false alarms, and it flagged 18% of *all* hospitalized patients. That's the recipe for alert fatigue — when everything is urgent, nothing feels urgent.[/EX]
+
+[KEY]A high false-alarm rate doesn't just waste time — it trains clinicians to distrust the system, which means real emergencies get missed too.[/KEY]
+
+[Q]
+What makes alert fatigue specifically dangerous — beyond just being annoying?
+A) It causes the AI model to retrain itself on bad data over time
+B) It increases hospital costs because staff have to review every alert manually
+C) It erodes clinician trust so that genuine critical alerts get ignored along with the false ones
+ANS: C
+[/Q]
+
+===== STUDENT (concise): idk
+----- MERC turn 4 (lessonComplete=false, ~128 words)
+No worries — let me rephrase the question.
+
+Imagine a fire alarm that goes off 88 times a day, but only 12 of those are real fires. After a week, what do you think the building's residents start doing when they hear it?
+
+That's exactly the situation with the Epic Sepsis Model — it flagged 18% of all hospitalized patients, but 88% of those alerts were false alarms.
+
+So here's the question again:
+
+[Q]
+What makes alert fatigue specifically dangerous — beyond just being annoying?
+A) It causes the AI model to retrain itself on bad data over time
+B) It increases hospital costs because staff have to review every alert manually
+C) It erodes clinician trust so that genuine critical alerts get ignored along with the false ones
+ANS: C
+[/Q]
+
+===== STUDENT (balanced): I picked C) It erodes clinician trust so that genuine critical alerts get ignored along with the false ones
+----- MERC turn 5 (lessonComplete=false, ~218 words)
+That's exactly it — when the alarm cries wolf too often, the real wolves get ignored. That's what makes a high false-alarm rate genuinely dangerous, not just inefficient.
+
+---
+
+You've now got the three core ideas of this lesson:
+
+- Biased training targets corrupt outcomes silently
+- FDA authorization means validated, not perfect
+- Alert fatigue turns a noisy AI into a dangerous one
+
+Now let's put it to work.
+
+---
+
+**Here's your exercise.**
+
+A hypothetical hospital is considering deploying an AI diagnostic tool for detecting early-stage lung cancer from chest X-rays (made-up numbers ahead — this is a fictional scenario).
+
+The vendor reports:
+- **92% overall accuracy**
+- **79% accuracy for patients over 70**
+- **81% accuracy for female patients**
+- The model was trained primarily on X-rays from a large urban research hospital
+
+**Answer all three parts:**
+
+1. Identify ONE specific risk from the training data situation, and name what type of problem from this lesson it represents.
+
+2. The hospital's radiology team gets 200 AI alerts per day, and early testing shows 74% are false positives. What specific danger does this create, and what is it called?
+
+3. A hospital administrator says "92% accuracy is excellent — we should deploy immediately." What's wrong with that reasoning, and what would you want to know before agreeing?
+
+===== STUDENT (concise): 1. it was trained at one city hospital so it might not work as good for people at other hospitals like rural ones, thats like a training data bias thing. 2. alert fatigue, the doctors will start ignoring the alerts even the real cancer ones. 3 not sure, 92 sounds good tbh
+----- MERC turn 6 (lessonComplete=false, ~199 words)
+Good work on the first two — let me be specific about what you got right and where to push further.
+
+**Part 1** ✓ Solid. Training data from one urban research hospital means the patient population was narrow — rural patients, different demographics, different equipment may all look different on an X-ray. That's deployment bias layered on top of a data representation gap.
+
+Good instinct.
+
+**Part 2** ✓ Exactly right. 74% false positives means nearly 3 out of 4 alerts are wrong. Radiologists start tuning it out — and real early-stage cancers get missed along with the noise.
+
+That's alert fatigue working exactly as we discussed.
+
+**Part 3** — This one needs another look.
+
+Think about what 92% *overall* accuracy is hiding. The vendor also told you the accuracy drops to 79% for patients over 70 and 81% for female patients.
+
+If a hospital serves a lot of elderly patients, what does 92% overall actually mean for *them*? And what does this lesson tell us about who pays the cost when an AI performs worse on a specific group?
+
+Have a go at Part 3 in your own words — what's wrong with just looking at the overall number?
+
+===== STUDENT (concise): oh ok so the 92 is an average and it hides that its worse for old people and women, so if ur hospital has alot of old patients its gonna miss more of their cancer. id want to know how it does on our own patients first
+----- MERC turn 7 (lessonComplete=true, ~176 words)
+You nailed it.
+
+The overall accuracy is an average that can mask serious gaps for specific groups — and a hospital serving mostly elderly patients could be running a tool that's effectively 79% accurate for most of its patients, not 92%. That's the same logic as the Obermeyer study: a headline number hides who's actually being harmed.
+
+And wanting to test it on *your own* patient population before deploying? That's exactly the right instinct — real-world validation on the people you actually serve.
+
+---
+
+Let's put all three parts together:
+
+**Part 1** ✓ Training data from one urban hospital = representation gap, deployment bias risk for different populations.
+
+**Part 2** ✓ 74% false positive rate = alert fatigue, real cancers get missed.
+
+**Part 3** ✓ 92% overall accuracy hides worse performance for elderly and female patients — the subgroup numbers are what matter for *your* hospital's population.
+
+That's a genuinely strong analysis. You caught the biased proxy problem, the alert fatigue danger, and the hidden-average trap — the three core failure modes of this lesson.
+
+[LESSON_COMPLETE]
+

@@ -4,9 +4,14 @@ import AppFeature
 /// App-level hooks SwiftUI's `App` doesn't offer.
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // Before launch finishes, as on iOS: a reminder clicked while the
-        // app wasn't running is delivered to this delegate during launch.
         MainActor.assumeIsolated {
+            // Dark only (`BrandAppearance`), before the first window: the
+            // menus, alerts and panels too, whatever the Mac's appearance.
+            // The scenes also apply the dark scheme to their windows.
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+            // Before launch finishes, as on iOS: a reminder clicked while
+            // the app wasn't running is delivered to this delegate during
+            // launch.
             MacAppSupport.installNotificationDelegate()
         }
     }

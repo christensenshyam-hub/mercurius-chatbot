@@ -109,6 +109,12 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIStatusBarStyle: UIStatusBarStyleDefault
+        # Dark only (Night Studio, docs/ios-night-only/PR.md): the launch,
+        # alerts, the keyboard and the system's share and print sheets are
+        # dark too, whatever the phone's own appearance. The widget
+        # extension (the Live Activity) has no such key: it follows the
+        # system.
+        UIUserInterfaceStyle: Dark
         # iPhone stays portrait-only — designed for a single full-screen
         # reading/typing context on phone.
         UISupportedInterfaceOrientations:
@@ -283,8 +289,12 @@ targets:
         com.apple.security.app-sandbox: true
         # HTTPS to the Railway backend (chat SSE, progress, reports).
         com.apple.security.network.client: true
-        # A photo the student picks to attach to a chat message.
-        com.apple.security.files.user-selected.read-only: true
+        # A photo the student picks to attach to a chat message (read), and
+        # where they save their certificate's PDF (write): only files the
+        # student picks in an open or save panel.
+        com.apple.security.files.user-selected.read-write: true
+        # Printing the certificate (sandboxed apps need it to print).
+        com.apple.security.print: true
     settings:
       base:
         PRODUCT_NAME: Mercurius

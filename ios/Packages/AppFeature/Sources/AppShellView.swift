@@ -84,6 +84,9 @@ struct AppShellView: View {
 
     @Environment(\.requestReview) private var requestReview
 
+    /// The certificates (the Progress hub's row, the course-complete card).
+    @EnvironmentObject private var env: AppEnvironment
+
     /// Standby gamification (quiet progress) cache. Default-constructed, so
     /// `clientEnabled` is false — it makes no network calls and renders nothing
     /// unless the feature is explicitly turned on (client + server flags).
@@ -220,7 +223,10 @@ struct AppShellView: View {
                 .tabItem { Label(trackStore.track == .basics ? BasicsPathCopy.title : "Curriculum", systemImage: "book") }
                 .tag(Tab.curriculum)
         }
-        .tint(BrandColor.accent)
+        // The selected tab's icon and label, and the text buttons below:
+        // Night's readable indigo. The fill indigo drew the selected label
+        // at 3.2:1 on its highlight.
+        .tint(BrandAppearance.tint)
         .onChange(of: selectedTab) { oldValue, newValue in
             handleSelection(from: oldValue, to: newValue)
             recordTab(newValue)
@@ -252,11 +258,14 @@ struct AppShellView: View {
         }
         // On the same host as the lesson window, so the celebration's "Take
         // the Unit N check" can hand over without switching tabs.
-        .fullScreenCover(item: $activeUnitTest, onDismiss: presentReviewPromptIfDue) { unit in
+        .fullScreenCover(item: $activeUnitTest, onDismiss: unitTestDismissed) { unit in
             unitTestCover(for: unit)
                 // Same as the lesson cover: Unit Master is awarded while this
                 // cover is up, so its toast needs a presenter in this layer.
                 .achievementToasts(achievementStore)
+                // The pass that completed the course: "Get your certificate"
+                // on the result, and its name sheet over the check.
+                .certificateMasterySlot(env.certificates)
         }
 #endif
         .sheet(isPresented: $showChatHistory) {
@@ -290,7 +299,7 @@ struct AppShellView: View {
                     }
                 }
             }
-            .tint(BrandColor.accentText)
+            .tint(BrandAppearance.tint)
         }
         .sheet(isPresented: $showProgress) {
             ProgressHubView(
@@ -300,9 +309,12 @@ struct AppShellView: View {
                 scheduler: scheduler,
                 gamificationStore: gamificationStore,
                 nextLessonId: progress.frontierLessonId(in: trackStore.track),
+                certificates: env.certificates,
                 onDone: { showProgress = false }
             )
-            .tint(BrandColor.accent)
+            // Its Done button reads in Night's indigo; the reminder
+            // switches tint themselves.
+            .tint(BrandAppearance.tint)
         }
         // Achievement-unlocked toasts surface over the whole shell.
         .achievementToasts(achievementStore)
@@ -423,7 +435,8 @@ struct AppShellView: View {
             achievementStore: achievementStore,
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
                                   streakStore, achievementStore, progress, progressSync,
-                                  reminderStore, scheduler, onConsentWithdrawn] in
+                                  reminderStore, scheduler, onConsentWithdrawn,
+                                  certificates = env.certificates] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -444,7 +457,9 @@ struct AppShellView: View {
                         scheduler: scheduler,
                         // The server-side erasure behind "Delete my data".
                         sessionDeleter: apiClient,
-                        onConsentWithdrawn: onConsentWithdrawn
+                        onConsentWithdrawn: onConsentWithdrawn,
+                        // The certificate name goes with the rest.
+                        certificates: certificates
                     )
                 )
             },
@@ -499,7 +514,9 @@ struct AppShellView: View {
     /// badge. Idempotent, so a duplicate callback is harmless. The curriculum
     /// stays fully open — mastery is a checkpoint, not a gate.
     private func handleUnitMastered(_ unitId: String) {
-        progress.markUnitMastered(unitId)
+        // The eighth unit's pass completes the course: its moment is kept
+        // and the result shows "Get your certificate".
+        env.certificates.recordingNewlyEarned { progress.markUnitMastered(unitId) }
         lastActivityStore.touch()
         achievementStore.award(AchievementCatalog.unitMaster)
         // Credit module completion (idempotent per unit). Gated/no-op when off.
@@ -606,6 +623,13 @@ struct AppShellView: View {
             handleStartUnitTest(unit)
             return
         }
+        presentReviewPromptIfDue()
+    }
+
+    /// The unit check closed: the course-complete card goes with it (the
+    /// certificate stays in Progress ▸ Certificates), then the review prompt.
+    private func unitTestDismissed() {
+        env.certificates.justEarned = nil
         presentReviewPromptIfDue()
     }
 

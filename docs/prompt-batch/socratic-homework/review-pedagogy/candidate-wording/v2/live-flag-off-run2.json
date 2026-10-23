@@ -1,0 +1,90 @@
+{
+  "base": "http://localhost:3444",
+  "tag": "CANDIDATE v2 (scratch copy) flag off, run 2",
+  "generatedAt": "2026-10-22T05:08:20.615Z",
+  "results": [
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What happens if you get the **2x** term by itself first — what would you subtract from both sides?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 + 24 = 33, not 15. What happens when you subtract 9 from both sides of 9 − 2x = 15?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Yes — that's **inverse operations**, undoing the +9: −2x = 6. What undoes the −2 that's multiplying x?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "Check it: 9 − 2(3) = 9 − 6 = 3, not 15. There's a slip in the last step — what's 6 divided by −2?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check it: 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's it — same check works on any AI's math: plug its answer back in.\n\nWant to try a trickier one where the variable is on both sides?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "\"Dividing makes things smaller\" works when you're dividing a **positive** by a positive — but here you're dividing by −2, and dividing by a negative flips the sign.\n\n6 ÷ −2 = −3, because −2 × −3 = 6. Does that check out in your head?"
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "Rewriting the equation you're working on: C₃H₈ + O₂ → CO₂ + H₂O\n\nHow many carbon atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "That's not allowed — you can only change **coefficients** (the numbers in front of molecules), never the formulas themselves. Changing CO₂ to C₃O₂ would be a different molecule entirely.\n\nSo you're stuck with CO₂ as-is. If there are 3 carbons on the left, how many CO₂ molecules do you need on the right to match them?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Yes — that's **balancing by coefficient**: 3CO₂ gives you 3 carbons on the right to match the 3 in C₃H₈ ✓\n\nNow look at hydrogen: C₃H₈ has 8 H atoms on the left. How many H₂O molecules do you need on the right to match that?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Each H₂O molecule has 2 hydrogen atoms. How many H₂O molecules would give you 8 hydrogen atoms total?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Yes — 4 × 2 = 8 hydrogen atoms ✓\n\nNow the last element: count the oxygen atoms on the right side (from your 3CO₂ and 4H₂O). How many do you get?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A **coefficient** is the number you write in front of a molecule — like the 3 in 3CO₂ or the 4 in 4H₂O.\n\nIt multiplies everything in that molecule: 3CO₂ means 3 carbons and 6 oxygens. So how many total oxygen atoms are on the right side between 3CO₂ and 4H₂O?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Look at just 3CO₂ first — each CO₂ has 2 oxygen atoms, and you have 3 of them. How many oxygens is that?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "3CO₂ gives you 6 oxygens, and 4H₂O gives you 4 more — so **10 oxygens total** on the right.\n\nNow the left side has O₂, and each O₂ has 2 oxygen atoms. What coefficient in front of O₂ gives you 10 oxygens?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Yes — 5 × 2 = 10 ✓\n\nSo your balanced equation is: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O\n\nQuick check: does the number of each atom match on both sides — can you verify the carbons and hydrogens still look right?"
+        }
+      ]
+    }
+  ]
+}

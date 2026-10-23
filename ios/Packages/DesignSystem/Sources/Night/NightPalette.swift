@@ -1,9 +1,9 @@
-#if os(macOS)
 import Foundation
 
-/// Night Studio's raw colour values on the Mac: the one source the `Night`
-/// colour tokens are built from, and what `NightContrastTests` reads (a
-/// SwiftUI `Color` can't be resolved per appearance on the test host).
+/// Night Studio's raw colour values: the one source the Mac's `Night`
+/// colour tokens and the iPhone's `BrandColor` tokens are built from, and
+/// what `NightContrastTests` and `BrandContrastTests` read (a SwiftUI
+/// `Color` can't be resolved per appearance on the test host).
 ///
 /// Every token has four values: light, dark, and the same two under Increase
 /// Contrast ("HC"). The values are SPEC.md §2.1's;
@@ -11,7 +11,10 @@ import Foundation
 /// and the tests hold the same pairs to the same minimums. Change a value
 /// in all three places, or none.
 ///
-/// Mac only: iOS keeps `BrandPalette` until it adopts Night Studio.
+/// Both platforms compile it (Foundation only). The Mac draws all four
+/// variants; the iPhone is dark only and draws `dark`, or `darkHC` under
+/// Increase Contrast (`BrandNight`; docs/ios-night-only/PR.md). Lesson 1.1's
+/// interactive reads the same dark values through `NightSkyCard`.
 enum NightPalette {
     /// One sRGB colour, with an alpha for the translucent tokens (hairlines,
     /// the field stroke, the hero's lamp).
@@ -219,4 +222,3 @@ enum NightPalette {
                     || forcedIncreasedContrast)
     }
 }
-#endif

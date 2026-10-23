@@ -2,9 +2,17 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
-  CLUB_V1, wantsClub, staticClubBlock, dynamicClubBlock, makeTtlCache,
+  CLUB_V1, DEFAULT_SCHEDULE, wantsClub, staticClubBlock, dynamicClubBlock,
+  buildMeetingContext, buildBlogContext, makeTtlCache,
 } = require('../lib/clubContext');
+
+// Snapshots of the live site's feeds (2026-10-06), as the server fetches them.
+const FEEDS = path.join(__dirname, 'fixtures', 'club-feeds');
+const liveEvents = () => JSON.parse(fs.readFileSync(path.join(FEEDS, 'events-data.json'), 'utf8'));
+const liveBlog = () => JSON.parse(fs.readFileSync(path.join(FEEDS, 'blog-content.json'), 'utf8'));
 
 const CAP = ['club_v1'];
 
@@ -75,6 +83,74 @@ describe('clubContext', () => {
     test('does not throw on missing knowledge', () => {
       assert.equal(staticClubBlock({ capabilities: CAP }), '\n\n<club_knowledge>\n\n</club_knowledge>');
       assert.equal(staticClubBlock({ capabilities: CAP, clubKnowledge: null }), '\n\n<club_knowledge>\n\n</club_knowledge>');
+    });
+  });
+
+  describe('buildMeetingContext', () => {
+    const SCHEDULE_LINE = 'Regular meetings: Every Thursday at 8:20 AM, MHS Library Classroom. Open to: All MHS Students.';
+
+    test('the live feed: schedule from the JSON, the site’s empty-calendar line, recent past meetings', () => {
+      const out = buildMeetingContext(liveEvents());
+      assert.match(out, /^\n\n### MAYO AI LITERACY CLUB — LIVE MEETING SCHEDULE\n/);
+      assert.ok(out.includes(SCHEDULE_LINE), out);
+      assert.match(out, /Nothing special is on the calendar right now\./);
+      assert.match(out, /RECENT PAST MEETINGS:\*\*\n- Fall interest meeting: /);
+      assert.match(out, /do not invent one/);
+      assert.doesNotMatch(out, /UPCOMING MEETINGS|Reference the actual topics and key questions/);
+    });
+
+    test('the schedule comes from the feed when it has one', () => {
+      const out = buildMeetingContext({ schedule: { day: 'Every Tuesday', time: '7:45 AM', location: 'Room 210', openTo: 'Everyone' }, upcoming: [] });
+      assert.ok(out.includes('Regular meetings: Every Tuesday at 7:45 AM, Room 210. Open to: Everyone.'), out);
+    });
+
+    test('feed unavailable: still the schedule, and no claim about the calendar', () => {
+      for (const events of [null, undefined, 'oops']) {
+        const out = buildMeetingContext(events);
+        assert.ok(out.includes(SCHEDULE_LINE), String(events));
+        assert.match(out, /events list is unavailable right now/);
+        assert.doesNotMatch(out, /Nothing special is on the calendar/);
+      }
+    });
+
+    test('a missing or malformed schedule field falls back field by field', () => {
+      const out = buildMeetingContext({ schedule: { day: 'Every Thursday', time: '', location: 42 }, upcoming: [] });
+      assert.ok(out.includes(SCHEDULE_LINE), out);
+      assert.equal(Object.isFrozen(DEFAULT_SCHEDULE), true);
+    });
+
+    test('upcoming meetings are listed with their prep material', () => {
+      const out = buildMeetingContext({
+        upcoming: [{ date: '2026-10-08', title: 'Kickoff', description: 'First meeting.', keyQuestions: ['Who decides?'], topics: ['ethics'], suggestedReading: 'The Pentagon piece.' }],
+      });
+      assert.match(out, /\*\*UPCOMING MEETINGS:\*\*\n\n- \*\*Kickoff\*\* \(Thursday, October 8\)\n  First meeting\.\n/);
+      assert.match(out, /• Who decides\?/);
+      assert.match(out, /Topics covered: ethics/);
+      assert.match(out, /Suggested reading: The Pentagon piece\./);
+      assert.match(out, /Reference the actual topics and key questions/);
+      assert.doesNotMatch(out, /Nothing special is on the calendar/);
+    });
+
+    test('a poisoned row degrades instead of throwing', () => {
+      assert.doesNotThrow(() => buildMeetingContext({ upcoming: 'soon', past: { title: 'x' } }));
+      assert.match(buildMeetingContext({ upcoming: 'soon' }), /Nothing special is on the calendar/);
+    });
+
+    test('pure: the same feed gives the same bytes', () => {
+      assert.equal(buildMeetingContext(liveEvents()), buildMeetingContext(liveEvents()));
+    });
+  });
+
+  describe('buildBlogContext', () => {
+    test('the live feed: every post with its author', () => {
+      const posts = liveBlog();
+      const out = buildBlogContext(posts);
+      assert.match(out, /^\n\n### MAYO AI LITERACY CLUB — BLOG LIBRARY\n/);
+      for (const p of posts) assert.ok(out.includes(`**"${p.title}"** by ${p.author} (${p.date}) [${p.category}]`), p.title);
+    });
+
+    test('empty for a missing, empty or non-list feed', () => {
+      for (const posts of [null, undefined, [], {}, 'x']) assert.equal(buildBlogContext(posts), '');
     });
   });
 

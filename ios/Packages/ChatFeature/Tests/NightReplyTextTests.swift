@@ -12,19 +12,19 @@ import Testing
 struct NightPartsTests {
 
     private func names(_ text: String, streaming: Bool = false) -> [String?] {
-        NightParts.sections(of: text, isStreaming: streaming).map(\.name)
+        LessonParts.sections(of: text, isStreaming: streaming).map(\.name)
     }
 
     @Test("A reply with no break is one part")
     func oneSection() {
-        let sections = NightParts.sections(of: "Hello there.\n\nA second paragraph.", isStreaming: false)
+        let sections = LessonParts.sections(of: "Hello there.\n\nA second paragraph.", isStreaming: false)
         #expect(sections.count == 1)
         #expect(sections[0].name == nil)
     }
 
     @Test("The recorded lesson reply splits into its three parts, named honestly")
     func recordedReply() {
-        let sections = NightParts.sections(of: LessonReplay.replies[0], isStreaming: false)
+        let sections = LessonParts.sections(of: LessonReplay.replies[0], isStreaming: false)
         #expect(sections.map(\.name) == [nil, "Tokenization", "Check"])
         // The second part holds the prose, the example and the key idea.
         let kinds = sections[1].blocks.map { block -> String in
@@ -50,65 +50,65 @@ struct NightPartsTests {
     @Test("Breaks are ---, *** or ___ (three or more, spaced or not); not two, not text")
     func thematicBreaks() {
         for line in ["---", "***", "___", "- - -", "-----", "   ---", "--- "] {
-            #expect(NightParts.isThematicBreak(Substring(line)), "\(line)")
+            #expect(LessonParts.isThematicBreak(Substring(line)), "\(line)")
         }
         for line in ["--", "-- -x", "- item", "**bold**", "    ---", "-*-", "text ---", ""] {
-            #expect(!NightParts.isThematicBreak(Substring(line)), "\(line)")
+            #expect(!LessonParts.isThematicBreak(Substring(line)), "\(line)")
         }
     }
 
     @Test("Whitespace-only sections don't count; a trailing break adds nothing yet")
     func emptySections() {
-        #expect(NightParts.sections(of: "One.\n\n---\n\n   \n\n---\n\nTwo.", isStreaming: false).count == 2)
-        #expect(NightParts.sections(of: "One.\n\n---\n\n", isStreaming: true).count == 1)
-        #expect(NightParts.sections(of: "---\n\nOne.", isStreaming: false).count == 1)
+        #expect(LessonParts.sections(of: "One.\n\n---\n\n   \n\n---\n\nTwo.", isStreaming: false).count == 2)
+        #expect(LessonParts.sections(of: "One.\n\n---\n\n", isStreaming: true).count == 1)
+        #expect(LessonParts.sections(of: "---\n\nOne.", isStreaming: false).count == 1)
     }
 
     @Test("Streaming: a part counts once its first character arrives")
     func streamingCount() {
-        #expect(NightParts.sections(of: "One.\n\n---\n\nT", isStreaming: true).count == 2)
+        #expect(LessonParts.sections(of: "One.\n\n---\n\nT", isStreaming: true).count == 2)
         // A marker still being withheld isn't content yet.
-        #expect(NightParts.sections(of: "One.\n\n---\n\n[K", isStreaming: true).count == 1)
-        #expect(NightParts.sections(of: "One.\n\n---\n\n[KEY]Tok", isStreaming: true).count == 2)
+        #expect(LessonParts.sections(of: "One.\n\n---\n\n[K", isStreaming: true).count == 1)
+        #expect(LessonParts.sections(of: "One.\n\n---\n\n[KEY]Tok", isStreaming: true).count == 2)
     }
 
     @Test("Streaming: a last line of one or two dashes is held back, never shown as text")
     func partialBreakHeld() {
-        let sections = NightParts.sections(of: "One.\n\n--", isStreaming: true)
+        let sections = LessonParts.sections(of: "One.\n\n--", isStreaming: true)
         #expect(sections.count == 1)
         #expect(sections[0].blocks == [.prose("One.\n\n")])
         // Complete, the same "--" is text.
-        #expect(NightParts.sections(of: "One.\n\n--", isStreaming: false)[0].blocks == [.prose("One.\n\n--")])
+        #expect(LessonParts.sections(of: "One.\n\n--", isStreaming: false)[0].blocks == [.prose("One.\n\n--")])
     }
 
     @Test("A break inside a fenced code block is code")
     func fencedBreak() {
         let text = "Look:\n\n```\n---\n```\n\nDone."
-        #expect(NightParts.sections(of: text, isStreaming: false).count == 1)
+        #expect(LessonParts.sections(of: text, isStreaming: false).count == 1)
     }
 
     @Test("A break inside a [KEY] or [EX] stays inside it")
     func breakInsideBlock() {
-        let sections = NightParts.sections(of: "Intro.\n\n[EX]a\n---\nb[/EX]\n\nAfter.", isStreaming: false)
+        let sections = LessonParts.sections(of: "Intro.\n\n[EX]a\n---\nb[/EX]\n\nAfter.", isStreaming: false)
         #expect(sections.count == 1)
     }
 
     @Test("Naming: a [Q] makes it Check; else the first bold term if ≤ 32 characters; else none")
     func naming() {
-        #expect(NightParts.name(of: [.prose("**Tokens** and **more**")]) == "Tokens")
-        #expect(NightParts.name(of: [.prose("Plain."), .quiz(QuizBlock(stem: "Q", options: [], answerIndex: nil, isComplete: false))]) == "Check")
-        #expect(NightParts.name(of: [.prose("**Exercise:**")]) == "Exercise")
-        #expect(NightParts.name(of: [.prose("__Attention__ matters")]) == "Attention")
+        #expect(LessonParts.name(of: [.prose("**Tokens** and **more**")]) == "Tokens")
+        #expect(LessonParts.name(of: [.prose("Plain."), .quiz(QuizBlock(stem: "Q", options: [], answerIndex: nil, isComplete: false))]) == "Check")
+        #expect(LessonParts.name(of: [.prose("**Exercise:**")]) == "Exercise")
+        #expect(LessonParts.name(of: [.prose("__Attention__ matters")]) == "Attention")
         let long = "**" + String(repeating: "a", count: 33) + "**"
-        #expect(NightParts.name(of: [.prose(long)]) == nil)
+        #expect(LessonParts.name(of: [.prose(long)]) == nil)
         let exactly = "**" + String(repeating: "b", count: 32) + "**"
-        #expect(NightParts.name(of: [.prose(exactly)]) == String(repeating: "b", count: 32))
+        #expect(LessonParts.name(of: [.prose(exactly)]) == String(repeating: "b", count: 32))
         // The first bold term decides: a long one means no name.
-        #expect(NightParts.name(of: [.prose(long + " then **Short**")]) == nil)
-        #expect(NightParts.name(of: [.prose("No bold here, just *italic*.")]) == nil)
+        #expect(LessonParts.name(of: [.prose(long + " then **Short**")]) == nil)
+        #expect(LessonParts.name(of: [.prose("No bold here, just *italic*.")]) == nil)
         // An unclosed bold run (mid-stream) names nothing yet.
-        #expect(NightParts.name(of: [.prose("**Tokeniz")]) == nil)
-        #expect(NightParts.name(of: [.key("**Key term** inside")]) == "Key term")
+        #expect(LessonParts.name(of: [.prose("**Tokeniz")]) == nil)
+        #expect(LessonParts.name(of: [.key("**Key term** inside")]) == "Key term")
     }
 
     @Test("Numbering runs across the thread over Merc's replies, counting only parts so far")
@@ -155,13 +155,13 @@ struct NightPartsTests {
 
     @Test("The lesson's layout puts a mark before every part but the first, numbered from its start")
     func lessonLayout() {
-        let sections = NightParts.sections(of: LessonReplay.replies[1], isStreaming: false)
+        let sections = LessonParts.sections(of: LessonReplay.replies[1], isStreaming: false)
         let pieces = NightReplyLayout.lesson(sections: sections, firstPart: 4, crisis: false, isStreaming: false)
         let marks = pieces.compactMap { piece -> Int? in
             if case .partMark(let number, _) = piece { return number } else { return nil }
         }
         #expect(marks == [4, 5, 6])
-        let first = NightReplyLayout.lesson(sections: NightParts.sections(of: LessonReplay.replies[0], isStreaming: false),
+        let first = NightReplyLayout.lesson(sections: LessonParts.sections(of: LessonReplay.replies[0], isStreaming: false),
                                             firstPart: 1, crisis: false, isStreaming: false)
         guard case .markdown = first.first else {
             Issue.record("part 1 has no mark")
@@ -315,7 +315,7 @@ struct NightSourceTests {
     @Test("Tags inside [EX], [KEY], [CHECK] and a check's question leave the card and follow it as chips")
     func tagsInCards() {
         let reply = "[EX]Amazon's hiring model penalised résumés that mentioned women's colleges [SOURCE: Reuters — reuters.com/article/amazon-ai].[/EX]\n\n[KEY][SOURCE: Gender Shades — gendershades.org] shows the gap.[/KEY]\n\n[Q]\nWhich study measured it? [SOURCE: Gender Shades — gendershades.org]\nA) Gender Shades\nB) None\nANS: A\n[/Q]"
-        let sections = NightParts.sections(of: reply, isStreaming: false)
+        let sections = LessonParts.sections(of: reply, isStreaming: false)
         let pieces = NightReplyLayout.lesson(sections: sections, firstPart: 1, crisis: false, isStreaming: false)
         for piece in pieces {
             switch piece {
@@ -487,7 +487,7 @@ struct NightYourTurnTests {
 
         Would you be willing to reach out to one of them now?
         """
-        #expect(NightCrisisGuard.applies(to: crisis))
+        #expect(LessonCrisisGuard.applies(to: crisis))
         let pieces = NightReplyLayout.chat(content: crisis, isStreaming: false, yourTurn: true, crisis: true)
         #expect(pieces.count == 1)
         guard case .plain(let text) = pieces.first else {
@@ -506,32 +506,32 @@ struct NightYourTurnTests {
         let student = ChatMessage(role: .user, content: "ok")
         let followUp = ChatMessage(role: .assistant, content: "That sounds really heavy, and I'm glad you're still talking with me.\n\nIs there an adult at school or at home you'd feel okay telling tonight?")
         let thread = [before, ChatMessage(role: .user, content: "I don't want to be here anymore"), crisis, student, followUp]
-        let guarded = NightCrisisGuard.guardedReplies(in: thread)
+        let guarded = LessonCrisisGuard.guardedReplies(in: thread)
         #expect(guarded == [crisis.id, followUp.id])
         // The follow-up alone wouldn't trip the guard…
-        #expect(!NightCrisisGuard.applies(to: followUp.content))
+        #expect(!LessonCrisisGuard.applies(to: followUp.content))
         // …but in this thread it is drawn plainly: one run of text, no card.
         let pieces = NightReplyLayout.chat(content: followUp.content, isStreaming: false, yourTurn: true,
                                            crisis: guarded.contains(followUp.id))
         #expect(pieces.count == 1)
         #expect(!pieces.contains { if case .yourTurn = $0 { return true } else { return false } })
         // A thread with no crisis line guards nothing.
-        #expect(NightCrisisGuard.guardedReplies(in: [before, student]).isEmpty)
+        #expect(LessonCrisisGuard.guardedReplies(in: [before, student]).isEmpty)
     }
 
     @Test("The guard matches whole words only")
     func crisisWords() {
-        #expect(NightCrisisGuard.applies(to: "Call 988."))
-        #expect(NightCrisisGuard.applies(to: "Text 741741"))
-        #expect(!NightCrisisGuard.applies(to: "In 1988 the first chatbots"))
-        #expect(!NightCrisisGuard.applies(to: "Order #9880"))
-        #expect(!NightCrisisGuard.applies(to: "7417410 tokens"))
+        #expect(LessonCrisisGuard.applies(to: "Call 988."))
+        #expect(LessonCrisisGuard.applies(to: "Text 741741"))
+        #expect(!LessonCrisisGuard.applies(to: "In 1988 the first chatbots"))
+        #expect(!LessonCrisisGuard.applies(to: "Order #9880"))
+        #expect(!LessonCrisisGuard.applies(to: "7417410 tokens"))
     }
 
     @Test("In a lesson the guard keeps the part marks, and makes every block plain")
     func crisisLesson() {
         let reply = "Please reach out: call 988.\n\n---\n\n[KEY]You matter.[/KEY]\n\n[Q]\nPick one\nA) a\nB) b\nANS: A\n[/Q]"
-        let sections = NightParts.sections(of: reply, isStreaming: false)
+        let sections = LessonParts.sections(of: reply, isStreaming: false)
         let pieces = NightReplyLayout.lesson(sections: sections, firstPart: 1, crisis: true, isStreaming: false)
         #expect(pieces.contains(.partMark(number: 2, name: "Check")))
         for piece in pieces {
@@ -663,11 +663,7 @@ struct NightCheckKeysTests {
 @Suite("Night: honest copy (lesson and chat)")
 struct NightReplyCopyTests {
     /// The same register as AppFeature's `NightCopyTests` (SPEC §6).
-    static let banned: [String] = [
-        "notebook", "saved to", "\\bsaved\\b", "rest day", #"part \d+ of \d+"#, #"beat \d"#,
-        #"\b\d+\s?min\b"#, #"\bminutes?\b"#, "previewable", "pinned", "give me a hint", "hint",
-        "never reset", "verified",
-    ]
+    static let banned: [String] = HonestCopy.banned
 
     static func everyLine() -> [String] {
         var lines: [String] = []

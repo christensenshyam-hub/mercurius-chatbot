@@ -1,0 +1,90 @@
+{
+  "base": "http://localhost:3443",
+  "tag": "CANDIDATE v2 (scratch copy) flag on, run 2",
+  "generatedAt": "2026-10-22T05:08:21.892Z",
+  "results": [
+    {
+      "id": "sign-error",
+      "mode": "socratic",
+      "persona": "Sign-error student: adds instead of subtracts, then drops the negative on the division, then a misconception.",
+      "answer": {
+        "variable": "x",
+        "value": -3
+      },
+      "leakAtReply": null,
+      "repliesMentioningAI": 0,
+      "turns": [
+        {
+          "student": "solve 9 - 2x = 15",
+          "merc": "What's your first move to get the 2x by itself?"
+        },
+        {
+          "student": "-2x = 24?",
+          "merc": "Check it: if −2x = 24, then 9 − 2x = 9 − 24 = −15, not 15.\n\nWhat happens to the 9 when you move it to the other side?"
+        },
+        {
+          "student": "oh wait -2x = 6",
+          "merc": "Check it: if −2x = 6, then 9 − 2x = 9 − 6 = 3, not 15.\n\nLook at the sign: 9 is being *subtracted* from 2x's side. What do you do to both sides to remove a positive 9?"
+        },
+        {
+          "student": "so x = 3",
+          "merc": "Check it: if x = 3, then 9 − 2(3) = 9 − 6 = 3, not 15.\n\nWe're not at the last step yet — what do you do to both sides to move the 9 over?"
+        },
+        {
+          "student": "x = -3?",
+          "merc": "Check it: if x = −3, then 9 − 2(−3) = 9 + 6 = 15 ✓\n\nThat's right! How did you get from −2x = 6 to x = −3?"
+        },
+        {
+          "student": "why is it negative tho i thought dividing makes stuff smaller",
+          "merc": "\"Dividing makes things smaller\" works for positive numbers, but here you're dividing by a **negative**.\n\nWhen you divide both sides by −2, the sign of x flips — a negative divided by a negative gives a positive, and a positive divided by a negative gives a negative.\n\nSo −2x = 6 → x = 6 ÷ (−2) = −3.\n\nDoes that sign flip make sense, or want to test it with another example?"
+        }
+      ]
+    },
+    {
+      "id": "chem",
+      "mode": "socratic",
+      "persona": "Chemistry student: tries the subscript shortcut, gets C and H, asks a vocab question, stuck on O.",
+      "answer": null,
+      "leakAtReply": null,
+      "repliesMentioningAI": 1,
+      "turns": [
+        {
+          "student": "balance C3H8 + O2 -> CO2 + H2O",
+          "merc": "How many C atoms are on the left side, and how many are on the right?"
+        },
+        {
+          "student": "cant i just change CO2 to C3O2 so the carbons match",
+          "merc": "Coefficients only — you can't change the formulas themselves, because that would create a different molecule.\n\nHow many C atoms does one CO2 molecule have, and how many do you need on the right to match the 3 on the left?"
+        },
+        {
+          "student": "oh ok so put a 3 in front of CO2?",
+          "merc": "Yes — **coefficients** it is: 3CO2 gives you 3 carbons. ✓\n\nNow look at hydrogen: how many H atoms are on the left side?"
+        },
+        {
+          "student": "idk what to do with the H",
+          "merc": "Count them up: C3H8 has 8 H atoms on the left.\n\nEach H2O molecule has 2 H atoms — how many H2O do you need on the right to get to 8?"
+        },
+        {
+          "student": "4 H2O?",
+          "merc": "Yes — 4H2O gives you 8 hydrogen atoms. ✓\n\nNow count the O atoms on the right side (3CO2 and 4H2O together). How many do you get?"
+        },
+        {
+          "student": "wait whats a coefficient again",
+          "merc": "A coefficient is the number in front of a molecule — like the **3** in 3CO2.\n\nIt multiplies every atom in that molecule, so 3CO2 means 3 × 2 = 6 oxygen atoms.\n\nUsing that, how many total O atoms are on the right side (3CO2 + 4H2O)?"
+        },
+        {
+          "student": "ok idk how to do the oxygen",
+          "merc": "Count each molecule separately:\n\n- 3CO2 → 3 × 2 = 6 oxygen atoms\n- 4H2O → 4 × 1 = 4 oxygen atoms\n\nAdd those together. How many O atoms total are on the right?"
+        },
+        {
+          "student": "just do it pls",
+          "merc": "Add 6 + 4 — what do you get?"
+        },
+        {
+          "student": "5 O2?",
+          "merc": "Check it: 6 + 4 = 10, not 10 from 5 O2... actually that part works — 5 O2 gives 10 O atoms.\n\n✓\n\nSo your balanced equation is:\n\nC3H8 + 5O2 → 3CO2 + 4H2O\n\nYou got there! Same check works on any AI's chemistry: plug the coefficients back in and count each element on both sides.\n\nCan you verify it yourself — do the C, H, and O counts all match left to right?"
+        }
+      ]
+    }
+  ]
+}

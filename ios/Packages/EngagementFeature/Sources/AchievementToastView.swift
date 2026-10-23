@@ -33,7 +33,11 @@ public struct AchievementToastView: View {
             RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous)
                 .strokeBorder(BrandColor.border, lineWidth: 1)
         )
+        // No shadow on the iPhone (dark only; Night casts none in dark). The
+        // Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        #endif
         .padding(.horizontal, BrandSpacing.lg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Achievement unlocked: \(achievement.title)")

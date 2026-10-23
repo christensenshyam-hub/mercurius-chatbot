@@ -28,7 +28,9 @@
 #   scripts/mac-snapshots.sh <out-dir> [shot ...]
 # Each window shot is taken four ways: <shot>.png (1280×800, light),
 # <shot>-dark.png, <shot>-min.png (700×600, the window's minimum) and
-# <shot>-min-dark.png. The Settings and Help windows have their own size:
+# <shot>-min-dark.png. VARIANTS="system" takes <shot>-system.png with no
+# appearance flag at all: the app as the Mac's own appearance leaves it
+# (with mac-copy-snapshots.sh's AQUA=YES, a Mac in light mode). The Settings and Help windows have their own size:
 # light and dark only. Set VARIANTS="light" (or any of light dark min
 # min-dark) to take fewer. VARIANTS="store" takes <shot>-store.png instead:
 # light, square corners, no alpha, at STORE_SIZE points (default 1280x800,
@@ -131,7 +133,7 @@ snap() {
   # The control dump and the composer log once per state (the light,
   # full-size shot), not once per variant.
   case $name in
-    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass) ;;
+    *-dark|*-min|*-store|*-hc|*-rt|*-rm|*-noglass|*-system) ;;
     *)
       grep '^CONTROL' "$log" > "$OUT/$name.controls.txt" || rm -f "$OUT/$name.controls.txt"
       grep '^COMPOSER' "$log" > "$OUT/$name.composer.txt" || rm -f "$OUT/$name.composer.txt"
@@ -150,6 +152,7 @@ window_shot() {
       min)      snap "$name-min"      "$@" -MacSnapshotAppearance light -MacSnapshotSize 700x600 ;;
       min-dark) snap "$name-min-dark" "$@" -MacSnapshotAppearance dark -MacSnapshotSize 700x600 ;;
       store)    snap "$name-store"    "$@" -MacSnapshotAppearance light -MacSnapshotSize "$STORE_SIZE" -MacSnapshotOpaque YES ;;
+      system)   snap "$name-system"   "$@" ;;
       hc)       snap "$name-hc"       "$@" -MacSnapshotAppearance light -NightContrast increased ;;
       hc-dark)  snap "$name-dark-hc"  "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
       rt)       snap "$name-rt"       "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
@@ -168,6 +171,7 @@ panel_shot() {
     case $variant in
       light) snap "$name"      "$@" -MacSnapshotAppearance light ;;
       dark)  snap "$name-dark" "$@" -MacSnapshotAppearance dark ;;
+      system) snap "$name-system" "$@" ;;
       hc)    snap "$name-hc"   "$@" -MacSnapshotAppearance light -NightContrast increased ;;
       hc-dark) snap "$name-dark-hc" "$@" -MacSnapshotAppearance dark -NightContrast increased ;;
       rt)    snap "$name-rt"   "$@" -MacSnapshotAppearance light -NightReduceTransparency YES ;;
@@ -222,6 +226,19 @@ run() {
     lesson-interactive-money)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer money -MacSnapshotDelay 11 ;;
     lesson-interactive-river)   window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive map -NightTokenizer river -MacSnapshotDelay 11 ;;
     lesson-interactive-compact) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToInteractive top -NightTokenizerCompact YES -MacSnapshotDelay 11 ;;
+    # Any lesson interactive by its slug (docs/interactives/FRAMEWORK.md):
+    # interactive-<slug> opens its lesson with the replay or the stub
+    # replies (-Interactive, which shows a card that ships dark) and scrolls
+    # the card's top into view; gallery-<slug> shows the card alone
+    # (-InteractiveGallery). INTERACTIVE_ARGS adds state, e.g.
+    # INTERACTIVE_ARGS="-InteractiveState revealed"; INTERACTIVE_SCROLL
+    # (top, reveal or after; default top) is where the lesson scrolls (the
+    # first -InteractiveScroll on the line wins, so it can't go in
+    # INTERACTIVE_ARGS).
+    interactive-*)   window_shot "$1" "${PAST_GATE[@]}" -Interactive "${1#interactive-}" -InteractiveScroll "${INTERACTIVE_SCROLL:-top}" \
+                       ${INTERACTIVE_ARGS:-} -MacSnapshotDelay "${INTERACTIVE_DELAY:-14}" ;;
+    gallery-*)       window_shot "$1" "${PAST_GATE[@]}" -InteractiveGallery "${1#gallery-}" ${INTERACTIVE_ARGS:-} \
+                       -MacSnapshotDelay 4 ;;
     lesson-check)    window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState picked -MacSnapshotDelay 11 ;;
     lesson-answered) window_shot "$1" "${PAST_GATE[@]}" "${LESSON[@]}" -NightScrollToPart 3 -NightCheckState answered -MacSnapshotDelay 18 ;;
     # Night Studio's complete card: the replay's first reply streams in
@@ -268,6 +285,17 @@ run() {
     # under it).
     chat-mode-sheet) panel_shot "$1" "${PAST_GATE[@]}" -ChatPreview YES -ChatPreviewMode debate -seenModeDescription.debate NO -MacSnapshotWindow sheet ;;
     start-failure)   window_shot "$1" "${PAST_GATE[@]}" -NightStartFailure YES ;;
+    # The certificates (DEBUG CertificateDebug: progress seeded in the
+    # -UITests suites, a sample name, nothing pushed). The name sheet for
+    # each certificate; the Certificates list (Deep dive earned, AI Basics
+    # part way, through the Basics seam's demo lessons); the Progress sheet's
+    # Certificates row; the last unit's check passed with its "Get your
+    # certificate" card.
+    certificate-sheet)        panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview deepDive -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-sheet-basics) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificatePreview basics -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-list)         panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateList YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-hub)          panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -CertificateHub YES -MacSnapshotWindow sheet -MacSnapshotDelay 5 ;;
+    certificate-card)         window_shot "$1" "${PAST_GATE[@]}" -CertificateCardPreview YES -MacSnapshotDelay 6 ;;
     crisis)          window_shot "$1" "${PAST_GATE[@]}" -UnitTestCrisisPreview YES -MacSnapshotDelay 5 ;;
     settings-general) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab general ;;
     settings-privacy) panel_shot "$1" "${PAST_GATE[@]}" -EnterShell YES -MacOpenWindow settings -MacSnapshotWindow settings -MacSettingsTab privacy ;;

@@ -1,0 +1,27 @@
+{
+  "schedule": {
+    "day": "Every Thursday",
+    "time": "8:20 AM",
+    "location": "MHS Library Classroom",
+    "openTo": "All MHS Students"
+  },
+  "upcoming": [],
+  "past": [
+    {
+      "date": "2026-09-28",
+      "title": "Fall interest meeting",
+      "description": "The first meeting of the 2026–27 year, in the Mayo commons."
+    },
+    {
+      "date": "2026-03-26",
+      "title": "Ethical Dilemmas: Decisions That Will Define the Future",
+      "description": "From self-driving cars to AI in medicine and warfare — we'll tackle the dilemmas that don't have easy answers. A structured discussion on the choices humanity will be forced to make."
+    },
+    {
+      "date": "2026-03-19",
+      "title": "Advanced Seminar: AI Dilemmas",
+      "description": "A deep dive into the real ethical and societal tensions in AI — from autonomous decision-making to alignment challenges.",
+      "recapUrl": "https://mayoailiteracy.com/blog-post.html?id=ai-dilemmas-march-19"
+    }
+  ]
+}

@@ -8,6 +8,9 @@
 //      fact-check: deterministically for a first-person unit-test answer or
 //      claim (no model call), and via the model's hand-off otherwise (the
 //      mock follows rule 1 in prose when the safety block is present).
+//      Every chat, lesson and widget static prefix carries the app facts
+//      (lib/appFacts) once, directly before the safety core; the helper
+//      routes never do.
 //   2. The chat/lesson thread carries ONE message-level breakpoint, on the
 //      last replayed message, and the prefix up to it is byte-identical on
 //      the next turn, including the iOS lesson wire shape (hidden opener,
@@ -29,11 +32,22 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
-const { SAFETY_CORE, HELPER_CRISIS_RULE, CRISIS_COPY } = require('../lib/safetyCore');
+const { SAFETY_CORE, SAFETY_CORE_TAGGED, HELPER_CRISIS_RULE, CRISIS_COPY } = require('../lib/safetyCore');
+const { APP_FACTS, APP_FACTS_TAGGED } = require('../lib/appFacts');
+const { CLUB_KNOWLEDGE } = require('../lib/clubKnowledge');
 
 const ROOT = path.join(__dirname, '..');
 const STUB = path.join(__dirname, 'fixtures', 'stubClubFeeds.js');
 const OPENER_TAG = '[CURRICULUM: Unit 1, Lesson 1]';
+const BASICS_TAG = '[BASICS: Unit 1, Lesson 1]';
+const { BASICS_PROMPT, BASICS_BLOCKS_APPENDIX } = require('../lib/basicsGuide');
+// server.js CURRICULUM_PROMPT's first line, read from the source (the
+// constant is not exported).
+const DEEP_GUIDE_FIRST_LINE = (() => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = src.indexOf('const CURRICULUM_PROMPT = `') + 'const CURRICULUM_PROMPT = `'.length;
+  return src.slice(start, src.indexOf('\n', start));
+})();
 
 const servers = {};
 
@@ -211,7 +225,10 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
     assert.ok(Array.isArray(map.json.nodes));
     const helperCalls = captured(servers.on, n).filter((c) => typeof c.system === 'string');
     assert.equal(helperCalls.length, 3);
-    for (const call of helperCalls) assert.ok(endsWithSafety(call.system), call.system.slice(0, 80));
+    for (const call of helperCalls) {
+      assert.ok(endsWithSafety(call.system), call.system.slice(0, 80));
+      assert.ok(!call.system.includes(APP_FACTS), 'JSON helper routes never take the app facts');
+    }
   });
 
   test('a quiz over a chat that disclosed a crisis returns the resources instead of a quiz', async () => {
@@ -261,6 +278,116 @@ describe('helper routes carry the safety block and hand off a crisis', () => {
     assert.match(call.system, /LIVE MEETING SCHEDULE/, 'meeting material stays ahead of the safety block');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 1b. App facts on the wire (audit 2026-10, AUD-03/-20/-43): every chat,
+//     lesson and widget static prefix carries lib/appFacts exactly once,
+//     directly before the safety core, which stays LAST — in both flag states.
+// ---------------------------------------------------------------------------
+for (const flag of ['on', 'off']) {
+  describe(`app facts sit just before the safety core (USE_UNIFIED_PROMPT ${flag})`, () => {
+    const server = () => servers[flag];
+    const countOf = (haystack, needle) => haystack.split(needle).length - 1;
+    const variants = [
+      { name: 'socratic (app)', mode: 'socratic', text: 'What is a token?' },
+      { name: 'debate (app)', mode: 'debate', text: 'Debate me: AI art is real art.' },
+      { name: 'discussion (app)', mode: 'discussion', text: 'Should schools allow AI for homework?' },
+      { name: 'socratic (widget, club_v1)', mode: 'socratic', text: 'What is a token?', capabilities: ['club_v1'] },
+      { name: 'lesson (prose)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.` },
+      { name: 'lesson (blocks_v1)', lesson: true, text: `${OPENER_TAG} Teach me what happens inside an LLM.`, capabilities: ['blocks_v1'] },
+      { name: 'Basics lesson (prose)', lesson: true, basics: true, text: `${BASICS_TAG} Teach me what an AI chatbot is, in plain words.` },
+      { name: 'Basics lesson (blocks_v1)', lesson: true, basics: true, text: `${BASICS_TAG} Teach me what an AI chatbot is, in plain words.`, capabilities: ['blocks_v1', 'platform_ios'] },
+      { name: 'Basics lesson (alias tag)', lesson: true, basics: true, text: '[CURRICULUM: Basics Unit 1, Lesson 1] Teach me what an AI chatbot is.' },
+    ];
+    for (const v of variants) {
+      test(v.name, async () => {
+        const n = nonce();
+        const s = sid();
+        if (v.mode) assert.equal((await post(server(), '/api/mode', { sessionId: s, mode: v.mode })).status, 200);
+        const body = { sessionId: s, messages: [{ role: 'user', content: `${v.text} (${n})` }] };
+        if (v.capabilities) body.capabilities = v.capabilities;
+        await chatSse(server(), body);
+        const [call] = captured(server(), n);
+        assert.ok(call, 'the model was called');
+        const staticText = call.system[0].text;
+        assert.ok(call.system[0].cache_control, 'the static block is the cached one');
+        // Lessons always use CURRICULUM_PROMPT + the plain safety core; v2
+        // free chat uses the XML-tagged forms.
+        const tagged = flag === 'on' && !v.lesson;
+        const facts = tagged ? APP_FACTS_TAGGED : APP_FACTS;
+        const safety = tagged ? SAFETY_CORE_TAGGED : SAFETY_CORE;
+        assert.ok(staticText.endsWith(`\n\n${facts}\n\n${safety}`), 'app facts, then the safety core LAST');
+        assert.equal(countOf(staticText, APP_FACTS), 1, 'the facts appear exactly once');
+        assert.equal(countOf(staticText, safety), 1, 'the safety core appears exactly once');
+        for (const block of call.system.slice(1)) assert.ok(!block.text.includes(APP_FACTS), 'never in the dynamic block');
+        // Each lesson track gets its own guide and never the other's.
+        if (v.basics) {
+          assert.ok(staticText.startsWith(BASICS_PROMPT), 'the Basics guide opens the prefix');
+          assert.ok(!staticText.includes(DEEP_GUIDE_FIRST_LINE), 'no Deep-dive guide');
+          assert.equal(staticText.includes(BASICS_BLOCKS_APPENDIX), Boolean(v.capabilities), 'card rules only for blocks_v1');
+        } else {
+          assert.ok(!staticText.includes(BASICS_PROMPT.slice(0, 200)), 'no Basics guide');
+          if (v.lesson) assert.ok(staticText.startsWith(DEEP_GUIDE_FIRST_LINE), 'the Deep-dive guide opens a Deep-dive lesson');
+        }
+      });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 1c. Lesson routing (Basics, 2026-10): the most recent lesson tag picks the
+//     guide, so a Basics lesson never falls into the Deep-dive guide and a
+//     Deep-dive lesson never into the Basics one — whichever came first.
+// ---------------------------------------------------------------------------
+for (const flag of ['on', 'off']) {
+  describe(`lesson routing by track (USE_UNIFIED_PROMPT ${flag})`, () => {
+    const server = () => servers[flag];
+    const cases = [
+      { name: 'Basics opener alone', basics: true, thread: (n) => [{ role: 'user', content: `${BASICS_TAG} Teach me (${n}).` }] },
+      { name: 'Deep-dive opener alone', basics: false, thread: (n) => [{ role: 'user', content: `${OPENER_TAG} Teach me (${n}).` }] },
+      {
+        name: 'a Deep-dive thread that moves on to a Basics lesson (widget)',
+        basics: true,
+        thread: (n) => [
+          { role: 'user', content: `${OPENER_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: `${BASICS_TAG} Teach me what a chatbot is.` },
+        ],
+      },
+      {
+        name: 'a Basics thread that moves on to a Deep-dive lesson (widget)',
+        basics: false,
+        thread: (n) => [
+          { role: 'user', content: `${BASICS_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: `${OPENER_TAG} Teach me about tokens.` },
+        ],
+      },
+      {
+        name: 'a Basics thread whose later turns are untagged stays Basics',
+        basics: true,
+        thread: (n) => [
+          { role: 'user', content: `${BASICS_TAG} Teach me (${n}).` },
+          { role: 'assistant', content: 'Here is the idea.' },
+          { role: 'user', content: 'Are you a real person?' },
+        ],
+      },
+    ];
+    for (const c of cases) {
+      test(c.name, async () => {
+        const n = nonce();
+        await chatSse(server(), { sessionId: sid(), messages: c.thread(n) });
+        const [call] = captured(server(), n);
+        assert.ok(call, 'the model was called');
+        const staticText = call.system[0].text;
+        assert.equal(staticText.startsWith(BASICS_PROMPT), c.basics, 'Basics guide');
+        assert.equal(staticText.startsWith(DEEP_GUIDE_FIRST_LINE), !c.basics, 'Deep-dive guide');
+        assert.ok(staticText.endsWith(SAFETY_CORE), 'the safety core is LAST either way');
+        assert.equal(call.max_tokens, 2048, 'both tracks get the lesson token budget');
+      });
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 2. History breakpoint + widget club block, in both flag states
@@ -328,6 +455,42 @@ for (const flag of ['on', 'off']) {
       assert.ok(usages[4].cache_read_input_tokens > usages[2].cache_read_input_tokens);
     });
 
+    test('Basics lesson, iOS wire shape: typed turns and [Q] taps share one prefix, so every turn reads back the last', async () => {
+      const n = nonce();
+      const s = sid();
+      const opener = { role: 'user', content: `${BASICS_TAG} Teach me what an AI chatbot is (${n}).` };
+      const visible = [];
+      const usages = [];
+      // concise = a typed send(), balanced = the opener and a [Q] tap.
+      const modes = ['balanced', 'concise', 'concise', 'balanced', 'concise'];
+      for (let t = 1; t <= 5; t++) {
+        if (t > 1) visible.push({ role: 'user', content: t === 4 ? 'I picked B) A computer program' : `practice ${t}: Are you a real person?` });
+        const wire = visible.slice();
+        wire.unshift(opener);
+        const last = wire.length - 1;
+        if (last > 0 && !wire[last].content.startsWith('[BASICS')) wire[last] = { role: 'user', content: `${BASICS_TAG} ${wire[last].content}` };
+        const complete = await chatSse(server(), { sessionId: s, messages: wire, responseMode: modes[t - 1], capabilities: ['blocks_v1', 'platform_ios'] });
+        usages.push(complete.usage);
+        visible.push({ role: 'assistant', content: complete.reply });
+      }
+      // lib/basicsVoice ran on the stream: the mock's guide label and filler
+      // "just" are gone from every reply, the sentence kept with a capital.
+      for (const reply of visible.filter((m) => m.role === 'assistant').map((m) => m.content)) {
+        assert.ok(reply.includes('\n\nLeave private details out.\n\n'), reply);
+        assert.doesNotMatch(reply, /Safety point|\bJust\b/);
+      }
+      const calls = captured(server(), n);
+      assert.equal(calls.length, 5);
+      for (const call of calls) {
+        assert.ok(call.system[0].text.startsWith(BASICS_PROMPT));
+        assert.equal(call.system.filter((b) => b.cache_control).length, 1, 'only the static block is cached');
+        assert.match(call.system[1].text, /^## BASICS RUNTIME NOTE\nToday's date: \d{4}-\d{2}-\d{2}\.\nDevice: iPhone or iPad/);
+      }
+      for (const call of calls.slice(1)) assert.deepEqual(messageBreakpoints(call.messages), [call.messages.length - 2]);
+      assertByteStable(calls);
+      assertReadsBack(usages, 3);
+    });
+
     test('free chat: the same, and the app dynamic block carries no breakpoint', async () => {
       const n = nonce();
       const s = sid();
@@ -342,6 +505,7 @@ for (const flag of ['on', 'off']) {
       const calls = captured(server(), n);
       for (const call of calls) {
         assert.equal(call.system.filter((b) => b.cache_control).length, 1, 'only the static block is cached for the app');
+        assert.ok(!call.system[0].text.includes(CLUB_KNOWLEDGE.trim()), 'the app never carries the club facts');
       }
       for (const call of calls.slice(1)) assert.deepEqual(messageBreakpoints(call.messages), [call.messages.length - 2]);
       assertByteStable(calls);
@@ -374,12 +538,22 @@ for (const flag of ['on', 'off']) {
         await chatSse(server(), { sessionId: sid(), messages: thread, capabilities: ['club_v1'] });
         calls.push(...captured(server(), n));
       }
+      const clubBlock = `<club_knowledge>\n${CLUB_KNOWLEDGE.trim()}\n</club_knowledge>`;
       for (const call of calls) {
         assert.equal(call.system.length, 2);
+        // The club facts sit in the cached prefix, ahead of the safety block,
+        // which stays last.
+        assert.ok(call.system[0].cache_control);
+        assert.ok(call.system[0].text.includes(clubBlock), 'club facts in the cached prefix');
+        assert.ok(call.system[0].text.endsWith(flag === 'on' ? SAFETY_CORE_TAGGED : SAFETY_CORE), 'safety block last');
+        assert.ok(call.system[0].text.indexOf(clubBlock) < call.system[0].text.lastIndexOf('SAFETY CORE'));
         assert.ok(call.system[1].cache_control, 'club block is a breakpoint');
         assert.match(call.system[1].text, /LIVE MEETING SCHEDULE/);
+        // The schedule is read from the site's events feed (fixture copy).
+        assert.match(call.system[1].text, /Regular meetings: Every Thursday at 8:20 AM, MHS Library Classroom\. Open to: All MHS Students\./);
         assert.match(call.system[1].text, /BLOG LIBRARY/);
       }
+      assert.equal(calls[2].system[0].text, calls[0].system[0].text, 'the cached prefix is byte-identical across students');
       assert.equal(calls[2].system[1].text, calls[0].system[1].text, 'a second student gets the same bytes');
       // Breakpoints in play: static, club block, history. Under the API's 4.
       const total = calls[1].system.filter((b) => b.cache_control).length + messageBreakpoints(calls[1].messages).length;

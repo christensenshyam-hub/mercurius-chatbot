@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 
 /// A curriculum lesson in its OWN window — distinct from the three chat modes,
 /// and not a tab. It owns a **persisted but non-hydrating** `ChatViewModel`
@@ -172,8 +173,9 @@ public struct CurriculumLessonView: View {
             achievementStore: achievementStore
         ))
         #if DEBUG
-        // `-LessonReplay`: recorded replies, no network (see LessonReplay).
-        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel(lessonId: lessonId)) }
+        // `-LessonReplay`: recorded replies (stubs for a lesson with no
+        // recording), no network (see LessonReplay).
+        if LessonReplay.isRequested { _model = State(initialValue: LessonReplay.makeModel(lessonID: lessonId)) }
         #endif
     }
 
@@ -232,14 +234,16 @@ public struct CurriculumLessonView: View {
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
                     composerFocused: composerFocused
                 )
+                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
+                .lesson(id: lessonId)
                 #if os(macOS)
                 .nightLesson(complete: didCelebrate || model.lessonCompletionEvents > 0)
-                // Lesson 1.1 holds the "How a model reads “bank”" interactive.
-                .nightLesson(id: lessonId)
                 .onPreferenceChange(NightUncommittedPickKey.self) { nightUncommittedPick = $0 }
                 // A waiting check takes the lesson's keys, unless the
                 // composer has the keyboard.
                 .environment(\.nightCheckRouter, nightCheckRouter)
+                // The lesson's interactive holds Return through it too.
+                .environment(\.interactiveKeyRouter, nightCheckRouter)
                 .environment(\.nightComposerFocused, composerFocused)
                 #endif
                 // Basics: Copy on Merc's replies (its notes and emails are
@@ -411,6 +415,19 @@ public struct CurriculumLessonView: View {
             if !showIntro { reactToProgressOnEntry() }
         }
         .reportFeedbackAlert(reportFeedback)
+        #if DEBUG
+        // `-Interactive <slug>` with a card past the first reply (a stub
+        // replay): each stub check is answered as a tap would, until the
+        // card's reply has arrived (simctl can't tap).
+        .onChange(of: model.phase) { _, phase in
+            guard phase == .idle, let target = LessonReplay.repliesToReach(lessonID: lessonId),
+                  let last = model.messages.last, last.role == .assistant, last.status == .idle,
+                  model.messages.filter({ $0.role == .assistant }).count < target else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                model.sendQuickReply(LessonReplay.stubAnswer)
+            }
+        }
+        #endif
         #if DEBUG && os(macOS)
         // `-NightCompleteAfterReply YES` (shots only): the complete card once
         // the replay's first reply is in, so it recaps that reply's [KEY]
@@ -808,7 +825,11 @@ public struct CurriculumLessonView: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 28)
                 .background(BrandGradient.merc, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // No glow on the iPhone (dark only; Night casts no shadows
+                // in dark). The Mac keeps its own.
+                #if os(macOS)
                 .shadow(color: BrandColor.accent.opacity(0.5), radius: 12, y: 7)
+                #endif
         }
         .accessibilityLabel(basics == nil ? "Continue. Start the lesson." : BasicsCopy.startAccessibility)
     }
@@ -847,7 +868,11 @@ public struct CurriculumLessonView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(BrandColor.accent.opacity(0.16), lineWidth: 2)
         )
+        // No shadow on the iPhone (dark only; Night casts none in dark). The
+        // Mac keeps its own.
+        #if os(macOS)
         .shadow(color: .black.opacity(0.12), radius: 18, y: 12)
+        #endif
     }
 
     private func startFromIntro() {

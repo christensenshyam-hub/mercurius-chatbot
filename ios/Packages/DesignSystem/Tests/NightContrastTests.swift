@@ -366,12 +366,26 @@ struct NightPaletteMappingTests {
         #expect(Self.drawn(BrandColor.mercViolet, in: .darkAqua) == 0x7C3AED)
     }
 
-    @Test("BrandPalette, the iPhone's values, is untouched")
-    func iPhonePaletteUnchanged() {
-        #expect(BrandPalette.background == .init(light: 0xF7FAFC, dark: 0x0B0F30))
-        #expect(BrandPalette.text == .init(light: 0x0F142A, dark: 0xE6E9F5))
-        #expect(BrandPalette.accentText == .init(light: 0x4F46E5, dark: 0xA5B4FC))
-        #expect(BrandPalette.errorText == .init(light: 0xB91C1C, dark: 0xF87171))
+    @Test("The iPhone reads the same Night token for each BrandColor token as the Mac")
+    func iPhoneSharesTheMapping() {
+        // BrandNight is the iPhone's side of the mapping (it draws the dark
+        // column only). The fills differ on purpose: the iPhone keeps its
+        // fixed success and error hues.
+        let iPhone: [String: NightPalette.Quad] = [
+            "background": BrandNight.background,
+            "surface": BrandNight.surface,
+            "surfaceElevated": BrandNight.surfaceElevated,
+            "border": BrandNight.border,
+            "text": BrandNight.text,
+            "textSecondary": BrandNight.textSecondary,
+            "accentText": BrandNight.accentText,
+            "successText": BrandNight.successText,
+            "errorText": BrandNight.errorText,
+        ]
+        for (name, _, quad) in Self.mapping where name != "success" && name != "error" {
+            #expect(iPhone[name] == quad, "\(name)")
+        }
+        #expect(iPhone.count == Self.mapping.count - 2)
     }
 }
 

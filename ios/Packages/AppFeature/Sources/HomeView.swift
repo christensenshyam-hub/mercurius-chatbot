@@ -89,7 +89,7 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
 #endif
         }
-        .tint(BrandColor.accent)
+        .tint(BrandAppearance.tint)
     }
 
     // MARK: - Layout
@@ -270,8 +270,10 @@ struct HomeView: View {
     private var weekRow: some View {
         HStack(spacing: BrandSpacing.sm) {
             ZStack {
+                // The empty track: Night's hairline, as on the Mac's Today
+                // ring (surfaceElevated all but vanished on the canvas).
                 Circle()
-                    .stroke(BrandColor.surfaceElevated, lineWidth: 4)
+                    .stroke(BrandColor.border, lineWidth: 4)
                 Circle()
                     .trim(from: 0, to: state.weekProgress)
                     .stroke(BrandGradient.mercHorizontal, style: StrokeStyle(lineWidth: 4, lineCap: .round))

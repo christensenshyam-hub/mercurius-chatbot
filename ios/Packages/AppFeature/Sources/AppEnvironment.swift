@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import CurriculumFeature
+import EngagementFeature
 import DesignSystem
 import NetworkingKit
 import PersistenceKit
@@ -25,9 +26,9 @@ public final class AppEnvironment: ObservableObject {
     public let apiClient: APIClient
     public let sessionIdentity: SessionIdentity
 
-    /// App-wide theme preference. Observed by `RootView` so the chosen
-    /// color scheme propagates everywhere the moment the user changes
-    /// it in Settings.
+    /// The theme preference earlier versions offered. No longer read: the
+    /// app is dark only (`BrandAppearance`), and Settings no longer shows
+    /// the choice. Kept so the hosts' initialisers don't change.
     public let themeStore: ThemePreferenceStore
 
     /// Disk-backed chat history. `nil` only if SwiftData fails to
@@ -59,6 +60,11 @@ public final class AppEnvironment: ObservableObject {
     let reminderCardStore: ReminderCardStore
     /// Whether this device answered under 13 recently.
     let ageBlockStore: AgeBlockStore
+
+    /// The printable certificates: who has earned which, and the name and
+    /// dates they print (kept on this device only; Settings' resets erase
+    /// them).
+    public let certificates: CertificateCenter
 
     /// A lesson a tapped reminder (or a `mercurius://lesson/<id>` link) asked
     /// to open. The shell presents it and clears it.
@@ -168,6 +174,9 @@ public final class AppEnvironment: ObservableObject {
         self.ageBlockStore = AgeBlockStore(
             defaults: Self.makeDefaults(suite: Self.uiTestAgeBlockSuite, arguments: arguments,
                                         wipe: !arguments.contains(Self.keepAgeBlockArgument)))
+        self.certificates = CertificateCenter.make(
+            progress: progress,
+            defaults: Self.makeDefaults(suite: Self.uiTestCertificateSuite, arguments: arguments))
         if isUITesting {
             // Every UI test anchors on Home's CTAs; the card would push them
             // down. Its logic is covered by the AppFeature unit tests.
@@ -317,6 +326,7 @@ public final class AppEnvironment: ObservableObject {
     static let uiTestReviewPromptSuite = "com.mayoailiteracy.mercurius.uitests.reviewPrompt"
     static let uiTestReminderCardSuite = "com.mayoailiteracy.mercurius.uitests.reminderCard"
     static let uiTestAgeBlockSuite = "com.mayoailiteracy.mercurius.uitests.ageBlock"
+    static let uiTestCertificateSuite = "com.mayoailiteracy.mercurius.uitests.certificate"
     static let keepAgeBlockArgument = "-KeepAgeBlock"
 
     static func makeCurriculumProgressPreferences(arguments: [String]) -> PreferenceStore {

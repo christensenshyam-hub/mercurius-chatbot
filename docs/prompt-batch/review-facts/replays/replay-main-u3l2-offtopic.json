@@ -1,0 +1,38 @@
+{
+  "base": "on-u3l2.json",
+  "keepTurns": 2,
+  "student": "can u help me with my bio homework real quick its about cells",
+  "flag": "main-on",
+  "results": [
+    {
+      "run": 0,
+      "lessonComplete": false,
+      "reply": "Ha, I like the pivot — but we're in the middle of your AI in Healthcare lesson, and I want to make sure you finish strong!\n\nCell biology is outside what I can help with here. Your bio teacher or a tutoring resource would be the right call for that.\n\nReady to jump back in? You're actually doing really well — one more concept and then you get the exercise."
+    },
+    {
+      "run": 1,
+      "lessonComplete": false,
+      "reply": "Ha — I like the enthusiasm, but I'm your AI literacy tutor today, not a bio tutor!\n\nLet's finish what we started — you're actually doing really well on this lesson, and we're almost at the exercise.\n\nYou just nailed that FDA authorization means *validated, not perfect*. One more micro-concept and then we get to the hands-on part.\n\nReady to continue?"
+    },
+    {
+      "run": 2,
+      "lessonComplete": false,
+      "reply": "Ha — I like the enthusiasm, but I'm your AI literacy tutor, not a bio tutor!\n\nLet's finish what we started — you're actually doing really well on this lesson, and you're just one beat away from the exercise.\n\nWhat did you think of that last question about FDA authorization?"
+    },
+    {
+      "run": 3,
+      "lessonComplete": false,
+      "reply": "Ha — I like the ambition, but I'm your AI literacy teacher right now, not a bio tutor!\n\nLet's finish what we started — you're actually doing really well, and we're close to the exercise.\n\nYou just nailed that FDA authorization means *validated, not perfect*. One more micro-concept and then you get a real scenario to dig into.\n\n---\n\nHere's where the promise meets reality in a striking way: **alert fatigue**.\n\nEven a well-validated AI can fail in deployment — not because its predictions are wrong, but because of how clinicians respond to it in practice.\n\n[EX]Epic's sepsis prediction model, deployed across many US hospitals, was studied by researchers at University of Michigan (2021). They found that nurses acknowledged the alert and then took no new action about 54% of the time — not because they were negligent, but because the alert fired so often that it blended into background noise. A tool meant to save lives was being routinely ignored.[/EX]\n\n[KEY]An AI tool's real-world impact depends not just on its accuracy, but on whether the humans using it can actually act on its outputs — too many alerts, and even good ones get ignored.[/KEY]\n\n[Q]\nA hospital's AI sepsis alert has 80% sensitivity (catches 80% of real cases). But nurses ignore it 50% of the time. What's the actual problem here?\nA) The AI's sensitivity is too low — it needs more training data\nB) Deployment design failed — even accurate alerts don't help if clinicians can't act on them\nC) The AI should be replaced with a doctor making the same prediction manually\nANS: B\n[/Q]"
+    },
+    {
+      "run": 4,
+      "lessonComplete": false,
+      "reply": "Ha — I like the enthusiasm, but I'm your AI literacy tutor right now, not a bio tutor!\n\nLet's finish what we started — you're actually doing really well on this lesson, and we're one beat away from your exercise.\n\nWhat was your answer to the question above: what does FDA authorization of a diagnostic AI actually tell you?"
+    },
+    {
+      "run": 5,
+      "lessonComplete": false,
+      "reply": "Ha — I like the enthusiasm, but I'm your AI literacy teacher, not your bio tutor!\n\nLet's stay on track. You're actually doing really well on this lesson — one more concept and then you get a real exercise.\n\nYou just nailed that FDA authorization means *validated, not perfect*. Now let's talk about what happens when AI tools meet the chaos of a real hospital.\n\n---\n\n**Alert fatigue** is one of the most underappreciated failure modes in health AI.\n\nAn AI can be technically accurate and still make things *worse* — if it fires too many alerts, clinicians start ignoring them. The tool trains the humans around it to tune it out.\n\n[EX]Epic's sepsis prediction model — deployed across hundreds of hospitals — was studied by researchers at University of Michigan. They found it generated so many alerts that nurses and doctors began dismissing them routinely. One analysis put the false alert rate at around 52%. When half your warnings are wrong, the warning system stops being a safety net.[/EX]\n\n[KEY]A health AI that's right 48% of the time on its alerts isn't just unhelpful — it can actively degrade care by training clinicians to ignore warnings.[/KEY]\n\n[Q]\nEpic's sepsis model had a ~52% false alert rate. What's the most dangerous consequence of this?\nA) The hospital gets sued for over-diagnosing sepsis\nB) Clinicians start ignoring alerts, so real sepsis cases get missed too\nC) The AI uses too much computing power and slows down hospital systems\nANS: B\n[/Q]"
+    }
+  ]
+}

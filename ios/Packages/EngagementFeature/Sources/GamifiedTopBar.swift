@@ -128,8 +128,10 @@ public struct GamifiedTopBar: View {
     private var levelStat: some View {
         HStack(spacing: BrandSpacing.xs) {
             ZStack {
+                // The empty track: Night's hairline, which reads on the
+                // canvas (surfaceElevated all but vanished).
                 Circle()
-                    .stroke(BrandColor.surfaceElevated, lineWidth: 3)
+                    .stroke(BrandColor.border, lineWidth: 3)
                 Circle()
                     .trim(from: 0, to: min(1, max(0, gamificationStore.levelProgress)))
                     .stroke(BrandGradient.mercHorizontal, style: StrokeStyle(lineWidth: 3, lineCap: .round))

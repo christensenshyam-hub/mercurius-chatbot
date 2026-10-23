@@ -7,6 +7,7 @@ import EngagementFeature
 import MercuriusActivity
 import NetworkingKit
 import PersistenceKit
+import LessonInteractives
 #endif
 
 /// Root view of the app. Focused on **bootstrap** only:
@@ -61,7 +62,11 @@ public struct RootView: View {
 
     public var body: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-LessonPreview") && !Self.shellHostsPreviews {
+        if let card = InteractiveLaunchOptions.current.gallery {
+            // `-InteractiveGallery <slug>`: one card alone (both platforms).
+            InteractiveGalleryView(id: card)
+                .preferredColorScheme(env.themeStore.theme.colorScheme)
+        } else if Self.opensLessonPreview && !Self.shellHostsPreviews {
             lessonPreview
         } else if ProcessInfo.processInfo.arguments.contains("-MercPreview") {
             MercPreviewView()
@@ -75,12 +80,14 @@ public struct RootView: View {
             unitTestCrisisPreview
         } else if ProcessInfo.processInfo.arguments.contains("-UnitTestPreview") && !Self.shellHostsPreviews {
             unitTestPreview
+        } else if let mode = CertificateDebug.mode, !Self.shellHostsPreviews {
+            certificatePreview(mode)
         } else if ProcessInfo.processInfo.arguments.contains("-QuizCrisisPreview") {
             QuizView(
                 model: QuizViewModel(tools: CrisisPreviewTools(), sessionIdProvider: { "debug-preview" }),
                 dismissAction: {}
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -102,15 +109,37 @@ public struct RootView: View {
         #endif
     }
 
+    /// `-LessonPreview`, or `-Interactive <slug>` (which implies it, with
+    /// `-LessonSkipIntro` and `-LessonReplay`, for the card's lesson).
+    static var opensLessonPreview: Bool {
+        ProcessInfo.processInfo.arguments.contains("-LessonPreview") || InteractiveLaunchOptions.current.card != nil
+    }
+
+    /// The lesson the preview opens: the card's under `-Interactive
+    /// <slug>`, else Unit 1, Lesson 1.
+    static var previewLesson: (unit: CurriculumFeature.Unit, lesson: CurriculumFeature.Lesson)? {
+        if let card = InteractiveLaunchOptions.current.card,
+           let lessonID = InteractiveRegistry.spec(for: card)?.lessonID {
+            for unit in MercuriusCurriculum.units {
+                if let lesson = unit.lessons.first(where: { $0.id == lessonID }) { return (unit, lesson) }
+            }
+        }
+        guard let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first else { return nil }
+        return (unit, lesson)
+    }
+
     /// DEBUG-only: launch straight into the redesigned lesson screen for the
-    /// first lesson, wired to the live environment, so the Playful redesign can
-    /// be screenshotted without navigating the whole app.
+    /// first lesson (or `-Interactive`'s card's lesson), wired to the live
+    /// environment, so the Playful redesign can be screenshotted without
+    /// navigating the whole app.
     @ViewBuilder private var lessonPreview: some View {
-        if let unit = MercuriusCurriculum.units.first, let lesson = unit.lessons.first {
+        if let unit = Self.previewLesson?.unit, let lesson = Self.previewLesson?.lesson {
             let next = MercuriusCurriculum.nextStop(after: lesson.id)
             // A fake resume id skips the speech-bubble intro (and harmlessly
             // falls through to a fresh start) so the chat can be previewed.
-            let fakeResume: UUID? = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro") ? UUID() : nil
+            let skipsIntro = ProcessInfo.processInfo.arguments.contains("-LessonSkipIntro")
+                || InteractiveLaunchOptions.current.card != nil
+            let fakeResume: UUID? = skipsIntro ? UUID() : nil
             CurriculumLessonView(
                 lessonId: lesson.id,
                 unitLabel: "UNIT \(unit.number)",
@@ -132,10 +161,21 @@ public struct RootView: View {
                 totalInUnit: unit.lessons.count,
                 nextStop: next.map(AppShellView.celebrationStop)
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
+    }
+
+    /// DEBUG-only: the certificate shots (`CertificateDebug`): on the Mac
+    /// they open inside the shell.
+    @ViewBuilder private func certificatePreview(_ mode: CertificateDebug.Mode) -> some View {
+        #if os(iOS)
+        CertificateDebugHost(mode: mode)
+            .preferredColorScheme(env.themeStore.theme.colorScheme)
+        #else
+        mainBody
+        #endif
     }
 
     /// DEBUG-only: Unit 1's test at a stage (`-UnitTestStage`), for
@@ -145,7 +185,7 @@ public struct RootView: View {
            let test = MercuriusCurriculum.unitTest(for: unit.id) {
             UnitTestPreviewHost(unit: unit, test: test,
                                 stage: UserDefaults.standard.string(forKey: "UnitTestStage"))
-                .preferredColorScheme(env.themeStore.theme.colorScheme)
+                .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -162,7 +202,7 @@ public struct RootView: View {
                 test: test,
                 via503: ProcessInfo.processInfo.arguments.contains("-CrisisVia503")
             )
-            .preferredColorScheme(env.themeStore.theme.colorScheme)
+            .preferredColorScheme(BrandAppearance.colorScheme)
         } else {
             mainBody
         }
@@ -189,7 +229,7 @@ public struct RootView: View {
             chatStore: env.chatStore,
             autoSend: ProcessInfo.processInfo.arguments.contains("-ChatSeed")
         )
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
     }
     #endif
 
@@ -208,7 +248,7 @@ public struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: bootstrapState)
-        .preferredColorScheme(env.themeStore.theme.colorScheme)
+        .preferredColorScheme(BrandAppearance.colorScheme)
         .task { await bootstrap() }
         .task {
             #if DEBUG
@@ -406,8 +446,10 @@ private struct ChatPreviewHost: View {
 struct UnitTestPreviewHost: View {
     @State private var model: UnitTestViewModel
     private let stage: String?
+    private let onMastered: (String) -> Void
 
-    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?) {
+    init(unit: CurriculumFeature.Unit, test: UnitTest, stage: String?, onMastered: @escaping (String) -> Void = { _ in }) {
+        self.onMastered = onMastered
         let pass = stage == "mastered"
         _model = State(initialValue: UnitTestViewModel(unit: unit, test: test, shuffleSeed: 42) { _ in
             .init(grade: pass ? "A" : "C", pass: pass,
@@ -417,7 +459,7 @@ struct UnitTestPreviewHost: View {
     }
 
     var body: some View {
-        UnitTestView(model: model, onMastered: { _ in }, onExit: {})
+        UnitTestView(model: model, onMastered: onMastered, onExit: {})
             .task {
                 guard model.phase == .quiz, !model.quizSubmitted, let stage else { return }
                 switch stage {

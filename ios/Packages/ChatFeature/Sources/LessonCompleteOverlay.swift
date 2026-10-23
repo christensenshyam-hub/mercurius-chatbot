@@ -336,7 +336,8 @@ public struct LessonCompleteOverlay: View {
         )
         .fill(BrandColor.surface)
         .ignoresSafeArea(edges: .bottom)
-        .shadow(color: .black.opacity(0.3), radius: 28, y: -8)
+        // No shadow: the iPhone is dark only, and Night casts none in dark
+        // (SPEC.md §2.6).
         #endif
     }
 
