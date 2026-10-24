@@ -72,20 +72,16 @@ is two short lessons a week. That's it."
 
 **8:21 — The poster / QR moment (2 min).**
 Hold up the poster. Say: "One link, forever: trymercurius.com/get. It's
-on the poster, it's on the door, it's pinned in the group chat. Right now
-it opens TestFlight — that's Apple's beta app — because our App Store
-version is in review. If your phone asks you to install TestFlight first,
-do that, then come back to the link. When the store version is approved,
-the same link goes to the App Store and your progress carries over. Same
-QR, no new link."
+on the poster, it's on the door, it's pinned in the group chat. It opens
+Mercurius AI on the App Store. When a new version comes out, the same
+link still works and your progress carries over. Same QR, no new link."
 
 Show: scan the QR with my own phone camera so they see it works.
 
 **8:23 — Install (4 min).**
 The Install captain walks the room. Common snags: Safari asks to open
-TestFlight (say yes); TestFlight not installed (App Store → TestFlight →
-back to the link); "Accept" then "Install"; iOS 16 or older will not
-install (the app needs iOS 17). Anyone without an iPhone pairs up with a
+the App Store (say yes); "Get" then Face ID or the Apple ID password; iOS
+16 or older will not install (the app needs iOS 17). Anyone without an iPhone pairs up with a
 neighbor today and is not on the hook this week. A student who mis-taps an
 age under 13 gets the stop screen, and that phone stays on it for 7 days
 (the app keeps only when it happened, never the age). There is no retry
@@ -651,11 +647,10 @@ line only when I have seen the result myself.
 - [ ] 2.3.0 (16) in the TestFlight external group with the **public link
       enabled**; installed from that link on a phone that has never had
       the app, walked through the four first-run screens.
-- [ ] `/get` added to `marketing/_redirects` (with `/Get` and `/GET`,
-      phones autocapitalize) → the TestFlight join URL, `302`, deployed;
-      `curl -sI https://trymercurius.com/get` shows the redirect. After
-      App Store approval the same three lines flip to
-      `https://apps.apple.com/app/id6773192313`. No reprint.
+- [ ] `/get` in `marketing/_redirects` (with `/Get` and `/GET`, phones
+      autocapitalize) → `https://apps.apple.com/app/id6773192313`, `302`
+      (flipped from TestFlight on 2026-10-24); `curl -sI
+      https://trymercurius.com/get` shows the redirect. No reprint.
 - [ ] REVIEW_REHEARSAL.md completed on the exact build in TestFlight, and
       2.3.0 submitted with phased release (APP_STORE_LISTING.md §6).
 - [ ] `https://trymercurius.com/privacy`, `/terms`, `/support` return 200

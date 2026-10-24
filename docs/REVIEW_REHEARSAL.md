@@ -240,10 +240,9 @@ Tick each line only when you saw the expected result yourself.
     ```
 
     Also load each on the phone in Safari. `/support` must show
-    `support@trymercurius.com`. `/get` must land on the TestFlight join page
-    while 2.3.0 is in review, and on the App Store page for id 6773192313
-    once it is approved (flip all three `/get` lines in
-    `marketing/_redirects` together).
+    `support@trymercurius.com`. `/get` must land on the App Store page for
+    id 6773192313 (all three `/get` lines in `marketing/_redirects` point
+    there since 2026-10-24).
 
 23. **What's New matches the build.** Read the 2.3.0 What's New text in
     `APP_STORE_LISTING.md` §1 line by line against what you just rehearsed:
