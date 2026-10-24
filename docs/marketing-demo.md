@@ -17,6 +17,7 @@ Founder decision (October 7, 2026): a replay of a real Mercurius session, on the
 - Say what it is: a real Mercurius lesson, replayed. Our team scripted the student's taps; Mercurius's replies are unedited. Give the date it was recorded (October 7, 2026) and which lesson it is (Unit 1, Lesson 1 and its real title, found in the iOS curriculum data, `ios/Packages/CurriculumFeature`).
 - When a visitor answers a check, grade it locally from the `ANS:` line, then show what happened in the recorded session ("In this session, the student picked B." / "…picked A.") before Mercurius's real reply. Never imply the reply responds to the visitor's own pick.
 - End with the real next step, the App Store link (id 6773192313, using the self-hosted badge `/assets/app-store-badge.svg`), and a plain line that the full lesson continues in the app. No claims about features that aren't in the app (see `marketing/features.html` and the iOS code if unsure).
+  - **Until 2.3 is approved (AUD-06):** the App Store still sells 2.0.0, which has no lesson cards, no age check and no delete button, so the end panel links to `https://trymercurius.com/get` (TestFlight today) as a plain "Get the app (beta)" button. Apple's badge is only for App Store links. Switch back with `docs/STORE_CTA_SWITCHBACK.md`.
 
 ## Look
 - **Match the marketing site:** use `marketing/styles.css` tokens, its type and its spacing. The demo panel should look like the app's lesson view so visitors recognise it in the App Store.
