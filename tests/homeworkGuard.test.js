@@ -799,6 +799,67 @@ describe('dropRefusals: the refusal in any sentence (claude-sonnet-5-5)', () => 
   });
 });
 
+// stripMenu's `asides` (Sonnet 5.5 A/B and tuned runs 2026-10-24,
+// hw-essay-draft "no menu of readings"): the second option between commas
+// inside the closing question. `sent` is what claude-sonnet-5-5 sends.
+const ESSAY_ASIDES = [
+  // Tuned run 1, replies 2 and 3.
+  { reply: '"His plan" is carrying your whole claim without saying what went wrong, because a plan can be risky without being the reason two people died. What exactly did the Friar\'s plan do, or fail to do, that made the ending happen?', sent: '"His plan" is carrying your whole claim without saying what went wrong, because a plan can be risky without being the reason two people died. What exactly did the Friar\'s plan do that made the ending happen?' },
+  { reply: '"Because of his plan" is the phrase holding you back: it names the Friar\'s plan but never says what it caused, and that cause-and-effect link is exactly what a thesis has to argue. What did his plan lead Romeo to believe, or keep Romeo from knowing, in that final scene?', sent: '"Because of his plan" is the phrase holding you back: it names the Friar\'s plan but never says what it caused, and that cause-and-effect link is exactly what a thesis has to argue. What did his plan lead Romeo to believe in that final scene?' },
+  // Tuned run 3, reply 3.
+  { reply: '"Friar Laurence is responsible because of his plan" is the phrase to fix: it names a person and a plan, but not what was wrong with the plan or why that wrong decision was his. What did the Friar choose to do, or not do, that someone more careful could have done differently?', sent: '"Friar Laurence is responsible because of his plan" is the phrase to fix: it names a person and a plan, but not what was wrong with the plan or why that wrong decision was his. What did the Friar choose to do that someone more careful could have done differently?' },
+  // Untuned run 3, reply 3.
+  { reply: '"Because of his plan" is the phrase that most needs work: it names what the Friar did but not why that makes him the one most responsible. A plan can fail through bad luck, so it doesn\'t yet blame him.\n\nWhat did the Friar decide, in the plan or around it, that he could have chosen differently?', sent: '"Because of his plan" is the phrase that most needs work: it names what the Friar did but not why that makes him the one most responsible. A plan can fail through bad luck, so it doesn\'t yet blame him.\n\nWhat did the Friar decide that he could have chosen differently?' },
+  { reply: 'Think of the tomb: what did he do, or fail to do, that sealed it?', sent: 'Think of the tomb: what did he do that sealed it?' },
+  // A dash menu is cut first, then the aside.
+  { reply: 'What did he do, or fail to do, that sealed it — was it haste or secrecy?', sent: 'What did he do that sealed it?' },
+];
+// Sent as written with `asides` on: the verifiers' counterexamples
+// (2026-10-24) and the shapes the pass leaves alone.
+const CRISIS_OR_988 = "I'm really glad you told me, and I'm taking it seriously. You can call or text 988 any time, day or night.\n\nWho could you reach out to tonight, or would it help to talk through how to reach 988, so you're not alone with this?";
+const KEPT_ASIDES = {
+  'an Oxford-comma list of characters': '"Friar Laurence is to blame" says who, but not why yet.\n\nWhich of Romeo, the Nurse, or the Friar, made the choice that mattered most?',
+  'discussion-1, "A, B, or C, and why?" (5.5 A/B run 3)': 'Yes, and you\'ve moved your claim: "basically fine" has become "fine if someone is accountable when the audit fails." That\'s a sharper position than where you started.\n\nNow the hard part: suppose an audit passes, but a qualified applicant is still screened out unfairly. Who should bear that responsibility, the company that deployed the tool, the vendor that built it, or the auditor who signed off, and why?',
+  'the recorded 4.6 opener, "when you use something like Siri, ChatGPT, or…, what…?"': "I'll pick for us — let's start with **what AI actually is**.\n\nHere's a question to kick things off: when you use something like Siri, ChatGPT, or a recommendation algorithm, what do you think is actually happening inside the machine?",
+  'the recorded 4.6 opener, "Siri, Google, or a chatbot"': "I'll pick for us — let's start with **what AI actually is**.\n\nHere's a question to kick things off: when you use something like Siri, Google, or a chatbot, what do you think is actually happening inside the machine to produce a response?",
+  'a crisis reply whose "or" offers 988': CRISIS_OR_988,
+  'a leading "When" clause with a list': 'When you reread your intro, the hook, the context, or the thesis, which part feels weakest?',
+  'a length, not an option': 'What does your paragraph prove, in one sentence or less, about the Friar?',
+  'a chain of asides': 'What did he do, or fail to do, or ignore, that sealed it?',
+  'a yes/no question': 'Was it his haste, or his secrecy, that doomed them?',
+  'their own words, quoted': 'What does "his plan, or his choices," leave out?',
+  'an aside in an earlier sentence': 'He acted, or failed to act, in haste. What did that cost them?',
+  'an "or" with no comma (tuned run 2)': "What did Friar Laurence decide or do that you think a more careful person wouldn't have?",
+  'a list with no Oxford comma': 'Which of Romeo, the Nurse or the Friar, is most to blame?',
+  'an aside that starts a new clause': 'What did he want, or you could say need, from Juliet?',
+  'no aside': 'What did the Friar do that made the ending happen?',
+};
+
+describe('stripMenu asides: the "or" aside in a writing question (claude-sonnet-5-5)', () => {
+  test('the eval runs\' asides go, and the question reads on (Sonnet 5.5 evals 2026-10-24)', () => {
+    for (const { reply, sent } of ESSAY_ASIDES) assert.equal(g.stripMenu(reply, { asides: true }), sent, reply);
+  });
+
+  test('off by default: every other model gets the dash menu cut alone', () => {
+    for (const { reply } of ESSAY_ASIDES.slice(0, 5)) {
+      assert.equal(g.stripMenu(reply), reply);
+      assert.equal(g.stripMenu(reply, { asides: false }), reply);
+    }
+    assert.equal(g.stripMenu(ESSAY_ASIDES[5].reply), 'What did he do, or fail to do, that sealed it?');
+  });
+
+  for (const [name, reply] of Object.entries(KEPT_ASIDES)) {
+    test(`kept: ${name}`, () => {
+      assert.equal(g.stripMenu(reply, { asides: true }), reply);
+    });
+  }
+
+  test('idempotent, and never throws', () => {
+    for (const { sent } of ESSAY_ASIDES) assert.equal(g.stripMenu(sent, { asides: true }), sent);
+    assert.equal(g.stripMenu(null, { asides: true }), '');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Wiring (mocked Anthropic)
 // ---------------------------------------------------------------------------
@@ -1127,6 +1188,57 @@ for (const flag of ['on', 'off']) {
           assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
           const t = sid();
           const json = await chatJson(servers[flag], t, turn(c, nonce()), { ...(model ? { model } : {}), ...(c.photo ? { imageId: await upload(servers[flag], t) } : {}) });
+          assert.equal(json.reply, sent);
+        });
+      }
+    });
+  }
+}
+
+// stripMenu's `asides` wiring (Sonnet 5.5 evals 2026-10-24): on
+// claude-sonnet-5-5 a writing turn's closing question loses its "or" aside,
+// on the stream and the JSON path; the default model's reply is sent as
+// today. `sent55` is what 5.5 sends; without it both models send the reply as
+// written: the verifiers' counterexamples in writing threads, a crisis turn
+// in a writing thread, an essay thread with a crisis message in it, and a
+// homework turn (unrepeat, not tidyWriting).
+const ROMEO = (n) => [
+  { role: 'user', content: `i need a thesis for romeo and juliet about who is most responsible for the tragedy (${n})` },
+  { role: 'assistant', content: "Who do you think carries the most blame for how it ended, and what's the first moment in the play that comes to mind when you think that?" },
+];
+const ROMEO_DRAFT = (n) => [...ROMEO(n), { role: 'user', content: 'friar laurence is responsible because of his plan' }, { role: 'assistant', content: ESSAY_ASIDES[0].sent }];
+const ROMEO_CRISIS = (n) => [...ROMEO(n), { role: 'user', content: 'honestly i want to die' }, { role: 'assistant', content: CRISIS_OR_988 }];
+const ASIDE_TURNS = {
+  'their draft (tuned run 1, reply 2)': { thread: ROMEO, said: 'friar laurence is responsible because of his plan', reply: ESSAY_ASIDES[0].reply, sent55: ESSAY_ASIDES[0].sent },
+  '"is that good?" (tuned run 1, reply 3)': { thread: ROMEO_DRAFT, said: 'is that good? can u make it better', reply: ESSAY_ASIDES[1].reply, sent55: ESSAY_ASIDES[1].sent },
+  '"is that good?" (untuned run 3, reply 3)': { thread: ROMEO_DRAFT, said: 'is that good? can u make it better', reply: ESSAY_ASIDES[3].reply, sent55: ESSAY_ASIDES[3].sent },
+  'an Oxford-comma list in a thesis thread': { thread: () => [], said: 'my thesis is that friar laurence is to blame for the deaths in romeo and juliet', reply: KEPT_ASIDES['an Oxford-comma list of characters'] },
+  'discussion-1 in a paragraph thread': { thread: () => [], said: 'for my paragraph on AI hiring tools, who is responsible when it is unfair', reply: KEPT_ASIDES['discussion-1, "A, B, or C, and why?" (5.5 A/B run 3)'] },
+  'the 4.6 Siri opener in an intro thread': { thread: () => [], said: 'i have to write an intro paragraph for my essay on AI', reply: KEPT_ASIDES['the recorded 4.6 opener, "when you use something like Siri, ChatGPT, or…, what…?"'] },
+  'a crisis turn in a writing thread': { thread: () => [], said: 'i have to write a paragraph for english and honestly i want to die', reply: CRISIS_OR_988 },
+  'an essay thread with a crisis message in it': { thread: ROMEO_CRISIS, said: 'friar laurence is responsible because of his plan', reply: ESSAY_ASIDES[0].reply },
+  'a homework turn (not tidyWriting)': { thread: MATH, said: 'idk', reply: 'What did you undo, or forget to undo, before you divided?' },
+};
+
+for (const flag of ['on', 'off']) {
+  for (const model of [undefined, 'claude-sonnet-5-5']) {
+    describe(`stripMenu asides wiring, flag ${flag}, ${model || 'default model'}`, () => {
+      const turn = (c, n) => {
+        const prior = c.thread(n);
+        return [...prior, { role: 'user', content: `${c.said}${prior.length ? '' : ` (${n})`} MOCK_SAY_B64:${b64(c.reply)}` }];
+      };
+      for (const [name, c] of Object.entries(ASIDE_TURNS)) {
+        const sent = model && c.sent55 ? c.sent55 : c.reply;
+        test(`${name}: ${sent === c.reply ? 'sent as written' : 'sent without the aside'}`, async () => {
+          const extra = model ? { model } : {};
+          const n = nonce();
+          const { deltas, complete } = await chatSse(servers[flag], sid(), turn(c, n), extra);
+          assert.equal(complete.reply, sent);
+          assert.equal(deltas.join(''), sent);
+          const calls = captured(servers[flag], n);
+          assert.equal(calls.length, 1, 'no answer-guard or writing retry');
+          assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
+          const json = await chatJson(servers[flag], sid(), turn(c, nonce()), extra);
           assert.equal(json.reply, sent);
         });
       }

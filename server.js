@@ -2282,7 +2282,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       previousReply && previousReply.content,
       guardProblems[0] && guardProblems[0].variable,
     )), { refusals: cutRefusals }), { cutNudge });
-    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }));
+    // The closing question's "or" aside (stripMenu's `asides`; Sonnet 5.5
+    // evals 2026-10-24, hw-essay-draft) goes on the same terms as a refusal:
+    // claude-sonnet-5-5, no crisis message in the thread, not a safety topic,
+    // and never in safety text.
+    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
     const guardDraft = async (draft) => {
       if (writingTurn) {
         const text = tidyWriting(draft);
