@@ -2222,7 +2222,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // model wrote it (review 2026-10-24; tests/homeworkSafetyText.test.js).
     const textOfTurn = (m) => (typeof m.content === 'string' ? m.content
       : Array.isArray(m.content) ? m.content.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : '');
-    const safetyAsked = Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText)
+    const safetyAsked = Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText) || homeworkGuard.harmRequest(latestText)
       || clientMessages.some((m) => m && ((m.role === 'user' && crisisSignal(textOfTurn(m))) || (m.role === 'assistant' && crisisHistory.isCrisisHandoff(m.content))));
     const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD && !safetyAsked;
     const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];
@@ -2270,12 +2270,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // in it, and never on a safety turn (guardOn is off for one).
     const cutNudge = modelRequest.usesBetweenTools(chosenModel)
       && !clientMessages.some((m) => m && m.role === 'user' && typeof m.content === 'string' && crisisSignal(m.content));
+    // Its refusal in any sentence, not only the first (dropRefusals; tuned
+    // 5.5 run 2026-10-24: "I won't hand over the number, but…" after the
+    // PHOTO restatement): on claude-sonnet-5-5 as cutNudge, and not when this
+    // message is a safety topic. On a writing turn only when the student
+    // pasted their own text (quoteTurn): a refusal to write about a real
+    // person is a writing turn too (verifiers 2026-10-24).
+    const cutRefusals = cutNudge && !needsSafetyBudget(latestText);
     const unrepeat = (text) => homeworkGuard.endOnQuestion(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
       homeworkGuard.handBackFromLatest(text, clientMessages),
       previousReply && previousReply.content,
       guardProblems[0] && guardProblems[0].variable,
-    ))), { cutNudge });
-    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
+    )), { refusals: cutRefusals }), { cutNudge });
+    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }));
     const guardDraft = async (draft) => {
       if (writingTurn) {
         const text = tidyWriting(draft);

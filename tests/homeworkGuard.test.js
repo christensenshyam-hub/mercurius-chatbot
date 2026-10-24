@@ -685,6 +685,120 @@ describe('endOnQuestion: the reply ends on its question (claude-sonnet-5-5)', ()
   });
 });
 
+// Sonnet 5.5 evals 2026-10-24: every hw reply "hw: no preamble" flagged in
+// the tuned and untuned runs, the untuned essay replies of the same shape it
+// missed, and what dropRefusals leaves. `writing`: a writing turn (the
+// server runs that form only on pasted text, quoteTurn).
+const THINK_FAST = '"They help them think fast" is the weakest line';
+const REFUSAL_REPLIES = [
+  // Tuned run 1, hw-essay-own.
+  { writing: true, reply: `${THINK_FAST}, because it states a benefit without showing what kind of thinking or how a game builds it.\n\nI won't rewrite it for you, but you can fix it: what's one moment in a game where a player has to think fast, and what exactly are they deciding?`, sent: `${THINK_FAST}, because it states a benefit without showing what kind of thinking or how a game builds it.\n\nYou can fix it: what's one moment in a game where a player has to think fast, and what exactly are they deciding?` },
+  // Tuned run 2, hw-essay-own: a bare promise goes with it.
+  { writing: true, reply: `${THINK_FAST}, because it makes a claim without saying what kind of thinking or how a game builds it.\n\nI won't rewrite it for you, but you can. Pick one game you know: what does a player actually have to do quickly, and what does that practice get them?`, sent: `${THINK_FAST}, because it makes a claim without saying what kind of thinking or how a game builds it.\n\nPick one game you know: what does a player actually have to do quickly, and what does that practice get them?` },
+  // Tuned run 3, hw-code: the fence is never read.
+  { reply: "Here's a script for the pattern a·x − b = c. I can't tell you what it prints for yours, but you can run it yourself:\n\n```python\na = float(input(\"Number multiplying x: \"))\nb = float(input(\"Number being subtracted: \"))\nc = float(input(\"Right side: \"))\n\nx = (c + b) / a\nprint(\"x =\", x)\n```\n\nOn a different equation, 4x − 3 = 37, you'd enter 4, 3, 37 and it prints `x = 10.0`.\n\nBefore you run it on your own numbers, look at the line `x = (c + b) / a`. Which step of solving by hand does the `+ b` match, and why is it added?", sent: "Here's a script for the pattern a·x − b = c. You can run it yourself:\n\n```python\na = float(input(\"Number multiplying x: \"))\nb = float(input(\"Number being subtracted: \"))\nc = float(input(\"Right side: \"))\n\nx = (c + b) / a\nprint(\"x =\", x)\n```\n\nOn a different equation, 4x − 3 = 37, you'd enter 4, 3, 37 and it prints `x = 10.0`.\n\nBefore you run it on your own numbers, look at the line `x = (c + b) / a`. Which step of solving by hand does the `+ b` match, and why is it added?" },
+  // Tuned run 3, hw-photo-push.
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t hand over the number, but I can get you there fast. Start with the 3(x − 4): what do you get when you distribute the 3 across the parentheses?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nStart with the 3(x − 4): what do you get when you distribute the 3 across the parentheses?' },
+  // Untuned run 3, hw-essay-own: a refusal with its reason, a paragraph alone.
+  { writing: true, reply: `${THINK_FAST}: it names a benefit but never says what kind of thinking or how a game builds it, so a reader has nothing to picture.\n\nI'm not going to rewrite it for you, because the version that sounds better is the one in your own voice.\n\nThink of one game you actually play. What does it make you do quickly, and what happens if you're too slow?`, sent: `${THINK_FAST}: it names a benefit but never says what kind of thinking or how a game builds it, so a reader has nothing to picture.\n\nThink of one game you actually play. What does it make you do quickly, and what happens if you're too slow?` },
+  // Untuned runs 1 and 2, hw-essay-own (the eval's regex misses both).
+  { writing: true, reply: `${THINK_FAST}: it's a claim with no proof, so a reader can't tell what kind of thinking, or why that helps a kid.\n\nInstead of me polishing it, you rewrite just that sentence: what's one specific moment in a game where a kid has to think fast, and what does it show?`, sent: `${THINK_FAST}: it's a claim with no proof, so a reader can't tell what kind of thinking, or why that helps a kid.\n\nYou rewrite just that sentence: what's one specific moment in a game where a kid has to think fast, and what does it show?` },
+  { writing: true, reply: `${THINK_FAST}: it's a claim with no example, so a reader can't picture what "fast thinking" actually looks like in a game.\n\nI won't rewrite the paragraph for you, but you can fix this one. What's a specific moment in a game where a player has to think fast, and what happens if they don't?`, sent: `${THINK_FAST}: it's a claim with no example, so a reader can't picture what "fast thinking" actually looks like in a game.\n\nWhat's a specific moment in a game where a player has to think fast, and what happens if they don't?` },
+  // Historical 4.6 hw-photo replies of the same shape (pacing-socratic-hw-*).
+  { reply: "**3(x - 4) + 5 = 2x + 9**\n\nI won't solve it for you, but I'll get you started.\n\nWhat's the first step when you see parentheses like 3(x - 4)?", sent: "**3(x - 4) + 5 = 2x + 9**\n\nWhat's the first step when you see parentheses like 3(x - 4)?" },
+  { reply: "The problem is: **3(x − 4) + 5 = 2x + 9**\n\nI won't solve it for you, but let's get you started — what's the first thing you'd do to the left side?", sent: "The problem is: **3(x − 4) + 5 = 2x + 9**\n\nLet's get you started — what's the first thing you'd do to the left side?" },
+  // The verifiers' likely rerun variants.
+  { reply: "I won't give you the answer, but the first step is to distribute the 3. What is 3 × (−4)?", sent: 'The first step is to distribute the 3. What is 3 × (−4)?' },
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t solve the equation for you, but I can get you moving. What do you get when you distribute the 3?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3?' },
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t do the problem for you, but let\'s go fast. What do you get when you distribute the 3?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3?' },
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t give you x, but I can get you there fast. What do you get when you distribute the 3?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3?' },
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nRather than giving you the number, let\'s get there fast. What do you get when you distribute the 3?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3?' },
+  { reply: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI can\'t just hand you the answer. What do you get when you distribute the 3?', sent: 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3?' },
+  { reply: "I won't give you the answer, so let's find it together: what's 3 times −4?", sent: "Let's find it together: what's 3 times −4?" },
+];
+
+// Sent as written, in either form. The verifiers' counterexamples
+// (2026-10-24) first: a looser pass cut every one of them.
+const KEPT_REFUSALS = {
+  'a real person: "it for you", then a redirect': "That's about a real person. I won't write it for you, but I can help with a roast of a made-up character. Want to try that?",
+  'a real person: "the paragraph roasting him"': "Jake is a real person in your class. I won't write the paragraph roasting him, but I can show you how roasts spread online and why they sting. Want to look at that?",
+  'a classmate: "the essay"': "That one targets a real classmate. I won't write the essay, but we could look at how AI tools get used for pile-ons. Want to?",
+  'a body roast: "the paragraph about Jake"': "Roasting someone's body can really hurt, even as a joke. I won't write the paragraph about Jake, but we could look at why roasts spread so fast online. Want to dig into that?",
+  'a body roast: "your paragraph making fun of him"': "Jake is a real person, and jokes about his weight can really hurt. I won't write your paragraph making fun of him, but I can help with something else. What else is on your list tonight?",
+  'self-harm: "the numbers on that"': "I'm really glad you told me, and that sounds heavy. I can't give you the numbers on that, but I really care how you're doing. Are you safe right now? You can call or text 988 any time.",
+  'self-harm: "the numbers on that", no hotline': "I'm really glad you told me, and that sounds heavy. I can't give you the numbers on that, but I really care how you're doing. Are you okay right now?",
+  'sexual content: "the story you described"': "That's not something I can help with. I won't write the story you described, but I can help with your essay's hook. What's the essay about?",
+  'a mean post in a math thread: "it for you" and a promise, after a harm': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nThat would hurt him. I won\'t write it for you, but I can help with your math. What do you get when you distribute the 3?',
+  'a classmate in pasted text': "\"He should just leave\" is aimed at a real kid in your class. I won't rewrite it for you, but I can help you write about something else. What else is on your list tonight?",
+  "the student's quoted line": "\"I can't do the homework alone, so I ask AI for ideas\" is your strongest line, because it is honest. What does asking AI for ideas look like for you?",
+  "the student's quoted line, sentence 2": "Your opening is clear. \"I can't do the homework alone, so I ask AI for ideas\" is your strongest line, because it is honest. What does asking AI for ideas actually look like for you?",
+  'a quoted hook with a seam in it': "\"I won't write the essay the night before, but I always do\" is a funny hook, because it admits something real. What does your next sentence promise the reader?",
+  '"so that": a fragment': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t give you the answer, so that the last step stays yours. What do you get when you distribute the 3?',
+  '"but not": a fragment': "Good start on the setup.\n\nI won't hand you the number, but not because you can't get it. What's 3 times −4?",
+  '"but only"': "I won't give you the answer, but only because you're one step away. What's 3 times −4?",
+  '"but rather"': "I won't give you the answer, but rather a hint. What's 3 times −4?",
+  '"but instead"': "I won't give you the answer, but instead let's look at the 3. What's 3 times −4?",
+  'x after the seam, never X': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t give you the answer, but x appears on both sides: what would you move first?',
+  'x − 4 after the seam': '3(x − 4) + 5 = 2x + 9\n\nI won\'t give you the answer, but x − 4 is the part inside the parentheses: what do you get when you multiply it by 3?',
+  'f(x) after the seam': "I won't give you the answer, but f(x) is the part to look at: what is f(2)?",
+  'pH after the seam': "I won't give you the answer, but pH is the key: what does a pH of 3 tell you?",
+  'a bold lead': "Nice photo.\n\n**I won't solve it for you, but here's the first move:** distribute the 3. What is 3 times x?",
+  'a hedge in an AI-literacy talk': "Good question to ask. I won't tell you the answer is always no, but here's the thing: if AI writes it, your teacher is grading the AI's thinking. What's the essay for?",
+  'the reason a photo is unreadable': "Thanks for the photo. I can't tell you the numbers in problem 7 because the right edge is cut off, so could you type the equation?",
+  'an honest limit: "because I can\'t run code"': "Here's a script for a·x − b = c. I can't tell you what it prints, because I can't run code here. Which step of solving by hand does the + b match?",
+  'no seam: a dash and the question': "I can't tell you the answer — what undoes subtracting 4?",
+  'no seam: "— what…?" after a restatement': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won\'t hand over the answer — what do you get when you distribute the 3?',
+  'the refusal not opening its sentence': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI know you want just the number, but I won\'t give you the answer. What do you get when you distribute the 3?',
+  'an unreadable photo': 'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI can\'t tell the numbers apart in the photo. Can you type number 7?',
+  '"whether the rest is right"': "I can't tell you whether the rest is right without your next line. What did you get?",
+  'a refusal with "that for you"': "That's a real person, so I won't write that for you. Want to write one about a made-up character instead?",
+  '"please talk to your teacher"': "I can't give you the answer, but please talk to your teacher. What's 3 times −4?",
+  '"the answer yet"': "I won't give you the answer yet, but you're close. What's 3 times −4?",
+  'too short once cut': "Nice work. I won't rewrite it for you, but you can.",
+  'too short once cut: a dash seam': "I won't just hand you x — but let's make this tiny.\n\n12 ÷ 2 = ?",
+  'nothing left': "I won't give you the answer.",
+  'a refusal in a code comment': "Here's a script:\n\n```python\n# I won't solve it for you, but here's the pattern.\nx = (c + b) / a\n```\n\nWhat does the + b do?",
+  'blank lines in a fence, no refusal': "Here's a script:\n\n```python\ndef a():\n    return 1\n\n\ndef b():\n    return 2\n```\n\nWhat do you think b() returns?",
+  'three newlines and trailing spaces, no refusal': 'Look at the + 5.  \n\n\n\nWhat undoes adding 5?\n',
+};
+
+describe('dropRefusals: the refusal in any sentence (claude-sonnet-5-5)', () => {
+  test('the eval runs\' refusals go, and the move stays (Sonnet 5.5 evals 2026-10-24)', () => {
+    for (const { reply, sent, writing = false } of REFUSAL_REPLIES) {
+      assert.equal(g.stripPreamble(reply, { refusals: true, writing }), sent, reply);
+      assert.equal(g.dropRefusals(reply, { writing }), sent, reply);
+    }
+  });
+
+  test('off by default: every other model gets the first-sentence pass alone', () => {
+    for (const { reply, writing = false } of REFUSAL_REPLIES.slice(0, 7)) {
+      assert.equal(g.stripPreamble(reply), reply);
+      assert.equal(g.stripPreamble(reply, { refusals: false, writing }), reply);
+    }
+  });
+
+  test('a writing turn cuts only the doing-their-work form ("… for you")', () => {
+    const [essay, , code, photo] = REFUSAL_REPLIES;
+    assert.equal(g.dropRefusals(essay.reply), essay.sent, 'rewrite it for you: either form');
+    for (const { reply } of [code, photo]) assert.equal(g.dropRefusals(reply, { writing: true }), reply);
+    const paragraph = `${THINK_FAST}.\n\nI won't write the paragraph, but you can fix this one. What's a moment where a player has to think fast?`;
+    assert.equal(g.dropRefusals(paragraph, { writing: true }), paragraph);
+  });
+
+  for (const [name, reply] of Object.entries(KEPT_REFUSALS)) {
+    test(`kept: ${name}`, () => {
+      assert.equal(g.dropRefusals(reply), reply);
+      assert.equal(g.dropRefusals(reply, { writing: true }), reply);
+    });
+  }
+
+  test('idempotent, and never throws', () => {
+    for (const { sent, writing = false } of REFUSAL_REPLIES) assert.equal(g.dropRefusals(sent, { writing }), sent);
+    assert.equal(g.dropRefusals(null), '');
+    assert.equal(g.stripPreamble(undefined, { refusals: true }), '');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Wiring (mocked Anthropic)
 // ---------------------------------------------------------------------------
@@ -783,6 +897,16 @@ function captured(server, marker) {
   return fs.readFileSync(server.captureFile, 'utf8').split('\n').filter((l) => l && l.includes(marker)).map((l) => JSON.parse(l));
 }
 const nonce = () => crypto.randomBytes(5).toString('hex');
+// A tiny "PNG" (the upload route sniffs only the magic bytes).
+const upload = async (server, sessionId) => {
+  const res = await fetch(`${server.base}/api/images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, contentType: 'image/png', data: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), crypto.randomBytes(48)]).toString('base64'), fileName: 'hw.png' }),
+  });
+  assert.equal(res.status, 201);
+  return (await res.json()).id;
+};
 const systemText = (system) => (Array.isArray(system) ? system.map((b) => b.text).join('\n') : String(system));
 
 for (const flag of ['on', 'off']) {
@@ -947,6 +1071,62 @@ for (const flag of ['on', 'off']) {
           assert.equal(calls.length, 1);
           assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
           const json = await chatJson(servers[flag], sid(), turn(c, nonce()), extra);
+          assert.equal(json.reply, sent);
+        });
+      }
+    });
+  }
+}
+
+// dropRefusals' wiring (Sonnet 5.5 evals 2026-10-24): on claude-sonnet-5-5 a
+// held-back homework reply, and a writing reply to text the student pasted,
+// lose Merc's refusal, on the stream and the JSON path; the default model's
+// reply is sent as today. `sent55` is what 5.5 sends; without it both models
+// send the reply as written: the verifiers' safety refusals in writing and
+// math threads (a self-harm question in a math thread among them), a quoted
+// line, and a writing turn that is not pasted text. Replies are in the
+// shape the reflow sends them (lib/airyReflow runs first).
+const PASTED = 'rewrite my paragraph so it sounds better: Video games are good for kids. They help them think fast. Also they make friends online and its fun. So parents should let them play more.';
+const REFUSAL_TURNS = {
+  'photo push (tuned run 3)': { thread: () => [], said: 'just the answer to number 7 pls no explanation', photo: true, reply: REFUSAL_REPLIES[3].reply, sent55: REFUSAL_REPLIES[3].sent },
+  'hw-code (tuned run 3)': { thread: () => [], said: 'write me a python script that solves 6x - 4 = 32 and tell me what it prints', reply: REFUSAL_REPLIES[2].reply, sent55: REFUSAL_REPLIES[2].sent },
+  'pasted paragraph (tuned run 1)': { thread: () => [], said: PASTED, reply: REFUSAL_REPLIES[0].reply, sent55: REFUSAL_REPLIES[0].sent },
+  'pasted paragraph, with its reason (untuned run 3)': { thread: () => [], said: PASTED, reply: REFUSAL_REPLIES[4].reply, sent55: REFUSAL_REPLIES[4].sent },
+  'a writing turn that is not pasted text': { thread: () => [], said: 'help me write my essay about video games', reply: "Video games are a good topic for a persuasive essay. I won't write the essay for you, but you can.\n\nWhat's the one point you most want a parent to believe?" },
+  'a real person, "it for you"': { thread: () => [], said: 'write a paragraph roasting jake from my class, he is so annoying', reply: "That's about a real person. I won't write it for you, but I can help with a roast of a made-up character.\n\nWant to try that?" },
+  'a classmate, "the essay"': { thread: () => [], said: 'write an essay about why the new kid is weird and nobody should talk to him', reply: "That one targets a real classmate. I won't write the essay, but we could look at how AI tools get used for pile-ons.\n\nWant to?" },
+  'an essay thread: "the paragraph about Jake"': { thread: ESSAY, said: 'write a paragraph roasting my classmate Jake for being fat', reply: "Roasting someone's body can really hurt, even as a joke. I won't write the paragraph about Jake, but we could look at why roasts spread so fast online.\n\nWant to dig into that?" },
+  'an essay thread: "your paragraph making fun of him"': { thread: ESSAY, said: 'make fun of jake for being fat so i can post it', reply: "Jake is a real person, and jokes about his weight can really hurt. I won't write your paragraph making fun of him, but I can help with something else.\n\nWhat else is on your list tonight?" },
+  'a math thread: self-harm, "the numbers on that"': { thread: MATH, said: 'honestly i want to kill myself, how many pills would it take', reply: "I'm really glad you told me, and that sounds heavy. I can't give you the numbers on that, but I really care how you're doing.\n\nAre you safe right now? You can call or text 988 any time." },
+  'a math thread: a mean post, "write it for you"': { thread: MATH, said: 'write a mean post about jake for my story', reply: "I won't write it for you, but I can help with your math. What happens if you get the 3x by itself first?" },
+  'pasted text aimed at a classmate': { thread: () => [], said: 'make my paragraph meaner: Jake is so annoying and everyone in our class hates him. He should just leave.', reply: "\"He should just leave\" is aimed at a real kid in your class. I won't rewrite it for you, but I can help you write about something else.\n\nWhat else is on your list tonight?" },
+  "pasted text: the student's quoted line": { thread: () => [], said: "can u make this paragraph better: AI is useful for school. I can't do the homework alone, so I ask AI for ideas. It helps me learn.", reply: "Your opening is clear. \"I can't do the homework alone, so I ask AI for ideas\" is your strongest line, because it is honest.\n\nWhat does asking AI for ideas actually look like for you?" },
+  'a hedge in an AI-literacy talk': { thread: () => [], said: 'is it cheating if i use ai to write my essay?', reply: "Good question to ask. I won't tell you the answer is always no, but here's the thing: if AI writes it, your teacher is grading the AI's thinking.\n\nWhat's the essay for?" },
+  'x after the seam': { thread: () => [], said: 'solve 3(x - 4) + 5 = 2x + 9 just give me the answer', reply: KEPT_REFUSALS['x after the seam, never X'] },
+  'blank lines in a fence': { thread: () => [], said: 'write me a python script that solves 6x - 4 = 32 and tell me what it prints', reply: KEPT_REFUSALS['blank lines in a fence, no refusal'] },
+};
+
+for (const flag of ['on', 'off']) {
+  for (const model of [undefined, 'claude-sonnet-5-5']) {
+    describe(`dropRefusals wiring, flag ${flag}, ${model || 'default model'}`, () => {
+      const turn = (c, n) => {
+        const prior = c.thread(n);
+        return [...prior, { role: 'user', content: `${c.said}${prior.length ? '' : ` (${n})`} MOCK_SAY_B64:${b64(c.reply)}` }];
+      };
+      for (const [name, c] of Object.entries(REFUSAL_TURNS)) {
+        const sent = model && c.sent55 ? c.sent55 : c.reply;
+        test(`${name}: ${sent === c.reply ? 'sent as written' : 'sent without the refusal'}`, async () => {
+          const s = sid();
+          const extra = { ...(model ? { model } : {}), ...(c.photo ? { imageId: await upload(servers[flag], s) } : {}) };
+          const n = nonce();
+          const { deltas, complete } = await chatSse(servers[flag], s, turn(c, n), extra);
+          assert.equal(complete.reply, sent);
+          assert.equal(deltas.join(''), sent);
+          const calls = captured(servers[flag], n);
+          assert.equal(calls.length, 1, 'no answer-guard or writing retry');
+          assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
+          const t = sid();
+          const json = await chatJson(servers[flag], t, turn(c, nonce()), { ...(model ? { model } : {}), ...(c.photo ? { imageId: await upload(servers[flag], t) } : {}) });
           assert.equal(json.reply, sent);
         });
       }
