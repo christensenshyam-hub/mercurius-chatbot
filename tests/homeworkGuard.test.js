@@ -99,6 +99,24 @@ describe('findLeak: the red team\'s routes to the answer', () => {
     assert.equal(leak('x = −3 works', 'solve 9 - 2x = 15'), 'x = -3');
   });
 
+  test('a line the student typed is theirs, not an example on their answer', () => {
+    // Tuned 5.5 run 2026-10-24 (alg-1): "Yes, 2x − 15 = 7 is right" restated
+    // their own step; dropExampleLines took the one-line reply and sent "".
+    const thread = [
+      { role: 'user', content: 'can u help me with my algebra hw: 3(2x - 5) = 4x + 7' },
+      { role: 'assistant', content: 'What happens to the 3 if you multiply it into 2x and −5?' },
+      { role: 'user', content: 'ohh oops -15. so 6x - 15 = 4x + 7' },
+      { role: 'assistant', content: 'Yes. Now what could you do to get the x\'s onto one side?' },
+      { role: 'user', content: 'subtract 4x from both sides? then its 2x - 15 = 7' },
+    ];
+    const problems = g.studentProblems(thread);
+    const reply = 'Yes, 2x − 15 = 7 is right. What could you do to both sides to get the 2x by itself?';
+    assert.equal(g.findLeak(reply, problems), null);
+    assert.equal(g.dropExampleLines(reply, problems), reply);
+    // A new example landing on their x = 11 is still one.
+    assert.equal(g.findLeak('Like this: 2x + 8 = 30, so 2x = 22.', problems)?.name, 'example');
+  });
+
   test('a candidate, a substitution, or arithmetic on their own numbers', () => {
     assert.equal(leak('Try 6 — does 2(6) + 9 = 21?', 'what is 2x + 9 = 21'), 'Try 6');
     assert.equal(leak('What is 5(7) + 3?', 'what is 5x + 3 = 38'), '(7)');
@@ -722,6 +740,21 @@ for (const flag of ['on', 'off']) {
       assert.equal(complete.reply, 'What is your first step?');
       const json = await chatJson(servers[flag], sid(), thread.map((m) => ({ ...m, content: m.content.replace(n, nonce()) })));
       assert.equal(json.reply, 'What is your first step?');
+    });
+
+    test('a guarded turn is never blank: nothing left after the cuts → the next-step question', async () => {
+      const n = nonce();
+      const leak = 'Like this: 2x + 3 = 13, so 2x = 10.';
+      const thread = [
+        { role: 'user', content: `what is 3x+5 = 20 (${n})` },
+        { role: 'assistant', content: 'What happens if you get the 3x by itself first?' },
+        { role: 'user', content: `idk MOCK_SAYS_B64:${b64(leak)}` },
+      ];
+      const { deltas, complete } = await chatSse(servers[flag], sid(), thread);
+      assert.equal(complete.reply, "What's your next step? Write it out and I'll check it with you.");
+      assert.equal(deltas.join(''), complete.reply);
+      const json = await chatJson(servers[flag], sid(), thread.map((m) => ({ ...m, content: m.content.replace(n, nonce()) })));
+      assert.equal(json.reply, complete.reply);
     });
 
     test('once the student has said the answer, nothing is held back or rewritten', async () => {

@@ -164,6 +164,8 @@ const HOMEWORK_THINKING = process.env.HOMEWORK_THINKING !== '0';
 // closing menu of readings is cut by stripMenu), are buffered and sent
 // whole. HOMEWORK_LEAK_GUARD=0 turns it off.
 const HOMEWORK_LEAK_GUARD = process.env.HOMEWORK_LEAK_GUARD !== '0';
+// What a guarded turn says when nothing is left after the guard's cuts.
+const GUARD_EMPTY_COPY = "What's your next step? Write it out and I'll check it with you.";
 
 // ---------------------------------------------------------------------------
 // Standby gamification (quiet progress) — feature flag.
@@ -2252,7 +2254,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       guardProblems[0] && guardProblems[0].variable,
     )));
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
-    const guardReply = async (draft) => {
+    const guardDraft = async (draft) => {
       if (writingTurn) {
         const text = tidyWriting(draft);
         if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages)) return text;
@@ -2321,6 +2323,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
       }
       return redactGuardLeaks(text);
+    };
+    // Whatever the guard cut, the student never gets a blank turn (tuned 5.5
+    // run 2026-10-24: a one-line reply dropped whole read as "it didnt say
+    // anything").
+    const guardReply = async (draft) => {
+      const text = await guardDraft(draft);
+      if (text.trim()) return text;
+      logger.forRequest(req).warn('homework answer guard: nothing left after the guard, sending GUARD_EMPTY_COPY');
+      return GUARD_EMPTY_COPY;
     };
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
