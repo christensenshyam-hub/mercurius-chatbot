@@ -2152,7 +2152,23 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Off for a lesson of either track: a Basics practice turn has Merc write
     // the learner's note or list on purpose, so it must never be guarded,
     // held back or rewritten (tests/basicsHomeworkExempt.test.js).
-    const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD;
+    // Never on a safety turn (review 2026-10-24; lib/homeworkGuard): a
+    // crisis, a request aimed at a person or for sexual content, personal
+    // details, an age under 13, the turn right after a crisis or such a
+    // request, or a safety topic that is not plainly math. In a thread that
+    // opened with homework the guard used to check those replies as homework
+    // and cut or rewrote their safety lines (tests/homeworkSafetyText.test.js).
+    const textOfTurn = (m) => (typeof m.content === 'string' ? m.content
+      : Array.isArray(m.content) ? m.content.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : '');
+    const priorUser = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'user');
+    const priorReply = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'assistant');
+    const firstUser = clientMessages.find((m) => m && m.role === 'user');
+    const safetyAsked = homeworkGuard.safetyTurn(latestText, {
+      prior: priorUser ? textOfTurn(priorUser) : '',
+      priorReply: priorReply ? textOfTurn(priorReply) : '',
+      problem: firstUser && firstUser !== clientMessages[clientMessages.length - 1] ? textOfTurn(firstUser) : '',
+    });
+    const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD && !safetyAsked;
     const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];
     const guardNumbers = guardOn ? homeworkGuard.wordProblemNumbers(clientMessages) : null;
     const guardCorrections = guardOn ? homeworkGuard.correctionValues(clientMessages) : [];
@@ -2191,10 +2207,14 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       guardProblems[0] && guardProblems[0].variable,
     )));
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
-    const guardReply = async (draft) => {
+    const guardDraft = async (draft) => {
+      // A reply that hands off to a crisis line or to emergency help is sent
+      // as the model wrote it, whatever the turn looked like.
+      if (homeworkGuard.crisisReply(draft)) return draft;
       if (writingTurn) {
         const text = tidyWriting(draft);
-        if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages)) return text;
+        // A safety reply is never sent back for a quote of their words.
+        if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages) || homeworkGuard.safetyText(text)) return text;
         // Final run 2026-10-22: "is that good? can u make it better" met with a
         // new question instead of their own words. One more try, then keep it.
         try {
@@ -2260,6 +2280,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
       }
       return redactGuardLeaks(text);
+    };
+    // A bug in the guard must never leave the student's request hanging (an
+    // exception in the stream's end handler sent nothing at all): the model's
+    // reply goes out as written, and the error is logged.
+    const guardReply = async (draft) => {
+      try {
+        return await guardDraft(draft);
+      } catch (err) {
+        logger.forRequest(req).error({ err: err.message }, 'homework guard failed; sending the reply as written');
+        return draft;
+      }
     };
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
