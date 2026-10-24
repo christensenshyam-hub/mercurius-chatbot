@@ -12,9 +12,11 @@ const assert = require('node:assert/strict');
 const { pickModel, allowedSet, _DEFAULT_ALLOWED } = require('../lib/modelAllowlist');
 
 const ORIGINAL_ENV = process.env.MODEL_ALLOWLIST;
+const ORIGINAL_TUTOR = process.env.TUTOR_MODEL;
 
 beforeEach(() => {
   delete process.env.MODEL_ALLOWLIST;
+  delete process.env.TUTOR_MODEL;
 });
 
 afterEach(() => {
@@ -22,6 +24,11 @@ afterEach(() => {
     delete process.env.MODEL_ALLOWLIST;
   } else {
     process.env.MODEL_ALLOWLIST = ORIGINAL_ENV;
+  }
+  if (ORIGINAL_TUTOR === undefined) {
+    delete process.env.TUTOR_MODEL;
+  } else {
+    process.env.TUTOR_MODEL = ORIGINAL_TUTOR;
   }
 });
 
@@ -110,5 +117,31 @@ describe('pickModel', () => {
     const out = pickModel('', 'only-allowed');
     assert.equal(out.model, 'only-allowed');
     assert.equal(out.error, null);
+  });
+});
+
+describe('TUTOR_MODEL is always allowed', () => {
+  test('unset: the list is exactly the default (nothing added)', () => {
+    assert.deepEqual([...allowedSet()].sort(), [..._DEFAULT_ALLOWED].sort());
+  });
+
+  test('set: added to the default list', () => {
+    process.env.TUTOR_MODEL = 'claude-sonnet-5-5';
+    const set = allowedSet();
+    assert.ok(set.has('claude-sonnet-5-5'));
+    for (const m of _DEFAULT_ALLOWED) assert.ok(set.has(m), m);
+    assert.equal(pickModel('claude-sonnet-5-5', 'claude-sonnet-5-5').model, 'claude-sonnet-5-5');
+  });
+
+  test('set: added to an explicit MODEL_ALLOWLIST too (trimmed)', () => {
+    process.env.MODEL_ALLOWLIST = 'claude-haiku-4-5';
+    process.env.TUTOR_MODEL = ' claude-sonnet-5-5 ';
+    assert.deepEqual([...allowedSet()].sort(), ['claude-haiku-4-5', 'claude-sonnet-5-5']);
+    assert.equal(pickModel('claude-sonnet-4-6', 'claude-sonnet-5-5').model, null, 'only what the two vars name');
+  });
+
+  test('blank TUTOR_MODEL adds nothing', () => {
+    process.env.TUTOR_MODEL = '   ';
+    assert.deepEqual([...allowedSet()].sort(), [..._DEFAULT_ALLOWED].sort());
   });
 });

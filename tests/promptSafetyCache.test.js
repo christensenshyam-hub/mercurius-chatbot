@@ -69,6 +69,9 @@ async function boot(name, unified) {
       ANTHROPIC_MOCK: '1',
       ANTHROPIC_API_KEY: '',
       MOCK_CAPTURE_FILE: captureFile,
+      // Today's tutor model, whatever the developer's shell or .env names.
+      TUTOR_MODEL: '',
+      TUTOR_EFFORT: '',
       EVAL_EXPOSE_USAGE: '1',
       USE_UNIFIED_PROMPT: unified ? '1' : '0',
       ALLOWED_ORIGIN: `http://localhost:${port}`,

@@ -53,6 +53,9 @@ const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
+const modelRequest = require('./lib/modelParams');
+const { modelNotesFor } = require('./lib/modelNotes');
+const pricing = require('./lib/pricing');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 const spendCap = require('./lib/spendCap');
@@ -117,7 +120,19 @@ function isValidSessionId(id) {
   return id && typeof id === 'string' && id.length <= 64 && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
-const MODEL = 'claude-sonnet-4-6';
+// The tutor model: chat and lesson turns, the unit-test grader, fact-check,
+// analyze and the cache prewarm. TUTOR_MODEL (default claude-sonnet-4-6)
+// switches it; the request fields each model takes (temperature, thinking,
+// effort) come from lib/modelParams, so with TUTOR_MODEL unset every request
+// is byte-identical to the one sent before it existed. TUTOR_EFFORT (low |
+// medium | high, default low) is the output_config.effort of the turns that
+// run without extended thinking on a model that takes no temperature
+// (claude-sonnet-5-5: thinking between_tools). Only claude-sonnet-4-6 and
+// claude-sonnet-5-5 are verified; any other TUTOR_MODEL logs a boot warning.
+// See docs/sonnet-5-5/README.md.
+const MODEL = modelRequest.resolveTutorModel(process.env.TUTOR_MODEL);
+const TUTOR_EFFORT_SETTING = modelRequest.resolveTutorEffort(process.env.TUTOR_EFFORT);
+const TUTOR_EFFORT = TUTOR_EFFORT_SETTING.effort;
 // Summarize-existing-content helpers (quiz, report card, concept map, meeting
 // briefing) run on Haiku: ~3× cheaper, and their errors land on a summary,
 // not on a student's grade or a verdict about truth — grading, fact-check
@@ -137,10 +152,10 @@ const USE_UNIFIED_PROMPT = process.env.USE_UNIFIED_PROMPT === '1' || process.env
 // streamed, and Merc called correct steps wrong (34 of 48 probe threads
 // right without thinking, 46 of 48 with it). Thinking counts against
 // max_tokens, so those turns get headroom; it is never forwarded to clients
-// (the SSE relay sends 'text' events only). HOMEWORK_THINKING=0 turns it off.
+// (the SSE relay sends 'text' events only). Which models think, and the
+// headroom, are lib/modelParams (thinksOnProblems, maxTokensFor).
+// HOMEWORK_THINKING=0 turns it off.
 const HOMEWORK_THINKING = process.env.HOMEWORK_THINKING !== '0';
-const THINKING_MODEL_RE = /^claude-(?:sonnet|opus)-4-6$/;
-const THINKING_MIN_TOKENS = 3000;
 // The answer guard (lib/homeworkGuard): when the student's own problem is
 // a linear equation, a word problem with numbers, or a distribution they got
 // wrong, a reply that gives its answer away (a worked example landing on it,
@@ -149,6 +164,8 @@ const THINKING_MIN_TOKENS = 3000;
 // closing menu of readings is cut by stripMenu), are buffered and sent
 // whole. HOMEWORK_LEAK_GUARD=0 turns it off.
 const HOMEWORK_LEAK_GUARD = process.env.HOMEWORK_LEAK_GUARD !== '0';
+// What a guarded turn says when nothing is left after the guard's cuts.
+const GUARD_EMPTY_COPY = "What's your next step? Write it out and I'll check it with you.";
 
 // ---------------------------------------------------------------------------
 // Standby gamification (quiet progress) — feature flag.
@@ -1063,7 +1080,12 @@ Only cite sources from this list. If a topic isn't covered here, don't invent a 
 //     don't-fabricate-links rule) goes to every variant, lessons included;
 //   - anything per-request (date, mode, meeting/blog material, the
 //     "explain more" nudge) goes in the dynamic block — one byte of drift in
-//     a static prefix is a full cache miss.
+//     a static prefix is a full cache miss;
+//   - the free-chat prefixes of a model with prompt notes (lib/modelNotes:
+//     claude-sonnet-5-5 only) carry them after the source library, so they
+//     sit before the app facts and the safety core, which stays LAST. They
+//     are their own byte-stable variants with their own cache entries; every
+//     other model gets exactly the prefixes it got before.
 // ---------------------------------------------------------------------------
 const SOURCE_BLOCK = '<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
 const CLUB_BLOCK = clubContext.staticClubBlock({ capabilities: [clubContext.CLUB_V1], clubKnowledge: CLUB_KNOWLEDGE });
@@ -1073,15 +1095,35 @@ const V2_STATIC_WIDGET = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT,
 // Legacy (flag off) and curriculum prefixes, memoized per variant.
 const LEGACY_MODE_PROMPTS = { socratic: SOCRATIC_PROMPT, debate: DEBATE_PROMPT, discussion: DISCUSSION_PROMPT };
 const staticPrefixCache = new Map();
-function legacyStatic(mode, isWidget) {
+// The v2 free-chat prefix for the model this call uses: the constants above,
+// or (claude-sonnet-5-5) the same parts with its model notes before the app
+// facts and the safety core.
+function v2Static(isWidget, model) {
+  const notes = modelNotesFor(model, { tagged: true });
+  if (!notes) return isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+  const key = `v2:${isWidget ? 'widget' : 'app'}:notes`;
+  if (!staticPrefixCache.has(key)) {
+    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
+      UNIFIED_PROMPT,
+      isWidget ? CLUB_BLOCK : null,
+      SOURCE_BLOCK,
+      notes,
+      SAFETY_CORE_TAGGED,
+    ]));
+  }
+  return staticPrefixCache.get(key);
+}
+function legacyStatic(mode, isWidget, model) {
   const m = LEGACY_MODE_PROMPTS[mode] ? mode : 'socratic';
-  const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
+  const notes = modelNotesFor(model);
+  const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}${notes ? ':notes' : ''}`;
   if (!staticPrefixCache.has(key)) {
     staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
       qualityPrefix(m),
       LEGACY_MODE_PROMPTS[m],
       isWidget ? CLUB_BLOCK : null,
       SOURCE_BLOCK,
+      notes,
       SAFETY_CORE,
     ]));
   }
@@ -1134,8 +1176,10 @@ const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 const CRISIS_RESULT = Object.freeze({ error: 'crisis', message: CRISIS_COPY, crisis: true });
 const sendCrisisResult = (res) => res.status(503).json({ ...CRISIS_RESULT });
 
-/** The reply text of a non-streaming response: with thinking on, content[0]
- *  is the thinking block, so read the text blocks. */
+/** The reply text of a non-streaming response, read by block type: with
+ *  thinking on, content[0] is a thinking block (on claude-sonnet-5-5 an
+ *  empty one under the default display "omitted"), so read the text blocks
+ *  and nothing else. Every route that reads a model response uses this. */
 function firstTextOf(response) {
   const blocks = Array.isArray(response && response.content) ? response.content : [];
   return blocks.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
@@ -1172,7 +1216,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
-  const raw = response.content[0]?.text || '';
+  const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
   try {
@@ -1740,10 +1784,13 @@ function isRefusedReply(stopReason, text) {
   return stopReason === 'refusal' || typeof text !== 'string' || text.trim() === '';
 }
 
-// Count and log a refusal: route, call kind and stop reason only, never text.
-function noteRefusal(req, kind, stopReason) {
+// Count and log a refusal: route, call kind, stop reason and the refusal
+// category (stop_details.category: cyber, bio, frontier_llm,
+// reasoning_extraction, general_harms, … or none), never text.
+function noteRefusal(req, kind, stopReason, stopDetails) {
   metrics.modelRefusalsTotal.inc({ route: '/api/chat', kind });
-  logger.forRequest(req).warn({ kind, stopReason: stopReason || 'empty' }, 'model refusal answered with the safe refusal copy');
+  const category = stopDetails && typeof stopDetails.category === 'string' ? stopDetails.category : undefined;
+  logger.forRequest(req).warn({ kind, stopReason: stopReason || 'empty', category }, 'model refusal answered with the safe refusal copy');
 }
 
 // Server-synced progress (Phase 3A), belt and braces: the server just judged
@@ -1950,7 +1997,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // words), atom counts for a reaction, a reminder to check a formula answer
   // with their own number, the next move when they keep asking, and the
   // writing and photo openers. Dynamic block only; never on a lesson, a
-  // crisis or a safety-topic turn.
+  // crisis or a safety-topic turn. On claude-sonnet-5-5 (calmTieIn) a
+  // right-answer note orders the AI tie-in only in a thread that never
+  // pushed for the answer or was rushed, and (calcCheck) a calculus or
+  // statistics number is checked against the model's own working, not run
+  // backwards; every other model gets today's notes.
   const latestText = typeof latestUserMessage.content === 'string' ? latestUserMessage.content : '';
   const homeworkNote = isCurriculumMsg
     ? ''
@@ -1958,6 +2009,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       unsafe: Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText),
       hasImage: Boolean(attachedImage),
       deep: responseMode === 'deep',
+      calmTieIn: modelRequest.usesBetweenTools(chosenModel),
+      calcCheck: modelRequest.usesBetweenTools(chosenModel),
     });
 
   let staticText;
@@ -1986,7 +2039,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // v2: the quality preamble / mode rules / response-mode contract are
     // baked into the unified prompt, so qualityPrefix + EXPAND_MODE_NOTE are
     // intentionally not used — response_mode + the deep nudge live inside it.
-    staticText = isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+    staticText = v2Static(isWidget, chosenModel);
     dynamicText = [buildRuntimeContext({
       mode: effectiveMode,
       responseMode,
@@ -1997,7 +2050,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   } else {
     // Legacy per-mode prompts (flag off): the quality preamble first so the
     // model reads concision + format guidance before the pedagogy.
-    staticText = legacyStatic(mode, isWidget);
+    staticText = legacyStatic(mode, isWidget, chosenModel);
     dynamicText = [
       clubContext.dynamicClubBlock({ capabilities, meetingContext, blogContext }),
       responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
@@ -2112,6 +2165,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // A safety-topic turn (suicide news, sextortion, eating-disorder
     // behaviour: lib/responseQuality.needsSafetyBudget) gets the balanced
     // budget too, so its closing 988 / 741741 line is never cut off.
+    // These are Sonnet 4.6 token counts: lib/modelParams.maxTokensFor scales
+    // each of them for claude-sonnet-5-5's tokenizer (TOKENIZER_SCALE).
     const DEBATE_MIN_TOKENS = 400;
     const safetyFloor = needsSafetyBudget(latestUserMessage.content) ? RESPONSE_MODE_BUDGETS.balanced.maxTokens : 0;
     const maxTokens = isCurriculumMsg
@@ -2130,16 +2185,24 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Problem detection reads the thread as text: a re-attached photo turn
     // (AUD-10) counts by the student's own words, as it did before re-attach.
     // This turn's photo is still hasImage.
+    // Every other turn: its response-mode temperature on a model that takes
+    // one (claude-sonnet-4-6), thinking between_tools at TUTOR_EFFORT on
+    // claude-sonnet-5-5 (lib/modelParams.requestFields). On claude-sonnet-5-5
+    // the detector also counts calculus, statistics, proofs and a bare "i got
+    // 12" (`broad`): a between_tools turn has no reasoning at all, where a
+    // 4.6 temperature turn still judged their work. Only for this decision:
+    // the answer guard's holdback below keeps today's detector.
     const problemThread = photoReattach.textView(trimmed);
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
-      && THINKING_MODEL_RE.test(chosenModel)
+      && modelRequest.thinksOnProblems(chosenModel)
       && !needsSafetyBudget(latestUserMessage.content)
-      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
+      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage), broad: modelRequest.usesBetweenTools(chosenModel) });
+    const callIntent = problemTurn ? 'problem' : 'turn';
     const modelParams = {
       model: chosenModel,
-      max_tokens: problemTurn ? Math.max(maxTokens + 2048, THINKING_MIN_TOKENS) : maxTokens,
-      ...(problemTurn ? { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } } : { temperature }),
+      max_tokens: modelRequest.maxTokensFor(chosenModel, callIntent, maxTokens),
+      ...modelRequest.requestFields(chosenModel, callIntent, { temperature, effort: TUTOR_EFFORT }),
       system: systemForApi,
       messages: messagesForApi,
     };
@@ -2182,14 +2245,23 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // A writing turn whose move is to quote the student's own wording.
     const quoteTurn = writingTurn && homeworkGuard.needsQuote(clientMessages);
     const replyLimit = reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
-    const findGuardLeak = (text) => homeworkGuard.findLeak(text, guardProblems)
+    // A photo opener on claude-sonnet-5-5 (tuned run 2026-10-24, hw-photo-slip,
+    // 2 of 3: "Work it silently: … → x = 16" went out as written): the problem
+    // is only in the photo and in this reply's own first line, so nothing above
+    // arms the answer check. guardDraft arms it with that restatement
+    // (homeworkGuard.photoProblems, openers only); guardOn is off on a safety
+    // turn. Off for every other model, whose replies are checked as today.
+    const photoOpener = modelRequest.usesBetweenTools(chosenModel) && Boolean(attachedImage) && guardProblems.length === 0;
+    let photoGuard = [];
+    const answerProblems = () => (photoGuard.length ? photoGuard : guardProblems);
+    const findGuardLeak = (text) => homeworkGuard.findLeak(text, answerProblems())
       || homeworkGuard.findNumberLeak(text, guardNumbers)
       || homeworkGuard.findCorrectionLeak(text, guardCorrections)
       || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
       || homeworkGuard.findSystemLeak(text, guardSystems)
       || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
     const redactGuardLeaks = (text) => {
-      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, guardProblems), guardProblems), guardQuadratics);
+      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, answerProblems()), answerProblems()), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
       return out;
     };
@@ -2200,13 +2272,31 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
     // One question mark first, so a preamble written as a question ("…your
     // essay yours?") is seen as the sentence it becomes (red-team run on
-    // 594cd6a), then the preamble, then the move's own fixes.
-    const unrepeat = (text) => homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
+    // 594cd6a), then the preamble, then the move's own fixes. Last, on
+    // claude-sonnet-5-5 only (cutNudge), the reply ends on its question: one
+    // nudge sentence after it is cut (endOnQuestion; Sonnet 5.5 evals
+    // 2026-10-24), after stripPreamble so the preamble is judged on the reply
+    // it is judged on today. Not in a thread with a crisis message anywhere
+    // in it, and never on a safety turn (guardOn is off for one).
+    const cutNudge = modelRequest.usesBetweenTools(chosenModel)
+      && !clientMessages.some((m) => m && m.role === 'user' && typeof m.content === 'string' && crisisSignal(m.content));
+    // Its refusal in any sentence, not only the first (dropRefusals; tuned
+    // 5.5 run 2026-10-24: "I won't hand over the number, but…" after the
+    // PHOTO restatement): on claude-sonnet-5-5 as cutNudge, and not when this
+    // message is a safety topic. On a writing turn only when the student
+    // pasted their own text (quoteTurn): a refusal to write about a real
+    // person is a writing turn too (verifiers 2026-10-24).
+    const cutRefusals = cutNudge && !needsSafetyBudget(latestText);
+    const unrepeat = (text) => homeworkGuard.endOnQuestion(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
       homeworkGuard.handBackFromLatest(text, clientMessages),
       previousReply && previousReply.content,
       guardProblems[0] && guardProblems[0].variable,
-    )));
-    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
+    )), { refusals: cutRefusals }), { cutNudge });
+    // The closing question's "or" aside (stripMenu's `asides`; Sonnet 5.5
+    // evals 2026-10-24, hw-essay-draft) goes on the same terms as a refusal:
+    // claude-sonnet-5-5, no crisis message in the thread, not a safety topic,
+    // and never in safety text.
+    const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
     const guardDraft = async (draft) => {
       // A reply that hands off to a crisis line or to emergency help is sent
       // as the model wrote it, whatever the turn looked like.
@@ -2240,14 +2330,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         }
         return text;
       }
+      if (photoOpener) photoGuard = homeworkGuard.photoProblems(clientMessages, draft);
       const text = unrepeat(draft);
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
-      const what = leak.problem
-        ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
-        : leak.name === 'past step'
-          ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
+      // 'working' (photoGuard only): the photo may hold lines of theirs, so the
+      // note never says they haven't written any.
+      const what = leak.name === 'working'
+        ? `your own working of the student's problem (${leak.match}) and its answer (${leak.problem.variable} = ${leak.problem.value}). Write the reply again: the problem restated in one line, then the same coaching move with one question at the end, with no line of your working and without the value ${leak.problem.value} anywhere in it.`
+        : leak.name === 'past step' || leak.name === 'own step'
+        ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
+        : leak.problem
+          ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
           : leak.name === 'system'
           ? `a value of the student's own system (${leak.match}), in their working or in an example that shares it. Write the reply again with the same coaching move: never write a value of x or y from their system, and give any example values that share nothing with theirs.`
           : /^quadratic/.test(leak.name)
@@ -2281,16 +2376,22 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       }
       return redactGuardLeaks(text);
     };
-    // A bug in the guard must never leave the student's request hanging (an
+    // Whatever the guard cut, the student never gets a blank turn (tuned 5.5
+    // run 2026-10-24: a one-line reply dropped whole read as "it didnt say
+    // anything"), and a bug in the guard never leaves the request hanging (an
     // exception in the stream's end handler sent nothing at all): the model's
     // reply goes out as written, and the error is logged.
     const guardReply = async (draft) => {
+      let text;
       try {
-        return await guardDraft(draft);
+        text = await guardDraft(draft);
       } catch (err) {
         logger.forRequest(req).error({ err: err.message }, 'homework guard failed; sending the reply as written');
         return draft;
       }
+      if (text.trim()) return text;
+      logger.forRequest(req).warn('homework answer guard: nothing left after the guard, sending GUARD_EMPTY_COPY');
+      return GUARD_EMPTY_COPY;
     };
 
     const wantsStream = (req.headers.accept || '').includes('text/event-stream');
@@ -2428,7 +2529,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const holdBack = guardArmed || writingTurn || problemWork;
 
       // Thinking streams no 'text' for a while: any upstream event is life.
-      stream.on('streamEvent', () => touch());
+      // The SDK drops the API's pings, so a think must stream deltas to count:
+      // on a 4.7+/5.x model (claude-sonnet-5-5) lib/modelParams asks for
+      // display 'summarized', 4.6's default, because under 'omitted' nothing
+      // arrives until the think ends and a long one would trip STREAM_IDLE_MS.
+      // Thinking blocks and their deltas (thinking_delta, signature_delta)
+      // never reach the student: only 'text' events are relayed below.
+      // A refusal's stop_details rides on message_delta, which the SDK (0.39)
+      // does not copy into the final message: keep it for the refusal log.
+      let stopDetails = null;
+      stream.on('streamEvent', (ev) => {
+        touch();
+        if (ev && ev.type === 'message_delta' && ev.delta && ev.delta.stop_details) stopDetails = ev.delta.stop_details;
+      });
       let modelSpoke = false;
       stream.on('text', (text) => {
         touch();
@@ -2473,7 +2586,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           if (fullText) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText })}\n\n`);
         }
         if (refused) {
-          noteRefusal(req, callKind, stopReason);
+          noteRefusal(req, callKind, stopReason, (received.length && received[received.length - 1].stop_details) || stopDetails);
           // Stream the safe text as well, for any client (and the eval) that
           // renders deltas rather than the complete frame's reply: on its own
           // after an outright refusal, after a blank line if words streamed.
@@ -2579,7 +2692,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // With thinking on, content[0] is the thinking block: read the text.
       const replyText = firstTextOf(response);
       const refused = isRefusedReply(response.stop_reason, replyText);
-      if (refused) noteRefusal(req, callKind, response.stop_reason);
+      if (refused) noteRefusal(req, callKind, response.stop_reason, response.stop_details);
       // REFUSAL_COPY keeps its own line breaks; only a model reply goes
       // through the same transforms as the stream (Basics voice, then
       // lib/replyPipeline with replyTransforms), and a guarded turn through
@@ -2800,14 +2913,16 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 400,
-        // Low temperature for grading consistency across retries.
-        temperature: 0.2,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'grader', 400),
+        // Low temperature for grading consistency across retries, on a model
+        // that takes one; claude-sonnet-5-5 takes none (between_tools at
+        // TUTOR_EFFORT instead, lib/modelParams).
+        ...modelRequest.requestFields(MODEL, 'grader', { temperature: 0.2, effort: TUTOR_EFFORT }),
         system: UNIT_TEST_GRADER_SYSTEM,
         messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return res.json({ ...CRISIS_GRADE });
     const result = parseUnitTestGrade(raw);
     if (!result) {
@@ -3028,14 +3143,16 @@ async function prewarmCaches(ip = null) {
   // Every prefix a shipped client can hit under the active flag state: both
   // lesson variants, the app free-chat prefix, and the widget (club_v1)
   // free-chat prefixes — a club session is exactly when the widget is busy.
+  // The free-chat prefixes are the tutor model's own (its model notes on
+  // claude-sonnet-5-5), the ones its turns read.
   const variants = [
     { name: 'curriculum:blocks', text: curriculumStatic(true) },
     { name: 'curriculum:prose', text: curriculumStatic(false) },
     ...(unified
-      ? [{ name: 'v2:app', text: V2_STATIC_APP }, { name: 'v2:widget', text: V2_STATIC_WIDGET }]
+      ? [{ name: 'v2:app', text: v2Static(false, MODEL) }, { name: 'v2:widget', text: v2Static(true, MODEL) }]
       : ['socratic', 'debate', 'discussion'].flatMap((m) => [
-          { name: `legacy:${m}:app`, text: legacyStatic(m, false) },
-          { name: `legacy:${m}:widget`, text: legacyStatic(m, true) },
+          { name: `legacy:${m}:app`, text: legacyStatic(m, false, MODEL) },
+          { name: `legacy:${m}:widget`, text: legacyStatic(m, true, MODEL) },
         ])),
   ];
   const warmed = [];
@@ -3054,7 +3171,10 @@ async function prewarmCaches(ip = null) {
         ip,
         params: {
           model: MODEL,
-          max_tokens: 1,
+          max_tokens: modelRequest.maxTokensFor(MODEL, 'prewarm', 1),
+          // The same thinking and effort as a tutor turn, so the prefix it
+          // writes is the one real traffic reads (no fields on claude-sonnet-4-6).
+          ...modelRequest.requestFields(MODEL, 'prewarm', { effort: TUTOR_EFFORT }),
           system: systemBlocks.buildSystem({ staticText: v.text }),
           messages: [{ role: 'user', content: 'ok' }],
         },
@@ -3154,12 +3274,13 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'helper', 700),
+        ...modelRequest.requestFields(MODEL, 'helper', { effort: TUTOR_EFFORT }),
         system: FACTCHECK_SYSTEM,
         messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
@@ -3193,12 +3314,13 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'helper', 700),
+        ...modelRequest.requestFields(MODEL, 'helper', { effort: TUTOR_EFFORT }),
         system: ANALYZE_SYSTEM,
         messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
@@ -3240,7 +3362,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
         messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
@@ -3600,6 +3722,8 @@ app.get('/api/health', async (_req, res) => {
     memory: Math.floor(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
     commit: BUILD_COMMIT,
     bootedAt: BOOTED_AT,
+    // The tutor model (TUTOR_MODEL): what an operator checks after switching it.
+    model: MODEL,
   };
   try {
     // SELECT 1 with a 2s timeout — the probe used to run a COUNT(DISTINCT)
@@ -3773,10 +3897,26 @@ db.initSchema().then(async () => {
     logger.warn({ err: e.message }, 'spend hydrate failed — starting today at $0');
   }
   server = app.listen(PORT, () => {
+    // tutorEffort only where it is sent (a model that takes no temperature).
+    const tutorEffort = modelRequest.acceptsSampling(MODEL) ? undefined : TUTOR_EFFORT;
     logger.info(
-      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL, killSwitch: killSwitch.state(), budget: spendCap.state() },
+      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL, tutorEffort, killSwitch: killSwitch.state(), budget: spendCap.state() },
       'Mercurius Ⅰ is running'
     );
+    if (!TUTOR_EFFORT_SETTING.valid) {
+      logger.warn({ tutorEffort: process.env.TUTOR_EFFORT, using: TUTOR_EFFORT }, `TUTOR_EFFORT must be one of ${modelRequest.TUTOR_EFFORTS.join(', ')}: using the default`);
+    }
+    if (!modelRequest.isVerifiedTutorModel(MODEL)) {
+      // lib/modelParams sends adaptive thinking with max_tokens headroom on
+      // any other 4.7+/5.x model, and temperature on anything older: shapes
+      // the API accepts, but no eval has run them.
+      logger.warn({ model: MODEL }, 'TUTOR_MODEL is not claude-sonnet-4-6 or claude-sonnet-5-5: its request fields are unverified (see docs/sonnet-5-5/README.md)');
+    }
+    if (!pricing.hasRateCard(MODEL)) {
+      // lib/pricing prices an unknown id at the most expensive card, so the
+      // budget only over-counts; still, say so before the first bill.
+      logger.warn({ model: MODEL }, 'TUTOR_MODEL has no rate card in lib/pricing.js: spend is counted at the fallback rate');
+    }
     // A boot alert makes a crash loop visible from the phone (Railway
     // restarts up to 10 times before giving up).
     if (process.env.NODE_ENV === 'production') {

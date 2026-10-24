@@ -7,7 +7,8 @@
 // The model is always the in-process mock with no key: a developer's
 // exported ANTHROPIC_API_KEY (or Discord webhook) must never reach a test
 // server, whatever the caller passes. `discordWebhookUrl` may point the
-// alerts at a local stub (127.0.0.1 only).
+// alerts at a local stub (127.0.0.1 only). TUTOR_MODEL / TUTOR_EFFORT are
+// empty (the defaults) unless the caller's `env` sets them.
 
 const { spawn } = require('node:child_process');
 const path = require('node:path');
@@ -25,6 +26,10 @@ function spawnServer(env = {}, { timeoutMs = 15000, discordWebhookUrl = '' } = {
       ...process.env,
       NODE_ENV: 'test',
       DATABASE_URL: '',
+      // Today's tutor model unless the caller names one: a TUTOR_MODEL in the
+      // developer's shell or .env must not change what the suites assert.
+      TUTOR_MODEL: '',
+      TUTOR_EFFORT: '',
       ...env,
       ANTHROPIC_MOCK: '1',
       ANTHROPIC_API_KEY: '',
