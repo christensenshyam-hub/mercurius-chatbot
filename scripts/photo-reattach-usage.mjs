@@ -36,7 +36,10 @@ if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(BASE)) {
   console.error('BASE_URL must be http://localhost:<port> (a local eval server).');
   process.exit(2);
 }
-const MODEL = 'claude-sonnet-4-6'; // server.js MODEL
+// The eval server's tutor model (server.js MODEL, set by TUTOR_MODEL), read
+// from its /api/health so the costs below use that model's rate card.
+const MODEL = (await fetch(`${BASE}/api/health`).then((r) => r.json()).catch(() => ({}))).model
+  || process.env.TUTOR_MODEL || 'claude-sonnet-4-6';
 const imagePath = process.argv[2];
 if (!imagePath) {
   console.error('usage: BASE_URL=http://localhost:<port> node scripts/photo-reattach-usage.mjs <image> [--out file.json]');

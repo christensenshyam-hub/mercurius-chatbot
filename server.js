@@ -53,6 +53,8 @@ const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
+const modelRequest = require('./lib/modelParams');
+const pricing = require('./lib/pricing');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
 const spendCap = require('./lib/spendCap');
@@ -117,7 +119,19 @@ function isValidSessionId(id) {
   return id && typeof id === 'string' && id.length <= 64 && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
-const MODEL = 'claude-sonnet-4-6';
+// The tutor model: chat and lesson turns, the unit-test grader, fact-check,
+// analyze and the cache prewarm. TUTOR_MODEL (default claude-sonnet-4-6)
+// switches it; the request fields each model takes (temperature, thinking,
+// effort) come from lib/modelParams, so with TUTOR_MODEL unset every request
+// is byte-identical to the one sent before it existed. TUTOR_EFFORT (low |
+// medium | high, default low) is the output_config.effort of the turns that
+// run without extended thinking on a model that takes no temperature
+// (claude-sonnet-5-5: thinking between_tools). Only claude-sonnet-4-6 and
+// claude-sonnet-5-5 are verified; any other TUTOR_MODEL logs a boot warning.
+// See docs/sonnet-5-5/README.md.
+const MODEL = modelRequest.resolveTutorModel(process.env.TUTOR_MODEL);
+const TUTOR_EFFORT_SETTING = modelRequest.resolveTutorEffort(process.env.TUTOR_EFFORT);
+const TUTOR_EFFORT = TUTOR_EFFORT_SETTING.effort;
 // Summarize-existing-content helpers (quiz, report card, concept map, meeting
 // briefing) run on Haiku: ~3× cheaper, and their errors land on a summary,
 // not on a student's grade or a verdict about truth — grading, fact-check
@@ -137,10 +151,10 @@ const USE_UNIFIED_PROMPT = process.env.USE_UNIFIED_PROMPT === '1' || process.env
 // streamed, and Merc called correct steps wrong (34 of 48 probe threads
 // right without thinking, 46 of 48 with it). Thinking counts against
 // max_tokens, so those turns get headroom; it is never forwarded to clients
-// (the SSE relay sends 'text' events only). HOMEWORK_THINKING=0 turns it off.
+// (the SSE relay sends 'text' events only). Which models think, and the
+// headroom, are lib/modelParams (thinksOnProblems, maxTokensFor).
+// HOMEWORK_THINKING=0 turns it off.
 const HOMEWORK_THINKING = process.env.HOMEWORK_THINKING !== '0';
-const THINKING_MODEL_RE = /^claude-(?:sonnet|opus)-4-6$/;
-const THINKING_MIN_TOKENS = 3000;
 // The answer guard (lib/homeworkGuard): when the student's own problem is
 // a linear equation, a word problem with numbers, or a distribution they got
 // wrong, a reply that gives its answer away (a worked example landing on it,
@@ -1134,8 +1148,10 @@ const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 const CRISIS_RESULT = Object.freeze({ error: 'crisis', message: CRISIS_COPY, crisis: true });
 const sendCrisisResult = (res) => res.status(503).json({ ...CRISIS_RESULT });
 
-/** The reply text of a non-streaming response: with thinking on, content[0]
- *  is the thinking block, so read the text blocks. */
+/** The reply text of a non-streaming response, read by block type: with
+ *  thinking on, content[0] is a thinking block (on claude-sonnet-5-5 an
+ *  empty one under the default display "omitted"), so read the text blocks
+ *  and nothing else. Every route that reads a model response uses this. */
 function firstTextOf(response) {
   const blocks = Array.isArray(response && response.content) ? response.content : [];
   return blocks.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
@@ -1172,7 +1188,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
-  const raw = response.content[0]?.text || '';
+  const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
   try {
@@ -1740,10 +1756,13 @@ function isRefusedReply(stopReason, text) {
   return stopReason === 'refusal' || typeof text !== 'string' || text.trim() === '';
 }
 
-// Count and log a refusal: route, call kind and stop reason only, never text.
-function noteRefusal(req, kind, stopReason) {
+// Count and log a refusal: route, call kind, stop reason and the refusal
+// category (stop_details.category: cyber, bio, frontier_llm,
+// reasoning_extraction, general_harms, … or none), never text.
+function noteRefusal(req, kind, stopReason, stopDetails) {
   metrics.modelRefusalsTotal.inc({ route: '/api/chat', kind });
-  logger.forRequest(req).warn({ kind, stopReason: stopReason || 'empty' }, 'model refusal answered with the safe refusal copy');
+  const category = stopDetails && typeof stopDetails.category === 'string' ? stopDetails.category : undefined;
+  logger.forRequest(req).warn({ kind, stopReason: stopReason || 'empty', category }, 'model refusal answered with the safe refusal copy');
 }
 
 // Server-synced progress (Phase 3A), belt and braces: the server just judged
@@ -2130,16 +2149,20 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Problem detection reads the thread as text: a re-attached photo turn
     // (AUD-10) counts by the student's own words, as it did before re-attach.
     // This turn's photo is still hasImage.
+    // Every other turn: its response-mode temperature on a model that takes
+    // one (claude-sonnet-4-6), thinking between_tools at TUTOR_EFFORT on
+    // claude-sonnet-5-5 (lib/modelParams.requestFields).
     const problemThread = photoReattach.textView(trimmed);
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
-      && THINKING_MODEL_RE.test(chosenModel)
+      && modelRequest.thinksOnProblems(chosenModel)
       && !needsSafetyBudget(latestUserMessage.content)
       && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
+    const callIntent = problemTurn ? 'problem' : 'turn';
     const modelParams = {
       model: chosenModel,
-      max_tokens: problemTurn ? Math.max(maxTokens + 2048, THINKING_MIN_TOKENS) : maxTokens,
-      ...(problemTurn ? { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } } : { temperature }),
+      max_tokens: modelRequest.maxTokensFor(chosenModel, callIntent, maxTokens),
+      ...modelRequest.requestFields(chosenModel, callIntent, { temperature, effort: TUTOR_EFFORT }),
       system: systemForApi,
       messages: messagesForApi,
     };
@@ -2397,7 +2420,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const holdBack = guardArmed || writingTurn || problemWork;
 
       // Thinking streams no 'text' for a while: any upstream event is life.
-      stream.on('streamEvent', () => touch());
+      // The SDK drops the API's pings, so a think must stream deltas to count:
+      // on a 4.7+/5.x model (claude-sonnet-5-5) lib/modelParams asks for
+      // display 'summarized', 4.6's default, because under 'omitted' nothing
+      // arrives until the think ends and a long one would trip STREAM_IDLE_MS.
+      // Thinking blocks and their deltas (thinking_delta, signature_delta)
+      // never reach the student: only 'text' events are relayed below.
+      // A refusal's stop_details rides on message_delta, which the SDK (0.39)
+      // does not copy into the final message: keep it for the refusal log.
+      let stopDetails = null;
+      stream.on('streamEvent', (ev) => {
+        touch();
+        if (ev && ev.type === 'message_delta' && ev.delta && ev.delta.stop_details) stopDetails = ev.delta.stop_details;
+      });
       let modelSpoke = false;
       stream.on('text', (text) => {
         touch();
@@ -2442,7 +2477,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           if (fullText) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: fullText })}\n\n`);
         }
         if (refused) {
-          noteRefusal(req, callKind, stopReason);
+          noteRefusal(req, callKind, stopReason, (received.length && received[received.length - 1].stop_details) || stopDetails);
           // Stream the safe text as well, for any client (and the eval) that
           // renders deltas rather than the complete frame's reply: on its own
           // after an outright refusal, after a blank line if words streamed.
@@ -2548,7 +2583,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // With thinking on, content[0] is the thinking block: read the text.
       const replyText = firstTextOf(response);
       const refused = isRefusedReply(response.stop_reason, replyText);
-      if (refused) noteRefusal(req, callKind, response.stop_reason);
+      if (refused) noteRefusal(req, callKind, response.stop_reason, response.stop_details);
       // REFUSAL_COPY keeps its own line breaks; only a model reply goes
       // through the same transforms as the stream (Basics voice, then
       // lib/replyPipeline with replyTransforms), and a guarded turn through
@@ -2769,14 +2804,16 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 400,
-        // Low temperature for grading consistency across retries.
-        temperature: 0.2,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'grader', 400),
+        // Low temperature for grading consistency across retries, on a model
+        // that takes one; claude-sonnet-5-5 takes none (between_tools at
+        // TUTOR_EFFORT instead, lib/modelParams).
+        ...modelRequest.requestFields(MODEL, 'grader', { temperature: 0.2, effort: TUTOR_EFFORT }),
         system: UNIT_TEST_GRADER_SYSTEM,
         messages: [{ role: 'user', content: buildGraderUserMessage({ unitTitle, defensePrompt, answer }) }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return res.json({ ...CRISIS_GRADE });
     const result = parseUnitTestGrade(raw);
     if (!result) {
@@ -3023,7 +3060,10 @@ async function prewarmCaches(ip = null) {
         ip,
         params: {
           model: MODEL,
-          max_tokens: 1,
+          max_tokens: modelRequest.maxTokensFor(MODEL, 'prewarm', 1),
+          // The same thinking and effort as a tutor turn, so the prefix it
+          // writes is the one real traffic reads (no fields on claude-sonnet-4-6).
+          ...modelRequest.requestFields(MODEL, 'prewarm', { effort: TUTOR_EFFORT }),
           system: systemBlocks.buildSystem({ staticText: v.text }),
           messages: [{ role: 'user', content: 'ok' }],
         },
@@ -3123,12 +3163,13 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'helper', 700),
+        ...modelRequest.requestFields(MODEL, 'helper', { effort: TUTOR_EFFORT }),
         system: FACTCHECK_SYSTEM,
         messages: [{ role: 'user', content: 'Fact-check this claim: ' + claim }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse fact-check result.' });
@@ -3162,12 +3203,13 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
       traceId: req.traceId,
       params: {
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'helper', 700),
+        ...modelRequest.requestFields(MODEL, 'helper', { effort: TUTOR_EFFORT }),
         system: ANALYZE_SYSTEM,
         messages: [{ role: 'user', content: 'Analyze this AI-generated response:\n\n' + aiOutput }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     if (isCrisisReply(raw)) return sendCrisisResult(res);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not parse analysis.' });
@@ -3209,7 +3251,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
         messages: [{ role: 'user', content: 'Generate a pre-meeting briefing for the next upcoming club meeting.' }],
       },
     });
-    const raw = response.content[0]?.text || '';
+    const raw = firstTextOf(response);
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'parse_error', message: 'Could not generate briefing — check that meeting data exists.' });
     return res.json(JSON.parse(match[0]));
@@ -3569,6 +3611,8 @@ app.get('/api/health', async (_req, res) => {
     memory: Math.floor(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
     commit: BUILD_COMMIT,
     bootedAt: BOOTED_AT,
+    // The tutor model (TUTOR_MODEL): what an operator checks after switching it.
+    model: MODEL,
   };
   try {
     // SELECT 1 with a 2s timeout — the probe used to run a COUNT(DISTINCT)
@@ -3742,10 +3786,26 @@ db.initSchema().then(async () => {
     logger.warn({ err: e.message }, 'spend hydrate failed — starting today at $0');
   }
   server = app.listen(PORT, () => {
+    // tutorEffort only where it is sent (a model that takes no temperature).
+    const tutorEffort = modelRequest.acceptsSampling(MODEL) ? undefined : TUTOR_EFFORT;
     logger.info(
-      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL, killSwitch: killSwitch.state(), budget: spendCap.state() },
+      { port: PORT, allowedOrigin: ALLOWED_ORIGIN, model: MODEL, tutorEffort, killSwitch: killSwitch.state(), budget: spendCap.state() },
       'Mercurius Ⅰ is running'
     );
+    if (!TUTOR_EFFORT_SETTING.valid) {
+      logger.warn({ tutorEffort: process.env.TUTOR_EFFORT, using: TUTOR_EFFORT }, `TUTOR_EFFORT must be one of ${modelRequest.TUTOR_EFFORTS.join(', ')}: using the default`);
+    }
+    if (!modelRequest.isVerifiedTutorModel(MODEL)) {
+      // lib/modelParams sends adaptive thinking with max_tokens headroom on
+      // any other 4.7+/5.x model, and temperature on anything older: shapes
+      // the API accepts, but no eval has run them.
+      logger.warn({ model: MODEL }, 'TUTOR_MODEL is not claude-sonnet-4-6 or claude-sonnet-5-5: its request fields are unverified (see docs/sonnet-5-5/README.md)');
+    }
+    if (!pricing.hasRateCard(MODEL)) {
+      // lib/pricing prices an unknown id at the most expensive card, so the
+      // budget only over-counts; still, say so before the first bill.
+      logger.warn({ model: MODEL }, 'TUTOR_MODEL has no rate card in lib/pricing.js: spend is counted at the fallback rate');
+    }
     // A boot alert makes a crash loop visible from the phone (Railway
     // restarts up to 10 times before giving up).
     if (process.env.NODE_ENV === 'production') {

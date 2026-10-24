@@ -89,8 +89,10 @@ applies) — unlike the quotas below, where `0` means refuse.
 
 | Var | Purpose | Default |
 |---|---|---|
-| `MODEL_ALLOWLIST` | Comma-separated model ids the server accepts when a client supplies `model` on `/api/chat`; anything else is rejected with `invalid_model` | `claude-sonnet-4-6,claude-haiku-4-5` |
-| `STREAM_IDLE_MS` | Abort a Claude stream that has produced no delta for this long (wedged upstream) | `30000` |
+| `TUTOR_MODEL` | The tutor model: chat and lesson turns, the unit-test grader, fact-check, analyze and the cache prewarm. Each model's request fields (temperature, thinking, effort) come from `lib/modelParams.js`; unset sends exactly the `claude-sonnet-4-6` requests the server always sent. `claude-sonnet-5-5` is ready but gated on the A/B in `docs/sonnet-5-5/README.md`, which also has the switch and the rollback. Only these two are verified: any other id logs a boot warning (`TUTOR_MODEL is not claude-sonnet-4-6 or claude-sonnet-5-5`). After changing it, Redeploy; check `GET /api/health` → `model`. | unset = `claude-sonnet-4-6` |
+| `TUTOR_EFFORT` | `output_config.effort` for the tutor-model calls other than a homework problem turn on a model that takes no temperature (`claude-sonnet-5-5`: every call but a problem turn, sent with `thinking: between_tools`). `low`, `medium` or `high`; anything else logs a boot warning and uses `low`. Ignored on `claude-sonnet-4-6`. | `low` |
+| `MODEL_ALLOWLIST` | Comma-separated model ids the server accepts when a client supplies `model` on `/api/chat`; anything else is rejected with `invalid_model`. A set `TUTOR_MODEL` is always allowed too. | `claude-sonnet-4-6,claude-haiku-4-5` |
+| `STREAM_IDLE_MS` | Abort a Claude stream that has produced no delta for this long (wedged upstream). Any upstream event counts, thinking deltas too; the SDK drops pings, which is why a Sonnet 5.5 problem turn asks for summarized thinking. | `30000` |
 | `STREAM_MAX_MS` | Hard cap on one stream's total wall time (runaway reply). A healthy long lesson turn trips neither watchdog. | `150000` |
 | `STREAM_WATCHDOG_MS` | Legacy name for `STREAM_MAX_MS` (eval/CI overrides); when set it wins | unset |
 | `CLUB_FEED_TIMEOUT_MS` | Timeout for each fetch of the club site's `events-data.json` / `blog-content.json` (widget turns). A stale copy is served while one refresh runs; a failed fetch is retried after 5 min. `CLUB_EVENTS_URL` / `CLUB_BLOG_URL` override the feed URLs (tests) | `2000` |
@@ -191,7 +193,7 @@ records which is which, so the counts survive a restart.
 | `IP_DAILY_IMAGE_BYTES` | image bytes a client IP may store per day | `524288000` |
 | `IP_MAX_INFLIGHT` | concurrent Claude calls per client IP | `40` |
 | `MAX_INFLIGHT` | concurrent Claude calls for the whole process; beyond it requests get `503 busy`, not a queue | `80` |
-| `HELPER_MODEL` | model for the summarizing helpers (quiz, report card, concept map, briefing); the tutor/grader/fact-check/analyze stay on the tutor model in `server.js` | `claude-haiku-4-5` |
+| `HELPER_MODEL` | model for the summarizing helpers (quiz, report card, concept map, briefing); the tutor/grader/fact-check/analyze stay on the tutor model (`TUTOR_MODEL`) | `claude-haiku-4-5` |
 | `EVAL_EXPOSE_USAGE` | eval servers only — puts settled usage on the SSE `complete` frame so `scripts/eval-pacing.mjs` can prove cache hits. Never set in production. | unset |
 | `SCHEDULER_ENABLED` | in-process daily digest + retention sweep (`lib/scheduler.js`); `0` disables. Off under `NODE_ENV=test`. | `1` |
 | `DIGEST_UTC_HOUR` | UTC hour after which the daily Discord digest posts once | `13` |
