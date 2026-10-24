@@ -1,0 +1,31 @@
+{
+ "basedOn": 1,
+ "title": "AI Sounds Sure",
+ "note": "Ad 1 with the \"Studying that feels like a game\" segment (+20 XP / Climb the ranks, source 17.0-20.37 s) cut out, because XP and ranks are not shipped. Both cut points fall on blank navy frames; the audio dips over 120 ms at the join. Only the 4:5 cut is deployed; a 9:16 cut (same edit) was made from Mercurius-Ad1-AISoundsSure-9x16-WithSound.mp4 and kept out of marketing/ because no page uses it.",
+ "renditions": [
+  {
+   "aspect": "4:5",
+   "video": "assets/ads/hero-4x5.mp4",
+   "poster": "assets/ads/hero-4x5-poster.jpg",
+   "width": 720,
+   "height": 900,
+   "duration": 20.63,
+   "bytes": 1406281,
+   "posterWidth": 720,
+   "posterHeight": 900,
+   "posterBytes": 34841,
+   "encode": "H.264 720px wide, ~450 kbps video, AAC 128 kbps",
+   "source": "Mercurius-Ad1-AISoundsSure-4x5-WithSound.mp4"
+  }
+ ],
+ "caption": "AI sounds sure. That doesn't mean it's right.\n\nChatbots can invent a study and insist it's real. Merc does the opposite. He asks how you'd check, then lets you work it out.\n\nHas an AI ever confidently told you something wrong?",
+ "captionNote": "Ad 1 caption with its XP/ranks sentence deleted (the hero cut does not show XP or ranks); nothing else changed.",
+ "transcript": [
+  "\"AI sounds sure. That doesn't mean it's right. Can you tell the difference?\"",
+  "Most AI chatbots. Student: \"Is this source real?\" Chatbot: \"Yes! It's a real study.\" Stamp: \"Confidently wrong.\"",
+  "Merc, your Mercurius tutor. Student: \"Is this source real?\" Merc: \"Good instinct. How could you check?\" Student: \"Search for the study itself?\" Merc: \"Exactly. So why would an AI invent one?\"",
+  "\"Merc asks. You think. It sticks.\"",
+  "End card: Merc. \"Mercurius. Learn how AI really works.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
+ ],
+ "transcriptNote": "On-screen text, scene by scene, read from frames of hero-4x5.mp4 (same convention as each transcript in ads.json). Audio checked Oct 24 (on-device sound classifier): music, no speech, so the site labels the reel as a video version of this text. If a voice-over is ever added, add a WebVTT captions track."
+}

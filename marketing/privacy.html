@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0B1330" />
+  <meta name="theme-color" content="#0A1130" />
+  <meta name="color-scheme" content="dark" />
   <meta name="apple-itunes-app" content="app-id=6773192313" />
 
   <title>Privacy — Mercurius AI</title>
@@ -13,80 +14,60 @@
   <meta property="og:type" content="article" />
   <meta property="og:title" content="Privacy — Mercurius AI" />
   <meta property="og:description" content="What we collect, what we don't, how long we keep it, and how to delete it." />
-  <meta property="og:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta property="og:image" content="https://trymercurius.com/assets/brand/og-card.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="The Mercurius logo, Merc inside a question mark, over the line: Learn how AI really works." />
   <meta property="og:url" content="https://trymercurius.com/privacy" />
   <meta property="og:site_name" content="Mercurius AI" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Privacy — Mercurius AI" />
   <meta name="twitter:description" content="What we collect, what we don't, how long we keep it, and how to delete it." />
-  <meta name="twitter:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta name="twitter:image" content="https://trymercurius.com/assets/brand/og-card.png" />
 
-  <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/brand/favicon-48.png" />
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/brand/apple-touch-icon.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=8" />
-
-  <style>
-    /* Retention table — page-local because it's the only table on the
-       site. Uses the brand tokens from styles.css so it matches the
-       trust-list cards around it. */
-    .retention-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      overflow-x: auto;
-      margin-bottom: var(--space-6);
-    }
-    .retention-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--fs-body);
-      color: var(--ink-soft);
-    }
-    .retention-table th,
-    .retention-table td {
-      text-align: left;
-      vertical-align: top;
-      padding: var(--space-4) var(--space-5);
-      border-bottom: 1px solid var(--border-soft);
-    }
-    .retention-table th {
-      color: var(--navy);
-      font-weight: 600;
-      font-size: var(--fs-small);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      background: var(--gradient-soft);
-    }
-    .retention-table tr:last-child td { border-bottom: none; }
-    .retention-table td:first-child {
-      color: var(--navy);
-      font-weight: 600;
-      width: 42%;
-    }
-  </style>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=12" />
 </head>
 
-<body>
+<body class="page-read">
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="site-header" role="banner">
+  <header class="site-header">
     <div class="container header-inner">
-      <a class="brand" href="/" aria-label="Mercurius AI home">
-        <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+      <a class="brand" href="/">
+        <img src="/assets/brand/mercurius-logo.svg" alt="Mercurius home" width="140" height="65" />
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/audience.html">Who it's for</a>
-        <a class="cta-pill" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Start Learning</a>
+        <ul class="nav-list">
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+        </ul>
       </nav>
+      <a class="btn btn-primary btn-small header-cta" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+      <details class="nav-menu" data-nav-menu>
+        <summary><span class="nav-menu-icon" aria-hidden="true"></span>Menu</summary>
+        <div class="nav-menu-panel">
+          <nav aria-label="Primary">
+            <ul class="nav-list">
+              <li><a href="/features.html">Features</a></li>
+              <li><a href="/modes.html">Modes</a></li>
+              <li><a href="/how-it-works.html">How it works</a></li>
+              <li><a href="/audience.html">Who it's for</a></li>
+              <li><a href="/ads.html">Watch</a></li>
+            </ul>
+          </nav>
+          <a class="btn btn-primary" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -105,14 +86,14 @@
         </p>
         <!-- FOUNDER-TODO (AUD-56/57/55/53 wording): set this date to the day the
              reworded page is deployed. -->
-        <p class="lede" style="font-size: var(--fs-small); margin-top: var(--space-4);">
+        <p class="page-meta">
           Effective: September 27, 2026 · We update this page whenever the facts change.
         </p>
       </div>
     </section>
 
     <section class="section" aria-label="Who it is for">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">Who Mercurius is for</h2>
         <p class="lede">
           Mercurius AI is built for teens aged 13 to 18. If you are under 13,
@@ -140,7 +121,7 @@
     </section>
 
     <section class="section section-soft" aria-label="What we collect">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">What we collect</h2>
 
         <p class="lede">
@@ -215,7 +196,7 @@
     </section>
 
     <section class="section" aria-label="What we don't collect">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">What we don't collect</h2>
         <ul class="trust-list">
           <li>
@@ -256,7 +237,7 @@
          so the page no longer says "not linked". Not "linked only" either:
          usage rows also carry the scrambled network address (db.js usage.ip_hash). -->
     <section class="section section-soft" aria-label="What linked to a random ID means">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">What "linked to a random ID" means in practice</h2>
         <p class="lede">
           What we keep is filed under a random ID, never your name or an
@@ -280,7 +261,7 @@
     </section>
 
     <section class="section" aria-label="Who processes your data">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">Who sees what</h2>
         <p class="lede">
           Three outside services touch your data. Two of them see message
@@ -292,7 +273,7 @@
             <strong>Anthropic — Claude.</strong> Runs the language model that
             writes the replies. Every message and photo is sent to Anthropic's
             API to generate a response. Their terms are at
-            <a href="https://www.anthropic.com/legal/commercial-terms" style="color: var(--violet);">anthropic.com/legal</a>.
+            <a href="https://www.anthropic.com/legal/commercial-terms">anthropic.com/legal</a>.
             Anthropic does not train future models on API requests by default.
             <!-- AUD-56. Source: Anthropic's commercial data retention article
                  (privacy.claude.com/en/articles/7996866, "Last updated July 1, 2026",
@@ -307,7 +288,7 @@
                  or other retention agreement, and that Railway's model variables
                  don't point at a Covered Model. If either is wrong, reword this. -->
             Anthropic's
-            <a href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data" style="color: var(--violet);">published policy</a>
+            <a href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data">published policy</a>
             for API customers like us is to delete what we send it, and its
             replies, within 30 days. It can keep them longer when the law
             requires it or to enforce its usage policy: messages its automated
@@ -336,7 +317,7 @@
             channel after the data they describe is deleted.
           </li>
         </ul>
-        <p class="lede" style="margin-top: var(--space-6);">
+        <p class="lede after-list">
           Anthropic and Railway are the only companies that process message
           content. We do not share, sell, or transfer your messages to anyone
           else.
@@ -345,7 +326,7 @@
     </section>
 
     <section class="section section-soft" aria-label="How long we keep it">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">How long we keep it</h2>
         <p class="lede">
           Deletion is automatic. You don't have to ask for any of these.
@@ -394,7 +375,7 @@
     </section>
 
     <section class="section" aria-label="Your controls">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">Your controls</h2>
         <ul class="trust-list">
           <li>
@@ -429,7 +410,7 @@
     </section>
 
     <section class="section section-soft" aria-label="For parents and schools">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">For parents and schools</h2>
         <p class="lede">
           There is no account to review and no name on file, so we cannot
@@ -461,7 +442,7 @@
     </section>
 
     <section class="section" aria-label="Contact">
-      <div class="container" style="max-width: 760px;">
+      <div class="container container--read">
         <h2 class="section-title">Contact</h2>
         <p class="lede">
           Privacy questions and deletion requests:
@@ -470,7 +451,7 @@
         <p class="lede">
           Everything else, including bugs and feature questions:
           <strong>support@trymercurius.com</strong> or the
-          <a href="/support.html" style="color: var(--violet);">Support page</a>.
+          <a href="/support.html">Support page</a>.
         </p>
       </div>
     </section>
@@ -486,27 +467,29 @@
     </section>
   </main>
 
-  <footer class="site-footer" role="contentinfo">
+  <footer class="site-footer">
     <div class="container footer-inner">
-      <div>
-        <a class="brand" href="/" aria-label="Mercurius AI home">
-          <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
-        </a>
+      <div class="footer-brand">
+        <a class="footer-logo" href="/"><img src="/assets/brand/mercurius-wordmark.svg" alt="Mercurius home" width="120" height="23" /></a>
         <p class="footer-tagline">Guided, not given.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/trust.html">Responsibility</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/support.html">Support</a>
+        <ul>
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/trust.html">Responsibility</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+          <li><a href="/privacy.html" aria-current="page">Privacy</a></li>
+          <li><a href="/terms.html">Terms</a></li>
+          <li><a href="/support.html">Support</a></li>
+        </ul>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
     </div>
   </footer>
 
-  <script src="/script.js?v=7" defer></script>
+  <script src="/script.js?v=10" defer></script>
 </body>
 </html>
