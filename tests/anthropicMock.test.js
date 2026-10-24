@@ -14,6 +14,8 @@
 //   4. Scenarios — error / overloaded / credit / hang / slow, on both create()
 //      and stream(), with real SDK APIError instances.
 //   5. Request validation the real API enforces (first role, `timeout`).
+//   6. Sonnet 5.5 rules (sampling, disabled/enabled thinking, between_tools,
+//      effort) and thinking blocks in replies and streams, read by type.
 
 const { describe, test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -809,5 +811,222 @@ describe('request validation (real-API 400s)', () => {
     await rec.ended;
     assert.deepEqual(rec.log, ['error', 'end']);
     assert.equal(rec.error.status, 400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Claude Sonnet 5.5 request rules + thinking blocks (TUTOR_MODEL)
+// ---------------------------------------------------------------------------
+describe('claude-sonnet-5-5 request rules, like the real API', () => {
+  const client = createMockClient({ delayMs: 1 });
+  const S55 = 'claude-sonnet-5-5';
+  const base = (extra = {}) => ({ ...chat('What is a token?', { model: S55 }), ...extra });
+  const rejects400 = (params, re) => assert.rejects(
+    client.messages.create(params),
+    (err) => err.status === 400 && err.error.error.type === 'invalid_request_error' && re.test(err.error.error.message),
+  );
+
+  test('temperature, top_p and top_k are 400s on Sonnet 5.5 (the mock rejects any value) and fine on Sonnet 4.6', async () => {
+    await rejects400(base({ temperature: 0.4 }), /^temperature:/);
+    await rejects400(base({ temperature: 1 }), /^temperature:/);
+    await rejects400(base({ top_p: 0.9 }), /^top_p:/);
+    await rejects400(base({ top_k: 5 }), /^top_k:/);
+    await rejects400(base({ temperature: 0.2, thinking: { type: 'between_tools' }, output_config: { effort: 'low' } }), /^temperature:/);
+    const ok = await client.messages.create({ ...chat('What is a token?'), temperature: 0.4 });
+    assert.equal(ok.stop_reason, 'end_turn');
+  });
+
+  test('thinking disabled, enabled and budget_tokens are 400s on Sonnet 5.5', async () => {
+    await rejects400(base({ thinking: { type: 'disabled' } }), /"thinking\.type\.disabled" is not supported for this model\. Use "thinking\.type\.between_tools"/);
+    await rejects400(base({ thinking: { type: 'enabled', budget_tokens: 2000 } }), /budget_tokens are not supported/);
+    await rejects400(base({ thinking: { type: 'adaptive', budget_tokens: 2000 } }), /budget_tokens are not supported/);
+  });
+
+  test('between_tools: accepted at low/medium/high with nothing else inside thinking; 400 with another field or at xhigh/max', async () => {
+    for (const effort of ['low', 'medium', 'high']) {
+      const ok = await client.messages.create(base({ thinking: { type: 'between_tools' }, output_config: { effort } }));
+      assert.deepEqual(ok.content.map((b) => b.type), ['text'], `${effort}: no tools, so no thinking block`);
+    }
+    const plain = await client.messages.create(base({ thinking: { type: 'between_tools' } }));
+    assert.equal(plain.stop_reason, 'end_turn', 'no effort at all is fine too');
+    await rejects400(base({ thinking: { type: 'between_tools', display: 'summarized' } }), /thinking\.display: Extra inputs/);
+    await rejects400(base({ thinking: { type: 'between_tools', budget_tokens: 1024 } }), /thinking\.budget_tokens: Extra inputs/);
+    await rejects400(base({ thinking: { type: 'between_tools' }, output_config: { effort: 'xhigh' } }), /effort 'xhigh' is not supported when thinking is disabled/);
+    await rejects400(base({ thinking: { type: 'between_tools' }, output_config: { effort: 'max' } }), /effort 'max' is not supported when thinking is disabled/);
+  });
+
+  test('between_tools is a 400 on every other model; an unknown effort is a 400 anywhere', async () => {
+    for (const model of ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-sonnet-5', 'm']) {
+      await rejects400({ ...chat('hi', { model }), thinking: { type: 'between_tools' } }, /"thinking\.type\.between_tools" is not supported for this model\./);
+    }
+    await rejects400(base({ output_config: { effort: 'turbo' } }), /^output_config\.effort: Input should be/);
+    await rejects400({ ...chat('hi'), thinking: { type: 'sometimes' } }, /^thinking\.type: Input should be/);
+  });
+
+  test('forced tool_choice any/tool is a 400 on Sonnet 5.5', async () => {
+    await rejects400(base({ tool_choice: { type: 'any' } }), /tool_choice: type "tool" and "any" are not supported/);
+    await rejects400(base({ tool_choice: { type: 'tool', name: 'x' } }), /tool_choice: type "tool" and "any" are not supported/);
+  });
+
+  test('a stream with a forbidden field fails as an error event, before any text', async () => {
+    const rec = record(client.messages.stream(base({ temperature: 0.4 })));
+    await rec.ended;
+    assert.deepEqual(rec.log, ['error', 'end']);
+    assert.equal(rec.error.status, 400);
+  });
+});
+
+describe('thinking blocks come first, and readers must go by type', () => {
+  const client = createMockClient({ delayMs: 1 });
+  const S55 = 'claude-sonnet-5-5';
+  const textOf = (m) => m.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+
+  test('Sonnet 5.5 with no thinking field runs adaptive: an EMPTY thinking block, then the text', async () => {
+    const msg = await client.messages.create(chat('What is a token?', { model: S55 }));
+    assert.deepEqual(msg.content.map((b) => b.type), ['thinking', 'text']);
+    assert.equal(msg.content[0].thinking, '', 'display "omitted" is the default on Sonnet 5.5');
+    assert.match(msg.content[0].signature, /^mock_sig_/);
+    assert.equal(msg.content[0].text, undefined, 'content[0].text is not the reply');
+    const plain = await client.messages.create(chat('What is a token?'));
+    assert.equal(textOf(msg), textOf(plain), 'the same reply text as without thinking');
+  });
+
+  test('adaptive on Sonnet 4.6 summarizes by default; display can be set either way', async () => {
+    const s46 = await client.messages.create({ ...chat('Solve 3x + 5 = 20'), thinking: { type: 'adaptive' }, output_config: { effort: 'low' } });
+    assert.deepEqual(s46.content.map((b) => b.type), ['thinking', 'text']);
+    assert.equal(s46.content[0].thinking, mock.MOCK_THINKING_TEXT);
+    const omitted = await client.messages.create({ ...chat('x'), thinking: { type: 'adaptive', display: 'omitted' } });
+    assert.equal(omitted.content[0].thinking, '');
+    const summarized = await client.messages.create({ ...chat('x', { model: S55 }), thinking: { type: 'adaptive', display: 'summarized' } });
+    assert.equal(summarized.content[0].thinking, mock.MOCK_THINKING_TEXT);
+  });
+
+  test('a thinking call bills its thinking as output; a plain call does not', async () => {
+    const plain = await client.messages.create(chat('Same question here?'));
+    const thought = await client.messages.create({ ...chat('Same question here?'), thinking: { type: 'adaptive' } });
+    assert.equal(thought.usage.output_tokens, plain.usage.output_tokens + 40);
+  });
+
+  test('an outright refusal carries no thinking block and no text', async () => {
+    const msg = await client.messages.create(chat('MOCK_REFUSAL please', { model: S55 }));
+    assert.deepEqual(msg.content, []);
+    assert.equal(msg.stop_reason, 'refusal');
+  });
+
+  test('stream: thinking at index 0 (start, thinking_delta, signature_delta, stop), then text at index 1; \'text\' carries only the reply', async () => {
+    const params = { ...chat('Solve 3x + 5 = 20'), thinking: { type: 'adaptive' }, output_config: { effort: 'low' } };
+    const expected = await createMockClient({ delayMs: 1 }).messages.create(params);
+    const stream = client.messages.stream(params);
+    const rec = record(stream);
+    const deltas = [];
+    const thinking = [];
+    stream.on('streamEvent', (e) => { if (e.type === 'content_block_delta' || e.type === 'content_block_start') deltas.push(`${e.type}:${e.index}:${(e.delta || e.content_block).type}`); });
+    stream.on('thinking', (t) => thinking.push(t));
+    await rec.ended;
+    assert.deepEqual(deltas.slice(0, 4), [
+      'content_block_start:0:thinking', 'content_block_delta:0:thinking_delta', 'content_block_delta:0:signature_delta', 'content_block_start:1:text',
+    ]);
+    assert.ok(deltas.slice(4).every((d) => d === 'content_block_delta:1:text_delta'));
+    assert.deepEqual(thinking, [mock.MOCK_THINKING_TEXT]);
+    const streamed = rec.texts.map((t) => t.delta).join('');
+    assert.equal(streamed, textOf(expected));
+    assert.ok(!streamed.includes('MOCK_THINKING'));
+    const final = await stream.finalMessage();
+    assert.deepEqual(final.content.map((b) => b.type), ['thinking', 'text']);
+    assert.equal(final.content[0].thinking, mock.MOCK_THINKING_TEXT);
+    assert.equal(final.content[0].signature, expected.content[0].signature);
+    assert.equal(final.content[1].text, textOf(expected));
+    assert.equal(await stream.finalText(), textOf(expected));
+  });
+
+  test('stream on Sonnet 5.5 with no thinking field: an empty thinking block (no thinking_delta) before the text', async () => {
+    const stream = client.messages.stream(chat('What is a token?', { model: S55 }));
+    const types = [];
+    stream.on('streamEvent', (e) => { if (e.type === 'content_block_delta') types.push(e.delta.type); });
+    const final = await stream.finalMessage();
+    assert.equal(types[0], 'signature_delta');
+    assert.ok(!types.includes('thinking_delta'));
+    assert.deepEqual(final.content.map((b) => b.type), ['thinking', 'text']);
+    assert.equal(final.content[0].thinking, '');
+  });
+
+  test('no thinking field: every 5.x model thinks (adaptive by default), Opus 4.7/4.8 and the 4.6 models do not', async () => {
+    for (const model of ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-haiku-5-5', `${S55}-20261001`]) {
+      const msg = await client.messages.create(chat('What is a token?', { model }));
+      assert.deepEqual(msg.content.map((b) => b.type), ['thinking', 'text'], model);
+      assert.equal(msg.content[0].thinking, '', `${model}: display "omitted" by default`);
+    }
+    for (const model of ['claude-opus-4-7', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-3-5-haiku-latest']) {
+      const msg = await client.messages.create(chat('What is a token?', { model }));
+      assert.deepEqual(msg.content.map((b) => b.type), ['text'], model);
+    }
+  });
+
+  test('MOCK_THINKING_MS: an omitted think is silence for that long; a summarized one streams pieces throughout', async () => {
+    const THINK_MS = 300;
+    const timed = createMockClient({ delayMs: 1, thinkingMs: THINK_MS });
+    async function play(thinking) {
+      const stream = timed.messages.stream({ ...chat('Solve 3x + 5 = 20', { model: S55 }), thinking, output_config: { effort: 'low' } });
+      const events = [];
+      const thoughts = [];
+      stream.on('streamEvent', (e) => events.push({ at: Date.now(), type: e.delta ? e.delta.type : e.type }));
+      stream.on('thinking', (t) => thoughts.push(t));
+      const final = await stream.finalMessage();
+      const gaps = events.slice(1).map((e, i) => e.at - events[i].at);
+      return { events, thoughts, final, maxGap: Math.max(...gaps) };
+    }
+
+    const omitted = await play({ type: 'adaptive' });
+    assert.ok(!omitted.events.some((e) => e.type === 'thinking_delta'), 'nothing streams while it thinks');
+    assert.ok(omitted.maxGap >= THINK_MS - 20, `one silent gap of ~${THINK_MS} ms (max gap ${omitted.maxGap})`);
+    assert.equal(omitted.final.content[0].thinking, '');
+
+    const summarized = await play({ type: 'adaptive', display: 'summarized' });
+    assert.ok(summarized.thoughts.length > 1, 'the summary arrives in pieces');
+    assert.equal(summarized.thoughts.join(''), mock.MOCK_THINKING_TEXT);
+    assert.equal(summarized.final.content[0].thinking, mock.MOCK_THINKING_TEXT);
+    assert.ok(summarized.maxGap < THINK_MS / 2, `deltas keep coming (max gap ${summarized.maxGap})`);
+    assert.equal(summarized.final.content[1].text, omitted.final.content[1].text, 'the same reply either way');
+
+    // Without MOCK_THINKING_MS: one thinking_delta, no wait (as before).
+    const untimed = createMockClient({ delayMs: 1 }).messages.stream({ ...chat('Solve 3x + 5 = 20', { model: S55 }), thinking: { type: 'adaptive', display: 'summarized' } });
+    const pieces = [];
+    untimed.on('thinking', (t) => pieces.push(t));
+    await untimed.finalMessage();
+    assert.deepEqual(pieces, [mock.MOCK_THINKING_TEXT]);
+  });
+
+  test('stream on Sonnet 5.5 with between_tools: text only, at index 0', async () => {
+    const stream = client.messages.stream({ ...chat('What is a token?', { model: S55 }), thinking: { type: 'between_tools' }, output_config: { effort: 'low' } });
+    const final = await stream.finalMessage();
+    assert.deepEqual(final.content.map((b) => b.type), ['text']);
+  });
+});
+
+describe('MOCK_CAPTURE_FILE records the new fields and the key order', () => {
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(os.tmpdir(), `merc-mock-capture-${process.pid}-${Date.now()}.jsonl`);
+  const saved = process.env.MOCK_CAPTURE_FILE;
+  after(() => {
+    if (saved === undefined) delete process.env.MOCK_CAPTURE_FILE; else process.env.MOCK_CAPTURE_FILE = saved;
+    fs.rmSync(file, { force: true });
+  });
+
+  test('thinking, output_config, top_p / top_k and paramKeys (in the order the request built them)', async () => {
+    process.env.MOCK_CAPTURE_FILE = file;
+    const client = createMockClient({ delayMs: 1 });
+    await client.messages.create({ model: 'claude-sonnet-5-5', max_tokens: 100, thinking: { type: 'between_tools' }, output_config: { effort: 'medium' }, system: 'S', messages: [{ role: 'user', content: 'capture me' }] });
+    await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 100, temperature: 0.4, top_p: 0.9, top_k: 5, system: 'S', messages: [{ role: 'user', content: 'capture me too' }] });
+    const [a, b] = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(a.thinking, { type: 'between_tools' });
+    assert.deepEqual(a.output_config, { effort: 'medium' });
+    assert.equal('temperature' in a, false, 'an unsent field is not in the record');
+    assert.deepEqual(a.paramKeys, ['model', 'max_tokens', 'thinking', 'output_config', 'system', 'messages']);
+    assert.equal(b.temperature, 0.4);
+    assert.equal(b.top_p, 0.9);
+    assert.equal(b.top_k, 5);
+    assert.deepEqual(b.paramKeys, ['model', 'max_tokens', 'temperature', 'top_p', 'top_k', 'system', 'messages']);
   });
 });

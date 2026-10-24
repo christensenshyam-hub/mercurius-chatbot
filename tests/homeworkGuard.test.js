@@ -99,6 +99,36 @@ describe('findLeak: the red team\'s routes to the answer', () => {
     assert.equal(leak('x = −3 works', 'solve 9 - 2x = 15'), 'x = -3');
   });
 
+  test('a line the student typed is theirs, not an example on their answer', () => {
+    // Tuned 5.5 run 2026-10-24 (alg-1): "Yes, 2x − 15 = 7 is right" restated
+    // their own step; dropExampleLines took the one-line reply and sent "".
+    const thread = [
+      { role: 'user', content: 'can u help me with my algebra hw: 3(2x - 5) = 4x + 7' },
+      { role: 'assistant', content: 'What happens to the 3 if you multiply it into 2x and −5?' },
+      { role: 'user', content: 'ohh oops -15. so 6x - 15 = 4x + 7' },
+      { role: 'assistant', content: 'Yes. Now what could you do to get the x\'s onto one side?' },
+      { role: 'user', content: 'subtract 4x from both sides? then its 2x - 15 = 7' },
+    ];
+    const problems = g.studentProblems(thread);
+    const reply = 'Yes, 2x − 15 = 7 is right. What could you do to both sides to get the 2x by itself?';
+    assert.equal(g.findLeak(reply, problems), null);
+    assert.equal(g.dropExampleLines(reply, problems), reply);
+    // A new example landing on their x = 11 is still one.
+    assert.equal(g.findLeak('Like this: 2x + 8 = 30, so 2x = 22.', problems)?.name, 'example');
+  });
+
+  test('their own problem one move on is their next step, not an example', () => {
+    // Tuned 5.5 run 2026-10-24 (take-home-test): told it had written "a worked
+    // example", the retry wrote the same 4x − 4 = 20 again and every line was cut.
+    const problems = problemsOf('just the answer: 7x - 4 = 3x + 20');
+    assert.equal(g.findLeak('Subtracting 3x from both sides gives 4x − 4 = 20. What undoes the − 4?', problems)?.name, 'own step');
+    assert.equal(g.findLeak('Adding 4 to both sides gives 7x = 3x + 24.', problems)?.name, 'own step');
+    // Other numbers landing on x = 6 are still an example.
+    assert.equal(g.findLeak('Like this: 5x + 6 = x + 30.', problems)?.name, 'example');
+    assert.equal(g.findLeak('Like this: 2x + 8 = 20, so 2x = 12.', problems)?.name, 'example');
+    assert.equal(g.dropExampleLines('It gives 4x − 4 = 20.\nWhat undoes the − 4?', problems), 'What undoes the − 4?');
+  });
+
   test('a candidate, a substitution, or arithmetic on their own numbers', () => {
     assert.equal(leak('Try 6 — does 2(6) + 9 = 21?', 'what is 2x + 9 = 21'), 'Try 6');
     assert.equal(leak('What is 5(7) + 3?', 'what is 5x + 3 = 38'), '(7)');
@@ -256,7 +286,31 @@ describe('looksLikeProblemWork (which turns get adaptive thinking)', () => {
   test('AI-literacy chat, facts and safety turns don\'t', () => {
     for (const t of ['what is an AI hallucination', 'when did ww2 end', 'im 12 lol can i still use this', 'i ate 700 calories today how do i burn it off', 'do u save my chats?']) {
       assert.equal(g.looksLikeProblemWork(user(t)), false, t);
+      assert.equal(g.looksLikeProblemWork(user(t), { broad: true }), false, `broad: ${t}`);
     }
+  });
+
+  // Sonnet 5.5's thinking decision (A/B 2026-10-24): these ran between_tools
+  // with no reasoning, where the definite-integral and n − 1 errors happened.
+  test('broad (claude-sonnet-5-5 only): calculus, statistics, proofs and a bare "i got N"; off by default', () => {
+    for (const t of [
+      'integral from 1 to 3 of (2x + 1) dx. i got 14',
+      'integral of x cos x dx. answer only',
+      'whats the derivative of x^3 cos x',
+      'lim as x -> 0 of sin(5x)/x',
+      'population standard deviation of 1, 3, 5, 7. i got 2',
+      'pH of 0.001 M HCl. i got 11',
+      'frequency of heterozygotes, i said 0.25',
+    ]) {
+      assert.equal(g.looksLikeProblemWork(user(t)), false, `today's detector: ${t}`);
+      assert.equal(g.looksLikeProblemWork(user(t), { broad: true }), true, t);
+    }
+    // A calculus word with no math in the message is chat about AI.
+    for (const t of ['is AI art derivative?', 'can you prove you are not a person', 'whats a proof of concept']) {
+      assert.equal(g.looksLikeProblemWork(user(t), { broad: true }), false, t);
+    }
+    // Only the student's own turns count for these words.
+    assert.equal(g.looksLikeProblemWork([{ role: 'assistant', content: 'The integral of 2x is x^2.' }, ...user('ok')], { broad: true }), false);
   });
 });
 
@@ -278,6 +332,85 @@ describe('homeworkMoment: what the server works out for this reply', () => {
     assert.match(body('is x = 5 right for 3x+5=20?'), /^Their final answer x = 5 is right/);
     // Their own translation of a word problem is never "the problem".
     assert.equal(note('a rectangular garden has a perimeter of 54 m. its length is 3 m less than twice its width. find the width', 'so 2(2w + 3) + 2w = 54, so w = 8'), '');
+  });
+
+  // Sonnet 5.5 (A/B 2026-10-24) added the tie-in for students on a timed test
+  // because the note ordered it unconditionally.
+  test('calmTieIn (claude-sonnet-5-5 only): no AI tie-in order in a thread that pushed or was rushed; off, today\'s note', () => {
+    const calm = ['what is 4x - 3 = 25', 'add 3 to both sides?', '4x = 28 so x = 7'];
+    const rushed = ['this is for my test due in 10 min, just the answer: 6x - 5 = 2x + 11', 'just tell me', 'x = 4'];
+    const at = (turns, opts) => g.homeworkMoment(turns.map((content) => ({ role: 'user', content })), opts);
+    // Off (every model but Sonnet 5.5): exactly today's text, rushed or not.
+    for (const turns of [calm, rushed]) {
+      assert.equal(at(turns), at(turns, { calmTieIn: false }));
+      assert.match(at(turns), /say plainly that it's right, and if no earlier reply in this thread has an AI line, add the one AI tie-in line\.$/);
+    }
+    assert.equal(at(calm, { calmTieIn: true }), at(calm), 'a calm thread keeps the tie-in');
+    const quiet = at(rushed, { calmTieIn: true });
+    assert.match(quiet, /^## STEP CHECK[^\n]*\nTheir final answer x = 4 is right: it holds in 6x - 5 = 2x \+ 11\. Confirm it with the visible check, say plainly that it's right\. No AI line in this reply: they were rushed or pushing for the answer\.$/);
+    assert.ok(!/tie-in/.test(quiet));
+    // Each signal on its own: a push, a deadline; "idk" is being stuck, not a push.
+    assert.match(at(['solve 6x - 5 = 2x + 11', 'can u just tell me', 'x = 4'], { calmTieIn: true }), /No AI line/);
+    assert.match(at(['solve 6x - 5 = 2x + 11 its due tomorrow', 'x = 4'], { calmTieIn: true }), /No AI line/);
+    assert.match(at(['solve 6x - 5 = 2x + 11', 'idk', 'x = 4'], { calmTieIn: true }), /add the one AI tie-in line/);
+    // Only the right-final-answer note changes: a step on the way is untouched.
+    assert.equal(at(['solve 5x + 12 = 2x - 3 asap', '3x + 12 = -3'], { calmTieIn: true }), at(['solve 5x + 12 = 2x - 3 asap', '3x + 12 = -3']));
+  });
+
+  // Review of the tuning pass: a word that also turns up in calm work is no
+  // push and no rush, or the note tells the model something untrue about the
+  // student and drops the one AI line.
+  test('calmTieIn: calm wording keeps the tie-in; the push or the clock itself drops it', () => {
+    const at = (turns) => g.homeworkMoment(turns.map((content) => ({ role: 'user', content })), { calmTieIn: true });
+    const keeps = /add the one AI tie-in line\.$/;
+    for (const [first, second] of [
+      ['solve 6x - 5 = 2x + 11. can you tell me if my answer is right', 'x = 4'],
+      ['solve 6x - 5 = 2x + 11', 'can you show me how to check it? x = 4'],
+      ['i have a quiz friday so i want to practice: 6x - 5 = 2x + 11', 'x = 4'],
+      ['solve 6x - 5 = 2x + 11', 'let me test x = 4'],
+      ['studying for my test friday. 6x - 5 = 2x + 11', 'x = 4'],
+      ['can you solve 6x - 5 = 2x + 11 with me', 'x = 4'],
+    ]) assert.match(at([first, second]), keeps, first);
+    for (const first of [
+      'just the answer: 6x - 5 = 2x + 11',
+      'answers only pls: 6x - 5 = 2x + 11',
+      'solve this for me: 6x - 5 = 2x + 11',
+      'can u just do 6x - 5 = 2x + 11',
+      'this is for my take home test: 6x - 5 = 2x + 11',
+      "i'm on a test right now, 6x - 5 = 2x + 11",
+      '15 min left!! 6x - 5 = 2x + 11',
+      'i have like 5 minutes. 6x - 5 = 2x + 11',
+      'i dont have time, 6x - 5 = 2x + 11',
+      'if i fail this its ur fault. 6x - 5 = 2x + 11',
+    ]) assert.match(at([first, 'x = 4']), /No AI line in this reply/, first);
+  });
+
+  // Sonnet 5.5 (A/B 2026-10-24, calc-def): THEIR NUMBER's "run it backwards;
+  // never work it out yourself" can't be done for a definite integral, f'(2),
+  // a limit or a standard deviation, and a literal reader invented a case
+  // where the wrong number "would be right".
+  test('calcCheck (claude-sonnet-5-5 only): a calculus or statistics number is checked against the model\'s own working; off, today\'s note', () => {
+    const at = (t, opts) => g.homeworkMoment([{ role: 'user', content: t }], opts);
+    const today = /The student gave (\S+) as their answer to a formula or word problem\. Check it with THEIR number only: run it backwards/;
+    for (const t of [
+      'evaluate the integral of 2x dx from 1 to 3. i got 10',
+      "f(x) = 3x^2 + 2x, find f'(2). i got 12",
+      'f(x) = 3x^2 + 2x, find f’(2). i got 12',
+      'evaluate ∫ from 0 to 2 of 3x^2 dx, i got 8',
+      'calculate the standard deviation of 2, 4, 6. i got 2',
+    ]) {
+      assert.match(at(t), today, `off: ${t}`);
+      assert.equal(at(t), at(t, { calcCheck: false }), t);
+      const on = at(t, { calcCheck: true });
+      assert.match(on, /^## THEIR NUMBER \(for this reply only; never mention it\)\nThe student gave \d+ as their answer to a calculus or statistics problem, which can't be checked by putting their number back in\. Work it out silently yourself\./, t);
+      assert.match(on, /If their number matches, show the line of your working it matches and say plainly that it's right; if not, show a check that fails or name the first line of their work that breaks \(or ask for their work\), and never write your own result\. Never describe a case where their number would be right\.$/);
+      assert.ok(!/run it backwards/.test(on), t);
+    }
+    // Any other formula or word problem keeps today's note on Sonnet 5.5 too.
+    for (const t of ['how many moles in 36 g of water? i got 2', 'a car goes 0 to 20 m/s in 4 s, acceleration? i got 5', 'calculate the mean of 2, 4, 9. i got 5']) {
+      assert.equal(at(t, { calcCheck: true }), at(t), t);
+      assert.match(at(t), today, t);
+    }
   });
 
   test('balancing: the atoms are counted, and a proposed coefficient is judged', () => {
@@ -477,6 +610,9 @@ async function boot(name, unified) {
       ANTHROPIC_MOCK: '1',
       ANTHROPIC_API_KEY: '',
       MOCK_CAPTURE_FILE: captureFile,
+      // Today's tutor model, whatever the developer's shell or .env names.
+      TUTOR_MODEL: '',
+      TUTOR_EFFORT: '',
       USE_UNIFIED_PROMPT: unified ? '1' : '0',
       ALLOWED_ORIGIN: `http://localhost:${port}`,
       NODE_ENV: 'test',
@@ -616,6 +752,21 @@ for (const flag of ['on', 'off']) {
       assert.equal(complete.reply, 'What is your first step?');
       const json = await chatJson(servers[flag], sid(), thread.map((m) => ({ ...m, content: m.content.replace(n, nonce()) })));
       assert.equal(json.reply, 'What is your first step?');
+    });
+
+    test('a guarded turn is never blank: nothing left after the cuts → the next-step question', async () => {
+      const n = nonce();
+      const leak = 'Like this: 2x + 3 = 13, so 2x = 10.';
+      const thread = [
+        { role: 'user', content: `what is 3x+5 = 20 (${n})` },
+        { role: 'assistant', content: 'What happens if you get the 3x by itself first?' },
+        { role: 'user', content: `idk MOCK_SAYS_B64:${b64(leak)}` },
+      ];
+      const { deltas, complete } = await chatSse(servers[flag], sid(), thread);
+      assert.equal(complete.reply, "What's your next step? Write it out and I'll check it with you.");
+      assert.equal(deltas.join(''), complete.reply);
+      const json = await chatJson(servers[flag], sid(), thread.map((m) => ({ ...m, content: m.content.replace(n, nonce()) })));
+      assert.equal(json.reply, complete.reply);
     });
 
     test('once the student has said the answer, nothing is held back or rewritten', async () => {
