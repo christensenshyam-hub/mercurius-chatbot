@@ -306,7 +306,7 @@ Do these in order. Tick each one.
 - [ ] Every step in [`REVIEW_REHEARSAL.md`](REVIEW_REHEARSAL.md) passes on the exact build you will submit (same build number).
 
 **Web**
-- [ ] `https://trymercurius.com/privacy`, `/terms` and `/support` return 200, and `/get` (and `/Get`) return a 302 to TestFlight (not a redirect loop, not the 404 page). `/support` must show `support@trymercurius.com`.
+- [ ] `https://trymercurius.com/privacy`, `/terms` and `/support` return 200, and `/get` (and `/Get`) return a 302 to the App Store listing `https://apps.apple.com/app/id6773192313` (not a redirect loop, not the 404 page). `/support` must show `support@trymercurius.com`.
 - [ ] The privacy page names Anthropic as the processor, describes photos, the synced lesson checklist, the in-app deletion path and the age gate as build 16 has it (a 7-day stop that keeps only when it happened, never the age). The site mentions no Direct mode.
 - [ ] Production still runs main (live since PR #32, verified 2026-09-27): `GET /api/admin/kill-switch` with the admin password returns 200, not 404. The page's retention and deletion promises describe this server.
 

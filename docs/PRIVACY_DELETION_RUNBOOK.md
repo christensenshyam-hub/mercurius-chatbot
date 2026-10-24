@@ -38,18 +38,16 @@ The erase route needs no admin password: the session ID itself is the
 proof of ownership (see the comment above the route in `server.js`). `jq`
 is optional (`brew install jq`).
 
-**Is the beta open?** Some replies below offer "install the current
-version from trymercurius.com/get" (TestFlight until 2.3 is on the App
-Store). Offer it only when this prints `0`:
+**Is 2.3 on the App Store?** Some replies below offer "install the current
+version from trymercurius.com/get". `/get` points at the App Store listing
+(since 2026-10-24), and only 2.3 and later show the whole ID and have
+"Delete my data & start over". Offer it only when this prints 2.3 or later:
 
 ```bash
-curl -sL https://testflight.apple.com/join/3ujBtDsa | grep -cE "accepting any new testers|beta is full"
+curl -s 'https://itunes.apple.com/lookup?id=6773192313&country=us' | grep -o '"version":"[^"]*"'
 ```
 
-(Apple writes "isn't" as `isn&#39;t` in the page source, so don't grep
-for the apostrophe.) It printed `1` on 2026-10-19: the public link was not
-accepting testers. Once 2.3 is on the App Store and `/get` points there,
-skip this check.
+It printed `"version":"2.0.0"` on 2026-10-24, so don't offer `/get` yet.
 
 ## A. The email has the full ID (16+ characters)
 
@@ -106,12 +104,12 @@ contain `_`, which `LIKE` treats as "any character".
   retype it) and erase it with the command in section A. Log it.
 - **Zero rows:** erase nothing. Reply asking for a screenshot of
   Settings → Session ID (lookalikes such as `l`/`I`/`1` and `O`/`0` are
-  the usual cause). Only if the beta check above passes, also offer
+  the usual cause). Only if the version check above passes, also offer
   installing the current version from `trymercurius.com/get`, which shows
   the whole ID and has "Delete my data & start over". If the data is older
   than the retention windows, there may be nothing left to find; say so.
 - **Two or more rows:** erase nothing. Versions before 2.3 can't show more
-  than 8 characters. If the beta check passes, the way through is
+  than 8 characters. If the version check passes, the way through is
   installing the current version from `trymercurius.com/get`; installing
   it over an older version keeps the same ID (it lives in the Keychain).
   If it doesn't pass, say plainly that we can't tell which session is
@@ -178,7 +176,7 @@ Need more:
 > deleted anything yet. Could you send a screenshot of Settings → Session
 > ID?
 
-Add this sentence only if the beta check passes:
+Add this sentence only if the version check passes:
 
 > Or install the current version from trymercurius.com/get: it shows the
 > whole ID and has a "Delete my data & start over" button that does this

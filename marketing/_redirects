@@ -16,13 +16,13 @@
 /BETA   https://testflight.apple.com/join/3ujBtDsa   302
 
 # "Get the app" shortcut for posters, bios and the club site.
-# Points at TestFlight while app 2.3.0 is in review. Once 2.3.0 is approved
-# on the App Store, flip all three targets to
-# https://apps.apple.com/app/id6773192313 (keep the 302 — same caching
-# reasoning as /beta above; same capitalization reasoning too).
-/get    https://testflight.apple.com/join/3ujBtDsa   302
-/Get    https://testflight.apple.com/join/3ujBtDsa   302
-/GET    https://testflight.apple.com/join/3ujBtDsa   302
+# Points at the App Store listing (flipped from TestFlight on 2026-10-24,
+# while the TestFlight public link was closed). 302, not 301, so the target
+# can change again without browsers holding on to the old one; all three
+# capitalizations, same reasoning as /beta above.
+/get    https://apps.apple.com/app/id6773192313   302
+/Get    https://apps.apple.com/app/id6773192313   302
+/GET    https://apps.apple.com/app/id6773192313   302
 
 # Clean URLs for every page (the canonical URLs are the short form).
 # 200 = rewrite, so the address bar keeps the short form and the existing
