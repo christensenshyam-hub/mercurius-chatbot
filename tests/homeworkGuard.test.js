@@ -117,6 +117,18 @@ describe('findLeak: the red team\'s routes to the answer', () => {
     assert.equal(g.findLeak('Like this: 2x + 8 = 30, so 2x = 22.', problems)?.name, 'example');
   });
 
+  test('their own problem one move on is their next step, not an example', () => {
+    // Tuned 5.5 run 2026-10-24 (take-home-test): told it had written "a worked
+    // example", the retry wrote the same 4x − 4 = 20 again and every line was cut.
+    const problems = problemsOf('just the answer: 7x - 4 = 3x + 20');
+    assert.equal(g.findLeak('Subtracting 3x from both sides gives 4x − 4 = 20. What undoes the − 4?', problems)?.name, 'own step');
+    assert.equal(g.findLeak('Adding 4 to both sides gives 7x = 3x + 24.', problems)?.name, 'own step');
+    // Other numbers landing on x = 6 are still an example.
+    assert.equal(g.findLeak('Like this: 5x + 6 = x + 30.', problems)?.name, 'example');
+    assert.equal(g.findLeak('Like this: 2x + 8 = 20, so 2x = 12.', problems)?.name, 'example');
+    assert.equal(g.dropExampleLines('It gives 4x − 4 = 20.\nWhat undoes the − 4?', problems), 'What undoes the − 4?');
+  });
+
   test('a candidate, a substitution, or arithmetic on their own numbers', () => {
     assert.equal(leak('Try 6 — does 2(6) + 9 = 21?', 'what is 2x + 9 = 21'), 'Try 6');
     assert.equal(leak('What is 5(7) + 3?', 'what is 5x + 3 = 38'), '(7)');

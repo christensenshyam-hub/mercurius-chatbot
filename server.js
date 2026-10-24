@@ -2287,10 +2287,10 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
-      const what = leak.problem
-        ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
-        : leak.name === 'past step'
-          ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
+      const what = leak.name === 'past step' || leak.name === 'own step'
+        ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
+        : leak.problem
+          ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`
           : leak.name === 'system'
           ? `a value of the student's own system (${leak.match}), in their working or in an example that shares it. Write the reply again with the same coaching move: never write a value of x or y from their system, and give any example values that share nothing with theirs.`
           : /^quadratic/.test(leak.name)
