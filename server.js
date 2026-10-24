@@ -2238,12 +2238,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // A writing turn whose move is to quote the student's own wording.
     const quoteTurn = writingTurn && homeworkGuard.needsQuote(clientMessages);
     const replyLimit = reflowLimit({ isCurriculum: isCurriculumMsg, responseMode, mode });
+    // A photo opener on claude-sonnet-5-5 (tuned run 2026-10-24, hw-photo-slip,
+    // 2 of 3: "Work it silently: … → x = 16" went out as written): the problem
+    // is only in the photo and in this reply's own first line, so nothing above
+    // arms the answer check. guardDraft arms it with that restatement
+    // (homeworkGuard.photoProblems, openers only); guardOn is off on a safety
+    // turn. Off for every other model, whose replies are checked as today.
+    const photoOpener = modelRequest.usesBetweenTools(chosenModel) && Boolean(attachedImage) && guardProblems.length === 0;
+    let photoGuard = [];
+    const answerProblems = () => (photoGuard.length ? photoGuard : guardProblems);
     // A sentence with strong safety content holds no leak and is never
     // redacted: the "24/7" of a crisis hand-off is not the 24 of 8(x + 3), and
     // "under 18" is not their 18 (lib/homeworkGuard.maskSafetyText).
     const findGuardLeak = (draft) => {
       const text = homeworkGuard.maskSafetyText(draft);
-      return homeworkGuard.findLeak(text, guardProblems)
+      return homeworkGuard.findLeak(text, answerProblems())
         || homeworkGuard.findNumberLeak(text, guardNumbers)
         || homeworkGuard.findCorrectionLeak(text, guardCorrections)
         || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
@@ -2251,7 +2260,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
     };
     const redactGuardLeaks = (draft) => homeworkGuard.outsideSafetyText(draft, (text) => {
-      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, guardProblems), guardProblems), guardQuadratics);
+      let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, answerProblems()), answerProblems()), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
       return out;
     });
@@ -2317,11 +2326,16 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         }
         return text;
       }
+      if (photoOpener) photoGuard = homeworkGuard.photoProblems(clientMessages, draft);
       const text = unrepeat(draft);
       const leak = findGuardLeak(text);
       if (!leak) return text;
       logger.forRequest(req).warn({ leak: leak.name }, 'homework answer guard: regenerating a reply that gave the answer away');
-      const what = leak.name === 'past step' || leak.name === 'own step'
+      // 'working' (photoGuard only): the photo may hold lines of theirs, so the
+      // note never says they haven't written any.
+      const what = leak.name === 'working'
+        ? `your own working of the student's problem (${leak.match}) and its answer (${leak.problem.variable} = ${leak.problem.value}). Write the reply again: the problem restated in one line, then the same coaching move with one question at the end, with no line of your working and without the value ${leak.problem.value} anywhere in it.`
+        : leak.name === 'past step' || leak.name === 'own step'
         ? `the line their own next step produces (${leak.match}), which the student hasn't reached yet. Write the reply again: explain the idea behind the step with an example on other numbers, and leave every line of their own problem to them.`
         : leak.problem
           ? `the answer to the student's own problem (${leak.problem.text}, so ${leak.problem.variable} = ${leak.problem.value}) in a worked example, a number to try, a substitution or a line of arithmetic. Write the reply again with the same coaching move, and without the value ${leak.problem.value} anywhere in it: a worked example keeps their left side and changes only the right side, so its answer is different; never suggest or substitute a value yourself; the last step stays theirs.`

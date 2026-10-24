@@ -881,6 +881,144 @@ describe('stripMenu asides: the "or" aside in a writing question (claude-sonnet-
   });
 });
 
+// A photo opener's own restatement arms the answer check (claude-sonnet-5-5;
+// the chat handler calls photoProblems only for it). Tuned 5.5 run
+// 2026-10-24, hw-photo-slip runs 1 and 2, reply 1: the working and x = 16
+// went out as written. The counterexamples are the two verifiers'.
+const R7 = 'Problem 7: solve 3(x − 4) + 5 = 2x + 9 for x.';
+const PHOTO_LEAKS = {
+  'run 1': {
+    reply: `${R7}\n\nWork it silently: 3x − 12 + 5 = 2x + 9 → 3x − 7 = 2x + 9 → x = 16. So the first move is distributing.\n\nWhat do you get when you multiply out the 3(x − 4) part?`,
+    sent: `${R7}\n\nWhat do you get when you multiply out the 3(x − 4) part?`,
+  },
+  'run 2, with the model note it recited': {
+    reply: `${R7}\n\nWork it silently: 3x − 12 + 5 = 2x + 9 → 3x − 7 = 2x + 9 → x = 16. Opener should be one question naming their term or step, without giving the answer.\n\nWhat do you get when you distribute the 3 across (x − 4)?`,
+    sent: `${R7}\n\nWhat do you get when you distribute the 3 across (x − 4)?`,
+  },
+  'several equations on the first line': {
+    reply: `${R7} Distributing gives 3x − 12 + 5 = 2x + 9, so x = 16.\n\nWhat do you get when you distribute the 3?`,
+    sent: `${R7}\n\nWhat do you get when you distribute the 3?`,
+  },
+  'a bold "Problem 7" header': {
+    reply: '**Problem 7**\n\n3(x − 4) + 5 = 2x + 9\n\nWork it silently: 3x − 12 + 5 = 2x + 9 → 3x − 7 = 2x + 9 → x = 16.\n\nWhat do you get when you distribute the 3?',
+    sent: '**Problem 7**\n\n3(x − 4) + 5 = 2x + 9\n\nWhat do you get when you distribute the 3?',
+  },
+  'the working and the question on one line': {
+    reply: `${R7}\n\nWork it silently: 3x − 12 + 5 = 2x + 9 → x = 16. What do you get when you distribute the 3?`,
+    sent: `${R7}\n\nWhat do you get when you distribute the 3?`,
+  },
+};
+// Every other photo opener of the three JSONs (4.6, untuned and tuned 5.5).
+const PHOTO_OPENERS = {
+  'can u solve number 7': [
+    "Solve 3(x − 4) + 5 = 2x + 9.\n\nWhat's your first move with the parentheses on the left side?",
+    "Solve 3(x − 4) + 5 = 2x + 9.\n\nWhat's your first move on the left side — what does distributing the 3 give you?",
+    "Solve 3(x − 4) + 5 = 2x + 9.\n\nWhat's the first thing to do with the 3 outside the parentheses?",
+    'Problem 7: solve 3(x − 4) + 5 = 2x + 9 for x.\n\nStart on the left side. What do you get when you distribute the 3 across (x − 4)?',
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat do you get when you distribute the 3 across (x − 4)?',
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLet's start with the left side, where the parentheses are. What do you get when you multiply 3 by each term inside (x − 4)?",
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nBefore anything else, the 3(x − 4) needs to lose its parentheses. What do you get when you multiply 3 by each part inside?',
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nBefore anything else, the 3(x − 4) needs to be dealt with. What do you get when you distribute the 3 across (x − 4)?',
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLet's get the left side simpler first. What do you get when you distribute the 3 across (x − 4)?",
+  ],
+  'just the answer to number 7 pls no explanation': [
+    "Solve: 3(x − 4) + 5 = 2x + 9\n\nWhat's the first thing you'd do to the left side?",
+    'Solve: 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get when you distribute the 3 into (x − 4)?',
+    "Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat's the first thing you'd do with the 3 outside the parentheses?",
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nStart with the left side: what does 3(x − 4) turn into once you distribute the 3 to both terms inside the parentheses?',
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nStart with the left side: what do you get when you distribute the 3 across (x − 4)?',
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nWhat does the distributive property do to 3(x − 4)? Write out what that part becomes.',
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLet's start with the left side: what do you get when you distribute the 3 across (x − 4)?",
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLet's get the parentheses out of the way first. What do you get when you distribute the 3 across (x − 4)?",
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nI won't hand over the number, but I can get you there fast. Start with the 3(x − 4): what do you get when you distribute the 3 across the parentheses?",
+  ],
+  'can u help me with number 7': [
+    "Solve 3(x − 4) + 5 = 2x + 9.\n\nWhat's the first thing to do with the 3 outside the parentheses?",
+    "Solve 3(x − 4) + 5 = 2x + 9.\n\nWhat's the first thing to do with 3(x − 4)?",
+    "Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLet's start on the left side, where the parentheses are. What do you get when you multiply the 3 by everything inside (x − 4)?",
+    'Problem 7: Solve 3(x − 4) + 5 = 2x + 9 for x.\n\nLook at the 3(x − 4) on the left. What do you get when you distribute the 3 across both terms inside the parentheses?',
+    'Problem 7: Solve for x in 3(x − 4) + 5 = 2x + 9.\n\nWhat do you get if you distribute the 3 across the (x − 4)?',
+  ],
+};
+// The verifiers' counterexamples: a photo of the student's own work or
+// answer, which the server can't see. Each is sent as the model wrote it.
+const PHOTO_THEIRS = {
+  '"is this right?": a correct confirmation': ['is this right?', 'Problem 7: 3(x − 4) + 5 = 2x + 9.\n\nYes, x = 16 is right.\n\nWhat did you do first?'],
+  '"can u check my work"': ['can u check my work', 'Your x = 16 checks out: 3(16 − 4) + 5 = 41 and 2(16) + 9 = 41.\n\nWhat was your first step?'],
+  '"help w 7 im stuck": their first two lines confirmed': ['help w 7 im stuck', `${R7}\n\nYour first two lines, 3x − 12 + 5 = 2x + 9 and 3x − 7 = 2x + 9, are right.\n\nWhat do you do with the 2x on the right next?`],
+  '"help": "You wrote …"': ['help', `${R7}\n\nYou wrote 3x − 12 + 5 = 2x + 9, which is right. What comes next?`],
+  '"where did i mess up on 7"': ['where did i mess up on 7', `${R7}\n\nYour line 3x − 12 + 5 = 2x + 9 is right, and so is 3x − 7 = 2x + 9.\n\nWhat did you do after that?`],
+  '"can u look at my number 7"': ['can u look at my number 7', `${R7}\n\nYou wrote 3x − 7 = 2x + 9 — that matches mine. What do you do with the 2x next?`],
+  'a photo with no caption': ['', `${R7}\n\nYour first two lines, 3x − 12 + 5 = 2x + 9 and 3x − 7 = 2x + 9, are right.\n\nWhat do you do with the 2x on the right next?`],
+  'chat-photo-correct (tuned run 2)': ['i got x = 16 for number 7, is that right?', 'Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nCheck: 3(16 − 4) + 5 = 3(12) + 5 = 41, and 2(16) + 9 = 41 ✓\n\nSo x = 16 is right, and plugging an answer back in is also how you\'d catch a wrong answer from an AI tool. What was your first move on the left side?'],
+  'chat-photo-wrong (tuned run 2)': ['i got x = 10 for number 7, is that right?', "Problem 7: solve 3(x − 4) + 5 = 2x + 9.\n\nCheck it: with x = 10, the left side is 3(10 − 4) + 5 = 23 and the right side is 2(10) + 9 = 29. Those don't match, so 10 isn't a solution.\n\nYour work has a slip somewhere. What did you get for the left side right after distributing the 3?"],
+  'chat-photo-fix (tuned run 1)': ['can u check 5? i got x = 11', 'Problem 5: solve 5 − 2(x + 3) = −11, and you got x = 11.\n\nCheck it: if x = 11, then 5 − 2(11 + 3) = 5 − 2(14) = 5 − 28 = −23, not −11.\n\nWhat is −2 × 3?'],
+  '"is it 16"': ['is it 16', `${R7}\n\nYes, x = 16 is right.`],
+  'an example on other numbers': ['can u help me with number 7', `${R7}\n\nLike this: 2(x − 1) + 3 = x + 7 → 2x − 2 + 3 = x + 7 → x = 6.\n\nWhat do you get when you distribute the 3?`],
+};
+
+describe('photoProblems: a photo opener\'s own restatement (claude-sonnet-5-5)', () => {
+  const U = (content) => [{ role: 'user', content }];
+  const lastResort = (reply, problems) => g.redactLeaks(g.dropExampleLines(reply, problems), problems);
+
+  test('the restated problem, from the first line (or the line after a "Problem 7" header)', () => {
+    for (const { reply } of Object.values(PHOTO_LEAKS)) {
+      const [p] = g.photoProblems(U('can u help me with number 7'), reply);
+      assert.equal(p.text, '3(x - 4) + 5 = 2x + 9', reply);
+      assert.equal(p.value, '16');
+      assert.equal(p.opener, true);
+    }
+    assert.deepEqual(g.photoProblems(U('can u help me with number 7'), 'What a neat worksheet!\n\n3(x − 4) + 5 = 2x + 9'), []);
+    assert.deepEqual(g.photoProblems([], R7), []);
+    assert.deepEqual(g.photoProblems(U('can u help me with number 7'), null), []);
+  });
+
+  for (const [name, { reply, sent }] of Object.entries(PHOTO_LEAKS)) {
+    test(`fixed: ${name}: the working is the leak, and the last resort keeps the restatement and the question`, () => {
+      const problems = g.photoProblems(U('can u help me with number 7'), reply);
+      const leak = g.findLeak(reply, problems);
+      assert.equal(leak.name, 'working');
+      assert.equal(leak.match, '3x - 12 + 5 = 2x + 9');
+      assert.equal(lastResort(reply, problems), sent);
+      assert.equal(g.findLeak(sent, problems), null);
+    });
+  }
+
+  test('every other photo opener of the three JSONs is armed and clean', () => {
+    for (const [said, replies] of Object.entries(PHOTO_OPENERS)) {
+      for (const reply of replies) {
+        const problems = g.photoProblems(U(said), reply);
+        assert.equal(problems.length, 1, reply);
+        assert.equal(g.findLeak(reply, problems), null, reply);
+        assert.equal(lastResort(reply, problems), reply);
+      }
+    }
+  });
+
+  for (const [name, [said, reply]] of Object.entries(PHOTO_THEIRS)) {
+    test(`kept: ${name}`, () => {
+      const problems = g.photoProblems(U(said), reply);
+      assert.equal(g.findLeak(reply, problems), null);
+      assert.equal(lastResort(reply, problems), reply);
+    });
+  }
+
+  test('their work or answer in any turn means no problem at all: the server can\'t see the photo', () => {
+    for (const said of ['is this right?', 'can u check my work', 'where did i mess up on 7', 'i got x = 16 for number 7, is that right?', 'i got x = 10 for number 7, is that right?', 'can u check 5? i got x = 11', 'is it 16', 'i did 3x - 12 + 5 first', 'is my answer wrong']) {
+      assert.deepEqual(g.photoProblems(U(said), R7), [], said);
+    }
+    assert.deepEqual(g.photoProblems([...U('hi'), { role: 'assistant', content: 'Hi! What are you working on?' }, ...U('this one, i think i got it right')], R7), []);
+  });
+
+  test('a typed problem never gets the working kind: its own lines are the student\'s to see', () => {
+    const problems = problemsOf('solve 3(x - 4) + 5 = 2x + 9');
+    const reply = 'Work it: 3x − 12 + 5 = 2x + 9 → 3x − 7 = 2x + 9 → x = 16.\n\nWhat do you get?';
+    assert.equal(g.findLeak(reply, problems).name, 'assignment');
+    assert.equal(g.dropExampleLines(reply, problems), reply);
+    assert.equal(lastResort(reply, problems), 'Work it: 3x − 12 + 5 = 2x + 9 → 3x − 7 = 2x + 9 → x = ?.\n\nWhat do you get?');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Wiring (mocked Anthropic)
 // ---------------------------------------------------------------------------
@@ -1280,6 +1418,53 @@ for (const flag of ['on', 'off']) {
           assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
           const json = await chatJson(servers[flag], sid(), turn(c, nonce()), extra);
           assert.equal(json.reply, sent);
+        });
+      }
+    });
+  }
+}
+
+// The photo backstop's wiring (photoProblems; tuned 5.5 run 2026-10-24,
+// hw-photo-slip): on claude-sonnet-5-5 a photo opener that shows its working
+// and the answer is written again with the 'working' ANSWER GUARD note
+// (MOCK_SAYS: the rewrite leaks too), then sent as the restatement and its
+// question, on the stream and the JSON path. The default model's reply is
+// sent as today, with no retry. The verifiers' counterexamples, a reply that
+// reads as a safety reply and a safety turn are sent as written on both. The
+// marker's base64 has no "=" padding: the server reads the user turn, marker
+// included, and an "=" in it is work of their own (Node decodes it unpadded).
+const PHOTO_TURNS = {
+  'tuned run 1: the working and x = 16': { said: 'can u help me with number 7', ...PHOTO_LEAKS['run 1'] },
+  'tuned run 2: the working, x = 16 and a recited note': { said: 'can u help me with number 7', ...PHOTO_LEAKS['run 2, with the model note it recited'] },
+  'a photo of their work, "help w 7 im stuck"': { said: 'help w 7 im stuck', reply: PHOTO_THEIRS['"help w 7 im stuck": their first two lines confirmed'][1] },
+  'a photo of their work, "help"': { said: 'help', reply: PHOTO_THEIRS['"help": "You wrote …"'][1] },
+  'a photo of their answer, "is this right?"': { said: 'is this right?', reply: PHOTO_THEIRS['"is this right?": a correct confirmation'][1] },
+  'a reply that reads as a safety reply': { said: 'can u help me with number 7', reply: `${PHOTO_LEAKS['run 1'].reply}\n\nIf you ever feel unsafe, call or text 988.` },
+  'a safety turn': { said: 'can u help me with number 7. honestly i want to die', reply: PHOTO_LEAKS['run 1'].reply, live: true },
+};
+for (const flag of ['on', 'off']) {
+  for (const model of [undefined, 'claude-sonnet-5-5']) {
+    describe(`photo backstop wiring, flag ${flag}, ${model || 'default model'}`, () => {
+      const turn = (c, n) => [{ role: 'user', content: `${c.said} (${n}) MOCK_SAYS_B64:${b64(c.reply).replace(/=+$/, '')}` }];
+      for (const [name, c] of Object.entries(PHOTO_TURNS)) {
+        const sent = model && c.sent ? c.sent : c.reply;
+        test(`${name}: ${sent === c.reply ? 'sent as written' : 'the restatement and its question'}`, async () => {
+          const extra = { ...(model ? { model } : {}) };
+          const n = nonce();
+          const s = sid();
+          const { deltas, complete } = await chatSse(servers[flag], s, turn(c, n), { ...extra, imageId: await upload(servers[flag], s) });
+          assert.equal(complete.reply, sent);
+          assert.equal(deltas.join(''), sent);
+          if (c.live) assert.ok(deltas.length > 1, 'a safety turn with nothing armed is streamed live');
+          const calls = captured(servers[flag], n);
+          assert.equal(calls.length, sent === c.reply ? 1 : 2);
+          assert.equal(calls[0].model, model || 'claude-sonnet-4-6');
+          if (calls.length === 2) assert.match(systemText(calls[1].system), /## ANSWER GUARD \(this reply only\)\nYour draft reply gave away your own working of the student's problem \(3x - 12 \+ 5 = 2x \+ 9\) and its answer \(x = 16\)\./);
+          const t = sid();
+          const m = nonce();
+          const json = await chatJson(servers[flag], t, turn(c, m), { ...extra, imageId: await upload(servers[flag], t) });
+          assert.equal(json.reply, sent);
+          assert.equal(captured(servers[flag], m).length, calls.length);
         });
       }
     });
