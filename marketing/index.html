@@ -3,39 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0B1330" />
+  <meta name="theme-color" content="#0A1130" />
+  <meta name="color-scheme" content="dark" />
   <meta name="apple-itunes-app" content="app-id=6773192313" />
 
-  <!-- Primary SEO -->
-  <title>Mercurius AI — AI literacy tutor for independent thinkers</title>
-  <meta
-    name="description"
-    content="Mercurius AI helps learners ask better questions, challenge ideas, and build real understanding in the age of artificial intelligence. Guided, not given."
-  />
+  <title>Mercurius AI — Learn how AI really works</title>
+  <meta name="description" content="Mercurius is a free AI literacy tutor for teens on iPhone. Merc asks questions instead of handing you answers, so you learn how AI really works and how to check what it tells you." />
   <link rel="canonical" href="https://trymercurius.com/" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Mercurius AI — AI literacy tutor for independent thinkers" />
-  <meta property="og:description" content="Understand AI. Think for yourself. The AI literacy tutor that helps you ask better questions and build real understanding." />
-  <meta property="og:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta property="og:title" content="Mercurius AI — Learn how AI really works" />
+  <meta property="og:description" content="AI sounds sure. That doesn't mean it's right. The free AI literacy tutor that asks instead of tells." />
+  <meta property="og:image" content="https://trymercurius.com/assets/brand/og-card.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="The Mercurius logo, Merc inside a question mark, over the line: Learn how AI really works." />
   <meta property="og:url" content="https://trymercurius.com/" />
   <meta property="og:site_name" content="Mercurius AI" />
-
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Mercurius AI — AI literacy tutor for independent thinkers" />
-  <meta name="twitter:description" content="Understand AI. Think for yourself." />
-  <meta name="twitter:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta name="twitter:title" content="Mercurius AI — Learn how AI really works" />
+  <meta name="twitter:description" content="AI sounds sure. That doesn't mean it's right." />
+  <meta name="twitter:image" content="https://trymercurius.com/assets/brand/og-card.png" />
 
-  <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/brand/favicon-48.png" />
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/brand/apple-touch-icon.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=11" />
 
-  <link rel="stylesheet" href="/styles.css?v=9" />
+  <!-- Without JS each reel is a native <video controls>; hide the JS poster + play button. -->
+  <noscript><style>.reel-poster, .reel-play, .reel-duration { display: none !important; }</style></noscript>
 
   <script type="application/ld+json">
     {
@@ -43,7 +43,7 @@
       "@type": "Organization",
       "name": "Mercurius AI",
       "url": "https://trymercurius.com/",
-      "logo": "https://trymercurius.com/assets/mercurius-logo.png",
+      "logo": "https://trymercurius.com/assets/brand/apple-touch-icon.png",
       "description": "AI literacy tutor for independent thinkers."
     }
   </script>
@@ -52,61 +52,97 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="site-header" role="banner">
+  <header class="site-header">
     <div class="container header-inner">
-      <a class="brand" href="/" aria-label="Mercurius AI home">
-        <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+      <a class="brand" href="/">
+        <img src="/assets/brand/mercurius-logo.svg" alt="Mercurius home" width="140" height="65" />
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/audience.html">Who it's for</a>
-        <a class="cta-pill" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Start Learning</a>
+        <ul class="nav-list">
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+        </ul>
       </nav>
+      <a class="btn btn-primary btn-small header-cta" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+      <details class="nav-menu" data-nav-menu>
+        <summary><span class="nav-menu-icon" aria-hidden="true"></span>Menu</summary>
+        <div class="nav-menu-panel">
+          <nav aria-label="Primary">
+            <ul class="nav-list">
+              <li><a href="/features.html">Features</a></li>
+              <li><a href="/modes.html">Modes</a></li>
+              <li><a href="/how-it-works.html">How it works</a></li>
+              <li><a href="/audience.html">Who it's for</a></li>
+              <li><a href="/ads.html">Watch</a></li>
+            </ul>
+          </nav>
+          <a class="btn btn-primary" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+        </div>
+      </details>
     </div>
   </header>
 
   <main id="main">
     <!-- ─────────────────────────────────────────────────────────────
-         HERO
+         HERO — the ads' voice ("Learn how AI really works.", Ad 1's
+         exchange) with Merc as the ads draw him (assets/brand/merc.svg,
+         inlined so his layers can move). Motion runs once, never under
+         prefers-reduced-motion. The lesson replay must stay the very next
+         element (scripts/check-demo.mjs checks it).
          ───────────────────────────────────────────────────────────── -->
     <section class="hero" aria-labelledby="hero-headline">
-      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="rings" aria-hidden="true">
+        <svg class="stars" viewBox="0 0 1600 900" width="1600" height="900" focusable="false">
+          <defs><path id="hero-spark" d="M0 -20 C3 -6 6 -3 20 0 C6 3 3 6 0 20 C-3 6 -6 3 -20 0 C-6 -3 -3 -6 0 -20 Z" /></defs>
+          <use class="s-top" href="#hero-spark" transform="translate(700 36) scale(.2)" opacity=".5" />
+          <use class="s-top" href="#hero-spark" transform="translate(962 26) scale(.28)" opacity=".6" />
+          <use href="#hero-spark" transform="translate(150 120) scale(.3)" opacity=".55" />
+          <use href="#hero-spark" transform="translate(196 520) scale(.2)" opacity=".4" />
+          <use href="#hero-spark" transform="translate(128 800) scale(.24)" opacity=".45" />
+          <use href="#hero-spark" transform="translate(1452 150) scale(.32)" opacity=".6" />
+          <use href="#hero-spark" transform="translate(1484 560) scale(.2)" opacity=".4" />
+          <use href="#hero-spark" transform="translate(1412 812) scale(.18)" opacity=".45" />
+          <use href="#hero-spark" transform="translate(560 806) scale(.16)" opacity=".35" />
+          <use href="#hero-spark" transform="translate(1040 790) scale(.22)" opacity=".5" />
+        </svg>
+      </div>
       <div class="container hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">AI Literacy Tutor</p>
-          <h1 id="hero-headline" class="display">
-            Understand <span class="text-gradient">AI.</span><br />
-            Think for <span class="text-gradient">Yourself.</span>
-          </h1>
+          <p class="pill-tag"><svg viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><path d="M0 -20 C3 -6 6 -3 20 0 C6 3 3 6 0 20 C-3 6 -6 3 -20 0 C-6 -3 -3 -6 0 -20 Z" /></svg>The AI literacy tutor for teens</p>
+          <h1 id="hero-headline" class="display">Learn how AI <em>really works.</em></h1>
+          <p class="deck">AI sounds sure. That doesn't mean it's right.</p>
           <p class="lede">
-            Mercurius AI helps learners ask better questions, challenge ideas, and
-            build real understanding in the age of artificial intelligence.
+            Mercurius is a free AI literacy tutor for iPhone. Merc, your tutor,
+            asks you questions instead of handing you answers, so you learn to
+            check what AI tells you and work things out yourself.
           </p>
-          <div class="cta-row" style="align-items: center;">
-            <a href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer" aria-label="Download Mercurius on the App Store">
-              <img src="/assets/app-store-badge.svg" alt="Download on the App Store"
-                   width="144" height="48" style="display: block;" />
+          <div class="cta-row">
+            <a class="store-badge" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">
+              <img src="/assets/app-store-badge.svg" alt="Download on the App Store" width="144" height="48" fetchpriority="high" />
             </a>
-            <a class="btn btn-ghost" href="/features.html">Explore Features</a>
+            <a class="btn btn-secondary" href="#demo">Try a real lesson</a>
           </div>
-          <p class="hero-tagline">Here to help you think, not think for you.</p>
+          <p class="fineprint">Free on the App Store. Requires iPhone, iOS 17 or later.</p>
         </div>
 
-        <div class="hero-art" aria-hidden="true">
-          <picture>
-            <source srcset="/assets/mercurius-logo.webp" type="image/webp" />
-            <img
-              src="/assets/mercurius-logo.png"
-              alt=""
-              width="1024"
-              height="1024"
-              class="hero-logo"
-              loading="eager"
-              fetchpriority="high"
-            />
-          </picture>
+        <div class="hero-art">
+          <div class="hero-merc">
+            <svg class="merc-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 300" width="240" height="300" role="img" aria-labelledby="merc-title" focusable="false"><title id="merc-title">Merc, the Mercurius mascot</title><desc>A small purple messenger with blue wings on his helmet, in a white tunic with a gold belt.</desc><g class="merc-wing-l"><defs><linearGradient id="mercs-wing-left-gw" x1="0.15" y1="0" x2="0.55" y2="1"><stop offset="0" stop-color="#C3D3FF"/><stop offset="0.45" stop-color="#7E98FB"/><stop offset="1" stop-color="#3E5CF1"/></linearGradient></defs><path d="M86 74 C82 56 74 38 64 26 C57 19 49 23 50 33 C42 35 39 45 44 53 C37 57 37 69 44 73 C38 79 40 91 49 93 C48 101 57 107 66 101 C74 97 81 95 88 92 Z" fill="url(#mercs-wing-left-gw)"/><path d="M57 31 C63 41 70 54 76 68" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/></g><g class="merc-wing-r"><defs><linearGradient id="mercs-wing-right-gw" x1="0.15" y1="0" x2="0.55" y2="1"><stop offset="0" stop-color="#C3D3FF"/><stop offset="0.45" stop-color="#7E98FB"/><stop offset="1" stop-color="#3E5CF1"/></linearGradient></defs><path d="M154 74 C158 56 166 38 176 26 C183 19 191 23 190 33 C198 35 201 45 196 53 C203 57 203 69 196 73 C202 79 200 91 191 93 C192 101 183 107 174 101 C166 97 159 95 152 92 Z" fill="url(#mercs-wing-right-gw)"/><path d="M183 31 C177 41 170 54 164 68" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/></g><g class="merc-body"><defs><linearGradient id="mercs-body-gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5D5CF4"/><stop offset="1" stop-color="#7337E5"/></linearGradient><linearGradient id="mercs-body-gt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4E3F5"/></linearGradient><linearGradient id="mercs-body-gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0CF6A"/><stop offset="1" stop-color="#C79D3C"/></linearGradient></defs><rect x="62" y="160" width="15" height="62" rx="7.5" fill="url(#mercs-body-gl)" transform="rotate(10 70 162)"/><rect x="99" y="240" width="16" height="28" rx="5" fill="#7335E4"/><rect x="125" y="240" width="16" height="28" rx="5" fill="#7335E4"/><rect x="87" y="262" width="32" height="17" rx="8.5" fill="#7A37E8"/><rect x="121" y="262" width="32" height="17" rx="8.5" fill="#7A37E8"/><rect x="110" y="138" width="20" height="22" rx="6" fill="#7438E6"/><rect x="77" y="142" width="86" height="104" rx="26" fill="url(#mercs-body-gt)"/><path d="M74 170 C70 152 84 141 104 141 C124 141 146 146 158 156 C166 164 164 176 154 180 C132 178 98 176 74 170 Z" fill="#FFFFFF" stroke="#DCDAF0" stroke-width="1.2"/><path d="M88 196 L152 207 M94 223 L142 231" fill="none" stroke="#D6D4EB" stroke-width="2" stroke-linecap="round"/><rect x="86" y="202" width="68" height="7" rx="3.5" fill="url(#mercs-body-gg)"/><circle cx="120" cy="205.5" r="6.5" fill="url(#mercs-body-gg)"/><circle cx="118" cy="203.5" r="2" fill="#F8E7A6"/></g><g class="merc-arm"><defs><linearGradient id="mercs-arm-gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5D5CF4"/><stop offset="1" stop-color="#7337E5"/></linearGradient></defs><rect x="157" y="140" width="18" height="68" rx="9" fill="url(#mercs-arm-gl)"/></g><g class="merc-head"><defs><linearGradient id="mercs-head-gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7B3DEF"/><stop offset="0.55" stop-color="#6A5BF7"/><stop offset="1" stop-color="#4F78FF"/></linearGradient><linearGradient id="mercs-head-gf" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#5F40F1"/><stop offset="0.6" stop-color="#8A3CEA"/><stop offset="1" stop-color="#AE3CE2"/></linearGradient><linearGradient id="mercs-head-gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.6" stop-color="#F7F6FD"/><stop offset="1" stop-color="#D9D7F0"/></linearGradient></defs><path d="M80 86 L160 86 L160 116 C160 134 144 146 120 146 C96 146 80 134 80 116 Z" fill="url(#mercs-head-gf)"/><path d="M80 82 L80 56 C80 40 96 31 120 31 C144 31 160 40 160 56 L160 82 Z" fill="url(#mercs-head-gc)"/><rect x="68" y="73" width="104" height="21" rx="10.5" fill="url(#mercs-head-gb)"/><rect x="113" y="128" width="14" height="5" rx="2.5" fill="#24184F"/></g><g class="merc-eyes"><rect x="92" y="97" width="16" height="4" rx="2" fill="#24184F"/><rect x="132" y="97" width="16" height="4" rx="2" fill="#24184F"/><path d="M95 106 L106 106 M134 106 L145 106" fill="none" stroke="#24184F" stroke-opacity="0.75" stroke-width="1.6" stroke-linecap="round"/></g><g class="merc-sparkle"><path d="M0 -20 C3 -6 6 -3 20 0 C6 3 3 6 0 20 C-3 6 -6 3 -20 0 C-6 -3 -3 -6 0 -20 Z" fill="#C2AEFF" transform="translate(204 58) scale(0.45)"/></g></svg>
+          </div>
+          <div class="hero-chat">
+            <p class="speaker-tag"><img src="/assets/brand/merc-avatar.svg" alt="" width="22" height="18" />Merc, your Mercurius tutor</p>
+            <ol class="chat" aria-label="An exchange from the reel “AI Sounds Sure”">
+              <li class="bubble bubble--student"><span class="sr-only">Student: </span>Is this source real?</li>
+              <li class="bubble bubble--merc"><span class="sr-only">Merc: </span>Good instinct. How could you check?</li>
+              <li class="bubble bubble--student"><span class="sr-only">Student: </span>Search for the study itself?</li>
+              <li class="bubble bubble--merc"><span class="sr-only">Merc: </span>Exactly. So why would an AI invent one?</li>
+            </ol>
+            <p class="hero-motto">Merc asks. You think. <em>It sticks.</em></p>
+            <p class="chat-source">From our reel “AI Sounds Sure.” <a href="#reels">Watch it below</a>.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -327,15 +363,201 @@
     <!-- DEMO:END -->
 
     <!-- ─────────────────────────────────────────────────────────────
-         "WHAT'S INSIDE" — table-of-contents grid that links to the
-         five detail pages. Replaces the inline sections the page
-         used to render in one big scroll.
+         REELS — six of the Instagram Reels ads. The cards between the
+         REELS markers are written from docs/marketing-reels/ads.json
+         (+ hero.json) by scripts/build-reels.mjs; don't edit them by hand.
+         ads.js plays one at a time, muted first.
+         Posters load with the page (not lazily, at low priority) so
+         nothing loads while a visitor steps through the lesson replay above.
          ───────────────────────────────────────────────────────────── -->
-    <section class="section section-soft" aria-labelledby="toc-heading">
+    <section id="reels" class="section reels-section" aria-labelledby="reels-heading">
+      <div class="container">
+        <div class="reels-head">
+          <header class="section-head">
+            <p class="eyebrow">Watch</p>
+            <h2 id="reels-heading" class="section-title">See it in <em>30 seconds.</em></h2>
+            <p class="section-sub">Short reels about how AI works and how to use it well. Each one starts muted, with its caption and a written version of what’s on screen right under it.</p>
+          </header>
+          <a class="btn btn-secondary btn-arrow" href="/ads.html">All the reels</a>
+        </div>
+<!-- REELS:START -->
+        <ul class="reel-row" role="list">
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/hero-4x5.mp4" data-width="720" data-height="900" data-title-id="reel-ai-sounds-sure-title" data-caption-id="reel-ai-sounds-sure-cap">
+              <img class="reel-poster" src="/assets/ads/hero-4x5-poster.jpg" width="720" height="900" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “AI Sounds Sure”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:20</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/hero-4x5-poster.jpg" width="720" height="900" aria-labelledby="reel-ai-sounds-sure-title" aria-describedby="reel-ai-sounds-sure-cap"><source src="/assets/ads/hero-4x5.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ai-sounds-sure-title">AI Sounds Sure</h3>
+              <div class="reel-caption" id="reel-ai-sounds-sure-cap">
+                <p>AI sounds sure. That doesn't mean it's right.</p>
+                <p>Chatbots can invent a study and insist it's real. Merc does the opposite. He asks how you'd check, then lets you work it out.</p>
+                <p>Has an AI ever confidently told you something wrong?</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>&quot;AI sounds sure. That doesn't mean it's right. Can you tell the difference?&quot;</li>
+                  <li>Most AI chatbots. Student: &quot;Is this source real?&quot; Chatbot: &quot;Yes! It's a real study.&quot; Stamp: &quot;Confidently wrong.&quot;</li>
+                  <li>Merc, your Mercurius tutor. Student: &quot;Is this source real?&quot; Merc: &quot;Good instinct. How could you check?&quot; Student: &quot;Search for the study itself?&quot; Merc: &quot;Exactly. So why would an AI invent one?&quot;</li>
+                  <li>&quot;Merc asks. You think. It sticks.&quot;</li>
+                  <li>End card: Merc. &quot;Mercurius. Learn how AI really works.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-18.mp4" data-width="720" data-height="900" data-title-id="reel-ad-18-title" data-caption-id="reel-ad-18-cap">
+              <img class="reel-poster" src="/assets/ads/ad-18-poster.jpg" width="540" height="675" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Count the R's”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:20</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-18-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-18-title" aria-describedby="reel-ad-18-cap"><source src="/assets/ads/ad-18.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ad-18-title">Count the R's</h3>
+              <div class="reel-caption" id="reel-ad-18-cap">
+                <p>How many R's are in &quot;strawberry&quot;? Some AI chatbots have said 2.</p>
+                <p>AI doesn't read letters. It reads tokens, chunks of words like &quot;str&quot; + &quot;aw&quot; + &quot;berry,&quot; so it never really sees each R. Know how it reads and you'll know where it slips.</p>
+                <p>Which word do you think would trip it up next?</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>&quot;How many R's are in strawberry?&quot; Letter tiles spell S-T-R-A-W-B-E-R-R-Y. &quot;Count them in your head.&quot;</li>
+                  <li>&quot;We asked an AI.&quot; Student: &quot;How many R's are in 'strawberry'?&quot; AI: &quot;There are 2 R's in 'strawberry.'&quot;</li>
+                  <li>&quot;Let's count.&quot; The three R tiles light up, numbered 1, 2, 3. Stamp: &quot;It's 3.&quot;</li>
+                  <li>&quot;AI doesn't see letters. It sees tokens.&quot; The tiles split into three tokens: STR, AW, BERRY. &quot;Tokens are chunks of words, like str + aw + berry. It never really sees each R.&quot;</li>
+                  <li>&quot;Know how it reads. Spot where it slips.&quot; Merc: &quot;Want to find its other blind spots?&quot;</li>
+                  <li>End card: Merc. &quot;Mercurius. Count on yourself.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-25.mp4" data-width="720" data-height="900" data-title-id="reel-ad-25-title" data-caption-id="reel-ad-25-cap">
+              <img class="reel-poster" src="/assets/ads/ad-25-poster.jpg" width="540" height="675" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “No Such Book”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:20</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-25-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-25-title" aria-describedby="reel-ad-25-cap"><source src="/assets/ads/ad-25.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ad-25-title">No Such Book</h3>
+              <div class="reel-caption" id="reel-ad-25-cap">
+                <p>Your AI found the perfect source. The book doesn't exist.</p>
+                <p>AI can invent citations with a real-sounding author, title, publisher, and page number. Before you cite anything, search the exact title, check a library catalog, or look on the publisher's website.</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>&quot;Your AI found you the perfect source.&quot; AI: &quot;Here's a perfect source for your essay:&quot; Citation: &quot;Marsh, Helen. (2019). The Secret Life of Pencils. Brightwater Press, p. 112.&quot;</li>
+                  <li>&quot;Let's go find it.&quot; The library catalog search for &quot;The Secret Life of Pencils&quot; returns 0 found.</li>
+                  <li>&quot;The book doesn't exist. The AI made it up.&quot; Stamp: &quot;Not found.&quot; &quot;No author. No publisher. No page 112.&quot;</li>
+                  <li>&quot;AI can invent sources that sound totally real.&quot; A book: real-sounding title and author. A link: goes nowhere. A quote: with a page number. Each is stamped &quot;Made up.&quot;</li>
+                  <li>&quot;Look it up before you cite it.&quot; Merc: &quot;Where could we check if a book is real?&quot; Library catalog. Publisher's website. Search the exact title.</li>
+                  <li>End card: Merc. &quot;Mercurius. Look it up first.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-23.mp4" data-width="720" data-height="900" data-title-id="reel-ad-23-title" data-caption-id="reel-ad-23-cap">
+              <img class="reel-poster" src="/assets/ads/ad-23-poster.jpg" width="540" height="675" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “The Call”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:20</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-23-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-23-title" aria-describedby="reel-ad-23-cap"><source src="/assets/ads/ad-23.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ad-23-title">The Call</h3>
+              <div class="reel-caption" id="reel-ad-23-cap">
+                <p>Your mom calls. She sounds scared and needs money right now. It isn't her.</p>
+                <p>AI can copy a voice from a few seconds of audio, like a birthday video posted online. If a call feels urgent and off, hang up and call back on a number you know. Better yet, pick a family code word today.</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>&quot;Your mom calls. She sounds scared.&quot; An incoming call from &quot;Mom.&quot;</li>
+                  <li>&quot;She needs money. Right now.&quot; On the call: &quot;Honey, it's me.&quot; &quot;I lost my wallet and my phone.&quot; &quot;Please send $300 right now.&quot; &quot;Please hurry.&quot;</li>
+                  <li>&quot;It wasn't her. It was an AI voice.&quot; The caller is now &quot;Unknown voice.&quot; Stamp: &quot;Fake.&quot;</li>
+                  <li>&quot;AI can copy a voice from a short video.&quot; Mom's 4-second post, &quot;Happy birthday to my favorite kid!&quot;, turns into an &quot;AI voice copy.&quot;</li>
+                  <li>&quot;Hang up. Call back. Or use a code word.&quot; Merc: &quot;What's a question only your real family could answer?&quot; Student: &quot;What's our dog's middle name?&quot;</li>
+                  <li>End card: Merc. &quot;Mercurius. Hang up. Call back.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-09.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-09-title" data-caption-id="reel-ad-09-cap">
+              <img class="reel-poster" src="/assets/ads/ad-09-poster.jpg" width="540" height="675" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Two Doors”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:20</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-09-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-09-title" aria-describedby="reel-ad-09-cap"><source src="/assets/ads/ad-09.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ad-09-title">Two Doors</h3>
+              <div class="reel-caption" id="reel-ad-09-cap">
+                <p>Door A: the answer. Door B: understanding. Pick one.</p>
+                <p>The answer gets you through tonight. Understanding gets you through finals, and it's still yours after the test. Merc always points you to door B.</p>
+                <p>Be honest. Which door do you usually pick?</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>&quot;Pick a door.&quot; Door A: &quot;The answer.&quot; Door B: &quot;Understanding.&quot;</li>
+                  <li>&quot;Door A: the answer.&quot; It opens on a card that says &quot;Answer: C,&quot; which blurs and fades. &quot;Gone by test day.&quot;</li>
+                  <li>&quot;Door B: understanding.&quot; It opens on Merc, glowing. &quot;Yours forever.&quot;</li>
+                  <li>&quot;A gets you through tonight. B gets you through finals.&quot;</li>
+                  <li>End card: Merc. &quot;Mercurius. Always pick door B.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+          <li class="reel">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-02.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-02-title" data-caption-id="reel-ad-02-cap">
+              <img class="reel-poster" src="/assets/ads/ad-02-poster.jpg" width="540" height="675" alt="" fetchpriority="low" decoding="async" />
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Messenger of the Gods”, 25 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <span class="reel-duration" aria-hidden="true">0:25</span>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-02-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-02-title" aria-describedby="reel-ad-02-cap"><source src="/assets/ads/ad-02.mp4" type="video/mp4" /></video></noscript>
+            </div>
+            <div class="reel-body">
+              <div class="reel-meta"><span class="chip chip--merc">Meet Merc</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
+              <h3 class="reel-title" id="reel-ad-02-title">Messenger of the Gods</h3>
+              <div class="reel-caption" id="reel-ad-02-cap">
+                <p>2,000 years ago, Mercury carried messages for the gods. Now he has a new job.</p>
+                <p>Meet Merc, the messenger behind Mercurius. He doesn't deliver answers. He delivers the right question, so you're the one who figures it out.</p>
+                <p>What's one thing about AI you've always wanted to understand?</p>
+              </div>
+              <details class="reel-transcript">
+                <summary>What’s on screen</summary>
+                <ol>
+                  <li>Ancient Rome. Merc flies in under a temple roof. &quot;Mercury. Messenger of the gods. Fastest delivery in the empire.&quot;</li>
+                  <li>&quot;2,000 years later.&quot; Merc lands on a scroll: &quot;Today's delivery: Messages for Jupiter.&quot; The line is crossed out and replaced with &quot;Your questions about AI.&quot; &quot;New job. Same wings.&quot;</li>
+                  <li>&quot;A message from Merc.&quot; An envelope opens. &quot;From: Merc. Why do you think the AI sounded so sure?&quot;</li>
+                  <li>&quot;He doesn't deliver answers. He delivers the right question.&quot;</li>
+                  <li>End card: Merc. &quot;Mercurius. Divine tutoring for mere mortals.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
+                </ol>
+              </details>
+            </div>
+          </li>
+        </ul>
+<!-- REELS:END -->
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────
+         FIVE SHORT READS — links to the detail pages.
+         ───────────────────────────────────────────────────────────── -->
+    <section class="section section-band" aria-labelledby="toc-heading">
       <div class="container">
         <header class="section-head">
           <p class="eyebrow">What's inside</p>
-          <h2 id="toc-heading" class="section-title">Five short reads.</h2>
+          <h2 id="toc-heading" class="section-title">Five short <em>reads.</em></h2>
           <p class="section-sub">
             Each page covers one part of how Mercurius works and why we built it
             the way we did. Read in any order.
@@ -344,30 +566,35 @@
 
         <div class="toc-grid">
           <a class="toc-card" href="/features.html">
+            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></svg></span>
             <h3>Features</h3>
             <p>Socratic learning, critical thinking, AI literacy — the three pillars and what they mean in practice.</p>
             <span class="toc-arrow">Read</span>
           </a>
 
           <a class="toc-card" href="/modes.html">
+            <span class="card-icon card-icon--lavender" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></svg></span>
             <h3>Modes</h3>
             <p>Socratic, Debate, Discussion. One conversation, three pedagogical postures.</p>
             <span class="toc-arrow">Read</span>
           </a>
 
           <a class="toc-card" href="/how-it-works.html">
+            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg></span>
             <h3>How it works</h3>
             <p>Ask, explore, understand. The three-beat loop that shapes every Mercurius session.</p>
             <span class="toc-arrow">Read</span>
           </a>
 
           <a class="toc-card" href="/trust.html">
+            <span class="card-icon card-icon--orange" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg></span>
             <h3>Responsibility</h3>
             <p>What we promise, what we don't, and why honesty about AI's limits is the whole product.</p>
             <span class="toc-arrow">Read</span>
           </a>
 
           <a class="toc-card" href="/audience.html">
+            <span class="card-icon card-icon--lavender" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></span>
             <h3>Who it's for</h3>
             <p>Students, teachers, parents, and schools — and what each gets from a tutor that refuses to do the work for you.</p>
             <span class="toc-arrow">Read</span>
@@ -377,49 +604,48 @@
     </section>
 
     <!-- ─────────────────────────────────────────────────────────────
-         FINAL CTA
+         END CARD — every ad ends this way: logo, the tagline in italic,
+         badge, "Search 'Mercurius AI' on iPhone". (audience.html links #cta.)
          ───────────────────────────────────────────────────────────── -->
-    <section id="cta" class="section cta-section" aria-labelledby="cta-heading">
-      <div class="container cta-inner">
-        <h2 id="cta-heading" class="display cta-headline">
-          Learn AI. <span class="text-gradient">Think Better.</span>
-        </h2>
-        <p class="cta-sub">
-          Understand AI with clarity, curiosity, and confidence.
-        </p>
-        <a href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer" aria-label="Download Mercurius on the App Store" style="display: inline-block;">
-          <img src="/assets/app-store-badge.svg" alt="Download on the App Store"
-               width="168" height="56" style="display: block;" />
+    <section id="cta" class="section endcard" aria-labelledby="cta-heading">
+      <div class="rings" aria-hidden="true"></div>
+      <div class="container endcard-inner">
+        <img class="endcard-logo" src="/assets/brand/mercurius-logo-stacked.svg" alt="Mercurius" width="168" height="192" />
+        <h2 id="cta-heading" class="endcard-tagline">Learn how AI really works.</h2>
+        <a class="store-badge" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">
+          <img src="/assets/app-store-badge.svg" alt="Download on the App Store" width="168" height="56" />
         </a>
-        <p class="fineprint">
-          Free on the App Store. Requires iPhone, iOS 17 or later.
-        </p>
+        <p class="fineprint">Search “Mercurius AI” on iPhone.</p>
+        <p class="fineprint">Free on the App Store. Requires iPhone, iOS 17 or later.</p>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer" role="contentinfo">
+  <footer class="site-footer">
     <div class="container footer-inner">
-      <div>
-        <a class="brand" href="/" aria-label="Mercurius AI home">
-          <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
-        </a>
+      <div class="footer-brand">
+        <a class="footer-logo" href="/"><img src="/assets/brand/mercurius-wordmark.svg" alt="Mercurius home" width="120" height="23" /></a>
         <p class="footer-tagline">Guided, not given.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/trust.html">Responsibility</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/support.html">Support</a>
+        <ul>
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/trust.html">Responsibility</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+          <li><a href="/privacy.html">Privacy</a></li>
+          <li><a href="/terms.html">Terms</a></li>
+          <li><a href="/support.html">Support</a></li>
+        </ul>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
     </div>
   </footer>
 
-  <script src="/script.js?v=7" defer></script>
+  <script src="/script.js?v=9" defer></script>
   <script src="/demo.js?v=1" defer></script>
+  <script src="/ads.js?v=2" defer></script>
 </body>
 </html>

@@ -8,22 +8,34 @@ JS — no framework, no build step, no dependencies.
 
 ```
 marketing/
-├── index.html          # Home: hero, lesson replay (#demo), links to the five short reads
+├── index.html          # Home: hero (Merc + Ad 1's exchange), lesson replay (#demo),
+│                       #   six reels (#reels), the five short reads, end card (#cta)
+├── ads.html            # "Watch" (/ads): every reel, grouped by category, with captions
 ├── features.html, modes.html, how-it-works.html, audience.html, trust.html
 ├── privacy.html, terms.html, support.html   # linked from the app and App Store
 ├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites
 ├── robots.txt, sitemap.xml
-├── styles.css          # Single stylesheet; brand tokens at top
-├── script.js           # Mode-pill tabs + dynamic year
+├── styles.css          # Single stylesheet; design tokens at top
+├── script.js           # Mode-pill tabs, phone menu niceties, dynamic year
 ├── demo.js             # Lesson replay step-through (homepage only)
+├── ads.js              # Reel players: poster first, one at a time, muted + sound toggle
 ├── assets/
-│   ├── mercurius-logo.png / .webp  # Full logo + wordmark (1024×1024); hero
-│   ├── og-card.png          # 1200×630 link-preview image (og:image)
-│   ├── favicon-48.png, apple-touch-icon.png
+│   ├── brand/               # Brand kit: logo lockups (dark + on-light), mark, wordmark,
+│   │                        #   Merc (merc.svg + the 7 layers in merc/, merc-avatar.svg),
+│   │                        #   favicons, apple-touch-icon, og-card.png (1200×630)
+│   ├── ads/                 # Only what the reel cards use: ad-NN.mp4 + ad-NN-poster.jpg,
+│   │                        #   hero-4x5.mp4 + poster (Ad 1 without its XP/ranks segment)
 │   ├── app-store-badge.svg  # Apple's official US badge, self-hosted
-│   └── mercurius-icon.png   # Old cropped icon (470×415), no longer referenced
+│   └── mercurius-logo.png/.webp, og-card.png, favicon-48.png, apple-touch-icon.png,
+│       mercurius-icon.png   # Old brand: no page uses them; kept because links from outside
+│                            #   the site may (old link previews, docs/certificate/README.md)
 └── README.md
 ```
+
+Everything in this folder is published, so internal material lives elsewhere:
+the design system is `docs/marketing-design.md`, the Reels manifests are
+`docs/marketing-reels/`, and the scripts that write the generated parts of
+the pages are in `scripts/` (below).
 
 Canonical URLs are the extensionless form (`https://trymercurius.com/privacy`).
 Netlify rewrites the `.html` links in the pages to that form on deploy, and
@@ -60,8 +72,10 @@ No live AI calls. Spec: `docs/marketing-demo.md`.
   visitor's pick locally from the card's `data-answer`, say what the student
   picked in the recorded session, then "Continue" reveals that pick and the
   real reply. "Show the whole lesson" and "Start over" are in the panel
-  header. Styles are the "Lesson replay" block at the end of `styles.css`
-  (iOS `BrandColor`/`BrandRadius` values, darkened where needed for AA).
+  header. Styles are the "Lesson replay" block near the end of `styles.css`:
+  a dark panel on the navy page, the student's bubble in the ads' accent,
+  and Merc's bubble white, so the cards, checks and options inside it keep
+  the iOS `BrandColor`/`BrandRadius` values (darkened where needed for AA).
 - **Debug hook:** `?demo-step=turn1|answered1|turn2|answered2|turn3|answered3|end|whole`
   opens the replay at that point. Earlier checks are answered with the
   recorded pick, or with the right answer where none was recorded (turn 3's
@@ -92,6 +106,68 @@ No live AI calls. Spec: `docs/marketing-demo.md`.
   `scripts/build-demo-replay.mjs` and the matching `perRun[…]`/`TURNS` in
   `check-demo.mjs`, regenerate, re-run both checks, and update the spec
   (`docs/marketing-demo.md`) in the same PR.
+
+## Reels (homepage `#reels` and `/ads`)
+
+The Instagram Reels ads. The cards between `<!-- REELS:START -->` and
+`<!-- REELS:END -->` in `index.html` and between `<!-- ADS:START -->` and
+`<!-- ADS:END -->` in `ads.html` are written by `scripts/build-reels.mjs` from
+`docs/marketing-reels/ads.json` (one entry per ad, from the founder's Reels
+calendar) and `docs/marketing-reels/hero.json` (Ad 1's XP-free cut). Edit the
+manifests, not the cards, then:
+
+```bash
+node scripts/build-reels.mjs           # rewrite the cards
+node scripts/build-reels.mjs --check   # fail if the cards or assets/ads/ drift
+```
+
+The manifests stay out of this folder because they carry posting dates,
+source file names and internal notes.
+
+- **Honest copy:** ads flagged `unshipped` (XP, ranks or levels in the video
+  or caption: ads 1, 3 and 15) are left off, and their videos are not in
+  `assets/ads/`. Ad 1 appears as its XP-free cut (`hero-4x5.mp4`) with the
+  caption that has only its XP/ranks sentence deleted. Ads with no rendered
+  video yet (16 "The Yes-Man", 17 "Ask It Twice": `video: null`) are left
+  off until one exists; add the files to `assets/ads/`, fill in `video`,
+  `poster`, size, `duration` and `transcript`, and rerun the script.
+- **Captions:** the Instagram caption as the text alternative, minus the
+  hashtags, the "Search 'Mercurius AI' on the App Store" line, and any
+  sentence listed in the ad's `siteDrop`: calls to comment, tag, save or
+  share, "tell us", and seasonal lines ("New year, new streak.", "How are
+  you spending winter break?"). The script checks that each dropped sentence
+  appears in the caption exactly once; nothing else is reworded.
+- **What's on screen:** every reel's `transcript` is its on-screen text,
+  scene by scene (read from the video frames), shown under the caption in a
+  "What's on screen" disclosure. It is the text alternative for the video
+  itself (WCAG 1.2.3); keep it in step with any re-export.
+- **Behaviour:** each card is a poster, a play button and the caption.
+  Nothing loads or plays until the visitor presses play; then `ads.js`
+  makes a muted inline `<video controls>`, pauses any other reel, and shows
+  "Turn sound on". Reels pause when they scroll out of view. Nothing
+  autoplays. On phones and tablets each category is a swipeable strip;
+  when keyboard focus enters a card, `ads.js` scrolls the whole card in.
+- **Without JS:** each frame holds a native `<video controls preload="none"
+  muted>` inside `<noscript>`; a `<noscript>` style in the head hides the
+  poster and play button.
+- **Loading:** homepage posters load with the page at `fetchpriority="low"`
+  (not lazily), so no request fires while a visitor steps through the lesson
+  replay above (`check-demo.mjs` fails on any). `/ads` posters are lazy.
+- **Check:** `--check` also fails if `assets/ads/` holds a file no card uses,
+  so a left-off video can't be deployed by accident.
+
+## Shared head, header and footer
+
+The `<head>`, site header, footer and trailing `<script>` tags are the same
+on every page and are written by `scripts/build-site-chrome.mjs` (each page
+keeps its own title, description and canonical URL; overrides are in the
+script). Change them there, bump `CSS_V`/`JS_V`/`ADS_V` when a file changes,
+then:
+
+```bash
+node scripts/build-site-chrome.mjs           # rewrite all ten pages
+node scripts/build-site-chrome.mjs --check   # fail if any page drifts
+```
 
 ## Local preview
 
@@ -125,29 +201,34 @@ The site is fully static — pick whichever host you already use.
 
 ## Brand tokens
 
-Defined as CSS custom properties at the top of `styles.css`. Update
-once, everything follows:
+The dark navy world of the Reels ads and the new logo.
+`docs/marketing-design.md` is the source (with the board each value comes
+from and a contrast table for every text pair); its token block sits at the
+top of `styles.css`. The core:
 
 | Token | Hex | Use |
 | --- | --- | --- |
-| `--navy` | `#0B1330` | Headings, primary text |
-| `--blue` | `#2F7BFF` | Gradient stop 1, accents |
-| `--violet` | `#7B4DFF` | Gradient stop 2, eyebrows |
-| `--lavender` | `#E8E5FF` | Soft section backgrounds |
-| `--bg` | `#F2F4F8` | Page background |
-| `--ink` | `#1A202C` | Body text |
+| `--night` | `#0A1130` | Page ground |
+| `--night-deep` | `#070C22` | Alternate bands, footer |
+| `--panel` / `--panel-2` | `#141C45` / `#18214D` | Cards, panels (2px `--line` edge, no shadow) |
+| `--ink` / `--ink-body` | `#F5F7FF` / `#E7EBFA` | Headings / body text |
+| `--ink-2` / `--ink-3` | `#AEB8E0` / `#8F9BC7` | Secondary text / labels |
+| `--accent` | `#3B63F5` | Fills only: primary button, student bubble (white text 4.90:1) |
+| `--periwinkle` | `#9DB2FF` | Italic headline accents, icons, focus ring |
+| `--link` | `#8FA8FF` | Inline links |
 
-Blue → violet gradients live behind the primary CTA, the eyebrows,
-the headline accents, and the step numbers. Don't add a third color
-to the gradient — it stops feeling premium fast.
+Headlines end on one italic phrase in periwinkle (`<em>` inside an `h1`/`h2`,
+or the old `.text-gradient` span). Never use `--accent` as text on navy.
 
 ## Typography
 
-- **Display** — Playfair Display 700 (headlines, brand mark)
-- **Body / UI** — Inter 400/500/600/700 (everything else)
+- **Display** — Fraunces (variable, optical-size axis) 500–700, roman + italic
+- **Body / UI** — Inter 400–700
 
-Both loaded from Google Fonts with `display=swap`, so first paint
-uses system fonts and the web font swaps in without layout shift.
+One Google Fonts request with `display=swap` (about 193 KB of woff2 for the
+Latin subset). Keep page text inside that subset (Latin-1 plus general
+punctuation): a character such as "ě" makes browsers fetch the latin-ext
+files as well.
 
 ## Accessibility
 
@@ -159,8 +240,21 @@ uses system fonts and the web font swaps in without layout shift.
   navigation in `script.js`.
 - All decorative images have `alt=""` + `aria-hidden`. The brand
   mark has the meaningful label on the wrapping link.
-- `prefers-reduced-motion` disables the hero float + smooth scroll,
-  and makes the lesson replay's reveal fade instant.
+- Focus: a 3px periwinkle ring on everything focusable (the darker accent
+  inside Merc's white bubble).
+- `prefers-reduced-motion` turns off Merc's idle motion, the hero bubbles'
+  entrance and smooth scroll, and makes the lesson replay's reveal fade
+  instant. Without it, every hero animation runs once and ends within 5
+  seconds (WCAG 2.2.2); it replays on hover or focus.
+- The phone menu is a native `<details>` (works without JS); Escape, a click
+  outside it, or Tabbing out of it closes it.
+- Reels: muted by default, real play buttons named after the reel, the
+  caption and a "What's on screen" transcript next to each one, nothing
+  autoplays.
+- Decorative rings never cross text: below 1024px the large ring is left out
+  and the small one is a corner arc; from 1024px both sit in the margins
+  beside the container (page heroes: the top-right corner, clear of the
+  headline and lede).
 - Lesson replay: each check is a `radiogroup` of real buttons (arrows,
   Home/End, Enter/Space), options are at least 44px tall, focus is
   always visible, newly shown turns are announced in a polite live
@@ -169,14 +263,12 @@ uses system fonts and the web font swaps in without layout shift.
 
 ## Performance
 
-- One HTML, one CSS, one JS file per page (the homepage adds `demo.js`,
-  ~4KB gzipped, `defer`). Total transfer < 50KB before fonts and the
-  hero image.
-- The hero is served as WebP (≈50KB) through `<picture>`, with the
-  210KB PNG as the fallback. Every `<img>` carries width and height
-  so nothing shifts while it loads.
-- `loading="eager"` + `fetchpriority="high"` on the hero image so
-  it doesn't lose the LCP race.
+- One HTML, one CSS, one JS file per page (the homepage adds `demo.js`
+  and `ads.js`, the ads page `ads.js`, all `defer`). The homepage is about
+  600 KB on first load uncompressed (fonts about 193 KB, six reel posters
+  about 220 KB) and loads no video until a play button is pressed.
+- Merc is inline SVG; logos are cacheable SVG files. Every `<img>`
+  carries width and height so nothing shifts while it loads.
 - No third-party scripts. No analytics by default — add a single
   `<script>` tag when you're ready.
 

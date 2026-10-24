@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0B1330" />
+  <meta name="theme-color" content="#0A1130" />
+  <meta name="color-scheme" content="dark" />
   <meta name="apple-itunes-app" content="app-id=6773192313" />
 
   <title>Modes — Mercurius AI</title>
@@ -13,40 +14,60 @@
   <meta property="og:type" content="article" />
   <meta property="og:title" content="Modes — Mercurius AI" />
   <meta property="og:description" content="Three ways to learn. One conversation." />
-  <meta property="og:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta property="og:image" content="https://trymercurius.com/assets/brand/og-card.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="The Mercurius logo, Merc inside a question mark, over the line: Learn how AI really works." />
   <meta property="og:url" content="https://trymercurius.com/modes" />
   <meta property="og:site_name" content="Mercurius AI" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Modes — Mercurius AI" />
   <meta name="twitter:description" content="Three ways to learn. One conversation." />
-  <meta name="twitter:image" content="https://trymercurius.com/assets/og-card.png" />
+  <meta name="twitter:image" content="https://trymercurius.com/assets/brand/og-card.png" />
 
-  <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/brand/favicon-48.png" />
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/brand/apple-touch-icon.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=8" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap" />
+  <link rel="stylesheet" href="/styles.css?v=11" />
 </head>
 
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="site-header" role="banner">
+  <header class="site-header">
     <div class="container header-inner">
-      <a class="brand" href="/" aria-label="Mercurius AI home">
-        <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
+      <a class="brand" href="/">
+        <img src="/assets/brand/mercurius-logo.svg" alt="Mercurius home" width="140" height="65" />
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html" aria-current="page">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/audience.html">Who it's for</a>
-        <a class="cta-pill" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Start Learning</a>
+        <ul class="nav-list">
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html" aria-current="page">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+        </ul>
       </nav>
+      <a class="btn btn-primary btn-small header-cta" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+      <details class="nav-menu" data-nav-menu>
+        <summary><span class="nav-menu-icon" aria-hidden="true"></span>Menu</summary>
+        <div class="nav-menu-panel">
+          <nav aria-label="Primary">
+            <ul class="nav-list">
+              <li><a href="/features.html">Features</a></li>
+              <li><a href="/modes.html" aria-current="page">Modes</a></li>
+              <li><a href="/how-it-works.html">How it works</a></li>
+              <li><a href="/audience.html">Who it's for</a></li>
+              <li><a href="/ads.html">Watch</a></li>
+            </ul>
+          </nav>
+          <a class="btn btn-primary" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">Get the app</a>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -90,10 +111,10 @@
               the answer. Use this when you want to <em>learn</em> how to think
               through a problem, not just collect a result.
             </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "How does an LLM actually work?"
-            </p>
+            <div class="example">
+              <p class="example-label">Try:</p>
+              <p class="bubble bubble--student">"How does an LLM actually work?"</p>
+            </div>
           </div>
 
           <div class="mode-panel" id="mode-panel-debate" data-mode-panel="debate" role="tabpanel" aria-labelledby="mode-tab-debate" hidden>
@@ -103,10 +124,10 @@
               come structured as claim, warrant, impact, and rebuttal angle —
               punchy enough for speech prep or live cross-examination.
             </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "Argue against the claim that AI will replace teachers."
-            </p>
+            <div class="example">
+              <p class="example-label">Try:</p>
+              <p class="bubble bubble--student">"Argue against the claim that AI will replace teachers."</p>
+            </div>
           </div>
 
           <div class="mode-panel" id="mode-panel-discussion" data-mode-panel="discussion" role="tabpanel" aria-labelledby="mode-tab-discussion" hidden>
@@ -115,10 +136,10 @@
               Conversational and balanced. Mercurius treats you as a thinking
               partner — surfacing tradeoffs and tensions, not verdicts.
             </p>
-            <p class="example">
-              <span class="example-label">Try:</span>
-              "What perspectives matter most when thinking about AI bias?"
-            </p>
+            <div class="example">
+              <p class="example-label">Try:</p>
+              <p class="bubble bubble--student">"What perspectives matter most when thinking about AI bias?"</p>
+            </div>
           </div>
         </div>
       </div>
@@ -179,29 +200,43 @@
         <a class="next-strip-link" href="/how-it-works.html">How it works →</a>
       </div>
     </section>
+    <section class="section endcard" aria-labelledby="cta-heading">
+      <div class="rings" aria-hidden="true"></div>
+      <div class="container endcard-inner">
+        <img class="endcard-logo" src="/assets/brand/mercurius-logo-stacked.svg" alt="Mercurius" width="168" height="192" loading="lazy" />
+        <h2 id="cta-heading" class="endcard-tagline">Learn how AI really works.</h2>
+        <a class="store-badge" href="https://apps.apple.com/app/id6773192313" target="_blank" rel="noopener noreferrer">
+          <img src="/assets/app-store-badge.svg" alt="Download on the App Store" width="168" height="56" loading="lazy" />
+        </a>
+        <p class="fineprint">Search “Mercurius AI” on iPhone.</p>
+        <p class="fineprint">Free on the App Store. Requires iPhone, iOS 17 or later.</p>
+      </div>
+    </section>
   </main>
 
-  <footer class="site-footer" role="contentinfo">
+  <footer class="site-footer">
     <div class="container footer-inner">
-      <div>
-        <a class="brand" href="/" aria-label="Mercurius AI home">
-          <span class="brand-name">Mercurius<span class="brand-name-accent"> AI</span></span>
-        </a>
+      <div class="footer-brand">
+        <a class="footer-logo" href="/"><img src="/assets/brand/mercurius-wordmark.svg" alt="Mercurius home" width="120" height="23" /></a>
         <p class="footer-tagline">Guided, not given.</p>
       </div>
       <nav class="footer-nav" aria-label="Footer">
-        <a href="/features.html">Features</a>
-        <a href="/modes.html">Modes</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/trust.html">Responsibility</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/support.html">Support</a>
+        <ul>
+          <li><a href="/features.html">Features</a></li>
+          <li><a href="/modes.html" aria-current="page">Modes</a></li>
+          <li><a href="/how-it-works.html">How it works</a></li>
+          <li><a href="/audience.html">Who it's for</a></li>
+          <li><a href="/trust.html">Responsibility</a></li>
+          <li><a href="/ads.html">Watch</a></li>
+          <li><a href="/privacy.html">Privacy</a></li>
+          <li><a href="/terms.html">Terms</a></li>
+          <li><a href="/support.html">Support</a></li>
+        </ul>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Mercurius AI.</p>
     </div>
   </footer>
 
-  <script src="/script.js?v=7" defer></script>
+  <script src="/script.js?v=9" defer></script>
 </body>
 </html>
