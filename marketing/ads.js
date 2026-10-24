@@ -14,8 +14,9 @@
  *   - "Turn sound on / off" under the reel toggles the sound (the native
  *     controls' mute button stays in sync);
  *   - nothing autoplays, ever;
- *   - in the phone/tablet strips, a card scrolls fully into view when
- *     keyboard focus enters it.
+ *   - in the phone/tablet strips, a card scrolls fully into the strip when
+ *     keyboard focus enters it, and the focused control stays clear of the
+ *     sticky header.
  *
  * No dependencies. Loaded with `defer`.
  */
@@ -62,7 +63,7 @@
     if (frame.dataset.height) video.height = Number(frame.dataset.height);
     if (poster) video.poster = poster.currentSrc || poster.src;
     if (frame.dataset.titleId) video.setAttribute('aria-labelledby', frame.dataset.titleId);
-    if (frame.dataset.captionId) video.setAttribute('aria-describedby', frame.dataset.captionId);
+    if (frame.dataset.describedby) video.setAttribute('aria-describedby', frame.dataset.describedby);
     const source = document.createElement('source');
     source.src = frame.dataset.src;
     source.type = 'video/mp4';
@@ -108,17 +109,32 @@
   // On phones and tablets each row of reels is a horizontal strip. Browsers
   // don't scroll a control into view on focus while any part of it shows, so
   // Tab could land on the next card's play button while only its edge peeks
-  // in. Bring the whole card into the strip instead.
+  // in. Bring the whole card into the strip instead. Only the strip scrolls
+  // sideways: a card can be taller than a phone screen, so the page is
+  // scrolled just enough to keep the focused control itself clear of the
+  // sticky header and the bottom edge.
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+  const header = document.querySelector('.site-header');
+  const keyboard = (el) => {
+    try { return el.matches(':focus-visible'); } catch (err) { return true; }
+  };
   document.querySelectorAll('.reel-row').forEach((row) => {
     row.addEventListener('focusin', (e) => {
-      if (row.scrollWidth <= row.clientWidth + 1) return;
+      const behavior = reduce && reduce.matches ? 'auto' : 'smooth';
       const card = e.target.closest('.reel');
-      if (!card) return;
-      const c = card.getBoundingClientRect();
-      const v = row.getBoundingClientRect();
-      if (c.left >= v.left - 1 && c.right <= v.right + 1) return;
-      card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduce && reduce.matches ? 'auto' : 'smooth' });
+      if (card && row.scrollWidth > row.clientWidth + 1) {
+        const c = card.getBoundingClientRect();
+        const v = row.getBoundingClientRect();
+        const pad = parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0;
+        if (c.left < v.left + pad - 1) row.scrollBy({ left: c.left - (v.left + pad), behavior });
+        else if (c.right > v.right - pad + 1) row.scrollBy({ left: c.right - (v.right - pad), behavior });
+      }
+      if (!keyboard(e.target)) return;
+      const t = e.target.getBoundingClientRect();
+      const top = Math.max(0, header ? header.getBoundingClientRect().bottom : 0) + 8;
+      const bottom = window.innerHeight - 8;
+      if (t.top < top) window.scrollBy({ top: t.top - top, behavior });
+      else if (t.bottom > bottom && t.height <= bottom - top) window.scrollBy({ top: t.bottom - bottom, behavior });
     });
   });
 })();

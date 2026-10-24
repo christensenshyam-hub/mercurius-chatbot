@@ -21,7 +21,9 @@
 //     exactly once; nothing else is reworded. Hashtags and the "Search ... on the App Store" line are
 //     not in the manifest captions at all;
 //   - every reel on the site has a `transcript` (its on-screen text, scene by scene), shown under the
-//     caption as "What's on screen".
+//     caption as "What's on screen". The soundtracks are music only, so the card labels the reel as a
+//     video version of that text (a media alternative for text, which WCAG's success criteria 1.2.1–1.2.5
+//     exempt when it is labelled as one); keep the transcript complete.
 // --check also fails if marketing/assets/ads/ holds a file no card uses, so a left-off video (the XP
 // reels) can't be deployed by accident.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -86,11 +88,23 @@ for (const a of ads) {
     duration: a.duration, transcript: a.transcript,
   });
 }
+// A missing field would otherwise be written into the page as "undefined" or "null".
+const FIELDS = { w: 'width', h: 'height', pw: 'posterWidth', ph: 'posterHeight' };
+const byN = {};
 for (const r of reels) {
+  if (byN[r.n]) fail(`ad ${r.n} is in the manifest twice`);
+  byN[r.n] = r;
+  if (typeof r.title !== 'string' || !r.title.trim()) fail(`reel ${r.n} has no title`);
+  if (typeof r.caption !== 'string' || !r.caption.trim()) fail(`reel ${r.n} "${r.title}" has no caption`);
+  for (const [k, name] of Object.entries(FIELDS)) {
+    if (!Number.isInteger(r[k]) || r[k] <= 0) fail(`reel ${r.n} "${r.title}": ${name} must be a whole number of pixels (got ${r[k]})`);
+  }
+  if (!Number.isFinite(r.duration) || r.duration <= 0) fail(`reel ${r.n} "${r.title}": duration must be the length in seconds (got ${r.duration})`);
   if (!Array.isArray(r.transcript) || !r.transcript.length) fail(`reel ${r.n} "${r.title}" has no transcript`);
-  for (const f of [r.video, r.poster]) if (!existsSync(path.join(SITE, f))) fail(`reel ${r.n}: missing marketing/${f}`);
+  for (const f of [r.video, r.poster]) {
+    if (typeof f !== 'string' || !existsSync(path.join(SITE, f))) fail(`reel ${r.n}: missing marketing/${f}`);
+  }
 }
-const byN = Object.fromEntries(reels.map((r) => [r.n, r]));
 
 function captionHtml(text, pad) {
   return text.split(/\n\s*\n/).map((para) => `${pad}<p>${para.split('\n').map(esc).join('<br />')}</p>`).join('\n');
@@ -105,11 +119,11 @@ function card(r, { home, pad }) {
   const s = secs(r.duration);
   return [
     `${pad}<li class="reel">`,
-    `${p(1)}<div class="reel-frame" data-reel data-src="${abs(r.video)}" data-width="${r.w}" data-height="${r.h}" data-title-id="${id}-title" data-caption-id="${id}-cap">`,
+    `${p(1)}<div class="reel-frame" data-reel data-src="${abs(r.video)}" data-width="${r.w}" data-height="${r.h}" data-title-id="${id}-title" data-describedby="${id}-alt ${id}-cap">`,
     `${p(2)}<img class="reel-poster" src="${abs(r.poster)}" width="${r.pw}" height="${r.ph}" alt=""${load} decoding="async" />`,
-    `${p(2)}<button type="button" class="reel-play" data-reel-play aria-label="Play “${esc(r.title)}”, ${s} seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>`,
+    `${p(2)}<button type="button" class="reel-play" data-reel-play aria-label="Play “${esc(r.title)}”, ${s} seconds, starts muted" aria-describedby="${id}-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>`,
     `${p(2)}<span class="reel-duration" aria-hidden="true">${mmss(r.duration)}</span>`,
-    `${p(2)}<noscript><video class="reel-video" controls muted playsinline preload="none" poster="${abs(r.poster)}" width="${r.w}" height="${r.h}" aria-labelledby="${id}-title" aria-describedby="${id}-cap"><source src="${abs(r.video)}" type="video/mp4" /></video></noscript>`,
+    `${p(2)}<noscript><video class="reel-video" controls muted playsinline preload="none" poster="${abs(r.poster)}" width="${r.w}" height="${r.h}" aria-labelledby="${id}-title" aria-describedby="${id}-alt ${id}-cap"><source src="${abs(r.video)}" type="video/mp4" /></video></noscript>`,
     `${p(1)}</div>`,
     `${p(1)}<div class="reel-body">`,
     `${p(2)}<div class="reel-meta"><span class="chip chip--${r.cat.slug}">${esc(r.cat.name)}</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>`,
@@ -117,6 +131,7 @@ function card(r, { home, pad }) {
     `${p(2)}<div class="reel-caption" id="${id}-cap">`,
     captionHtml(r.caption, p(3)),
     `${p(2)}</div>`,
+    `${p(2)}<p class="reel-alt" id="${id}-alt">A video version of the text under “What’s on screen.”</p>`,
     `${p(2)}<details class="reel-transcript">`,
     `${p(3)}<summary>What’s on screen</summary>`,
     `${p(3)}<ol>`,

@@ -662,7 +662,7 @@ strong { color: var(--ink); font-weight: 600; }
   align-items: center;
   gap: var(--space-2);
   margin: 0 0 var(--space-3);
-  padding: 6px 14px 6px 12px;
+  padding: 4px 14px 4px 6px;
   background: var(--panel-2);
   border-radius: var(--radius-pill);
   font-size: var(--fs-tag);
@@ -670,7 +670,7 @@ strong { color: var(--ink); font-weight: 600; }
   line-height: 1.2;
   color: var(--ink);
 }
-.speaker-tag img { flex: none; width: 22px; height: 18px; }
+.speaker-tag img { flex: none; width: 28px; height: 23px; }
 
 /* Category chips (Reels calendar). Text in the category colour on a 13%
    tint of it; the fallback hexes are docs/marketing-design.md's tints on --night. */
@@ -830,8 +830,9 @@ strong { color: var(--ink); font-weight: 600; }
 }
 
 /* Merc's idle (Ad › Main / Logo › Main motion): a bob, a wing flap, a blink,
-   a sparkle twinkle. Each runs ONCE (all under 5s, WCAG 2.2.2) and again on
-   hover or keyboard focus inside the hero art. Off under reduced motion. */
+   a sparkle twinkle. Each runs ONCE (all under 5s, WCAG 2.2.2) when the hero
+   art is on screen, and again on hover or keyboard focus inside it. Off under
+   reduced motion. */
 .merc-svg g { transform-box: view-box; }
 .merc-svg .merc-wing-l { transform-origin: 86px 84px; }
 .merc-svg .merc-wing-r { transform-origin: 154px 84px; }
@@ -867,6 +868,13 @@ strong { color: var(--ink); font-weight: 600; }
   .chat .bubble:nth-child(2) { animation-delay: 0.75s; }
   .chat .bubble:nth-child(3) { animation-delay: 1.25s; }
   .chat .bubble:nth-child(4) { animation-delay: 1.75s; }
+
+  /* On a phone the hero art starts below the fold: script.js adds
+     .is-waiting until it scrolls into view. Without JS it plays on load. */
+  .hero-art.is-waiting .merc-svg,
+  .hero-art.is-waiting .merc-svg g,
+  .hero-art.is-waiting .speaker-tag,
+  .hero-art.is-waiting .bubble { animation-play-state: paused; }
 }
 
 @keyframes merc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
@@ -1409,6 +1417,15 @@ strong { color: var(--ink); font-weight: 600; }
 .reel-caption p:first-child { color: var(--ink-body); }
 .reel-caption p { margin: 0 0 var(--space-2); }
 .reel-caption p:last-child { margin-bottom: 0; }
+/* Labels the reel as a video version of its text (a media alternative for
+   text, WCAG 1.2): its soundtrack is music, so the text carries everything. */
+.reel-alt {
+  margin: var(--space-3) 0 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
 .reel-caption-label {
   font-size: var(--fs-label);
   font-weight: 600;
@@ -2070,6 +2087,10 @@ strong { color: var(--ink); font-weight: 600; }
   .brand img,
   .footer-logo img,
   .endcard-logo { forced-color-adjust: none; background: #0A1130; border-radius: var(--radius-xs); }
+  /* The disc's fill is forced to Canvas but an SVG fill isn't: draw both in
+     system colours so the play triangle shows on a dark or light palette. */
+  .reel-play-disc { border: 2px solid ButtonText; }
+  .reel-play-disc svg { fill: ButtonText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

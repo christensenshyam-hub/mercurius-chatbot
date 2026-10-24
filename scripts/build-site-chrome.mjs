@@ -17,9 +17,9 @@ const CHECK = process.argv.includes('--check');
 
 const STORE = 'https://apps.apple.com/app/id6773192313';
 const SITE = 'https://trymercurius.com';
-const CSS_V = '11';
-const JS_V = '9';
-const ADS_V = '2';
+const CSS_V = '12';
+const JS_V = '10';
+const ADS_V = '3';
 const DEMO_V = '1';
 const FONTS = 'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap';
 
@@ -70,7 +70,17 @@ const OVERRIDES = {
 };
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+// Page-owned head text is read back as plain text, then re-escaped by esc(). Numeric entities
+// decode; a named entity other than the basic five would be double-escaped, so it fails loudly.
+const unesc = (s) => {
+  const named = s.match(/&(?!(?:quot|lt|gt|amp|#\d+|#x[0-9a-f]+);)[a-z][a-z0-9]*;/i);
+  if (named) throw new Error(`write ${named[0]} as the character itself (or a numeric entity) in a page's <head>`);
+  return s
+    .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&amp;/g, '&');
+};
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function meta(src, key) {
@@ -199,10 +209,9 @@ function scripts(page) {
 }
 
 function once(src, re, fn, what, page) {
-  let n = 0;
-  const out = src.replace(re, (...m) => { n += 1; return fn(...m); });
+  const n = src.match(new RegExp(re.source, `${re.flags.replace('g', '')}g`))?.length || 0;
   if (n !== 1) throw new Error(`${page}: expected one ${what}, found ${n}`);
-  return out;
+  return src.replace(re, fn);
 }
 
 let drift = false;

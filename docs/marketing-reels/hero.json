@@ -27,5 +27,5 @@
   "\"Merc asks. You think. It sticks.\"",
   "End card: Merc. \"Mercurius. Learn how AI really works.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
  ],
- "transcriptNote": "On-screen text, scene by scene, read from frames of hero-4x5.mp4 (same convention as each transcript in ads.json). Not yet checked: whether the audio has spoken words. If it does, add a WebVTT captions track."
+ "transcriptNote": "On-screen text, scene by scene, read from frames of hero-4x5.mp4 (same convention as each transcript in ads.json). Audio checked Oct 24 (on-device sound classifier): music, no speech, so the site labels the reel as a video version of this text. If a voice-over is ever added, add a WebVTT captions track."
 }

@@ -369,7 +369,7 @@
   "transcript": [
    "\"Finish this sentence.\" A text box: \"Peanut butter and ___.\" \"Your brain already guessed.\"",
    "\"Now watch an AI try.\" The AI's guesses fill in: jelly 71%, bananas 12%, honey 9%, pickles 1%. It writes \"jelly.\"",
-   "\"Then it guesses again.\" Next word: \"is\" (88%), then \"favorite\" (51%), then a period (97%). The sentence reads \"Peanut butter and jelly is my favorite.\"",
+   "\"Then it guesses again.\" Next word: \"is\" (88%), then \"my\" (64%), then \"favorite\" (51%), then a period (97%). The sentence reads \"Peanut butter and jelly is my favorite.\"",
    "\"Word by word. That's it. It's predicting, not fact-checking. So sounding right can beat being right.\" Merc: \"Want to see when that happens?\"",
    "End card: Merc. \"Mercurius. See how the magic works.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
   ]
@@ -428,7 +428,7 @@
   "sourceBytes": 7057966,
   "transcript": [
    "\"One video. Just one.\" \"How to fold a paper crane,\" 2:31.",
-   "\"Then the next one picks itself.\" Videos fly past: crane hacks, origami fails, paper vs. scissors, \"Is paper a scam?\", paper cuts explained, top 10 paper facts, paper facts at 3 AM, origami drama part 9. The counter climbs from 1 video at 9:02 PM to 47 videos at 11:15 PM.",
+   "\"Then the next one picks itself.\" Videos fly past: crane hacks, origami fails, paper vs. scissors, \"Why is paper weird?\", 1,000 cranes in a day, paper cuts explained, \"Is paper a scam?\", top 10 paper facts, \"Wait for the end...\", \"You won't believe #4\", paper facts at 3 AM, origami drama part 9. The counter climbs from 1 video at 9:02 PM to 47 videos at 11:15 PM.",
    "\"Who's picking? An AI.\" An eye: \"For you: picked by AI.\"",
    "\"It learns what keeps you watching.\"",
    "\"You can steer it.\" Merc: \"What did you actually want to watch?\" Search on purpose. Tap \"Not interested.\" Set a time limit.",
@@ -602,7 +602,7 @@
   "transcript": [
    "A videotape, recording. \"Every AI learned from a recording.\" The cassette is labeled \"Training data.\"",
    "The tape stops. \"Then the recording stopped.\" Stamp: \"Cutoff.\"",
-   "The tape fast-forwards. \"But the world kept going.\" New update, new prices, new phone, new trend, new app, new law, new study.",
+   "The tape fast-forwards. \"But the world kept going.\" New update, new rules, new record, new season, new prices, new version, new app, new trend, new phone, new law, new champion, new study.",
    "\"So you ask it what's new.\" Student: \"What's the newest version of my favorite game?\" AI: \"The newest version is 2.0. It just came out!\" A Game Store notification: \"Update available: version 5.1.\" Stamp: \"Old tape.\"",
    "The tape pauses. \"AI can sound current and still be out of date.\" Merc: \"How could we check when this info is from?\"",
    "End card: Merc. \"Mercurius. Hit pause. Check the date.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."

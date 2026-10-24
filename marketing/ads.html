@@ -32,7 +32,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=11" />
+  <link rel="stylesheet" href="/styles.css?v=12" />
 
   <!-- Without JS each reel is a native <video controls>; hide the JS poster + play button. -->
   <noscript><style>.reel-poster, .reel-play, .reel-duration { display: none !important; }</style></noscript>
@@ -112,11 +112,11 @@
         </header>
         <ul class="reel-row reel-row--wide" role="list">
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-18.mp4" data-width="720" data-height="900" data-title-id="reel-ad-18-title" data-caption-id="reel-ad-18-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-18.mp4" data-width="720" data-height="900" data-title-id="reel-ad-18-title" data-describedby="reel-ad-18-alt reel-ad-18-cap">
               <img class="reel-poster" src="/assets/ads/ad-18-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Count the R's”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Count the R's”, 20 seconds, starts muted" aria-describedby="reel-ad-18-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-18-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-18-title" aria-describedby="reel-ad-18-cap"><source src="/assets/ads/ad-18.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-18-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-18-title" aria-describedby="reel-ad-18-alt reel-ad-18-cap"><source src="/assets/ads/ad-18.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -126,6 +126,7 @@
                 <p>AI doesn't read letters. It reads tokens, chunks of words like &quot;str&quot; + &quot;aw&quot; + &quot;berry,&quot; so it never really sees each R. Know how it reads and you'll know where it slips.</p>
                 <p>Which word do you think would trip it up next?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-18-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -140,11 +141,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-19.mp4" data-width="720" data-height="900" data-title-id="reel-ad-19-title" data-caption-id="reel-ad-19-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-19.mp4" data-width="720" data-height="900" data-title-id="reel-ad-19-title" data-describedby="reel-ad-19-alt reel-ad-19-cap">
               <img class="reel-poster" src="/assets/ads/ad-19-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Glue on Pizza”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Glue on Pizza”, 20 seconds, starts muted" aria-describedby="reel-ad-19-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-19-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-19-title" aria-describedby="reel-ad-19-cap"><source src="/assets/ads/ad-19.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-19-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-19-title" aria-describedby="reel-ad-19-alt reel-ad-19-cap"><source src="/assets/ads/ad-19.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -154,6 +155,7 @@
                 <p>In 2024, an AI search feature suggested mixing non-toxic glue into the sauce to keep the cheese from sliding off. Its source was a joke forum comment from over a decade earlier. AI can't always tell a joke from a fact, so check the source, then cook.</p>
                 <p>What's the strangest answer an AI has ever given you?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-19-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -166,11 +168,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-25.mp4" data-width="720" data-height="900" data-title-id="reel-ad-25-title" data-caption-id="reel-ad-25-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-25.mp4" data-width="720" data-height="900" data-title-id="reel-ad-25-title" data-describedby="reel-ad-25-alt reel-ad-25-cap">
               <img class="reel-poster" src="/assets/ads/ad-25-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “No Such Book”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “No Such Book”, 20 seconds, starts muted" aria-describedby="reel-ad-25-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-25-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-25-title" aria-describedby="reel-ad-25-cap"><source src="/assets/ads/ad-25.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-25-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-25-title" aria-describedby="reel-ad-25-alt reel-ad-25-cap"><source src="/assets/ads/ad-25.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -179,6 +181,7 @@
                 <p>Your AI found the perfect source. The book doesn't exist.</p>
                 <p>AI can invent citations with a real-sounding author, title, publisher, and page number. Before you cite anything, search the exact title, check a library catalog, or look on the publisher's website.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-25-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -193,11 +196,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-04.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-04-title" data-caption-id="reel-ad-04-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-04.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-04-title" data-describedby="reel-ad-04-alt reel-ad-04-cap">
               <img class="reel-poster" src="/assets/ads/ad-04-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “5-Second Challenge”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “5-Second Challenge”, 20 seconds, starts muted" aria-describedby="reel-ad-04-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-04-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-04-title" aria-describedby="reel-ad-04-cap"><source src="/assets/ads/ad-04.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-04-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-04-title" aria-describedby="reel-ad-04-alt reel-ad-04-cap"><source src="/assets/ads/ad-04.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -206,6 +209,7 @@
                 <p>Quick. Spot the AI's mistake in 5 seconds.</p>
                 <p>&quot;The Great Wall of China is easy to see from space.&quot; Myth. The wall is about as wide as a road, and astronauts say it's very hard to pick out with the naked eye, even from low orbit.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-04-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -219,11 +223,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-11.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-11-title" data-caption-id="reel-ad-11-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-11.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-11-title" data-describedby="reel-ad-11-alt reel-ad-11-cap">
               <img class="reel-poster" src="/assets/ads/ad-11-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Next Word”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Next Word”, 20 seconds, starts muted" aria-describedby="reel-ad-11-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-11-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-11-title" aria-describedby="reel-ad-11-cap"><source src="/assets/ads/ad-11.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-11-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-11-title" aria-describedby="reel-ad-11-alt reel-ad-11-cap"><source src="/assets/ads/ad-11.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -233,12 +237,13 @@
                 <p>A chatbot writes by predicting the next word, then the next, one at a time. It's predicting, not fact-checking, which is why sounding right can beat being right.</p>
                 <p>What word did your brain pick?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-11-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
                   <li>&quot;Finish this sentence.&quot; A text box: &quot;Peanut butter and ___.&quot; &quot;Your brain already guessed.&quot;</li>
                   <li>&quot;Now watch an AI try.&quot; The AI's guesses fill in: jelly 71%, bananas 12%, honey 9%, pickles 1%. It writes &quot;jelly.&quot;</li>
-                  <li>&quot;Then it guesses again.&quot; Next word: &quot;is&quot; (88%), then &quot;favorite&quot; (51%), then a period (97%). The sentence reads &quot;Peanut butter and jelly is my favorite.&quot;</li>
+                  <li>&quot;Then it guesses again.&quot; Next word: &quot;is&quot; (88%), then &quot;my&quot; (64%), then &quot;favorite&quot; (51%), then a period (97%). The sentence reads &quot;Peanut butter and jelly is my favorite.&quot;</li>
                   <li>&quot;Word by word. That's it. It's predicting, not fact-checking. So sounding right can beat being right.&quot; Merc: &quot;Want to see when that happens?&quot;</li>
                   <li>End card: Merc. &quot;Mercurius. See how the magic works.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
                 </ol>
@@ -246,11 +251,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-12.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-12-title" data-caption-id="reel-ad-12-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-12.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-12-title" data-describedby="reel-ad-12-alt reel-ad-12-cap">
               <img class="reel-poster" src="/assets/ads/ad-12-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Fed on Cats”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Fed on Cats”, 20 seconds, starts muted" aria-describedby="reel-ad-12-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-12-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-12-title" aria-describedby="reel-ad-12-cap"><source src="/assets/ads/ad-12.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-12-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-12-title" aria-describedby="reel-ad-12-alt reel-ad-12-cap"><source src="/assets/ads/ad-12.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -260,6 +265,7 @@
                 <p>It isn't broken. It only knows what it was trained on. Every AI learned from somebody's data, so ask who picked the data, what's missing from it, and who gets left out.</p>
                 <p>Asking those questions is what AI literacy looks like.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-12-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -273,11 +279,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-20.mp4" data-width="720" data-height="900" data-title-id="reel-ad-20-title" data-caption-id="reel-ad-20-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-20.mp4" data-width="720" data-height="900" data-title-id="reel-ad-20-title" data-describedby="reel-ad-20-alt reel-ad-20-cap">
               <img class="reel-poster" src="/assets/ads/ad-20-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Old Tape”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Old Tape”, 20 seconds, starts muted" aria-describedby="reel-ad-20-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-20-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-20-title" aria-describedby="reel-ad-20-cap"><source src="/assets/ads/ad-20.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-20-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-20-title" aria-describedby="reel-ad-20-alt reel-ad-20-cap"><source src="/assets/ads/ad-20.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -287,12 +293,13 @@
                 <p>AI models have a training cutoff, but the world keeps going. That's how an AI can sound current and still be out of date on prices, rules, records, and new versions. Hit pause and check the date.</p>
                 <p>What's something that changed recently that an AI might not know yet?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-20-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
                   <li>A videotape, recording. &quot;Every AI learned from a recording.&quot; The cassette is labeled &quot;Training data.&quot;</li>
                   <li>The tape stops. &quot;Then the recording stopped.&quot; Stamp: &quot;Cutoff.&quot;</li>
-                  <li>The tape fast-forwards. &quot;But the world kept going.&quot; New update, new prices, new phone, new trend, new app, new law, new study.</li>
+                  <li>The tape fast-forwards. &quot;But the world kept going.&quot; New update, new rules, new record, new season, new prices, new version, new app, new trend, new phone, new law, new champion, new study.</li>
                   <li>&quot;So you ask it what's new.&quot; Student: &quot;What's the newest version of my favorite game?&quot; AI: &quot;The newest version is 2.0. It just came out!&quot; A Game Store notification: &quot;Update available: version 5.1.&quot; Stamp: &quot;Old tape.&quot;</li>
                   <li>The tape pauses. &quot;AI can sound current and still be out of date.&quot; Merc: &quot;How could we check when this info is from?&quot;</li>
                   <li>End card: Merc. &quot;Mercurius. Hit pause. Check the date.&quot; Download on the App Store. Search &quot;Mercurius AI&quot; on iPhone.</li>
@@ -301,11 +308,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-26.mp4" data-width="720" data-height="900" data-title-id="reel-ad-26-title" data-caption-id="reel-ad-26-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-26.mp4" data-width="720" data-height="900" data-title-id="reel-ad-26-title" data-describedby="reel-ad-26-alt reel-ad-26-cap">
               <img class="reel-poster" src="/assets/ads/ad-26-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Draw a Scientist”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Draw a Scientist”, 20 seconds, starts muted" aria-describedby="reel-ad-26-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-26-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-26-title" aria-describedby="reel-ad-26-cap"><source src="/assets/ads/ad-26.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-26-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-26-title" aria-describedby="reel-ad-26-alt reel-ad-26-cap"><source src="/assets/ads/ad-26.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--how">How AI works</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -314,6 +321,7 @@
                 <p>Ask an AI to draw a scientist. Then ask again. And again.</p>
                 <p>AI copies the patterns in its training data, stereotypes included. Real scientists look like everyone. When an AI keeps showing you the same kind of person, notice who's missing.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-26-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -339,11 +347,11 @@
         </header>
         <ul class="reel-row reel-row--wide" role="list">
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/hero-4x5.mp4" data-width="720" data-height="900" data-title-id="reel-ai-sounds-sure-title" data-caption-id="reel-ai-sounds-sure-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/hero-4x5.mp4" data-width="720" data-height="900" data-title-id="reel-ai-sounds-sure-title" data-describedby="reel-ai-sounds-sure-alt reel-ai-sounds-sure-cap">
               <img class="reel-poster" src="/assets/ads/hero-4x5-poster.jpg" width="720" height="900" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “AI Sounds Sure”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “AI Sounds Sure”, 20 seconds, starts muted" aria-describedby="reel-ai-sounds-sure-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/hero-4x5-poster.jpg" width="720" height="900" aria-labelledby="reel-ai-sounds-sure-title" aria-describedby="reel-ai-sounds-sure-cap"><source src="/assets/ads/hero-4x5.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/hero-4x5-poster.jpg" width="720" height="900" aria-labelledby="reel-ai-sounds-sure-title" aria-describedby="reel-ai-sounds-sure-alt reel-ai-sounds-sure-cap"><source src="/assets/ads/hero-4x5.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -353,6 +361,7 @@
                 <p>Chatbots can invent a study and insist it's real. Merc does the opposite. He asks how you'd check, then lets you work it out.</p>
                 <p>Has an AI ever confidently told you something wrong?</p>
               </div>
+              <p class="reel-alt" id="reel-ai-sounds-sure-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -366,11 +375,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-09.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-09-title" data-caption-id="reel-ad-09-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-09.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-09-title" data-describedby="reel-ad-09-alt reel-ad-09-cap">
               <img class="reel-poster" src="/assets/ads/ad-09-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Two Doors”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Two Doors”, 20 seconds, starts muted" aria-describedby="reel-ad-09-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-09-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-09-title" aria-describedby="reel-ad-09-cap"><source src="/assets/ads/ad-09.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-09-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-09-title" aria-describedby="reel-ad-09-alt reel-ad-09-cap"><source src="/assets/ads/ad-09.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -380,6 +389,7 @@
                 <p>The answer gets you through tonight. Understanding gets you through finals, and it's still yours after the test. Merc always points you to door B.</p>
                 <p>Be honest. Which door do you usually pick?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-09-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -393,11 +403,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-14.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-14-title" data-caption-id="reel-ad-14-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-14.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-14-title" data-describedby="reel-ad-14-alt reel-ad-14-cap">
               <img class="reel-poster" src="/assets/ads/ad-14-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Prompt Glow-Up”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Prompt Glow-Up”, 20 seconds, starts muted" aria-describedby="reel-ad-14-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-14-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-14-title" aria-describedby="reel-ad-14-cap"><source src="/assets/ads/ad-14.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-14-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-14-title" aria-describedby="reel-ad-14-alt reel-ad-14-cap"><source src="/assets/ads/ad-14.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -406,6 +416,7 @@
                 <p>&quot;help me w my essay&quot; gets you generic advice. Give your prompt a glow-up.</p>
                 <p>Say what the essay is about, who will read it, and what you want back. &quot;Give feedback on my thesis. Don't rewrite it.&quot; gets you something you can use. Better questions in, better answers out.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-14-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -419,11 +430,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-10.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-10-title" data-caption-id="reel-ad-10-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-10.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-10-title" data-describedby="reel-ad-10-alt reel-ad-10-cap">
               <img class="reel-poster" src="/assets/ads/ad-10-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “11:47 PM”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “11:47 PM”, 20 seconds, starts muted" aria-describedby="reel-ad-10-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-10-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-10-title" aria-describedby="reel-ad-10-cap"><source src="/assets/ads/ad-10.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-10-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-10-title" aria-describedby="reel-ad-10-alt reel-ad-10-cap"><source src="/assets/ads/ad-10.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -433,6 +444,7 @@
                 <p>Merc starts with what you already know and builds from there, one question at a time. Ready by 12:09. Now go to sleep.</p>
                 <p>What time do you usually start studying for a test? No judgment.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-10-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -446,11 +458,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-13.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-13-title" data-caption-id="reel-ad-13-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-13.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-13-title" data-describedby="reel-ad-13-alt reel-ad-13-cap">
               <img class="reel-poster" src="/assets/ads/ad-13-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Keep the Rally”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Keep the Rally”, 20 seconds, starts muted" aria-describedby="reel-ad-13-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-13-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-13-title" aria-describedby="reel-ad-13-cap"><source src="/assets/ads/ad-13.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-13-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-13-title" aria-describedby="reel-ad-13-alt reel-ad-13-cap"><source src="/assets/ads/ad-13.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -460,6 +472,7 @@
                 <p>Ask why AI makes things up, and Merc hits it back with a question. Then another. You land the answer yourself: it predicts something even when it doesn't know, so check it.</p>
                 <p>How long of a rally could you keep going?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-13-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -472,11 +485,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-06.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-06-title" data-caption-id="reel-ad-06-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-06.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-06-title" data-describedby="reel-ad-06-alt reel-ad-06-cap">
               <img class="reel-poster" src="/assets/ads/ad-06-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Connect the Dots”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Connect the Dots”, 20 seconds, starts muted" aria-describedby="reel-ad-06-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-06-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-06-title" aria-describedby="reel-ad-06-cap"><source src="/assets/ads/ad-06.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-06-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-06-title" aria-describedby="reel-ad-06-alt reel-ad-06-cap"><source src="/assets/ads/ad-06.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -486,6 +499,7 @@
                 <p>What do you already know? What's the goal? What connects them? What's still missing? Merc won't connect the dots for you. He helps you see how, so next time you can do it on your own.</p>
                 <p>What's a problem you finally got after staring at it forever?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-06-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -499,11 +513,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-07.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-07-title" data-caption-id="reel-ad-07-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-07.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-07-title" data-describedby="reel-ad-07-alt reel-ad-07-cap">
               <img class="reel-poster" src="/assets/ads/ad-07-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Teach You to Fly”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Teach You to Fly”, 20 seconds, starts muted" aria-describedby="reel-ad-07-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-07-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-07-title" aria-describedby="reel-ad-07-cap"><source src="/assets/ads/ad-07.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-07-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-07-title" aria-describedby="reel-ad-07-alt reel-ad-07-cap"><source src="/assets/ads/ad-07.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--study">Study smarter</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -513,6 +527,7 @@
                 <p>Attempt one: oof. Attempt two: almost. Then one good question about what made it dip turns a nosedive into a flight. Merc won't carry you. He'll teach you to fly.</p>
                 <p>What took you the most tries to finally get?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-07-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -537,11 +552,11 @@
         </header>
         <ul class="reel-row" role="list">
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-27.mp4" data-width="720" data-height="900" data-title-id="reel-ad-27-title" data-caption-id="reel-ad-27-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-27.mp4" data-width="720" data-height="900" data-title-id="reel-ad-27-title" data-describedby="reel-ad-27-alt reel-ad-27-cap">
               <img class="reel-poster" src="/assets/ads/ad-27-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Flagged”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Flagged”, 20 seconds, starts muted" aria-describedby="reel-ad-27-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-27-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-27-title" aria-describedby="reel-ad-27-cap"><source src="/assets/ads/ad-27.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-27-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-27-title" aria-describedby="reel-ad-27-alt reel-ad-27-cap"><source src="/assets/ads/ad-27.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -550,6 +565,7 @@
                 <p>You wrote every word. The AI detector says 98% AI.</p>
                 <p>AI detectors guess, and different detectors often disagree about the same essay. Your best proof is how you wrote it: drafts, notes, version history, and being able to explain your ideas out loud.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-27-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -564,11 +580,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-23.mp4" data-width="720" data-height="900" data-title-id="reel-ad-23-title" data-caption-id="reel-ad-23-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-23.mp4" data-width="720" data-height="900" data-title-id="reel-ad-23-title" data-describedby="reel-ad-23-alt reel-ad-23-cap">
               <img class="reel-poster" src="/assets/ads/ad-23-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “The Call”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “The Call”, 20 seconds, starts muted" aria-describedby="reel-ad-23-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-23-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-23-title" aria-describedby="reel-ad-23-cap"><source src="/assets/ads/ad-23.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-23-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-23-title" aria-describedby="reel-ad-23-alt reel-ad-23-cap"><source src="/assets/ads/ad-23.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -577,6 +593,7 @@
                 <p>Your mom calls. She sounds scared and needs money right now. It isn't her.</p>
                 <p>AI can copy a voice from a few seconds of audio, like a birthday video posted online. If a call feels urgent and off, hang up and call back on a number you know. Better yet, pick a family code word today.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-23-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -591,11 +608,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-21.mp4" data-width="720" data-height="900" data-title-id="reel-ad-21-title" data-caption-id="reel-ad-21-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-21.mp4" data-width="720" data-height="900" data-title-id="reel-ad-21-title" data-describedby="reel-ad-21-alt reel-ad-21-cap">
               <img class="reel-poster" src="/assets/ads/ad-21-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Billboard”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Billboard”, 20 seconds, starts muted" aria-describedby="reel-ad-21-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-21-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-21-title" aria-describedby="reel-ad-21-cap"><source src="/assets/ads/ad-21.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-21-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-21-title" aria-describedby="reel-ad-21-alt reel-ad-21-cap"><source src="/assets/ads/ad-21.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -604,6 +621,7 @@
                 <p>Would you put it on a billboard? Then keep it out of the chat.</p>
                 <p>Chats can feel private, but they can be saved and seen later. Keep passwords, your home address, your full name plus your school, and private photos out of it. Share the problem, not your life story.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-21-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -618,11 +636,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-24.mp4" data-width="576" data-height="720" data-title-id="reel-ad-24-title" data-caption-id="reel-ad-24-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-24.mp4" data-width="576" data-height="720" data-title-id="reel-ad-24-title" data-describedby="reel-ad-24-alt reel-ad-24-cap">
               <img class="reel-poster" src="/assets/ads/ad-24-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Rabbit Hole”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Rabbit Hole”, 20 seconds, starts muted" aria-describedby="reel-ad-24-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-24-poster.jpg" width="576" height="720" aria-labelledby="reel-ad-24-title" aria-describedby="reel-ad-24-cap"><source src="/assets/ads/ad-24.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-24-poster.jpg" width="576" height="720" aria-labelledby="reel-ad-24-title" aria-describedby="reel-ad-24-alt reel-ad-24-cap"><source src="/assets/ads/ad-24.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -632,11 +650,12 @@
                 <p>An AI decides what plays next, and it learns whatever keeps you watching. You can steer it: search on purpose, tap &quot;Not interested,&quot; and set a time limit.</p>
                 <p>What's the strangest rabbit hole your feed has sent you down?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-24-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
                   <li>&quot;One video. Just one.&quot; &quot;How to fold a paper crane,&quot; 2:31.</li>
-                  <li>&quot;Then the next one picks itself.&quot; Videos fly past: crane hacks, origami fails, paper vs. scissors, &quot;Is paper a scam?&quot;, paper cuts explained, top 10 paper facts, paper facts at 3 AM, origami drama part 9. The counter climbs from 1 video at 9:02 PM to 47 videos at 11:15 PM.</li>
+                  <li>&quot;Then the next one picks itself.&quot; Videos fly past: crane hacks, origami fails, paper vs. scissors, &quot;Why is paper weird?&quot;, 1,000 cranes in a day, paper cuts explained, &quot;Is paper a scam?&quot;, top 10 paper facts, &quot;Wait for the end...&quot;, &quot;You won't believe #4&quot;, paper facts at 3 AM, origami drama part 9. The counter climbs from 1 video at 9:02 PM to 47 videos at 11:15 PM.</li>
                   <li>&quot;Who's picking? An AI.&quot; An eye: &quot;For you: picked by AI.&quot;</li>
                   <li>&quot;It learns what keeps you watching.&quot;</li>
                   <li>&quot;You can steer it.&quot; Merc: &quot;What did you actually want to watch?&quot; Search on purpose. Tap &quot;Not interested.&quot; Set a time limit.</li>
@@ -646,11 +665,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-22.mp4" data-width="720" data-height="900" data-title-id="reel-ad-22-title" data-caption-id="reel-ad-22-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-22.mp4" data-width="720" data-height="900" data-title-id="reel-ad-22-title" data-describedby="reel-ad-22-alt reel-ad-22-cap">
               <img class="reel-poster" src="/assets/ads/ad-22-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Spot the Fake”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Spot the Fake”, 20 seconds, starts muted" aria-describedby="reel-ad-22-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-22-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-22-title" aria-describedby="reel-ad-22-cap"><source src="/assets/ads/ad-22.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-22-poster.jpg" width="720" height="900" aria-labelledby="reel-ad-22-title" aria-describedby="reel-ad-22-alt reel-ad-22-cap"><source src="/assets/ads/ad-22.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--safe">Stay safe</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -660,6 +679,7 @@
                 <p>Old AI images left clues like six fingers, melted signs, and mismatched earrings. New ones barely leave any. So don't just check the pixels. Check where it came from: who posted it first, whether it shows up anywhere else, and whether a real news source shared it.</p>
                 <p>How many clues did you catch?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-22-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -684,11 +704,11 @@
         </header>
         <ul class="reel-row" role="list">
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-02.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-02-title" data-caption-id="reel-ad-02-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-02.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-02-title" data-describedby="reel-ad-02-alt reel-ad-02-cap">
               <img class="reel-poster" src="/assets/ads/ad-02-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Messenger of the Gods”, 25 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Messenger of the Gods”, 25 seconds, starts muted" aria-describedby="reel-ad-02-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:25</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-02-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-02-title" aria-describedby="reel-ad-02-cap"><source src="/assets/ads/ad-02.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-02-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-02-title" aria-describedby="reel-ad-02-alt reel-ad-02-cap"><source src="/assets/ads/ad-02.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--merc">Meet Merc</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -698,6 +718,7 @@
                 <p>Meet Merc, the messenger behind Mercurius. He doesn't deliver answers. He delivers the right question, so you're the one who figures it out.</p>
                 <p>What's one thing about AI you've always wanted to understand?</p>
               </div>
+              <p class="reel-alt" id="reel-ad-02-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -711,11 +732,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-05.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-05-title" data-caption-id="reel-ad-05-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-05.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-05-title" data-describedby="reel-ad-05-alt reel-ad-05-cap">
               <img class="reel-poster" src="/assets/ads/ad-05-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “By Jupiter”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “By Jupiter”, 20 seconds, starts muted" aria-describedby="reel-ad-05-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-05-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-05-title" aria-describedby="reel-ad-05-cap"><source src="/assets/ads/ad-05.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-05-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-05-title" aria-describedby="reel-ad-05-alt reel-ad-05-cap"><source src="/assets/ads/ad-05.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--merc">Meet Merc</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -724,6 +745,7 @@
                 <p>Took a few days off? That's okay.</p>
                 <p>Merc saved you a question. Patient? Yes. Pushy? Never. He'll be here whenever you're ready, so enjoy the break.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-05-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -736,11 +758,11 @@
             </div>
           </li>
           <li class="reel">
-            <div class="reel-frame" data-reel data-src="/assets/ads/ad-08.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-08-title" data-caption-id="reel-ad-08-cap">
+            <div class="reel-frame" data-reel data-src="/assets/ads/ad-08.mp4" data-width="1080" data-height="1350" data-title-id="reel-ad-08-title" data-describedby="reel-ad-08-alt reel-ad-08-cap">
               <img class="reel-poster" src="/assets/ads/ad-08-poster.jpg" width="540" height="675" alt="" loading="lazy" decoding="async" />
-              <button type="button" class="reel-play" data-reel-play aria-label="Play “Day 1 to Day 30”, 20 seconds, starts muted"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
+              <button type="button" class="reel-play" data-reel-play aria-label="Play “Day 1 to Day 30”, 20 seconds, starts muted" aria-describedby="reel-ad-08-alt"><span class="reel-play-disc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" /></svg></span></button>
               <span class="reel-duration" aria-hidden="true">0:20</span>
-              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-08-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-08-title" aria-describedby="reel-ad-08-cap"><source src="/assets/ads/ad-08.mp4" type="video/mp4" /></video></noscript>
+              <noscript><video class="reel-video" controls muted playsinline preload="none" poster="/assets/ads/ad-08-poster.jpg" width="1080" height="1350" aria-labelledby="reel-ad-08-title" aria-describedby="reel-ad-08-alt reel-ad-08-cap"><source src="/assets/ads/ad-08.mp4" type="video/mp4" /></video></noscript>
             </div>
             <div class="reel-body">
               <div class="reel-meta"><span class="chip chip--merc">Meet Merc</span><button type="button" class="reel-sound" data-reel-sound hidden>Turn sound on</button></div>
@@ -749,6 +771,7 @@
                 <p>What happens if you show up every day?</p>
                 <p>Day 1: lost. Day 7: curious. Day 14: getting it. Day 21: on a roll. Day 30: unstoppable. Yours starts today, one question at a time.</p>
               </div>
+              <p class="reel-alt" id="reel-ad-08-alt">A video version of the text under “What’s on screen.”</p>
               <details class="reel-transcript">
                 <summary>What’s on screen</summary>
                 <ol>
@@ -802,7 +825,7 @@
     </div>
   </footer>
 
-  <script src="/script.js?v=9" defer></script>
-  <script src="/ads.js?v=2" defer></script>
+  <script src="/script.js?v=10" defer></script>
+  <script src="/ads.js?v=3" defer></script>
 </body>
 </html>

@@ -130,7 +130,9 @@ source file names and internal notes.
   caption that has only its XP/ranks sentence deleted. Ads with no rendered
   video yet (16 "The Yes-Man", 17 "Ask It Twice": `video: null`) are left
   off until one exists; add the files to `assets/ads/`, fill in `video`,
-  `poster`, size, `duration` and `transcript`, and rerun the script.
+  `poster`, `width`, `height`, `posterWidth`, `posterHeight`, `duration`
+  and `transcript`, and rerun the script (it stops with the ad's number if
+  any of them is missing).
 - **Captions:** the Instagram caption as the text alternative, minus the
   hashtags, the "Search 'Mercurius AI' on the App Store" line, and any
   sentence listed in the ad's `siteDrop`: calls to comment, tag, save or
@@ -139,8 +141,15 @@ source file names and internal notes.
   appears in the caption exactly once; nothing else is reworded.
 - **What's on screen:** every reel's `transcript` is its on-screen text,
   scene by scene (read from the video frames), shown under the caption in a
-  "What's on screen" disclosure. It is the text alternative for the video
-  itself (WCAG 1.2.3); keep it in step with any re-export.
+  "What's on screen" disclosure. The soundtracks are music with no speech,
+  so the caption and transcript carry everything the reel says, and each
+  card labels the reel "A video version of the text under “What's on
+  screen.”" (the play button and the video point at that line with
+  `aria-describedby`). That makes the reel a media alternative for text,
+  which WCAG 1.2.1–1.2.5 exempt, so no audio description or captions track
+  is needed. It holds only while the transcript is complete: keep it in step
+  with any re-export, and if a reel ever gets a voice-over, it needs a
+  captions track (and the label changes).
 - **Behaviour:** each card is a poster, a play button and the caption.
   Nothing loads or plays until the visitor presses play; then `ads.js`
   makes a muted inline `<video controls>`, pauses any other reel, and shows
@@ -245,12 +254,16 @@ files as well.
 - `prefers-reduced-motion` turns off Merc's idle motion, the hero bubbles'
   entrance and smooth scroll, and makes the lesson replay's reveal fade
   instant. Without it, every hero animation runs once and ends within 5
-  seconds (WCAG 2.2.2); it replays on hover or focus.
+  seconds (WCAG 2.2.2); it replays on hover or focus. When the hero art
+  starts below the fold (phones), `script.js` holds it until it scrolls
+  into view.
 - The phone menu is a native `<details>` (works without JS); Escape, a click
   outside it, or Tabbing out of it closes it.
 - Reels: muted by default, real play buttons named after the reel, the
-  caption and a "What's on screen" transcript next to each one, nothing
-  autoplays.
+  caption and a "What's on screen" transcript next to each one, each reel
+  labelled as a video version of that text, nothing autoplays. In the
+  phone strips, Tab brings the whole card into the strip and keeps the
+  focused control clear of the sticky header.
 - Decorative rings never cross text: below 1024px the large ring is left out
   and the small one is a corner arc; from 1024px both sit in the margins
   beside the container (page heroes: the top-right corner, clear of the

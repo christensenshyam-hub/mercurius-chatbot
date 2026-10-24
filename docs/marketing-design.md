@@ -611,9 +611,10 @@ For the Reels gallery:
 - Play button: a real `<button>` 56 px round over the poster, in its lower-right
   corner inset 16 px (the duration chip sits on the left at the same inset,
   centred on it), white fill with
-  a navy triangle, accessible name "Play Ad 18: Count the R's" (number and
-  title), focus ring as in section 6.
-- Under the frame: category chip, ad number in `--ink-3`, title (Fraunces 600,
+  a navy triangle, accessible name "Play “Count the R's”, 20 seconds, starts
+  muted" (title, length, and that it starts muted), focus ring as in section 6.
+  In forced colours the disc gets a `ButtonText` border and triangle.
+- Under the frame: category chip, title (Fraunces 600,
   20 px), then the ad's Instagram caption from the Reels calendar as its text
   alternative (Inter 400 15 px, first paragraph `--ink-body`, the rest
   `--ink-2`, line breaks kept). The closing hashtag line and the "Search
@@ -621,8 +622,14 @@ For the Reels gallery:
   that only work on Instagram or at posting time (comment, tag, save, share,
   "tell us", seasonal lines), listed per ad as `siteDrop` in
   `docs/marketing-reels/ads.json`. Nothing else is reworded.
-- Then "What's on screen": a `<details>` with the reel's on-screen text, scene
-  by scene, as the text alternative for the video itself.
+- Then the line "A video version of the text under “What's on screen.”"
+  (`--ink-2`, 14 px; the play button and the video are `aria-describedby` it),
+  and "What's on screen": a `<details>` with the reel's on-screen text, scene
+  by scene. The soundtracks are music only, so the reel is a media
+  alternative for its text, labelled as one (WCAG 1.2.1–1.2.5 exempt it); a
+  reel with a voice-over would need a captions track instead.
+- No ad number on the site: the public set has gaps (1 is its XP-free cut,
+  3, 15, 16 and 17 are left off).
 - Ads keep their own "world" colours inside the frame (green felt for Ad 22,
   library wood for Ad 25, photo-booth mint for Ad 26). The page around them
   stays navy.
@@ -700,7 +707,7 @@ are fine.
 - Brand SVGs used as `<img>` carry `alt` text; decorative ones `alt=""`.
 - Motion rules in section 10, including the 5-second limit and reduced motion.
 - Videos muted by default, play button or controls visible, caption text next
-  to each.
+  to each, each labelled as a video version of its "What's on screen" text.
 - No horizontal scroll at 360 px; decorative rings are clipped.
 
 ## 15. CSS custom properties
@@ -911,5 +918,7 @@ without clashes. The old raster logo layers in the ad canvas's assets (five
 6. Site captions drop the Instagram-only and seasonal sentences listed in
    `siteDrop` (section 12.10). Keep that, or show the calendar captions word
    for word?
-7. Do any reels have spoken words? The transcripts cover the on-screen text;
-   a voiced reel would also need a captions track.
+7. Do any reels have spoken words? Checked Oct 24 with an on-device sound
+   classifier: all 23 soundtracks on the site are music, with no speech, so
+   the reels are labelled as video versions of their text (12.10). Confirm;
+   a reel with a voice-over would need a captions track.

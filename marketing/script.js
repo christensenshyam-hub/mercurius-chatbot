@@ -4,8 +4,9 @@
  * Deliberately minimal. The page works without JS — the mode tabs
  * stay on "Socratic" (the default panel is the only one not hidden)
  * and the phone menu is a native <details>. This script wires up the
- * tab switching, a few menu niceties, and a tiny dynamic year in the
- * footer. (Reel players live in ads.js, the lesson replay in demo.js.)
+ * tab switching, a few menu niceties, holding the hero's entrance until
+ * it is on screen, and a tiny dynamic year in the footer. (Reel players
+ * live in ads.js, the lesson replay in demo.js.)
  *
  * No frameworks, no dependencies. Loaded `defer` so it never blocks
  * parse.
@@ -81,6 +82,22 @@
       if (menu.open && e.relatedTarget && !menu.contains(e.relatedTarget)) menu.open = false;
     });
   });
+
+  // ---- Hero entrance ----
+  //
+  // Merc's idle and the hero exchange play once (styles.css). On a phone
+  // the hero art starts below the fold, so hold them (`is-waiting` pauses
+  // them) until it scrolls into view. Without JS they play on load.
+  const art = document.querySelector('.hero-art');
+  if (art && 'IntersectionObserver' in window && art.getBoundingClientRect().top >= window.innerHeight) {
+    art.classList.add('is-waiting');
+    const seen = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      art.classList.remove('is-waiting');
+      seen.disconnect();
+    }, { threshold: 0.2 });
+    seen.observe(art);
+  }
 
   // ---- Dynamic year ----
   const year = document.getElementById('year');
