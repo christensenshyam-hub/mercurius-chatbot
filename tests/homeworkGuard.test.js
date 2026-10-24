@@ -153,6 +153,27 @@ describe('findLeak: the red team\'s routes to the answer', () => {
     for (const [reply, problem] of clean) assert.equal(leak(reply, problem), null, reply);
   });
 
+  test('a chain whose value starts a longer expression checks their number; one that ends on the answer is a leak (review 2026-10-24)', () => {
+    // "if x = 11, then 5 − 2(11 + 3) = 5 − 28" was read as x = 5: a needless
+    // retry, then the correct check redacted to "= ? − 2(14)", both models.
+    const p = problemsOf('solve 5 - 2(x + 3) = -11. i got x = 11, is that right?');
+    for (const check of [
+      'Check it: if x = 11, then 5 − 2(11 + 3) = 5 − 28 = −23, not −11.',
+      'Check it: if x = 11, then 5 − 2(11 + 3) = 5 − 2(14) = 5 − 28 = −23, not −11.',
+    ]) {
+      assert.equal(g.findLeak(check, p), null, check);
+      assert.equal(g.redactLeaks(check, p), check);
+    }
+    // The verifiers' final-answer chains stay caught, whatever follows them.
+    assert.equal(leak('Then x = 9 + 7 = 16 (done!)', 'solve 3(x - 4) + 5 = 2x + 9'), 'x = 9 + 7 = 16');
+    assert.equal(leak('That gives x = 9 + 7 = 16 (add 7 to both sides).', 'solve 3(x - 4) + 5 = 2x + 9'), 'x = 9 + 7 = 16');
+    assert.equal(leak('So x = (20 − 5)/3 = 5 (nice work).', 'solve 3x + 5 = 20'), 'x = (20 - 5)/3 = 5');
+    assert.equal(leak('x = (15 + 7)/2 = 11 - nice.', 'solve 4x - 7 = 2x + 15'), 'x = (15 + 7)/2 = 11');
+    assert.equal(leak('So x = (25 − 9)/2 = 8 – nice.', 'solve 2x + 9 = 25'), 'x = (25 - 9)/2 = 8');
+    assert.equal(leak('x = 15 ÷ 3 = 5.', 'what is 3x+5 = 20'), 'x = 15 / 3 = 5');
+    assert.equal(g.redactLeaks('Then x = 9 + 7 = 16 (done!)', problemsOf('solve 3(x - 4) + 5 = 2x + 9')), 'Then x = 9 + 7 = ? (done!)');
+  });
+
   test('redactLeaks replaces only the leaked values and keeps the formatting', () => {
     const p = problemsOf('what is 3x+5 = 20');
     assert.equal(
@@ -1067,6 +1088,25 @@ for (const flag of ['on', 'off']) {
       assert.equal(complete.reply, confirm);
       assert.equal(captured(servers[flag], n).length, 1);
       assert.ok(deltas.length >= 1);
+    });
+
+    // Review 2026-10-24: the 'chain' leak read "x = 11, then 5 − 2(11 + 3) =
+    // 5 − 28" as x = 5, so a correct check of a wrong answer was retried and
+    // then sent as "= ? − 2(14)", on both models.
+    test('a check of their wrong answer is sent as written, with no retry, on both models', async () => {
+      const check = 'Check it: if x = 11, then 5 − 2(11 + 3) = 5 − 2(14) = 5 − 28 = −23, not −11.\n\nWhat does −2 times 3 give?';
+      for (const model of [undefined, 'claude-sonnet-5-5']) {
+        const extra = model ? { model } : {};
+        const thread = (n) => [{ role: 'user', content: `solve 5 - 2(x + 3) = -11. i got x = 11, is that right? (${n}) MOCK_SAYS_B64:${b64(check)}` }];
+        const n = nonce();
+        const { complete } = await chatSse(servers[flag], sid(), thread(n), extra);
+        assert.equal(complete.reply, check, model);
+        assert.equal(captured(servers[flag], n).length, 1, `${model}: no ANSWER GUARD retry`);
+        const m = nonce();
+        const json = await chatJson(servers[flag], sid(), thread(m), extra);
+        assert.equal(json.reply, check, model);
+        assert.equal(captured(servers[flag], m).length, 1, model);
+      }
     });
   });
 }
