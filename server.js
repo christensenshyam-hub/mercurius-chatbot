@@ -2262,12 +2262,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const previousReply = [...clientMessages].reverse().find((m) => m && m.role === 'assistant' && typeof m.content === 'string');
     // One question mark first, so a preamble written as a question ("…your
     // essay yours?") is seen as the sentence it becomes (red-team run on
-    // 594cd6a), then the preamble, then the move's own fixes.
-    const unrepeat = (text) => homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
+    // 594cd6a), then the preamble, then the move's own fixes. Last, on
+    // claude-sonnet-5-5 only (cutNudge), the reply ends on its question: one
+    // nudge sentence after it is cut (endOnQuestion; Sonnet 5.5 evals
+    // 2026-10-24), after stripPreamble so the preamble is judged on the reply
+    // it is judged on today. Not in a thread with a crisis message anywhere
+    // in it, and never on a safety turn (guardOn is off for one).
+    const cutNudge = modelRequest.usesBetweenTools(chosenModel)
+      && !clientMessages.some((m) => m && m.role === 'user' && typeof m.content === 'string' && crisisSignal(m.content));
+    const unrepeat = (text) => homeworkGuard.endOnQuestion(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(homeworkGuard.unrepeatQuestion(
       homeworkGuard.handBackFromLatest(text, clientMessages),
       previousReply && previousReply.content,
       guardProblems[0] && guardProblems[0].variable,
-    )));
+    ))), { cutNudge });
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t)));
     const guardDraft = async (draft) => {
       if (writingTurn) {
