@@ -628,8 +628,9 @@ For the Reels gallery:
   by scene. The soundtracks are music only, so the reel is a media
   alternative for its text, labelled as one (WCAG 1.2.1–1.2.5 exempt it); a
   reel with a voice-over would need a captions track instead.
-- No ad number on the site: the public set has gaps (1 is its XP-free cut,
-  3, 15, 16 and 17 are left off).
+- No ad number on the site: the public set has gaps (1 is its XP-free cut;
+  16, 17, 28 and 29 have no video yet; the 5-Second AI Test series has its
+  own numbering).
 - Ads keep their own "world" colours inside the frame (green felt for Ad 22,
   library wood for Ad 25, photo-booth mint for Ad 26). The page around them
   stays navy.
@@ -693,10 +694,10 @@ sticks.", "Check the source.", "Look it up first.", "Search 'Mercurius AI' on
 iPhone". Captions also say Merc "stays in Socratic mode and answers with a
 question until you work it out yourself" (Ad 3).
 
-Do not reuse: Ad 1's scene 4 and caption ("+20 XP", "Climb the ranks") or Ad 15
-"Boss Fight" (its caption promises XP). XP, ranks and leaderboards are not
-shipped, so neither ad belongs on the site (see Open questions). Daily streaks
-are fine.
+Do not reuse in site copy: Ad 1's scene 4 and caption ("+20 XP", "Climb the
+ranks") or Ad 15's "the XP is real". XP, ranks and leaderboards are not shipped.
+Ads 3 and 15 are on /ads at the founder's request with XP in the video; Ad 15's
+caption drops "and the XP is real" (see Open questions). Daily streaks are fine.
 
 ## 14. Accessibility checklist for this system
 
@@ -909,16 +910,19 @@ without clashes. The old raster logo layers in the ad canvas's assets (five
    the smiling TikTok avatar: are they approved for the public site? Only the
    standing Merc from the ads and his avatar are exported.
 3. Ads 1, 3 and 15 show or promise XP, ranks or levels, which are not shipped.
-   The site leaves 3 and 15 out and shows Ad 1 as its XP-free cut. Confirm, or
-   re-export them without the XP segments.
-4. Ads 16 and 17 have no rendered video, so the site leaves them out until
-   renders exist (their captions wait in the manifest).
+   The founder asked for every ad on the site (Oct 24): 3 and 15 are on /ads
+   with their XP segments, Ad 15's caption drops "and the XP is real", and Ad 1
+   stays as its XP-free cut. Re-exports without the XP segments would make
+   them match the app.
+4. Ads 16, 17, 28 and 29 have no rendered video yet, so the site leaves them
+   out until 4:5 exports exist (16 and 17 have calendar captions; 28 and 29
+   have neither a calendar entry nor a caption).
 5. The OG card's label reads "AI literacy tutor". Keep it, or use a caption
    line from the ads?
 6. Site captions drop the Instagram-only and seasonal sentences listed in
    `siteDrop` (section 12.10). Keep that, or show the calendar captions word
    for word?
 7. Do any reels have spoken words? Checked Oct 24 with an on-device sound
-   classifier: all 23 soundtracks on the site are music, with no speech, so
+   classifier: all 27 soundtracks on the site are music, with no speech, so
    the reels are labelled as video versions of their text (12.10). Confirm;
    a reel with a voice-over would need a captions track.

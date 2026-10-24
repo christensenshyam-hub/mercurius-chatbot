@@ -124,15 +124,23 @@ node scripts/build-reels.mjs --check   # fail if the cards or assets/ads/ drift
 The manifests stay out of this folder because they carry posting dates,
 source file names and internal notes.
 
-- **Honest copy:** ads flagged `unshipped` (XP, ranks or levels in the video
-  or caption: ads 1, 3 and 15) are left off, and their videos are not in
-  `assets/ads/`. Ad 1 appears as its XP-free cut (`hero-4x5.mp4`) with the
-  caption that has only its XP/ranks sentence deleted. Ads with no rendered
-  video yet (16 "The Yes-Man", 17 "Ask It Twice": `video: null`) are left
-  off until one exists; add the files to `assets/ads/`, fill in `video`,
-  `poster`, `width`, `height`, `posterWidth`, `posterHeight`, `duration`
-  and `transcript`, and rerun the script (it stops with the ad's number if
-  any of them is missing).
+- **Which ads:** every ad with a rendered video, under its calendar
+  category: ads 1–15, 18–27, 30 and "5-Second AI Test #1" (`n: 0`).
+  - Ad 1 appears as its XP-free cut (`hero-4x5.mp4`), with the caption that
+    has only its XP/ranks sentence deleted.
+  - Ads 3 and 15 show XP in the video, which the app doesn't have
+    (`unshipped` records where). Ad 15's caption drops the fragment "and the
+    XP is real" (`siteCut`).
+  - Ad 30 and the AI Test aren't in the Reels calendar, so their captions
+    were drafted for the site from the video (`captionDraft`). Replace them
+    with the posting captions when there are some.
+  - Ads 16 "The Yes-Man", 17 "Ask It Twice", 28 "Settle It" and 29 "Game
+    Day" have no rendered video yet (`video: null`; their boards are in the
+    Mercurius Social Ad canvas). To add one: encode the 4:5 export into
+    `assets/ads/ad-NN.mp4` with a poster, fill in `video`, `poster`,
+    `width`, `height`, `posterWidth`, `posterHeight`, `duration`, a caption
+    and the `transcript`, then rerun the script. It stops with the ad's
+    number if any of them is missing.
 - **Captions:** the Instagram caption as the text alternative, minus the
   hashtags, the "Search 'Mercurius AI' on the App Store" line, and any
   sentence listed in the ad's `siteDrop`: calls to comment, tag, save or
@@ -163,7 +171,7 @@ source file names and internal notes.
   (not lazily), so no request fires while a visitor steps through the lesson
   replay above (`check-demo.mjs` fails on any). `/ads` posters are lazy.
 - **Check:** `--check` also fails if `assets/ads/` holds a file no card uses,
-  so a left-off video can't be deployed by accident.
+  so a stray video can't be deployed by accident.
 
 ## Shared head, header and footer
 

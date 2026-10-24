@@ -12,20 +12,23 @@
 //   marketing/index.html  between <!-- REELS:START --> and <!-- REELS:END -->  (six featured reels)
 //   marketing/ads.html    between <!-- ADS:START --> and <!-- ADS:END -->      (every reel, by category)
 //
-// Rules (honest copy):
-//   - an ad flagged `unshipped` (XP, ranks or levels in the video or caption: ads 1, 3, 15) is left off;
-//     ad 1 appears as its XP-free cut from hero.json instead;
-//   - an ad with no rendered video (`video: null`: ads 16, 17) is left off until one exists;
+// Rules:
+//   - every ad with a rendered video is on the site, under its calendar category. Ad 1 appears as its
+//     XP-free cut from hero.json; ads 3 and 15 show XP in the video (`unshipped` records where), which
+//     the app does not have;
+//   - an ad with no rendered video (`video: null`) is left off until one exists;
 //   - the caption is the Instagram caption minus the sentences listed in `siteDrop` (calls to comment,
-//     tag, save, share or "tell us", and seasonal lines). Each listed sentence must appear in the caption
-//     exactly once; nothing else is reworded. Hashtags and the "Search ... on the App Store" line are
-//     not in the manifest captions at all;
+//     tag, save, share or "tell us", and seasonal lines) and the fragments listed in `siteCut` (a claim
+//     about a feature the app doesn't have: ad 15's "and the XP is real"). Each must appear in the
+//     caption exactly once; nothing else is reworded. Hashtags and the "Search ... on the App Store"
+//     line are not in the manifest captions at all. Ads not in the Reels calendar (`captionDraft`) carry
+//     a caption drafted for the site;
 //   - every reel on the site has a `transcript` (its on-screen text, scene by scene), shown under the
 //     caption as "What's on screen". The soundtracks are music only, so the card labels the reel as a
 //     video version of that text (a media alternative for text, which WCAG's success criteria 1.2.1–1.2.5
 //     exempt when it is labelled as one); keep the transcript complete.
-// --check also fails if marketing/assets/ads/ holds a file no card uses, so a left-off video (the XP
-// reels) can't be deployed by accident.
+// --check also fails if marketing/assets/ads/ holds a file no card uses, so a stray video can't be
+// deployed by accident.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,9 +60,9 @@ const mmss = (d) => `${Math.floor(secs(d) / 60)}:${String(secs(d) % 60).padStart
 
 function siteCaption(a) {
   let text = a.caption;
-  for (const s of a.siteDrop || []) {
+  for (const [field, s] of [...(a.siteDrop || []).map((x) => ['siteDrop', x]), ...(a.siteCut || []).map((x) => ['siteCut', x])]) {
     const count = text.split(s).length - 1;
-    if (count !== 1) fail(`ad ${a.n}: siteDrop sentence found ${count} times: "${s}"`);
+    if (count !== 1) fail(`ad ${a.n}: ${field} text found ${count} times: "${s}"`);
     text = text.replace(s, '');
   }
   return text
@@ -81,7 +84,7 @@ for (const a of ads) {
     });
     continue;
   }
-  if (a.unshipped || !a.video) continue;
+  if (!a.video) continue;
   reels.push({
     key: `ad-${String(a.n).padStart(2, '0')}`, n: a.n, title: a.title, cat: catOf(a.category), caption: siteCaption(a),
     video: a.video, poster: a.poster, w: a.width, h: a.height, pw: a.posterWidth, ph: a.posterHeight,
@@ -201,7 +204,7 @@ const used = new Set(reels.flatMap((r) => [r.video, r.poster].map((f) => path.ba
 const orphans = readdirSync(path.join(SITE, 'assets/ads')).filter((f) => !f.startsWith('.') && !used.has(f));
 if (orphans.length) { console.error(`marketing/assets/ads/: not used by any card (keep it out of the deploy): ${orphans.join(', ')}`); drift = true; }
 
-const leftOff = ads.filter((a) => a.n !== 1 && (a.unshipped || !a.video)).sort((x, y) => x.n - y.n).map((a) => `${a.n}${a.unshipped ? ' (XP/ranks)' : ' (no video yet)'}`);
-console.log(`reels on /ads: ${reels.length}; left off: ${leftOff.join(', ')}; ad 1 shown as its XP-free cut`);
+const leftOff = ads.filter((a) => a.n !== 1 && !a.video).sort((x, y) => x.n - y.n).map((a) => `${a.n} "${a.title}"`);
+console.log(`reels on /ads: ${reels.length}; no video yet: ${leftOff.join(', ') || 'none'}; ad 1 shown as its XP-free cut`);
 console.log('per category:', groups.map(({ c, list }) => `${c.name} ${list.length}`).join(', '));
 if (drift) process.exit(1);

@@ -39,8 +39,8 @@
   "reel": 2,
   "caption": "We built an AI tutor that refuses to do your homework. On purpose.\n\nBeg, bargain, offer $5. Merc stays in Socratic mode and answers with a question until you work it out yourself. That's the part that actually sticks.\n\nWhat bribe would you try on Merc?",
   "encode": "original H.264 video stream (untouched), audio re-encoded to AAC 128 kbps",
-  "video": null,
-  "poster": null,
+  "video": "assets/ads/ad-03.mp4",
+  "poster": "assets/ads/ad-03-poster.jpg",
   "aspect": "4:5",
   "width": 1080,
   "height": 1350,
@@ -50,7 +50,19 @@
   "unshipped": {
    "video": "about 13.5 s: a small \"+20 XP\" chip under Merc's reply"
   },
-  "offSite": "XP or ranks (not shipped); see unshipped"
+  "offSite": "XP or ranks (not shipped); see unshipped",
+  "bytes": 1103673,
+  "posterWidth": 540,
+  "posterHeight": 675,
+  "posterBytes": 22538,
+  "posterFrom": "video frame at 2 s",
+  "transcript": [
+   "\"We built an AI tutor that refuses to do your homework.\" \"(on purpose)\"",
+   "Chat header: Merc, \"Socratic mode: ON\". Student: \"just tell me how AI works\" Merc: \"What do you think happens when you hit send?\" Student: \"pls. i'm begging\" Merc: \"You're closer than you think.\"",
+   "Student: \"what if i pay you $5\" Merc: \"I only accept payment in effort.\"",
+   "Student: \"ugh. it predicts the next word?\" Merc: \"THERE it is.\" A chip with a lightning bolt pops up: \"+20 XP\".",
+   "End card: Merc. \"Mercurius. You'll earn every answer.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
+  ]
  },
  {
   "n": 27,
@@ -198,8 +210,8 @@
   "reel": 8,
   "caption": "Copying the AI answer does 0 damage.\n\nConfusion is a level 99 boss, and copy-paste doesn't even scratch it. Asking the right question does. In Mercurius, working something out yourself is the critical hit, and the XP is real.\n\nWhat subject is your final boss?",
   "encode": "original H.264 video stream (untouched), audio re-encoded to AAC 128 kbps",
-  "video": null,
-  "poster": null,
+  "video": "assets/ads/ad-15.mp4",
+  "poster": "assets/ads/ad-15-poster.jpg",
   "aspect": "4:5",
   "width": 1080,
   "height": 1350,
@@ -208,10 +220,26 @@
   "sourceBytes": 1495053,
   "unshipped": {
    "caption": "says \"the XP is real\"",
-   "video": "HP/XP bars, \"Lv.1\"/\"Lv.2\", \"+50 XP\", \"You reached Lv.2!\" and the end line \"Level up for real.\"",
-   "captionSafe": "Copying the AI answer does 0 damage.\n\nConfusion is a level 99 boss, and copy-paste doesn't even scratch it. Asking the right question does. In Mercurius, working something out yourself is the critical hit.\n\nWhat subject is your final boss?"
+   "video": "HP/XP bars, \"Lv.1\"/\"Lv.2\", \"+50 XP\", \"You reached Lv.2!\" and the end line \"Level up for real.\""
   },
-  "offSite": "XP or ranks (not shipped); see unshipped"
+  "offSite": "XP or ranks (not shipped); see unshipped",
+  "bytes": 1283041,
+  "posterWidth": 540,
+  "posterHeight": 675,
+  "posterBytes": 37559,
+  "posterFrom": "video frame at 1 s",
+  "transcript": [
+   "\"BOSS FIGHT\" \"vs. Confusion\" A battle screen: a frowning purple cloud ringed by question marks faces a student and Merc. Boss box: \"CONFUSION\" \"Lv.99\", HP bar \"100/100\". Player box: \"YOU\" \"Lv.1\", HP and XP bars. \"CONFUSION blocks your homework!\"",
+   "Menu: \"COPY AI ANSWER\" \"ASK A QUESTION\" \"RUN AWAY\". The cursor picks \"COPY AI ANSWER\". \"You used COPY AI ANSWER!\" A \"0\" floats over Confusion. Its HP stays at \"100/100\". \"It did nothing. CONFUSION is unbothered.\"",
+   "The menu again. The cursor moves to \"ASK A QUESTION\". MERC asked: \"What do you already know?\" Damage: \"-35\". Confusion's HP drops to \"65/100\".",
+   "\"You worked it out yourself! CRITICAL HIT!\" Damage: \"-65 CRIT!\" Confusion's HP hits \"0/100\" and the cloud deflates and vanishes in sparkles. \"CONFUSION was defeated!\"",
+   "\"+50 XP\" The XP bar fills. \"You reached Lv.2!\" The player box glows and \"Lv.1\" becomes \"Lv.2\".",
+   "The battle dims. \"Copying does 0 damage. Understanding crits.\"",
+   "End card: Merc. \"Mercurius. Level up for real.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
+  ],
+  "siteCut": [
+   ", and the XP is real"
+  ]
  },
  {
   "n": 25,
@@ -794,6 +822,96 @@
    "The days fill in with flame tiles as Merc watches. \"Day 1: Lost.\" \"Day 7: Curious.\" \"Day 14: Getting it.\" \"Day 21: On a roll.\" \"Day 30: Unstoppable.\" Days 7, 14, 21 and 30 turn gold with a star.",
    "\"30 days. One question at a time.\"",
    "End card: Merc. \"Mercurius. Your streak starts today.\" Download on the App Store. Search \"Mercurius AI\" on iPhone."
+  ]
+ },
+ {
+  "n": 28,
+  "title": "Settle It",
+  "category": "How AI works",
+  "date": null,
+  "postAt": null,
+  "reel": null,
+  "caption": null,
+  "video": null,
+  "note": "Not in the Reels calendar. No rendered video yet: board \"Ad 28: Settle It (fight night, 19 s)\" (Settle.dc.html) in the Mercurius Social Ad canvas. Category: AI agreeing with whoever asks, like Ad 16."
+ },
+ {
+  "n": 29,
+  "title": "Game Day",
+  "category": "Study smarter",
+  "date": null,
+  "postAt": null,
+  "reel": null,
+  "caption": null,
+  "video": null,
+  "note": "Not in the Reels calendar. No rendered video yet: board \"Ad 29: Game Day\" (GameDay.dc.html) in the Mercurius Social Ad canvas. Category: Merc helps with nerves before a game, \"Same as before a test.\""
+ },
+ {
+  "n": 30,
+  "title": "Get It Wrong",
+  "category": "Study smarter",
+  "date": null,
+  "postAt": null,
+  "reel": null,
+  "caption": "Getting it wrong is how you get smarter. As long as you find out why.\n\nAI can sound completely sure and still be wrong, because fluency is a style, not a signal. When you slip up, Merc doesn't just correct you. He shows you why the mistake happened, then asks what you'd actually check to tell the difference.\n\nHow do you check whether an AI answer is actually right?",
+  "captionDraft": true,
+  "captionNote": "Not in the Reels calendar: drafted for the site from the video. Replace with the posting caption when there is one.",
+  "encode": "H.264 720px wide, ~800 kbps video, AAC 128 kbps",
+  "video": "assets/ads/ad-30.mp4",
+  "poster": "assets/ads/ad-30-poster.jpg",
+  "aspect": "4:5",
+  "width": 720,
+  "height": 900,
+  "duration": 26.5,
+  "bytes": 2969356,
+  "posterWidth": 540,
+  "posterHeight": 675,
+  "posterBytes": 32094,
+  "posterFrom": "video frame at 2.5 s",
+  "source": "Mercurius-Ad30-GetItWrong-4x5-WithSound.mp4",
+  "sourceBytes": 9950562,
+  "transcript": [
+   "\"Getting it wrong is how you get smarter.\"",
+   "The Mercurius app in Socratic mode. Under Merc: \"Let's sharpen this question together.\" Student: \"Why can an ai sound confident but be completely wrong???\" \"Merc is thinking...\"",
+   "Merc: \"Because confidence and accuracy are generated separately. When an LLM predicts the next word, it picks whatever fits the pattern of fluent, authoritative text — not whatever is actually true. Sounding certain is just a style that appears constantly in training data. So here's the tension: if a model can't tell the difference between \"sounds right\" and \"is right,\" what does that mean for how you should use its output?\" \"What does that mean for how you should use its output?\" is highlighted.",
+   "Student types and sends: \"Just trust it if it sound sure?\" \"Merc is thinking...\" Stamp: \"Oops.\"",
+   "Headline over the chat: \"It helps you understand your mistake.\" Merc: \"That's exactly the trap. Fluency is a style, not a signal. A model that's wrong about something will write it just as smoothly as when it's right — sometimes more confidently, because it's pattern-matching to authoritative-sounding text. What would you actually check to tell the difference?\" \"Fluency is a style, not a signal.\" is highlighted, then the closing question.",
+   "End card: Merc. \"Mercurius. Don't just get answers. Build understanding.\" Download on the App Store. Free · Search \"Mercurius AI\""
+  ]
+ },
+ {
+  "n": 0,
+  "title": "5-Second AI Test #1",
+  "category": "How AI works",
+  "date": null,
+  "postAt": null,
+  "reel": null,
+  "series": "The 5-Second AI Test",
+  "caption": "Quick AI test: does a chatbot look up its answers, or predict them?\n\nA large language model doesn't pull a stored answer from a database. It predicts the next token (a word fragment), over and over, using patterns learned from massive amounts of text. Merc lays out that foundation, then asks you to pick a side and argues the other one, so you do the thinking.\n\nDid you pick A or B before the timer ran out?",
+  "captionDraft": true,
+  "captionNote": "Not in the Reels calendar: drafted for the site from the video. Replace with the posting caption when there is one.",
+  "encode": "H.264 720px wide, ~700 kbps video, AAC 128 kbps",
+  "video": "assets/ads/ad-00.mp4",
+  "poster": "assets/ads/ad-00-poster.jpg",
+  "aspect": "4:5",
+  "width": 720,
+  "height": 900,
+  "duration": 24.5,
+  "bytes": 2469619,
+  "posterWidth": 540,
+  "posterHeight": 675,
+  "posterBytes": 33011,
+  "posterFrom": "video frame at 2.2 s",
+  "source": "Mercurius-AITest01-4x5-WithSound.mp4",
+  "sourceBytes": 5976868,
+  "transcript": [
+   "Label: \"THE 5-SECOND AI TEST · #1\". \"Quick AI test. Can you get this right?\"",
+   "\"How does an LLM actually generate an answer?\" A: \"Looks up a stored answer\" B: \"Predicts the next token\" A timer counts down from 3.",
+   "An X on A, a check mark on B. \"It predicts the next token.\" \"That's the core of how language models generate text.\"",
+   "The Mercurius app. Modes: \"Socratic\" (selected), \"Debate\", \"Discussion\". Merc. \"Hi, I'm Merc\" \"Your AI literacy tutor — here to help you think, not think for you.\" Suggested questions: \"How does an LLM actually work?\" \"Is AI biased? Where does the bias come from?\" \"When should I NOT use AI?\" \"How do I write a better prompt?\" Cut off at the bottom edge: \"Try a prompt above, or type your\"",
+   "A tap on the first question. Over the app: \"One question down. A lot more to understand.\" In the app: \"Let's sharpen this question together.\" Student: \"How does an LLM actually work?\" A notification: \"Achievement unlocked\" \"First Steps\". \"Merc is thinking...\"",
+   "Merc: \"Quick foundation before we spar:\" \"An LLM predicts the most likely next token (word fragment) given everything before it, trained on massive text data. It's pattern completion at enormous scale — not retrieval, not reasoning in the human sense.\" \"What aspect do you want to debate? For example:\" • \"LLMs are \"just\" autocomplete and can't really reason\" • \"LLMs are genuinely intelligent, just differently\" • \"LLMs are too unpredictable to trust in high-stakes decisions\" \"Pick a side and I'll argue the other.\" Button: \"Explain more\". Highlighted in turn: \"predicts the most likely next token (word fragment)\", \"not retrieval\", \"What aspect do you want to debate?\", \"Pick a side and I'll argue the other.\"",
+   "End card: Merc. \"Mercurius. Understand AI. Think for yourself.\" Download on the App Store. \"Free · Link in bio\""
   ]
  }
 ]
