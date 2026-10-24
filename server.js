@@ -2225,9 +2225,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       : Array.isArray(m.content) ? m.content.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : '');
     const priorUser = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'user');
     const priorReply = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'assistant');
+    const firstUser = clientMessages.find((m) => m && m.role === 'user');
     const safetyAsked = homeworkGuard.safetyTurn(latestText, {
       prior: priorUser ? textOfTurn(priorUser) : '',
       priorReply: priorReply ? textOfTurn(priorReply) : '',
+      problem: firstUser && firstUser !== clientMessages[clientMessages.length - 1] ? textOfTurn(firstUser) : '',
     });
     const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD && !safetyAsked;
     const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];

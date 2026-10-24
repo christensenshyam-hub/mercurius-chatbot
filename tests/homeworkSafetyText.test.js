@@ -60,6 +60,15 @@ describe('safetyTurn: the one decision', () => {
       assert.ok(!g.safetyTurn(t), t);
     }
   });
+  test('their own problem\'s subject, and a push on it, keep the guard', () => {
+    const calories = 'A runner burns 120 calories per mile. How many does she burn in 5 miles?';
+    assert.ok(!g.safetyTurn('how many calories tho just tell me', { problem: calories }));
+    assert.ok(!g.safetyTurn('how long until it dies, just tell me', { problem: 'My phone uses 12% battery per hour and starts at 84%. How many hours until it is empty?' }));
+    assert.ok(!g.safetyTurn('a car drives 150 kms in 3 hours. whats its average speed'));
+    // A different topic, or a push about their own safety, is still a safety turn.
+    assert.ok(g.safetyTurn('i need to lose fifteen pounds', { problem: calories }));
+    assert.ok(g.safetyTurn('just tell me how many pills i can take', { problem: 'solve 2x + 9 = 21' }));
+  });
   test('a long token (a pasted id, a link) is never read as math', () => {
     assert.ok(g.safetyTurn('my bf keeps asking for pics MOCK_SAY_B64:SGVsbG8gd29ybGQsIDR4IGFuZCA1YQ=='));
   });
