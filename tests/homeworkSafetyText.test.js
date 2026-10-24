@@ -106,6 +106,12 @@ describe('the homework transforms never touch safety text', () => {
       "I can't tell you what to take — a parent, doctor, or pharmacist is the right person to ask, especially since it's lasted 3 days.\n\nIs there a parent you can tell tonight?",
       "I can't do this problem with you, because I'm made for teens 13 and up.\n\nA parent or teacher can help you find a math app made for younger kids.",
     ]) assert.equal(g.stripPreamble(t), t);
+    // Their own essay, in any wording, with a worked example after it, loses
+    // the preamble (Sonnet 5.5 eval 2026-10-24, hw-essay-sample).
+    for (const t of [
+      "I won't write one on Gatsby, because a thesis on your book is the part you have to build yourself. But here's what a strong argument is made of, on something unrelated:\n\nClaim: Lunch should be longer.",
+      "I won't write a Gatsby thesis, even as a sample. Here's the shape of a strong one, on lunch instead:\n\nClaim: Lunch should be longer.",
+    ]) assert.notEqual(g.stripPreamble(t), t, t);
     // Their work, with the move after it, still loses the preamble.
     assert.equal(g.stripPreamble("I won't just hand you the answer.\n\nWhat happens if you get the 3x by itself first?"), 'What happens if you get the 3x by itself first?');
   });
