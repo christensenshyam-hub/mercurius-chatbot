@@ -2215,15 +2215,20 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // Off for a lesson of either track: a Basics practice turn has Merc write
     // the learner's note or list on purpose, so it must never be guarded,
     // held back or rewritten (tests/basicsHomeworkExempt.test.js).
-    // Never on a turn the student's own words make a safety turn (the
-    // crisis and safety-topic signals that already keep the homework note
-    // off), nor for the rest of a thread once it held a crisis (a crisis
-    // message, or a hand-off with both hotlines): the reply is sent as the
-    // model wrote it (review 2026-10-24; tests/homeworkSafetyText.test.js).
+    // Never on a safety turn (review 2026-10-24; lib/homeworkGuard): a
+    // crisis, a request aimed at a person or for sexual content, personal
+    // details, an age under 13, the turn right after a crisis or such a
+    // request, or a safety topic that is not plainly math. In a thread that
+    // opened with homework the guard used to check those replies as homework
+    // and cut or rewrote their safety lines (tests/homeworkSafetyText.test.js).
     const textOfTurn = (m) => (typeof m.content === 'string' ? m.content
       : Array.isArray(m.content) ? m.content.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : '');
-    const safetyAsked = Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText) || homeworkGuard.harmRequest(latestText)
-      || clientMessages.some((m) => m && ((m.role === 'user' && crisisSignal(textOfTurn(m))) || (m.role === 'assistant' && crisisHistory.isCrisisHandoff(m.content))));
+    const priorUser = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'user');
+    const priorReply = [...clientMessages.slice(0, -1)].reverse().find((m) => m && m.role === 'assistant');
+    const safetyAsked = homeworkGuard.safetyTurn(latestText, {
+      prior: priorUser ? textOfTurn(priorUser) : '',
+      priorReply: priorReply ? textOfTurn(priorReply) : '',
+    });
     const guardOn = !isCurriculumMsg && HOMEWORK_LEAK_GUARD && !safetyAsked;
     const guardProblems = guardOn ? homeworkGuard.studentProblems(clientMessages) : [];
     const guardNumbers = guardOn ? homeworkGuard.wordProblemNumbers(clientMessages) : null;
@@ -2247,23 +2252,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     const photoOpener = modelRequest.usesBetweenTools(chosenModel) && Boolean(attachedImage) && guardProblems.length === 0;
     let photoGuard = [];
     const answerProblems = () => (photoGuard.length ? photoGuard : guardProblems);
-    // A sentence with strong safety content holds no leak and is never
-    // redacted: the "24/7" of a crisis hand-off is not the 24 of 8(x + 3), and
-    // "under 18" is not their 18 (lib/homeworkGuard.maskSafetyText).
-    const findGuardLeak = (draft) => {
-      const text = homeworkGuard.maskSafetyText(draft);
-      return homeworkGuard.findLeak(text, answerProblems())
-        || homeworkGuard.findNumberLeak(text, guardNumbers)
-        || homeworkGuard.findCorrectionLeak(text, guardCorrections)
-        || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
-        || homeworkGuard.findSystemLeak(text, guardSystems)
-        || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
-    };
-    const redactGuardLeaks = (draft) => homeworkGuard.outsideSafetyText(draft, (text) => {
+    const findGuardLeak = (text) => homeworkGuard.findLeak(text, answerProblems())
+      || homeworkGuard.findNumberLeak(text, guardNumbers)
+      || homeworkGuard.findCorrectionLeak(text, guardCorrections)
+      || homeworkGuard.findQuadraticLeak(text, guardQuadratics)
+      || homeworkGuard.findSystemLeak(text, guardSystems)
+      || (responseMode === 'deep' ? homeworkGuard.findPastStep(text, clientMessages) : null);
+    const redactGuardLeaks = (text) => {
       let out = homeworkGuard.dropLeakLines(homeworkGuard.redactLeaks(homeworkGuard.dropExampleLines(text, answerProblems()), answerProblems()), guardQuadratics);
       for (let i = 0, leak; i < 5 && (leak = findGuardLeak(out)); i++) out = homeworkGuard.redactValue(out, leak);
       return out;
-    });
+    };
     // A reply that gives the answer away is written once more with a note in
     // the dynamic block (the cached prefix is untouched); if that one leaks
     // too, or the call fails, the leaked values are replaced by "?".
@@ -2297,6 +2296,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // and never in safety text.
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
     const guardDraft = async (draft) => {
+      // A reply that hands off to a crisis line or to emergency help is sent
+      // as the model wrote it, whatever the turn looked like.
+      if (homeworkGuard.crisisReply(draft)) return draft;
       if (writingTurn) {
         const text = tidyWriting(draft);
         // A safety reply is never sent back for a quote of their words.
@@ -2374,9 +2376,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     };
     // Whatever the guard cut, the student never gets a blank turn (tuned 5.5
     // run 2026-10-24: a one-line reply dropped whole read as "it didnt say
-    // anything").
+    // anything"), and a bug in the guard never leaves the request hanging (an
+    // exception in the stream's end handler sent nothing at all): the model's
+    // reply goes out as written, and the error is logged.
     const guardReply = async (draft) => {
-      const text = await guardDraft(draft);
+      let text;
+      try {
+        text = await guardDraft(draft);
+      } catch (err) {
+        logger.forRequest(req).error({ err: err.message }, 'homework guard failed; sending the reply as written');
+        return draft;
+      }
       if (text.trim()) return text;
       logger.forRequest(req).warn('homework answer guard: nothing left after the guard, sending GUARD_EMPTY_COPY');
       return GUARD_EMPTY_COPY;
