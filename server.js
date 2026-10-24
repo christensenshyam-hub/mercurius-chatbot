@@ -54,6 +54,7 @@ const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
 const { pickModel } = require('./lib/modelAllowlist');
 const modelRequest = require('./lib/modelParams');
+const { modelNotesFor } = require('./lib/modelNotes');
 const pricing = require('./lib/pricing');
 const metrics = require('./lib/metrics');
 const { ipLimiter, sessionLimiter } = require('./lib/rateLimiter');
@@ -1077,7 +1078,12 @@ Only cite sources from this list. If a topic isn't covered here, don't invent a 
 //     don't-fabricate-links rule) goes to every variant, lessons included;
 //   - anything per-request (date, mode, meeting/blog material, the
 //     "explain more" nudge) goes in the dynamic block — one byte of drift in
-//     a static prefix is a full cache miss.
+//     a static prefix is a full cache miss;
+//   - the free-chat prefixes of a model with prompt notes (lib/modelNotes:
+//     claude-sonnet-5-5 only) carry them after the source library, so they
+//     sit before the app facts and the safety core, which stays LAST. They
+//     are their own byte-stable variants with their own cache entries; every
+//     other model gets exactly the prefixes it got before.
 // ---------------------------------------------------------------------------
 const SOURCE_BLOCK = '<source_library>\n' + SOURCE_LIBRARY.trim() + '\n</source_library>';
 const CLUB_BLOCK = clubContext.staticClubBlock({ capabilities: [clubContext.CLUB_V1], clubKnowledge: CLUB_KNOWLEDGE });
@@ -1087,15 +1093,35 @@ const V2_STATIC_WIDGET = systemBlocks.composeStaticWithAppFacts([UNIFIED_PROMPT,
 // Legacy (flag off) and curriculum prefixes, memoized per variant.
 const LEGACY_MODE_PROMPTS = { socratic: SOCRATIC_PROMPT, debate: DEBATE_PROMPT, discussion: DISCUSSION_PROMPT };
 const staticPrefixCache = new Map();
-function legacyStatic(mode, isWidget) {
+// The v2 free-chat prefix for the model this call uses: the constants above,
+// or (claude-sonnet-5-5) the same parts with its model notes before the app
+// facts and the safety core.
+function v2Static(isWidget, model) {
+  const notes = modelNotesFor(model, { tagged: true });
+  if (!notes) return isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+  const key = `v2:${isWidget ? 'widget' : 'app'}:notes`;
+  if (!staticPrefixCache.has(key)) {
+    staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
+      UNIFIED_PROMPT,
+      isWidget ? CLUB_BLOCK : null,
+      SOURCE_BLOCK,
+      notes,
+      SAFETY_CORE_TAGGED,
+    ]));
+  }
+  return staticPrefixCache.get(key);
+}
+function legacyStatic(mode, isWidget, model) {
   const m = LEGACY_MODE_PROMPTS[mode] ? mode : 'socratic';
-  const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}`;
+  const notes = modelNotesFor(model);
+  const key = `legacy:${m}:${isWidget ? 'widget' : 'app'}${notes ? ':notes' : ''}`;
   if (!staticPrefixCache.has(key)) {
     staticPrefixCache.set(key, systemBlocks.composeStaticWithAppFacts([
       qualityPrefix(m),
       LEGACY_MODE_PROMPTS[m],
       isWidget ? CLUB_BLOCK : null,
       SOURCE_BLOCK,
+      notes,
       SAFETY_CORE,
     ]));
   }
@@ -1969,7 +1995,11 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // words), atom counts for a reaction, a reminder to check a formula answer
   // with their own number, the next move when they keep asking, and the
   // writing and photo openers. Dynamic block only; never on a lesson, a
-  // crisis or a safety-topic turn.
+  // crisis or a safety-topic turn. On claude-sonnet-5-5 (calmTieIn) a
+  // right-answer note orders the AI tie-in only in a thread that never
+  // pushed for the answer or was rushed, and (calcCheck) a calculus or
+  // statistics number is checked against the model's own working, not run
+  // backwards; every other model gets today's notes.
   const latestText = typeof latestUserMessage.content === 'string' ? latestUserMessage.content : '';
   const homeworkNote = isCurriculumMsg
     ? ''
@@ -1977,6 +2007,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       unsafe: Boolean(crisisSignal(latestText)) || needsSafetyBudget(latestText),
       hasImage: Boolean(attachedImage),
       deep: responseMode === 'deep',
+      calmTieIn: modelRequest.usesBetweenTools(chosenModel),
+      calcCheck: modelRequest.usesBetweenTools(chosenModel),
     });
 
   let staticText;
@@ -2005,7 +2037,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // v2: the quality preamble / mode rules / response-mode contract are
     // baked into the unified prompt, so qualityPrefix + EXPAND_MODE_NOTE are
     // intentionally not used — response_mode + the deep nudge live inside it.
-    staticText = isWidget ? V2_STATIC_WIDGET : V2_STATIC_APP;
+    staticText = v2Static(isWidget, chosenModel);
     dynamicText = [buildRuntimeContext({
       mode: effectiveMode,
       responseMode,
@@ -2016,7 +2048,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   } else {
     // Legacy per-mode prompts (flag off): the quality preamble first so the
     // model reads concision + format guidance before the pedagogy.
-    staticText = legacyStatic(mode, isWidget);
+    staticText = legacyStatic(mode, isWidget, chosenModel);
     dynamicText = [
       clubContext.dynamicClubBlock({ capabilities, meetingContext, blogContext }),
       responseMode === 'deep' ? EXPAND_MODE_NOTE : '',
@@ -2131,6 +2163,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // A safety-topic turn (suicide news, sextortion, eating-disorder
     // behaviour: lib/responseQuality.needsSafetyBudget) gets the balanced
     // budget too, so its closing 988 / 741741 line is never cut off.
+    // These are Sonnet 4.6 token counts: lib/modelParams.maxTokensFor scales
+    // each of them for claude-sonnet-5-5's tokenizer (TOKENIZER_SCALE).
     const DEBATE_MIN_TOKENS = 400;
     const safetyFloor = needsSafetyBudget(latestUserMessage.content) ? RESPONSE_MODE_BUDGETS.balanced.maxTokens : 0;
     const maxTokens = isCurriculumMsg
@@ -2151,13 +2185,17 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // This turn's photo is still hasImage.
     // Every other turn: its response-mode temperature on a model that takes
     // one (claude-sonnet-4-6), thinking between_tools at TUTOR_EFFORT on
-    // claude-sonnet-5-5 (lib/modelParams.requestFields).
+    // claude-sonnet-5-5 (lib/modelParams.requestFields). On claude-sonnet-5-5
+    // the detector also counts calculus, statistics, proofs and a bare "i got
+    // 12" (`broad`): a between_tools turn has no reasoning at all, where a
+    // 4.6 temperature turn still judged their work. Only for this decision:
+    // the answer guard's holdback below keeps today's detector.
     const problemThread = photoReattach.textView(trimmed);
     const problemTurn = !isCurriculumMsg
       && HOMEWORK_THINKING
       && modelRequest.thinksOnProblems(chosenModel)
       && !needsSafetyBudget(latestUserMessage.content)
-      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage) });
+      && homeworkGuard.looksLikeProblemWork(problemThread, { hasImage: Boolean(attachedImage), broad: modelRequest.usesBetweenTools(chosenModel) });
     const callIntent = problemTurn ? 'problem' : 'turn';
     const modelParams = {
       model: chosenModel,
@@ -3034,14 +3072,16 @@ async function prewarmCaches(ip = null) {
   // Every prefix a shipped client can hit under the active flag state: both
   // lesson variants, the app free-chat prefix, and the widget (club_v1)
   // free-chat prefixes — a club session is exactly when the widget is busy.
+  // The free-chat prefixes are the tutor model's own (its model notes on
+  // claude-sonnet-5-5), the ones its turns read.
   const variants = [
     { name: 'curriculum:blocks', text: curriculumStatic(true) },
     { name: 'curriculum:prose', text: curriculumStatic(false) },
     ...(unified
-      ? [{ name: 'v2:app', text: V2_STATIC_APP }, { name: 'v2:widget', text: V2_STATIC_WIDGET }]
+      ? [{ name: 'v2:app', text: v2Static(false, MODEL) }, { name: 'v2:widget', text: v2Static(true, MODEL) }]
       : ['socratic', 'debate', 'discussion'].flatMap((m) => [
-          { name: `legacy:${m}:app`, text: legacyStatic(m, false) },
-          { name: `legacy:${m}:widget`, text: legacyStatic(m, true) },
+          { name: `legacy:${m}:app`, text: legacyStatic(m, false, MODEL) },
+          { name: `legacy:${m}:widget`, text: legacyStatic(m, true, MODEL) },
         ])),
   ];
   const warmed = [];

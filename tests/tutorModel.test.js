@@ -18,6 +18,11 @@
 // between_tools at TUTOR_EFFORT; replies are read by block type, so the
 // empty thinking block every adaptive Sonnet 5.5 reply starts with never
 // reaches a student; the ledger prices the calls at the Sonnet 5.5 card.
+// The tuning pass (A/B 2026-10-24): every reply budget is scaled for its
+// tokenizer; its free-chat prefixes carry its model notes before the app
+// facts and the safety core; calculus, statistics and "i got N" turns think;
+// a rushed thread's right-answer note drops the AI tie-in. None of it
+// reaches a Sonnet 4.6 request.
 //
 // TUTOR_MODEL unset: every request has exactly today's fields, values and
 // key order, and the mock's summarized 4.6 thinking (MOCK_THINKING_TEXT)
@@ -50,6 +55,11 @@ const S5 = 'claude-sonnet-5'; // a 5.x model with no verified request rules here
 const UNVERIFIED_WARNING = 'TUTOR_MODEL is not claude-sonnet-4-6 or claude-sonnet-5-5';
 const ADMIN_PASSWORD = 'test-admin-pw-' + crypto.randomBytes(4).toString('hex');
 const CONCISE = RESPONSE_MODE_BUDGETS.concise;
+// Sonnet 5.5's reply budgets: the 4.6 budgets × 1.35, rounded up (its
+// tokenizer counts more tokens for the same words: lib/modelParams
+// TOKENIZER_SCALE). A problem turn's thinking room is scaled too (concise:
+// max(338 + 2765, 4050)); the prewarm's 1 is not.
+const S55_CAP = Object.freeze({ concise: 338, debate: 540, balanced: 810, lesson: 2765, grader: 540, helper: 945, problem: 4050 });
 const LESSON_TAG = '[CURRICULUM: Unit 1, Lesson 1]';
 const BASICS_TAG = '[BASICS: Unit 1, Lesson 1]';
 const IOS_CAPS = ['blocks_v1', 'platform_ios'];
@@ -197,7 +207,7 @@ function assertProblemCall(call, model, label) {
   assert.deepEqual(call.thinking, model === S46 ? { type: 'adaptive' } : { type: 'adaptive', display: 'summarized' }, label);
   assert.deepEqual(call.output_config, { effort: 'low' }, label);
   for (const k of SAMPLING) assert.equal(call[k], undefined, `${label}: ${k}`);
-  assert.equal(call.max_tokens, Math.max(CONCISE.maxTokens + 2048, 3000), label);
+  assert.equal(call.max_tokens, model === S46 ? Math.max(CONCISE.maxTokens + 2048, 3000) : S55_CAP.problem, label);
   assert.deepEqual(call.paramKeys, KEYS_THINKING, label);
 }
 
@@ -250,12 +260,12 @@ for (const flag of ['on', 'off']) {
   describe(`TUTOR_MODEL=claude-sonnet-5-5, flag ${flag}: no forbidden field on any route`, () => {
     const server = () => servers[`s55${flag}`];
 
-    test('a free-chat turn over SSE: between_tools at effort low, the concise budget, the reply streamed whole', async () => {
+    test('a free-chat turn over SSE: between_tools at effort low, the concise budget scaled for the tokenizer, the reply streamed whole', async () => {
       const n = nonce();
       const { deltas, complete } = await chatSse(server(), chatBody(`What is a token, really? (${n})`));
       const [call, ...extra] = captured(server(), n);
       assert.equal(extra.length, 0);
-      assertBetweenTools(call, 'low', CONCISE.maxTokens, 'chat sse');
+      assertBetweenTools(call, 'low', S55_CAP.concise, 'chat sse');
       noThinkingLeak(complete.reply, 'chat sse');
       assert.equal(deltas.join(''), complete.reply);
     });
@@ -264,7 +274,7 @@ for (const flag of ['on', 'off']) {
       const n = nonce();
       const json = await chatJson(server(), { ...chatBody(`How do chatbots pick words? (${n})`), capabilities: undefined });
       const [call] = captured(server(), n);
-      assertBetweenTools(call, 'low', CONCISE.maxTokens, 'chat json');
+      assertBetweenTools(call, 'low', S55_CAP.concise, 'chat json');
       noThinkingLeak(json.reply, 'chat json');
     });
 
@@ -288,27 +298,27 @@ for (const flag of ['on', 'off']) {
       noThinkingLeak(json.reply, 'problem json');
     });
 
-    test('a Deep-dive lesson turn: between_tools, the 2048-token lesson budget', async () => {
+    test('a Deep-dive lesson turn: between_tools, the lesson budget scaled for the tokenizer', async () => {
       const n = nonce();
       const { complete } = await chatSse(server(), lessonBody(LESSON_TAG, n));
       const [call] = captured(server(), n);
-      assertBetweenTools(call, 'low', 2048, 'lesson');
+      assertBetweenTools(call, 'low', S55_CAP.lesson, 'lesson');
       noThinkingLeak(complete.reply, 'lesson');
       assert.match(complete.reply, /\[CHECK\]/);
     });
 
-    test('a Basics lesson turn: between_tools, the 2048-token lesson budget', async () => {
+    test('a Basics lesson turn: between_tools, the lesson budget scaled for the tokenizer', async () => {
       const n = nonce();
       const { complete } = await chatSse(server(), lessonBody(BASICS_TAG, n));
       const [call] = captured(server(), n);
-      assertBetweenTools(call, 'low', 2048, 'basics');
+      assertBetweenTools(call, 'low', S55_CAP.lesson, 'basics');
       noThinkingLeak(complete.reply, 'basics');
     });
 
     test('a client naming claude-sonnet-5-5 is allowed (TUTOR_MODEL joins the allowlist)', async () => {
       const n = nonce();
       const json = await chatJson(server(), { ...chatBody(`What is RLHF? (${n})`), capabilities: undefined, model: S55 });
-      assertBetweenTools(captured(server(), n)[0], 'low', CONCISE.maxTokens, 'named model');
+      assertBetweenTools(captured(server(), n)[0], 'low', S55_CAP.concise, 'named model');
       noThinkingLeak(json.reply, 'named model');
     });
   });
@@ -323,7 +333,7 @@ describe('TUTOR_MODEL=claude-sonnet-5-5: the helpers on the tutor model, the pre
     assert.equal(r.status, 200, JSON.stringify(r.json));
     assert.deepEqual(Object.keys(r.json).sort(), ['feedback', 'grade', 'pass']);
     const [call] = captured(server(), n);
-    assertBetweenTools(call, 'low', 400, 'grader');
+    assertBetweenTools(call, 'low', S55_CAP.grader, 'grader');
   });
 
   test('fact-check and analyze: between_tools; their JSON still parses', async () => {
@@ -331,12 +341,12 @@ describe('TUTOR_MODEL=claude-sonnet-5-5: the helpers on the tutor model, the pre
     const fc = await post(server(), '/api/factcheck', { sessionId: sid(), claim: `AI will replace all programmers by 2030 ${n}` });
     assert.equal(fc.status, 200, JSON.stringify(fc.json));
     assert.equal(typeof fc.json.verdict, 'string');
-    assertBetweenTools(captured(server(), n)[0], 'low', 700, 'factcheck');
+    assertBetweenTools(captured(server(), n)[0], 'low', S55_CAP.helper, 'factcheck');
 
     const m = nonce();
     const an = await post(server(), '/api/analyze', { sessionId: sid(), aiOutput: `The Great Wall is visible from space with the naked eye. ${m}` });
     assert.equal(an.status, 200, JSON.stringify(an.json));
-    assertBetweenTools(captured(server(), m)[0], 'low', 700, 'analyze');
+    assertBetweenTools(captured(server(), m)[0], 'low', S55_CAP.helper, 'analyze');
   });
 
   test('the quiz stays on the helper model, unchanged (no sampling or thinking field)', async () => {
@@ -421,7 +431,7 @@ describe('claude-sonnet-5-5: a think longer than STREAM_IDLE_MS does not trip th
     const started = Date.now();
     const { complete } = await chatSse(server(), chatBody(`What is a token, really? (${n})`));
     assert.ok(Date.now() - started < THINK_MS, 'no thinking block, so no think time');
-    assertBetweenTools(captured(server(), n)[0], 'low', CONCISE.maxTokens, 'chat');
+    assertBetweenTools(captured(server(), n)[0], 'low', S55_CAP.concise, 'chat');
     noThinkingLeak(complete.reply, 'chat');
   });
 });
@@ -432,15 +442,15 @@ describe('TUTOR_EFFORT=medium on claude-sonnet-5-5', () => {
   test('tutor turns, lessons and the grader send effort medium; a problem turn stays at low', async () => {
     const n = nonce();
     await chatSse(server(), chatBody(`What is a token, really? (${n})`));
-    assertBetweenTools(captured(server(), n)[0], 'medium', CONCISE.maxTokens, 'chat');
+    assertBetweenTools(captured(server(), n)[0], 'medium', S55_CAP.concise, 'chat');
 
     const l = nonce();
     await chatSse(server(), lessonBody(LESSON_TAG, l));
-    assertBetweenTools(captured(server(), l)[0], 'medium', 2048, 'lesson');
+    assertBetweenTools(captured(server(), l)[0], 'medium', S55_CAP.lesson, 'lesson');
 
     const g = nonce();
     assert.equal((await grade(server(), g)).status, 200);
-    assertBetweenTools(captured(server(), g)[0], 'medium', 400, 'grader');
+    assertBetweenTools(captured(server(), g)[0], 'medium', S55_CAP.grader, 'grader');
 
     const p = nonce();
     await chatJson(server(), { ...chatBody(`Solve for x: 2x + 6 = 14 (${p})`), capabilities: undefined });
@@ -659,5 +669,191 @@ describe('every reply starts with an empty thinking block: every route reads its
     const map = await post(server(), '/api/concept-map', { sessionId: s });
     assert.equal(map.status, 200, JSON.stringify(map.json));
     assert.ok(Array.isArray(map.json.nodes));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Sonnet 5.5 tuning pass (A/B 2026-10-24): model notes, scaled floors,
+// the broad problem detector, the calm AI tie-in. Sonnet 4.6 gets none of it.
+// ---------------------------------------------------------------------------
+const { SAFETY_CORE, SAFETY_CORE_TAGGED } = require('../lib/safetyCore');
+const { APP_FACTS, APP_FACTS_TAGGED } = require('../lib/appFacts');
+const { SONNET_55_NOTES, SONNET_55_NOTES_TAGGED } = require('../lib/modelNotes');
+
+const NOTES_HEADING = '## MODEL NOTES';
+const staticOf = (call) => (Array.isArray(call.system) ? call.system[0].text : String(call.system));
+const dynamicOf = (call) => (Array.isArray(call.system) ? call.system.slice(1).map((b) => b.text).join('\n') : '');
+const widgetBody = (text) => ({ sessionId: sid(), responseMode: 'concise', capabilities: ['club_v1'], messages: [{ role: 'user', content: text }] });
+
+/** A thread in `mode` (debate / discussion: the legacy prefix differs per mode). */
+async function modeChat(server, mode, text) {
+  const sessionId = sid();
+  // The session exists once it has a turn; then the mode switch applies.
+  await chatJson(server, { sessionId, messages: [{ role: 'user', content: `hi (${nonce()})` }] });
+  assert.equal((await post(server, '/api/mode', { sessionId, mode })).status, 200);
+  const n = nonce();
+  await chatJson(server, { sessionId, responseMode: 'concise', messages: [{ role: 'user', content: `${text} (${n})` }] });
+  return captured(server, n)[0];
+}
+
+for (const flag of ['on', 'off']) {
+  describe(`claude-sonnet-5-5, flag ${flag}: its model notes ride the cached free-chat prefix, before the app facts and the safety core`, () => {
+    const s55 = () => servers[`s55${flag}`];
+    const s46 = () => servers[`s46${flag}`];
+    const NOTES = flag === 'on' ? SONNET_55_NOTES_TAGGED : SONNET_55_NOTES;
+    const TAIL = flag === 'on'
+      ? `\n\n${NOTES}\n\n${APP_FACTS_TAGGED}\n\n${SAFETY_CORE_TAGGED}`
+      : `\n\n${NOTES}\n\n${APP_FACTS}\n\n${SAFETY_CORE}`;
+    const assertNotesTail = (call, label) => {
+      const text = staticOf(call);
+      assert.ok(text.endsWith(TAIL), `${label}: notes, then the app facts, then the safety core LAST`);
+      assert.equal(text.split(NOTES_HEADING).length, 2, `${label}: the notes once`);
+      assert.deepEqual(call.system[0].cache_control, { type: 'ephemeral' }, `${label}: in the cached static block`);
+      assert.ok(!dynamicOf(call).includes(NOTES_HEADING), `${label}: never in the dynamic block`);
+    };
+
+    test('app and widget turns, SSE and JSON: the notes once, in the same bytes every turn', async () => {
+      const [a, b, w] = [nonce(), nonce(), nonce()];
+      await chatSse(s55(), chatBody(`What is a token, really? (${a})`));
+      await chatJson(s55(), { ...chatBody(`How do chatbots pick words? (${b})`), capabilities: undefined });
+      await chatSse(s55(), widgetBody(`When does the club meet? (${w})`));
+      const [ca, cb, cw] = [captured(s55(), a)[0], captured(s55(), b)[0], captured(s55(), w)[0]];
+      for (const [c, label] of [[ca, 'app sse'], [cb, 'app json'], [cw, 'widget']]) assertNotesTail(c, label);
+      assert.equal(staticOf(ca), staticOf(cb), 'byte-stable: one prefix for every app turn');
+    });
+
+    test('the same requests on Sonnet 4.6 send the same prefixes without the notes, byte for byte', async () => {
+      const pairs = [];
+      for (const [label, body] of [['app', (t) => chatBody(t)], ['widget', (t) => widgetBody(t)]]) {
+        const [x, y] = [nonce(), nonce()];
+        await chatSse(s55(), body(`What is a token, really? (${x})`));
+        await chatSse(s46(), body(`What is a token, really? (${y})`));
+        pairs.push([label, captured(s55(), x)[0], captured(s46(), y)[0]]);
+      }
+      for (const mode of ['debate', 'discussion']) {
+        pairs.push([mode, await modeChat(s55(), mode, 'AI should be regulated'), await modeChat(s46(), mode, 'AI should be regulated')]);
+      }
+      for (const [label, c55, c46] of pairs) {
+        assertNotesTail(c55, label);
+        assert.ok(!staticOf(c46).includes(NOTES_HEADING), `${label}: no notes on 4.6`);
+        assert.equal(staticOf(c55).replace(`\n\n${NOTES}`, ''), staticOf(c46), `${label}: the 4.6 prefix plus the notes, nothing else`);
+      }
+    });
+
+    test('a client naming claude-sonnet-4-6 on this server gets the 4.6 prefix: the notes follow the model each call uses', async () => {
+      const n = nonce();
+      await chatJson(s55(), { ...chatBody(`What is RLHF? (${n})`), capabilities: undefined, model: S46 });
+      assert.ok(!staticOf(captured(s55(), n)[0]).includes(NOTES_HEADING));
+    });
+
+    test('lessons (Deep dive and Basics), the grader and the helpers carry no notes', async () => {
+      const [l, bs, g, f] = [nonce(), nonce(), nonce(), nonce()];
+      await chatSse(s55(), lessonBody(LESSON_TAG, l));
+      await chatSse(s55(), lessonBody(BASICS_TAG, bs));
+      assert.equal((await grade(s55(), g)).status, 200);
+      assert.equal((await post(s55(), '/api/factcheck', { sessionId: sid(), claim: `AI will replace all programmers by 2030 ${f}` })).status, 200);
+      for (const [marker, label] of [[l, 'lesson'], [bs, 'basics'], [g, 'grader'], [f, 'factcheck']]) {
+        const call = captured(s55(), marker)[0];
+        assert.ok(!JSON.stringify(call.system).includes(NOTES_HEADING), label);
+      }
+    });
+  });
+}
+
+describe('claude-sonnet-5-5: the prewarm warms the prefixes its turns read', () => {
+  test('the free-chat prefixes it writes carry the notes, the lesson prefixes do not; Sonnet 4.6 warms today\'s', async () => {
+    for (const [server, notes] of [[servers.s55on, true], [servers.s46on, false]]) {
+      const before = allCalls(server).length;
+      const r = await post(server, '/api/admin/prewarm', {}, { 'x-admin-password': ADMIN_PASSWORD });
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      const calls = allCalls(server).slice(before).filter((c) => c.max_tokens === 1);
+      const withNotes = calls.filter((c) => staticOf(c).includes(NOTES_HEADING));
+      assert.equal(calls.length, 4, 'two lesson prefixes, the v2 app and widget prefixes');
+      assert.equal(withNotes.length, notes ? 2 : 0, 'the notes on the v2 app + widget prefixes only');
+      if (notes) {
+        const n = nonce();
+        await chatSse(server, chatBody(`What is a token, really? (${n})`));
+        assert.ok(withNotes.some((c) => staticOf(c) === staticOf(captured(server, n)[0])), 'a turn reads what the prewarm wrote');
+      }
+    }
+  });
+});
+
+describe('claude-sonnet-5-5: the reply budget floors are scaled too', () => {
+  test('debate 540 and the discussion floor 810 (4.6: 400 and 600); a safety-topic turn 810 (4.6: 600)', async () => {
+    assert.equal((await modeChat(servers.s55on, 'debate', 'Your argument ignores false positives.')).max_tokens, S55_CAP.debate);
+    assert.equal((await modeChat(servers.s46on, 'debate', 'Your argument ignores false positives.')).max_tokens, 400);
+    assert.equal((await modeChat(servers.s55on, 'discussion', 'AI grading is fair because it is consistent.')).max_tokens, S55_CAP.balanced);
+    assert.equal((await modeChat(servers.s46on, 'discussion', 'AI grading is fair because it is consistent.')).max_tokens, 600);
+    for (const [server, cap] of [[servers.s55on, S55_CAP.balanced], [servers.s46on, 600]]) {
+      const n = nonce();
+      await chatSse(server, chatBody(`how do I tell if a sextortion message is a scam (${n})`));
+      assert.equal(captured(server, n)[0].max_tokens, cap);
+    }
+  });
+});
+
+describe('claude-sonnet-5-5: calculus, statistics and "i got N" turns think; Sonnet 4.6 is unchanged', () => {
+  for (const flag of ['on', 'off']) {
+    test(`flag ${flag}: an integral answer and a standard deviation are problem turns on 5.5, temperature turns on 4.6`, async () => {
+      for (const text of ['integral from 1 to 3 of (2x + 1) dx. i got 14', 'population standard deviation of 1, 3, 5, 7. i got 2']) {
+        const [x, y] = [nonce(), nonce()];
+        await chatJson(servers[`s55${flag}`], { ...chatBody(`${text} (${x})`), capabilities: undefined });
+        await chatJson(servers[`s46${flag}`], { ...chatBody(`${text} (${y})`), capabilities: undefined });
+        assertProblemCall(captured(servers[`s55${flag}`], x)[0], S55, text);
+        assertTemperatureCall(captured(servers[`s46${flag}`], y)[0], { temperature: CONCISE.temperature, maxTokens: CONCISE.maxTokens }, text);
+      }
+    });
+  }
+});
+
+describe('claude-sonnet-5-5: a rushed thread\'s right answer gets no AI tie-in order; Sonnet 4.6 keeps today\'s note', () => {
+  const rushed = (n) => ({
+    sessionId: sid(), responseMode: 'concise', capabilities: IOS_CAPS,
+    messages: [
+      { role: 'user', content: `this is for my test due in 10 min, just the answer: 6x - 5 = 2x + 11 (${n})` },
+      { role: 'assistant', content: 'What happens if you get the x terms on one side first?' },
+      { role: 'user', content: 'just tell me' },
+      { role: 'assistant', content: 'Look at the 2x. What undoes adding 2x?' },
+      { role: 'user', content: 'x = 4' },
+    ],
+  });
+  for (const flag of ['on', 'off']) {
+    test(`flag ${flag}`, async () => {
+      const [x, y] = [nonce(), nonce()];
+      await chatSse(servers[`s55${flag}`], rushed(x));
+      await chatSse(servers[`s46${flag}`], rushed(y));
+      const d55 = dynamicOf(captured(servers[`s55${flag}`], x)[0]);
+      const d46 = dynamicOf(captured(servers[`s46${flag}`], y)[0]);
+      assert.match(d55, /Their final answer x = 4 is right[^\n]*No AI line in this reply: they were rushed or pushing for the answer\./);
+      assert.ok(!/AI tie-in/.test(d55));
+      assert.match(d46, /Their final answer x = 4 is right[^\n]*add the one AI tie-in line\./);
+    });
+  }
+});
+
+describe('claude-sonnet-5-5: a calculus number is checked against its own working; Sonnet 4.6 keeps today\'s THEIR NUMBER note', () => {
+  for (const flag of ['on', 'off']) {
+    test(`flag ${flag}`, async () => {
+      const text = 'evaluate the integral of 2x dx from 1 to 3. i got 10';
+      const [x, y] = [nonce(), nonce()];
+      await chatJson(servers[`s55${flag}`], { ...chatBody(`${text} (${x})`), capabilities: undefined });
+      await chatJson(servers[`s46${flag}`], { ...chatBody(`${text} (${y})`), capabilities: undefined });
+      const d55 = dynamicOf(captured(servers[`s55${flag}`], x)[0]);
+      const d46 = dynamicOf(captured(servers[`s46${flag}`], y)[0]);
+      assert.match(d55, /## THEIR NUMBER[^\n]*\nThe student gave 10 as their answer to a calculus or statistics problem[^\n]*Never describe a case where their number would be right\./);
+      assert.ok(!/run it backwards/.test(d55));
+      assert.match(d46, /## THEIR NUMBER[^\n]*\nThe student gave 10 as their answer to a formula or word problem\. Check it with THEIR number only: run it backwards through the formula/);
+    });
+  }
+});
+
+describe('Sonnet 4.6 servers: no request ever carried the notes', () => {
+  test('every call captured on the TUTOR_MODEL-unset servers, in both flag states', () => {
+    for (const server of [servers.s46on, servers.s46off]) {
+      const calls = allCalls(server);
+      assert.ok(calls.length > 0, `${server.name}: no calls captured`);
+      for (const c of calls) assert.ok(!JSON.stringify(c.system).includes(NOTES_HEADING), `${server.name}: ${c.model}`);
+    }
   });
 });

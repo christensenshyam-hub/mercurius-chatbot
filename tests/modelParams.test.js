@@ -128,23 +128,25 @@ describe('requestFields on claude-sonnet-5-5', () => {
     }
   });
 
-  test('a problem turn: adaptive thinking at low effort (as on 4.6), summarized, with the same headroom', () => {
+  test('a problem turn: adaptive thinking at low effort (as on 4.6), summarized, with the headroom scaled', () => {
     // display 'summarized' is 4.6's default; on 5.5 the default is 'omitted',
     // which streams nothing while it thinks and would trip the idle watchdog.
     const fields = mp.requestFields(S55, 'problem', { temperature: 0.4, effort: 'high' });
     assert.deepEqual(fields, { thinking: SUMMARIZED, output_config: { effort: 'low' } });
     assert.deepEqual(Object.keys(fields.thinking), ['type', 'display']);
-    assert.equal(mp.maxTokensFor(S55, 'problem', 250), 3000);
+    // 4.6's 3000 floor in Sonnet 5.5 tokens (next suite).
+    assert.equal(mp.maxTokensFor(S55, 'problem', 250), 4050);
   });
 
-  test('every other call: between_tools (no other field inside) at TUTOR_EFFORT, no extra headroom', () => {
+  test('every other call: between_tools (no other field inside) at TUTOR_EFFORT, no thinking headroom', () => {
     for (const intent of NON_PROBLEM) {
       for (const effort of mp.TUTOR_EFFORTS) {
         const fields = mp.requestFields(S55, intent, { temperature: 0.2, effort });
         assert.deepEqual(fields, { thinking: { type: 'between_tools' }, output_config: { effort } }, `${intent} ${effort}`);
         assert.deepEqual(Object.keys(fields.thinking), ['type']);
       }
-      assert.equal(mp.maxTokensFor(S55, intent, 400), 400, intent);
+      // The tokenizer scale only (next suite), never the +2048.
+      assert.equal(mp.maxTokensFor(S55, intent, 400), intent === 'prewarm' ? 400 : 540, intent);
     }
   });
 
@@ -152,6 +154,52 @@ describe('requestFields on claude-sonnet-5-5', () => {
     assert.deepEqual(mp.requestFields(S55, 'turn').output_config, { effort: 'low' });
     assert.deepEqual(mp.requestFields(S55, 'turn', { effort: 'xhigh' }).output_config, { effort: 'low' });
     assert.deepEqual(mp.requestFields(S55, 'turn', { effort: 'max' }).output_config, { effort: 'low' });
+  });
+});
+
+// A/B 2026-10-24: Sonnet 5.5's tokenizer counts ~1.3x the tokens for the
+// same words (1.34x on Debate), and its Debate reply was cut off at the 400
+// floor in 2 of 3 runs. Its caps are scaled by 1.35 so they hold the words a
+// 4.6 cap holds; every other model keeps the base.
+describe('max_tokens on claude-sonnet-5-5: every reply budget scaled for its tokenizer', () => {
+  // [intent, base, Sonnet 5.5 cap]: the route budgets of server.js and
+  // lib/responseQuality RESPONSE_MODE_BUDGETS.
+  const TABLE = [
+    ['turn', 120, 162], // one_line
+    ['turn', 250, 338], // concise
+    ['turn', 400, 540], // the Debate floor
+    ['turn', 600, 810], // balanced, the Discussion and safety-topic floor
+    ['turn', 1400, 1890], // deep ("Explain more")
+    ['turn', 2048, 2765], // a lesson turn, Deep dive or Basics
+    ['grader', 400, 540],
+    ['helper', 700, 945], // fact-check, analyze
+    // The thinking room is scaled too (2048 → 2765, the 3000 floor → 4050):
+    // thinking text tokenizes heavier as well.
+    ['problem', 250, 4050], // 338 + 2765 is under the 4050 floor
+    ['problem', 600, 4050], // 810 + 2765
+    ['problem', 1400, 4655], // 1890 + 2765
+    ['prewarm', 1, 1], // its 1-token reply is never read
+  ];
+
+  test('the scale is 1.35, rounded up to a whole token', () => {
+    assert.equal(mp.TOKENIZER_SCALE, 1.35);
+    for (const [intent, base, cap] of TABLE) {
+      assert.equal(mp.maxTokensFor(S55, intent, base), cap, `${intent} ${base}`);
+      assert.equal(mp.maxTokensFor(`${S55}-20261001`, intent, base), cap, `dated id: ${intent} ${base}`);
+    }
+    // Whole-percent arithmetic: 700 × 1.35 is 945.0000000000001 in floating point.
+    assert.equal(mp.maxTokensFor(S55, 'helper', 700), 945);
+  });
+
+  test('Sonnet 4.6, Haiku 4.5 and the unverified models keep today\'s caps', () => {
+    for (const [intent, base] of TABLE) {
+      const today46 = intent === 'problem' ? Math.max(base + 2048, 3000) : base;
+      assert.equal(mp.maxTokensFor(S46, intent, base), today46, `4.6 ${intent} ${base}`);
+      assert.equal(mp.maxTokensFor(HAIKU, intent, base), base, `haiku ${intent} ${base}`);
+      for (const id of UNVERIFIED_MODERN) {
+        assert.equal(mp.maxTokensFor(id, intent, base), intent === 'prewarm' ? base : Math.max(base + 2048, 3000), `${id} ${intent} ${base}`);
+      }
+    }
   });
 });
 
