@@ -1667,8 +1667,9 @@ function quotaErrorHandled(err, req, res) {
 //
 // The network's count is read back from the ledger first (once per network
 // per product day), and each session it creates leaves a $0 ledger row with
-// the hashed address and no session id: a deploy used to give every network
-// a fresh IP_DAILY_NEW_SESSIONS, and an erasure doesn't take the row away.
+// the hashed address, no session id and only the day (not the moment): a
+// deploy used to give every network a fresh IP_DAILY_NEW_SESSIONS, and an
+// erasure doesn't take the row away. The row goes after two days.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
   await hydrateNetworkQuota(req.ip);
@@ -4018,6 +4019,7 @@ db.initSchema().then(async () => {
           imagesBefore: (ts) => db.purgeImagesBefore(ts),
           reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
           usageBefore: (ts) => db.purgeUsageBefore(ts),
+          networkCountsBefore: (ts) => db.purgeNetworkCountsBefore(ts),
           lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
           inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
           deleteSession: (id) => db.deleteSession(id),

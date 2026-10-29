@@ -30,7 +30,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-
+const productDay = require('../lib/productDay');
 
 // `srv.base` is set once `srv.ready` resolves (the server binds port 0).
 function spawnQuotaServer(extraEnv = {}) {
@@ -614,7 +614,10 @@ describe("a network's new sessions and content reports survive a restart", () =>
     assert.equal(r.status, 200);
     return Number.isInteger(r.json && r.json.id) ? 'stored' : 'dropped';
   }
-  const markers = (r, kind) => r.ledger(`SELECT session_id, ip_hash, cost_usd, answered FROM usage WHERE kind = '${kind}'`);
+  const markers = (r, kind) => r.ledger(`SELECT ts, session_id, ip_hash, cost_usd, answered FROM usage WHERE kind = '${kind}'`);
+  // The rows outlive an erasure, so they hold the day only: the start of the
+  // product day (STREAK_TZ, the same in this process and the server's).
+  const isDayStart = (ts) => productDay.startOfDayMs(ts) === ts;
 
   test("the network's new sessions, even after one of them is erased", async () => {
     const r = restartable({ IP_DAILY_NEW_SESSIONS: '2' });
@@ -622,17 +625,21 @@ describe("a network's new sessions and content reports survive a restart", () =>
     try {
       const a = newSession();
       assert.deepEqual([await start(first.base, a), await start(first.base, newSession()), await start(first.base, newSession())], ['200', '200', '429 ip']);
+      const [{ created_at: aCreatedAt }] = r.ledger(`SELECT created_at FROM sessions WHERE session_id = '${a}'`);
       // The student erases their data; the network's sign-up stays counted.
       assert.equal((await fetch(`${first.base}/api/session/${a}`, { method: 'DELETE' })).status, 200);
       await waitFor(() => markers(r, 'session'), (rows) => rows.length >= 2);
+      // Before: the row's ts was the millisecond the erased session was created.
+      assert.equal(r.ledger(`SELECT COUNT(*) AS n FROM usage WHERE ts = ${Number(aCreatedAt)}`)[0].n, 0, 'nothing left says when the erased session started');
     } finally {
       await first.stop();
     }
-    // The ledger rows: the network's, $0, never a turn, no session id.
+    // The ledger rows: the network's, $0, never a turn, no session id, the day only.
     const rows = markers(r, 'session');
     assert.equal(rows.length, 2);
     assert.ok(rows.every((row) => row.session_id === null && row.cost_usd === 0 && row.answered === 0), JSON.stringify(rows));
     assert.ok(rows.every((row) => /^[0-9a-f]{16}$/.test(row.ip_hash)), 'hashed, never the address');
+    assert.ok(rows.every((row) => isDayStart(row.ts)), JSON.stringify(rows));
 
     const second = await r.boot();
     try {
@@ -667,6 +674,8 @@ describe("a network's new sessions and content reports survive a restart", () =>
     const rows = markers(byNetwork, 'report');
     assert.equal(rows.length, 2);
     assert.ok(rows.every((row) => row.session_id === null && row.cost_usd === 0 && /^[0-9a-f]{16}$/.test(row.ip_hash)), JSON.stringify(rows));
+    // Before: the millisecond each report was filed (the reports table's created_at).
+    assert.ok(rows.every((row) => isDayStart(row.ts)), JSON.stringify(rows));
 
     let second = await byNetwork.boot();
     try {

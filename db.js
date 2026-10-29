@@ -220,7 +220,9 @@ async function initSchema() {
       -- and one per stored photo upload (usage.bytes below). A network's new
       -- session and each stored content report add a $0 row too (kind
       -- 'session' / 'report', session_id NULL: only the network's hashed
-      -- address), so a restart can count the network's day.
+      -- address, and ts is the start of the product day, not the moment),
+      -- so a restart can count the network's day. Those are deleted after
+      -- two days (purgeNetworkCountsBefore).
       -- Feeds the spend cap, per-session and per-network throttles and the
       -- admin stats view.
       -- session_id is a plain column (no FK) so a row can outlive its session
@@ -1340,6 +1342,12 @@ module.exports = {
   //                                  unreviewed safety signal), pass
   //                                  resolvedOnly: false to purge open ones too
   //   purgeUsageBefore(tsMs)         usage.ts < tsMs
+  //   purgeNetworkCountsBefore(tsMs) usage rows of kind 'session' / 'report'
+  //                                  (a network's sign-up and report counts)
+  //                                  with ts < tsMs, but never today's: the
+  //                                  cutoff is held to the start of the
+  //                                  product day, because a restart still
+  //                                  reads today's rows back
   //   purgeLessonEventsBefore(tsMs)  lesson_events.ts < tsMs
   //   inactiveSessionIds(beforeTsMs, limit = 200)
   //                                  → session ids with last_active < before,
@@ -1361,6 +1369,11 @@ module.exports = {
 
   async purgeUsageBefore(tsMs) {
     return purgeBatched('purgeUsageBefore', 'usage', 'id', 'ts < ?', [num(tsMs)]);
+  },
+
+  async purgeNetworkCountsBefore(tsMs) {
+    const cutoff = Math.min(num(tsMs), productDay.startOfDayMs());
+    return purgeBatched('purgeNetworkCountsBefore', 'usage', 'id', "kind IN ('session', 'report') AND ts < ?", [cutoff]);
   },
 
   async purgeLessonEventsBefore(tsMs) {
