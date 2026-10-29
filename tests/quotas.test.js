@@ -642,6 +642,31 @@ describe('hydrateSession()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// forgetSession() — the erase route
+// ---------------------------------------------------------------------------
+describe('forgetSession()', () => {
+  test("drops the session's day (and its read-back flag), keeps the network's and other sessions'", () => {
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 1, SESSION_DAILY_REPORTS: 1, IP_DAILY_USD: 1 });
+    quotas.hydrateSession(SID, [{ kind: 'chat', count: 1, usd: 0.5 }]);
+    quotas.record({ sessionId: 'sess_b', ip: IP, kind: 'chat', usd: 0.6 });
+    assert.equal(quotas.noteReport(SID, IP).ok, true);
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat' }).reason, 'chat_turns');
+
+    assert.equal(quotas.forgetSession(SID), true);
+    assert.equal(quotas.forgetSession(SID), false, 'nothing left to drop');
+    assert.equal(quotas.forgetSession(undefined), false);
+
+    const snap = quotas.snapshot();
+    assert.equal(snap.sessions.tracked, 1, 'only the other session is held');
+    assert.equal(snap.ips.usd, 0.6, "the network's dollars stay");
+    assert.equal(quotas.check({ sessionId: SID, ip: '9.9.9.9', kind: 'chat' }).ok, true, 'a fresh day for the id');
+    assert.equal(quotas.noteReport(SID, '9.9.9.9').ok, true, 'its report count went too');
+    assert.equal(quotas.hydrateSession(SID, [{ kind: 'chat', count: 0, usd: 0 }]), true, 'it can be read back again');
+    assert.equal(quotas.check({ sessionId: 'sess_b', ip: '9.9.9.9', kind: 'chat' }).reason, 'chat_turns', 'the other session keeps its day');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // hydrateIp() — a network's allowances after a restart
 // ---------------------------------------------------------------------------
 describe('hydrateIp()', () => {

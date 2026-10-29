@@ -1822,11 +1822,13 @@ function recordLessonProgress(sessionId, meta) {
 // is tried again on the next request. It used to be marked done anyway, so
 // one database blip on a session's first request after a deploy gave it a
 // second full day's allowance. Requests that arrive while the read is
-// pending wait for the same read rather than skip it.
+// pending wait for the same read rather than skip it. `.forget(key)` drops
+// a key's read (an erased session: its rows are gone, so the next request
+// reads the ledger again).
 function dailyLedgerRead(what, read) {
   const reads = new Map(); // key → today's read (never rejects)
   let readsDay = productDay.dayKey();
-  return (key) => {
+  const readBack = (key) => {
     if (!key) return Promise.resolve();
     const now = Date.now();
     const today = productDay.dayKey(now);
@@ -1843,6 +1845,8 @@ function dailyLedgerRead(what, read) {
     }
     return pending;
   };
+  readBack.forget = (key) => { reads.delete(key); };
+  return readBack;
 }
 const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since) => {
   const rows = await db.sessionUsageSince(sessionId, since);
@@ -3789,6 +3793,13 @@ app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (re
   }
   try {
     const result = await db.deleteSession(sessionId);
+    // Memory too: today's turns, photos, dollars and reports for the id, and
+    // the note that they were read back. The ledger rows they came from are
+    // gone, so a restart would forget them anyway ("from the server's point
+    // of view you have never been here before"). The network's counters
+    // stay: they are the network's, not the student's.
+    quotas.forgetSession(sessionId);
+    hydrateSessionQuota.forget(sessionId);
     // Log a hash, never the id itself — the logs are not the place a
     // student's bearer capability should live.
     logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId), deleted: result.deleted }, 'session erased on request');
