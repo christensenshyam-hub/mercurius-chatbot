@@ -1,0 +1,310 @@
+{
+  "summary": {
+    "label": "lessons3-review-final",
+    "model": "claude-sonnet-5-5",
+    "baseUrl": "http://localhost:3740",
+    "generatedAt": "2026-10-29T08:12:26.794Z",
+    "wrongAt": 2,
+    "maxReplies": 6,
+    "trials": 3,
+    "reachedExercise": 2,
+    "stoppedOnCheck": 1,
+    "attentionTaught": 3,
+    "embeddingsTaught": 1,
+    "bothTaught": 1,
+    "eitherTaught": 3,
+    "teachReplies": [
+      4,
+      4,
+      4
+    ],
+    "teachAfterReteach": [
+      1,
+      1,
+      1
+    ],
+    "budgetTalk": [],
+    "laterContext": [],
+    "completedEarly": 0,
+    "errors": 0,
+    "spendUsd": 0.1686
+  },
+  "results": [
+    {
+      "trial": 1,
+      "sessionId": "probe-reteach-lessons3-review-final-1-8ead1497",
+      "replies": [
+        {
+          "user": "(opener)",
+          "raw": "Here's something that surprises most people: an LLM never sees your words. It only ever sees numbers.\n\nBefore your prompt reaches the model, it gets chopped into pieces called **tokens**, which are often whole words, but sometimes word fragments or punctuation. GPT-4's tokenizer, for example, has a vocabulary of about 100,000 tokens, and each one gets assigned an ID number.\n\n[KEY]Your prompt is converted into a list of token ID numbers before the model ever touches it.[/KEY]\n\n[EX]Imagine a tokenizer splitting \"The cat sat\" into three tokens, which become the IDs [464, 3797, 3332]. Those IDs are made up for illustration, since every tokenizer uses its own numbering.[/EX]\n\n[Q]\nWhat does the model actually receive when you type a prompt?\nA) A list of matching web pages it looks up\nB) A list of token ID numbers\nC) A summary of your question's meaning in plain English\nD) The exact text you typed, letter by letter\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 346,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 20852
+          },
+          "cost": 0.05585
+        },
+        {
+          "user": "I picked B) A list of token ID numbers",
+          "raw": "Yes, B is right. The model works with numbers, not letters or words.\n\nHere's the second idea: those IDs aren't the end of the story. Each token gets turned into a long list of numbers called an **embedding**, which places tokens with similar meanings near each other.\n\nThen **attention** lets each token look at the words before it and adjust its meaning to fit.\n\n[KEY]Embeddings give each token a meaning-bearing list of numbers, and attention adjusts that meaning using the surrounding words.[/KEY]\n\n[EX]Take \"We walked along the river and sat down on the bank.\" The word \"bank\" gets the same token as in \"I put cash in the bank.\" Attention to \"river\" or \"cash\" is what pushes it toward the right meaning.[/EX]\n\n[Q]\nIn the river sentence, what makes the model treat \"bank\" as a riverbank?\nA) A dictionary lookup that stores one meaning per word\nB) A different token ID for riverbank\nC) The model asking you which meaning you intended\nD) Attention to the earlier word \"river\"\nANS: D\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 42,
+            "output_tokens": 349,
+            "cache_read_input_tokens": 20852,
+            "cache_creation_input_tokens": 474
+          },
+          "cost": 0.008929400000000002
+        },
+        {
+          "user": "I picked A) A dictionary lookup that stores one meaning per word",
+          "raw": "Not quite. A dictionary lookup would give \"bank\" one fixed meaning every time, but \"bank\" gets the same token in both sentences, and the meaning still differs. Something has to adjust it using the surrounding words, and that something is attention.\n\nHere's another angle. Take \"She poured water from the pitcher into the glass.\" The token for \"glass\" starts out ambiguous: it could be a drinking glass, the material, or eyeglasses.\n\nAttention to earlier words like \"poured\" and \"water\" pulls it toward the drinking glass.\n\n[KEY]Attention lets earlier words reshape what a token means, so one token can carry different meanings in different sentences.[/KEY]\n\n[Q]\nWhy doesn't a fixed one-meaning-per-word lookup explain how \"bank\" gets its meaning?\nA) Dictionaries only store words longer than five letters\nB) The model deletes ambiguous words before reading them\nC) The same token appears in both sentences, so context must decide\nD) The tokenizer splits \"bank\" into two different pieces\nANS: C\n[/Q]",
+          "wrong": true,
+          "usage": {
+            "input_tokens": 50,
+            "output_tokens": 347,
+            "cache_read_input_tokens": 21326,
+            "cache_creation_input_tokens": 367
+          },
+          "cost": 0.0087527
+        },
+        {
+          "user": "I picked C) The same token appears in both sentences, so context must decide",
+          "raw": "Yes, C is right. The token is identical, so context has to do the deciding.\n\nNow for the idea that ties everything together: **next-token prediction**. After your tokens pass through embeddings and attention, the model produces a score for every token in its vocabulary, a probability for what should come next. It picks one, adds it to the text, and repeats, one token at a time.\n\nThat's the whole loop. The model doesn't look up an answer; it keeps asking \"given everything so far, what token is most likely next?\"\n\n[KEY]An LLM writes by repeatedly predicting the next token from the tokens before it.[/KEY]\n\n[EX]Take \"The cat sat on the ___\". One continuation, like \"mat\", gets a big share of the probability. A slot like \"My favorite food is ___\" spreads probability across hundreds of plausible words.[/EX]\n\n[Q]\nWhich blank would an LLM most likely fill with HIGH confidence in its top token?\nA) \"Yesterday I went to the ___\"\nB) \"Twinkle, twinkle, little ___\"\nC) \"My favorite thing to do is ___\"\nD) \"The best name for a puppy is ___\"\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 49,
+            "output_tokens": 380,
+            "cache_read_input_tokens": 21693,
+            "cache_creation_input_tokens": 374
+          },
+          "cost": 0.0091716
+        },
+        {
+          "user": "I picked B) \"Twinkle, twinkle, little ___\"",
+          "raw": "Yes, B is right. The rhyme is so familiar that one continuation, \"star\", dominates the probabilities. The other three blanks have many plausible fillers, so the model's confidence would be spread out.\n\nNow let's put this to work. Here's a sentence with four blanks:\n\n\"After the rain stopped, we put on our jackets and walked to the ___ to get some ___, and then we went back home to ___ on the ___.\"\n\nFor each numbered blank, tell me:\n\n1. Would an LLM predict the next word with HIGH or LOW confidence?\n2. Why? Explain in terms of how many plausible continuations there are.\n\nNumber your answers 1 to 4 for blanks 1 to 4, in order, and write your reasoning in your own words.",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 49,
+            "output_tokens": 238,
+            "cache_read_input_tokens": 22067,
+            "cache_creation_input_tokens": 405
+          },
+          "cost": 0.0079039
+        }
+      ],
+      "score": {
+        "replies": 5,
+        "exerciseAt": 5,
+        "stoppedOnCheck": false,
+        "teachReplies": 4,
+        "teachAfterReteach": 1,
+        "taught": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "named": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "bothTaught": true,
+        "eitherTaught": true,
+        "focus": [
+          "Your prompt is converted into a list of token ID numbers before the model ever touches it. | What does the model actually receive when you type a prompt?",
+          "Embeddings give each token a meaning-bearing list of numbers, and attention adjusts that meaning using the surrounding words. | In the river sentence, what makes the model treat \"bank\" as a riverbank?",
+          "Attention lets earlier words reshape what a token means, so one token can carry different meanings in different sentences. | Why doesn't a fixed one-meaning-per-word lookup explain how \"bank\" gets its meaning?",
+          "An LLM writes by repeatedly predicting the next token from the tokens before it. | Which blank would an LLM most likely fill with HIGH confidence in its top token?"
+        ],
+        "budgetTalk": [],
+        "laterContext": [],
+        "completed": false
+      }
+    },
+    {
+      "trial": 2,
+      "sessionId": "probe-reteach-lessons3-review-final-2-ba9794df",
+      "replies": [
+        {
+          "user": "(opener)",
+          "raw": "Here's something that surprises most people: the model never sees your words. It only sees numbers.\n\nBefore anything else happens, your prompt gets chopped into pieces called **tokens**, chunks that are often whole words but can also be word fragments or punctuation.\n\n[KEY]An LLM turns your text into tokens, and each token into a number, because numbers are the only thing it can work with.[/KEY]\n\n[EX]Imagine the sentence \"I love pizza!\" gets split into four tokens: \"I\", \" love\", \" pizza\", \"!\". Each one is swapped for an ID number, like 40, 3021, 9104, 0 (made-up numbers, just for illustration). The model computes with those numbers, never the letters.[/EX]\n\n[Q]\nWhy does an LLM convert your words into numbers before doing anything else?\nA) Numbers let it look up stored answers in a database.\nB) Numbers are the only form it can compute with.\nC) Numbers make the model read words in a fixed order.\nD) Numbers keep your private text hidden from the model.\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 347,
+            "cache_read_input_tokens": 20852,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.0079004
+        },
+        {
+          "user": "I picked B) Numbers are the only form it can compute with.",
+          "raw": "Exactly right. Math is all the model can do, so text has to become numbers first. And it isn't looking anything up: there's no database of stored answers behind those numbers.\n\nNow for the part that makes the numbers meaningful. Each token ID gets turned into a long list of numbers called an **embedding**, which works like coordinates for meaning: words with similar meanings land near each other.\n\nBut one token can mean different things depending on context. That's where **attention** comes in: each token looks back at the words before it and adjusts its meaning accordingly.\n\n[KEY]Attention lets the surrounding words decide which meaning a token carries.[/KEY]\n\n[EX]Take \"bank\". In \"We walked along the river and sat down on the bank\", the earlier word \"river\" pulls \"bank\" toward riverside. In \"I put cash in the bank\", the word \"cash\" pulls it toward money. Same token, different meaning, and the clue came from the words before it.[/EX]\n\n[Q]\nIn \"I put cash in the bank\", what tells the model which meaning of \"bank\" is intended?\nA) The punctuation at the end of the sentence.\nB) The token ID number assigned to \"bank\".\nC) A dictionary entry stored for the word \"bank\".\nD) The word \"cash\" earlier in the sentence.\nANS: D\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 47,
+            "output_tokens": 420,
+            "cache_read_input_tokens": 20852,
+            "cache_creation_input_tokens": 475
+          },
+          "cost": 0.009651900000000001
+        },
+        {
+          "user": "I picked A) The punctuation at the end of the sentence.",
+          "raw": "Not quite, and it's a tempting pick. The clue isn't the punctuation, and the model can't wait for the end of the sentence anyway: it works through the text one token at a time and can only look back at what came before.\n\nHere's another angle. Picture someone saying \"I deposited my paycheck at the bank.\" The word \"deposited\" already points to money before \"bank\" is even said.\n\nLikewise, in \"I put cash in the bank\", the word \"cash\" arrives first and steers the meaning of \"bank\". Words earlier in the sentence do the work.\n\n[Q]\nIn \"I put cash in the bank\", what tells the model which meaning of \"bank\" is intended?\nA) The period at the end of the sentence.\nB) A dictionary entry stored for the word \"bank\".\nC) The ID number given to the token \"bank\".\nD) The word \"cash\" earlier in the sentence.\nANS: D\n[/Q]",
+          "wrong": true,
+          "usage": {
+            "input_tokens": 47,
+            "output_tokens": 283,
+            "cache_read_input_tokens": 21327,
+            "cache_creation_input_tokens": 443
+          },
+          "cost": 0.008296900000000001
+        },
+        {
+          "user": "I picked D) The word \"cash\" earlier in the sentence.",
+          "raw": "Yes, that's it. \"Cash\" comes earlier, so attention can use it to settle what \"bank\" means.\n\nLet's keep going, because everything so far builds toward the model's one real job.\n\nOnce your tokens have become embeddings and attention has adjusted them, the model does a single thing: it scores every token it knows as a possible **next token** and picks one. Then it adds that token to the text and does the whole thing again, one token at a time.\n\nIt isn't looking up an answer. It's predicting which token is most likely to come next, given everything before it.\n\n[KEY]An LLM writes by repeatedly predicting the next token, so confidence depends on how many continuations fit.[/KEY]\n\n[EX]Take \"The cat sat on the ___\". Words like \"mat\" or \"floor\" fit well, so the model's probability is spread across a few strong options. Now take \"The capital of France is ___\". Almost everything points to \"Paris\", so one token dominates.[/EX]\n\n[CHECK]Which of those two sentences would make the model more confident in its top choice, and why?[/CHECK]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 48,
+            "output_tokens": 342,
+            "cache_read_input_tokens": 21770,
+            "cache_creation_input_tokens": 307
+          },
+          "cost": 0.0086375
+        }
+      ],
+      "score": {
+        "replies": 4,
+        "exerciseAt": null,
+        "stoppedOnCheck": true,
+        "teachReplies": 4,
+        "teachAfterReteach": 1,
+        "taught": {
+          "tokens": true,
+          "embeddings": false,
+          "attention": true,
+          "prediction": true
+        },
+        "named": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "bothTaught": false,
+        "eitherTaught": true,
+        "focus": [
+          "An LLM turns your text into tokens, and each token into a number, because numbers are the only thing it can work with. | Why does an LLM convert your words into numbers before doing anything else?",
+          "Attention lets the surrounding words decide which meaning a token carries. | In \"I put cash in the bank\", what tells the model which meaning of \"bank\" is intended?",
+          "In \"I put cash in the bank\", what tells the model which meaning of \"bank\" is intended?",
+          "An LLM writes by repeatedly predicting the next token, so confidence depends on how many continuations fit. | Which of those two sentences would make the model more confident in its top choice, and why?"
+        ],
+        "budgetTalk": [],
+        "laterContext": [],
+        "completed": false
+      }
+    },
+    {
+      "trial": 3,
+      "sessionId": "probe-reteach-lessons3-review-final-3-9b8834be",
+      "replies": [
+        {
+          "user": "(opener)",
+          "raw": "Here's something surprising: an LLM never sees your words. It never reads the letter \"c\" or the word \"cat\" the way you do.\n\nBefore anything else happens, your text gets chopped into chunks called **tokens**, and each token is swapped for a number.\n\n[KEY]An LLM doesn't read words; it works on numbers that stand in for chunks of text.[/KEY]\n\n[EX]GPT-4's tokenizer has a vocabulary of about 100,000 tokens. Imagine it splits \"unbelievable\" into three pieces, like \"un\", \"believ\", and \"able\", and gives each piece a number (say 348, 9121, 562, made up just for illustration).[/EX]\n\nCommon words usually get one token, while rarer or longer words get broken into several.\n\n[Q]\nWhy does an LLM convert your text into tokens and numbers first?\nA) The model only does math, so text must become numbers\nB) The model translates your words into another human language\nC) The model checks each word's spelling against a dictionary\nD) The model looks each word up in a stored answer database\nANS: A\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 347,
+            "cache_read_input_tokens": 20852,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.0079004
+        },
+        {
+          "user": "I picked A) The model only does math, so text must become numbers",
+          "raw": "Right: a neural network can only do arithmetic on numbers, so text has to be converted before the model can touch it.\n\nNow for the part most people get wrong about what the model does next.\n\nIt doesn't look up an answer. It makes one guess: given all the tokens so far, what token is most likely to come next?\n\n[KEY]An LLM writes by predicting one token at a time, scoring every token in its vocabulary by how likely it is to come next.[/KEY]\n\n[EX]Take \"The cat sat on the ___\". The model gives high probability to tokens like \"mat\", \"floor\", or \"couch\", and near-zero to \"democracy\". It picks one, adds it to the text, and repeats the whole process for the next token.[/EX]\n\nSometimes one continuation dominates and the model is very confident. Other times many continuations fit, and its probability is spread thin.\n\n[Q]\nWhich best describes how an LLM produces its reply?\nA) It writes the whole reply at once, then checks it\nB) It predicts one token at a time from the text so far\nC) It picks a prewritten answer that matches your question\nD) It searches stored documents and copies the best match\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 46,
+            "output_tokens": 372,
+            "cache_read_input_tokens": 20852,
+            "cache_creation_input_tokens": 475
+          },
+          "cost": 0.009169900000000002
+        },
+        {
+          "user": "I picked C) It picks a prewritten answer that matches your question",
+          "raw": "Not quite. Picking a prewritten answer is exactly how a search engine or an FAQ page works, and that's the tempting mistake here. An LLM has no stock of finished answers to choose from.\n\nThink of your phone's autocomplete, but far more powerful. It looks at the tokens so far, scores every token in its vocabulary, picks one, and repeats. That loop is what builds a reply, one token at a time.\n\n[EX]Ask the same question twice and you can get two differently worded answers. Nothing was retrieved. Each reply was built fresh, token by token, and a different pick early on sent it down a different path.[/EX]\n\n[KEY]An LLM doesn't retrieve answers; it builds them one predicted token at a time.[/KEY]\n\nLet's try it on a new question.\n\n[Q]\nWhy can the same prompt produce two differently worded replies?\nA) The model fetches a different stored answer each time\nB) Each token is chosen from probabilities, so paths diverge\nC) The model forgets the first answer and starts over\nD) The tokenizer splits the same prompt differently each time\nANS: B\n[/Q]",
+          "wrong": true,
+          "usage": {
+            "input_tokens": 48,
+            "output_tokens": 365,
+            "cache_read_input_tokens": 21327,
+            "cache_creation_input_tokens": 394
+          },
+          "cost": 0.008996400000000002
+        },
+        {
+          "user": "I picked B) Each token is chosen from probabilities, so paths diverge",
+          "raw": "Yes, that's it. Because each token is chosen from a spread of likely options, one different early pick changes everything that follows.\n\nLet's keep going. So far the model has turned your text into numbers, but a bare ID number tells it nothing about meaning.\n\nSo each token gets converted into a long list of numbers called an **embedding**, which places the token in a kind of \"meaning space\" where similar meanings sit close together.\n\nThen comes **attention**. Each token looks back at the words before it and adjusts its meaning based on them.\n\n[EX]Compare \"We walked along the river and sat down on the bank\" with \"I put cash in the bank\". The word \"bank\" gets the same token both times. But attention to \"river\" pulls it toward riverside, while attention to \"cash\" pulls it toward money.[/EX]\n\n[KEY]Attention lets the words before a token shape what that token means in context.[/KEY]\n\n[Q]\nIn \"I put cash in the bank\", what tells the model \"bank\" means money?\nA) The tokenizer gives \"bank\" a different ID in this sentence\nB) Attention to \"cash\" earlier in the sentence adjusts its meaning\nC) The model looks up \"bank\" in a dictionary of definitions\nD) The word \"bank\" itself carries only one fixed meaning\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 52,
+            "output_tokens": 417,
+            "cache_read_input_tokens": 21721,
+            "cache_creation_input_tokens": 389
+          },
+          "cost": 0.0095907
+        },
+        {
+          "user": "I picked B) Attention to \"cash\" earlier in the sentence adjusts its meaning",
+          "raw": "Exactly. The token for \"bank\" is identical in both sentences, and it's the surrounding words, through attention, that settle which meaning applies.\n\nNow let's put this to work.\n\n**Exercise: predicting the next token**\n\nHere are three sentence openings. For each, the model must predict the next word:\n\n1. \"The capital of France is ___\"\n2. \"My favorite thing to do on a weekend is ___\"\n3. \"She opened the door and saw a ___\"\n\nFor each one, tell me whether you think the model's top prediction would be **high confidence** or **low confidence**, and explain why in your own words. Then pick one of the three and name two or three words you think the model would rate as likely next tokens.",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 57,
+            "output_tokens": 217,
+            "cache_read_input_tokens": 22110,
+            "cache_creation_input_tokens": 445
+          },
+          "cost": 0.0078185
+        }
+      ],
+      "score": {
+        "replies": 5,
+        "exerciseAt": 5,
+        "stoppedOnCheck": false,
+        "teachReplies": 4,
+        "teachAfterReteach": 1,
+        "taught": {
+          "tokens": true,
+          "embeddings": false,
+          "attention": true,
+          "prediction": true
+        },
+        "named": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "bothTaught": false,
+        "eitherTaught": true,
+        "focus": [
+          "An LLM doesn't read words; it works on numbers that stand in for chunks of text. | Why does an LLM convert your text into tokens and numbers first?",
+          "An LLM writes by predicting one token at a time, scoring every token in its vocabulary by how likely it is to come next. | Which best describes how an LLM produces its reply?",
+          "An LLM doesn't retrieve answers; it builds them one predicted token at a time. | Why can the same prompt produce two differently worded replies?",
+          "Attention lets the words before a token shape what that token means in context. | In \"I put cash in the bank\", what tells the model \"bank\" means money?"
+        ],
+        "budgetTalk": [],
+        "laterContext": [],
+        "completed": false
+      }
+    }
+  ]
+}
