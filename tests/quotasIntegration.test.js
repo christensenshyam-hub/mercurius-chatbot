@@ -14,6 +14,9 @@
  *      refused with 503 restarting, and the process exits 0.
  *   6. After a restart, a session's turns come back from the ledger even
  *      when the first read of it fails: the read is tried again.
+ *   7. After a restart, a network's daily dollars, photo uploads and photo
+ *      bytes come back from the ledger too (and a session's photo uploads),
+ *      with the same retry after a failed read.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -401,6 +404,150 @@ describe('a failed quota read after a restart is tried again', () => {
       assert.equal(outcome(blip), 'complete');
       // The next request reads the ledger again and finds both turns.
       assert.equal(outcome(await chatSse(second.base, s)), 'daily_limit');
+    } finally {
+      await second.stop();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("a network's daily allowances survive a restart", () => {
+  // IP_DAILY_USD, IP_DAILY_IMAGES and IP_DAILY_IMAGE_BYTES belong to a
+  // school's one shared address. They lived only in memory, so every deploy
+  // gave each network a fresh day (and photo uploads weren't on the ledger at
+  // all, so a session's photo count started again too). Every request here
+  // comes from 127.0.0.1; each test has its own database file, kept across
+  // its two boots.
+  const TINY_PNG_B64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const procs = [];
+  const files = [];
+  after(() => {
+    for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
+    for (const f of files) {
+      for (const suffix of ['', '-wal', '-shm']) {
+        try { fs.rmSync(f + suffix, { force: true }); } catch { /* ignore */ }
+      }
+    }
+  });
+
+  function restartable(env) {
+    const dbPath = path.join(os.tmpdir(), `merc-quotas-network-${crypto.randomBytes(4).toString('hex')}.db`);
+    files.push(dbPath);
+    const boot = async () => {
+      const { proc, ready } = spawnServer({ SQLITE_PATH: dbPath, MOCK_STREAM_DELAY_MS: '1', ...env });
+      procs.push(proc);
+      const { base } = await ready;
+      const stop = () => new Promise((resolve) => {
+        if (proc.exitCode !== null) return resolve();
+        proc.once('exit', () => resolve());
+        proc.kill('SIGKILL');
+      });
+      return { base, stop };
+    };
+    const ledger = (sql) => {
+      const Database = require('better-sqlite3');
+      const sqlite = new Database(dbPath);
+      try { return sqlite.prepare(sql).all(); } finally { sqlite.close(); }
+    };
+    const onLedger = (sql) => {
+      const Database = require('better-sqlite3');
+      const sqlite = new Database(dbPath);
+      try { sqlite.exec(sql); } finally { sqlite.close(); }
+    };
+    return { boot, ledger, onLedger };
+  }
+
+  async function upload(base, sessionId) {
+    const res = await fetch(`${base}/api/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, contentType: 'image/png', data: TINY_PNG_B64 }),
+    });
+    const json = await res.json().catch(() => null);
+    return res.status === 429 ? `429 ${json && json.scope}` : String(res.status);
+  }
+  const imageRows = (r) => r.ledger("SELECT session_id, ip_hash, bytes, cost_usd, answered FROM usage WHERE kind = 'image'");
+
+  test("the network's dollars", async () => {
+    // Far below one mock call's cost: the first call spends the network's day.
+    const r = restartable({ IP_DAILY_USD: '0.000001' });
+    const first = await r.boot();
+    try {
+      assert.equal((await chatJson(first.base, newSession())).status, 200);
+      const refused = await chatJson(first.base, newSession());
+      assert.deepEqual([refused.status, refused.json.error, refused.json.scope], [429, 'daily_limit', 'ip']);
+      await waitFor(() => r.ledger('SELECT id FROM usage'), (rows) => rows.length >= 1);
+    } finally {
+      await first.stop();
+    }
+    const second = await r.boot();
+    try {
+      // A new session on the same network: before, a fresh day (200).
+      const after = await chatJson(second.base, newSession());
+      assert.deepEqual([after.status, after.json.error, after.json.scope], [429, 'daily_limit', 'ip'], JSON.stringify(after.json));
+      assert.match(after.json.message, /network/);
+    } finally {
+      await second.stop();
+    }
+  });
+
+  test("the network's photo uploads, by count and by bytes, and a session's photo uploads", async () => {
+    const byCount = restartable({ IP_DAILY_IMAGES: '2' });
+    // The test PNG is 70 bytes: two uploads reach 140 of 100.
+    const byBytes = restartable({ IP_DAILY_IMAGE_BYTES: '100' });
+    const bySession = restartable({ SESSION_DAILY_IMAGES: '1' });
+    const student = newSession();
+    for (const [r, before] of [
+      [byCount, async (base) => [await upload(base, newSession()), await upload(base, newSession()), await upload(base, newSession())]],
+      [byBytes, async (base) => [await upload(base, newSession()), await upload(base, newSession()), await upload(base, newSession())]],
+      [bySession, async (base) => [await upload(base, student), await upload(base, student)]],
+    ]) {
+      const first = await r.boot();
+      try {
+        const got = await before(first.base);
+        assert.deepEqual(got, r === bySession ? ['201', '429 session'] : ['201', '201', '429 ip']);
+        await waitFor(() => imageRows(r), (rows) => rows.length >= got.filter((g) => g === '201').length);
+      } finally {
+        await first.stop();
+      }
+    }
+    // The ledger rows: $0, answered, the size, the address hashed.
+    const rows = imageRows(byBytes);
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((row) => row.bytes === 70 && row.cost_usd === 0 && row.answered === 1), JSON.stringify(rows));
+    assert.ok(rows.every((row) => /^[0-9a-f]{16}$/.test(row.ip_hash)), 'hashed, never the address');
+
+    for (const [r, expected, sessionId] of [[byCount, '429 ip'], [byBytes, '429 ip'], [bySession, '429 session', student]]) {
+      const second = await r.boot();
+      try {
+        // Before: '201' for each (a fresh day for the network and the session).
+        assert.equal(await upload(second.base, sessionId || newSession()), expected);
+      } finally {
+        await second.stop();
+      }
+    }
+  });
+
+  test('a failed read of the network is tried again on its next request', async () => {
+    const r = restartable({ IP_DAILY_IMAGES: '2' });
+    const first = await r.boot();
+    try {
+      assert.equal(await upload(first.base, newSession()), '201');
+      assert.equal(await upload(first.base, newSession()), '201');
+      await waitFor(() => imageRows(r), (rows) => rows.length >= 2);
+    } finally {
+      await first.stop();
+    }
+    const second = await r.boot();
+    try {
+      r.onLedger('ALTER TABLE usage RENAME TO usage_away');
+      // The read fails: this upload is let through on the in-memory count (1 of 2).
+      const blip = await upload(second.base, newSession());
+      r.onLedger('ALTER TABLE usage_away RENAME TO usage');
+      assert.equal(blip, '201');
+      // The next one reads the ledger again and finds the two from before.
+      assert.equal(await upload(second.base, newSession()), '429 ip');
     } finally {
       await second.stop();
     }
