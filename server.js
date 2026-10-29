@@ -1813,20 +1813,30 @@ function recordLessonProgress(sessionId, meta) {
 // Per-session quota counters live in memory; the first time a session is
 // seen each product day (lib/productDay), seed them from the usage ledger so
 // a mid-day redeploy doesn't hand every session a fresh allowance.
-const hydratedSessions = new Set();
+//
+// A read that fails lets that request through on the in-memory counters and
+// is tried again on the session's next request. It used to be marked done
+// anyway, so one database blip on a session's first request after a deploy
+// gave it a second full day's allowance. Requests that arrive while the read
+// is pending wait for the same read rather than skip it.
+const hydratedSessions = new Map(); // sessionId → today's read (never rejects)
 let hydratedDay = productDay.dayKey();
-async function hydrateSessionQuota(sessionId) {
+function hydrateSessionQuota(sessionId) {
   const now = Date.now();
   const today = productDay.dayKey(now);
   if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
-  if (hydratedSessions.has(sessionId)) return;
-  hydratedSessions.add(sessionId);
-  try {
-    const rows = await db.sessionUsageSince(sessionId, productDay.startOfDayMs(now));
-    if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
-  } catch (e) {
-    logger.warn({ err: e.message }, 'session quota hydrate failed');
+  let read = hydratedSessions.get(sessionId);
+  if (!read) {
+    read = Promise.resolve()
+      .then(() => db.sessionUsageSince(sessionId, productDay.startOfDayMs(now)))
+      .then((rows) => { if (rows && rows.length) quotas.hydrateSession(sessionId, rows); })
+      .catch((e) => {
+        if (hydratedSessions.get(sessionId) === read) hydratedSessions.delete(sessionId);
+        logger.warn({ err: e.message }, 'session quota hydrate failed; trying again on its next request');
+      });
+    hydratedSessions.set(sessionId, read);
   }
+  return read;
 }
 
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {

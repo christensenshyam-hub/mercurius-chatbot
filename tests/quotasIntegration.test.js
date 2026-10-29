@@ -12,6 +12,8 @@
  *   4. /metrics is admin-only and carries the cost counters.
  *   5. SIGTERM drains: an in-flight stream finishes, new model work is
  *      refused with 503 restarting, and the process exits 0.
+ *   6. After a restart, a session's turns come back from the ledger even
+ *      when the first read of it fails: the read is tried again.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -337,5 +339,70 @@ describe('in-flight caps hold under a concurrent burst', () => {
     const text = await res.text();
     assert.match(text, /inflight_model_calls(\{[^}]*\})?\s+0\b/, 'no leaked in-flight slots');
     assert.match(text, /quota_rejections_total\{[^}]*scope="(ip|global):busy"[^}]*\}\s+\d+/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('a failed quota read after a restart is tried again', () => {
+  // A session's daily turns live in memory and are read back from the usage
+  // ledger on its first request after a restart. That read used to be marked
+  // done even when it failed, so one database blip on that request gave the
+  // session a fresh day's allowance. Here the read fails once (the ledger
+  // table is renamed away for that one request, from outside the server).
+  const dbPath = path.join(os.tmpdir(), `merc-quotas-hydrate-${crypto.randomBytes(4).toString('hex')}.db`);
+  const procs = [];
+  after(() => {
+    for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
+    for (const suffix of ['', '-wal', '-shm']) {
+      try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  async function boot() {
+    const { proc, ready } = spawnServer({ SQLITE_PATH: dbPath, MOCK_STREAM_DELAY_MS: '1', SESSION_DAILY_CHAT_TURNS: '2' });
+    procs.push(proc);
+    const { base } = await ready;
+    const stop = () => new Promise((resolve) => {
+      if (proc.exitCode !== null) return resolve();
+      proc.once('exit', () => resolve());
+      proc.kill('SIGKILL');
+    });
+    return { base, stop };
+  }
+  const outcome = (out) => {
+    if (!out.events) return `http_${out.status}`;
+    const err = out.events.find((e) => e.type === 'error');
+    return err ? err.code : (out.events.some((e) => e.type === 'complete') ? 'complete' : 'none');
+  };
+  const onLedger = (sql) => {
+    const Database = require('better-sqlite3');
+    const sqlite = new Database(dbPath);
+    try { sqlite.exec(sql); } finally { sqlite.close(); }
+  };
+
+  test('the session that used its turns before the restart is still out of them', async () => {
+    const s = newSession();
+    const first = await boot();
+    try {
+      assert.equal(outcome(await chatSse(first.base, s)), 'complete');
+      assert.equal(outcome(await chatSse(first.base, s)), 'complete');
+      assert.equal(outcome(await chatSse(first.base, s)), 'daily_limit');
+      await waitFor(() => readUsage(dbPath), (r) => r.length >= 2);
+    } finally {
+      await first.stop();
+    }
+
+    const second = await boot();
+    try {
+      onLedger('ALTER TABLE usage RENAME TO usage_away');
+      // The read fails: this request is let through on the in-memory counters.
+      const blip = await chatSse(second.base, s);
+      onLedger('ALTER TABLE usage_away RENAME TO usage');
+      assert.equal(outcome(blip), 'complete');
+      // The next request reads the ledger again and finds both turns.
+      assert.equal(outcome(await chatSse(second.base, s)), 'daily_limit');
+    } finally {
+      await second.stop();
+    }
   });
 });
