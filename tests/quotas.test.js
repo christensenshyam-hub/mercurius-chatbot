@@ -642,6 +642,45 @@ describe('hydrateSession()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// hydrateIp() — a network's allowances after a restart
+// ---------------------------------------------------------------------------
+describe('hydrateIp()', () => {
+  test("seeds the network's dollars, photo count and photo bytes, so its caps hold after a restart", () => {
+    quotas.configure({ IP_DAILY_USD: 1, IP_DAILY_IMAGES: 3, IP_DAILY_IMAGE_BYTES: 1000 });
+    assert.equal(quotas.hydrateIp(IP, { usd: 1.2, images: 0, imageBytes: 0 }), true);
+    assert.equal(quotas.check({ sessionId: 'fresh', ip: IP, kind: 'chat' }).reason, 'ip_usd');
+
+    assert.equal(quotas.hydrateIp('2.2.2.2', { usd: 0, images: 3, imageBytes: 10 }), true);
+    assert.equal(quotas.check({ sessionId: 'fresh', ip: '2.2.2.2', kind: 'image' }).reason, 'ip_images');
+    assert.equal(quotas.check({ sessionId: 'fresh', ip: '2.2.2.2', kind: 'chat' }).ok, true, 'chat is not a photo');
+
+    assert.equal(quotas.hydrateIp('3.3.3.3', { usd: 0, images: 1, imageBytes: 1000 }), true);
+    assert.equal(quotas.check({ sessionId: 'fresh', ip: '3.3.3.3', kind: 'image' }).reason, 'ip_images', 'the byte cap');
+  });
+
+  test('applies once per network per day and only raises', () => {
+    quotas.record({ sessionId: SID, ip: IP, kind: 'image', usd: 0.4, bytes: 50 });
+    assert.equal(quotas.hydrateIp(IP, { usd: '0.1', images: '0', imageBytes: '500' }), true, 'pg strings');
+    assert.equal(quotas.hydrateIp(IP, { usd: 9, images: 9, imageBytes: 9 }), false);
+    const snap = quotas.snapshot();
+    assert.equal(snap.ips.usd, 0.4, 'memory had more dollars than the ledger');
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'image' }).ok, true);
+    quotas.configure({ IP_DAILY_IMAGE_BYTES: 500 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'image' }).reason, 'ip_images', 'the ledger had more bytes');
+  });
+
+  test('a missing result (failed query) or no address is skipped and keeps the slot', () => {
+    assert.equal(quotas.hydrateIp(IP, undefined), false);
+    assert.equal(quotas.hydrateIp(IP, null), false);
+    assert.equal(quotas.hydrateIp(IP, []), false);
+    assert.equal(quotas.hydrateIp('', { usd: 5 }), false);
+    assert.equal(quotas.hydrateIp(IP, { usd: 0.5 }), true);
+    assert.equal(quotas.snapshot().ips.usd, 0.5);
+    assert.equal(quotas.snapshot().sessions.tracked, 0, 'no session counter is touched');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // In-flight caps
 // ---------------------------------------------------------------------------
 describe('in-flight acquire/release', () => {

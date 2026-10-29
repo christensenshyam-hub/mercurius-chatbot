@@ -216,8 +216,10 @@ async function initSchema() {
         updated_at BIGINT NOT NULL
       );
 
-      -- Per-call usage/cost ledger: one row per Anthropic call (or refusal).
-      -- Feeds the spend cap, per-session throttles and the admin stats view.
+      -- Per-call usage/cost ledger: one row per Anthropic call (or refusal),
+      -- and one per stored photo upload (usage.bytes below).
+      -- Feeds the spend cap, per-session and per-network throttles and the
+      -- admin stats view.
       -- session_id is a plain column (no FK) so a row can outlive its session
       -- for accounting — deleteSession still clears it (privacy cascade).
       CREATE TABLE IF NOT EXISTS usage (
@@ -237,7 +239,8 @@ async function initSchema() {
         error_kind TEXT,
         duration_ms INTEGER,
         trace_id TEXT,
-        answered INTEGER DEFAULT NULL
+        answered INTEGER DEFAULT NULL,
+        bytes BIGINT DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
@@ -251,6 +254,11 @@ async function initSchema() {
       -- column existed (counted, as every call was then). The ALTER migrates
       -- older databases.
       ALTER TABLE usage ADD COLUMN IF NOT EXISTS answered INTEGER DEFAULT NULL;
+      -- A stored photo upload (POST /api/images) is a usage row too: kind
+      -- 'image', $0, its size in usage.bytes (NULL on every model call). It
+      -- is what lets a restart count a day's photos for the session and the
+      -- network (sessionUsageSince / networkUsageSince).
+      ALTER TABLE usage ADD COLUMN IF NOT EXISTS bytes BIGINT DEFAULT NULL;
 
       -- Read-path indexes for the admin/ops queries (recent sessions, per-session
       -- report lookups, time-windowed message counts).
@@ -366,7 +374,8 @@ async function initSchema() {
         error_kind TEXT,
         duration_ms INTEGER,
         trace_id TEXT,
-        answered INTEGER DEFAULT NULL
+        answered INTEGER DEFAULT NULL,
+        bytes INTEGER DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
       CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, ts);
@@ -420,6 +429,8 @@ async function initSchema() {
     // usage.answered (AUD-31) — see the pg block above.
     const usageCols = sqliteDb.prepare('PRAGMA table_info(usage)').all().map(c => c.name);
     if (!usageCols.includes('answered')) sqliteDb.exec('ALTER TABLE usage ADD COLUMN answered INTEGER DEFAULT NULL');
+    // usage.bytes (a stored photo's size) — see the pg block above.
+    if (!usageCols.includes('bytes')) sqliteDb.exec('ALTER TABLE usage ADD COLUMN bytes INTEGER DEFAULT NULL');
   }
 
   // Privacy: the name columns are dead (no reader or writer remains in the
@@ -967,7 +978,8 @@ module.exports = {
   },
 
   // ─── Usage ledger (per-call cost accounting) ───
-  // One row per Anthropic call (or per refusal, when the caller records one).
+  // One row per Anthropic call (or per refusal, when the caller records one),
+  // and one per stored photo upload (kind 'image', $0, its size in `bytes`).
   // The spend cap, per-session throttles and admin stats all read from here,
   // so it is the single source of truth for "what did we spend and on whom".
   //
@@ -988,6 +1000,12 @@ module.exports = {
   //                                       is the turns used (rows with
   //                                       answered = 0 don't count, AUD-31);
   //                                       `usd` sums every row.
+  //   networkUsageSince(ipHash, tsMs)  → { usd, images, imageBytes } for one
+  //                                       network (the ledger's salted hash
+  //                                       of its address): every row's cost,
+  //                                       and its kind 'image' rows (stored
+  //                                       photo uploads) and their bytes.
+  //   A row's `bytes` is a stored photo's size (kind 'image' rows only).
   //   A row's `answered` (true/false) says whether the call uses a turn (it
   //   gave the student an answer, or a client stopped it before
   //   message_start; a follow-up call on a turn already counted is false);
@@ -1008,8 +1026,8 @@ module.exports = {
       const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
       const cost = Number(pick('costUsd', 'cost_usd'));
       await query(
-        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id, answered)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usage (ts, session_id, ip_hash, route, kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, status, error_kind, duration_ms, trace_id, answered, bytes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ts,
           wasErased(pick('sessionId', 'session_id')) ? null : str(pick('sessionId', 'session_id')),
@@ -1027,6 +1045,7 @@ module.exports = {
           optInt(pick('durationMs', 'duration_ms')),
           str(pick('traceId', 'trace_id')),
           flag(row.answered),
+          optInt(row.bytes),
         ],
       );
       return true;
@@ -1049,6 +1068,17 @@ module.exports = {
       [sessionId, num(tsMs)],
     );
     return rows.map((r) => ({ kind: r.kind, count: num(r.count), usd: num(r.usd) }));
+  },
+
+  async networkUsageSince(ipHash, tsMs) {
+    // One network's day (the hashed address, never the address): `usd` is
+    // every call's cost, `images` / `imageBytes` its stored photo uploads.
+    if (typeof ipHash !== 'string' || ipHash === '') return { usd: 0, images: 0, imageBytes: 0 };
+    const r = await queryOne(
+      "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(CASE WHEN kind = 'image' THEN 1 ELSE 0 END), 0) AS images, COALESCE(SUM(CASE WHEN kind = 'image' THEN COALESCE(bytes, 0) ELSE 0 END), 0) AS image_bytes FROM usage WHERE ip_hash = ? AND ts >= ?",
+      [ipHash, num(tsMs)],
+    );
+    return { usd: r ? num(r.usd) : 0, images: r ? num(r.images) : 0, imageBytes: r ? num(r.image_bytes) : 0 };
   },
 
   async usageSummarySince(tsMs) {

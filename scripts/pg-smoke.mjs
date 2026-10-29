@@ -453,6 +453,18 @@ await step('C5 usage ledger: recordUsage / sumCostSince (spend-cap hydrate) / se
   assertNum(sum.usd, 'usageSummarySince.usd');
   assert.ok(sum.byRoute.some((r) => r.route === '/api/chat' && r.calls >= 2 && isNum(r.usd)));
   assert.ok(sum.errors.some((e) => e.route === '/api/quiz' && e.error_kind === 'overloaded' && e.count === 1));
+  // A network's day, read back after a restart (quotas.hydrateIp): every
+  // row's cost by the hashed address, and its photo uploads (kind 'image',
+  // usage.bytes BIGINT). SUM comes back from pg as a string.
+  const N = `net_${crypto.randomBytes(4).toString('hex')}`;
+  assert.equal(await db.recordUsage({ ipHash: N, route: '/api/chat', kind: 'chat', costUsd: 0.003, status: 'ok' }), true);
+  assert.equal(await db.recordUsage({ ipHash: N, route: '/api/images', kind: 'image', costUsd: 0, status: 'ok', answered: true, bytes: 6000000000 }), true);
+  const netDay = await db.networkUsageSince(N, midnight);
+  assertNum(netDay.usd, 'networkUsageSince.usd');
+  assertNum(netDay.images, 'networkUsageSince.images');
+  assertNum(netDay.imageBytes, 'networkUsageSince.imageBytes');
+  assert.ok(Math.abs(netDay.usd - 0.003) < 1e-9);
+  assert.deepEqual([netDay.images, netDay.imageBytes], [1, 6000000000], 'bytes past 32 bits');
 });
 
 await step('C6 settings: getSetting / setSetting upsert', async () => {

@@ -114,6 +114,28 @@ describe('usage ledger', () => {
     assert.deepEqual(rows.map((r) => r.answered), [1, 0, 0, 0, 1, 0, null]);
   });
 
+  // A network's daily allowances are read back from these after a restart
+  // (server.js hydrateNetworkQuota → quotas.hydrateIp), by the hashed address.
+  test('networkUsageSince sums one network\'s day: every cost, and its stored photo uploads and their bytes', async () => {
+    const t0 = Date.now();
+    const net = 'net_' + crypto.randomBytes(4).toString('hex');
+    const other = 'net_' + crypto.randomBytes(4).toString('hex');
+    const rec = (row) => db.recordUsage({ route: '/api/chat', kind: 'chat', status: 'ok', ...row });
+    await rec({ ts: t0 - 10, ipHash: net, costUsd: 5 });                       // yesterday's, say
+    await rec({ ts: t0 + 1, ipHash: net, sessionId: sid(), costUsd: 0.25 });
+    await rec({ ts: t0 + 2, ipHash: net, sessionId: sid(), kind: 'lesson', costUsd: 0.5, status: 'error', answered: false });
+    await rec({ ts: t0 + 3, ipHash: net, sessionId: sid(), route: '/api/images', kind: 'image', costUsd: 0, answered: true, bytes: 700 });
+    await rec({ ts: t0 + 4, ipHash: net, sessionId: sid(), route: '/api/images', kind: 'image', costUsd: 0, answered: true, bytes: 300 });
+    await rec({ ts: t0 + 5, ipHash: other, costUsd: 1, kind: 'image', bytes: 99 });
+    const got = await db.networkUsageSince(net, t0);
+    assert.ok(Math.abs(got.usd - 0.75) < 1e-9, `every call billed today (${got.usd})`);
+    assert.deepEqual([got.images, got.imageBytes], [2, 1000]);
+    assert.deepEqual(await db.networkUsageSince('net_never_seen', t0), { usd: 0, images: 0, imageBytes: 0 });
+    assert.deepEqual(await db.networkUsageSince(null, t0), { usd: 0, images: 0, imageBytes: 0 }, 'no hash, no query');
+    const rows = await db.queryRaw('SELECT bytes FROM usage WHERE ip_hash = ? ORDER BY ts', [net]);
+    assert.deepEqual(rows.map((r) => r.bytes), [null, null, null, 700, 300], 'bytes only on photo rows');
+  });
+
   test('recordUsage fills defaults and never throws', async () => {
     const t0 = Date.now();
     // No ts/route/kind/status at all → defaults instead of a NOT NULL violation.

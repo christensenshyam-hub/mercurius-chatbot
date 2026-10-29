@@ -1810,33 +1810,50 @@ function recordLessonProgress(sessionId, meta) {
     .catch((e) => logger.warn({ err: e && e.message, lessonId: id }, 'lesson progress upsert failed (row dropped)'));
 }
 
-// Per-session quota counters live in memory; the first time a session is
-// seen each product day (lib/productDay), seed them from the usage ledger so
-// a mid-day redeploy doesn't hand every session a fresh allowance.
+// The daily quota counters live in memory (lib/quotas); the first time a
+// session or a network is seen each product day (lib/productDay), seed them
+// from the usage ledger so a mid-day redeploy doesn't hand out a fresh
+// allowance. A network is looked up by the ledger's salted hash of its
+// address, never the address. Its allowances used to start again on every
+// deploy: a school that had spent its IP_DAILY_USD or its photo uploads by
+// lunch got a whole new day after an afternoon deploy.
 //
 // A read that fails lets that request through on the in-memory counters and
-// is tried again on the session's next request. It used to be marked done
-// anyway, so one database blip on a session's first request after a deploy
-// gave it a second full day's allowance. Requests that arrive while the read
-// is pending wait for the same read rather than skip it.
-const hydratedSessions = new Map(); // sessionId → today's read (never rejects)
-let hydratedDay = productDay.dayKey();
-function hydrateSessionQuota(sessionId) {
-  const now = Date.now();
-  const today = productDay.dayKey(now);
-  if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
-  let read = hydratedSessions.get(sessionId);
-  if (!read) {
-    read = Promise.resolve()
-      .then(() => db.sessionUsageSince(sessionId, productDay.startOfDayMs(now)))
-      .then((rows) => { if (rows && rows.length) quotas.hydrateSession(sessionId, rows); })
-      .catch((e) => {
-        if (hydratedSessions.get(sessionId) === read) hydratedSessions.delete(sessionId);
-        logger.warn({ err: e.message }, 'session quota hydrate failed; trying again on its next request');
-      });
-    hydratedSessions.set(sessionId, read);
-  }
-  return read;
+// is tried again on the next request. It used to be marked done anyway, so
+// one database blip on a session's first request after a deploy gave it a
+// second full day's allowance. Requests that arrive while the read is
+// pending wait for the same read rather than skip it.
+function dailyLedgerRead(what, read) {
+  const reads = new Map(); // key → today's read (never rejects)
+  let readsDay = productDay.dayKey();
+  return (key) => {
+    if (!key) return Promise.resolve();
+    const now = Date.now();
+    const today = productDay.dayKey(now);
+    if (today !== readsDay) { reads.clear(); readsDay = today; }
+    let pending = reads.get(key);
+    if (!pending) {
+      pending = Promise.resolve()
+        .then(() => read(key, productDay.startOfDayMs(now)))
+        .catch((e) => {
+          if (reads.get(key) === pending) reads.delete(key);
+          logger.warn({ err: e.message }, `${what} quota hydrate failed; trying again on its next request`);
+        });
+      reads.set(key, pending);
+    }
+    return pending;
+  };
+}
+const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since) => {
+  const rows = await db.sessionUsageSince(sessionId, since);
+  if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
+});
+const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since) => {
+  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since));
+});
+// Every route that checks the daily quotas awaits this before its check.
+function readQuotasBack(req, sessionId) {
+  return Promise.all([hydrateSessionQuota(sessionId), hydrateNetworkQuota(req.ip)]);
 }
 
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
@@ -1899,7 +1916,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
   if (await refuseUnseenSession(req, res, sessionId)) return;
-  await hydrateSessionQuota(sessionId);
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: callKind, sessionId })) return;
 
   // Every user turn gets the same budget, the latest AND the replayed ones,
@@ -2310,6 +2327,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // claude-sonnet-5-5, no crisis message in the thread, not a safety topic,
     // and never in safety text.
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
+    // The student going away (Stop, the app closed, the connection dropped)
+    // stops the guard's second call. That call runs after the reply's stream
+    // has ended, so the stream's own abort can't reach it: it used to run to
+    // the end for nobody and be billed in full. (Checked on the socket too:
+    // a client gone during the DB awaits above has already closed it.)
+    const clientGone = new AbortController();
+    const noteClientGone = () => { if (!res.writableFinished) clientGone.abort(); };
+    if (res.destroyed || !req.socket || req.socket.destroyed) noteClientGone();
+    else res.once('close', noteClientGone);
     const guardDraft = async (draft) => {
       // A reply that hands off to a crisis line or to emergency help is sent
       // as the model wrote it, whatever the turn looked like.
@@ -2329,6 +2355,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             ip: req.ip,
             traceId: req.traceId,
             followUp: true,
+            signal: clientGone.signal,
             params: {
               ...modelParams,
               system: systemBlocks.buildSystem({
@@ -2341,7 +2368,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           const retryText = tidyWriting(transformReply(firstTextOf(retry), replyTransforms));
           if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText) && homeworkGuard.quotesStudent(retryText, clientMessages)) return retryText;
         } catch (err) {
-          logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
+          if (clientGone.signal.aborted) logger.forRequest(req).info('writing quote retry stopped: the student left');
+          else logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
         }
         return text;
       }
@@ -2377,6 +2405,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ip: req.ip,
           traceId: req.traceId,
           followUp: true,
+          signal: clientGone.signal,
           params: {
             ...modelParams,
             system: systemBlocks.buildSystem({
@@ -2391,7 +2420,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }
       } catch (err) {
-        logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
+        if (clientGone.signal.aborted) logger.forRequest(req).info('homework answer guard: retry stopped, the student left; redacting');
+        else logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
       }
       return redactGuardLeaks(text);
     };
@@ -2843,6 +2873,7 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     // One tap is one helper turn: only the first ask counts it.
@@ -2914,6 +2945,7 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
@@ -2958,6 +2990,7 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -3002,6 +3035,7 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
@@ -3319,6 +3353,7 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -3359,6 +3394,7 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -3399,6 +3435,7 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
     return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
   }
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
@@ -3555,9 +3592,14 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // Uploads cost no model tokens but each one becomes a vision turn later and
   // bytes land in the database, so they have their own daily caps — per
   // session AND per network (count + bytes), and an unseen session id counts
-  // against the per-IP new-session quota like any model route.
+  // against the per-IP new-session quota like any model route. The upload is
+  // counted when it is admitted (reserveImage: the check and the count in
+  // one step) and given back if the store fails. It used to be counted after
+  // the write, so every upload still writing had already passed the check
+  // and a burst got past the caps.
   if (await refuseUnseenSession(req, res, sessionId)) return;
-  const imageVerdict = quotas.check({ sessionId, ip: req.ip, kind: 'image' });
+  await readQuotasBack(req, sessionId);
+  const imageVerdict = quotas.reserveImage({ sessionId, ip: req.ip, bytes: buffer.length });
   if (!imageVerdict.ok) {
     metrics.quotaRejectionsTotal.inc({ scope: `${imageVerdict.scope}:${imageVerdict.error}` });
     if (imageVerdict.retryAfterSec) res.setHeader('Retry-After', String(imageVerdict.retryAfterSec));
@@ -3587,10 +3629,12 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
       createdAt,
     });
   } catch (err) {
+    quotas.forgetImage(imageVerdict.reservation);
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
   }
-  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0, bytes: buffer.length });
+  // The ledger row a restart counts the day's photos from (session and network).
+  claudeCall.recordImageUpload({ sessionId, ip: req.ip, traceId: req.traceId, bytes: buffer.length });
 
   // Log metadata only — never the image bytes or the (possibly personal) file name.
   logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
