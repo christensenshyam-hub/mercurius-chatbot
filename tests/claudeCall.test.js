@@ -446,3 +446,100 @@ describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
     assert.equal(db.rows.length, 0, 'refused before the call');
   });
 });
+
+// The answer guard's rewrite is a non-streaming call made after the reply's
+// stream has ended, so only a signal of its own can stop it when the
+// student leaves. createMessage forwards `signal` to the SDK and settles an
+// aborted call honestly: 'aborted' / 'client_abort' (the SDK's abort error
+// is named 'Error', which classifyError would call an upstream error), no
+// turn, billed for what it sent and no output.
+describe('claudeCall: createMessage with an abort signal', () => {
+  let db;
+  let posts;
+  const IP = '10.9.0.2';
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  beforeEach(() => {
+    delete process.env.MOCK_SCENARIO;
+    claudeCall.__resetForTest();
+    quotas.__resetForTest();
+    spendCap.__resetForTest();
+    alerts.__resetForTest();
+    posts = [];
+    alerts.configure({ webhookUrl: 'https://discord.invalid/hook', fetch: async (_url, init) => { posts.push(JSON.parse(init.body).content); return { ok: true }; } });
+    db = fakeDb();
+    claudeCall.init({ apiKey: 'unused', db, ipHashSalt: 'test-salt' });
+  });
+
+  // The shape server.js sends: a cached static block, then the dynamic one.
+  function guardParams() {
+    return {
+      ...chatParams('what is 3x+5 = 20'),
+      system: [
+        { type: 'text', text: 'You are a Socratic tutor. '.repeat(40), cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: '## ANSWER GUARD (this reply only)\nWrite the reply again.' },
+      ],
+    };
+  }
+
+  test('a call aborted while it runs rejects at once and settles as a client abort, billed for its input only', async () => {
+    const gone = new AbortController();
+    const call = claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'g1', ip: IP, followUp: true, signal: gone.signal, params: guardParams() });
+    gone.abort();
+    await assert.rejects(call);
+    await tick();
+    assert.equal(db.rows.length, 1);
+    const row = db.rows[0];
+    assert.deepEqual([row.status, row.error_kind, row.answered], ['aborted', 'client_abort', false]);
+    assert.equal(row.output_tokens, 0, 'no reply came back');
+    assert.ok(row.cache_read_tokens > 0, 'the static prefix counts as cache reads');
+    assert.ok(row.input_tokens > 0, 'the rest as input');
+    const expected = pricing.costUsd('claude-sonnet-4-6', { input_tokens: row.input_tokens, cache_read_input_tokens: row.cache_read_tokens });
+    assert.ok(Math.abs(row.cost_usd - expected) < 1e-12 && row.cost_usd > 0, 'billed, so the dollar caps see it');
+    // snapshot() rounds to 6 places.
+    assert.ok(Math.abs(quotas.snapshot().ips.usd - row.cost_usd) < 1e-6, 'on the network cap too');
+    assert.equal(quotas.snapshot().sessions.totals.chatTurns, 0, 'no turn');
+    assert.equal(quotas.inflight().global, 0, 'in-flight slot released');
+  });
+
+  test('a signal aborted before the call sends nothing and bills $0', async () => {
+    const gone = new AbortController();
+    gone.abort();
+    await assert.rejects(claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'g2', ip: IP, followUp: true, signal: gone.signal, params: guardParams() }));
+    await tick();
+    assert.deepEqual([db.rows[0].status, db.rows[0].error_kind, db.rows[0].cost_usd], ['aborted', 'client_abort', 0]);
+    assert.equal(quotas.inflight().global, 0);
+  });
+
+  test('students leaving are not upstream errors: five aborts page nobody', async () => {
+    for (let i = 0; i < 5; i++) {
+      const gone = new AbortController();
+      const call = claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'g3', ip: IP, followUp: true, signal: gone.signal, params: guardParams() });
+      gone.abort();
+      await assert.rejects(call);
+    }
+    await tick();
+    assert.ok(db.rows.every((r) => r.status === 'aborted' && r.error_kind === 'client_abort'), JSON.stringify(db.rows.map((r) => r.error_kind)));
+    assert.deepEqual(posts, [], 'no upstream-error burst page');
+  });
+
+  test('an AbortSignal.timeout is settled as a timeout', async () => {
+    process.env.MOCK_SCENARIO = 'hang';
+    claudeCall.__resetForTest();
+    claudeCall.init({ apiKey: 'unused', db, ipHashSalt: 'test-salt' });
+    try {
+      await assert.rejects(claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'g4', ip: IP, signal: AbortSignal.timeout(20), params: guardParams() }));
+    } finally {
+      delete process.env.MOCK_SCENARIO;
+    }
+    await tick();
+    assert.deepEqual([db.rows[0].status, db.rows[0].error_kind], ['aborted', 'timeout']);
+  });
+
+  test('without a signal nothing changes: the call runs to the end', async () => {
+    const message = await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'g5', ip: IP, params: guardParams() });
+    assert.ok(message.content.some((b) => b.type === 'text' && b.text.length > 0));
+    await tick();
+    assert.equal(db.rows[0].status, 'ok');
+  });
+});

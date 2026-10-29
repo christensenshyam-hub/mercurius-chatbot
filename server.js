@@ -2327,6 +2327,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // claude-sonnet-5-5, no crisis message in the thread, not a safety topic,
     // and never in safety text.
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
+    // The student going away (Stop, the app closed, the connection dropped)
+    // stops the guard's second call. That call runs after the reply's stream
+    // has ended, so the stream's own abort can't reach it: it used to run to
+    // the end for nobody and be billed in full. (Checked on the socket too:
+    // a client gone during the DB awaits above has already closed it.)
+    const clientGone = new AbortController();
+    const noteClientGone = () => { if (!res.writableFinished) clientGone.abort(); };
+    if (res.destroyed || !req.socket || req.socket.destroyed) noteClientGone();
+    else res.once('close', noteClientGone);
     const guardDraft = async (draft) => {
       // A reply that hands off to a crisis line or to emergency help is sent
       // as the model wrote it, whatever the turn looked like.
@@ -2346,6 +2355,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             ip: req.ip,
             traceId: req.traceId,
             followUp: true,
+            signal: clientGone.signal,
             params: {
               ...modelParams,
               system: systemBlocks.buildSystem({
@@ -2358,7 +2368,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           const retryText = tidyWriting(transformReply(firstTextOf(retry), replyTransforms));
           if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText) && homeworkGuard.quotesStudent(retryText, clientMessages)) return retryText;
         } catch (err) {
-          logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
+          if (clientGone.signal.aborted) logger.forRequest(req).info('writing quote retry stopped: the student left');
+          else logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
         }
         return text;
       }
@@ -2394,6 +2405,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ip: req.ip,
           traceId: req.traceId,
           followUp: true,
+          signal: clientGone.signal,
           params: {
             ...modelParams,
             system: systemBlocks.buildSystem({
@@ -2408,7 +2420,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }
       } catch (err) {
-        logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
+        if (clientGone.signal.aborted) logger.forRequest(req).info('homework answer guard: retry stopped, the student left; redacting');
+        else logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
       }
       return redactGuardLeaks(text);
     };
