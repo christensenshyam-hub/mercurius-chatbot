@@ -17,8 +17,8 @@ const CHECK = process.argv.includes('--check');
 
 const STORE = 'https://apps.apple.com/app/id6773192313';
 const SITE = 'https://trymercurius.com';
-const CSS_V = '13';
-const JS_V = '10';
+const CSS_V = '14';
+const JS_V = '11';
 const ADS_V = '3';
 const DEMO_V = '1';
 const FONTS = 'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500..700&family=Inter:wght@400..700&display=swap';

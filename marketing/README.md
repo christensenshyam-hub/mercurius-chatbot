@@ -260,8 +260,10 @@ sizes were measured against this site's headings
 - Semantic landmarks (`<header>`, `<main>`, `<footer>`, `<nav>`).
 - Heading hierarchy: one `<h1>` (hero), `<h2>` per section, `<h3>`
   inside cards.
-- Mode tabs follow the WAI-ARIA tablist pattern with arrow-key
-  navigation in `script.js`.
+- Mode tabs follow the WAI-ARIA tabs pattern (`script.js`): the
+  selected tab is the tablist's only Tab stop (roving tabindex), Left/Right
+  move between tabs and wrap, Home/End jump to the first/last, and the
+  shown panel is the next Tab stop, its ring drawn on the card's edge.
 - All decorative images have `alt=""` + `aria-hidden`. The brand
   mark has the meaningful label on the wrapping link.
 - Focus: a 3px periwinkle ring on everything focusable (the darker accent
