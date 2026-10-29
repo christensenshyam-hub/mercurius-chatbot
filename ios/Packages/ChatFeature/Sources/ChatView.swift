@@ -268,6 +268,7 @@ public struct ChatView: View {
             attachment: model.pendingImage,
             isPreparingAttachment: model.isPreparingAttachment,
             attachmentError: model.attachmentError,
+            photoLimitNotice: model.photoLimitNotice,
             characterLimit: model.draftCharacterLimit,
             onSend: { model.send() },
             onCancel: { model.cancel() },
