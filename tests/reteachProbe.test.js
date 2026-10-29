@@ -84,6 +84,20 @@ describe('reteach-probe', () => {
     assert.equal(s.stoppedOnCheck, false);
   });
 
+  test('"Now let\'s put them to work." (a reviewer\'s real trial) is the exercise, not a teach reply', async () => {
+    const { scoreTrial } = await modP;
+    const s = scoreTrial([
+      { raw: q('What does a tokenizer output?') },
+      { raw: `Not quite.\n\n${q('Fresh case: what fits here?')}`, wrong: true },
+      { raw: q('Which blank is the model most confident about?') },
+      { raw: 'Right, "star" overwhelmingly dominates that blank.\n\nYou now know the three pieces: tokens, embeddings with attention, and next-token prediction. Now let\'s put them to work.\n\n1. "The capital of France is ___"' },
+    ]);
+    assert.equal(s.exerciseAt, 4);
+    assert.equal(s.stoppedOnCheck, false);
+    assert.equal(s.teachReplies, 3);
+    assert.equal(s.teachAfterReteach, 1);
+  });
+
   test('a passing mention in the prose is not teaching; a [Q] distractor is not budget talk', async () => {
     const { scoreTrial } = await modP;
     const s = scoreTrial([
