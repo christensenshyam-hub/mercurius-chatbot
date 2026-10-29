@@ -272,6 +272,10 @@ describe('a photo still being stored when its session is erased is not kept', ()
     const student = newSid('again');
     assert.equal((await post(srv.base, '/api/mode', { sessionId: student, mode: 'socratic' })).status, 200);
     assert.equal((await fetch(`${srv.base}/api/session/${student}`, { method: 'DELETE' })).status, 200);
+    // Start in a later millisecond: an upload that begins in the same one the
+    // erasure finished in counts as erased (db.erasedSince), and on a fast
+    // machine the very next request can land there.
+    await sleep(5);
     const uploaded = await upload(srv.base, student);
     assert.equal(uploaded.status, 201, JSON.stringify(uploaded.json));
     assert.equal((await fetch(`${srv.base}/api/images/${uploaded.json.id}`)).status, 200);
