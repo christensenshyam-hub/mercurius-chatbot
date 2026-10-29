@@ -1,7 +1,7 @@
 'use strict';
 
 // scripts/reteach-probe.mjs — the pure scoring of the Unit 1 Lesson 1 reteach
-// probe. The probe itself only
+// probe, plus the CURRICULUM_PROMPT rule it measures. The probe itself only
 // runs against a local eval server; nothing here calls a model.
 
 const { describe, test } = require('node:test');
@@ -103,5 +103,34 @@ describe('reteach-probe', () => {
     for (const s of ['Let\'s keep going.', 'Now let\'s put this to work.', 'The model ran a prediction.']) {
       assert.ok(!BUDGET_TALK_RE.test(s), s);
     }
+  });
+});
+
+describe('CURRICULUM_PROMPT: a reteach is not one of the 2–3 teach replies; Lesson 1.1 names its three ideas', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = src.indexOf('const CURRICULUM_PROMPT = `');
+  const guide = src.slice(start, src.indexOf('`;', start));
+  const step1 = guide.slice(guide.indexOf('**STEP 1'), guide.indexOf('**STEP 2'));
+  const u1l1 = guide.slice(guide.indexOf('**Lesson 1 — What happens when you type a prompt**'), guide.indexOf('**Lesson 2 — Training data'));
+
+  test('STEP 1: a reteach doesn\'t count toward the 2–3, the untaught ideas still come before the exercise, and nothing announces what is left', () => {
+    assert.match(step1, /2–3 responses, ONE micro-concept each/);
+    assert.match(step1, /reteach[^\n]*doesn't count toward the 2–3/);
+    assert.match(step1, /next micro-concept you haven't taught yet \(just "Let's keep going", never "one more idea"\)/);
+    assert.match(step1, /exercise still waits until every micro-concept has been taught/);
+  });
+
+  test('Unit 1 Lesson 1: tokens, then embeddings + attention, then next-token prediction', () => {
+    assert.match(u1l1, /^Teach: Tokenization \(words → tokens → numbers\), embedding space, attention mechanism \(simplified\), next-token prediction$/m);
+    const line = u1l1.split('\n').find((l) => l.startsWith('Micro-concepts'));
+    assert.ok(line, 'the entry names its micro-concepts');
+    assert.match(line, /three, in this order/);
+    const at = (re) => line.search(re);
+    assert.ok(at(/\(1\) tokens/) < at(/\(2\) embeddings and attention/), line);
+    assert.ok(at(/\(2\) embeddings and attention/) < at(/\(3\) next-token prediction/), line);
+  });
+
+  test('the change touched no other lesson entry (only Lesson 1.1 names its micro-concepts)', () => {
+    assert.equal(guide.split('\n').filter((l) => l.startsWith('Micro-concepts')).length, 1);
   });
 });
