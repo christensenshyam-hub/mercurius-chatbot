@@ -98,6 +98,18 @@ describe('reteach-probe', () => {
     assert.equal(s.teachAfterReteach, 1);
   });
 
+  test('"Now let\'s put all of this to work." (round 3, trial 3) is the exercise too', async () => {
+    const { scoreTrial } = await modP;
+    const s = scoreTrial([
+      { raw: q('What does a tokenizer output?') },
+      { raw: `Not quite.\n\n${q('Fresh case: what fits here?')}`, wrong: true },
+      { raw: q('How does the model tell which meaning of "bank" is intended?') },
+      { raw: 'Yes, that\'s the mechanism.\n\nNow let\'s put all of this to work. Here\'s a scenario, and the first sentence is entirely your call.\n\n1. **Tokens:** …' },
+    ]);
+    assert.equal(s.exerciseAt, 4);
+    assert.equal(s.stoppedOnCheck, false);
+  });
+
   test('a passing mention in the prose is not teaching; a [Q] distractor is not budget talk', async () => {
     const { scoreTrial } = await modP;
     const s = scoreTrial([

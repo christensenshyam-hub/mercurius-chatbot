@@ -77,7 +77,7 @@ export function laterContextExamples(raw) {
 
 const Q_BLOCK_RE = /\[Q\][\s\S]*?(?:\[\/Q\]|$)/g;
 
-const EXERCISE_RE = /\bexercise\b|put (?:this|it|that|them|these) to work/i;
+const EXERCISE_RE = /\bexercise\b|put (?:all (?:of )?)?(?:this|it|that|them|these) to work/i;
 
 /** What one reply teaches: its [KEY] takeaway and its check ([Q] stem or
  *  [CHECK] text). A bold term alone can sit in the reaction to the last
@@ -94,7 +94,7 @@ export function replyFocus(raw) {
  * Score one trial (pure; unit-tested). `replies` are the tutor's replies in
  * order, each { raw, wrong? } where `wrong` marks the reply that answered a
  * deliberately wrong pick. The exercise is the first later reply with no [Q]
- * that gives it ("exercise", "put this/it/them to work"); every reply before it is a
+ * that gives it ("exercise", "put (all of) this/it/them to work"); every reply before it is a
  * teach reply. A later reply with no [Q] that is not the exercise (a teach
  * reply whose check is an open [CHECK]) ends the trial: the probe can't
  * answer it, so it counts as the last teach reply and `exerciseAt` is null.
