@@ -1541,9 +1541,10 @@ const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 15000
 //                    refuseIfRateLimited below; not part of the gate)
 // Every refusal also carries `retryable` (and `scope` / `retryAfterSec` when
 // known) in both shapes, the JSON body and the SSE error frame. Those are
-// additive: 2.0.0, 2.3.0 and the widget decode `error`/`code` and the copy
-// and ignore the rest; PR #43's iOS client reads `scope` and `retryAfterSec`
-// from both. A daily allowance and the spend cap come back at the next
+// additive: 2.0.0 and the widget decode `error`/`code` and the copy and
+// ignore the rest; 2.3.0 (17), which carries PR #43, also reads `scope` and
+// `retryAfterSec` from both, and they change only a daily_limit's copy and
+// Retry (ServerRefusal.swift). A daily allowance and the spend cap come back at the next
 // product-day midnight (lib/productDay, STREAK_TZ), and `retryAfterSec`
 // counts down to it.
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

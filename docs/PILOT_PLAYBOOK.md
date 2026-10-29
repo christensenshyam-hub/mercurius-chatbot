@@ -213,7 +213,7 @@ What students see in 2.3.0 (16), word for word (`APIError.swift`,
 | "Something went wrong. Try again." | Anything else | Try again; if many phones at once, the rule |
 
 The server writes these and the app shows them as sent (wording as of
-night/server-4). For a daily limit, 2.3.0 replaces the sentence that says
+2026-10-29). For a daily limit, 2.3.0 replaces the sentence that says
 "tomorrow" with a local time ("Try again after 11:00 PM.", or for the
 network's limits "Switch to cellular data and try again, or come back
 after 11:00 PM."):
