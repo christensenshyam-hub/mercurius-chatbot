@@ -1,8 +1,12 @@
 # Mercurius AI — marketing site
 
 The promotional site for [Mercurius AI](https://trymercurius.com), deployed
-by Netlify from this folder. Plain HTML, CSS, and a few lines of vanilla
-JS — no framework, no build step, no dependencies.
+by Netlify from the `marketing/` folder. Plain HTML, CSS, and a few lines of
+vanilla JS — no framework, no build step, no dependencies.
+
+These docs live here in `docs/`, not in `marketing/`, because Netlify
+publishes every file in that folder (they used to be `marketing/README.md`,
+which anyone could read at trymercurius.com/README.md).
 
 ## Structure
 
@@ -14,8 +18,7 @@ marketing/
 ├── features.html, modes.html, how-it-works.html, audience.html, trust.html
 ├── privacy.html, terms.html, support.html   # linked from the app and App Store
 ├── 404.html            # Netlify serves it, with a 404 status, for any unknown path
-├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites;
-│                       #   answers /README.md with the 404 page
+├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites
 ├── robots.txt, sitemap.xml
 ├── styles.css          # Single stylesheet; design tokens at top
 ├── script.js           # Mode-pill tabs, phone menu niceties, dynamic year
@@ -31,17 +34,18 @@ marketing/
 │   └── mercurius-logo.png/.webp, og-card.png, favicon-48.png, apple-touch-icon.png,
 │       mercurius-icon.png   # Old brand: no page uses them; kept because links from outside
 │                            #   the site may (old link previews, docs/certificate/README.md)
-└── README.md           # These docs (not served: see below)
 ```
 
-Everything in this folder is published, so internal material lives elsewhere:
-the design system is `docs/marketing-design.md`, the Reels manifests are
-`docs/marketing-reels/`, and the scripts that write the generated parts of
-the pages are in `scripts/` (below). This README is the one exception: it
-sits here so it shows when you open the folder, and forced `404!` rules at
-the end of `_redirects` answer `/README.md` (and its common capitalizations)
-with the 404 page instead of the file. Add a rule there for any other
-non-page file you put in this folder.
+Everything in `marketing/` is published, so internal material lives
+elsewhere: these docs, the design system (`docs/marketing-design.md`), the
+Reels manifests (`docs/marketing-reels/`), and the scripts that write the
+generated parts of the pages (`scripts/`, below). Keep notes, Markdown, data
+files and scripts out of `marketing/`: `tests/marketingNotFound.test.js`
+fails on any file there that isn't a page, a style, script, image or video,
+`robots.txt`, `sitemap.xml` or `_redirects`. A `_redirects` rule can't hide
+such a file instead, because Netlify finds files whatever the case of the
+URL and rules match it exactly (on the live site `/rEaDmE.md` served the old
+README, while `/bEta` was a 404 though `/beta` redirects).
 
 Canonical URLs are the extensionless form (`https://trymercurius.com/privacy`).
 Netlify rewrites the `.html` links in the pages to that form on deploy, and
@@ -127,7 +131,7 @@ node scripts/build-reels.mjs           # rewrite the cards
 node scripts/build-reels.mjs --check   # fail if the cards or assets/ads/ drift
 ```
 
-The manifests stay out of this folder because they carry posting dates,
+The manifests stay out of `marketing/` because they carry posting dates,
 source file names and internal notes.
 
 - **Which ads:** every ad with a rendered video, under its calendar
@@ -262,7 +266,9 @@ by the "Fraunces Fallback" faces at the top of `styles.css` so they mostly
 wrap on the same lines and the page doesn't jump when Fraunces swaps in. The
 sizes were measured against this site's headings
 (`docs/marketing-design.md` 3.1). Size headline boxes in `em`, not `ch`: a
-`ch` changes width with the font.
+`ch` changes width with the font. Body text does the same until Inter
+arrives: it shows in Arial, resized by the "Inter Fallback" faces to Inter's
+width, so paragraphs keep their line count when Inter swaps in.
 
 ## Accessibility
 
