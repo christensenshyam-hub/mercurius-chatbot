@@ -157,6 +157,117 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.match(r.photo, /^rejected /, `the photo went to the database: ${r.photo}`);
   });
 
+  // "Delete my data" is safe to retry. A retry that fails erased nothing, but
+  // the earlier try did: its note must stay, or the photo, report and usage
+  // row that were still on their way are kept under the erased id.
+  test("a retried erasure that fails keeps the earlier erasure's note", async () => {
+    const image = (sessionId, createdAt) => ({
+      id: crypto.randomBytes(12).toString('hex'), sessionId,
+      contentType: 'image/png', fileName: null, sizeBytes: 3,
+      data: Buffer.from([1, 2, 3]), createdAt,
+    });
+    const failingErasure = async (sessionId) => {
+      // A table the cascade deletes from is missing, so the transaction
+      // fails and rolls back (Postgres: a busy pool or a statement timeout).
+      await db.runRaw('ALTER TABLE curriculum_progress RENAME TO curriculum_progress_away');
+      try {
+        await assert.rejects(db.deleteSession(sessionId));
+      } finally {
+        await db.runRaw('ALTER TABLE curriculum_progress_away RENAME TO curriculum_progress');
+      }
+    };
+    const s = sid();
+    await db.getOrCreateSession(s);
+    const began = Date.now() - 50; // the requests came in, then the erasure
+    await db.deleteSession(s);
+    await failingErasure(s); // the client's retry
+    // Before: all three kept under the erased id.
+    const raced = image(s, began);
+    assert.equal(await db.saveImage(raced), false, 'the photo is not kept');
+    assert.equal(await db.getImage(raced.id), null);
+    assert.deepEqual(await db.saveReport({ sessionId: s, content: 'raced', createdAt: began }), { id: null }, 'nor the report');
+    await db.recordUsage({ ts: Date.now(), sessionId: s, route: '/api/chat', kind: 'chat', status: 'ok', costUsd: 0.01, traceId: 'after-retry' });
+    const rows = await db.queryRaw("SELECT session_id FROM usage WHERE trace_id = 'after-retry'");
+    assert.deepEqual(rows.map((r) => r.session_id), [null], 'the usage row drops the id');
+
+    // An erasure that fails on its own still marks nothing erased.
+    const other = sid();
+    await db.getOrCreateSession(other);
+    await failingErasure(other);
+    assert.equal(await db.saveImage(image(other, Date.now() - 50)), true);
+  });
+
+  test('overlapping erasures of one id (Postgres) never undo each other', () => {
+    // db.js on the Postgres driver, with tests/fixtures/fakePg.js standing in
+    // for Postgres: erasures of one id queue on the session row's lock.
+    const resultPath = path.join(os.tmpdir(), `merc-erase-overlap-${crypto.randomBytes(4).toString('hex')}.json`);
+    const script = `
+      const fs = require('node:fs');
+      const db = require('./db');
+      const pg = globalThis.fakePg;
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const until = async (ok) => { for (let i = 0; i < 400 && !ok(); i++) await sleep(5); if (!ok()) throw new Error('timed out'); };
+      const photo = (sessionId, createdAt) => db.saveImage({ id: 'img_' + Math.random(), sessionId, contentType: 'image/png', sizeBytes: 1, data: Buffer.from([1]), createdAt });
+      (async () => {
+        const out = {};
+        pg.holdDeletes = true;
+
+        // 1. The retry times out on the lock while the first try still runs.
+        const a = 'overlap_a_' + 'x'.repeat(22);
+        const aBegan = Date.now();
+        await sleep(5);
+        const a1 = db.deleteSession(a);
+        await until(() => pg.held.length === 1);
+        const a2 = db.deleteSession(a).then(() => 'resolved', (e) => 'rejected ' + e.code);
+        await until(() => pg.waiters.length === 1);
+        pg.timeOutWaiters();
+        out.retry = await a2;
+        pg.release();
+        await a1;
+        out.photoAfterFirst = await photo(a, aBegan);
+        await db.recordUsage({ ts: Date.now(), sessionId: a, route: '/api/chat', kind: 'chat', status: 'ok' });
+        out.usageIds = pg.usage.map((r) => r.session_id);
+
+        // 2. Both succeed: the first commits while the second still runs.
+        const b = 'overlap_b_' + 'x'.repeat(22);
+        const b1 = db.deleteSession(b);
+        await until(() => pg.held.length === 1);
+        const b2 = db.deleteSession(b);
+        await until(() => pg.waiters.length === 1);
+        pg.release();
+        await b1;
+        await until(() => pg.held.length === 1); // the second has the lock now
+        await sleep(5);
+        out.photoDuringSecond = await photo(b, Date.now());
+        pg.release();
+        await b2;
+        await sleep(5);
+        out.photoAfterBoth = await photo(b, Date.now());
+        fs.writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(out));
+        process.exit(0);
+      })().catch((e) => { console.error(e && e.stack || e); process.exit(1); });
+    `;
+    const fakePg = path.join(__dirname, 'fixtures', 'fakePg.js');
+    const env = { ...process.env, DATABASE_URL: 'postgres://fake@localhost/fake', NODE_ENV: 'test' };
+    let r;
+    try {
+      const { execFileSync } = require('node:child_process');
+      execFileSync(process.execPath, ['--require', fakePg, '-e', script], { env, cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+      r = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+    } catch (e) {
+      assert.fail(`child failed:\n${String(e.stderr || e.message)}`);
+    } finally {
+      try { fs.rmSync(resultPath, { force: true }); } catch { /* ignore */ }
+    }
+    assert.equal(r.retry, 'rejected 57014', 'the retry timed out');
+    // Before: the retry's rollback dropped the note, so both were kept.
+    assert.equal(r.photoAfterFirst, false, 'a photo begun before the erasure is not kept');
+    assert.deepEqual(r.usageIds, [null], 'a late usage row drops the id');
+    // Before: the first commit stamped the second's note done.
+    assert.equal(r.photoDuringSecond, false, 'a photo begun while an erasure still runs is not kept');
+    assert.equal(r.photoAfterBoth, true, 'one begun after both is');
+  });
+
   test('a usage row or lesson event settling after the erasure no longer carries the erased id', async () => {
     const s = sid();
     const other = sid();
