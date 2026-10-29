@@ -220,7 +220,9 @@ async function initSchema() {
       -- and one per stored photo upload (usage.bytes below). A network's new
       -- session and each stored content report add a $0 row too (kind
       -- 'session' / 'report', session_id NULL: only the network's hashed
-      -- address), so a restart can count the network's day.
+      -- address, and ts is the start of the product day, not the moment),
+      -- so a restart can count the network's day. Those are deleted after
+      -- two days (purgeNetworkCountsBefore).
       -- Feeds the spend cap, per-session and per-network throttles and the
       -- admin stats view.
       -- session_id is a plain column (no FK) so a row can outlive its session
@@ -588,20 +590,38 @@ function streakDay(now = new Date()) {
 // report still being written when its session is erased (a multi-megabyte
 // write takes a while) would outlive the erasure under the erased id:
 // erasedSince() catches those.
+//
+// One note per id covers every erasure of it: how many are running, when
+// the last one started, and when the last one that succeeded committed.
+// "Delete my data" is safe to retry and a retry can overlap the first try,
+// so one erasure's outcome must never undo another's: a retry that fails
+// leaves the earlier success on record, and an erasure that commits while
+// another of the same id still runs leaves it running.
 const ERASED_TTL_MS = 10 * 60_000;
-const recentlyErased = new Map(); // session id → { at: started, doneAt: committed (null while running) }
+const recentlyErased = new Map(); // session id → { running, startedAt, doneAt (last success, or null) }
+function noteFresh(e, now) {
+  return e.running > 0 ? now - e.startedAt < ERASED_TTL_MS : e.doneAt != null && now - e.doneAt < ERASED_TTL_MS;
+}
 function noteErased(sessionId) {
   const now = Date.now();
-  for (const [id, e] of recentlyErased) if (now - e.at >= ERASED_TTL_MS) recentlyErased.delete(id);
-  recentlyErased.set(sessionId, { at: now, doneAt: null });
+  for (const [id, e] of recentlyErased) if (!noteFresh(e, now)) recentlyErased.delete(id);
+  const e = recentlyErased.get(sessionId) || { running: 0, startedAt: now, doneAt: null };
+  e.running += 1;
+  e.startedAt = now;
+  recentlyErased.set(sessionId, e);
 }
-function noteErasureDone(sessionId) {
+function noteErasureEnded(sessionId, committed) {
   const e = recentlyErased.get(sessionId);
-  if (e) e.doneAt = Date.now();
+  if (!e) return;
+  e.running = Math.max(0, e.running - 1);
+  if (committed) e.doneAt = Date.now();
+  // An erasure that failed erased nothing: with no other running and none
+  // done, nothing about the id is erased.
+  else if (e.running === 0 && e.doneAt == null) recentlyErased.delete(sessionId);
 }
 function wasErased(sessionId) {
   const e = sessionId == null ? undefined : recentlyErased.get(String(sessionId));
-  return e !== undefined && Date.now() - e.at < ERASED_TTL_MS;
+  return e !== undefined && noteFresh(e, Date.now());
 }
 // True when an erasure of the session was still running at `sinceMs` or
 // finished after it: a write whose request began at `sinceMs` may have seen
@@ -612,7 +632,7 @@ function wasErased(sessionId) {
 function erasedSince(sessionId, sinceMs) {
   if (!wasErased(sessionId)) return false;
   const e = recentlyErased.get(String(sessionId));
-  return e.doneAt == null || !(e.doneAt < Number(sinceMs));
+  return e.running > 0 || !(e.doneAt < Number(sinceMs));
 }
 
 // ─── Exported async API (same interface as before, but now async) ───
@@ -1340,6 +1360,12 @@ module.exports = {
   //                                  unreviewed safety signal), pass
   //                                  resolvedOnly: false to purge open ones too
   //   purgeUsageBefore(tsMs)         usage.ts < tsMs
+  //   purgeNetworkCountsBefore(tsMs) usage rows of kind 'session' / 'report'
+  //                                  (a network's sign-up and report counts)
+  //                                  with ts < tsMs, but never today's: the
+  //                                  cutoff is held to the start of the
+  //                                  product day, because a restart still
+  //                                  reads today's rows back
   //   purgeLessonEventsBefore(tsMs)  lesson_events.ts < tsMs
   //   inactiveSessionIds(beforeTsMs, limit = 200)
   //                                  → session ids with last_active < before,
@@ -1361,6 +1387,11 @@ module.exports = {
 
   async purgeUsageBefore(tsMs) {
     return purgeBatched('purgeUsageBefore', 'usage', 'id', 'ts < ?', [num(tsMs)]);
+  },
+
+  async purgeNetworkCountsBefore(tsMs) {
+    const cutoff = Math.min(num(tsMs), productDay.startOfDayMs());
+    return purgeBatched('purgeNetworkCountsBefore', 'usage', 'id', "kind IN ('session', 'report') AND ts < ?", [cutoff]);
   },
 
   async purgeLessonEventsBefore(tsMs) {
@@ -1425,14 +1456,15 @@ module.exports = {
 
     if (USE_PG) {
       // A checkout that fails (Postgres unreachable, or every connection
-      // busy past connectionTimeoutMillis) erased nothing. Drop the note too,
-      // as a rollback does: left "running", it would make the session's
-      // photos and reports count as erased for 10 minutes and drop them.
+      // busy past connectionTimeoutMillis) erased nothing. End this try in
+      // the note, as a rollback does: left "running", it would make the
+      // session's photos and reports count as erased for 10 minutes and drop
+      // them. An earlier erasure that did succeed stays on record.
       let client;
       try {
         client = await pool.connect();
       } catch (e) {
-        recentlyErased.delete(sessionId);
+        noteErasureEnded(sessionId, false);
         throw e;
       }
       let releaseErr;
@@ -1454,13 +1486,13 @@ module.exports = {
           deleted[t] = r.rowCount;
         }
         await client.query('COMMIT');
-        noteErasureDone(sessionId);
+        noteErasureEnded(sessionId, true);
         return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
       } catch (e) {
         // A failed ROLLBACK means the connection is broken: discard it
         // rather than hand it back to the pool.
         await client.query('ROLLBACK').catch((rbErr) => { releaseErr = rbErr; });
-        recentlyErased.delete(sessionId);
+        noteErasureEnded(sessionId, false);
         throw e;
       } finally {
         client.release(releaseErr);
@@ -1483,10 +1515,10 @@ module.exports = {
     try {
       txn();
     } catch (e) {
-      recentlyErased.delete(sessionId);
+      noteErasureEnded(sessionId, false);
       throw e;
     }
-    noteErasureDone(sessionId);
+    noteErasureEnded(sessionId, true);
     return { deleted, sessionExisted: (deleted.sessions || 0) > 0 };
   },
 
