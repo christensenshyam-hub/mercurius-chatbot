@@ -265,7 +265,9 @@ by the "Fraunces Fallback" faces at the top of `styles.css` so they mostly
 wrap on the same lines and the page doesn't jump when Fraunces swaps in. The
 sizes were measured against this site's headings
 (`docs/marketing-design.md` 3.1). Size headline boxes in `em`, not `ch`: a
-`ch` changes width with the font.
+`ch` changes width with the font. Body text does the same until Inter
+arrives: it shows in Arial, resized by the "Inter Fallback" faces to Inter's
+width, so paragraphs keep their line count when Inter swaps in.
 
 ## Accessibility
 
