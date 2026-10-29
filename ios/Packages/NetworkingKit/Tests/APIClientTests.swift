@@ -60,6 +60,15 @@ struct APIClientValidationTests {
         }
     }
 
+    @Test("A 401/403 the app can't explain never tells the student to sign in: there are no accounts")
+    func unauthorizedCopyNamesNoSignIn() {
+        let copy = APIError.unauthorized.userFacingMessage
+        #expect(copy == "The server didn't allow that request.")
+        #expect(!copy.lowercased().contains("sign"))
+        #expect(!copy.lowercased().contains("try again"), "no Retry is offered for it")
+        #expect(!APIError.unauthorized.isRetryable)
+    }
+
     @Test("401 and 403 with the server's error envelope map to unauthorized")
     func authErrors() {
         for code in [401, 403] {

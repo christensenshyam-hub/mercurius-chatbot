@@ -57,6 +57,8 @@ struct UnitDefenseGradingTests {
         #expect(UnitDefenseGrading.gradingError(for: .quotaExceeded(message: "Tomorrow.", retryAfter: nil))
                 == .refused(message: "Tomorrow.", isRetryable: false))
         #expect(UnitDefenseGrading.gradingError(for: .crisisSupport(message: "988")) == .crisis)
+        #expect(UnitDefenseGrading.gradingError(for: .unauthorized)
+                == .refused(message: "The server didn't allow that request.", isRetryable: false))
     }
 
     @Test("A paused or capped server never locks the answer; the network's allowance doesn't either (AUD-30)")

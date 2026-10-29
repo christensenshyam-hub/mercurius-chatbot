@@ -119,6 +119,15 @@ struct QuizLoadTests {
         }
     }
 
+    @Test("Unauthorized reads as the server's refusal, never a sign-in")
+    func unauthorizedCopy() async {
+        let tools = FakeToolsClient()
+        tools.quizOutcome = .failure(APIError.unauthorized)
+        let vm = makeQuiz(tools: tools)
+        await vm.load()
+        #expect(vm.phase == .failed(reason: "The server didn't allow that request.", isRetryable: false))
+    }
+
     @Test("APIError propagates retryability")
     func apiErrorRetryable() async {
         let tools = FakeToolsClient()

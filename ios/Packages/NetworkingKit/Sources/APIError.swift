@@ -1,7 +1,7 @@
 import Foundation
 
 /// Structured error space for every API call. Features should switch on
-/// these cases to decide UI behavior (show retry, show auth wall, show
+/// these cases to decide UI behavior (show retry, show support, show
 /// generic error, etc.) rather than inspecting messages.
 public enum APIError: Error, Equatable, Sendable {
     /// The device has no usable network connection or the request could
@@ -31,7 +31,10 @@ public enum APIError: Error, Equatable, Sendable {
     /// technical.
     case invalidRequest(reason: String?)
 
-    /// The server requires authentication or authorization (401 / 403).
+    /// A 401 / 403 carrying the server's JSON error envelope. The app has
+    /// no accounts and calls no route that answers one (only the admin
+    /// routes do), so this is a refusal the app can't explain, never a
+    /// sign-in problem.
     case unauthorized
 
     /// The server rate-limited this client (429, per-minute limiter). The
@@ -122,7 +125,8 @@ public enum APIError: Error, Equatable, Sendable {
         case .invalidRequest:
             return "Something about that request wasn't right. Try again."
         case .unauthorized:
-            return "You're not signed in to do that."
+            // Not "you're not signed in": there is no sign-in.
+            return "The server didn't allow that request."
         case .rateLimited:
             // Not "you're moving fast": most per-minute limits count a
             // whole network (lib/rateLimiter's ipLimiter), so in a class
