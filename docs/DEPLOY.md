@@ -180,6 +180,14 @@ toward the dollar caps (`SESSION_DAILY_USD`, `IP_DAILY_USD`,
 `SESSION_DAILY_CHAT_TURNS`. The usage ledger's `answered` column (0/1)
 records which is which, so the counts survive a restart.
 
+A restart reads the rest of the day back from the same ledger too: a
+session's dollars and photo uploads, and a network's dollars and photo
+uploads (count and bytes). A stored photo is a `usage` row of kind
+`image`, $0, with its size in `usage.bytes`. So a redeploy no longer
+clears a network that has reached `IP_DAILY_USD`, `IP_DAILY_IMAGES` or
+`IP_DAILY_IMAGE_BYTES`: raise the variable instead. A network's new-session and content-report
+counts are not on the ledger and still start again at a restart.
+
 | Var | Scope | Default |
 |---|---|---|
 | `SESSION_DAILY_LESSON_TURNS` | curriculum (lesson) turns per session | `40` |
