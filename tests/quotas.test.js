@@ -238,6 +238,21 @@ describe('session daily turn caps', () => {
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'session_usd');
   });
+
+  test('check({ counted: false }) (a call that uses no turn) skips only the turn allowance', () => {
+    quotas.configure({ SESSION_DAILY_LESSON_TURNS: 1, SESSION_DAILY_CHAT_TURNS: 1, SESSION_DAILY_USD: 0.1 });
+    quotas.record({ sessionId: SID, ip: IP, kind: 'lesson', usd: 0.01 });
+    quotas.record({ sessionId: SID, ip: IP, kind: 'chat', usd: 0.01 });
+    for (const kind of ['lesson', 'chat', 'helper']) {
+      assert.notEqual(quotas.check({ sessionId: SID, ip: IP, kind }).ok, true, kind);
+      assert.deepEqual(quotas.check({ sessionId: SID, ip: IP, kind, counted: false }), { ok: true }, kind);
+    }
+    // The dollars and the in-flight caps still refuse it.
+    quotas.record({ sessionId: SID, ip: IP, kind: 'chat', usd: 0.1, counted: false });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat', counted: false }).reason, 'session_usd');
+    quotas.configure({ SESSION_DAILY_USD: 10, MAX_INFLIGHT: 0 });
+    assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'chat', counted: false }).reason, 'inflight_global');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1188,7 +1188,9 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
+// `followUp: true` for the route's second ask on the same tap (lib/claudeCall:
+// it uses no daily turn of its own).
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, followUp = false }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1209,6 +1211,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
+    followUp,
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -2307,6 +2310,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages) || homeworkGuard.safetyText(text)) return text;
         // Final run 2026-10-22: "is that good? can u make it better" met with a
         // new question instead of their own words. One more try, then keep it.
+        // The draft's call counted this turn; the retry is a follow-up.
         try {
           const retry = await claudeCall.createMessage({
             route: '/api/chat',
@@ -2314,6 +2318,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             sessionId,
             ip: req.ip,
             traceId: req.traceId,
+            followUp: true,
             params: {
               ...modelParams,
               system: systemBlocks.buildSystem({
@@ -2351,6 +2356,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? `a result worked out from the student's own numbers (${leak.value}), which is their answer or gives it away. Write the reply again with the same coaching move, without working their numbers through to any result: name the step, run a number THEY gave backwards, or use a worked example on new numbers.`
           : `the corrected value (${leak.value}) that the student still has to find. Write the reply again: point at the term where it breaks and ask what it is, without writing its value or the corrected line.`;
       const note = `## ANSWER GUARD (this reply only)\nYour draft reply gave away ${what}`;
+      // The student sent one message: the draft's call counted the turn, so
+      // the rewrite is a follow-up (it uses no second turn, and the turn
+      // allowance doesn't refuse it on their last one).
       try {
         const retry = await claudeCall.createMessage({
           route: '/api/chat',
@@ -2358,6 +2366,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           sessionId,
           ip: req.ip,
           traceId: req.traceId,
+          followUp: true,
           params: {
             ...modelParams,
             system: systemBlocks.buildSystem({
@@ -2793,9 +2802,12 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await refuseUnseenSession(req, res, sessionId)) return;
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
+    // One tap is one helper turn: only the first ask counts it.
+    let asked = 0;
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
+      followUp: asked++ > 0,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,

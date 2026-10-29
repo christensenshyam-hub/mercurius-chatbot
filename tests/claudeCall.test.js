@@ -419,4 +419,30 @@ describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
     assert.ok(Math.abs(spendCap.currentUsd() - refusedCost) < 1e-12, 'the refused call is on the global budget');
     assert.ok(Math.abs(quotas.snapshot().ips.usd - refusedCost) < 1e-9, 'and on the network dollar cap');
   });
+
+  // One message the student sent is one turn. The answer guard's rewrite
+  // (and the quiz asked again) is a second call for a turn the first call
+  // already counted: it used to count again, so a homework chat whose reply
+  // was rewritten spent two of the day's turns on one message.
+  test('a follow-up call is billed but uses no turn, and the turn allowance does not refuse it', async () => {
+    quotas.configure({ SESSION_DAILY_CHAT_TURNS: 1 });
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'f1', ip: IP, params: chatParams() });
+    assert.equal(quotas.check({ sessionId: 'f1', ip: IP, kind: 'chat' }).ok, false, 'the one turn is used');
+    // The rewrite of that same turn still runs: it is not a new turn.
+    await claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'f1', ip: IP, followUp: true, params: chatParams() });
+    await tick();
+    assert.equal(turns().chatTurns, 1, 'one message, one turn');
+    assert.deepEqual(db.rows.map((r) => r.answered), [true, false], 'the ledger agrees, so a restart hydrates one turn');
+    assert.ok(db.rows.every((r) => r.cost_usd > 0), 'both calls are billed');
+    assert.ok(Math.abs(sessionUsd() - (db.rows[0].cost_usd + db.rows[1].cost_usd)) < 1e-9, 'and both count toward the session dollar cap');
+  });
+
+  test('a follow-up call is still refused by the dollar caps', async () => {
+    quotas.configure({ SESSION_DAILY_USD: 0 });
+    await assert.rejects(
+      claudeCall.createMessage({ route: '/api/chat', kind: 'chat', sessionId: 'f2', ip: IP, followUp: true, params: chatParams() }),
+      (err) => err instanceof claudeCall.QuotaError && err.verdict.reason === 'session_usd',
+    );
+    assert.equal(db.rows.length, 0, 'refused before the call');
+  });
 });
