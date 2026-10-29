@@ -31,6 +31,13 @@ public enum APIError: Error, Equatable, Sendable {
     /// technical.
     case invalidRequest(reason: String?)
 
+    /// The server holds too little of this session's conversation for a
+    /// helper built from it: the 400 `insufficient_history` that
+    /// /api/quiz (and /api/report-card, /api/concept-map) answer with
+    /// fewer than 4 saved messages. The same request gets the same answer
+    /// until the student chats more, so no Retry.
+    case conversationTooShort
+
     /// A 401 / 403 carrying the server's JSON error envelope. The app has
     /// no accounts and calls no route that answers one (only the admin
     /// routes do), so this is a refusal the app can't explain, never a
@@ -124,6 +131,8 @@ public enum APIError: Error, Equatable, Sendable {
             return "That took too long. The server may be busy — try again."
         case .invalidRequest:
             return "Something about that request wasn't right. Try again."
+        case .conversationTooShort:
+            return "The conversation is too short for that yet. Chat a bit more and try again."
         case .unauthorized:
             // Not "you're not signed in": there is no sign-in.
             return "The server didn't allow that request."
@@ -159,8 +168,8 @@ public enum APIError: Error, Equatable, Sendable {
             return true
         case .quotaExceeded, .serviceUnavailable:
             return serverRefusal?.isRetryable ?? false
-        case .messageTooLong, .invalidRequest, .unauthorized, .decoding,
-             .invalidModelOutput, .cancelled, .crisisSupport:
+        case .messageTooLong, .invalidRequest, .conversationTooShort, .unauthorized,
+             .decoding, .invalidModelOutput, .cancelled, .crisisSupport:
             return false
         }
     }
