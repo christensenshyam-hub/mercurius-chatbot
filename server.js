@@ -1664,8 +1664,14 @@ function quotaErrorHandled(err, req, res) {
 // new-session quota BEFORE its row is created, so rotating ids can neither
 // sidestep the per-session limits nor fill the sessions table. Every model
 // route calls this; returns true when the request has been refused.
+//
+// The network's count is read back from the ledger first (once per network
+// per product day), and each session it creates leaves a $0 ledger row with
+// the hashed address and no session id: a deploy used to give every network
+// a fresh IP_DAILY_NEW_SESSIONS, and an erasure doesn't take the row away.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
+  await hydrateNetworkQuota(req.ip);
   // Count it in the same tick as the check (released below if this request
   // did not create the row): a burst of first contacts must not all pass the
   // check during the INSERT awaits before any of them is counted.
@@ -1686,6 +1692,7 @@ async function refuseUnseenSession(req, res, sessionId) {
   } finally {
     if (!created) quotas.forgetNewSession(req.ip);
   }
+  if (created) claudeCall.recordNetworkEvent('session', { route: 'new-session', ip: req.ip });
   return false;
 }
 
@@ -1849,8 +1856,8 @@ function dailyLedgerRead(what, read) {
   return readBack;
 }
 const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since) => {
-  const rows = await db.sessionUsageSince(sessionId, since);
-  if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
+  const [rows, reports] = await Promise.all([db.sessionUsageSince(sessionId, since), db.sessionReportsSince(sessionId, since)]);
+  if ((rows && rows.length) || reports > 0) quotas.hydrateSession(sessionId, rows || [], { reports });
 });
 const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since) => {
   quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since));
@@ -3718,7 +3725,9 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
     }
     // Past its daily allowance a session's (or a network's) reports are
     // acknowledged the same way and dropped, so one client cannot bury the
-    // review queue.
+    // review queue. Both counts are read back after a restart: the
+    // session's from the reports table, the network's from its ledger rows.
+    await readQuotasBack(req, sessionId);
     const reportVerdict = quotas.noteReport(sessionId, req.ip);
     if (!reportVerdict.ok) {
       metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
@@ -3737,6 +3746,7 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       context: context ?? null,
       createdAt,
     });
+    claudeCall.recordNetworkEvent('report', { route: '/api/report', ip: req.ip });
     // Log the signal (reason only) so reports surface in observability; the
     // full reported text lives in the DB for review. The Discord alert is the
     // only channel the founder actually sees between club meetings.

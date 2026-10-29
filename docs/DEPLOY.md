@@ -185,8 +185,12 @@ session's dollars and photo uploads, and a network's dollars and photo
 uploads (count and bytes). A stored photo is a `usage` row of kind
 `image`, $0, with its size in `usage.bytes`. So a redeploy no longer
 clears a network that has reached `IP_DAILY_USD`, `IP_DAILY_IMAGES` or
-`IP_DAILY_IMAGE_BYTES`: raise the variable instead. A network's new-session and content-report
-counts are not on the ledger and still start again at a restart.
+`IP_DAILY_IMAGE_BYTES`: raise the variable instead. A network's new sessions
+and content reports are read back too (`IP_DAILY_NEW_SESSIONS`,
+`IP_DAILY_REPORTS`): each is a $0 `usage` row of kind `session` or `report`
+that carries only the network's hashed address (no session id, so erasing a
+session leaves the network's count), and a session's own report count
+(`SESSION_DAILY_REPORTS`) comes from the `reports` table.
 
 | Var | Scope | Default |
 |---|---|---|

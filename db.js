@@ -217,7 +217,10 @@ async function initSchema() {
       );
 
       -- Per-call usage/cost ledger: one row per Anthropic call (or refusal),
-      -- and one per stored photo upload (usage.bytes below).
+      -- and one per stored photo upload (usage.bytes below). A network's new
+      -- session and each stored content report add a $0 row too (kind
+      -- 'session' / 'report', session_id NULL: only the network's hashed
+      -- address), so a restart can count the network's day.
       -- Feeds the spend cap, per-session and per-network throttles and the
       -- admin stats view.
       -- session_id is a plain column (no FK) so a row can outlive its session
@@ -1029,11 +1032,21 @@ module.exports = {
   //                                       is the turns used (rows with
   //                                       answered = 0 don't count, AUD-31);
   //                                       `usd` sums every row.
-  //   networkUsageSince(ipHash, tsMs)  → { usd, images, imageBytes } for one
+  //   networkUsageSince(ipHash, tsMs)  → { usd, images, imageBytes,
+  //                                       newSessions, reports } for one
   //                                       network (the ledger's salted hash
   //                                       of its address): every row's cost,
-  //                                       and its kind 'image' rows (stored
-  //                                       photo uploads) and their bytes.
+  //                                       its kind 'image' rows (stored
+  //                                       photo uploads) and their bytes,
+  //                                       and its kind 'session' (a session
+  //                                       it started) and 'report' (a stored
+  //                                       content report) rows. Those two
+  //                                       carry no session id (answered = 0,
+  //                                       so they are never a turn), so an
+  //                                       erasure leaves the network's count.
+  //   sessionReportsSince(sessionId, tsMs) → number: the session's stored
+  //                                       content reports (the reports table)
+  //                                       with created_at >= tsMs.
   //   A row's `bytes` is a stored photo's size (kind 'image' rows only).
   //   A row's `answered` (true/false) says whether the call uses a turn (it
   //   gave the student an answer, or a client stopped it before
@@ -1101,13 +1114,27 @@ module.exports = {
 
   async networkUsageSince(ipHash, tsMs) {
     // One network's day (the hashed address, never the address): `usd` is
-    // every call's cost, `images` / `imageBytes` its stored photo uploads.
-    if (typeof ipHash !== 'string' || ipHash === '') return { usd: 0, images: 0, imageBytes: 0 };
+    // every call's cost, `images` / `imageBytes` its stored photo uploads,
+    // `newSessions` / `reports` the sessions it started and its reports.
+    if (typeof ipHash !== 'string' || ipHash === '') return { usd: 0, images: 0, imageBytes: 0, newSessions: 0, reports: 0 };
     const r = await queryOne(
-      "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(CASE WHEN kind = 'image' THEN 1 ELSE 0 END), 0) AS images, COALESCE(SUM(CASE WHEN kind = 'image' THEN COALESCE(bytes, 0) ELSE 0 END), 0) AS image_bytes FROM usage WHERE ip_hash = ? AND ts >= ?",
+      "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(CASE WHEN kind = 'image' THEN 1 ELSE 0 END), 0) AS images, COALESCE(SUM(CASE WHEN kind = 'image' THEN COALESCE(bytes, 0) ELSE 0 END), 0) AS image_bytes,"
+        + " COALESCE(SUM(CASE WHEN kind = 'session' THEN 1 ELSE 0 END), 0) AS new_sessions, COALESCE(SUM(CASE WHEN kind = 'report' THEN 1 ELSE 0 END), 0) AS reports"
+        + ' FROM usage WHERE ip_hash = ? AND ts >= ?',
       [ipHash, num(tsMs)],
     );
-    return { usd: r ? num(r.usd) : 0, images: r ? num(r.images) : 0, imageBytes: r ? num(r.image_bytes) : 0 };
+    return {
+      usd: r ? num(r.usd) : 0,
+      images: r ? num(r.images) : 0,
+      imageBytes: r ? num(r.image_bytes) : 0,
+      newSessions: r ? num(r.new_sessions) : 0,
+      reports: r ? num(r.reports) : 0,
+    };
+  },
+
+  async sessionReportsSince(sessionId, tsMs) {
+    const r = await queryOne('SELECT COUNT(*) AS n FROM reports WHERE session_id = ? AND created_at >= ?', [sessionId, num(tsMs)]);
+    return r ? num(r.n) : 0;
   },
 
   async usageSummarySince(tsMs) {

@@ -17,6 +17,9 @@
  *   7. After a restart, a network's daily dollars, photo uploads and photo
  *      bytes come back from the ledger too (and a session's photo uploads),
  *      with the same retry after a failed read.
+ *   8. After a restart, a network's new sessions and content reports, and a
+ *      session's reports, come back too; erasing a session does not give
+ *      its network the sign-up back.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -102,7 +105,9 @@ function readUsage(dbPath) {
   const Database = require('better-sqlite3');
   const sqlite = new Database(dbPath, { readonly: true });
   try {
-    return sqlite.prepare('SELECT status, error_kind, route, kind, cost_usd, output_tokens FROM usage ORDER BY ts').all();
+    // Model calls only: a session's first request also leaves the network's
+    // $0 new-session row (kind 'session').
+    return sqlite.prepare("SELECT status, error_kind, route, kind, cost_usd, output_tokens FROM usage WHERE kind <> 'session' ORDER BY ts").all();
   } finally {
     sqlite.close();
   }
@@ -548,6 +553,132 @@ describe("a network's daily allowances survive a restart", () => {
       assert.equal(blip, '201');
       // The next one reads the ledger again and finds the two from before.
       assert.equal(await upload(second.base, newSession()), '429 ip');
+    } finally {
+      await second.stop();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("a network's new sessions and content reports survive a restart", () => {
+  // IP_DAILY_NEW_SESSIONS, IP_DAILY_REPORTS and SESSION_DAILY_REPORTS were
+  // counted only in memory, so every deploy gave each school network a fresh
+  // day of sign-ups and reports, and each session a fresh day of reports.
+  // Each test has its own database file, kept across its two boots; every
+  // request comes from 127.0.0.1.
+  const procs = [];
+  const files = [];
+  after(() => {
+    for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
+    for (const f of files) {
+      for (const suffix of ['', '-wal', '-shm']) {
+        try { fs.rmSync(f + suffix, { force: true }); } catch { /* ignore */ }
+      }
+    }
+  });
+
+  function restartable(env) {
+    const dbPath = path.join(os.tmpdir(), `merc-quotas-signups-${crypto.randomBytes(4).toString('hex')}.db`);
+    files.push(dbPath);
+    const boot = async () => {
+      const { proc, ready } = spawnServer({ SQLITE_PATH: dbPath, MOCK_STREAM_DELAY_MS: '1', ...env });
+      procs.push(proc);
+      const { base } = await ready;
+      const stop = () => new Promise((resolve) => {
+        if (proc.exitCode !== null) return resolve();
+        proc.once('exit', () => resolve());
+        proc.kill('SIGKILL');
+      });
+      return { base, stop };
+    };
+    const ledger = (sql) => {
+      const Database = require('better-sqlite3');
+      const sqlite = new Database(dbPath, { readonly: true });
+      try { return sqlite.prepare(sql).all(); } finally { sqlite.close(); }
+    };
+    return { boot, ledger };
+  }
+
+  const post = async (base, route, body) => {
+    const res = await fetch(`${base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  // A session is started by any route that may introduce one; /api/mode is the cheapest.
+  async function start(base, sessionId) {
+    const r = await post(base, '/api/mode', { sessionId, mode: 'socratic' });
+    return r.status === 429 ? `429 ${r.json && r.json.scope}` : String(r.status);
+  }
+  // A stored report answers with its id; one past an allowance is dropped (no id).
+  async function report(base, sessionId) {
+    const r = await post(base, '/api/report', { sessionId, content: 'A reply to report.', reason: 'other' });
+    assert.equal(r.status, 200);
+    return Number.isInteger(r.json && r.json.id) ? 'stored' : 'dropped';
+  }
+  const markers = (r, kind) => r.ledger(`SELECT session_id, ip_hash, cost_usd, answered FROM usage WHERE kind = '${kind}'`);
+
+  test("the network's new sessions, even after one of them is erased", async () => {
+    const r = restartable({ IP_DAILY_NEW_SESSIONS: '2' });
+    const first = await r.boot();
+    try {
+      const a = newSession();
+      assert.deepEqual([await start(first.base, a), await start(first.base, newSession()), await start(first.base, newSession())], ['200', '200', '429 ip']);
+      // The student erases their data; the network's sign-up stays counted.
+      assert.equal((await fetch(`${first.base}/api/session/${a}`, { method: 'DELETE' })).status, 200);
+      await waitFor(() => markers(r, 'session'), (rows) => rows.length >= 2);
+    } finally {
+      await first.stop();
+    }
+    // The ledger rows: the network's, $0, never a turn, no session id.
+    const rows = markers(r, 'session');
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((row) => row.session_id === null && row.cost_usd === 0 && row.answered === 0), JSON.stringify(rows));
+    assert.ok(rows.every((row) => /^[0-9a-f]{16}$/.test(row.ip_hash)), 'hashed, never the address');
+
+    const second = await r.boot();
+    try {
+      // Before: '200' (a fresh day of sign-ups for the network).
+      assert.equal(await start(second.base, newSession()), '429 ip');
+    } finally {
+      await second.stop();
+    }
+  });
+
+  test("the network's reports, and a session's reports", async () => {
+    const byNetwork = restartable({ IP_DAILY_REPORTS: '2' });
+    const bySession = restartable({ SESSION_DAILY_REPORTS: '1' });
+    const students = [newSession(), newSession(), newSession()];
+    const student = newSession();
+
+    let first = await byNetwork.boot();
+    try {
+      for (const s of students) assert.equal(await start(first.base, s), '200');
+      assert.deepEqual([await report(first.base, students[0]), await report(first.base, students[1]), await report(first.base, students[2])], ['stored', 'stored', 'dropped']);
+      await waitFor(() => markers(byNetwork, 'report'), (rows) => rows.length >= 2);
+    } finally {
+      await first.stop();
+    }
+    first = await bySession.boot();
+    try {
+      assert.equal(await start(first.base, student), '200');
+      assert.deepEqual([await report(first.base, student), await report(first.base, student)], ['stored', 'dropped']);
+    } finally {
+      await first.stop();
+    }
+    const rows = markers(byNetwork, 'report');
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((row) => row.session_id === null && row.cost_usd === 0 && /^[0-9a-f]{16}$/.test(row.ip_hash)), JSON.stringify(rows));
+
+    let second = await byNetwork.boot();
+    try {
+      // Before: 'stored' (a fresh day of reports for the network).
+      assert.equal(await report(second.base, students[2]), 'dropped');
+    } finally {
+      await second.stop();
+    }
+    second = await bySession.boot();
+    try {
+      // Before: 'stored' (a fresh day for the session); read from the reports table.
+      assert.equal(await report(second.base, student), 'dropped');
     } finally {
       await second.stop();
     }

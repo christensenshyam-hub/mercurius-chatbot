@@ -639,6 +639,19 @@ describe('hydrateSession()', () => {
     quotas.hydrateSession(SID, [{ kind: 'chat', count: 1, usd: 5 }]);
     assert.equal(quotas.snapshot().ips.tracked, 0);
   });
+
+  test("seeds the session's report count (from the reports table) and only raises it", () => {
+    quotas.configure({ SESSION_DAILY_REPORTS: 2 });
+    assert.equal(quotas.hydrateSession(SID, [], { reports: '2' }), true);
+    assert.deepEqual(quotas.noteReport(SID, IP), { ok: false, scope: 'session' });
+
+    quotas.configure({ SESSION_DAILY_REPORTS: 3 });
+    assert.equal(quotas.noteReport('sess_b', IP).ok, true);
+    assert.equal(quotas.noteReport('sess_b', IP).ok, true);
+    assert.equal(quotas.hydrateSession('sess_b', [], { reports: 1 }), true);
+    assert.equal(quotas.noteReport('sess_b', IP).ok, true, 'memory had 2, the table 1: the third is allowed');
+    assert.deepEqual(quotas.noteReport('sess_b', IP), { ok: false, scope: 'session' });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -692,6 +705,23 @@ describe('hydrateIp()', () => {
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'image' }).ok, true);
     quotas.configure({ IP_DAILY_IMAGE_BYTES: 500 });
     assert.equal(quotas.check({ sessionId: SID, ip: IP, kind: 'image' }).reason, 'ip_images', 'the ledger had more bytes');
+  });
+
+  test("seeds the network's new sessions and reports, so those caps hold after a restart too", () => {
+    quotas.configure({ IP_DAILY_NEW_SESSIONS: 2, IP_DAILY_REPORTS: 3 });
+    assert.equal(quotas.hydrateIp(IP, { usd: 0, images: 0, imageBytes: 0, newSessions: '2', reports: 3 }), true);
+    assert.equal(quotas.newSessionAllowed(IP).reason, 'new_sessions');
+    assert.equal(quotas.noteNewSession(IP).ok, false);
+    assert.deepEqual(quotas.noteReport('fresh', IP), { ok: false, scope: 'ip' });
+
+    // Only raises: memory already past the ledger keeps its count.
+    assert.equal(quotas.noteNewSession('2.2.2.2').ok, true);
+    assert.equal(quotas.noteNewSession('2.2.2.2').ok, true);
+    assert.equal(quotas.hydrateIp('2.2.2.2', { newSessions: 1, reports: 0 }), true);
+    assert.equal(quotas.noteNewSession('2.2.2.2').ok, false);
+    // An older result without the two fields counts them as 0.
+    assert.equal(quotas.hydrateIp('3.3.3.3', { usd: 0, images: 0, imageBytes: 0 }), true);
+    assert.equal(quotas.noteNewSession('3.3.3.3').ok, true);
   });
 
   test('a missing result (failed query) or no address is skipped and keeps the slot', () => {
