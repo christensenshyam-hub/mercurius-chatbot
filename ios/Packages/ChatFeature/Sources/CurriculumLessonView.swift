@@ -632,6 +632,7 @@ public struct CurriculumLessonView: View {
     /// Resume `resumeConversationId` when it's still there, otherwise begin a
     /// fresh curriculum conversation. Nil when nothing could start (no chat
     /// store to keep it in).
+    @MainActor
     static func open(
         _ model: ChatViewModel,
         lessonId: String,
