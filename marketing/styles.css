@@ -938,6 +938,16 @@ strong { color: var(--ink); font-weight: 600; }
 .page-hero .lede + .lede { margin-top: var(--space-4); }
 /* The first band after a page hero shares its navy, so it needs less air. */
 .page-hero + .section:not(.section-soft):not(.section-band) { padding-top: var(--space-5); }
+.page-hero .cta-row { margin-top: var(--space-6); }
+
+/* 404: only a hero, so keep the footer at the bottom of a tall window. */
+.page-404 {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.page-404 main { flex: 1 0 auto; }
 
 .page-meta {
   margin: var(--space-5) 0 0;
@@ -1180,6 +1190,16 @@ strong { color: var(--ink); font-weight: 600; }
   border-radius: var(--radius-lg);
 }
 .mode-panel[hidden] { display: none; }
+/* The shown panel is the Tab stop after the tabs (WAI-ARIA tabs); draw its
+   focus ring on the card's edge instead of a square inside the padding.
+   Browsers without :has() keep the default ring on the panel itself. */
+@supports selector(:has(*)) {
+  .mode-panels:has(> .mode-panel:focus-visible) {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+  }
+  .mode-panel:focus-visible { outline: none; }
+}
 .mode-panel h2 {
   margin-bottom: var(--space-3);
   font-size: var(--fs-h3);

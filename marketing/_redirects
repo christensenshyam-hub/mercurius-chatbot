@@ -42,3 +42,16 @@
 # support@ address); swap the target for the form URL when it is created.
 /feedback   /support.html   302
 /Feedback   /support.html   302
+
+# README.md is this folder's developer docs, not a page, but everything in
+# the publish folder is served. Answer it with the 404 page and a 404 status.
+# The "!" forces the rule over the file that exists at that path (without it
+# Netlify serves the file and never applies the rule). Rule paths match
+# case-sensitively but Netlify finds files whatever their case (/readme.md
+# and /README.MD both served README.md on 2026-10-29), so list the
+# capitalizations people type.
+/README.md   /404.html   404!
+/readme.md   /404.html   404!
+/Readme.md   /404.html   404!
+/ReadMe.md   /404.html   404!
+/README.MD   /404.html   404!
