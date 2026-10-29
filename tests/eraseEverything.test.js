@@ -30,10 +30,10 @@
  * here on SQLite. scripts/pg-smoke.mjs runs the same erasure on Postgres in
  * CI.
  *
- * The second block erases a session while one of its photos is still being
- * written (a preload makes the write slow, as a Postgres write of a large
- * photo is). The images table has no foreign key, so that photo used to stay
- * behind under the erased id.
+ * The second and third blocks erase a session while one of its photos, or
+ * one of its reports, is still being written (a preload makes the write
+ * slow, as a Postgres write can be). Neither table has a foreign key, so
+ * that photo or report used to stay behind under the erased id.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -275,5 +275,31 @@ describe('a photo still being stored when its session is erased is not kept', ()
     const uploaded = await upload(srv.base, student);
     assert.equal(uploaded.status, 201, JSON.stringify(uploaded.json));
     assert.equal((await fetch(`${srv.base}/api/images/${uploaded.json.id}`)).status, 200);
+  });
+});
+
+describe('a report still being saved when its session is erased is not kept', () => {
+  // Reports are kept 180 days and the reports table has no foreign key, so
+  // a report saved a moment after its session's erasure stayed behind under
+  // the erased id. The preload makes the save wait 300 ms.
+  const SLOW_REPORT = path.join(__dirname, 'fixtures', 'slowReportSave.js');
+  const srv = bootServer({ NODE_OPTIONS: `--require ${JSON.stringify(SLOW_REPORT)}`, SLOW_REPORT_SAVE_MS: '300' });
+  before(() => srv.ready);
+  after(() => srv.cleanup());
+
+  test('the report that raced the erasure leaves nothing behind', async () => {
+    const student = newSid('report');
+    assert.equal((await post(srv.base, '/api/mode', { sessionId: student, mode: 'socratic' })).status, 200);
+    const reporting = post(srv.base, '/api/report', { sessionId: student, content: 'A reply to report.', userMessage: 'What I asked.', reason: 'harmful' });
+    await sleep(100); // the report is past its checks and waiting to be saved
+    const erased = await fetch(`${srv.base}/api/session/${student}`, { method: 'DELETE' });
+    assert.equal(erased.status, 200);
+    const reported = await reporting;
+    await sleep(100);
+    const rows = rowsBySessionTable(srv.dbPath, student);
+    assert.equal(rows.reports, 0, `the report was stored after the erasure: ${JSON.stringify(rows)}`);
+    assert.deepEqual(cellsContaining(srv.dbPath, student), []);
+    // Acknowledged and dropped, like a report for a session the server has never seen.
+    assert.deepEqual([reported.status, reported.json], [200, { ok: true }]);
   });
 });

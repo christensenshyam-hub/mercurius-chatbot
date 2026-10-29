@@ -106,6 +106,19 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.ok(await db.getImage(theirs.id));
   });
 
+  test('a report whose request began before the erasure is not kept', async () => {
+    // Reports have no foreign key either, and are kept 180 days.
+    const s = sid();
+    await db.getOrCreateSession(s);
+    const began = Date.now() - 50;
+    await db.deleteSession(s);
+    assert.deepEqual(await db.saveReport({ sessionId: s, content: 'raced', createdAt: began }), { id: null });
+    const left = await db.queryRaw('SELECT COUNT(*) AS n FROM reports WHERE session_id = ?', [s]);
+    assert.equal(left[0].n, 0, 'no report under the erased id');
+    const theirs = await db.saveReport({ sessionId: sid(), content: 'kept', createdAt: began });
+    assert.ok(Number.isInteger(theirs.id), 'another session is never affected');
+  });
+
   test('a usage row or lesson event settling after the erasure no longer carries the erased id', async () => {
     const s = sid();
     const other = sid();

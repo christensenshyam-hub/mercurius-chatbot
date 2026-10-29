@@ -3715,6 +3715,10 @@ app.get('/api/images/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
   const { sessionId, content, reason, userMessage, context } = req.validated;
+  // Taken before the session is looked up, for the same reason as a photo's
+  // (POST /api/images): no report is kept for a session erased after the
+  // request began.
+  const createdAt = Date.now();
   try {
     // A session this server has never seen has no reply to report; acknowledge
     // and drop. Not refuseUnseenSession — that creates the row and spends the
@@ -3737,7 +3741,6 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       }
       return res.json({ ok: true });
     }
-    const createdAt = Date.now();
     const { id } = await db.saveReport({
       sessionId,
       content,
@@ -3746,6 +3749,12 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       context: context ?? null,
       createdAt,
     });
+    if (id == null) {
+      // The student erased this session while the report was on its way:
+      // acknowledged and dropped, like a report for an unknown session.
+      logger.forRequest(req).info({ reason: reason || null }, 'content report dropped: its session was erased meanwhile');
+      return res.json({ ok: true });
+    }
     claudeCall.recordNetworkEvent('report', { route: '/api/report', ip: req.ip });
     // Log the signal (reason only) so reports surface in observability; the
     // full reported text lives in the DB for review. The Discord alert is the

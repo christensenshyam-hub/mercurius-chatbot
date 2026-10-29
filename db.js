@@ -584,9 +584,10 @@ function streakDay(now = new Date()) {
 // A model call still in flight when its session is erased settles its usage
 // row and lesson event afterwards, and neither table has a foreign key to
 // refuse the write: for a while after an erasure those rows drop the id.
-// The images table has no foreign key either, so a photo still being written
-// when its session is erased (a multi-megabyte write takes a while) would
-// outlive the erasure under the erased id: erasedSince() catches that one.
+// The images and reports tables have no foreign key either, so a photo or a
+// report still being written when its session is erased (a multi-megabyte
+// write takes a while) would outlive the erasure under the erased id:
+// erasedSince() catches those.
 const ERASED_TTL_MS = 10 * 60_000;
 const recentlyErased = new Map(); // session id → { at: started, doneAt: committed (null while running) }
 function noteErased(sessionId) {
@@ -759,7 +760,12 @@ module.exports = {
   //       → { id }. `content` is the reported AI text, `userMessage` the
   //         student's preceding turn (optional), `context` an object stored as
   //         a JSON string (a string is stored verbatim; null/undefined → NULL).
-  //         `createdAt` defaults to now. Old 4-key callers keep working.
+  //         `createdAt` defaults to now; the route passes when its request
+  //         began (before it looked the session up). Old 4-key callers keep
+  //         working. → { id: null } when the session was erased while the
+  //         report was under way: like images, the table has no foreign key,
+  //         so the report is not kept (or removed again if the erasure
+  //         landed during the write).
   //   listReports({ limit = 50, since = null, unresolvedOnly = false })
   //       → newest first (created_at DESC, id DESC), as
   //         [{ id, session_id, content, reason, user_message, context,
@@ -773,11 +779,17 @@ module.exports = {
   async saveReport({ sessionId, content, reason, userMessage, context, createdAt } = {}) {
     let contextJson = null;
     if (context != null) contextJson = typeof context === 'string' ? context : JSON.stringify(context);
-    const ts = Number(createdAt);
+    const tsRaw = Number(createdAt);
+    const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.round(tsRaw) : Date.now();
+    if (erasedSince(sessionId, ts)) return { id: null };
     const id = await insertReturningId(
       'INSERT INTO reports (session_id, content, reason, user_message, context, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [sessionId, content, reason ?? null, userMessage ?? null, contextJson, Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now()],
+      [sessionId, content, reason ?? null, userMessage ?? null, contextJson, ts],
     );
+    if (erasedSince(sessionId, ts)) {
+      await execCount('DELETE FROM reports WHERE id = ?', [id]);
+      return { id: null };
+    }
     return { id };
   },
 
