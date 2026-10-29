@@ -14,7 +14,8 @@ marketing/
 ├── features.html, modes.html, how-it-works.html, audience.html, trust.html
 ├── privacy.html, terms.html, support.html   # linked from the app and App Store
 ├── 404.html            # Netlify serves it, with a 404 status, for any unknown path
-├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites
+├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites;
+│                       #   answers /README.md with the 404 page
 ├── robots.txt, sitemap.xml
 ├── styles.css          # Single stylesheet; design tokens at top
 ├── script.js           # Mode-pill tabs, phone menu niceties, dynamic year
@@ -30,13 +31,17 @@ marketing/
 │   └── mercurius-logo.png/.webp, og-card.png, favicon-48.png, apple-touch-icon.png,
 │       mercurius-icon.png   # Old brand: no page uses them; kept because links from outside
 │                            #   the site may (old link previews, docs/certificate/README.md)
-└── README.md
+└── README.md           # These docs (not served: see below)
 ```
 
 Everything in this folder is published, so internal material lives elsewhere:
 the design system is `docs/marketing-design.md`, the Reels manifests are
 `docs/marketing-reels/`, and the scripts that write the generated parts of
-the pages are in `scripts/` (below).
+the pages are in `scripts/` (below). This README is the one exception: it
+sits here so it shows when you open the folder, and forced `404!` rules at
+the end of `_redirects` answer `/README.md` (and its common capitalizations)
+with the 404 page instead of the file. Add a rule there for any other
+non-page file you put in this folder.
 
 Canonical URLs are the extensionless form (`https://trymercurius.com/privacy`).
 Netlify rewrites the `.html` links in the pages to that form on deploy, and
@@ -314,7 +319,7 @@ brand stays premium. Add them only with real content:
 
 - ❌ Fake testimonial blocks (no real students yet)
 - ❌ Logos of institutions (no partnerships yet)
-- ❌ Pricing table (free in beta)
+- ❌ Pricing table (the app is free)
 - ❌ "Trusted by N students" counter (don't fabricate stats)
 - ❌ Heavy animation libraries
 - ❌ Cookie banners (no third-party cookies set)
