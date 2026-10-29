@@ -212,15 +212,19 @@ What students see in 2.3.0 (16), word for word (`APIError.swift`,
 | "The server hit an error. Try again in a moment." | Server error (5xx) | Railway logs |
 | "Something went wrong. Try again." | Anything else | Try again; if many phones at once, the rule |
 
-The server writes these and the app shows them as sent (wording as of main
-720dbac; the server batch may reword them):
+The server writes these and the app shows them as sent (wording as of
+night/server-4). For a daily limit, 2.3.0 replaces the sentence that says
+"tomorrow" with a local time ("Try again after 11:00 PM.", or for the
+network's limits "Switch to cellular data and try again, or come back
+after 11:00 PM."):
 
 | On the phone | What happened | Do |
 |---|---|---|
 | "Mercurius is helping a lot of students right now. Try again in a minute." | Too many replies at once, for one network address or the whole server (40 and 80 by default) | Cellular helps if it is the address; then Railway logs |
-| "This network has reached today's usage limit. Mercurius will be ready again tomorrow." | `IP_DAILY_USD` for the school address | Cellular; the section 6 rail rule |
-| "Too many new sessions from this network today." | `IP_DAILY_NEW_SESSIONS` | Cellular |
-| "Daily usage limit reached — please try again tomorrow." | `DAILY_BUDGET_USD`, for everyone | Cellular won't help; section 6 rail rule |
+| "This network has reached today's usage limit. Switch to cellular data, or try again tomorrow." | `IP_DAILY_USD` for the school address | Cellular; the section 6 rail rule |
+| "This network has reached today's limit for new devices. Switch to cellular data, or try again tomorrow." | `IP_DAILY_NEW_SESSIONS`: a phone (or browser) the server has not seen before, on the school address | Cellular, once: after that the phone is known and works on the Wi-Fi |
+| "You've used today's lesson turns. Lessons come back tomorrow." (or "…chat turns. Chat comes back tomorrow.") | That student's `SESSION_DAILY_LESSON_TURNS` / `SESSION_DAILY_CHAT_TURNS`, two separate allowances | Try the other (chat or lessons): it usually still works; cellular won't help |
+| "Mercurius has reached today's usage limit and is resting. Please try again tomorrow." | `DAILY_BUDGET_USD`, for everyone | Cellular won't help; section 6 rail rule |
 | "Mercurius is temporarily paused — please try again soon." | The kill switch is on | Section 9: turn it off |
 | "Mercurius is restarting — try again in a few seconds." | A deploy is draining | Wait a few seconds |
 

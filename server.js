@@ -1620,12 +1620,14 @@ function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
     // Not retryable (AUD-30): the budget opens again at the product-day
     // midnight, which `retryAfterSec` (and the Retry-After header) count
     // down to, so "tomorrow" is true.
+    // Every client shows `message` (the SSE frame's `error` is `message`),
+    // so it says whose limit this is: Mercurius's, for every student, not
+    // the student's own ("You've reached today's usage limit.").
     return sendRefusal(req, res, {
       status: 503,
       error: 'spend_cap',
       scope: 'global',
-      reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
-      message: "Daily usage limit reached — please try again tomorrow.",
+      message: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
       retryAfterSec: spendCap.secondsUntilReset(),
     });
   }
