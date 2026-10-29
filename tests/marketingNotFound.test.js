@@ -3,8 +3,8 @@
 // trymercurius.com's own "page not found". Netlify serves marketing/404.html,
 // with a 404 status, for any path that matches no file or rule, at that path
 // (/a/b/c included), so a relative link or asset in it would break there.
-// marketing/_redirects also answers the folder's README with that page: the
-// README is developer docs, but everything in marketing/ is published.
+// Everything in marketing/ is published, so it must hold only the site's own
+// files: the developer docs are docs/marketing-site.md.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -65,16 +65,23 @@ test('_redirects: every rule is "<from> <to> <status>" and every local target ex
   }
 });
 
-test('_redirects: the README (any common capitalization) gets the 404 page, forced over the file', () => {
-  const docs = fs.readdirSync(SITE).filter((f) => /\.md$/i.test(f));
-  assert.ok(docs.includes('README.md'), 'marketing/README.md is the folder\'s developer docs');
-  for (const doc of docs) {
-    const base = doc.replace(/\.md$/i, '');
-    const forms = new Set([doc, doc.toLowerCase(), `${base[0].toUpperCase()}${base.slice(1).toLowerCase()}.md`, doc.toUpperCase()]);
-    for (const name of forms) {
-      const rule = rules.find((r) => r.f[0] === `/${name}`);
-      assert.ok(rule, `no rule for /${name}: Netlify would serve marketing/${doc} there`);
-      assert.deepEqual(rule.f.slice(1), ['/404.html', '404!'], `line ${rule.line}: "${rule.text}"`);
-    }
-  }
+// Netlify publishes every file in marketing/ and finds a file whatever the
+// case of the URL (/rEaDmE.md served the old marketing/README.md), while
+// _redirects rules match the case exactly. So nothing private can be hidden
+// there by a rule: it has to stay out of the folder.
+const SITE_FILE = /\.(?:html|css|js|svg|png|jpg|webp|mp4)$/;
+const SITE_NAMES = new Set(['_redirects', 'robots.txt', 'sitemap.xml']);
+
+function filesIn(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    return e.isDirectory() ? filesIn(p) : [path.relative(SITE, p)];
+  });
+}
+
+test('marketing/ holds only the site\'s own files (no docs, notes or data: Netlify publishes them all)', () => {
+  const files = filesIn(SITE).filter((f) => path.basename(f) !== '.DS_Store');
+  assert.ok(files.includes('index.html') && files.includes('404.html'));
+  const strays = files.filter((f) => !SITE_FILE.test(f) && !SITE_NAMES.has(f));
+  assert.deepEqual(strays, [], `would be public at trymercurius.com/<path>; developer docs go in docs/ (the site's are docs/marketing-site.md)`);
 });
