@@ -13,6 +13,7 @@ marketing/
 ├── ads.html            # "Watch" (/ads): every reel, grouped by category, with captions
 ├── features.html, modes.html, how-it-works.html, audience.html, trust.html
 ├── privacy.html, terms.html, support.html   # linked from the app and App Store
+├── 404.html            # Netlify serves it, with a 404 status, for any unknown path
 ├── _redirects          # /get, /beta, /feedback shortcuts + clean-URL rewrites
 ├── robots.txt, sitemap.xml
 ├── styles.css          # Single stylesheet; design tokens at top
@@ -182,9 +183,13 @@ script). Change them there, bump `CSS_V`/`JS_V`/`ADS_V` when a file changes,
 then:
 
 ```bash
-node scripts/build-site-chrome.mjs           # rewrite all ten pages
+node scripts/build-site-chrome.mjs           # rewrite all eleven pages
 node scripts/build-site-chrome.mjs --check   # fail if any page drifts
 ```
+
+`404.html` is shown at whatever path was mistyped (`/a/b/c` included), so
+it has no canonical URL or `og:url`, asks not to be indexed, and uses
+root-relative links only.
 
 ## Local preview
 
