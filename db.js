@@ -1424,7 +1424,17 @@ module.exports = {
     noteErased(sessionId);
 
     if (USE_PG) {
-      const client = await pool.connect();
+      // A checkout that fails (Postgres unreachable, or every connection
+      // busy past connectionTimeoutMillis) erased nothing. Drop the note too,
+      // as a rollback does: left "running", it would make the session's
+      // photos and reports count as erased for 10 minutes and drop them.
+      let client;
+      try {
+        client = await pool.connect();
+      } catch (e) {
+        recentlyErased.delete(sessionId);
+        throw e;
+      }
       let releaseErr;
       try {
         await client.query('BEGIN');

@@ -119,6 +119,44 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.ok(Number.isInteger(theirs.id), 'another session is never affected');
   });
 
+  test('an erasure that never reached Postgres does not mark the session erased', () => {
+    // Postgres driver, pointed at a port nobody listens on, so the erasure's
+    // pool checkout fails as it does when every connection is busy. Nothing
+    // was erased, so the session's next report and photo must go to the
+    // database (and fail here) rather than be dropped as "erased" for 10
+    // minutes (POST /api/report answers a dropped report with ok, so
+    // nobody would notice).
+    const resultPath = path.join(os.tmpdir(), `merc-erase-pgdown-${crypto.randomBytes(4).toString('hex')}.json`);
+    const script = `
+      const fs = require('node:fs');
+      const db = require('./db');
+      const outcome = (p) => p.then((v) => 'resolved ' + JSON.stringify(v), (e) => 'rejected ' + (e.code || e.message));
+      (async () => {
+        const s = 'pgdown_' + 'a'.repeat(25);
+        const erase = await outcome(db.deleteSession(s));
+        const report = await outcome(db.saveReport({ sessionId: s, content: 'x', createdAt: Date.now() }));
+        const photo = await outcome(db.saveImage({ id: 'pgdown', sessionId: s, contentType: 'image/png', sizeBytes: 1, data: Buffer.from([1]), createdAt: Date.now() }));
+        fs.writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ erase, report, photo }));
+        process.exit(0);
+      })().catch((e) => { console.error(e && e.stack || e); process.exit(1); });
+    `;
+    const env = { ...process.env, DATABASE_URL: 'postgres://merc:merc@localhost:1/merc', NODE_ENV: 'test' };
+    let r;
+    try {
+      const { execFileSync } = require('node:child_process');
+      execFileSync(process.execPath, ['-e', script], { env, cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+      r = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+    } catch (e) {
+      assert.fail(`child failed:\n${String(e.stderr || e.message)}`);
+    } finally {
+      try { fs.rmSync(resultPath, { force: true }); } catch { /* ignore */ }
+    }
+    assert.match(r.erase, /^rejected /, 'the erasure fails (no database)');
+    // Before: 'resolved {"id":null}' and 'resolved false', without a query.
+    assert.match(r.report, /^rejected /, `the report went to the database: ${r.report}`);
+    assert.match(r.photo, /^rejected /, `the photo went to the database: ${r.photo}`);
+  });
+
   test('a usage row or lesson event settling after the erasure no longer carries the erased id', async () => {
     const s = sid();
     const other = sid();
