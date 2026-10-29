@@ -44,7 +44,8 @@ public final class ChatViewModel {
     /// The server's copy, shown over the composer, when a photo turn came
     /// back unsent because today's photo uploads are used up
     /// (`returnPhotoTurnToComposer`). Stays until the next request, pick or
-    /// removal, or until the thread changes.
+    /// removal, or until the thread changes. Set, it also means the phase's
+    /// last move to idle wasn't a reply arriving.
     public private(set) var photoLimitNotice: String?
 
     /// Active teaching mode. Defaults to Socratic on first launch;
@@ -498,11 +499,13 @@ public final class ChatViewModel {
     /// its reset as a local time, shows over the field. The photo stays
     /// attached only for the network's allowance, where another network
     /// (cellular data) can send it now: Send is its retry, so the phase
-    /// offers none. The phase still says the request failed, so nothing
-    /// greets it as a reply (no "Merc replied." for VoiceOver, which hears
-    /// the copy instead, and no encouraging beat). False when the turn isn't
-    /// the thread's latest any more; the caller then marks it failed as
-    /// before.
+    /// offers none. The phase goes back to idle: the thread ends on Merc's
+    /// last finished reply again, so Explain more and the other controls
+    /// that wait for an idle chat stay. Views read `photoLimitNotice` to
+    /// know no reply came, so nothing greets it as one (VoiceOver hears the
+    /// copy, not "Merc replied.", and there's no encouraging beat). False
+    /// when the turn isn't the thread's latest any more; the caller then
+    /// marks it failed as before.
     private func returnPhotoTurnToComposer(assistantId: UUID, image: ChatImage, refusal: ServerRefusal) -> Bool {
         guard let replyIndex = messages.indices.last, messages[replyIndex].id == assistantId,
               replyIndex > 0, messages[replyIndex - 1].role == .user,
@@ -519,7 +522,7 @@ public final class ChatViewModel {
         let notice = refusal.studentMessage(clock: clock)
         photoLimitNotice = notice
         lastRequest = nil
-        phase = .failed(reason: notice, isRetryable: false)
+        phase = .idle
         return true
     }
 

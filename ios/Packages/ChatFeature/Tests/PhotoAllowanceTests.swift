@@ -152,7 +152,7 @@ struct PhotoAllowanceTests {
         #expect(model.messages.isEmpty, "no photo turn Merc never saw")
         #expect(model.pendingImage == nil, "photos are done for today on this device")
         #expect(plain(model.photoLimitNotice) == notice)
-        #expect(model.phase == .failed(reason: model.photoLimitNotice ?? "", isRetryable: false), "Send is the way on, not Retry")
+        #expect(model.phase == .idle, "Send is the way on, not Retry")
         #expect(client.receivedMessages.isEmpty, "the chat stream never opened")
         #expect(store.loadMessages(conversationId: try #require(model.conversationId)).isEmpty)
 
@@ -201,8 +201,41 @@ struct PhotoAllowanceTests {
             == ["Hi", "Hi! What are you working on?"])
         #expect(model.draft == "This one")
         // VoiceOver hears why, not "Merc replied." about the earlier reply.
-        #expect(plain(ChatAnnouncement.afterPhaseChange(from: .sending, to: model.phase, latest: model.messages.last))
-            == "Merc's reply didn't arrive. You've used today's photo uploads — you can still type your question. Photos come back after 7:00 PM.")
+        #expect(plain(ChatAnnouncement.afterPhaseChange(from: .sending, to: model.phase, latest: model.messages.last,
+                                                        photoLimitNotice: model.photoLimitNotice))
+            == "You've used today's photo uploads — you can still type your question. Photos come back after 7:00 PM.")
+    }
+
+    @Test("The chat is idle again, so Merc's last reply keeps Explain more, and nothing greets the bounce as a reply")
+    func idleAfterBounce() async throws {
+        let client = FakeChatClient()
+        client.outcome = .events([.complete(ChatResponse(reply: "Hi! What are you working on?", mode: "socratic"))])
+        let model = makeModel(client: client,
+                              uploader: RefusingUploader(APIError.quotaExceeded(message: photoUploadsCopy, retryAfter: 10_143, scope: "session")))
+        for text in ["Hi", "Question 3 of my worksheet"] {
+            model.draft = text
+            model.send()
+            try await settle(model)
+        }
+        #expect(MessageListView.offersExplainMore(phase: model.phase, messages: model.messages))
+
+        try await sendWithPhoto(model, text: "This one")
+
+        #expect(model.messages.count == 4, "back to the finished exchange")
+        #expect(model.phase == .idle)
+        #expect(MessageListView.offersExplainMore(phase: model.phase, messages: model.messages),
+                "Explain more is still offered on the reply it was offered on before")
+        #expect(model.photoLimitNotice != nil, "the notice still shows over the field")
+        #expect(!ChatView.earnsEncouragement(from: .sending, to: model.phase, messages: model.messages,
+                                             photoLimitNotice: model.photoLimitNotice),
+                "no encouraging beat: no reply came")
+        #expect(ChatView.earnsEncouragement(from: .sending, to: .idle, messages: model.messages, photoLimitNotice: nil),
+                "a reply landing here would earn one")
+
+        model.explainMore()
+        #expect(model.phase == .sending)
+        #expect(model.photoLimitNotice == nil)
+        try await settle(model)
     }
 
     @Test("Text typed while the photo uploaded is kept, after the question")
@@ -232,7 +265,7 @@ struct PhotoAllowanceTests {
         #expect(model.pendingImage != nil)
         #expect(plain(model.photoLimitNotice)?.hasPrefix("This network has reached today's image upload limit. Switch to ") == true)
         #expect(plain(model.photoLimitNotice)?.hasSuffix(" and try again, or come back after 7:00 PM.") == true)
-        #expect(model.phase == .failed(reason: model.photoLimitNotice ?? "", isRetryable: false))
+        #expect(model.phase == .idle)
 
         model.send()
         try await settle(model)
