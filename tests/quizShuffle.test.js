@@ -145,7 +145,9 @@ describe('quizShuffle: the order (AUD-18)', () => {
   test('spread: with the answer always written at A (the Deep-dive [Q] rule: right option first), it lands on every letter about equally often', () => {
     // lib/blockMarkup CURRICULUM_BLOCKS_APPENDIX has the model write the right
     // option first, as A), so it can size the wrong ones against it. That is
-    // only safe because this shuffle runs on every Deep-dive [Q].
+    // only safe because this shuffle reorders every Deep-dive [Q] it can,
+    // which is why a check it leaves alone (one whose options really point at
+    // each other) must be rare: see "ordinary lesson wording" below.
     const counts = { A: 0, B: 0, C: 0, D: 0 };
     const counts4 = { A: 0, B: 0, C: 0, D: 0 };
     for (let i = 0; i < 600; i += 1) {
@@ -194,9 +196,24 @@ describe('quizShuffle: what passes through untouched', () => {
     '"Both A and B"': '[Q]\nWhich are true?\nA) Models predict tokens\nB) Models can be wrong\nC) Both A and B\nANS: C\n[/Q]',
     'a stem that names letters': '[Q]\nIs option A or option B the better prompt?\nA) "Summarize this"\nB) "Summarize this for a 9th grader in 3 bullets"\nANS: B\n[/Q]',
     'an option that cites another': '[Q]\nPick the best fix\nA) Add sources\nB) Ask twice\nC) Same as A) but also ask twice\nANS: C\n[/Q]',
+    '"None of the above"': '[Q]\nWhich is safe?\nA) Sharing a password\nB) Pasting private data\nC) None of the above\nANS: C\n[/Q]',
+    '"All the above"': '[Q]\nWhich are risks?\nA) Bias\nB) Hallucination\nC) All the above\nANS: C\n[/Q]',
+    '"None of these options"': '[Q]\nWhich is safe?\nA) Sharing a password\nB) Pasting private data\nC) None of these options\nANS: C\n[/Q]',
+    '"Both of them."': '[Q]\nWhich are true?\nA) Models predict tokens\nB) Models can be wrong\nC) Both of them.\nANS: C\n[/Q]',
+    '"Neither A nor B"': '[Q]\nWhich are true?\nA) Models look facts up\nB) Models never guess\nC) Neither A nor B\nANS: C\n[/Q]',
+    '"A, B, and C"': '[Q]\nWhich are risks?\nA) Bias\nB) Hallucination\nC) Leaked data\nD) A, B, and C\nANS: D\n[/Q]',
+    '"A & B"': '[Q]\nWhich are true?\nA) Models predict tokens\nB) Models can be wrong\nC) A & B\nANS: C\n[/Q]',
+    '"Answer C"': '[Q]\nWhy is Answer C a trap?\nA) It sounds confident\nB) It is too short\nC) It cites a source\nANS: A\n[/Q]',
+    '"(B)"': '[Q]\nPick the best fix\nA) Add sources\nB) Ask twice\nC) Ask twice (B) and add sources\nANS: C\n[/Q]',
+    '"the previous option"': '[Q]\nPick the best fix\nA) Add sources\nB) Ask twice\nC) The previous option, plus sources\nANS: C\n[/Q]',
   };
   for (const [name, block] of Object.entries(untouched)) {
     test(`${name}: byte for byte`, () => {
+      const q = analyzeInterior(block.slice(3, -4));
+      if (q) {
+        const order = optionOrder(q.stem, q.options.map((o) => o.text));
+        assert.ok(order.some((v, k) => v !== k), 'held back, not an order that happens to be the written one');
+      }
       const text = `Before.\n\n${block}\n\nAfter.`;
       assert.equal(shuffleQuizzes(text), text);
       assert.equal(streamed(text, [1]), text);
@@ -229,6 +246,53 @@ describe('quizShuffle: what passes through untouched', () => {
     assert.ok(/\n {2}A\) (?:one|two)\n {2}B\) (?:one|two)\n\n {2}ANS: [AB] {2}\n\[\/Q\]$/.test(out), JSON.stringify(out));
     assert.equal(answerText(quizzes(out)[0]), 'two');
   });
+});
+
+describe('quizShuffle: ordinary lesson wording is not a cross-reference', () => {
+  // Review round 5 (2026-10-29): with the Deep-dive guide's "right option
+  // first, as A)" rule, a check held back here reaches the student with the
+  // answer at A. These are recorded checks (or close to them) that the old
+  // patterns held back although no option points at another; each is written
+  // right-first, as the guide now asks, and must be reordered. The letter
+  // each lands on is the hash order's (pinned); A there is the hash's pick,
+  // which says nothing about which option is right.
+  const cases = [
+    // docs/evals/quiz-length-probe-branch-run3-review.json u8_l3 ("next answer")
+    ['A chatbot just wrote a flawless summary of a dense legal contract. What should you conclude about its next task?',
+      ['Nothing reliable; test the next task separately', 'It will handle similar-difficulty tasks well too',
+        'Easier tasks are guaranteed to go even better', 'Its confident tone shows the next answer is right'], 'B'],
+    // docs/evals/reteach-probe-lessons3-final.json ("first answer")
+    ['Why can the same prompt produce two differently worded replies?',
+      ['Each token is chosen from probabilities, so paths diverge', 'The model fetches a different stored answer each time',
+        'The model forgets the first answer and starts over', 'The tokenizer splits the same prompt differently each time'], 'A'],
+    // docs/sonnet-5-5/final-2026-10-24/pacing-s55final-flag-on.json ("both of those sentences")
+    ['Why does the word "bank" get the same token in both of those sentences?',
+      ['A token stands for a piece of text, not a meaning, so context has to sort out the sense later',
+        'The tokenizer is simply broken and needs fixing to tell the meanings apart',
+        'The model looks up each sentence in a database to see which meaning is correct'], 'A'],
+    // docs/evals/pacing-socratic-hw-branch-flag-off.json ("letters B, A")
+    ['What does an LLM actually receive when you type a word like "bank"?',
+      ["A number representing a token from the model's vocabulary", 'The letters B, A, N, K stored as individual characters',
+        'A dictionary definition it looks up in its database'], 'B'],
+    // docs/evals/pacing-club-facts-flag-off.json ("letters C-h")
+    ['A student types "ChatGPT" into a prompt. What does the model actually process?',
+      ['One or more numeric token IDs that represent that word or its parts', 'The seven letters C-h-a-t-G-P-T, one at a time',
+        'A search query sent to Google to look up the word'], 'B'],
+    // a term, not a list of options
+    ['A school app shows half its students one button and half another, then compares. What is that?',
+      ['A/B testing', 'Fine-tuning', 'Prompt engineering'], 'B'],
+  ];
+  for (const [stem, options, landsOn] of cases) {
+    test(`reordered: ${stem.slice(0, 60)}`, () => {
+      const block = `[Q]\n${stem}\n${options.map((o, k) => `${'ABCD'[k]}) ${o}`).join('\n')}\nANS: A\n[/Q]`;
+      const out = shuffleQuizzes(`Nice.\n\n${block}`);
+      assert.notEqual(out, `Nice.\n\n${block}`, 'the check is reordered, not held back');
+      const [q] = quizzes(out);
+      assert.equal(answerText(q), options[0], 'same right answer');
+      assert.equal(String.fromCharCode(65 + q.answerIndex), landsOn);
+      assert.deepEqual([...q.options].sort(), [...options].sort());
+    });
+  }
 });
 
 describe('quizShuffle: chunk boundaries', () => {
