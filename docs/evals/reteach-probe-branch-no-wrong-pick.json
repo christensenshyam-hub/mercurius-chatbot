@@ -1,0 +1,195 @@
+{
+  "summary": {
+    "label": "after2-happy",
+    "model": "claude-sonnet-5-5",
+    "baseUrl": "http://localhost:3720",
+    "generatedAt": "2026-10-29T07:20:05.103Z",
+    "wrongAt": 0,
+    "maxReplies": 6,
+    "trials": 2,
+    "reachedExercise": 2,
+    "stoppedOnCheck": 0,
+    "attentionTaught": 2,
+    "embeddingsTaught": 0,
+    "bothTaught": 0,
+    "eitherTaught": 2,
+    "teachReplies": [
+      3,
+      3
+    ],
+    "teachAfterReteach": [
+      null,
+      null
+    ],
+    "budgetTalk": [],
+    "completedEarly": 0,
+    "errors": 0,
+    "spendUsd": 0.0727
+  },
+  "results": [
+    {
+      "trial": 1,
+      "sessionId": "probe-reteach-after2-happy-1-45aa3b45",
+      "replies": [
+        {
+          "user": "(opener)",
+          "raw": "Here's something that surprises most people: an LLM never actually sees your words. It only works with numbers.\n\nBefore anything else happens, your prompt gets chopped into pieces called **tokens**, chunks that are often whole words but can also be word fragments or punctuation. Each token is then swapped for a number.\n\n[KEY]An LLM doesn't read words; it reads tokens, which are chunks of text converted into numbers.[/KEY]\n\n[EX]Imagine a tokenizer splits \"I love pizza!\" into four pieces: \"I\", \" love\", \" pizza\", and \"!\". Each piece gets an ID number, something like 40, 3021, 9876, and 0. Those IDs are made up for illustration. Real tokenizers assign different numbers. GPT-4's tokenizer, for example, has a vocabulary of about 100,000 tokens.[/EX]\n\n[Q]\nWhy does an LLM convert your text into tokens and numbers first?\nA) The tokens are used to translate your prompt into English\nB) The model stores a dictionary entry for every sentence ever written\nC) The numbers let the model look up the answer in a database\nD) The model's math can only operate on numbers, not raw text\nANS: D\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 397,
+            "cache_read_input_tokens": 20800,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.00839
+        },
+        {
+          "user": "I picked D) The model's math can only operate on numbers, not raw text",
+          "raw": "Exactly right. A neural network is just a huge pile of arithmetic, and arithmetic needs numbers. Tokenization is the bridge between your sentence and that math.\n\nNow for the part that surprises people about what happens next.\n\nAn LLM doesn't \"look up\" an answer like a search engine does. It has one core job: given all the tokens so far, **predict the next token**. Then it adds that token to the text and predicts again, one token at a time, until the reply is done.\n\n[KEY]An LLM generates its answer by repeatedly predicting the most plausible next token, not by retrieving a stored answer.[/KEY]\n\n[EX]Take \"The cat sat on the ___\". The model scores every token in its vocabulary. \"mat\" and \"floor\" might get high scores, while \"democracy\" gets almost none. It picks from the high scorers, and that choice becomes part of the text for the next prediction.[/EX]\n\n[Q]\nA friend says ChatGPT works like Google: it finds a stored answer to your question. What's the best correction?\nA) It searches its training data for the closest matching answer\nB) It copies the best-matching passage from a saved document\nC) It builds its reply by predicting one token after another\nD) It runs your question through a fixed list of canned replies\nANS: C\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 50,
+            "output_tokens": 414,
+            "cache_read_input_tokens": 20800,
+            "cache_creation_input_tokens": 525
+          },
+          "cost": 0.0097125
+        },
+        {
+          "user": "I picked C) It builds its reply by predicting one token after another",
+          "raw": "Right again. That one-token-at-a-time loop is the engine behind everything an LLM writes.\n\nLet's keep going, because there's a gap in what I've told you. If \"bank\" is just one token, how does the model know whether you mean money or a river?\n\nEach token gets turned into a long list of numbers called an **embedding**, which places words with similar meanings near each other. Then a mechanism called **attention** lets the other words in the sentence adjust that list. The word \"bank\" starts out the same either way, but attention to \"river\" or \"cash\" shifts its meaning.\n\n[KEY]Attention lets surrounding words reshape each token's meaning, which is how the model tells apart the different senses of the same word.[/KEY]\n\n[EX]In \"I sat on the bank of the river,\" attention connects \"bank\" to \"river\" and pushes its meaning toward a riverside. In \"I put cash in the bank,\" it connects \"bank\" to \"cash\" and pushes it toward money. In \"I went to the bank,\" nothing decides it, so that sentence is genuinely ambiguous.[/EX]\n\n[Q]\nIn \"She deposited her paycheck at the bank,\" what lets the model settle on the money meaning?\nA) The word \"bank\" has a separate token ID for each meaning\nB) The word \"bank\" always defaults to its most common meaning\nC) Attention links \"bank\" to nearby clues like \"deposited\" and \"paycheck\"\nD) The model checks a built-in list of which words are financial\nANS: C\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 47,
+            "output_tokens": 479,
+            "cache_read_input_tokens": 21325,
+            "cache_creation_input_tokens": 440
+          },
+          "cost": 0.010249
+        },
+        {
+          "user": "I picked C) Attention links \"bank\" to nearby clues like \"deposited\" and \"paycheck\"",
+          "raw": "Yes, that's the key move. The meaning of \"bank\" isn't stored in the token. It gets shaped by the words around it.\n\nYou now have the whole pipeline: your text becomes tokens, tokens become numbers, attention lets the words adjust each other, and the model predicts the next token.\n\nNow let's put this to work. Here's your exercise.\n\nAn LLM is completing each of these sentences. For each blank, say whether the model's confidence in its top choice would be **HIGH** or **LOW**, and explain why in your own words.\n\n1. \"The cat sat on the ___\"\n2. \"My favorite thing to do on weekends is ___\"\n3. \"The capital of France is ___\"\n4. \"After the movie ended, everyone ___\"\n\nNumber your answers so I can check each one.",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 60,
+            "output_tokens": 246,
+            "cache_read_input_tokens": 21765,
+            "cache_creation_input_tokens": 502
+          },
+          "cost": 0.008188
+        }
+      ],
+      "score": {
+        "replies": 4,
+        "exerciseAt": 4,
+        "stoppedOnCheck": false,
+        "teachReplies": 3,
+        "teachAfterReteach": null,
+        "taught": {
+          "tokens": true,
+          "embeddings": false,
+          "attention": true,
+          "prediction": true
+        },
+        "named": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "bothTaught": false,
+        "eitherTaught": true,
+        "focus": [
+          "An LLM doesn't read words; it reads tokens, which are chunks of text converted into numbers. | Why does an LLM convert your text into tokens and numbers first?",
+          "An LLM generates its answer by repeatedly predicting the most plausible next token, not by retrieving a stored answer. | A friend says ChatGPT works like Google: it finds a stored answer to your question. What's the best correction?",
+          "Attention lets surrounding words reshape each token's meaning, which is how the model tells apart the different senses of the same word. | In \"She deposited her paycheck at the bank,\" what lets the model settle on the money meaning?"
+        ],
+        "budgetTalk": [],
+        "completed": false
+      }
+    },
+    {
+      "trial": 2,
+      "sessionId": "probe-reteach-after2-happy-2-d7dfb42c",
+      "replies": [
+        {
+          "user": "(opener)",
+          "raw": "Here's a surprising place to start: an LLM never sees your words. It never sees letters either.\n\nBefore anything else happens, your prompt gets chopped into chunks called **tokens**, and each token is swapped for a number. GPT-4's tokenizer, for example, works from a vocabulary of about 100,000 tokens.\n\n[KEY]An LLM doesn't read words; it reads tokens, which are chunks of text converted into numbers.[/KEY]\n\n[EX]Imagine the sentence \"I love pizza\" gets split into three tokens, which become the numbers 40, 3021, 9987. (Those numbers are made up for illustration, since every tokenizer uses its own.) A longer or rarer word might get split into several pieces.[/EX]\n\n[Q]\nWhat does an LLM actually receive when you type a prompt?\nA) The full sentence as one block of plain text\nB) Each letter fed in one at a time as a picture\nC) A list of keywords it searches for online\nD) Your text chopped into tokens, each turned into a number\nANS: D\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 347,
+            "cache_read_input_tokens": 20800,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.00789
+        },
+        {
+          "user": "I picked D) Your text chopped into tokens, each turned into a number",
+          "raw": "Right: tokens, then numbers.\n\nNow for something stranger. Take the word \"bank\" in these two sentences:\n\n- \"I sat on the bank of the river.\"\n- \"I put cash in the bank.\"\n\nBoth sentences contain the same word, so \"bank\" gets the same token and the same starting numbers either way.\n\nThose numbers are called an **embedding**, a long list of numbers that places the token near others with similar meaning. But a starting embedding can't tell river-bank from money-bank.\n\nSo the model uses **attention**: every token looks at the other words in the sentence and adjusts itself based on them. \"River\" pulls \"bank\" toward the riverside meaning, and \"cash\" pulls it toward money.\n\n[KEY]Attention lets the surrounding words reshape each token's numbers, so the same word can end up meaning different things in different sentences.[/KEY]\n\n[EX]Take \"I went to the bank.\" Nothing in \"went\", \"to\" or \"the\" says which kind of bank, so the sentence on its own is genuinely ambiguous. Only a word like \"river\" or \"cash\" would settle it.[/EX]\n\n[Q]\nIn \"I put cash in the bank\", what settles which meaning of \"bank\" is intended?\nA) The model looks up \"bank\" in a built-in dictionary\nB) Attention lets \"cash\" adjust the numbers for \"bank\"\nC) The model asks the user which meaning they intended\nD) The tokenizer gives each meaning of \"bank\" its own token\nANS: B\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 50,
+            "output_tokens": 481,
+            "cache_read_input_tokens": 20800,
+            "cache_creation_input_tokens": 475
+          },
+          "cost": 0.0102575
+        },
+        {
+          "user": "I picked B) Attention lets \"cash\" adjust the numbers for \"bank\"",
+          "raw": "Exactly: \"cash\" nudges the numbers for \"bank\" toward the money meaning, with no dictionary involved.\n\nNow the step that ties it together. After tokens, embeddings and attention, the model does just one thing: it predicts the **next token**.\n\nIt scores every token in its vocabulary by how likely it is to come next. Then one token is chosen, added to the text, and the whole process repeats to produce the following token.\n\nTake \"The cat sat on the ___\". The model might rate \"mat\" or \"floor\" as strong candidates and \"sofa\" or \"windowsill\" as weaker ones. Nothing is looked up, because the model is judging which continuations are plausible.\n\nSome slots have one dominant answer, so the model is highly confident about its top token. Others have many plausible answers, so its confidence is spread thin.\n\n[KEY]An LLM writes by repeatedly scoring every possible next token and picking one, so it is predicting what is plausible rather than retrieving stored answers.[/KEY]\n\n[EX]In \"Once upon a ___\", the word \"time\" is overwhelmingly likely. In \"My favorite thing to eat is ___\", dozens of words could fit about equally well.[/EX]\n\n[Q]\nWhich statement best describes how an LLM produces its reply?\nA) It searches the web and copies the top result\nB) It finds the best matching answer in a stored database\nC) It scores every possible next token, picks one, and repeats\nD) It writes the whole reply at once, then checks it\nANS: C\n[/Q]",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 54,
+            "output_tokens": 488,
+            "cache_read_input_tokens": 21275,
+            "cache_creation_input_tokens": 507
+          },
+          "cost": 0.0105105
+        },
+        {
+          "user": "I picked C) It scores every possible next token, picks one, and repeats",
+          "raw": "Yes, score, pick one, repeat. That loop is the engine behind every reply.\n\nNow let's put it to work.\n\nHere are three sentences, each with one blank at the end:\n\n1. \"The capital of France is ___.\"\n2. \"After the movie, we went to get ___.\"\n3. \"She opened the door and saw ___.\"\n\nFor **each** blank:\n\na) Would an LLM have HIGH or LOW confidence in its top predicted token?\nb) Explain why, in your own words, using what we just covered about next-token prediction.\n\nAnswer all three in your own words.",
+          "wrong": false,
+          "usage": {
+            "input_tokens": 50,
+            "output_tokens": 176,
+            "cache_read_input_tokens": 21782,
+            "cache_creation_input_tokens": 518
+          },
+          "cost": 0.0075114000000000005
+        }
+      ],
+      "score": {
+        "replies": 4,
+        "exerciseAt": 4,
+        "stoppedOnCheck": false,
+        "teachReplies": 3,
+        "teachAfterReteach": null,
+        "taught": {
+          "tokens": true,
+          "embeddings": false,
+          "attention": true,
+          "prediction": true
+        },
+        "named": {
+          "tokens": true,
+          "embeddings": true,
+          "attention": true,
+          "prediction": true
+        },
+        "bothTaught": false,
+        "eitherTaught": true,
+        "focus": [
+          "An LLM doesn't read words; it reads tokens, which are chunks of text converted into numbers. | What does an LLM actually receive when you type a prompt?",
+          "Attention lets the surrounding words reshape each token's numbers, so the same word can end up meaning different things in different sentences. | In \"I put cash in the bank\", what settles which meaning of \"bank\" is intended?",
+          "An LLM writes by repeatedly scoring every possible next token and picking one, so it is predicting what is plausible rather than retrieving stored answers. | Which statement best describes how an LLM produces its reply?"
+        ],
+        "budgetTalk": [],
+        "completed": false
+      }
+    }
+  ]
+}

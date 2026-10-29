@@ -104,7 +104,7 @@ const arg = (name, dflt) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function streamChat(base, body) {
+export async function streamChat(base, body) {
   const res = await fetch(`${base}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
