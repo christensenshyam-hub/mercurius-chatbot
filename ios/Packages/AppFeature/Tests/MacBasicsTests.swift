@@ -111,9 +111,13 @@ struct MacBasicsTests {
         // Finished, Today points back at the lessons, not at the Socratic
         // free chat Basics learners are kept out of (review 2026-10-22).
         #expect(done.detail == "Go back over any lesson any time.")
-        #expect(MacNightCopy.subline(finished) == "You've finished the Basics. Go back over any lesson any time.")
         #expect(!done.detail.lowercased().contains("chat"))
         #expect(!MacNightCopy.subline(finished).lowercased().contains("chat"))
+        // The line above the hero counts the lessons, as Home's caption
+        // does; it doesn't say the hero's words a second time.
+        #expect(MacNightCopy.subline(finished) == "You've finished 18 Basics lessons.")
+        #expect(!MacNightCopy.subline(finished).contains(done.title))
+        #expect(!MacNightCopy.subline(finished).contains(done.detail))
     }
 
     @Test("Today on Basics shows no Think it through (the Socratic free chat) and no week (review 2026-10-22)")

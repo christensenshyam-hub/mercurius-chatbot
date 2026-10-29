@@ -164,8 +164,8 @@ struct HomeState: Equatable {
         }
     }
 
-    /// What Merc says once every Basics lesson is done (Home, and the Mac's
-    /// Today).
+    /// What Merc says on Home once every Basics lesson is done. The Mac's
+    /// Today shows these words in its hero card instead.
     static let basicsFinishedLine = "You've finished the Basics. Go back over any lesson any time."
 
     /// A plain hello. Between 10 PM and 5 AM it stays neutral: it used to
