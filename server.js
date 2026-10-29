@@ -3555,9 +3555,13 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // Uploads cost no model tokens but each one becomes a vision turn later and
   // bytes land in the database, so they have their own daily caps — per
   // session AND per network (count + bytes), and an unseen session id counts
-  // against the per-IP new-session quota like any model route.
+  // against the per-IP new-session quota like any model route. The upload is
+  // counted when it is admitted (reserveImage: the check and the count in
+  // one step) and given back if the store fails. It used to be counted after
+  // the write, so every upload still writing had already passed the check
+  // and a burst got past the caps.
   if (await refuseUnseenSession(req, res, sessionId)) return;
-  const imageVerdict = quotas.check({ sessionId, ip: req.ip, kind: 'image' });
+  const imageVerdict = quotas.reserveImage({ sessionId, ip: req.ip, bytes: buffer.length });
   if (!imageVerdict.ok) {
     metrics.quotaRejectionsTotal.inc({ scope: `${imageVerdict.scope}:${imageVerdict.error}` });
     if (imageVerdict.retryAfterSec) res.setHeader('Retry-After', String(imageVerdict.retryAfterSec));
@@ -3587,10 +3591,10 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
       createdAt,
     });
   } catch (err) {
+    quotas.forgetImage(imageVerdict.reservation);
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
   }
-  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0, bytes: buffer.length });
 
   // Log metadata only — never the image bytes or the (possibly personal) file name.
   logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
