@@ -148,3 +148,15 @@ describe('CURRICULUM_PROMPT: a reteach is not one of the 2–3 teach replies; Le
     assert.equal(guide.split('\n').filter((l) => l.startsWith('Micro-concepts')).length, 1);
   });
 });
+
+describe('eval-pacing curriculum-blocks-1 (the merge gate\'s blocks lesson) follows the new flow', () => {
+  test('four taps (three ideas + the reteach, the 2nd one wrong) before the scripted exercise answers', async () => {
+    const { SCENARIOS } = await import('../scripts/eval-pacing.mjs');
+    const { turns } = SCENARIOS.find((s) => s.id === 'curriculum-blocks-1');
+    const taps = turns.slice(1).findIndex((t) => typeof t === 'string');
+    assert.equal(taps, 4, 'dynamic [Q] taps between the opener and the first scripted exercise answer');
+    assert.match(turns[1 + taps], /^For the exercise/);
+    const ask = '[Q]\nWhich?\nA) right one\nB) wrong one\nANS: A\n[/Q]';
+    assert.deepEqual(turns.slice(1, 1 + taps).map((t) => t.dynamic(ask)), ['I picked A) right one', 'I picked B) wrong one', 'I picked A) right one', 'I picked A) right one']);
+  });
+});
