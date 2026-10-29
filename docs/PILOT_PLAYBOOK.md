@@ -208,7 +208,7 @@ What students see in 2.3.0 (16), word for word (`APIError.swift`,
 | "Can't reach Mercurius on this network. Try cellular data or a different Wi-Fi." | The network refused or intercepted the request (what a school filter does) | Cellular; email IT |
 | "You're offline. Reconnect and try again." | No usable connection, or the request never reached the server | Check Wi-Fi is on; if it is, the rule |
 | "The connection dropped. Try again." | The connection dropped mid-reply (app sent to the background, Wi-Fi flapped) | Try again; if many phones at once, the rule |
-| "You're moving fast — give it a moment, then try again." (in a chat, the server's "You're moving fast! Take 60 seconds…") | A per-minute limit, per phone or per network address | Wait a minute; if many phones at once, the rule |
+| "You're moving fast — give it a moment, then try again." (in a chat, the server's "You're moving fast! … You can send again in 42 seconds.", with the real wait) | A per-minute limit, per phone or per network address | Wait that long (at most a minute); if many phones at once, the rule |
 | "The server hit an error. Try again in a moment." | Server error (5xx) | Railway logs |
 | "Something went wrong. Try again." | Anything else | Try again; if many phones at once, the rule |
 

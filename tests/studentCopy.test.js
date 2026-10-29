@@ -6,10 +6,10 @@
  *
  * Who reads which text, so a change here is a change on their screen:
  *   - iOS 2.0.0 and 2.3.0, and the Mac app: the text of an SSE error frame on
- *     /api/chat, as written, with a Retry button (for daily_limit frames
- *     2.3.0 swaps the "tomorrow" sentence for a local clock time). On JSON
- *     routes they show the server's `message` only for a daily_limit 429 or
- *     a 503, and their own copy for everything else.
+ *     /api/chat, as written (for a daily_limit frame 2.3.0 swaps the
+ *     "tomorrow" sentence for a local clock time). On JSON routes 2.3.0
+ *     shows the server's `message` only for a daily_limit 429 or a 503, and
+ *     2.0.0 never; otherwise they show their own copy.
  *   - The web widget: `error` of a frame and `message` of a JSON body,
  *     everywhere.
  *
@@ -19,6 +19,9 @@
  *   2. Lesson turns and chat turns are separate allowances: when one is used
  *      up the other still works, so neither says Mercurius is closed until
  *      tomorrow.
+ *   3. The per-minute limiter knows when it lets the session through again,
+ *      so it can say so (the route copy that uses it is pinned in
+ *      chatHardening.test.js).
  *   (The spend cap's copy, Mercurius's own limit, is pinned in
  *   spendCap.test.js.)
  */
@@ -29,6 +32,7 @@ const assert = require('node:assert/strict');
 process.env.NODE_ENV = 'test';
 
 const quotas = require('../lib/quotas');
+const rateLimiter = require('../lib/rateLimiter');
 
 const IP = '10.9.9.9';
 
@@ -72,5 +76,40 @@ describe('daily-limit copy says what is really used up', () => {
       assert.equal(r.reason, 'session_usd', kind);
       assert.equal(r.message, "You've reached today's usage limit. Mercurius will be ready again tomorrow.");
     }
+  });
+});
+
+describe('sessionLimiter.retryAfterSec — when the session may send again', () => {
+  test('0 for a session that is not over the limit, or one never seen', async () => {
+    const isLimited = rateLimiter.sessionLimiter(60_000, 2);
+    assert.equal(isLimited.retryAfterSec('never'), 0);
+    assert.equal(isLimited.retryAfterSec(''), 0);
+    assert.equal(await isLimited('s'), false);
+    assert.equal(isLimited.retryAfterSec('s'), 0, 'one of two used');
+  });
+
+  test("over the limit: the seconds until the oldest request leaves the window, and asking records nothing", async () => {
+    const isLimited = rateLimiter.sessionLimiter(60_000, 2);
+    await isLimited('s');
+    await isLimited('s');
+    assert.equal(await isLimited('s'), true);
+    const wait = isLimited.retryAfterSec('s');
+    assert.ok(wait >= 59 && wait <= 60, `a full window ahead, got ${wait}`);
+    assert.equal(isLimited.retryAfterSec('s'), wait, 'asking again changes nothing');
+    assert.equal(await isLimited('s'), true, 'still over: the refusal added no stamp either');
+  });
+
+  test('the wait is to the oldest stamp, so it shrinks as that stamp ages', async () => {
+    const isLimited = rateLimiter.sessionLimiter(1_500, 2);
+    await isLimited('s');
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await isLimited('s');
+    assert.equal(await isLimited('s'), true);
+    // The first stamp is ~0.7 s old, so the window reopens in ~0.8 s: 1 s,
+    // rounded up, where a full window would be 2.
+    assert.equal(isLimited.retryAfterSec('s'), 1);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    assert.equal(isLimited.retryAfterSec('s'), 0);
+    assert.equal(await isLimited('s'), false, 'and it is let through, as the wait said');
   });
 });
