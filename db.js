@@ -1406,8 +1406,10 @@ module.exports = {
 
   // ─── Right-to-erasure (audit P0-C) ───
   // Delete EVERYTHING keyed to one session, in a single transaction, so the
-  // 30-day-deletion promise on marketing/privacy.html is honored by code
-  // rather than by hand-run SQL. Children are removed before the sessions row
+  // deletion promise on marketing/privacy.html ("Delete my data & start
+  // over" erases everything tied to the session ID) is honored by code
+  // rather than by hand-run SQL; tests/eraseEverything.test.js checks it
+  // table by table. Children are removed before the sessions row
   // to satisfy the FK constraints. Gamification tables (progression, xp_ledger)
   // exist only when GAMIFICATION_ENABLED has run, and student_memory only
   // between a rollback to a pre-removal build and the next boot of this one
