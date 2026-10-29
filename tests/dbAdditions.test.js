@@ -114,6 +114,60 @@ describe('usage ledger', () => {
     assert.deepEqual(rows.map((r) => r.answered), [1, 0, 0, 0, 1, 0, null]);
   });
 
+  // A network's daily allowances are read back from these after a restart
+  // (server.js hydrateNetworkQuota → quotas.hydrateIp), by the hashed address.
+  test('networkUsageSince sums one network\'s day: every cost, and its stored photo uploads and their bytes', async () => {
+    const t0 = Date.now();
+    const net = 'net_' + crypto.randomBytes(4).toString('hex');
+    const other = 'net_' + crypto.randomBytes(4).toString('hex');
+    const rec = (row) => db.recordUsage({ route: '/api/chat', kind: 'chat', status: 'ok', ...row });
+    await rec({ ts: t0 - 10, ipHash: net, costUsd: 5 });                       // yesterday's, say
+    await rec({ ts: t0 + 1, ipHash: net, sessionId: sid(), costUsd: 0.25 });
+    await rec({ ts: t0 + 2, ipHash: net, sessionId: sid(), kind: 'lesson', costUsd: 0.5, status: 'error', answered: false });
+    await rec({ ts: t0 + 3, ipHash: net, sessionId: sid(), route: '/api/images', kind: 'image', costUsd: 0, answered: true, bytes: 700 });
+    await rec({ ts: t0 + 4, ipHash: net, sessionId: sid(), route: '/api/images', kind: 'image', costUsd: 0, answered: true, bytes: 300 });
+    await rec({ ts: t0 + 5, ipHash: other, costUsd: 1, kind: 'image', bytes: 99 });
+    const got = await db.networkUsageSince(net, t0);
+    assert.ok(Math.abs(got.usd - 0.75) < 1e-9, `every call billed today (${got.usd})`);
+    assert.deepEqual([got.images, got.imageBytes], [2, 1000]);
+    const none = { usd: 0, images: 0, imageBytes: 0, newSessions: 0, reports: 0 };
+    assert.deepEqual(await db.networkUsageSince('net_never_seen', t0), none);
+    assert.deepEqual(await db.networkUsageSince(null, t0), none, 'no hash, no query');
+    const rows = await db.queryRaw('SELECT bytes FROM usage WHERE ip_hash = ? ORDER BY ts', [net]);
+    assert.deepEqual(rows.map((r) => r.bytes), [null, null, null, 700, 300], 'bytes only on photo rows');
+  });
+
+  test("networkUsageSince counts the network's new sessions and reports (rows with no session id), never as turns", async () => {
+    const t0 = Date.now();
+    const net = 'net_' + crypto.randomBytes(4).toString('hex');
+    // What claudeCall.recordNetworkEvent writes.
+    const mark = (kind, ts) => db.recordUsage({ ts, ipHash: net, route: kind === 'report' ? '/api/report' : 'new-session', kind, costUsd: 0, status: 'ok', answered: false });
+    await mark('session', t0 - 10); // yesterday's, say
+    await mark('session', t0 + 1);
+    await mark('session', t0 + 2);
+    await mark('report', t0 + 3);
+    await db.recordUsage({ ts: t0 + 4, ipHash: net, sessionId: sid(), route: '/api/chat', kind: 'chat', costUsd: 0.1, status: 'ok' });
+    const got = await db.networkUsageSince(net, t0);
+    assert.deepEqual([got.newSessions, got.reports, got.images], [2, 1, 0]);
+    assert.ok(Math.abs(got.usd - 0.1) < 1e-9);
+    const sessionIds = await db.queryRaw("SELECT session_id FROM usage WHERE ip_hash = ? AND kind IN ('session', 'report')", [net]);
+    assert.deepEqual(sessionIds.map((r) => r.session_id), [null, null, null, null]);
+  });
+
+  test("sessionReportsSince counts a session's stored reports since a time", async () => {
+    const t0 = Date.now();
+    const s = sid();
+    await db.getOrCreateSession(s);
+    await db.saveReport({ sessionId: s, content: 'old', createdAt: t0 - 10 });
+    await db.saveReport({ sessionId: s, content: 'a', createdAt: t0 + 1 });
+    await db.saveReport({ sessionId: s, content: 'b', createdAt: t0 + 2 });
+    await db.saveReport({ sessionId: sid(), content: 'theirs', createdAt: t0 + 3 });
+    assert.equal(await db.sessionReportsSince(s, t0), 2);
+    assert.equal(await db.sessionReportsSince(sid(), t0), 0);
+    await db.deleteSession(s);
+    assert.equal(await db.sessionReportsSince(s, 0), 0, 'erased with the session');
+  });
+
   test('recordUsage fills defaults and never throws', async () => {
     const t0 = Date.now();
     // No ts/route/kind/status at all → defaults instead of a NOT NULL violation.

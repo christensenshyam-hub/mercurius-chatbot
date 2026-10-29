@@ -614,8 +614,11 @@ line only when I have seen the result myself.
       until midnight in `STREAK_TZ` (it was 7 PM Central, UTC midnight,
       before the AUD-30 fix). Set it to `25` for kickoff week and back to `15`
       on Fri Oct 9, together with `DAILY_BUDGET_USD`. Each variable change
-      restarts the server (and resets the per-IP counters), so make both
-      changes by Wednesday night.
+      restarts the server, so make both changes by Wednesday night. A
+      restart no longer resets a network's daily counts (dollars, photos,
+      new sessions, reports): they are read back from the usage ledger, so
+      a network at its limit stays there until midnight unless the
+      variable is raised.
 - [ ] Other per-IP caps left at defaults (`IP_DAILY_NEW_SESSIONS=60`,
       `CHAT_IP_PER_MIN=300`): the whole club installs behind one school
       address on Thursday. Do not set the eval-server value of 1000 in
