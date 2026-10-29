@@ -189,7 +189,9 @@ clears a network that has reached `IP_DAILY_USD`, `IP_DAILY_IMAGES` or
 and content reports are read back too (`IP_DAILY_NEW_SESSIONS`,
 `IP_DAILY_REPORTS`): each is a $0 `usage` row of kind `session` or `report`
 that carries only the network's hashed address (no session id, so erasing a
-session leaves the network's count), and a session's own report count
+session leaves the network's count) and the day (its `ts` is the start of
+the `STREAK_TZ` day, not the moment), and is deleted after
+`NETWORK_COUNT_RETENTION_DAYS`. A session's own report count
 (`SESSION_DAILY_REPORTS`) comes from the `reports` table.
 
 | Var | Scope | Default |
@@ -214,6 +216,7 @@ session leaves the network's count), and a session's own report count
 | `IMAGE_RETENTION_HOURS` | uploaded image bytes older than this are deleted (the photo's own turn and up to `PHOTO_REATTACH_TURNS` follow-ups are the only consumers). The image purge also runs every 5 minutes, whatever the hour, and an older image is never served or attached | `24` |
 | `REPORT_RETENTION_DAYS` | content reports older than this are deleted, open or resolved. A report quotes a student's turn verbatim, so it is not kept indefinitely; it outlives the 90-day transcript because it is the review record for a flagged reply | `180` |
 | `USAGE_RETENTION_DAYS` / `LESSON_EVENTS_RETENTION_DAYS` | analytics rows (no content) older than this are deleted | `400` |
+| `NETWORK_COUNT_RETENTION_DAYS` | a network's sign-up and report rows (`usage` kinds `session` / `report`: hashed address and day only) older than this are deleted. Only today's read-back after a restart needs them, and today's are never deleted, whatever the value | `2` |
 | `SESSION_RETENTION_DAYS` | sessions inactive this long are erased via the deletion cascade, 200 per sweep | `365` |
 
 ### Removed variables
