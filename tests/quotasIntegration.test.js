@@ -20,6 +20,8 @@
  *   8. After a restart, a network's new sessions and content reports, and a
  *      session's reports, come back too; erasing a session does not give
  *      its network the sign-up back.
+ *   9. A first read after a restart that crosses the product-day midnight
+ *      does not start the new day with the old day's counts.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -688,6 +690,100 @@ describe("a network's new sessions and content reports survive a restart", () =>
     try {
       // Before: 'stored' (a fresh day for the session); read from the reports table.
       assert.equal(await report(second.base, student), 'dropped');
+    } finally {
+      await second.stop();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('a ledger read that crosses the product-day midnight', () => {
+  // The first read of a session or a network after a restart takes a query's
+  // time. One that began before midnight and finished after it used to seed
+  // the NEW day with the old day's counts, for the rest of that day.
+  // tests/fixtures/ledgerReadCrossesMidnight.js moves the second server's
+  // clock past the next midnight while that first read is in flight.
+  const CROSS = path.join(__dirname, 'fixtures', 'ledgerReadCrossesMidnight.js');
+  const procs = [];
+  const files = [];
+  after(() => {
+    for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
+    for (const f of files) {
+      for (const suffix of ['', '-wal', '-shm']) {
+        try { fs.rmSync(f + suffix, { force: true }); } catch { /* ignore */ }
+      }
+    }
+  });
+
+  function onOneDatabase() {
+    const dbPath = path.join(os.tmpdir(), `merc-quotas-midnight-${crypto.randomBytes(4).toString('hex')}.db`);
+    files.push(dbPath);
+    const boot = async (env, crossing) => {
+      const preload = crossing ? { NODE_OPTIONS: `--require ${JSON.stringify(CROSS)}`, LEDGER_READ_CROSSES_MIDNIGHT: crossing } : {};
+      const { proc, ready } = spawnServer({ SQLITE_PATH: dbPath, MOCK_STREAM_DELAY_MS: '1', ...env, ...preload });
+      procs.push(proc);
+      const { base } = await ready;
+      const stop = () => new Promise((resolve) => {
+        if (proc.exitCode !== null) return resolve();
+        proc.once('exit', () => resolve());
+        proc.kill('SIGKILL');
+      });
+      return { base, stop };
+    };
+    const ledger = (sql) => {
+      const Database = require('better-sqlite3');
+      const sqlite = new Database(dbPath, { readonly: true });
+      try { return sqlite.prepare(sql).all(); } finally { sqlite.close(); }
+    };
+    return { boot, ledger };
+  }
+
+  test("a session's turns start the new day fresh", async () => {
+    const r = onOneDatabase();
+    const env = { SESSION_DAILY_CHAT_TURNS: '1' };
+    const s = newSession();
+    const first = await r.boot(env);
+    try {
+      assert.equal((await chatJson(first.base, s)).status, 200);
+      assert.equal((await chatJson(first.base, s)).status, 429, "the day's one turn is used");
+      await waitFor(() => r.ledger("SELECT id FROM usage WHERE kind = 'chat' AND answered = 1"), (rows) => rows.length >= 1);
+    } finally {
+      await first.stop();
+    }
+    const second = await r.boot(env, 'session');
+    try {
+      // Before: 429 daily_limit until the next midnight, from yesterday's turn.
+      const turn = await chatJson(second.base, s);
+      assert.equal(turn.status, 200, JSON.stringify(turn.json));
+      // The new day is counted as usual: that was its one turn.
+      const next = await chatJson(second.base, s);
+      assert.equal(next.status, 429);
+      assert.equal(next.json && next.json.error, 'daily_limit');
+    } finally {
+      await second.stop();
+    }
+  });
+
+  test("a network's sign-ups start the new day fresh", async () => {
+    const r = onOneDatabase();
+    const env = { IP_DAILY_NEW_SESSIONS: '1' };
+    const start = async (base) => {
+      const res = await fetch(`${base}/api/mode`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: newSession(), mode: 'socratic' }) });
+      const body = await res.json().catch(() => null);
+      return res.status === 429 ? `429 ${body && body.scope}` : String(res.status);
+    };
+    const first = await r.boot(env);
+    try {
+      assert.deepEqual([await start(first.base), await start(first.base)], ['200', '429 ip']);
+      await waitFor(() => r.ledger("SELECT id FROM usage WHERE kind = 'session'"), (rows) => rows.length >= 1);
+    } finally {
+      await first.stop();
+    }
+    const second = await r.boot(env, 'network');
+    try {
+      // Before: '429 ip' (the whole network refused until the next midnight).
+      assert.equal(await start(second.base), '200');
+      assert.equal(await start(second.base), '429 ip', "the new day's one sign-up is used");
     } finally {
       await second.stop();
     }

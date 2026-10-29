@@ -571,6 +571,31 @@ describe('product-day rollover (AUD-30)', () => {
     assert.equal(quotas.hydrateSession(SID, [{ kind: 'chat', count: 1, usd: 0.05 }]), true);
     assert.equal(quotas.snapshot().sessions.totals.chatTurns, 1);
   });
+
+  // The first read after a restart began at 11:59:59.9 PM and its rows came
+  // back after midnight. They are the old day's: applied, they used to start
+  // the new day used up, and mark it read so the right read couldn't lower it.
+  test("a read for the day that just ended is skipped, and the new day's read still applies", () => {
+    process.env.STREAK_TZ = 'America/Chicago';
+    mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-30T04:59:59.900Z') }); // 11:59:59.9 PM CDT
+    quotas.__resetForTest();
+    quotas.configure({ SESSION_DAILY_LESSON_TURNS: 40, IP_DAILY_USD: 10 });
+    const readFor = quotas.snapshot().day;
+    assert.equal(readFor, '2026-10-29');
+    mock.timers.setTime(Date.parse('2026-10-30T05:00:00.150Z')); // the rows arrive after midnight
+
+    assert.equal(quotas.hydrateSession(SID, [{ kind: 'lesson', count: 40, usd: 0.2 }], { reports: 0, day: readFor }), false);
+    assert.equal(quotas.hydrateIp(IP, { usd: 10.5, images: 0, imageBytes: 0, newSessions: 0, reports: 0 }, { day: readFor }), false);
+    assert.deepEqual(quotas.check({ sessionId: SID, ip: IP, kind: 'lesson' }), { ok: true });
+    const snap = quotas.snapshot();
+    assert.equal(snap.sessions.hydrated, 0, 'not marked read');
+
+    // The new day's read (since the new midnight) still applies.
+    assert.equal(quotas.hydrateSession(SID, [{ kind: 'lesson', count: 2, usd: 0.01 }], { day: '2026-10-30' }), true);
+    assert.equal(quotas.hydrateIp(IP, { usd: 0.5 }, { day: '2026-10-30' }), true);
+    assert.equal(quotas.snapshot().sessions.totals.lessonTurns, 2);
+    assert.equal(quotas.snapshot().ips.usd, 0.5);
+  });
 });
 
 // ---------------------------------------------------------------------------
