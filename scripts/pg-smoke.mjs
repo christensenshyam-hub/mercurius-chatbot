@@ -706,6 +706,11 @@ await step('C15 retention purges (batched past 1000 rows) + inactiveSessionIds',
   assertNum(m, 'purgeMessagesBefore');
   assert.equal(m, 1205, 'two batches (1000 + 205)');
   assert.equal(await count('messages'), recentBefore, 'recent messages untouched');
+  // A network's sign-up and report rows go on their own 2-day window.
+  await insertMany('usage', ['ts', 'ip_hash', 'route', 'kind', 'status'], [[2000, 'net_old', 'new-session', 'session', 'ok'], [2001, 'net_old', '/api/report', 'report', 'ok']]);
+  const nc = await db.purgeNetworkCountsBefore(10000);
+  assertNum(nc, 'purgeNetworkCountsBefore');
+  assert.equal(nc, 2, 'only kinds session / report');
   assert.equal(await db.purgeUsageBefore(10000), 3);
   assert.equal(await db.purgeLessonEventsBefore(10000), 4);
   assert.equal(await db.purgeReportsBefore(10000), 1, 'resolved only by default');
