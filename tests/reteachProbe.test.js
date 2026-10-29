@@ -162,14 +162,15 @@ describe('reteach-probe', () => {
   test('round 3\'s runs on the new example: no trial puts "bank" before its deciding word', async () => {
     const { scoreTrial } = await modP;
     let trials = 0;
-    for (const name of ['reteach-probe-lessons3-rejected-phrase-list', 'reteach-probe-lessons3-rejected-bridge']) {
+    // The two rejected wording tries, and the branch's own final prompt (lessons3-final).
+    for (const name of ['reteach-probe-lessons3-rejected-phrase-list', 'reteach-probe-lessons3-rejected-bridge', 'reteach-probe-lessons3-final']) {
       const { results } = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/evals', `${name}.json`), 'utf8'));
       for (const r of results) {
         assert.deepEqual(scoreTrial(r.replies.filter((x) => !x.error)).laterContext, [], `${name} trial ${r.trial}`);
         trials += 1;
       }
     }
-    assert.equal(trials, 9);
+    assert.equal(trials, 12);
   });
 });
 
