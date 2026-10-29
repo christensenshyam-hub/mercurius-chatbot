@@ -1188,9 +1188,12 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-// `followUp: true` for the route's second ask on the same tap (lib/claudeCall:
-// it uses no daily turn of its own).
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, followUp = false }) {
+// `turn` is one tap's turn when the route may ask more than once ({ counted:
+// false } to start): an ask after one that counted it is a follow-up
+// (lib/claudeCall: it uses no daily turn of its own), and an ask that gave
+// an answer counts it. An ask that was refused or came back empty used no
+// turn, so the next one is not a follow-up and counts it if it answers.
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, turn = null }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1211,7 +1214,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
-    followUp,
+    followUp: Boolean(turn && turn.counted),
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -1219,6 +1222,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
+  if (turn && response && typeof response.accounting === 'function' && response.accounting().answered) turn.counted = true;
   const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
@@ -1664,8 +1668,15 @@ function quotaErrorHandled(err, req, res) {
 // new-session quota BEFORE its row is created, so rotating ids can neither
 // sidestep the per-session limits nor fill the sessions table. Every model
 // route calls this; returns true when the request has been refused.
+//
+// The network's count is read back from the ledger first (once per network
+// per product day), and each session it creates leaves a $0 ledger row with
+// the hashed address, no session id and only the day (not the moment): a
+// deploy used to give every network a fresh IP_DAILY_NEW_SESSIONS, and an
+// erasure doesn't take the row away. The row goes after two days.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
+  await hydrateNetworkQuota(req.ip);
   // Count it in the same tick as the check (released below if this request
   // did not create the row): a burst of first contacts must not all pass the
   // check during the INSERT awaits before any of them is counted.
@@ -1686,6 +1697,7 @@ async function refuseUnseenSession(req, res, sessionId) {
   } finally {
     if (!created) quotas.forgetNewSession(req.ip);
   }
+  if (created) claudeCall.recordNetworkEvent('session', { route: 'new-session', ip: req.ip });
   return false;
 }
 
@@ -1822,11 +1834,19 @@ function recordLessonProgress(sessionId, meta) {
 // is tried again on the next request. It used to be marked done anyway, so
 // one database blip on a session's first request after a deploy gave it a
 // second full day's allowance. Requests that arrive while the read is
-// pending wait for the same read rather than skip it.
+// pending wait for the same read rather than skip it. `.forget(key)` drops
+// a key's read (an erased session: its rows are gone, so the next request
+// reads the ledger again).
+//
+// `read(key, since, day)` gets the product day it reads for and hands it
+// to quotas, which drop a read that began before midnight and finished
+// after it: it used to seed the new day with the old day's counts for the
+// rest of that day (a whole school network refused, for one). The new
+// day's first request reads the ledger again.
 function dailyLedgerRead(what, read) {
   const reads = new Map(); // key → today's read (never rejects)
   let readsDay = productDay.dayKey();
-  return (key) => {
+  const readBack = (key) => {
     if (!key) return Promise.resolve();
     const now = Date.now();
     const today = productDay.dayKey(now);
@@ -1834,7 +1854,7 @@ function dailyLedgerRead(what, read) {
     let pending = reads.get(key);
     if (!pending) {
       pending = Promise.resolve()
-        .then(() => read(key, productDay.startOfDayMs(now)))
+        .then(() => read(key, productDay.startOfDayMs(now), today))
         .catch((e) => {
           if (reads.get(key) === pending) reads.delete(key);
           logger.warn({ err: e.message }, `${what} quota hydrate failed; trying again on its next request`);
@@ -1843,13 +1863,15 @@ function dailyLedgerRead(what, read) {
     }
     return pending;
   };
+  readBack.forget = (key) => { reads.delete(key); };
+  return readBack;
 }
-const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since) => {
-  const rows = await db.sessionUsageSince(sessionId, since);
-  if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
+const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since, day) => {
+  const [rows, reports] = await Promise.all([db.sessionUsageSince(sessionId, since), db.sessionReportsSince(sessionId, since)]);
+  if ((rows && rows.length) || reports > 0) quotas.hydrateSession(sessionId, rows || [], { reports, day });
 });
-const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since) => {
-  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since));
+const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since, day) => {
+  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since), { day });
 });
 // Every route that checks the daily quotas awaits this before its check.
 function readQuotasBack(req, sessionId) {
@@ -2876,12 +2898,14 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    // One tap is one helper turn: only the first ask counts it.
-    let asked = 0;
+    // One tap is one helper turn: the first ask that gets an answer counts
+    // it, and every ask after that is a follow-up. (Marking every second ask
+    // a follow-up let a quiz whose first ask was refused cost no turn.)
+    const turn = { counted: false };
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
-      followUp: asked++ > 0,
+      turn,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
@@ -3581,6 +3605,10 @@ function imageBodyBudget(req, res, next) {
 
 app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
   const { sessionId, contentType, data, fileName } = req.validated;
+  // Taken before the session is looked up: the store compares it with the
+  // time of an erasure of this session that lands while the upload is under
+  // way, and keeps no photo for a session erased after it began.
+  const createdAt = Date.now();
 
   const validated = decodeAndValidateImage({ data, contentType });
   if (!validated.ok) {
@@ -3616,10 +3644,10 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // — consistent with the app's bearer-style session model — and is the stable
   // handle future v3 features key off.
   const id = crypto.randomBytes(24).toString('base64url');
-  const createdAt = Date.now();
 
+  let stored;
   try {
-    await imageStore.put({
+    stored = await imageStore.put({
       id,
       sessionId,
       contentType,
@@ -3632,6 +3660,13 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
     quotas.forgetImage(imageVerdict.reservation);
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
+  }
+  if (stored === false) {
+    // The student erased this session while the photo was on its way: it is
+    // not kept, and costs no photo upload.
+    quotas.forgetImage(imageVerdict.reservation);
+    logger.forRequest(req).info({ contentType, sizeBytes: buffer.length }, 'image upload dropped: its session was erased meanwhile');
+    return res.status(410).json({ error: 'session_erased', message: 'This chat was deleted, so the photo was not saved.' });
   }
   // The ledger row a restart counts the day's photos from (session and network).
   claudeCall.recordImageUpload({ sessionId, ip: req.ip, traceId: req.traceId, bytes: buffer.length });
@@ -3693,6 +3728,10 @@ app.get('/api/images/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
   const { sessionId, content, reason, userMessage, context } = req.validated;
+  // Taken before the session is looked up, for the same reason as a photo's
+  // (POST /api/images): no report is kept for a session erased after the
+  // request began.
+  const createdAt = Date.now();
   try {
     // A session this server has never seen has no reply to report; acknowledge
     // and drop. Not refuseUnseenSession — that creates the row and spends the
@@ -3703,7 +3742,9 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
     }
     // Past its daily allowance a session's (or a network's) reports are
     // acknowledged the same way and dropped, so one client cannot bury the
-    // review queue.
+    // review queue. Both counts are read back after a restart: the
+    // session's from the reports table, the network's from its ledger rows.
+    await readQuotasBack(req, sessionId);
     const reportVerdict = quotas.noteReport(sessionId, req.ip);
     if (!reportVerdict.ok) {
       metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
@@ -3713,7 +3754,6 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       }
       return res.json({ ok: true });
     }
-    const createdAt = Date.now();
     const { id } = await db.saveReport({
       sessionId,
       content,
@@ -3722,6 +3762,13 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       context: context ?? null,
       createdAt,
     });
+    if (id == null) {
+      // The student erased this session while the report was on its way:
+      // acknowledged and dropped, like a report for an unknown session.
+      logger.forRequest(req).info({ reason: reason || null }, 'content report dropped: its session was erased meanwhile');
+      return res.json({ ok: true });
+    }
+    claudeCall.recordNetworkEvent('report', { route: '/api/report', ip: req.ip });
     // Log the signal (reason only) so reports surface in observability; the
     // full reported text lives in the DB for review. The Discord alert is the
     // only channel the founder actually sees between club meetings.
@@ -3789,6 +3836,13 @@ app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (re
   }
   try {
     const result = await db.deleteSession(sessionId);
+    // Memory too: today's turns, photos, dollars and reports for the id, and
+    // the note that they were read back. The ledger rows they came from are
+    // gone, so a restart would forget them anyway ("from the server's point
+    // of view you have never been here before"). The network's counters
+    // stay: they are the network's, not the student's.
+    quotas.forgetSession(sessionId);
+    hydrateSessionQuota.forget(sessionId);
     // Log a hash, never the id itself — the logs are not the place a
     // student's bearer capability should live.
     logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId), deleted: result.deleted }, 'session erased on request');
@@ -3977,6 +4031,7 @@ db.initSchema().then(async () => {
           imagesBefore: (ts) => db.purgeImagesBefore(ts),
           reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
           usageBefore: (ts) => db.purgeUsageBefore(ts),
+          networkCountsBefore: (ts) => db.purgeNetworkCountsBefore(ts),
           lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
           inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
           deleteSession: (id) => db.deleteSession(id),
