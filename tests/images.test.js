@@ -14,9 +14,9 @@
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnServer } = require('./support/spawnServer');
-const path = require('node:path');
-const os = require('node:os');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const crypto = require('node:crypto');
 
 const {
@@ -123,19 +123,6 @@ let BASE_URL;
 
 let serverProc;
 
-// Each server gets a throwaway database. Without SQLITE_PATH the server
-// opens the checkout's own mercurius.db, and every new session id it sees
-// there is written to the 'session' ledger, which the server reads back
-// into the network's daily new-device count (IP_DAILY_NEW_SESSIONS, 60).
-// After about five runs in one day, uploads from 127.0.0.1 got 429.
-const dbPath = (name) => path.join(os.tmpdir(), `merc-images-${name}-${crypto.randomBytes(4).toString('hex')}.db`);
-function removeDb(file) {
-  for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(file + suffix, { force: true }); } catch { /* ignore */ }
-  }
-}
-const MAIN_DB = dbPath('main');
-
 function makeSessionId() {
   return 'img_' + crypto.randomBytes(8).toString('hex');
 }
@@ -161,16 +148,35 @@ async function getRaw(p) {
   };
 }
 
+// A database of its own. Without SQLITE_PATH the server opens the checkout's
+// mercurius.db, and a restart reads a network's day back from its ledger, so
+// every run's sessions from 127.0.0.1 piled up there until the network's
+// IP_DAILY_NEW_SESSIONS ran out and these uploads got 429s for the rest of
+// the day.
+const tempDbs = [];
+const tempDb = () => {
+  const p = path.join(os.tmpdir(), `merc-images-${crypto.randomBytes(4).toString('hex')}.db`);
+  tempDbs.push(p);
+  return p;
+};
+const removeTempDbs = () => {
+  for (const p of tempDbs) {
+    for (const suffix of ['', '-wal', '-shm']) {
+      try { fs.rmSync(p + suffix, { force: true }); } catch { /* ignore */ }
+    }
+  }
+};
+
 before(async () => {
   // Force the default DB-backed image store on ephemeral SQLite.
-  const server = spawnServer({ SQLITE_PATH: MAIN_DB, IMAGE_STORAGE_DRIVER: 'db' });
+  const server = spawnServer({ IMAGE_STORAGE_DRIVER: 'db', SQLITE_PATH: tempDb() });
   serverProc = server.proc;
   ({ base: BASE_URL } = await server.ready);
 });
 
 after(() => {
   if (serverProc) serverProc.kill('SIGTERM');
-  removeDb(MAIN_DB);
+  removeTempDbs();
 });
 
 describe('POST /api/images — success + retrieval round-trip', () => {
@@ -310,16 +316,12 @@ describe('image bodies are read only after the limiters', () => {
   describe('against a server with tight upload limits', () => {
     let base;
     let proc;
-    const tightDb = dbPath('tight');
     before(async () => {
-      const server = spawnServer({ SQLITE_PATH: tightDb, IMAGE_STORAGE_DRIVER: 'db', UPLOAD_IP_PER_MIN: '3', IMAGE_UPLOAD_INFLIGHT_BYTES: '4096' });
+      const server = spawnServer({ IMAGE_STORAGE_DRIVER: 'db', SQLITE_PATH: tempDb(), UPLOAD_IP_PER_MIN: '3', IMAGE_UPLOAD_INFLIGHT_BYTES: '4096' });
       proc = server.proc;
       ({ base } = await server.ready);
     });
-    after(() => {
-      if (proc) proc.kill('SIGTERM');
-      removeDb(tightDb);
-    });
+    after(() => { if (proc) proc.kill('SIGTERM'); });
 
     const send = (body) => fetch(`${base}/api/images`, {
       method: 'POST',
