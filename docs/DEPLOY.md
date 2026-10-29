@@ -194,6 +194,19 @@ the `STREAK_TZ` day, not the moment), and is deleted after
 `NETWORK_COUNT_RETENTION_DAYS`. A session's own report count
 (`SESSION_DAILY_REPORTS`) comes from the `reports` table.
 
+**Known limit: an erasure, then a restart.** "Delete my data" erases the
+session's `usage` rows, and those are the rows a restart reads a network's
+dollars and photos back from. So after an erasure and then a deploy or a
+crash restart the same day, the network gets back the share of
+`IP_DAILY_USD`, `IP_DAILY_IMAGES` and `IP_DAILY_IMAGE_BYTES` that the
+erased sessions used, and `DAILY_BUDGET_USD` gets back their dollars.
+Until the restart nothing changes (the counts in memory stay). It is
+bounded by the number of restarts and by `IP_DAILY_NEW_SESSIONS` (each
+erased id was a sign-up). The new-session and report counts are not
+affected. Closing it would mean keeping a per-network dollar and photo
+total through an erasure, which is more kept about an erased student; that
+is the founder's call, and it is not done.
+
 | Var | Scope | Default |
 |---|---|---|
 | `SESSION_DAILY_LESSON_TURNS` | curriculum (lesson) turns per session | `40` |
