@@ -2509,13 +2509,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       };
       touch();
       const hardCap = setTimeout(() => { timedOut = true; streamAbort.abort(); }, STREAM_MAX_MS);
+      // The watchdogs time the model's stream; the keepalive runs until the
+      // final frames are written (see the 'end' handler).
+      const stopWatchdogs = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        clearTimeout(hardCap);
+      };
       let timersStopped = false;
       const stopTimers = () => {
         if (timersStopped) return;
         timersStopped = true;
         clearInterval(keepalive);
-        if (idleTimer) clearTimeout(idleTimer);
-        clearTimeout(hardCap);
+        stopWatchdogs();
       };
 
       let fullText = '';
@@ -2562,11 +2567,19 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       });
 
       stream.on('end', async () => {
-        stopTimers();
+        // The model's stream is over, and so are its watchdogs. The keepalive
+        // pings on until the 'complete' frame: a held-back turn's answer
+        // guard asks the model again after this point, and that rewrite can
+        // take as long as the first reply while the socket carries nothing
+        // else (a held-back turn streams no text at all). A quiet socket that
+        // long is what school proxies, cellular NATs and the app's 60 s idle
+        // timeout drop.
+        stopWatchdogs();
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) {
+          stopTimers();
           // The API took the photo and began answering: a Stop or a dropped
           // stream mid-reply still leaves that turn in the student's thread.
           if (modelSpoke) linkPhoto(fullText);
@@ -2629,6 +2642,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const exposedUsage = process.env.EVAL_EXPOSE_USAGE === '1' && typeof stream.accounting === 'function' && stream.accounting()
           ? { usage: stream.accounting().usage }
           : {};
+        stopTimers();
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
@@ -2683,6 +2697,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // end, writableFinished is true and this is a no-op.
       res.on('close', () => {
         if (!res.writableFinished) stream.abort();
+        // Nobody is left to ping (a client gone during the answer guard).
+        stopTimers();
       });
 
     } else {
