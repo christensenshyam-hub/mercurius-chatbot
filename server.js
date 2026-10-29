@@ -1188,9 +1188,12 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-// `followUp: true` for the route's second ask on the same tap (lib/claudeCall:
-// it uses no daily turn of its own).
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, followUp = false }) {
+// `turn` is one tap's turn when the route may ask more than once ({ counted:
+// false } to start): an ask after one that counted it is a follow-up
+// (lib/claudeCall: it uses no daily turn of its own), and an ask that gave
+// an answer counts it. An ask that was refused or came back empty used no
+// turn, so the next one is not a follow-up and counts it if it answers.
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, turn = null }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1211,7 +1214,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
-    followUp,
+    followUp: Boolean(turn && turn.counted),
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -1219,6 +1222,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
+  if (turn && response && typeof response.accounting === 'function' && response.accounting().answered) turn.counted = true;
   const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
@@ -1691,8 +1695,9 @@ function quotaErrorHandled(err, req, res) {
 //
 // The network's count is read back from the ledger first (once per network
 // per product day), and each session it creates leaves a $0 ledger row with
-// the hashed address and no session id: a deploy used to give every network
-// a fresh IP_DAILY_NEW_SESSIONS, and an erasure doesn't take the row away.
+// the hashed address, no session id and only the day (not the moment): a
+// deploy used to give every network a fresh IP_DAILY_NEW_SESSIONS, and an
+// erasure doesn't take the row away. The row goes after two days.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
   await hydrateNetworkQuota(req.ip);
@@ -1856,6 +1861,12 @@ function recordLessonProgress(sessionId, meta) {
 // pending wait for the same read rather than skip it. `.forget(key)` drops
 // a key's read (an erased session: its rows are gone, so the next request
 // reads the ledger again).
+//
+// `read(key, since, day)` gets the product day it reads for and hands it
+// to quotas, which drop a read that began before midnight and finished
+// after it: it used to seed the new day with the old day's counts for the
+// rest of that day (a whole school network refused, for one). The new
+// day's first request reads the ledger again.
 function dailyLedgerRead(what, read) {
   const reads = new Map(); // key → today's read (never rejects)
   let readsDay = productDay.dayKey();
@@ -1867,7 +1878,7 @@ function dailyLedgerRead(what, read) {
     let pending = reads.get(key);
     if (!pending) {
       pending = Promise.resolve()
-        .then(() => read(key, productDay.startOfDayMs(now)))
+        .then(() => read(key, productDay.startOfDayMs(now), today))
         .catch((e) => {
           if (reads.get(key) === pending) reads.delete(key);
           logger.warn({ err: e.message }, `${what} quota hydrate failed; trying again on its next request`);
@@ -1879,12 +1890,12 @@ function dailyLedgerRead(what, read) {
   readBack.forget = (key) => { reads.delete(key); };
   return readBack;
 }
-const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since) => {
+const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since, day) => {
   const [rows, reports] = await Promise.all([db.sessionUsageSince(sessionId, since), db.sessionReportsSince(sessionId, since)]);
-  if ((rows && rows.length) || reports > 0) quotas.hydrateSession(sessionId, rows || [], { reports });
+  if ((rows && rows.length) || reports > 0) quotas.hydrateSession(sessionId, rows || [], { reports, day });
 });
-const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since) => {
-  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since));
+const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since, day) => {
+  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since), { day });
 });
 // Every route that checks the daily quotas awaits this before its check.
 function readQuotasBack(req, sessionId) {
@@ -2903,12 +2914,14 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    // One tap is one helper turn: only the first ask counts it.
-    let asked = 0;
+    // One tap is one helper turn: the first ask that gets an answer counts
+    // it, and every ask after that is a follow-up. (Marking every second ask
+    // a follow-up let a quiz whose first ask was refused cost no turn.)
+    const turn = { counted: false };
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
-      followUp: asked++ > 0,
+      turn,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
@@ -4022,6 +4035,7 @@ db.initSchema().then(async () => {
           imagesBefore: (ts) => db.purgeImagesBefore(ts),
           reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
           usageBefore: (ts) => db.purgeUsageBefore(ts),
+          networkCountsBefore: (ts) => db.purgeNetworkCountsBefore(ts),
           lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
           inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
           deleteSession: (id) => db.deleteSession(id),
