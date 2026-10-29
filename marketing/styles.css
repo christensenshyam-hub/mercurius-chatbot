@@ -21,6 +21,33 @@
    ============================================================ */
 
 /* ---------- 1. Tokens ---------- */
+/* Fallback faces for Fraunces. Until Fraunces arrives (display=swap) the
+   headlines are set in Iowan Old Style (iPhone, iPad, Mac) or Georgia
+   (Windows). Unadjusted, Iowan's italic is 10 to 13% narrower than
+   Fraunces's, so headlines changed their line count when Fraunces swapped
+   in and everything under them jumped (a layout shift of up to 0.33 on a
+   phone's first visit).
+   size-adjust scales each face to Fraunces's width on the site's own
+   headings, and the overrides give it Fraunces's ascent and descent
+   (0.978 / 0.255 em; they are scaled by size-adjust, hence divided by it
+   here). How the numbers were measured: docs/marketing-design.md 3.1. */
+@font-face { font-family: "Fraunces Fallback Iowan"; font-style: normal; font-weight: 400 599; src: local("Iowan Old Style Roman"), local("IowanOldStyle-Roman");
+  size-adjust: 103%; ascent-override: 95.0%; descent-override: 24.8%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Iowan"; font-style: normal; font-weight: 600 900; src: local("Iowan Old Style Bold"), local("IowanOldStyle-Bold");
+  size-adjust: 99%; ascent-override: 98.8%; descent-override: 25.8%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Iowan"; font-style: italic; font-weight: 400 599; src: local("Iowan Old Style Italic"), local("IowanOldStyle-Italic");
+  size-adjust: 113%; ascent-override: 86.5%; descent-override: 22.6%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Iowan"; font-style: italic; font-weight: 600 900; src: local("Iowan Old Style Bold Italic"), local("IowanOldStyle-BoldItalic");
+  size-adjust: 113%; ascent-override: 86.5%; descent-override: 22.6%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Georgia"; font-style: normal; font-weight: 400 599; src: local("Georgia");
+  size-adjust: 105%; ascent-override: 93.1%; descent-override: 24.3%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Georgia"; font-style: normal; font-weight: 600 900; src: local("Georgia Bold"), local("Georgia-Bold");
+  size-adjust: 93%; ascent-override: 105.2%; descent-override: 27.4%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Georgia"; font-style: italic; font-weight: 400 599; src: local("Georgia Italic"), local("Georgia-Italic");
+  size-adjust: 98%; ascent-override: 99.8%; descent-override: 26.0%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback Georgia"; font-style: italic; font-weight: 600 900; src: local("Georgia Bold Italic"), local("Georgia-BoldItalic");
+  size-adjust: 90%; ascent-override: 108.7%; descent-override: 28.3%; line-gap-override: 0%; }
+
 :root {
   color-scheme: dark;
 
@@ -76,7 +103,7 @@
   --glow-merc: radial-gradient(closest-side, rgba(138, 92, 255, 0.6) 0%, rgba(91, 61, 240, 0.16) 60%, rgba(91, 61, 240, 0) 100%);
 
   /* Type */
-  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-display: "Fraunces", "Fraunces Fallback Iowan", "Fraunces Fallback Georgia", serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --fs-display: clamp(2.5rem, 1.6rem + 4.5vw, 4.5rem);
   --fs-page-title: clamp(2.25rem, 1.55rem + 3.4vw, 3.75rem);
@@ -899,7 +926,10 @@ strong { color: var(--ink); font-weight: 600; }
 }
 .page-hero .container { position: relative; }
 .page-hero h1 {
-  max-width: 18ch;
+  /* 18ch of Fraunces, in em: a ch is the width of the font's "0", and the
+     fallbacks' old-style "0" is 4 to 13% narrower, so an 18ch box shrank
+     until Fraunces arrived and the headline rewrapped. */
+  max-width: 12.25em;
   margin-bottom: var(--space-5);
   font-size: var(--fs-page-title);
   line-height: var(--lh-heading);

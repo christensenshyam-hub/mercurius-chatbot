@@ -247,6 +247,13 @@ Latin subset). Keep page text inside that subset (Latin-1 plus general
 punctuation): a character such as "ě" makes browsers fetch the latin-ext
 files as well.
 
+Until Fraunces arrives, headlines show in Iowan Old Style or Georgia, resized
+by the "Fraunces Fallback" faces at the top of `styles.css` so they mostly
+wrap on the same lines and the page doesn't jump when Fraunces swaps in. The
+sizes were measured against this site's headings
+(`docs/marketing-design.md` 3.1). Size headline boxes in `em`, not `ch`: a
+`ch` changes width with the font.
+
 ## Accessibility
 
 - Skip link at the very top.

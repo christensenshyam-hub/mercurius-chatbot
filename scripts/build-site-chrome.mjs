@@ -17,7 +17,7 @@ const CHECK = process.argv.includes('--check');
 
 const STORE = 'https://apps.apple.com/app/id6773192313';
 const SITE = 'https://trymercurius.com';
-const CSS_V = '12';
+const CSS_V = '13';
 const JS_V = '10';
 const ADS_V = '3';
 const DEMO_V = '1';
