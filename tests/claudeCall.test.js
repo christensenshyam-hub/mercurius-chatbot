@@ -343,6 +343,14 @@ describe('claudeCall: only answered calls use a daily turn (AUD-31)', () => {
     assert.equal(quotas.check({ sessionId: 'r1', ip: IP, kind: 'chat' }).ok, true, 'the one turn is still there');
   });
 
+  test("createMessage: the message says whether the call used the turn (a route that asks again reads it)", async () => {
+    const answered = await claudeCall.createMessage({ route: '/api/quiz', kind: 'helper', sessionId: 'q1', ip: IP, params: chatParams() });
+    const refused = await claudeCall.createMessage({ route: '/api/quiz', kind: 'helper', sessionId: 'q1', ip: IP, params: chatParams('MOCK_REFUSAL quiz me') });
+    const followUp = await claudeCall.createMessage({ route: '/api/quiz', kind: 'helper', sessionId: 'q1', ip: IP, followUp: true, params: chatParams() });
+    assert.deepEqual([answered, refused, followUp].map((m) => m.accounting().answered), [true, false, false]);
+    assert.ok(!Object.keys(answered).includes('accounting'), 'not part of the message body');
+  });
+
   test('createMessage: an upstream error uses no turn', async () => {
     reinit('overloaded');
     quotas.configure({ SESSION_DAILY_LESSON_TURNS: 1 });

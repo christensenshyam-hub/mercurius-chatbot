@@ -1188,9 +1188,12 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-// `followUp: true` for the route's second ask on the same tap (lib/claudeCall:
-// it uses no daily turn of its own).
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, followUp = false }) {
+// `turn` is one tap's turn when the route may ask more than once ({ counted:
+// false } to start): an ask after one that counted it is a follow-up
+// (lib/claudeCall: it uses no daily turn of its own), and an ask that gave
+// an answer counts it. An ask that was refused or came back empty used no
+// turn, so the next one is not a follow-up and counts it if it answers.
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, turn = null }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1211,7 +1214,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
-    followUp,
+    followUp: Boolean(turn && turn.counted),
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -1219,6 +1222,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
+  if (turn && response && typeof response.accounting === 'function' && response.accounting().answered) turn.counted = true;
   const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
@@ -2894,12 +2898,14 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
-    // One tap is one helper turn: only the first ask counts it.
-    let asked = 0;
+    // One tap is one helper turn: the first ask that gets an answer counts
+    // it, and every ask after that is a follow-up. (Marking every second ask
+    // a follow-up let a quiz whose first ask was refused cost no turn.)
+    const turn = { counted: false };
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
-      followUp: asked++ > 0,
+      turn,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
