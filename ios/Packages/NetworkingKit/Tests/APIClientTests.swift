@@ -445,6 +445,18 @@ struct APIErrorTests {
         }
     }
 
+    @Test("A per-minute limit doesn't tell the student they're moving fast: it may be the whole network's")
+    func rateLimitCopyBlamesNoOne() throws {
+        // The school's one address trips the photo limiter (60 a minute,
+        // lib/rateLimiter.js ipLimiter) while this student sent one photo.
+        let body = Data(#"{"error":"rate_limited","message":"Too many requests. Try again in a moment."}"#.utf8)
+        #expect(throws: APIError.rateLimited) { try APIClient.validate(statusCode: 429, data: body) }
+        let copy = APIError.rateLimited.userFacingMessage
+        #expect(copy == "Too many requests at once. Wait a minute, then try again.")
+        #expect(!copy.lowercased().contains("you"))
+        #expect(APIError.rateLimited.isRetryable)
+    }
+
     @Test("quotaExceeded shows the server's copy with its reset as a local time; serviceUnavailable shows it verbatim")
     func refusalsPreferServerCopy() {
         let quota = APIError.quotaExceeded(
