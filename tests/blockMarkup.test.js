@@ -27,6 +27,18 @@ describe('blockMarkup', () => {
     }
   });
 
+  test('[Q] rule: the right option first, short and plain, the wrong ones sized against it (the length tell)', () => {
+    // Probe 2026-10-28 (scripts/quiz-length-probe.mjs, Sonnet 5.5, every
+    // non-Review Deep-dive opener): under "make the options look alike … at
+    // least one wrong option must be longer", the right option was the
+    // longest in 49 of 53 checks. The order makes the rule checkable while
+    // writing: A) is on the page when each wrong option is written.
+    assert.match(CURRICULUM_BLOCKS_APPENDIX, /FIRST the correct option, as A\) \(the server shuffles the options before the student sees them, so A gives nothing away\)/);
+    assert.match(CURRICULUM_BLOCKS_APPENDIX, /one plain claim of at most 12 words, with no hedge and no "because…" or "so…" add-on/);
+    assert.match(CURRICULUM_BLOCKS_APPENDIX, /THEN each wrong option: an equally confident plain claim within two words of A\)'s length/);
+    assert.doesNotMatch(CURRICULUM_BLOCKS_APPENDIX, /Length check before you send/, 'the old rule the model did not follow is gone');
+  });
+
   test('parseQuizInterior: well-formed and malformed shapes', () => {
     const good = parseQuizInterior('Why?\nA) one\nB) two\nANS: A');
     assert.deepEqual([good.stem, good.options.length, good.answerIndex, good.wellFormed], ['Why?', 2, 0, true]);

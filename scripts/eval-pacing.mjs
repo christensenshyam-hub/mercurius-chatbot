@@ -467,11 +467,15 @@ export const SCENARIOS = [
     // dynamic turns "tap" an option exactly like CheckQuizCard's auto-send —
     // correct picks on the happy path plus ONE deliberate wrong pick to
     // exercise the reteach beat. Exercise/summary turns stay scripted prose.
+    // The reteach doesn't use up a teach beat (CURRICULUM_PROMPT STEP 1), so
+    // Lesson 1.1's three ideas take four checks with the wrong pick: tap
+    // four times before the scripted exercise answers start.
     id: 'curriculum-blocks-1', mode: 'curriculum', capabilities: [BLOCKS_V1],
     turns: [
       '[CURRICULUM: Unit 1, Lesson 1] Teach me what physically happens inside an LLM when I type a prompt. Start with tokenization and next-token prediction. After explaining, give me a hands-on exercise.',
       { dynamic: (last) => pickFromQuiz(last) },
       { dynamic: (last) => pickFromQuiz(last, { wrong: true }) },
+      { dynamic: (last) => pickFromQuiz(last) },
       { dynamic: (last) => pickFromQuiz(last) },
       "For the exercise, concretely: the model is most confident at the end of a strong collocation — the slot where one continuation dominates training text. It's least confident at an open slot where several continuations are all plausible. Strong learned pattern → high confidence; open choice → low confidence.",
       "Naming the exact spots: high confidence — the final word of your sentence, because the phrase leading into it is a fixed expression. Low confidence — immediately after the first word, because almost any word class could follow there.",
