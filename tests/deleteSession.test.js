@@ -76,6 +76,36 @@ describe('db.deleteSession removes every session-keyed row', () => {
     assert.equal((await db.getMessages(drop, 50)).length, 0, 'target session cleared');
   });
 
+  test('a photo whose upload began before the erasure is not kept; one begun after it is', async () => {
+    // The images table has no foreign key: a photo still being written when
+    // its session is erased used to stay behind under the erased id.
+    const image = (sessionId, createdAt) => ({
+      id: crypto.randomBytes(12).toString('hex'), sessionId,
+      contentType: 'image/png', fileName: null, sizeBytes: 3,
+      data: Buffer.from([1, 2, 3]), createdAt,
+    });
+    const s = sid();
+    await db.getOrCreateSession(s);
+    const began = Date.now() - 50; // the upload's request came in, then the erasure
+    await db.deleteSession(s);
+    const raced = image(s, began);
+    assert.equal(await db.saveImage(raced), false);
+    assert.equal(await db.getImage(raced.id), null, 'no photo under the erased id');
+
+    // The phone keeps its id after an emailed erasure: a later upload under
+    // it starts the session again and is stored as usual.
+    await new Promise((r) => setTimeout(r, 5));
+    const later = image(s, Date.now());
+    assert.equal(await db.saveImage(later), true);
+    assert.ok(await db.getImage(later.id));
+
+    // Other sessions are never affected.
+    const other = sid();
+    const theirs = image(other, began);
+    assert.equal(await db.saveImage(theirs), true);
+    assert.ok(await db.getImage(theirs.id));
+  });
+
   test('a usage row or lesson event settling after the erasure no longer carries the erased id', async () => {
     const s = sid();
     const other = sid();

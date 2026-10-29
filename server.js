@@ -3585,6 +3585,10 @@ function imageBodyBudget(req, res, next) {
 
 app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
   const { sessionId, contentType, data, fileName } = req.validated;
+  // Taken before the session is looked up: the store compares it with the
+  // time of an erasure of this session that lands while the upload is under
+  // way, and keeps no photo for a session erased after it began.
+  const createdAt = Date.now();
 
   const validated = decodeAndValidateImage({ data, contentType });
   if (!validated.ok) {
@@ -3620,10 +3624,10 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // — consistent with the app's bearer-style session model — and is the stable
   // handle future v3 features key off.
   const id = crypto.randomBytes(24).toString('base64url');
-  const createdAt = Date.now();
 
+  let stored;
   try {
-    await imageStore.put({
+    stored = await imageStore.put({
       id,
       sessionId,
       contentType,
@@ -3636,6 +3640,13 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
     quotas.forgetImage(imageVerdict.reservation);
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
+  }
+  if (stored === false) {
+    // The student erased this session while the photo was on its way: it is
+    // not kept, and costs no photo upload.
+    quotas.forgetImage(imageVerdict.reservation);
+    logger.forRequest(req).info({ contentType, sizeBytes: buffer.length }, 'image upload dropped: its session was erased meanwhile');
+    return res.status(410).json({ error: 'session_erased', message: 'This chat was deleted, so the photo was not saved.' });
   }
   // The ledger row a restart counts the day's photos from (session and network).
   claudeCall.recordImageUpload({ sessionId, ip: req.ip, traceId: req.traceId, bytes: buffer.length });

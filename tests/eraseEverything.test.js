@@ -29,6 +29,11 @@
  * the only one wired; s3/r2 are unconfigured seams that refuse every call),
  * here on SQLite. scripts/pg-smoke.mjs runs the same erasure on Postgres in
  * CI.
+ *
+ * The second block erases a session while one of its photos is still being
+ * written (a preload makes the write slow, as a Postgres write of a large
+ * photo is). The images table has no foreign key, so that photo used to stay
+ * behind under the erased id.
  */
 
 const { describe, test, before, after } = require('node:test');
@@ -43,6 +48,7 @@ const { waitFor } = require('./support/waitFor');
 // A real 1×1 transparent PNG.
 const TINY_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const SLOW_STORE = path.join(__dirname, 'fixtures', 'slowImageStore.js');
 
 // 32 characters, the shape of the iOS Keychain id.
 const newSid = (prefix) => `${prefix}_${crypto.randomBytes(16).toString('hex')}`.slice(0, 32);
@@ -236,5 +242,38 @@ describe('DELETE /api/session/:id erases everything tied to the session', () => 
   test('the other session is untouched', () => {
     const rows = rowsBySessionTable(srv.dbPath, bystander);
     for (const [table, n] of Object.entries(rows)) assert.ok(n > 0, `${table}: ${JSON.stringify(rows)}`);
+  });
+});
+
+describe('a photo still being stored when its session is erased is not kept', () => {
+  // The preload makes each image write take 300 ms, as a Postgres write of a
+  // multi-megabyte photo can; the erasure lands in the middle of it.
+  const srv = bootServer({ NODE_OPTIONS: `--require ${JSON.stringify(SLOW_STORE)}`, SLOW_IMAGE_PUT_MS: '300' });
+  before(() => srv.ready);
+  after(() => srv.cleanup());
+
+  test('the upload that raced the erasure leaves no photo behind', async () => {
+    const student = newSid('race');
+    assert.equal((await post(srv.base, '/api/mode', { sessionId: student, mode: 'socratic' })).status, 200);
+    const uploading = upload(srv.base, student);
+    await sleep(100); // the upload is past its checks and inside the write
+    const erased = await fetch(`${srv.base}/api/session/${student}`, { method: 'DELETE' });
+    assert.equal(erased.status, 200);
+    const uploaded = await uploading;
+    await sleep(100);
+    const rows = rowsBySessionTable(srv.dbPath, student);
+    assert.equal(rows.images, 0, `the photo was stored after the erasure: ${JSON.stringify(rows)}`);
+    assert.deepEqual(cellsContaining(srv.dbPath, student), []);
+    // The upload is told so (it used to get a 201 and a working photo link).
+    assert.deepEqual([uploaded.status, uploaded.json && uploaded.json.error], [410, 'session_erased'], JSON.stringify(uploaded.json));
+  });
+
+  test('an upload that starts after the erasure is stored as usual (the id is new to the server)', async () => {
+    const student = newSid('again');
+    assert.equal((await post(srv.base, '/api/mode', { sessionId: student, mode: 'socratic' })).status, 200);
+    assert.equal((await fetch(`${srv.base}/api/session/${student}`, { method: 'DELETE' })).status, 200);
+    const uploaded = await upload(srv.base, student);
+    assert.equal(uploaded.status, 201, JSON.stringify(uploaded.json));
+    assert.equal((await fetch(`${srv.base}/api/images/${uploaded.json.id}`)).status, 200);
   });
 });
