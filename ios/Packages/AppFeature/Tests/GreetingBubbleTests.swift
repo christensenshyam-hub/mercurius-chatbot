@@ -71,11 +71,13 @@ struct GreetingBubbleTests {
         #expect(bubble.shown == next)
     }
 
-    @Test("Mid-type, nothing typed past the shared words is lost")
+    @Test("Mid-type still inside the shared words: everything typed so far stays up")
     func midTypeInsideSharedOpening() {
         var bubble = typed(first, characters: 5)
         #expect(bubble.follow(next, bubbleShown: true) == .inPlace)
         #expect(bubble.shown == "Good ")
+        typeToEnd(&bubble)
+        #expect(bubble.shown == next)
     }
 
     @Test("Mid-type into a line with nothing in common: that line starts from its first letter")
