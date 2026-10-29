@@ -2576,7 +2576,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
 
-      stream.on('end', async () => {
+      // Run by the stream's 'end' (registered below, where a throw in it is
+      // caught).
+      const finishTurn = async () => {
         // The model's stream is over, and so are its watchdogs. The keepalive
         // pings on until the 'complete' frame: a held-back turn's answer
         // guard asks the model again after this point, and that rewrite can
@@ -2668,6 +2670,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
         releaseSse();
+      };
+      // A throw in finishTurn (a bug in a reply transform, say) still ends the
+      // turn, with the stream-error frame. Otherwise the keepalive, which runs
+      // until the final frames, would ping on: the app would wait out its
+      // 240 s whole-reply cap, and the widget would wait for good.
+      stream.on('end', () => {
+        finishTurn().catch((err) => {
+          stopTimers();
+          logger.forRequest(req).error({ err: err && err.message }, 'SSE end handler failed');
+          if (!res.writableEnded) {
+            safeWrite(`data: ${JSON.stringify({ type: 'error', code: 'upstream_error', error: 'Mercurius hit a snag. Try again in a moment.' })}\n\n`);
+            try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
+          }
+          releaseSse();
+        });
       });
 
       stream.on('error', (err) => {

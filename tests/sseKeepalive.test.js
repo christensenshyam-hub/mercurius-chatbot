@@ -82,3 +82,49 @@ test('the keepalive pings on while the answer guard rewrites a held-back reply',
     }
   }
 });
+
+// The keepalive runs until the final frames, so the end handler has to reach
+// them. A throw there (a bug in a reply transform, say; the preload injects
+// one on a reply carrying FINISH_FAULT) used to leave the turn open with the
+// pings still going: no error, no end, so the app waited out its 240 s
+// whole-reply cap and the widget waited for good. It now ends with the
+// stream-error frame.
+test('a throw after the model has finished still ends the turn, with an error frame', async () => {
+  const dbPath = path.join(os.tmpdir(), `merc-keepalive-fault-${crypto.randomBytes(4).toString('hex')}.db`);
+  const fault = path.join(__dirname, 'fixtures', 'throwInFinishTurn.js');
+  const { proc, ready } = spawnServer({
+    SQLITE_PATH: dbPath,
+    SSE_KEEPALIVE_MS: '50',
+    NODE_OPTIONS: `--require ${JSON.stringify(fault)}`,
+  });
+  try {
+    const { base } = await ready;
+    const sessionId = 'sess_' + crypto.randomBytes(6).toString('hex');
+    const turn = async (content) => {
+      const res = await fetch(`${base}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({ sessionId, messages: [{ role: 'user', content }] }),
+        // Far longer than a mock turn takes; a turn left open fails here.
+        signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(res.status, 200);
+      let raw = '';
+      for await (const chunk of res.body) raw += Buffer.from(chunk).toString('utf8');
+      return raw.split('\n').filter((l) => l.startsWith('data: {')).map((l) => JSON.parse(l.slice(6)));
+    };
+
+    // The preload changes nothing else: a turn without the marker completes.
+    const ok = await turn('What is a token?');
+    assert.ok(ok.some((f) => f.type === 'complete'), JSON.stringify(ok));
+
+    const failed = await turn(`hi MOCK_SAY_B64:${b64('Tokens are pieces of text. FINISH_FAULT')}`);
+    assert.ok(!failed.some((f) => f.type === 'complete'), JSON.stringify(failed));
+    assert.deepEqual(failed.filter((f) => f.type === 'error').map((f) => f.code), ['upstream_error'], JSON.stringify(failed));
+  } finally {
+    proc.kill('SIGKILL');
+    for (const f of [dbPath, dbPath + '-wal', dbPath + '-shm']) {
+      try { fs.rmSync(f, { force: true }); } catch { /* ignore */ }
+    }
+  }
+});
