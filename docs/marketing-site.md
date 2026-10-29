@@ -44,7 +44,8 @@ files and scripts out of `marketing/`: `tests/marketingNotFound.test.js`
 fails on any file there that isn't a page, a style, script, image or video,
 `robots.txt`, `sitemap.xml` or `_redirects`. A `_redirects` rule can't hide
 such a file instead, because Netlify finds files whatever the case of the
-URL and rules match it exactly (`/rEaDmE.md` still served the old README).
+URL and rules match it exactly (on the live site `/rEaDmE.md` served the old
+README, while `/bEta` was a 404 though `/beta` redirects).
 
 Canonical URLs are the extensionless form (`https://trymercurius.com/privacy`).
 Netlify rewrites the `.html` links in the pages to that form on deploy, and
