@@ -465,8 +465,14 @@ public final class ChatViewModel {
                 imageId = response.id
             } catch is CancellationError {
                 return
+            } catch _ where Task.isCancelled {
+                // Stop, New Chat or opening another thread cancelled the
+                // upload, and the canceller has already set the state, as in
+                // runStream. APIClient reports the cancel as
+                // `APIError.cancelled`, which the arm above never sees.
+                return
             } catch let error as APIError {
-                if let refusal = error.serverRefusal, refusal.isPhotoAllowance, !Task.isCancelled,
+                if let refusal = error.serverRefusal, refusal.isPhotoAllowance,
                    returnPhotoTurnToComposer(assistantId: assistantId, image: image, refusal: refusal) {
                     return
                 }
