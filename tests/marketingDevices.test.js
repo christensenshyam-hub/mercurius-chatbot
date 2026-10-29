@@ -17,7 +17,9 @@ const SITE = path.join(ROOT, 'marketing');
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
 const project = read('ios', 'project.yml');
-const minIOS = /deploymentTarget:\s*\n\s*iOS:\s*"(\d+)\.\d+"/.exec(project)[1];
+// `|| []` so a reshaped project.yml fails the first test below with its
+// message instead of crashing the file as it loads.
+const minIOS = (/deploymentTarget:\s*\n\s*iOS:\s*"(\d+)\.\d+"/.exec(project) || [])[1];
 // The app target is the one with the main bundle id.
 const appTarget = /PRODUCT_BUNDLE_IDENTIFIER: com\.mayoailiteracy\.mercurius\.native\n\s*TARGETED_DEVICE_FAMILY: "([\d,]+)"/.exec(project);
 
@@ -46,11 +48,16 @@ test('every "iOS N or later" on the site names the project\'s iOS floor', () => 
 });
 
 test('the site never says iPhone-only while the app runs on iPad too', () => {
+  assert.ok(appTarget, 'no TARGETED_DEVICE_FAMILY next to the app bundle id in ios/project.yml');
   const families = appTarget[1].split(',');
   if (!families.includes('2')) return; // iPhone-only app: nothing to check
   for (const file of pages) {
     const t = text(file);
-    assert.doesNotMatch(t, /requires (an )?iPhone|iPhone only|iPhone-only|only on iPhone/i, `${file} says iPhone-only`);
+    // Report the words around the phrase, not the whole page (a whole page
+    // is cut off before the phrase when the test prints it).
+    const bad = /requires (an )?iPhone|iPhone only|iPhone-only|only on iPhone/i.exec(t);
+    const around = bad && t.slice(Math.max(0, bad.index - 40), bad.index + bad[0].length + 30).trim();
+    assert.equal(around, null, `${file} says iPhone-only: "…${around}…"`);
     // Each sentence that states the iOS floor also names the iPad.
     for (const m of t.matchAll(/[^.]*\biOS \d+(?:\.\d+)? or later[^.]*\./g)) {
       assert.match(m[0], /iPad/, `${file}: "${m[0].trim()}" leaves out the iPad`);
