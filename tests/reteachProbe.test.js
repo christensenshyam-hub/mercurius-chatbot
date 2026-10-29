@@ -118,6 +118,34 @@ describe('reteach-probe', () => {
       assert.ok(!BUDGET_TALK_RE.test(s), s);
     }
   });
+
+  test('"bank" before the word that decides it: flagged; the deciding word first: not', async () => {
+    const { laterContextExamples } = await modP;
+    assert.deepEqual(
+      laterContextExamples('In "I sat on the bank of the river," attention connects "bank" to "river".'),
+      ['I sat on the bank of the river,'],
+    );
+    assert.deepEqual(laterContextExamples('A student types: “I went to the bank to fish.”'), ['I went to the bank to fish.']);
+    for (const ok of [
+      'In "We walked along the river and sat down on the bank" vs. "I put cash in the bank", attention sorts it out.',
+      '"bank" (money) and "bank" (river) start as the same token.',
+      'With "I got my paycheck, so" before it, "bank" is near loan and deposit.',
+      'Each token gets a list of numbers. Rivers and cash come later.',
+    ]) {
+      assert.deepEqual(laterContextExamples(ok), [], ok);
+    }
+  });
+
+  test('round 2\'s runs: every trial put "bank" before its deciding word ("I sat on the bank of the river")', async () => {
+    const { scoreTrial } = await modP;
+    for (const name of ['reteach-probe-branch', 'reteach-probe-review', 'reteach-probe-branch-no-wrong-pick']) {
+      const { results } = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/evals', `${name}.json`), 'utf8'));
+      for (const r of results) {
+        const s = scoreTrial(r.replies.filter((x) => !x.error));
+        assert.ok(s.laterContext.some((b) => /bank of the river/.test(b.text)), `${name} trial ${r.trial}`);
+      }
+    }
+  });
 });
 
 describe('CURRICULUM_PROMPT: a reteach is not one of the 2–3 teach replies; Lesson 1.1 names its three ideas', () => {
@@ -142,6 +170,16 @@ describe('CURRICULUM_PROMPT: a reteach is not one of the 2–3 teach replies; Le
     const at = (re) => line.search(re);
     assert.ok(at(/\(1\) tokens/) < at(/\(2\) embeddings and attention/), line);
     assert.ok(at(/\(2\) embeddings and attention/) < at(/\(3\) next-token prediction/), line);
+  });
+
+  test('Unit 1 Lesson 1: attention adjusts a word from the words BEFORE it, and every "bank" example puts the deciding word first', async () => {
+    const { laterContextExamples } = await modP;
+    const line = u1l1.split('\n').find((l) => l.startsWith('Micro-concepts'));
+    assert.match(line, /attention lets the words before it in the sentence adjust it/);
+    assert.doesNotMatch(u1l1, /the other words in the sentence/);
+    assert.deepEqual(laterContextExamples(u1l1), [], 'a quoted example whose deciding word comes after "bank"');
+    assert.match(u1l1, /"We walked along the river and sat down on the bank" vs\. "I put cash in the bank"/);
+    assert.match(u1l1, /each word can only look back at the words before it/);
   });
 
   test('the change touched no other lesson entry (only Lesson 1.1 names its micro-concepts)', () => {

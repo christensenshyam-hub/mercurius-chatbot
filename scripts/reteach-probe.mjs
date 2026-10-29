@@ -57,6 +57,24 @@ export const IDEAS = Object.freeze({
  *  a distractor like "It ran out of training data" is not the tutor talking. */
 export const BUDGET_TALK_RE = /\b(?:run|ran|running) out\b|\bout of (?:time|steps|ideas|room)\b|\bno (?:more|time) (?:left|for)\b|\bone more (?:idea|thing|concept|step|piece)\b|\b(?:last|final) (?:idea|concept|step|piece)\b|\bwe(?:['’]ve| have) (?:covered|used up|got through) (?:all|every|everything)|\b(?:that['’]s|that is) all (?:we|i) (?:have|had) (?:time )?for\b/i;
 
+/** Words that settle which "bank" is meant, money or river. */
+const BANK_SENSE_RE = /\b(?:rivers?|riverside|streams?|creek|lake|water|shore|fish(?:ing|ed)?|boats?|cash|money|deposit(?:ed|ing)?|checks?|cheques?|loans?|account|paycheck|teller|savings)\b/i;
+
+/**
+ * Quoted "bank" examples whose deciding word comes AFTER "bank" ("I sat on
+ * the bank of the river"). In a GPT-style model a word can only look back at
+ * the words before it, so "river" there can't shift "bank" itself. [Q]
+ * blocks count: the student reads them too. Hand-check what this returns: a
+ * reply may quote such a sentence to say exactly that.
+ */
+export function laterContextExamples(raw) {
+  const quotes = [...String(raw ?? '').matchAll(/["“]([^"“”\n]+)["”]/g)].map((m) => m[1]);
+  return quotes.filter((quote) => {
+    const at = quote.search(/\bbank\b/i);
+    return at > -1 && BANK_SENSE_RE.test(quote.slice(at + 4));
+  });
+}
+
 const Q_BLOCK_RE = /\[Q\][\s\S]*?(?:\[\/Q\]|$)/g;
 
 const EXERCISE_RE = /\bexercise\b|put (?:this|it|that|them|these) to work/i;
@@ -99,6 +117,7 @@ export function scoreTrial(replies) {
     .map((raw) => raw.replace(Q_BLOCK_RE, ' ').match(BUDGET_TALK_RE)?.[0] ?? null)
     .map((hit, i) => (hit ? { reply: i + 1, text: hit } : null))
     .filter(Boolean);
+  const laterContext = raws.flatMap((raw, i) => laterContextExamples(raw).map((text) => ({ reply: i + 1, text })));
   return {
     replies: raws.length,
     exerciseAt: isExercise ? endIdx + 1 : null,
@@ -113,6 +132,7 @@ export function scoreTrial(replies) {
     eitherTaught: taught.attention || taught.embeddings,
     focus,
     budgetTalk,
+    laterContext,
     completed: raws.some((raw) => raw.includes('[LESSON_COMPLETE]')),
   };
 }
@@ -177,6 +197,7 @@ function report(results, meta) {
     teachReplies: scores.map((s) => s.teachReplies),
     teachAfterReteach: scores.map((s) => s.teachAfterReteach),
     budgetTalk: scores.flatMap((s, i) => s.budgetTalk.map((b) => ({ trial: i + 1, ...b }))),
+    laterContext: scores.flatMap((s, i) => (s.laterContext ?? []).map((b) => ({ trial: i + 1, ...b }))),
     completedEarly: count((s) => s.completed),
     errors,
     spendUsd: Number(spend.toFixed(4)),
@@ -186,9 +207,9 @@ function report(results, meta) {
   for (const r of results) {
     const s = r.score;
     const end = s.exerciseAt ? `exercise at reply ${s.exerciseAt}` : s.stoppedOnCheck ? `stopped on an open [CHECK] at reply ${s.teachReplies}` : 'no exercise';
-    lines.push(`  trial ${r.trial}: ${end}, ${s.teachReplies} teach replies (${s.teachAfterReteach ?? '-'} after the reteach); attention ${idea(s, 'attention')}, embeddings ${idea(s, 'embeddings')}${s.budgetTalk.length ? `; budget talk: ${s.budgetTalk.map((b) => `"${b.text}" (reply ${b.reply})`).join(', ')}` : ''}`);
+    lines.push(`  trial ${r.trial}: ${end}, ${s.teachReplies} teach replies (${s.teachAfterReteach ?? '-'} after the reteach); attention ${idea(s, 'attention')}, embeddings ${idea(s, 'embeddings')}${s.budgetTalk.length ? `; budget talk: ${s.budgetTalk.map((b) => `"${b.text}" (reply ${b.reply})`).join(', ')}` : ''}${s.laterContext.length ? `; "bank" before its deciding word: ${s.laterContext.map((b) => `"${b.text}" (reply ${b.reply})`).join(', ')}` : ''}`);
   }
-  lines.push(`attention taught ${summary.attentionTaught}/${n}, embeddings taught ${summary.embeddingsTaught}/${n}, both ${summary.bothTaught}/${n}; a teach reply after the reteach in ${count((s) => s.teachAfterReteach > 0)}/${n}; budget talk in ${summary.budgetTalk.length} reply(ies)`);
+  lines.push(`attention taught ${summary.attentionTaught}/${n}, embeddings taught ${summary.embeddingsTaught}/${n}, both ${summary.bothTaught}/${n}; a teach reply after the reteach in ${count((s) => s.teachAfterReteach > 0)}/${n}; budget talk in ${summary.budgetTalk.length} reply(ies) (${count((s) => s.budgetTalk.length > 0)}/${n} trials); "bank" before its deciding word in ${count((s) => s.laterContext.length > 0)}/${n} trials`);
   lines.push(`spend ≈ $${spend.toFixed(4)}`);
   return { summary, lines };
 }
