@@ -140,6 +140,7 @@ describe('the facts still match the server, the privacy page and the apps', () =
     assert.match(html, /It holds only the scrambled network address, the date and which of the two it was: no session ID and no time of day\./);
     assert.match(html, /they are deleted after 2 days\./);
     assert.match(html, /Network counts \(new sessions and reports per network, no session ID\) 2 days/);
+    assert.match(html, /Network counts carry that address, the date and which event it was, and no ID\./);
     // The delete control says the network count outlives it.
     assert.match(html, /Your network's daily count of new sessions and reports, described above, is not tied to your ID, so it stays until it is deleted after 2 days\./);
   });
