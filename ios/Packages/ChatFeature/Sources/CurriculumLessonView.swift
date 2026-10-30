@@ -238,7 +238,8 @@ public struct CurriculumLessonView: View {
                     // Where the header drops the title (accessibility
                     // sizes), the thread opens with it, in full.
                     threadTitle: LessonHeaderBar.showsTitle(at: dynamicTypeSize) ? nil : title,
-                    composerFocused: composerFocused
+                    composerFocused: composerFocused,
+                    photoLimitNotice: model.photoLimitNotice
                 )
                 // Lesson 1.1 holds the "How a model reads “bank”" interactive.
                 .lesson(id: lessonId)
@@ -550,6 +551,7 @@ public struct CurriculumLessonView: View {
             attachment: model.pendingImage,
             isPreparingAttachment: model.isPreparingAttachment,
             attachmentError: model.attachmentError,
+            photoLimitNotice: model.photoLimitNotice,
             characterLimit: model.draftCharacterLimit,
             onSend: { model.send() },
             onCancel: { model.cancel() },

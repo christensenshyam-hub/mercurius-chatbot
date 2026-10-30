@@ -124,7 +124,11 @@ public enum APIError: Error, Equatable, Sendable {
         case .unauthorized:
             return "You're not signed in to do that."
         case .rateLimited:
-            return "You're moving fast — give it a moment, then try again."
+            // Not "you're moving fast": most per-minute limits count a
+            // whole network (lib/rateLimiter's ipLimiter), so in a class
+            // the student who sent one photo can be the one refused. The
+            // windows are a minute long.
+            return "Too many requests at once. Wait a minute, then try again."
         case .quotaExceeded(let message, _, _), .serviceUnavailable(_, let message, _):
             return message  // Unreachable: `serverRefusal` answers both above.
         case .crisisSupport(let message):
