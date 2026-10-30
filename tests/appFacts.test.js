@@ -129,6 +129,21 @@ describe('the facts still match the server, the privacy page and the apps', () =
     assert.match(html, /Their terms are at anthropic\.com\/legal/);
   });
 
+  test('network counts: marketing/privacy.html says what lib/claudeCall.js writes and lib/scheduler.js keeps', () => {
+    // A network's new-session and report rows: the scrambled address and the
+    // day only, no session ID, purged after NETWORK_COUNT_RETENTION_DAYS.
+    const scheduler = read('lib', 'scheduler.js');
+    assert.match(scheduler, /env: 'NETWORK_COUNT_RETENTION_DAYS', def: 2,/);
+    const claudeCall = read('lib', 'claudeCall.js');
+    assert.match(claudeCall, /ts: productDay\.startOfDayMs\(\), session_id: null, ip_hash: ipHash/);
+    const html = read('marketing', 'privacy.html').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    assert.match(html, /It holds only the scrambled network address and the date: no session ID and no time of day\./);
+    assert.match(html, /they are deleted after 2 days\./);
+    assert.match(html, /Network counts \(new sessions and reports per network, no session ID\) 2 days/);
+    // The delete control names the one thing it leaves behind.
+    assert.match(html, /The one exception is your network's daily count of new sessions and reports/);
+  });
+
   test('retention + Anthropic + no accounts: marketing/privacy.html says the same', () => {
     // Tags stripped and whitespace collapsed: the page wraps its prose.
     const html = read('marketing', 'privacy.html').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
