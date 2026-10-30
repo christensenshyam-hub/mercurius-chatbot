@@ -244,7 +244,9 @@ async function initSchema() {
       -- usage.answered (AUD-31): 1 when the call uses a daily turn (it gave
       -- the student an answer, or the client stopped it before the API's
       -- message_start, when it has no usage to bill); 0 when it was refused,
-      -- failed, or stopped after message_start but before any text. The
+      -- failed, or stopped after message_start but before any text, and for
+      -- a follow-up call on a turn an earlier call already counted (the
+      -- answer guard's rewrite, the quiz asked again; lib/claudeCall). The
       -- per-session hydrate counts only the 1s. NULL = written before the
       -- column existed (counted, as every call was then). The ALTER migrates
       -- older databases.
@@ -988,7 +990,8 @@ module.exports = {
   //                                       `usd` sums every row.
   //   A row's `answered` (true/false) says whether the call uses a turn (it
   //   gave the student an answer, or a client stopped it before
-  //   message_start); omitted → NULL, which counts as a turn.
+  //   message_start; a follow-up call on a turn already counted is false);
+  //   omitted → NULL, which counts as a turn.
   //   usageSummarySince(tsMs)           → { calls, usd, byRoute: [{ route,
   //                                       calls, usd }], errors: [{ route,
   //                                       error_kind, count }] } for the admin

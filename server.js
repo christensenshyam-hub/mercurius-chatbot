@@ -1188,7 +1188,9 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
+// `followUp: true` for the route's second ask on the same tap (lib/claudeCall:
+// it uses no daily turn of its own).
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, followUp = false }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1209,6 +1211,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
+    followUp,
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -1810,20 +1813,30 @@ function recordLessonProgress(sessionId, meta) {
 // Per-session quota counters live in memory; the first time a session is
 // seen each product day (lib/productDay), seed them from the usage ledger so
 // a mid-day redeploy doesn't hand every session a fresh allowance.
-const hydratedSessions = new Set();
+//
+// A read that fails lets that request through on the in-memory counters and
+// is tried again on the session's next request. It used to be marked done
+// anyway, so one database blip on a session's first request after a deploy
+// gave it a second full day's allowance. Requests that arrive while the read
+// is pending wait for the same read rather than skip it.
+const hydratedSessions = new Map(); // sessionId → today's read (never rejects)
 let hydratedDay = productDay.dayKey();
-async function hydrateSessionQuota(sessionId) {
+function hydrateSessionQuota(sessionId) {
   const now = Date.now();
   const today = productDay.dayKey(now);
   if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
-  if (hydratedSessions.has(sessionId)) return;
-  hydratedSessions.add(sessionId);
-  try {
-    const rows = await db.sessionUsageSince(sessionId, productDay.startOfDayMs(now));
-    if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
-  } catch (e) {
-    logger.warn({ err: e.message }, 'session quota hydrate failed');
+  let read = hydratedSessions.get(sessionId);
+  if (!read) {
+    read = Promise.resolve()
+      .then(() => db.sessionUsageSince(sessionId, productDay.startOfDayMs(now)))
+      .then((rows) => { if (rows && rows.length) quotas.hydrateSession(sessionId, rows); })
+      .catch((e) => {
+        if (hydratedSessions.get(sessionId) === read) hydratedSessions.delete(sessionId);
+        logger.warn({ err: e.message }, 'session quota hydrate failed; trying again on its next request');
+      });
+    hydratedSessions.set(sessionId, read);
   }
+  return read;
 }
 
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
@@ -2307,6 +2320,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages) || homeworkGuard.safetyText(text)) return text;
         // Final run 2026-10-22: "is that good? can u make it better" met with a
         // new question instead of their own words. One more try, then keep it.
+        // The draft's call counted this turn; the retry is a follow-up.
         try {
           const retry = await claudeCall.createMessage({
             route: '/api/chat',
@@ -2314,6 +2328,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             sessionId,
             ip: req.ip,
             traceId: req.traceId,
+            followUp: true,
             params: {
               ...modelParams,
               system: systemBlocks.buildSystem({
@@ -2351,6 +2366,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? `a result worked out from the student's own numbers (${leak.value}), which is their answer or gives it away. Write the reply again with the same coaching move, without working their numbers through to any result: name the step, run a number THEY gave backwards, or use a worked example on new numbers.`
           : `the corrected value (${leak.value}) that the student still has to find. Write the reply again: point at the term where it breaks and ask what it is, without writing its value or the corrected line.`;
       const note = `## ANSWER GUARD (this reply only)\nYour draft reply gave away ${what}`;
+      // The student sent one message: the draft's call counted the turn, so
+      // the rewrite is a follow-up (it uses no second turn, and the turn
+      // allowance doesn't refuse it on their last one).
       try {
         const retry = await claudeCall.createMessage({
           route: '/api/chat',
@@ -2358,6 +2376,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           sessionId,
           ip: req.ip,
           traceId: req.traceId,
+          followUp: true,
           params: {
             ...modelParams,
             system: systemBlocks.buildSystem({
@@ -2500,13 +2519,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       };
       touch();
       const hardCap = setTimeout(() => { timedOut = true; streamAbort.abort(); }, STREAM_MAX_MS);
+      // The watchdogs time the model's stream; the keepalive runs until the
+      // final frames are written (see the 'end' handler).
+      const stopWatchdogs = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        clearTimeout(hardCap);
+      };
       let timersStopped = false;
       const stopTimers = () => {
         if (timersStopped) return;
         timersStopped = true;
         clearInterval(keepalive);
-        if (idleTimer) clearTimeout(idleTimer);
-        clearTimeout(hardCap);
+        stopWatchdogs();
       };
 
       let fullText = '';
@@ -2552,12 +2576,22 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
 
-      stream.on('end', async () => {
-        stopTimers();
+      // Run by the stream's 'end' (registered below, where a throw in it is
+      // caught).
+      const finishTurn = async () => {
+        // The model's stream is over, and so are its watchdogs. The keepalive
+        // pings on until the 'complete' frame: a held-back turn's answer
+        // guard asks the model again after this point, and that rewrite can
+        // take as long as the first reply while the socket carries nothing
+        // else (a held-back turn streams no text at all). A quiet socket that
+        // long is what school proxies, cellular NATs and the app's 60 s idle
+        // timeout drop.
+        stopWatchdogs();
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) {
+          stopTimers();
           // The API took the photo and began answering: a Stop or a dropped
           // stream mid-reply still leaves that turn in the student's thread.
           if (modelSpoke) linkPhoto(fullText);
@@ -2620,6 +2654,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const exposedUsage = process.env.EVAL_EXPOSE_USAGE === '1' && typeof stream.accounting === 'function' && stream.accounting()
           ? { usage: stream.accounting().usage }
           : {};
+        stopTimers();
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
@@ -2635,6 +2670,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
         releaseSse();
+      };
+      // A throw in finishTurn (a bug in a reply transform, say) still ends the
+      // turn, with the stream-error frame. Otherwise the keepalive, which runs
+      // until the final frames, would ping on: the app would wait out its
+      // 240 s whole-reply cap, and the widget would wait for good.
+      stream.on('end', () => {
+        finishTurn().catch((err) => {
+          stopTimers();
+          logger.forRequest(req).error({ err: err && err.message }, 'SSE end handler failed');
+          if (!res.writableEnded) {
+            safeWrite(`data: ${JSON.stringify({ type: 'error', code: 'upstream_error', error: 'Mercurius hit a snag. Try again in a moment.' })}\n\n`);
+            try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
+          }
+          releaseSse();
+        });
       });
 
       stream.on('error', (err) => {
@@ -2674,6 +2724,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // end, writableFinished is true and this is a no-op.
       res.on('close', () => {
         if (!res.writableFinished) stream.abort();
+        // Nobody is left to ping (a client gone during the answer guard).
+        stopTimers();
       });
 
     } else {
@@ -2793,9 +2845,12 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   if (await refuseUnseenSession(req, res, sessionId)) return;
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
+    // One tap is one helper turn: only the first ask counts it.
+    let asked = 0;
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
+      followUp: asked++ > 0,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
