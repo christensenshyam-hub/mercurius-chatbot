@@ -60,6 +60,33 @@ struct APIClientValidationTests {
         }
     }
 
+    @Test("A quiz with too little conversation says so, without a Retry, not the generic request error")
+    func insufficientHistoryIsItsOwnCase() {
+        // server.js generateFromHistory: /api/quiz with fewer than 4 saved
+        // messages. Before, this read "Something about that request wasn't
+        // right. Try again." with nothing to try again with.
+        let body = Data(#"{"error":"insufficient_history","message":"Have a longer conversation first."}"#.utf8)
+        #expect(throws: APIError.conversationTooShort) { try APIClient.validate(statusCode: 400, data: body) }
+        let error = APIError.conversationTooShort
+        #expect(!error.isRetryable)
+        #expect(error.userFacingMessage.contains("too short"))
+        #expect(error.userFacingMessage != APIError.invalidRequest(reason: nil).userFacingMessage)
+        // Any other 400 code keeps the generic case.
+        let other = Data(#"{"error":"invalid_session","message":"Session ID missing or invalid."}"#.utf8)
+        #expect(throws: APIError.invalidRequest(reason: "Session ID missing or invalid.")) {
+            try APIClient.validate(statusCode: 400, data: other)
+        }
+    }
+
+    @Test("A 401/403 the app can't explain never tells the student to sign in: there are no accounts")
+    func unauthorizedCopyNamesNoSignIn() {
+        let copy = APIError.unauthorized.userFacingMessage
+        #expect(copy == "The server didn't allow that request.")
+        #expect(!copy.lowercased().contains("sign"))
+        #expect(!copy.lowercased().contains("try again"), "no Retry is offered for it")
+        #expect(!APIError.unauthorized.isRetryable)
+    }
+
     @Test("401 and 403 with the server's error envelope map to unauthorized")
     func authErrors() {
         for code in [401, 403] {
@@ -432,7 +459,7 @@ struct APIErrorTests {
     func allErrorsHaveMessages() {
         let errors: [APIError] = [
             .offline, .connectionLost, .unreachableOnThisNetwork, .messageTooLong,
-            .timeout, .invalidRequest(reason: nil), .unauthorized,
+            .timeout, .invalidRequest(reason: nil), .conversationTooShort, .unauthorized,
             .rateLimited, .server(status: 500),
             .quotaExceeded(message: "q", retryAfter: nil),
             .serviceUnavailable(code: "busy", message: "b", retryAfter: 60),
@@ -519,6 +546,7 @@ struct APIErrorTests {
         #expect(!APIError.invalidRequest(reason: nil).isRetryable)
         #expect(!APIError.messageTooLong.isRetryable)
         #expect(!APIError.unauthorized.isRetryable)
+        #expect(!APIError.conversationTooShort.isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: 3600).isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: nil).isRetryable)
         #expect(!APIError.quotaExceeded(message: "m", retryAfter: 3600, scope: "session").isRetryable)
