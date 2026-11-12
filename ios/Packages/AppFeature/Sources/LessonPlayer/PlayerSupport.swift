@@ -40,9 +40,11 @@ struct AskMercSheet<Content: View>: View {
     }
 }
 
-/// Short-response evaluation through the server relay (milestone 4 fills this
-/// in). Until then every response is "ungraded (unavailable)", which the
-/// player shows honestly and never counts as correct.
+/// Short-response evaluation through the server relay
+/// (`POST /api/lesson-player/evaluate`, which holds the rubric, gates the call
+/// through the kill switch, spend cap and quotas, and validates the result).
+/// Every failure becomes an honest "not graded yet" with a reason; the player
+/// re-validates any result before showing it.
 enum LessonPlayerEvaluation {
     @MainActor
     static func evaluate(_ request: EvaluationRequest, apiClient: APIClient,
@@ -51,7 +53,42 @@ enum LessonPlayerEvaluation {
             try? await Task.sleep(for: .milliseconds(400))
             return stub
         }
-        return .failed(.unavailable)
+        guard let sessionId = try? sessionIdentity.current() else { return .failed(.unavailable) }
+        do {
+            let check = try await apiClient.checkLessonResponse(
+                sessionId: sessionId, lessonId: request.lessonId, contentVersion: request.contentVersion,
+                stepId: request.stepId, rubricId: request.rubricId, answer: request.text
+            )
+            return outcome(for: check)
+        } catch is CancellationError {
+            return .failed(.interrupted)
+        } catch let error as APIError {
+            return .failed(reason(for: error))
+        } catch {
+            return .failed(.unavailable)
+        }
+    }
+
+    static func outcome(for check: LessonResponseCheck) -> EvaluationOutcome {
+        switch check {
+        case .crisis:
+            return .failed(.support)
+        case .evaluated(let status, let feedback, let hint, let flags):
+            guard let s = ResponseEvaluation.Status(rawValue: status) else { return .failed(.invalidResult) }
+            return .evaluated(ResponseEvaluation(status: s, feedback: feedback, hint: hint, flags: flags))
+        }
+    }
+
+    /// Why a check failed, in the player's terms. Nothing here is ever a grade.
+    static func reason(for error: APIError) -> UngradedReason {
+        switch error {
+        case .offline, .connectionLost, .unreachableOnThisNetwork: return .offline
+        case .timeout, .server(status: 504): return .timeout
+        case .cancelled: return .interrupted
+        case .invalidModelOutput, .decoding, .unknown(underlying: "HTTP 422"): return .invalidResult
+        case .crisisSupport: return .support
+        default: return .unavailable
+        }
     }
 
     /// DEBUG builds (UI tests, screenshots): `-LessonPlayerStubGrade meets |

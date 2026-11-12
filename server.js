@@ -38,6 +38,7 @@ const {
   ReportCardRequest,
   ConceptMapRequest,
   UnitTestGradeRequest,
+  LessonPlayerEvaluateRequest,
   ResponseMode,
   ImageUploadRequest,
   ReportRequest,
@@ -53,6 +54,7 @@ const { reflowLimit } = require('./lib/airyReflow');
 const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
+const lessonPlayerRubrics = require('./lib/lessonPlayerRubrics');
 const { pickModel } = require('./lib/modelAllowlist');
 const modelRequest = require('./lib/modelParams');
 const { modelNotesFor } = require('./lib/modelNotes');
@@ -1167,6 +1169,7 @@ const QUIZ_SYSTEM = helperSystem(QUIZ_PROMPT);
 const REPORT_CARD_SYSTEM = helperSystem(REPORT_CARD_PROMPT);
 const CONCEPT_MAP_SYSTEM = helperSystem(CONCEPT_MAP_PROMPT);
 const UNIT_TEST_GRADER_SYSTEM = helperSystem(UNIT_TEST_GRADER_PROMPT);
+const LESSON_PLAYER_EVALUATOR_SYSTEM = helperSystem(lessonPlayerRubrics.EVALUATOR_PROMPT);
 const FACTCHECK_SYSTEM = helperSystem(FACTCHECK_PROMPT);
 const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 // What a JSON helper route (quiz, report card, concept map, fact-check,
@@ -3059,6 +3062,63 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
     if (quotaErrorHandled(err, req, res)) return;
     logger.forRequest(req).error({ err: err.message }, 'Unit test grade error');
     return res.status(500).json({ error: 'api_error', message: 'Could not grade your answer right now.' });
+  }
+}));
+
+// ---------------------------------------------------------------------------
+// POST /api/lesson-player/evaluate — the lesson player pilot's short-response
+// check (additive). The client sends ids and the answer; the task, evidence
+// and rubric come from lib/lessonPlayerRubrics.js, so this grades the
+// pilot's authored tasks and nothing else. Same rails as the unit-test grader
+// (crisis check, session rate limit, gate as a helper call: kill switch,
+// spend cap, quotas), plus a hard time limit. Responses:
+//   200 { status: 'meets'|'not_yet', feedback, hint, flags }
+//   200 { crisis: true, message }       (never graded)
+//   404 unknown rubric · 422 invalid model output · 504 timeout · 5xx/429 rails
+// Nothing is stored: the answer is not saved and is never logged.
+// ---------------------------------------------------------------------------
+const LESSON_PLAYER_EVALUATE_TIMEOUT_MS = Number(process.env.LESSON_PLAYER_EVALUATE_TIMEOUT_MS) || 15000;
+
+app.post('/api/lesson-player/evaluate', chatLimiter, validate(LessonPlayerEvaluateRequest, { endpoint: '/api/lesson-player/evaluate' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, contentVersion, stepId, rubricId, answer } = req.validated;
+  const rubric = lessonPlayerRubrics.rubricFor({ lessonId, contentVersion, stepId, rubricId });
+  if (!rubric) return res.status(404).json({ error: 'unknown_rubric', message: 'This activity can’t be checked here.' });
+  if (crisisSignal(answer)) return res.json({ crisis: true, message: CRISIS_COPY });
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
+  const signal = AbortSignal.timeout(LESSON_PLAYER_EVALUATE_TIMEOUT_MS);
+  try {
+    const response = await claudeCall.createMessage({
+      route: '/api/lesson-player/evaluate',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      signal,
+      params: {
+        model: MODEL,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'grader', 300),
+        ...modelRequest.requestFields(MODEL, 'grader', { temperature: 0.2, effort: TUTOR_EFFORT }),
+        system: LESSON_PLAYER_EVALUATOR_SYSTEM,
+        messages: [{ role: 'user', content: lessonPlayerRubrics.buildEvaluationMessage(rubric, answer) }],
+      },
+    });
+    const raw = firstTextOf(response);
+    if (isCrisisReply(raw)) return res.json({ crisis: true, message: CRISIS_COPY });
+    const result = lessonPlayerRubrics.parseEvaluation(raw, rubric);
+    if (!result) {
+      return res.status(422).json({ error: 'invalid_result', message: 'Couldn’t check your answer this time.' });
+    }
+    return res.json(result);
+  } catch (err) {
+    if (signal.aborted) {
+      return res.status(504).json({ error: 'timeout', message: 'Checking took too long.' });
+    }
+    if (quotaErrorHandled(err, req, res)) return;
+    logger.forRequest(req).error({ err: err.message }, 'Lesson player evaluate error');
+    return res.status(502).json({ error: 'api_error', message: 'Couldn’t check your answer right now.' });
   }
 }));
 

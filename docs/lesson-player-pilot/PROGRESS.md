@@ -10,8 +10,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 | 0 | Ground truth | done (12c90e2) |
 | 1 | Lesson data and deterministic core | done (c14bb04) |
 | 2 | Player and Lesson 3 (steps 1–5, 7) | done (39b5393) |
-| 3 | State and progress | done |
-| 4 | Short response and model evaluation | not started |
+| 3 | State and progress | done (84eb442) |
+| 4 | Short response and model evaluation | done |
 | 5 | Measurement | not started |
 | 6 | Second lesson | not started |
 | 7 | Validation, review, handoff | not started |
@@ -250,6 +250,37 @@ Tests:
 - `AppFeature/Tests/LessonPlayerHostTests.swift`: store round trip, resume after kill, unreadable records left alone, completion once, reset, flag cache/override, pilot lessons matching the curriculum, Settings reset.
 - Plus the core tests from M1.
 - Command: `swift test --filter "AppFeatureTests.LessonPlayer|AppFeatureTests.SettingsReset|LessonPlayerTests"`: ✔ 60 tests in 14 suites.
+
+## Milestone 4: short response and model evaluation
+
+**Server: `POST /api/lesson-player/evaluate`** (additive). Code in `server.js` and `lib/lessonPlayerRubrics.js`; schema `LessonPlayerEvaluateRequest` in `lib/schemas.js`.
+- **What the client sends:** `{sessionId, lessonId, contentVersion, stepId, rubricId, answer ≤ 600}`, and nothing else (strict schema).
+  - The task, the evidence and the rubric come from the server's registry, keyed by all four ids, so the endpoint can't be used as a general model relay.
+- **Rails:** the same as the unit-test grader: crisis check, session rate limit, unseen-session refusal, `gate(kind: 'helper')` (kill switch, `DAILY_BUDGET_USD` cap, quotas), and `claudeCall.createMessage` (usage ledger, pricing, alerts). There is also a hard `AbortSignal.timeout` (15 s; `LESSON_PLAYER_EVALUATE_TIMEOUT_MS`).
+- **Prompt:** `helperSystem(EVALUATOR_PROMPT)`, which carries the shared safety core. The answer is sent last, between `<student_answer>` markers, as data. The prompt says to accept equivalent reasoning, not repeat the answer, give no lecture after "meets", and return one hint at most.
+- **Result:**
+  - Strictly validated: `{status: meets|not_yet, feedback ≤ 400, hint (not_yet only) ≤ 240, flags ⊆ rubric}`. Anything off-shape or containing markup is rejected with a 422, never repaired.
+  - Crisis → `{crisis: true, message}`, never graded.
+  - Timeout → 504; upstream failure → 502; rails → the usual refusals.
+  - **Nothing is stored or logged** (no answer text in logs; the usage ledger records only cost and status).
+- **Mock:** `lib/anthropicMock.js` answers the evaluator's prompt, so local dev and tests run with no key.
+
+**Client.**
+- `APIClient.checkLessonResponse` calls the endpoint.
+- `LessonPlayerEvaluation` (AppFeature) maps every error to an `UngradedReason`: offline, timeout, invalidResult, unavailable, interrupted, support.
+- `LessonPlayerModel` re-validates any result with `EvaluationParser.check` (rubric flags only), adds a 25 s client timeout, and shows the crisis support sheet (`CrisisSupportView`) for a crisis reply.
+- The answer is kept through every state. Retry re-checks the same submission; Edit lets the learner revise.
+- Reviewed fallback guidance (authored in the lesson data) is shown whenever there is no grade.
+
+**D12 (pending vs retry, for review): a lesson never completes with a response that is pending or ungraded.**
+- **Behaviour:** the learner keeps their answer, can Retry, Edit, or Finish for now, and resumes on the same step with the answer still there. After a relaunch, a check that was in flight becomes "not graded yet (interrupted)", and Retry is offered.
+- **Why:** the spec says an ungraded answer never counts as correct. Lesson 3's legacy assessment needs all three parts from the student and a strict proficiency judgement. Its completion unlocks Lesson 4, so completing on an ungraded answer would grant progress for understanding nobody checked.
+- **The cost:** while grading is down, Lesson 3 can't complete in the player. The legacy lesson is in the same position, because it needs the model for every turn, so the player is no worse.
+- **Escape hatch:** none needed beyond Retry later. The two lessons' objective steps are graded on the device and keep working offline.
+
+Tests:
+- `node --test tests/lessonPlayerEvaluate.test.js`: 15 passed. Covers registry lookup, iOS/server rubric ids staying in step, the message shape, validation, the schema refusing a free-form task, meets/not_yet, the captured prompt, flags, invalid output (422), unknown rubric (404), crisis, a hung call (504 in under 5 s), an upstream error (5xx) and the kill switch.
+- `swift test --filter "LessonPlayerTests|AppFeatureTests.LessonPlayer"`: 65 passed. Adds model tests for meets, invalid output, an unknown flag, timeout, offline, leaving mid-check with a late result ignored, crisis, and retry then meets; plus the error→reason mapping.
 
 ## Known gaps
 

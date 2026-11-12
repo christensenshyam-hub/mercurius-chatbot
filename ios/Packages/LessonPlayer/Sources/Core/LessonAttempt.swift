@@ -19,6 +19,8 @@ public enum UngradedReason: String, Codable, Sendable {
     case unavailable
     /// The learner cancelled, or the app was closed while it was being graded.
     case interrupted
+    /// The answer read as a crisis: the player shows support, never a grade.
+    case support
 }
 
 public enum GradingStatus: Codable, Equatable, Sendable {

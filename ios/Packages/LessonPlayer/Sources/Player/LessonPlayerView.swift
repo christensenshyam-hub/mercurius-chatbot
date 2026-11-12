@@ -56,6 +56,9 @@ public struct LessonPlayerView: View {
         .background(BrandColor.background.ignoresSafeArea())
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.step.id)
         .onChange(of: model.step.id) { _, _ in headingFocused = true }
+        .sheet(isPresented: Bindable(model).showsCrisisSupport) {
+            CrisisSupportView(closeTitle: PlayerCopy.backToLesson) { model.showsCrisisSupport = false }
+        }
         .onAppear { model.sceneBecameActive() }
         .onDisappear { model.sceneBecameInactive() }
         .onChange(of: scenePhase) { _, phase in

@@ -38,6 +38,8 @@ enum PlayerCopy {
     static let goDeeper = "Go deeper"
     static let goDeeperMore = "Go deeper still"
     static let askMerc = "Ask Merc"
+    static let backToLesson = "Back to the lesson"
+    static let supportShown = "Your answer is saved and wasn’t graded. Come back to it whenever you’re ready."
     static let askMercHint = "Opens a chat with Merc. Your place in the lesson is kept."
 
     static func letter(_ index: Int) -> String { String(UnicodeScalar(65 + index) ?? "?") }

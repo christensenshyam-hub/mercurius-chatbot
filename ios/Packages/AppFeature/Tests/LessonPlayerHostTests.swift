@@ -166,3 +166,36 @@ struct LessonPlayerResetTests {
         #expect(attempts.ledger.granted.isEmpty)
     }
 }
+
+@Suite("Lesson player: server outcomes map to honest states")
+struct LessonPlayerEvaluationMappingTests {
+    @Test("Network and server failures are reasons, never grades")
+    func reasons() {
+        #expect(LessonPlayerEvaluation.reason(for: .offline) == .offline)
+        #expect(LessonPlayerEvaluation.reason(for: .connectionLost) == .offline)
+        #expect(LessonPlayerEvaluation.reason(for: .unreachableOnThisNetwork) == .offline)
+        #expect(LessonPlayerEvaluation.reason(for: .timeout) == .timeout)
+        #expect(LessonPlayerEvaluation.reason(for: .server(status: 504)) == .timeout)
+        #expect(LessonPlayerEvaluation.reason(for: .unknown(underlying: "HTTP 422")) == .invalidResult)
+        #expect(LessonPlayerEvaluation.reason(for: .server(status: 502)) == .unavailable)
+        #expect(LessonPlayerEvaluation.reason(for: .rateLimited) == .unavailable)
+        #expect(LessonPlayerEvaluation.reason(for: .serviceUnavailable(code: "spend_cap", message: "x", retryAfter: nil)) == .unavailable)
+        #expect(LessonPlayerEvaluation.reason(for: .cancelled) == .interrupted)
+        #expect(LessonPlayerEvaluation.reason(for: .crisisSupport(message: "x")) == .support)
+    }
+
+    @Test("A result decodes to an evaluation; an unknown status or a crisis does not")
+    func outcomes() {
+        #expect(LessonPlayerEvaluation.outcome(for: .evaluated(status: "meets", feedback: "Yes.", hint: nil, flags: []))
+                == .evaluated(ResponseEvaluation(status: .meets, feedback: "Yes.")))
+        #expect(LessonPlayerEvaluation.outcome(for: .evaluated(status: "correct", feedback: "Yes.", hint: nil, flags: []))
+                == .failed(.invalidResult))
+        #expect(LessonPlayerEvaluation.outcome(for: .crisis(message: "988")) == .failed(.support))
+    }
+
+    @Test("The DEBUG stub reads only its own argument")
+    func stub() {
+        #expect(LessonPlayerEvaluation.stubbedOutcome(arguments: []) == nil)
+        #expect(LessonPlayerEvaluation.stubbedOutcome(arguments: ["-LessonPlayerStubGrade", "offline"]) == .failed(.offline))
+    }
+}

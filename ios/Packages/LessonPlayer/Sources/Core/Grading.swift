@@ -135,6 +135,12 @@ public enum EvaluationParser {
         return validate(raw, allowedFlags: allowedFlags)
     }
 
+    /// Re-checks an evaluation the host decoded (the server validates too;
+    /// the player never trusts a single check).
+    public static func check(_ e: ResponseEvaluation, allowedFlags: Set<String>) -> ResponseEvaluation? {
+        validate(Raw(status: e.status.rawValue, feedback: e.feedback, hint: e.hint, flags: e.flags), allowedFlags: allowedFlags)
+    }
+
     static func validate(_ raw: Raw, allowedFlags: Set<String>) -> ResponseEvaluation? {
         guard let status = ResponseEvaluation.Status(rawValue: raw.status) else { return nil }
         let feedback = raw.feedback.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -68,22 +68,28 @@ public struct LessonPlayerHost {
 public final class LessonPlayerModel {
     /// How long the player waits for an evaluation before showing the
     /// reviewed fallback and Retry. The server has its own, shorter limit.
-    public static let evaluationTimeout: Duration = .seconds(25)
+    public static let defaultEvaluationTimeout: Duration = .seconds(25)
 
     public private(set) var machine: LessonMachine
     /// Bumped whenever feedback or optional depth appears, so the view can
     /// bring it into sight (also on a second answer to the same step).
     public private(set) var revealRevision = 0
+    /// The last evaluation read as a crisis: the view shows support.
+    public var showsCrisisSupport = false
 
     @ObservationIgnored private let host: LessonPlayerHost
     @ObservationIgnored private var evaluation: Task<Void, Never>?
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private var activeSince: Date?
+    @ObservationIgnored private let evaluationTimeout: Duration
 
-    public init(machine: LessonMachine, host: LessonPlayerHost, resumed: Bool, clock: @escaping () -> Date = Date.init) {
+    public init(machine: LessonMachine, host: LessonPlayerHost, resumed: Bool,
+                evaluationTimeout: Duration = LessonPlayerModel.defaultEvaluationTimeout,
+                clock: @escaping () -> Date = Date.init) {
         self.machine = machine
         self.host = host
         self.clock = clock
+        self.evaluationTimeout = evaluationTimeout
         if resumed {
             self.machine.markResumed()
             host.saveAttempt(self.machine.attempt)
@@ -177,11 +183,24 @@ public final class LessonPlayerModel {
         )
         evaluation?.cancel()
         let evaluate = host.evaluate
+        let limit = evaluationTimeout
         evaluation = Task { [weak self] in
-            let outcome = await Self.withTimeout(Self.evaluationTimeout) { await evaluate(request) }
+            let outcome = await Self.withTimeout(limit) { await evaluate(request) }
             guard !Task.isCancelled, let self else { return }
             switch outcome {
-            case .evaluated(let e): self.send(.evaluationArrived(token: token, e))
+            case .evaluated(let e):
+                // Validate again here: only a well-formed result with the
+                // rubric's own flags is ever shown as a grade.
+                let allowed = Set(sr.rubric.flags.map(\.id))
+                if let checked = EvaluationParser.check(e, allowedFlags: allowed) {
+                    self.send(.evaluationArrived(token: token, checked))
+                } else {
+                    self.send(.evaluationFailed(token: token, .invalidResult))
+                    self.host.record(.lessonError(self.context(), stepId: stepId, kind: UngradedReason.invalidResult.rawValue))
+                }
+            case .failed(.support):
+                self.send(.evaluationFailed(token: token, .support))
+                self.showsCrisisSupport = true
             case .failed(let reason):
                 self.send(.evaluationFailed(token: token, reason))
                 if reason != .interrupted {

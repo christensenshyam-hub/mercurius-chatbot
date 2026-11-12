@@ -282,6 +282,8 @@ struct FeedbackPanel: View {
     private var lines: [String] {
         var out: [String] = []
         switch (activity.kind, submission.status) {
+        case (.shortResponse, .ungraded(.support)):
+            out.append(PlayerCopy.supportShown)
         case (.shortResponse(let sr), .ungraded):
             out.append(sr.fallbackGuidance)
         case (.shortResponse(let sr), .graded(let verdict)):
