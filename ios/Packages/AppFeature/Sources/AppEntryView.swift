@@ -165,17 +165,18 @@ struct AppEntryView: View {
                 hasEnteredApp = true
             }
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
-            // The lesson player pilot: refresh the server's switch (cached for
-            // the lessons opened later; UI tests stay network-free), then log
-            // the activation denominator once per install, before any gate,
-            // with the experience this device would give a new learner
-            // (docs/lesson-player-pilot/METRICS.md).
+            // The lesson player pilot: log the activation denominator once per
+            // new install, right away (docs/lesson-player-pilot/METRICS.md),
+            // then refresh the server's switch, cached for the lessons opened
+            // later (UI tests stay network-free).
             .task {
-                if !AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument) {
-                    await env.lessonPlayerFlag.refresh { try await env.apiClient.lessonPlayerConfig() }
-                }
                 LessonPlayerTelemetry.shared.recordFirstOpenIfNeeded(
-                    playerEligible: LessonCatalog.library.lessonIds.contains { env.lessonPlayerFlag.isEnabled(for: $0) })
+                    isNewLearner: !hasSeenOnboarding && env.progressStore.totalCompleted() == 0,
+                    playerEligible: env.lessonPlayerFlag.knownEnabled(for: LessonCatalog.library.lessonIds))
+                if !AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument) {
+                    await env.lessonPlayerFlag.refresh(using: { try await env.apiClient.lessonPlayerConfig() },
+                                                       isNotServed: LessonPlayerFlag.isNotServed)
+                }
             }
             .onAppear {
                 // Every re-plan reads this week's lessons, so the weekly

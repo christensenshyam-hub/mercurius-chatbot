@@ -58,15 +58,19 @@ final class LessonPlayerTelemetry {
         sink.write(name: event.name, fields: event.fields.merging(common) { a, _ in a })
     }
 
-    /// `first_open`, once per install (and again after "delete my data",
-    /// which makes a new learner). `playerEligible` says whether the pilot was
-    /// on for this device then, so activation can be split by experience.
-    func recordFirstOpenIfNeeded(playerEligible: Bool) {
+    /// `first_open`, once per install, for a new learner only (METRICS.md):
+    /// an existing learner updating to this build is marked as seen without
+    /// an event, so they never join a new-user cohort. Written at launch,
+    /// before any network call, so someone who leaves at once is still
+    /// counted. `playerEligible` is the switch as this device knows it then:
+    /// nil (not known yet, as on a fresh install) is logged as `unknown`, and
+    /// the learner's arm comes from their first `lesson_start`.
+    func recordFirstOpenIfNeeded(isNewLearner: Bool, playerEligible: Bool?) {
         guard preferences.string(for: Self.firstOpenKey) == nil else { return }
         preferences.set("1", for: Self.firstOpenKey)
-        sink.write(name: "first_open", fields: common.merging([
-            "experience": playerEligible ? Experience.player.rawValue : Experience.legacy.rawValue,
-        ]) { a, _ in a })
+        guard isNewLearner else { return }
+        let experience = playerEligible.map { $0 ? Experience.player.rawValue : Experience.legacy.rawValue } ?? "unknown"
+        sink.write(name: "first_open", fields: common.merging(["experience": experience]) { a, _ in a })
     }
 
     /// The legacy lesson's start and completion, so the two experiences can

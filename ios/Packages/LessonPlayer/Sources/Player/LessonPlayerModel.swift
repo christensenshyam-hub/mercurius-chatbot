@@ -91,6 +91,10 @@ public final class LessonPlayerModel {
     /// Bumped whenever feedback or optional depth appears, so the view can
     /// bring it into sight (also on a second answer to the same step).
     public private(set) var revealRevision = 0
+    /// What VoiceOver should hear when feedback appears (its title and first
+    /// line), so a screen-reader user learns the result without hunting for it.
+    public private(set) var announcement: String?
+
     /// The last evaluation read as a crisis: the view shows support.
     public var showsCrisisSupport = false
 
@@ -126,6 +130,9 @@ public final class LessonPlayerModel {
     // MARK: Actions
 
     public func send(_ action: PlayerAction) {
+        // Count the foreground time up to this action first, so every event
+        // it causes carries an up-to-date active time.
+        flushActiveTime()
         let result = machine.send(action, now: clock())
         guard case .applied(let effects) = result else { return }
         host.saveAttempt(machine.attempt)
@@ -161,10 +168,19 @@ public final class LessonPlayerModel {
     }
 
     public func sceneBecameInactive() {
-        guard let since = activeSince else { return }
+        guard activeSince != nil else { return }
+        flushActiveTime()
         activeSince = nil
-        machine.recordActive(seconds: clock().timeIntervalSince(since))
         host.saveAttempt(machine.attempt)
+    }
+
+    /// Adds the foreground time since the last flush (each gap capped by
+    /// `LessonMachine.maxActiveGap`) and restarts the clock.
+    private func flushActiveTime() {
+        guard let since = activeSince else { return }
+        let now = clock()
+        machine.recordActive(seconds: now.timeIntervalSince(since))
+        activeSince = now
     }
 
     // MARK: Effects
@@ -181,6 +197,11 @@ public final class LessonPlayerModel {
             host.record(.answerSubmitted(context(), stepId: stepId, attemptIndex: index, interaction: interaction(stepId)))
         case .feedbackShown(let stepId, let status):
             revealRevision += 1
+            let detail: String? = {
+                guard let feedback = record.lastSubmission?.feedback, !feedback.isEmpty else { return nil }
+                return feedback
+            }()
+            announcement = [FeedbackLook.title(for: status), detail].compactMap { $0 }.joined(separator: ". ")
             host.record(.feedbackShown(context(), stepId: stepId, status: status))
         case .depthOpened(let stepId, let depthId):
             revealRevision += 1

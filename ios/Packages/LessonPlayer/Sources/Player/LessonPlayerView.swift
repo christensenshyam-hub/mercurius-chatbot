@@ -43,6 +43,9 @@ public struct LessonPlayerView: View {
                 // scrolled to.
                 .onChange(of: model.step.id) { _, _ in proxy.scrollTo("top", anchor: .top) }
                 .onChange(of: model.revealRevision) { _, _ in
+                    if let text = model.announcement {
+                        AccessibilityNotification.Announcement(text).post()
+                    }
                     // Bring the feedback into view without hiding the question.
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                         proxy.scrollTo("bottom", anchor: .bottom)

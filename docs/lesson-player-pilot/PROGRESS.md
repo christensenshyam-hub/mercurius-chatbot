@@ -13,8 +13,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 | 3 | State and progress | done (84eb442) |
 | 4 | Short response and model evaluation | done (b676e59) |
 | 5 | Measurement | done (c63bbe2) |
-| 6 | Second lesson | done |
-| 7 | Validation, review, handoff | not started |
+| 6 | Second lesson | done (3f7cb19) |
+| 7 | Validation, review, handoff | done |
 
 ## Session start (2026-11-11)
 
@@ -325,9 +325,24 @@ Tests:
 - **Tests:** `BasicsLesson1Tests` (validity, no statistics, practice resolution and retry, wrong pick completes, all-right first time is independent, practice can't be in `mustBeCorrect`) and `LessonPlayerPracticeTests` (reply clean-up, stub).
   - `swift test --filter "LessonPlayerTests|AppFeatureTests"`: ✔ 333 tests in 55 suites (three runs, all green).
 
+## Milestone 7: validation, review, handoff
+
+- **Simulator checks:**
+  - At AX5 text size the header compacts and the hint moved into the step (fix committed in 5838291). Everything scrolls and nothing is clipped.
+  - Flag switched off mid-attempt: verified after a kill and relaunch. The attempt resumed at the same step in the player.
+  - Rebalanced claim step re-captured.
+- **Full suites:**
+  - `npm test`: 2048 / 2049. The one failure is the environmental, gitignored `desktop/dist` widget copy.
+  - `swift test --parallel`: 1698 tests. The only failures are 4 `LoopbackNetworkTests` issues, **verified identical on a clean `origin/main` worktree** (macOS 27.2, PR #89).
+- **Fresh-context review:** three lenses plus adversarial verification. Every finding is fixed; HANDOFF.md lists them. The fixes added `POST /api/lesson-player/activity` (streak and `lesson_events`), so the pilot keeps learners' streaks.
+- **HANDOFF.md written.**
+- **Temporary files:** none in the repo (scratch scripts and the main-branch worktree lived in the session scratchpad and were removed). The simulator is shut down, at default text size.
+
 ## Known gaps
 
 - Home's primary button says "Start Lesson 3", not "Continue", for a lesson with an unfinished *player* attempt. `HomeState` reads the legacy in-progress map, and writing the attempt id there would make the resolver treat the lesson as legacy. Tapping it still resumes the attempt at its step.
 
 - The Mac app keeps legacy lessons in the pilot (D4).
-- Server D1/D7 and `lesson_events` only see `/api/chat` traffic, so player-only learners are invisible to them (addressed in M5 / METRICS.md).
+- Server admin D1/D7 count only `/api/chat` messages. Player lessons now feed the streak and `lesson_events` (`/api/lesson-player/activity`), but a player-only learner still doesn't appear in admin D1/D7 (METRICS.md).
+- The XCUITest runner can't start on this Mac (it fails for existing tests too). The new UI tests compile but haven't run.
+- The real model hasn't been called: evaluation quality, the live tutor's answer to "Are you a real person?" (D13a), and the D7 eval gate all need the founder's budget OK.

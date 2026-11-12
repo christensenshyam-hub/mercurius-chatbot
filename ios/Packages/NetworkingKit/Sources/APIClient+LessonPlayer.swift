@@ -68,3 +68,18 @@ extension APIClient {
         return .evaluated(status: status, feedback: feedback, hint: reply.hint, flags: reply.flags ?? [])
     }
 }
+
+extension APIClient {
+    /// `POST /api/lesson-player/activity`: a player lesson's study activity
+    /// (`start`, `resume`, `complete`), which counts today toward the streak as
+    /// a chat lesson's turns do. Ids only. Returns the streak.
+    public func recordLessonActivity(sessionId: String, lessonId: String, event: String) async throws -> Int {
+        struct Body: Encodable { let sessionId: String; let lessonId: String; let event: String }
+        struct Reply: Decodable { let streak: Int }
+        let reply: Reply = try await send(
+            method: "POST", path: "/api/lesson-player/activity",
+            body: Body(sessionId: sessionId, lessonId: lessonId, event: event)
+        )
+        return reply.streak
+    }
+}

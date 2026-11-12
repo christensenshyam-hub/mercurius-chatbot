@@ -38,6 +38,14 @@ public final class LessonPlayerFlag {
         }
     }
 
+    /// What this device knows of the switch for any pilot lesson: nil before
+    /// the server has ever answered (and no DEBUG override).
+    public func knownEnabled(for lessonIds: Set<String>) -> Bool? {
+        if let forced = debugOverride { return forced }
+        guard cached != nil else { return nil }
+        return lessonIds.contains { isEnabled(for: $0) }
+    }
+
     /// Whether a NEW attempt at this lesson should use the player.
     public func isEnabled(for lessonId: String) -> Bool {
         if let forced = debugOverride { return forced }
@@ -45,13 +53,30 @@ public final class LessonPlayerFlag {
         return config.enabled && config.lessons.contains(lessonId)
     }
 
-    /// Fetch the server's answer. A failure keeps the last known value.
-    public func refresh(using fetch: () async throws -> LessonPlayerConfig) async {
-        guard Self.clientAllowed, let config = try? await fetch() else { return }
+    /// Fetch the server's answer. A network failure keeps the last known value
+    /// (offline, the cache holds). A server that no longer serves the route
+    /// (`isNotServed`, e.g. a 404 after a revert) means the pilot is gone:
+    /// the cache turns off.
+    public func refresh(using fetch: () async throws -> LessonPlayerConfig,
+                        isNotServed: (Error) -> Bool = { _ in false }) async {
+        guard Self.clientAllowed else { return }
+        let config: LessonPlayerConfig
+        do {
+            config = try await fetch()
+        } catch {
+            guard isNotServed(error) else { return }
+            config = .off
+        }
         cached = config
         if let data = try? JSONEncoder().encode(config) {
             preferences.set(String(decoding: data, as: UTF8.self), for: Self.cacheKey)
         }
+    }
+
+    /// The config route answered that it isn't there (a server without the
+    /// pilot): HTTP 404 reaches the app as `APIError.unknown("HTTP 404")`.
+    nonisolated static func isNotServed(_ error: Error) -> Bool {
+        (error as? APIError) == .unknown(underlying: "HTTP 404")
     }
 
     /// `-LessonPlayer YES|NO` in DEBUG builds only (`testHookArguments` is

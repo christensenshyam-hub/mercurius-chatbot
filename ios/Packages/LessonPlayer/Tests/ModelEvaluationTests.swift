@@ -160,3 +160,31 @@ func waitUntil(_ condition: () -> Bool) async -> Bool {
     }
     return condition()
 }
+
+@Suite("Lesson player: active time")
+@MainActor
+struct ActiveTimeTests {
+    final class Clock { var now = Fixture.t0 }
+
+    @Test("A lesson done in one sitting carries real active time on every event")
+    func oneSitting() {
+        let clock = Clock()
+        var events: [LessonPlayerEvent] = []
+        let lesson = LessonCatalog.u1_l3_v1
+        let host = LessonPlayerHost(saveAttempt: { _ in }, evaluate: { _ in .failed(.offline) },
+                                    lessonCompleted: { _, _ in }, exit: { _ in }, record: { events.append($0) })
+        let m = LessonPlayerModel(machine: LessonMachine(content: lesson, attempt: LessonAttempt(lesson: lesson, now: clock.now))!,
+                                  host: host, resumed: false, clock: { clock.now })
+        m.sceneBecameActive()
+        clock.now += 40
+        m.send(.choose("unverified"))
+        clock.now += 50
+        m.send(.submit)
+        let submitted = events.first { $0.name == "answer_submitted" }
+        #expect(submitted?.context.activeSeconds == 90)
+        // A long idle gap counts for at most the cap.
+        clock.now += 3600
+        m.send(.advance(from: "claim-state"))
+        #expect(m.machine.attempt.activeSeconds == 90 + LessonMachine.maxActiveGap)
+    }
+}

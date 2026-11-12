@@ -23,9 +23,9 @@ struct ActionBar: View {
                     model.send(action)
                 }
             }
-            // A new label replaces the old one outright: no cross-fade with
-            // both titles half-drawn.
-            .id(plan.primary.title)
+            // A new label replaces the old one without a cross-fade (both
+            // titles half-drawn). The button keeps its identity, so VoiceOver
+            // focus stays on it when "Check answer" becomes "Continue".
             .transaction { $0.animation = nil }
             .accessibilityIdentifier("player.primary")
             .overlay(alignment: .leading) {

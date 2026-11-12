@@ -166,6 +166,18 @@ struct MachineTests {
         #expect(!r21.wasApplied)
     }
 
+    @Test("A step that ended on the revealed answer means the skill wasn't demonstrated")
+    func revealIsNotDemonstrated() {
+        var m = Fixture.machine()
+        _ = m.send(.choose("a")); _ = m.send(.submit); _ = m.send(.tryAgain)
+        _ = m.send(.choose("c")); _ = m.send(.submit)
+        #expect(m.currentRecord.revealed)
+        _ = m.send(.advance(from: "s1"))
+        for _ in 0..<5 { m.passCurrent() }
+        #expect(m.attempt.isComplete)
+        #expect(m.attempt.completion?.success == .notDemonstrated)
+    }
+
     @Test("Hints, retries or a reveal make success assisted, not independent")
     func assisted() {
         var m = Fixture.machine()
@@ -338,7 +350,7 @@ struct AttemptTests {
         m.recordActive(seconds: 5)
         m.recordActive(seconds: 3600)
         m.recordActive(seconds: -4)
-        #expect(m.attempt.activeSeconds == 65)
+        #expect(m.attempt.activeSeconds == 5 + LessonMachine.maxActiveGap)
     }
 }
 

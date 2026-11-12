@@ -607,6 +607,9 @@ struct AppShellView: View {
     private func makePlayerLaunch(for lesson: Lesson) -> PlayerLaunch? {
 #if os(iOS)
         let library = LessonCatalog.library
+        // A saved record from a newer build: leave it untouched and use the
+        // legacy lesson rather than start over on top of it.
+        guard !env.lessonAttempts.hasUnreadableRecord(for: lesson.id) else { return nil }
         let inputs = ExperienceInputs(
             playerEnabled: env.lessonPlayerFlag.isEnabled(for: lesson.id),
             playerAttempt: env.lessonAttempts.attempt(for: lesson.id),
@@ -663,7 +666,13 @@ struct AppShellView: View {
                 }
             },
             exit: { _ in activeLesson = nil },
-            record: { LessonPlayerTelemetry.shared.record($0) }
+            record: { [apiClient, sessionIdentity, streakStore, achievementStore] event in
+                LessonPlayerTelemetry.shared.record(event)
+                // Start, resume and completion count today toward the streak,
+                // as a chat lesson's turns do.
+                LessonPlayerActivity.report(event, apiClient: apiClient, sessionIdentity: sessionIdentity,
+                                            streakStore: streakStore, achievementStore: achievementStore)
+            }
         )
     }
 

@@ -123,11 +123,16 @@ public struct LessonMachine: Equatable, Sendable {
         return result
     }
 
-    /// Adds foreground time, capped per call so a long background or a stuck
-    /// timer can't inflate it.
+    /// The longest gap between two moments of activity that still counts as
+    /// active time: a screen left open while the learner walks away counts
+    /// for at most this long.
+    public static let maxActiveGap: Double = 120
+
+    /// Adds foreground time since the last flush, capped so an idle screen or
+    /// a stuck timer can't inflate it.
     public mutating func recordActive(seconds: Double) {
         guard seconds > 0 else { return }
-        attempt.activeSeconds += min(seconds, 60)
+        attempt.activeSeconds += min(seconds, Self.maxActiveGap)
     }
 
     public mutating func markResumed() { attempt.resumeCount += 1 }
@@ -361,10 +366,10 @@ public struct LessonMachine: Equatable, Sendable {
         for id in graded {
             let record = attempt.record(id)
             guard let last = record.lastSubmission else { return .notDemonstrated }
-            if last.status.verdict != .correct {
-                if content.completion.mustBeCorrect.contains(id), record.revealed { assisted = true; continue }
-                return .notDemonstrated
-            }
+            // A step that ended without a right answer (the answer was shown
+            // after repeated misses, or an answer-only step was wrong) did
+            // not demonstrate the skill, whatever else went right.
+            if last.status.verdict != .correct { return .notDemonstrated }
             let gradedSubmissions = record.submissions.filter { $0.status.verdict != nil }
             if gradedSubmissions.count > 1 || record.hintsShown > 0 || record.revealed { assisted = true }
         }

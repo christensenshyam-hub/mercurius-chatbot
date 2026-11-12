@@ -39,6 +39,7 @@ const {
   ConceptMapRequest,
   UnitTestGradeRequest,
   LessonPlayerEvaluateRequest,
+  LessonPlayerActivityRequest,
   ResponseMode,
   ImageUploadRequest,
   ReportRequest,
@@ -3077,6 +3078,24 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
 //   404 unknown rubric · 422 invalid model output · 504 timeout · 5xx/429 rails
 // Nothing is stored: the answer is not saved and is never logged.
 // ---------------------------------------------------------------------------
+// POST /api/lesson-player/activity — the pilot's study-activity ping (additive,
+// no model call, no text). A chat lesson updates the learner's streak and the
+// lesson funnel on every /api/chat turn; a player lesson mostly runs on the
+// device, so it reports here instead: 'start' (a new attempt), 'resume' (an
+// attempt reopened), 'complete'. Each counts today toward the streak exactly
+// as a chat turn does (db.updateStreak), and start/complete write the same
+// lesson_events rows a chat lesson writes. Returns { streak }.
+app.post('/api/lesson-player/activity', chatLimiter, validate(LessonPlayerActivityRequest, { endpoint: '/api/lesson-player/activity' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, event } = req.validated;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  const streak = await db.updateStreak(sessionId);
+  const m = /^([ub])(\d+)_l(\d+)$/.exec(lessonId);
+  const meta = { lessonId, unit: Number(m[2]), lesson: Number(m[3]), turnIndex: event === 'start' ? 1 : null };
+  if (event === 'start') writeLessonEvent(sessionId, meta, 'start');
+  if (event === 'complete') writeLessonEvent(sessionId, meta, 'complete');
+  return res.json({ streak });
+}));
+
 const LESSON_PLAYER_EVALUATE_TIMEOUT_MS = Number(process.env.LESSON_PLAYER_EVALUATE_TIMEOUT_MS) || 15000;
 
 app.post('/api/lesson-player/evaluate', chatLimiter, validate(LessonPlayerEvaluateRequest, { endpoint: '/api/lesson-player/evaluate' }), asyncRoute(async (req, res) => {

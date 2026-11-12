@@ -118,25 +118,25 @@ public extension LessonCatalog {
                     prompt: "Tap the claim in this AI answer that gives a specific number you could check against the original study.",
                     scenario: Material(
                         title: "An AI answer",
-                        text: "Studies show green study rooms can boost memory. In one experiment, students in green rooms remembered 34% more words than students in white rooms. Many teachers now recommend them, and the color is thought to feel calming.",
+                        text: "Studies show that green study rooms can boost memory for most students. In one experiment, students remembered 34% more words. Many teachers across the country now recommend them, and the color is widely thought to feel calming.",
                         origin: .fictional
                     ),
                     kind: .claimSelection(ClaimSelectionActivity(
                         passage: [
-                            PassageSegment("Studies show ", claimId: nil),
-                            PassageSegment("green study rooms can boost memory", claimId: "boost"),
+                            PassageSegment("Studies show that ", claimId: nil),
+                            PassageSegment("green study rooms can boost memory for most students", claimId: "boost"),
                             PassageSegment(". In one experiment, "),
-                            PassageSegment("students in green rooms remembered 34% more words than students in white rooms", claimId: "34-percent"),
+                            PassageSegment("students remembered 34% more words", claimId: "34-percent"),
                             PassageSegment(". "),
-                            PassageSegment("Many teachers now recommend them", claimId: "teachers"),
+                            PassageSegment("Many teachers across the country now recommend them", claimId: "teachers"),
                             PassageSegment(", and "),
-                            PassageSegment("the color is thought to feel calming", claimId: "calming"),
+                            PassageSegment("the color is widely thought to feel calming", claimId: "calming"),
                             PassageSegment("."),
                         ],
                         correct: ["34-percent"],
-                        correctFeedback: "Yes: 34% more words, green rooms against white. A figure that precise should appear in the original study if it’s real, so it’s what to check.",
+                        correctFeedback: "Yes: 34% more words. A figure that precise should appear in the original study if it’s real, so it’s the thing to check.",
                         claimFeedback: [
-                            "boost": "That’s a claim, but a broad one. “Can boost” gives no number or measure, so there’s nothing exact to match against a study.",
+                            "boost": "That’s a claim, but a broad one. “Can boost” and “most” give no exact number, so there’s nothing precise to match against a study.",
                             "teachers": "Maybe true, but there’s no number to test: which teachers, and how many? Look for the sentence with an exact figure.",
                             "calming": "“Is thought to” is hedged, and there’s no measure to check. Look for the sentence with an exact figure.",
                         ]

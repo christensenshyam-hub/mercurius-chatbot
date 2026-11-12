@@ -336,6 +336,17 @@ struct FeedbackLook {
     let icon: String
     let tint: Color
 
+    static func title(for status: GradingStatus) -> String {
+        switch status {
+        case .graded(.correct): return PlayerCopy.correct
+        case .graded(.partial): return PlayerCopy.partly
+        case .graded(.incorrect): return PlayerCopy.notQuite
+        case .notGraded: return PlayerCopy.mercReplied
+        case .pending: return PlayerCopy.checking
+        case .ungraded: return PlayerCopy.notGradedYet
+        }
+    }
+
     init(status: GradingStatus) {
         switch status {
         case .graded(.correct):

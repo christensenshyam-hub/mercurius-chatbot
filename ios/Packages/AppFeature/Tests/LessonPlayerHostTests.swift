@@ -70,6 +70,38 @@ struct LessonAttemptStoreTests {
         #expect(store.attempt(for: "u1_l3") != nil)
     }
 
+    @Test("A replay keeps the completed attempt in history; an unreadable record is never replaced")
+    func noSilentOverwrite() {
+        let prefs = InMemoryPreferenceStore()
+        let store = LessonAttemptStore(preferences: prefs)
+        var done = LessonMachine(content: lesson, attempt: attempt())!
+        while !done.attempt.isComplete {
+            let step = done.currentStep
+            switch step.activity?.kind {
+            case .choice(let c)?: _ = done.send(.choose(c.correct.first!)); _ = done.send(.submit)
+            case .claimSelection(let s)?: _ = done.send(.toggleClaim(s.correct.first!)); _ = done.send(.submit)
+            case .shortResponse?:
+                _ = done.send(.editText("Find the study."))
+                let t = done.send(.submit).effects.compactMap { e -> Int? in
+                    if case .requestEvaluation(_, let t, _) = e { return t }; return nil }.first!
+                _ = done.send(.evaluationArrived(token: t, ResponseEvaluation(status: .meets, feedback: "Yes.")))
+            default: break
+            }
+            _ = done.send(.advance(from: step.id))
+        }
+        store.save(done.attempt)
+        let replay = attempt("00000000-0000-0000-0000-00000000000B")
+        store.save(replay)
+        #expect(store.attempt(for: "u1_l3")?.attemptId == replay.attemptId)
+        #expect(store.previousCompletedAttempt(for: "u1_l3")?.attemptId == done.attempt.attemptId)
+
+        prefs.set(#"{"u1_l3":"bm90IGFuIGF0dGVtcHQ="}"#, for: LessonAttemptStore.attemptsKey)
+        #expect(store.hasUnreadableRecord(for: "u1_l3"))
+        store.save(attempt("00000000-0000-0000-0000-00000000000C"))
+        #expect(prefs.string(for: LessonAttemptStore.attemptsKey)?.contains("bm90IGFuIGF0dGVtcHQ=") == true)
+        #expect(!store.hasUnreadableRecord(for: "b1_l1"))
+    }
+
     @Test("Completion goes through the app once; a replay of a completed lesson grants nothing again")
     func completionOnce() {
         let store = LessonAttemptStore(preferences: InMemoryPreferenceStore())
@@ -119,6 +151,15 @@ struct LessonPlayerFlagTests {
         struct Offline: Error {}
         await next.refresh { throw Offline() }
         #expect(next.isEnabled(for: "u1_l3") == LessonPlayerFlag.clientAllowed)
+    }
+
+    @Test("A server without the route (404) turns a cached 'on' off")
+    func notServedTurnsOff() async {
+        let flag = LessonPlayerFlag(preferences: InMemoryPreferenceStore(), arguments: [])
+        await flag.refresh { LessonPlayerConfig(enabled: true, lessons: ["u1_l3"]) }
+        await flag.refresh(using: { throw APIError.unknown(underlying: "HTTP 404") }, isNotServed: LessonPlayerFlag.isNotServed)
+        #expect(!flag.isEnabled(for: "u1_l3"))
+        #expect(!LessonPlayerFlag.isNotServed(APIError.offline))
     }
 
     @Test("The DEBUG launch argument overrides both ways")
@@ -208,14 +249,14 @@ struct LessonPlayerTelemetryTests {
         func write(name: String, fields: [String: String]) { lines.append((name, fields)) }
     }
 
-    @Test("first_open is written once per install, with a pseudonymous id and the app version")
+    @Test("first_open is written once, for a new learner only, with a pseudonymous id and the app version")
     func firstOpenOnce() {
         let prefs = InMemoryPreferenceStore()
         let sink = Sink()
         let t = LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "9.9 (1)")
-        t.recordFirstOpenIfNeeded(playerEligible: true)
-        t.recordFirstOpenIfNeeded(playerEligible: true)
-        LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "9.9 (1)").recordFirstOpenIfNeeded(playerEligible: false)
+        t.recordFirstOpenIfNeeded(isNewLearner: true, playerEligible: true)
+        t.recordFirstOpenIfNeeded(isNewLearner: true, playerEligible: true)
+        LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "9.9 (1)").recordFirstOpenIfNeeded(isNewLearner: true, playerEligible: false)
         #expect(sink.lines.map(\.0) == ["first_open"])
         let f = sink.lines[0].1
         #expect(f["experience"] == "player")
@@ -224,9 +265,20 @@ struct LessonPlayerTelemetryTests {
         // "Delete my data" makes a new learner with a new id.
         let old = t.installId
         t.reset()
-        t.recordFirstOpenIfNeeded(playerEligible: false)
+        t.recordFirstOpenIfNeeded(isNewLearner: true, playerEligible: nil)
         #expect(sink.lines.count == 2)
+        #expect(sink.lines[1].1["experience"] == "unknown")
         #expect(t.installId != old)
+    }
+
+    @Test("An existing learner updating to this build is never counted as a first open")
+    func upgraderNotCounted() {
+        let prefs = InMemoryPreferenceStore()
+        let sink = Sink()
+        let t = LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "1")
+        t.recordFirstOpenIfNeeded(isNewLearner: false, playerEligible: true)
+        t.recordFirstOpenIfNeeded(isNewLearner: true, playerEligible: true)
+        #expect(sink.lines.isEmpty)
     }
 
     @Test("A full Lesson 3 run logs the spec's events, with no answer text anywhere")

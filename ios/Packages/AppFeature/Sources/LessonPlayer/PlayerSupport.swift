@@ -3,6 +3,7 @@ import DesignSystem
 import LessonPlayer
 import ChatFeature
 import NetworkingKit
+import PersistenceKit
 
 /// A lesson opened in the player: its id and the model running its attempt.
 struct PlayerLaunch {
@@ -165,6 +166,36 @@ enum LessonPlayerPractice {
         case "timeout": return .failed(.timeout)
         case "invalid": return .failed(.invalidResult)
         default: return .replied("No, I’m not a person. I’m Merc, an AI: a computer program that writes answers. (Stubbed reply.)")
+        }
+    }
+}
+
+/// Tells the server about player study activity, so a player lesson keeps the
+/// learner's streak exactly as a chat lesson's turns do, then caches the
+/// streak and awards streak milestones the way `ChatViewModel` does. Best
+/// effort: a failure never interrupts the lesson.
+enum LessonPlayerActivity {
+    static func serverEvent(for event: LessonPlayerEvent) -> String? {
+        switch event {
+        case .lessonStarted: return "start"
+        case .lessonResumed: return "resume"
+        case .lessonCompleted: return "complete"
+        default: return nil
+        }
+    }
+
+    @MainActor
+    static func report(_ event: LessonPlayerEvent, apiClient: APIClient, sessionIdentity: SessionIdentity,
+                       streakStore: StreakStore, achievementStore: AchievementStore) {
+        guard let name = serverEvent(for: event),
+              !AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument),
+              let sessionId = try? sessionIdentity.current() else { return }
+        let lessonId = event.context.lessonId
+        Task { @MainActor in
+            guard let streak = try? await apiClient.recordLessonActivity(sessionId: sessionId, lessonId: lessonId, event: name)
+            else { return }
+            streakStore.update(streak: streak)
+            for id in AchievementCatalog.streakMilestones(for: streak) { achievementStore.award(id) }
         }
     }
 }

@@ -145,6 +145,13 @@ public enum LessonValidator {
                 error(stepId, "claim \(id) has no feedback")
             }
             if a.scenario == nil { warn(stepId, "say where the passage comes from (scenario material)") }
+            // A right claim much longer than the others gives itself away.
+            if s.selection == .single, let right = s.claims.first(where: { s.correct.contains($0.claimId ?? "") }) {
+                let others = s.claims.filter { $0.claimId != right.claimId }.map(\.text.count)
+                if let longest = others.max(), right.text.count > Int(Double(longest) * 1.5) {
+                    warn(stepId, "the right claim is much longer than the others")
+                }
+            }
             return nil
         case .practice(let p):
             if p.suggestion.isBlank || p.fallbackGuidance.isBlank || p.notice.isBlank {
