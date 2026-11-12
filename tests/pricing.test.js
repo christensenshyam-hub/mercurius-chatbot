@@ -167,6 +167,18 @@ describe('normalizeUsage', () => {
     );
     assert.deepEqual(normalizeUsage(undefined), { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   });
+
+  test('negative counts clamp to 0, same guard as costUsd', () => {
+    assert.deepEqual(
+      normalizeUsage({
+        input_tokens: -500,
+        output_tokens: -1,
+        cache_read_input_tokens: -3,
+        cache_creation_input_tokens: -4,
+      }),
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+    );
+  });
 });
 
 describe('estimateTokens', () => {
