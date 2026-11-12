@@ -113,6 +113,20 @@
       }
     },
     {
+      "name" : "LessonPlayer",
+      "settings" : [
+
+      ],
+      "targets" : [
+        "LessonPlayer"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
       "name" : "ChatFeature",
       "settings" : [
 
@@ -381,6 +395,52 @@
       "name" : "LessonInteractivesTests",
       "packageAccess" : true,
       "path" : "LessonInteractives/Tests",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "test"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "DesignSystem",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "LessonPlayer",
+      "packageAccess" : true,
+      "path" : "LessonPlayer/Sources",
+      "resources" : [
+
+      ],
+      "settings" : [
+
+      ],
+      "type" : "regular"
+    },
+    {
+      "dependencies" : [
+        {
+          "byName" : [
+            "LessonPlayer",
+            null
+          ]
+        }
+      ],
+      "exclude" : [
+
+      ],
+      "name" : "LessonPlayerTests",
+      "packageAccess" : true,
+      "path" : "LessonPlayer/Tests",
       "resources" : [
 
       ],
@@ -742,6 +802,12 @@
             "LessonInteractives",
             null
           ]
+        },
+        {
+          "byName" : [
+            "LessonPlayer",
+            null
+          ]
         }
       ],
       "exclude" : [
@@ -805,6 +871,12 @@
         {
           "byName" : [
             "LessonInteractives",
+            null
+          ]
+        },
+        {
+          "byName" : [
+            "LessonPlayer",
             null
           ]
         }

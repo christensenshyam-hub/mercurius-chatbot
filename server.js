@@ -29,6 +29,7 @@ const helmet = require('helmet');
 const { z } = require('zod');
 const db = require('./db');
 const logger = require('./lib/logger');
+const lessonPlayer = require('./lib/lessonPlayer');
 const {
   validate,
   ChatRequest,
@@ -37,6 +38,8 @@ const {
   ReportCardRequest,
   ConceptMapRequest,
   UnitTestGradeRequest,
+  LessonPlayerEvaluateRequest,
+  LessonPlayerActivityRequest,
   ResponseMode,
   ImageUploadRequest,
   ReportRequest,
@@ -52,6 +55,7 @@ const { reflowLimit } = require('./lib/airyReflow');
 const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
+const lessonPlayerRubrics = require('./lib/lessonPlayerRubrics');
 const { pickModel } = require('./lib/modelAllowlist');
 const modelRequest = require('./lib/modelParams');
 const { modelNotesFor } = require('./lib/modelNotes');
@@ -635,6 +639,7 @@ Common mistake: Students think training = memorization. It's pattern compression
 Teach: Hallucination (generating plausible-sounding false info). Fluency ≠ accuracy. Calibration problems. Why next-token prediction optimizes for plausibility, not truth.
 Key examples: Mata v. Avianca (2023): lawyers filed a brief citing court cases ChatGPT had invented, and a federal judge fined them and their firm $5,000. AI confidently generating fake citations. Calibration: OpenAI's GPT-4 Technical Report (2023) found the pre-trained model's confidence matched its accuracy well, and that post-training (including RLHF) made that calibration worse — so a polished assistant can sound sure when it isn't.
 Exercise: Write a short, authoritative-sounding paragraph about a made-up topic, using invented names and sources (never real journals or people), and ask: identify 2 claims that could be hallucinated. What would you check? How would you verify? All three parts must come from the student.
+Grading note: a claim is supported, unverified, or contradicted, three different things. A citation the student can't find leaves the claim unverified, not proven fake (a real source can be hard to find or cited wrongly), so if their plan says "if I can't find it, it's made up", credit the search but correct that step plainly. Finding a real paper isn't the end either: the check is whether it actually says what the claim says (the same number, the same thing measured). Credit a plan that does both.
 Common mistake: "If it sounds confident, it must be right."
 
 **Lesson 4 — Unit Review**
@@ -1165,6 +1170,7 @@ const QUIZ_SYSTEM = helperSystem(QUIZ_PROMPT);
 const REPORT_CARD_SYSTEM = helperSystem(REPORT_CARD_PROMPT);
 const CONCEPT_MAP_SYSTEM = helperSystem(CONCEPT_MAP_PROMPT);
 const UNIT_TEST_GRADER_SYSTEM = helperSystem(UNIT_TEST_GRADER_PROMPT);
+const LESSON_PLAYER_EVALUATOR_SYSTEM = helperSystem(lessonPlayerRubrics.EVALUATOR_PROMPT);
 const FACTCHECK_SYSTEM = helperSystem(FACTCHECK_PROMPT);
 const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 // What a JSON helper route (quiz, report card, concept map, fact-check,
@@ -3061,6 +3067,81 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
 }));
 
 // ---------------------------------------------------------------------------
+// POST /api/lesson-player/evaluate — the lesson player pilot's short-response
+// check (additive). The client sends ids and the answer; the task, evidence
+// and rubric come from lib/lessonPlayerRubrics.js, so this grades the
+// pilot's authored tasks and nothing else. Same rails as the unit-test grader
+// (crisis check, session rate limit, gate as a helper call: kill switch,
+// spend cap, quotas), plus a hard time limit. Responses:
+//   200 { status: 'meets'|'not_yet', feedback, hint, flags }
+//   200 { crisis: true, message }       (never graded)
+//   404 unknown rubric · 422 invalid model output · 504 timeout · 5xx/429 rails
+// Nothing is stored: the answer is not saved and is never logged.
+// ---------------------------------------------------------------------------
+// POST /api/lesson-player/activity — the pilot's study-activity ping (additive,
+// no model call, no text). A chat lesson updates the learner's streak and the
+// lesson funnel on every /api/chat turn; a player lesson mostly runs on the
+// device, so it reports here instead: 'start' (a new attempt), 'resume' (an
+// attempt reopened), 'complete'. Each counts today toward the streak exactly
+// as a chat turn does (db.updateStreak), and start/complete write the same
+// lesson_events rows a chat lesson writes. Returns { streak }.
+app.post('/api/lesson-player/activity', chatLimiter, validate(LessonPlayerActivityRequest, { endpoint: '/api/lesson-player/activity' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, event } = req.validated;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  const streak = await db.updateStreak(sessionId);
+  const m = /^([ub])(\d+)_l(\d+)$/.exec(lessonId);
+  const meta = { lessonId, unit: Number(m[2]), lesson: Number(m[3]), turnIndex: event === 'start' ? 1 : null };
+  if (event === 'start') writeLessonEvent(sessionId, meta, 'start');
+  if (event === 'complete') writeLessonEvent(sessionId, meta, 'complete');
+  return res.json({ streak });
+}));
+
+const LESSON_PLAYER_EVALUATE_TIMEOUT_MS = Number(process.env.LESSON_PLAYER_EVALUATE_TIMEOUT_MS) || 15000;
+
+app.post('/api/lesson-player/evaluate', chatLimiter, validate(LessonPlayerEvaluateRequest, { endpoint: '/api/lesson-player/evaluate' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, contentVersion, stepId, rubricId, answer } = req.validated;
+  const rubric = lessonPlayerRubrics.rubricFor({ lessonId, contentVersion, stepId, rubricId });
+  if (!rubric) return res.status(404).json({ error: 'unknown_rubric', message: 'This activity can’t be checked here.' });
+  if (crisisSignal(answer)) return res.json({ crisis: true, message: CRISIS_COPY });
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
+  const signal = AbortSignal.timeout(LESSON_PLAYER_EVALUATE_TIMEOUT_MS);
+  try {
+    const response = await claudeCall.createMessage({
+      route: '/api/lesson-player/evaluate',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      signal,
+      params: {
+        model: MODEL,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'grader', 300),
+        ...modelRequest.requestFields(MODEL, 'grader', { temperature: 0.2, effort: TUTOR_EFFORT }),
+        system: LESSON_PLAYER_EVALUATOR_SYSTEM,
+        messages: [{ role: 'user', content: lessonPlayerRubrics.buildEvaluationMessage(rubric, answer) }],
+      },
+    });
+    const raw = firstTextOf(response);
+    if (isCrisisReply(raw)) return res.json({ crisis: true, message: CRISIS_COPY });
+    const result = lessonPlayerRubrics.parseEvaluation(raw, rubric);
+    if (!result) {
+      return res.status(422).json({ error: 'invalid_result', message: 'Couldn’t check your answer this time.' });
+    }
+    return res.json(result);
+  } catch (err) {
+    if (signal.aborted) {
+      return res.status(504).json({ error: 'timeout', message: 'Checking took too long.' });
+    }
+    if (quotaErrorHandled(err, req, res)) return;
+    logger.forRequest(req).error({ err: err.message }, 'Lesson player evaluate error');
+    return res.status(502).json({ error: 'api_error', message: 'Couldn’t check your answer right now.' });
+  }
+}));
+
+// ---------------------------------------------------------------------------
 // POST /api/concept-map
 // ---------------------------------------------------------------------------
 app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint: '/api/concept-map' }), asyncRoute(async (req, res) => {
@@ -3100,6 +3181,17 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
 // unauthenticated, one loaded every session row into memory to sort in JS,
 // and together they published a fragment of every minor's session id. The
 // operator view of the same numbers is the admin-only stats route.
+
+// ---------------------------------------------------------------------------
+// Interactive lesson player pilot — /api/lesson-player/* (additive; see
+// lib/lessonPlayer.js and docs/lesson-player-pilot/). The config probe is a
+// read-only flag the iOS app checks before starting a NEW player attempt.
+// No session, no storage, nothing per learner.
+// ---------------------------------------------------------------------------
+app.get('/api/lesson-player/config', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(lessonPlayer.lessonPlayerConfig());
+});
 
 // ---------------------------------------------------------------------------
 // Standby gamification (mascot: Mercury) — /api/progression/*

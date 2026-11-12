@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "NetworkingKit", targets: ["NetworkingKit"]),
         .library(name: "PersistenceKit", targets: ["PersistenceKit"]),
         .library(name: "LessonInteractives", targets: ["LessonInteractives"]),
+        .library(name: "LessonPlayer", targets: ["LessonPlayer"]),
         .library(name: "ChatFeature", targets: ["ChatFeature"]),
         .library(name: "CurriculumFeature", targets: ["CurriculumFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
@@ -88,6 +89,25 @@ let package = Package(
             name: "LessonInteractivesTests",
             dependencies: ["LessonInteractives"],
             path: "LessonInteractives/Tests"
+        ),
+
+        // MARK: LessonPlayer
+        //
+        // The interactive lesson player pilot (docs/lesson-player-pilot/):
+        // lesson data + validation, deterministic grading, the step state
+        // machine, attempt records, and the player's views. DesignSystem only:
+        // storage, the network and telemetry come in through protocols the
+        // composition root (AppFeature) implements, so the module itself never
+        // sends or stores anything (DependencyGraphTests enforces it).
+        .target(
+            name: "LessonPlayer",
+            dependencies: ["DesignSystem"],
+            path: "LessonPlayer/Sources"
+        ),
+        .testTarget(
+            name: "LessonPlayerTests",
+            dependencies: ["LessonPlayer"],
+            path: "LessonPlayer/Tests"
         ),
 
         // MARK: ChatFeature
@@ -169,13 +189,15 @@ let package = Package(
                 "EngagementFeature",
                 "MercuriusActivity",
                 "LessonInteractives",
+                "LessonPlayer",
             ],
             path: "AppFeature/Sources"
         ),
         .testTarget(
             name: "AppFeatureTests",
             dependencies: ["AppFeature", "ChatFeature", "CurriculumFeature", "EngagementFeature",
-                           "NetworkingKit", "PersistenceKit", "SettingsFeature", "LessonInteractives"],
+                           "NetworkingKit", "PersistenceKit", "SettingsFeature", "LessonInteractives",
+                           "LessonPlayer"],
             path: "AppFeature/Tests"
         ),
 
