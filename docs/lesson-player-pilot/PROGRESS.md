@@ -7,8 +7,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 
 | # | Milestone | Status |
 |---|---|---|
-| 0 | Ground truth | done |
-| 1 | Lesson data and deterministic core | not started |
+| 0 | Ground truth | done (12c90e2) |
+| 1 | Lesson data and deterministic core | done |
 | 2 | Player and Lesson 3 (steps 1–5, 7) | not started |
 | 3 | State and progress | not started |
 | 4 | Short response and model evaluation | not started |
@@ -145,7 +145,23 @@ Surveyed by five read-only subagents. Paths are relative to the repo root; packa
 
 ## Commands that work here
 
-(Filled in at each milestone with evidence.)
+- Player core and architecture tests (macOS host, about 1 min cold): `cd ios/Packages && swift test --filter "LessonPlayerTests|ArchitectureTests"`.
+  M1 result: `✔ Test run with 43 tests in 8 suites passed` (36 player tests plus 7 architecture tests).
+- After any Package.swift change: `cd ios/Packages && swift package dump-package > ArchitectureTests/Tests/Fixtures/manifest.json` (ArchitectureTests reads it).
+
+## Milestone 1 notes
+
+- New SPM target `LessonPlayer` (DesignSystem only). It is registered in `DependencyGraphTests.contentModules`, which adds it to the allow-list; no existing rule was loosened. AppFeature depends on it.
+- Files:
+  - `LessonPlayer/Sources/Model/` (LessonContent, Activity)
+  - `Core/Grading.swift` (Grader, EvaluationParser)
+  - `Core/LessonAttempt.swift` (attempt record, codec, relaunch normalisation)
+  - `Core/LessonMachine.swift` (state machine)
+  - `Core/LessonValidator.swift`
+  - `Core/ExperienceResolver.swift` (library, experience assignment, reward ledger)
+- **D8 (double advance):** `advance` carries the id of the step it was tapped on. A second Continue tap from a screen the lesson has already left is ignored, so it can't skip the next teaching step.
+- **D9 (misses):** after two wrong objective answers the right answer is shown with its explanation, and the learner may continue. That counts as assisted success, never independent. A short response has no such path: only a "meets" grade resolves it. After two "not yet" results the player shows an authored exemplar, and the learner still writes and submits their own answer.
+- **D10 (success levels):** completion, independent success, assisted success and "not demonstrated" are separate values on the attempt. A lesson never grants unit mastery; that stays with the unit check.
 
 ## Known gaps
 

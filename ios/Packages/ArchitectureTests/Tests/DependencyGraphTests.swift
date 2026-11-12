@@ -111,6 +111,9 @@ private let infraModules: Set<String> = [
 /// enforced by construction for every card.
 private let contentModules: [String: Set<String>] = [
     "LessonInteractives": ["DesignSystem"],
+    // The lesson player pilot: storage, network and telemetry are injected by
+    // AppFeature, so the player's own module reaches nothing but DesignSystem.
+    "LessonPlayer": ["DesignSystem"],
 ]
 
 /// Composition root. Only this module is allowed to fan out across
