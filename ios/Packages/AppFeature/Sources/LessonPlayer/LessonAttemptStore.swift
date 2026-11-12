@@ -59,6 +59,16 @@ public final class LessonAttemptStore {
         return true
     }
 
+    /// Whether a player completion should go through the app's completion
+    /// path (`handleLessonComplete`): the first time this learner completes
+    /// the lesson in the player (the ledger), or whenever progress doesn't
+    /// show it complete (so a completion is never lost). A replay of a lesson
+    /// already completed grants nothing again.
+    public func shouldRecordCompletion(lessonId: String, progressShowsCompleted: Bool) -> Bool {
+        let first = grantOnce(RewardLedger.completionKey(lessonId: lessonId))
+        return first || !progressShowsCompleted
+    }
+
     /// Erase every attempt and the ledger ("delete my data", a new identity).
     public func reset() {
         preferences.set(nil, for: Self.attemptsKey)

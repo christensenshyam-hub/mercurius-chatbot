@@ -22,7 +22,8 @@ struct SettingsResetTests {
         reminderStore: ReminderStore,
         onConsentWithdrawn: (@MainActor () -> Void)? = nil,
         afterReset: (@MainActor () -> Void)? = nil,
-        certificates: CertificateCenter? = nil
+        certificates: CertificateCenter? = nil,
+        lessonAttempts: LessonAttemptStore? = nil
     ) -> SettingsSheet {
         let identity = SessionIdentity(keychain: InMemoryKeychain())
         let chatStore = InMemoryChatStore()
@@ -48,8 +49,15 @@ struct SettingsResetTests {
             sessionDeleter: nil,
             onConsentWithdrawn: onConsentWithdrawn,
             afterReset: afterReset,
-            certificates: certificates
+            certificates: certificates,
+            lessonAttempts: lessonAttempts
         )
+    }
+
+    /// The lesson player's reset test builds the same sheet.
+    func makeSheetForPlayer(lessonAttempts: LessonAttemptStore) -> SettingsSheet {
+        makeSheet(reminderStore: ReminderStore(defaults: freshDefaults("settings.player.reminders")),
+                  lessonAttempts: lessonAttempts)
     }
 
     private func remindersOn() -> ReminderStore {

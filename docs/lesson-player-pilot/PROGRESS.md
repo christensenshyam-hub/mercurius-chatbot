@@ -9,8 +9,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 |---|---|---|
 | 0 | Ground truth | done (12c90e2) |
 | 1 | Lesson data and deterministic core | done (c14bb04) |
-| 2 | Player and Lesson 3 (steps 1–5, 7) | done |
-| 3 | State and progress | not started |
+| 2 | Player and Lesson 3 (steps 1–5, 7) | done (39b5393) |
+| 3 | State and progress | done |
 | 4 | Short response and model evaluation | not started |
 | 5 | Measurement | not started |
 | 6 | Second lesson | not started |
@@ -217,7 +217,43 @@ Surveyed by five read-only subagents. Paths are relative to the repo root; packa
   - Don't pass `CODE_SIGNING_ALLOWED=NO` for a build you run: unsigned simulator builds can't use the Keychain, and the app shows "Couldn't start".
 - `node --test tests/lessonPlayerConfig.test.js`: 4 passed.
 
+## Milestone 3: state and progress
+
+**What is persisted.** One `LessonAttempt` per lesson, saved after every learner action (`LessonAttemptStore`, the same UserDefaults suite as `CurriculumProgressStore`). It holds:
+- attempt id
+- content and schema versions
+- experience (`player`)
+- current step
+- per step: draft, submissions (response, grading status, feedback, hint, flags, hints seen), hints shown, reveal, depth opened, phase
+- active seconds, resume count
+- a completion record with its success level
+
+**Rules, and where each is enforced.**
+- **Pinning.** `LessonMachine.init` refuses an attempt on a different content version. `ExperienceResolver` resumes an unfinished attempt on its own version whatever the flag says. The decision is made once, when the lesson opens (`AppShellView.makePlayerLaunch`), so a flag change while the lesson is open does nothing to it.
+- **Legacy mapping** (tested):
+  - A lesson with a legacy thread stays legacy, in progress or completed (D11).
+  - Completed legacy progress is never touched.
+  - Player completion uses the same `progress.markCompleted`, so sync, certificates and unlocks behave exactly as before.
+- **One-time rewards:** `LessonAttemptStore.shouldRecordCompletion` (ledger key `lesson.complete.<id>`). The app's completion path is idempotent as well (review prompt counts first completions only; Explorer and certificates are idempotent).
+- **Resume:**
+  - After backgrounding: state is saved continuously, and active time stops on inactive.
+  - After closing the app: an evaluation in flight becomes "ungraded (interrupted)" with the text kept, and the player offers Retry.
+  - Finish for now: same state.
+- **Distinct states:**
+  - Completion = `completion != nil`.
+  - Success level = `independent`, `assisted` or `notDemonstrated`.
+  - Mastery stays the unit check's (`markUnitMastered`); the player never writes it.
+- **Identity and sync:** unchanged. Completion is synced through the existing forward-only `completed` status. Attempts and success levels stay on the device, like in-progress legacy lessons. Settings' delete-my-data erases them (tested).
+- **Decision D11:** a learner with a legacy thread for a pilot lesson keeps it, and the player never hides their transcript. The cost: learners who opened Lesson 3 before the flag went on won't see the player for that lesson.
+
+Tests:
+- `AppFeature/Tests/LessonPlayerHostTests.swift`: store round trip, resume after kill, unreadable records left alone, completion once, reset, flag cache/override, pilot lessons matching the curriculum, Settings reset.
+- Plus the core tests from M1.
+- Command: `swift test --filter "AppFeatureTests.LessonPlayer|AppFeatureTests.SettingsReset|LessonPlayerTests"`: ✔ 60 tests in 14 suites.
+
 ## Known gaps
+
+- Home's primary button says "Start Lesson 3", not "Continue", for a lesson with an unfinished *player* attempt. `HomeState` reads the legacy in-progress map, and writing the attempt id there would make the resolver treat the lesson as legacy. Tapping it still resumes the attempt at its step.
 
 - The Mac app keeps legacy lessons in the pilot (D4).
 - Server D1/D7 and `lesson_events` only see `/api/chat` traffic, so player-only learners are invisible to them (addressed in M5 / METRICS.md).

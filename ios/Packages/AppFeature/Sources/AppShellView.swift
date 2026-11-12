@@ -655,8 +655,8 @@ struct AppShellView: View {
                 // One-time rewards once per learner (the ledger); a replay of
                 // a lesson already complete grants nothing again. The existing
                 // completion path is idempotent too.
-                let first = attempts.grantOnce(RewardLedger.completionKey(lessonId: content.lessonId))
-                if first || !progress.isCompleted(content.lessonId) {
+                if attempts.shouldRecordCompletion(lessonId: content.lessonId,
+                                                   progressShowsCompleted: progress.isCompleted(content.lessonId)) {
                     handleLessonComplete(content.lessonId)
                 }
             },
