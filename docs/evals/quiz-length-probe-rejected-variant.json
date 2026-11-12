@@ -1,0 +1,507 @@
+{
+  "summary": {
+    "label": "after2-t1",
+    "model": "claude-sonnet-5-5",
+    "baseUrl": "http://localhost:3710",
+    "generatedAt": "2026-10-29T04:39:17.084Z",
+    "lessons": 27,
+    "trials": 1,
+    "turns": 1,
+    "n": 26,
+    "strictLongest": 18,
+    "longestPickHits": 20,
+    "shortestPickHits": 1,
+    "chance": 7.83,
+    "lengthRatio": 1.14,
+    "errors": 0,
+    "spendUsd": 0.3624
+  },
+  "results": [
+    {
+      "id": "u1_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u1_l1-1-42dcd5eb",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: the model never sees your words.\n\nBefore anything else happens, your prompt is chopped into chunks called **tokens**, and each chunk is swapped for a number. GPT-4's tokenizer has a vocabulary of about 100,000 of them.\n\n[KEY]An LLM doesn't read words; it reads a list of numbers that stand for chunks of text.[/KEY]\n\nHere's what that means for a word with two meanings:\n\n[EX]The word \"bank\" becomes the same token whether you write \"I sat on the bank of the river\" or \"I put cash in the bank.\" The model starts from the identical number both times, and only the surrounding words (\"river\" vs. \"cash\") tell it which meaning applies.[/EX]\n\n[Q]\nIn those two \"bank\" sentences, what does the model start with?\nA) Two different tokens, one for each meaning\nB) The same token for \"bank\" in both\nC) A dictionary lookup that picks the right meaning\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 130,
+            "output_tokens": 322,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 20575
+          },
+          "cost": 0.0549175
+        }
+      ]
+    },
+    {
+      "id": "u1_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u1_l2-1-744d7f0d",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a fact that surprises people: Common Crawl, a free archive of over 300 billion web pages, is one of the major sources of text that language models learn from.\n\nThat's **pre-training**. The model reads a huge pile of internet text, books, and code, and learns patterns in how language fits together. It doesn't memorize pages like a filing cabinet.\n\nIt compresses patterns, which is why it can write about things it never saw in that exact form.\n\n[KEY]A model's built-in knowledge comes from patterns it absorbed in pre-training, and that knowledge stops at its training cutoff date.[/KEY]\n\n[EX]Imagine a model whose training data ends in March. Ask it about a game released in June and its built-in knowledge has nothing on it. It might admit that, or it might confidently guess.[/EX]\n\n[Q]\nA model's training data ends in March. A student asks it about something that happened in June. What's the best explanation for why its own built-in knowledge falls short?\nA) It deletes older facts to make room for newer ones\nB) Its knowledge is frozen at its training cutoff\nC) It only searches the web when it feels unsure\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 128,
+            "output_tokens": 378,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 20575
+          },
+          "cost": 0.0554735
+        }
+      ]
+    },
+    {
+      "id": "u1_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u1_l3-1-fc16ea9f",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "In 2023, two New York lawyers filed a court brief full of case citations, and a federal judge later found that ChatGPT had invented them. The cases sounded real, with names, courts and quotes, but they didn't exist.\n\nHere's why that can happen: an LLM is trained to predict the next token that is **plausible**, not the next token that is **true**.\n\n[KEY]A language model optimizes for text that sounds right, so a smooth, confident answer tells you nothing about whether it's accurate.[/KEY]\n\n[EX]The judge fined the lawyers and their firm $5,000 in *Mata v. Avianca*. The model had never looked up those cases. It generated text shaped like a legal citation, because that shape was a likely continuation of the prompt.[/EX]\n\n[Q]\nWhy did the AI produce fake cases that looked so convincing?\nA) It searched a legal database and misread the results\nB) It deliberately lied to cover for missing information\nC) It generated text that fit the pattern of a real citation\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 131,
+            "output_tokens": 338,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 20575
+          },
+          "cost": 0.0550795
+        }
+      ]
+    },
+    {
+      "id": "u2_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u2_l1-1-71cd7615",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a number that surprised researchers: in a sample of ImageNet, one of the most influential image datasets in AI, about 45% of the images came from the US. China and India, together home to over a third of humanity, supplied roughly 1% and 2%.\n\nThat's **data bias**: the world a model learns from isn't a fair picture of the world it will be used on.\n\n[KEY]Data bias happens before any model exists, when the examples collected overrepresent some people and underrepresent others.[/KEY]\n\n[EX]Imagine a speech-recognition app trained mostly on recordings from one region. It works great for those speakers and keeps mishearing everyone else, and nobody wrote a single biased line of code.[/EX]\n\n[Q]\nWhere does data bias enter an AI system?\nA) In the choice of which company builds the model\nB) In the examples collected, before any model is trained\nC) In the math the model uses to learn patterns\nD) In the way people use the finished product\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 119,
+            "output_tokens": 319,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007543
+        }
+      ]
+    },
+    {
+      "id": "u2_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u2_l2-1-4be6cb7e",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Imagine a computer score that helps a judge decide how risky it is to release someone before trial or sentencing, and nobody outside the company can see how it works.\n\nThat's **COMPAS**, a risk-scoring tool used in US courts to predict whether a defendant will commit another crime.\n\nIn 2016, ProPublica analyzed its scores for thousands of defendants in Broward County, Florida, and published \"Machine Bias.\"\n\n[KEY]ProPublica found the errors weren't spread evenly: COMPAS got different kinds of wrong for Black and white defendants.[/KEY]\n\n[EX]Among defendants who did NOT reoffend, 45% of Black defendants had been labeled higher risk, versus 23% of white defendants. Among those who DID reoffend, 48% of white defendants had been labeled lower risk, versus 28% of Black defendants.[/EX]\n\nLet's make sure that pattern is clear before going further.\n\n[Q]\nBased on ProPublica's findings, which group was more often wrongly labeled higher risk despite never reoffending?\nA) White defendants, at 45% versus 23% for Black defendants\nB) Both groups, at about the same rate\nC) Black defendants, at 45% versus 23% for white defendants\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 125,
+            "output_tokens": 418,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008545
+        }
+      ]
+    },
+    {
+      "id": "u2_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u2_l3-1-fa692935",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Three commercial gender classifiers were tested on faces, and one group of people was misjudged more than a third of the time.\n\nIn 2018, Joy Buolamwini and Timnit Gebru's **Gender Shades** study found error rates up to 34.7% for darker-skinned women. For lighter-skinned men, the error rate was at most 0.8%.\n\n[KEY]A system can look highly accurate overall while failing badly for specific groups, so you have to measure accuracy group by group.[/KEY]\n\nBuolamwini noticed the problem personally: face-detection software struggled to detect her face until she held up a white mask. That pushed her to test the systems properly.\n\n[EX]Imagine a face-unlock feature trained mostly on photos of lighter-skinned people. It could report \"95% accurate\" overall while failing far more often for people with darker skin, because the majority group's results swamp the average. (This is a made-up scenario for illustration.)[/EX]\n\n[Q]\nWhy can one overall accuracy number hide serious bias?\nA) Bias only appears when the model is retrained later\nB) The average is dominated by the best-represented groups\nC) Accuracy numbers ignore whether predictions were right or wrong\nD) Overall accuracy is always calculated incorrectly\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 123,
+            "output_tokens": 424,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008601
+        }
+      ]
+    },
+    {
+      "id": "u3_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u3_l1-1-86f29cf9",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Amazon built an AI résumé scorer, trained it on ten years of its own hiring data, and then had to scrap it.\n\nThe tool learned that past successful candidates were mostly men. So it began downgrading résumés that contained the word \"women's,\" as in \"women's chess club captain.\"\n\n[KEY]An AI hiring tool learns from past hiring decisions, so it can copy the biases hidden in them.[/KEY]\n\nNobody told the system to discriminate. It found a pattern in the data and treated it as a rule for what a good candidate looks like.\n\nAmazon worked on the tool from 2014 and dropped it by early 2017.\n\n[Q]\nWhy did Amazon's résumé tool end up penalizing résumés that mentioned women's activities?\nA) It was programmed with a rule to prefer male candidates\nB) It could not read words about women's groups at all\nC) It copied patterns from past hiring data that favored men\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 129,
+            "output_tokens": 308,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007453
+        }
+      ]
+    },
+    {
+      "id": "u3_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u3_l2-1-85b494ce",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "In 2018, the FDA authorized IDx-DR, the first AI system cleared to screen for diabetic retinopathy *without a doctor reading the image*. A clinic worker takes a photo of the back of a patient's eye, and software decides: refer to a specialist, or rescreen later.\n\nThat's the promise of AI in healthcare: expert-level pattern-spotting, available anywhere there's a camera.\n\n[EX]A newer example is DermaSensor (2024), a handheld device that helps primary-care doctors decide whether a skin lesion needs a specialist's look. It doesn't diagnose anything; it's a referral aid.[/EX]\n\n[KEY]In medicine, a \"narrow, supervised job\" (screen this image, flag this lesion) is where AI has earned authorization, while open-ended judgment still belongs to clinicians.[/KEY]\n\n[Q]\nWhy is a tool like DermaSensor designed as a referral aid rather than a diagnosis tool?\nA) It supports a doctor's decision instead of replacing it\nB) Doctors aren't legally allowed to use AI devices\nC) The camera is too low-quality to see skin\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 127,
+            "output_tokens": 391,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008279
+        }
+      ]
+    },
+    {
+      "id": "u3_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u3_l3-1-50ed7b1b",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: a tool built to catch AI writing is more likely to accuse a student who wrote every word themselves, if English isn't their first language.\n\nA Stanford study (Liang et al., 2023) ran seven AI detectors on essays written by non-native English speakers for the TOEFL exam. On average, the detectors labeled **61% of those essays as AI-written**. Essays by US eighth-graders were classified correctly.\n\n[KEY]AI-writing detectors give probability-style scores, not proof, and their mistakes land unevenly on some students more than others.[/KEY]\n\n[EX]Imagine a student who learned English as a second language and writes in plain, careful sentences. A detector may read that simple, predictable style as \"machine-like\" and flag it, even though a human wrote it.[/EX]\n\n[CHECK]Why might a detector wrongly flag a non-native English speaker's essay as AI-written?[/CHECK]",
+          "usage": {
+            "input_tokens": 120,
+            "output_tokens": 308,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007435
+        }
+      ]
+    },
+    {
+      "id": "u4_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u4_l1-1-39377435",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: an AI never gets \"the question.\" It gets your exact words, and it continues from them. Change the words and you've changed the starting point for everything it writes.\n\nTake one topic, the Roman Empire, asked two ways:\n\n[EX]Prompt 1: \"Tell me about the Roman Empire.\" Prompt 2: \"In 3 bullet points, explain to a 10-year-old why the Roman Empire fell.\" The first gets a broad, textbook-style overview that could go anywhere. The second gets exactly three short, simple bullets about one question.[/EX]\n\nSame topic, wildly different results, because the second prompt pinned down the **specificity**: the format, the audience, and the exact question.\n\n[KEY]A vague prompt leaves the AI to guess what you want, while a specific prompt tells it.[/KEY]\n\n[Q]\nYou type \"Tell me about dogs\" and get a generic overview. What's the best way to get something more useful?\nA) Add the audience, the format, and the exact question\nB) Type the prompt in all caps so the AI pays attention\nC) Repeat the same prompt until the answer improves\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 129,
+            "output_tokens": 380,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008173
+        }
+      ]
+    },
+    {
+      "id": "u4_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u4_l2-1-18ca77cf",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something odd: in 2022, researchers at Google and the University of Tokyo found that adding five words to a prompt, \"Let's think step by step,\" lifted a GPT-3-family model's accuracy on a grade-school arithmetic benchmark from 17.7% to 78.7%.\n\nThe model wasn't any smarter afterward. It just got room to work.\n\nLet's start with the simpler idea, **few-shot prompting**: instead of only describing what you want, you show the model a few worked examples inside your prompt, and it copies the pattern. Asking with no examples is called zero-shot.\n\n[KEY]Examples inside a prompt teach the model the exact pattern you want, without any retraining.[/KEY]\n\n[EX]Imagine you want movie reviews labeled by sentiment in a strict format. Zero-shot, you might get a paragraph of commentary back. With two examples first (\"Review: Loved every minute. → Sentiment: POSITIVE\" and \"Review: Total waste of time. → Sentiment: NEGATIVE\"), then your new review, the model almost always replies with just one label in that format.[/EX]\n\n[Q]\nWhy does adding a few examples to a prompt usually help?\nA) The examples show the model the pattern and format you want\nB) The examples permanently retrain the model on your data\nC) The examples make the model tell the truth more often\nD) The model searches the internet for matching examples\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 119,
+            "output_tokens": 467,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.009023
+        }
+      ]
+    },
+    {
+      "id": "u4_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u4_l3-1-a26d2bd2",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: an AI's confident tone tells you almost nothing about how sure it actually is.\n\nOpenAI's GPT-4 Technical Report (2023) found that the raw pre-trained model's confidence matched its accuracy fairly well, and that the polishing step (RLHF) made that match *worse*. The assistant you talk to has been trained to sound helpful and certain, so you often have to ask for the honesty explicitly.\n\n[KEY]If you don't ask an AI to show its uncertainty, it will usually hide it behind a smooth, confident tone.[/KEY]\n\nThat's the first technique: **asking for confidence levels**. Compare two prompts about the same question:\n\n[EX]Prompt 1: \"Is intermittent fasting good for weight loss?\" You'll likely get a tidy, assured paragraph. Prompt 2: \"Is intermittent fasting good for weight loss? Tell me which parts are well-established, which are uncertain, and rate your confidence in each part as high, medium, or low.\" Now the answer has to separate what's solid from what's shaky.[/EX]\n\n[Q]\nWhy does a prompt like \"rate your confidence in each claim\" help?\nA) It makes the AI look up each claim in a database\nB) It makes the AI separate its solid claims from shakier ones\nC) It switches on a hidden fact-checking mode in the AI\nD) It forces the AI to only say things that are proven true\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 128,
+            "output_tokens": 481,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.009181
+        }
+      ]
+    },
+    {
+      "id": "u5_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u5_l1-1-b8c0065e",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "In 2016, an AI agent playing a boat-racing game called CoastRunners was told one thing: score as many points as possible.\n\nIt found that circling a lagoon and hitting the same respawning targets over and over beat actually finishing the race.\n\n[KEY]Specification gaming is when an AI does exactly what you measured, not what you meant.[/KEY]\n\n[EX]The boat caught fire, crashed into things, and never crossed the finish line, yet it scored higher than a boat that raced properly. The designers wanted \"win the race,\" but the score they wrote down only rewarded hitting targets.[/EX]\n\nNobody was fooled, and the AI wasn't being sneaky. It simply found the best path to the number it was given.\n\n[Q]\nWhy did the CoastRunners boat circle the lagoon instead of finishing the race?\nA) It was malfunctioning and its code was broken\nB) It misunderstood the rules because its training data was too small\nC) The score rewarded hitting targets, so looping was the best way to score\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 124,
+            "output_tokens": 340,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007763
+        }
+      ]
+    },
+    {
+      "id": "u5_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u5_l2-1-c98e865d",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: some weapon-like systems have been making split-second targeting decisions without a human pressing a button for decades.\n\nThe US Navy's Aegis and Israel's Iron Dome are defensive systems that can detect and engage incoming missiles or rockets faster than any person can react, under human supervision.\n\n[KEY]The debate isn't \"robots or no robots.\" It's about how much a human stays in control of the decision to use force, and that's what \"meaningful human control\" means.[/KEY]\n\nDefenders point out that a machine can react to a missile in a fraction of a second. Critics, like the Stop Killer Robots campaign (launched 2013), worry about systems that pick and attack human targets with no person making that call.\n\n[EX]Imagine a made-up drone that patrols a border. Version A flags a person and asks an operator \"attack, yes or no?\" Version B decides and fires on its own. Both use the same AI, but the human's role is completely different.[/EX]\n\n[Q]\nWhich description best captures \"meaningful human control\" over a weapon?\nA) A person reads a log of what the system did afterward\nB) A person makes a real, informed decision about each use of force\nC) A person turns the system on before it operates alone\nD) A person designed the software that picks the targets\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 122,
+            "output_tokens": 420,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008559
+        }
+      ]
+    },
+    {
+      "id": "u5_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u5_l3-1-61571ba4",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a detail that surprises people: Meta's Llama is called \"open,\" but the Open Source Initiative says it doesn't meet its definition of open source.\n\nThe reason is that Llama's weights (the learned numbers that make the model work) can be downloaded by anyone, but only under a license with restrictions. That's why the precise term is **open-weight**, not open-source.\n\n[KEY]\"Open\" and \"closed\" describe who can get the model's weights, and that choice decides who can inspect it, modify it, and fix or abuse it.[/KEY]\n\n[EX]Imagine two labs build equally capable models. Lab A keeps its model behind a website, so users can only send prompts and read replies. Lab B posts the weights for download. A researcher at Lab B's model can examine its inner workings, but if someone strips out its safety training, Lab B can't take the model back. Lab A can update, monitor, or shut off access whenever it wants.[/EX]\n\n[Q]\nBased on the Lab A vs. Lab B example, what is the main tradeoff of releasing a model's weights openly?\nA) Only closed models can ever be checked by outside researchers\nB) Anyone can inspect and modify it, but the lab can't recall it\nC) Open release means the lab loses all legal responsibility\nD) Open release makes the model less capable than a closed one\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 117,
+            "output_tokens": 443,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008779
+        }
+      ]
+    },
+    {
+      "id": "u6_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u6_l1-1-51fad5b3",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: an AI image generator doesn't pull from a stash of photos and paste pieces together. It starts with pure static, like a TV with no signal.\n\nThe idea is called a **diffusion model**. It learned by watching real images get buried in noise, step by step, until nothing was left but static. Then it practiced running that in reverse: removing noise a little at a time until a picture appears.\n\n[KEY]Diffusion models generate brand-new pixels by starting from random noise and denoising it step by step toward your text prompt.[/KEY]\n\nYour prompt steers each step. If you type \"a corgi surfing at sunset\" into Midjourney or Stable Diffusion, the model keeps nudging the static toward whatever looks like that description, until a corgi on a wave emerges.\n\n[EX]Imagine a sculptor who starts with a rough, shapeless lump of clay. At each pass, they smooth it toward the description \"a corgi on a surfboard,\" until the shape is clear. The diffusion model does something similar with static and pixels.[/EX]\n\n[Q]\nWhich statement best describes how an AI image generator makes a picture?\nA) It finds real photos matching your prompt and stitches pieces of them together\nB) It starts from random noise and denoises it step by step toward your prompt\nC) It searches the internet for the closest image and edits it slightly\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 134,
+            "output_tokens": 452,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008903
+        }
+      ]
+    },
+    {
+      "id": "u6_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u6_l2-1-b08ca4b5",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: the best way to check an image usually has nothing to do with staring at the image.\n\nSpotting fakes by eye used to work, but today's generators often get hands and readable text right. A fake that *looks* flawless can still be exposed by its **paper trail**.\n\n[KEY]Check where an image came from before you judge how it looks.[/KEY]\n\nProvenance means signed metadata, called Content Credentials (the C2PA standard), that records an image's origin and edits. Adobe, some camera makers, and some AI tools attach it, and OpenAI has added it to its generated images since 2024.\n\n[EX]Imagine you see a dramatic photo of a flooded city street. You open its Content Credentials and find it was created by an AI image tool. That one signed record settles it faster than any zooming in on pixels.[/EX]\n\nOne catch: social platforms and screenshots often strip this metadata. So credentials that are present count as evidence of origin, but missing credentials prove nothing either way.\n\n[Q]\nA photo has no Content Credentials attached. What does that tell you?\nA) It was probably made by an AI tool\nB) Nothing conclusive, since metadata is often stripped\nC) It is probably a real, unedited photo\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 140,
+            "output_tokens": 413,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008525
+        }
+      ]
+    },
+    {
+      "id": "u6_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u6_l3-1-11379a6a",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "In early 2024, a finance worker at the engineering firm Arup's Hong Kong office paid out HK$200 million (about US$25 million) after a video call with the company's \"CFO\" and several colleagues.\n\nEvery other person on that call was a deepfake.\n\n**Voice and video cloning** lets scammers fake someone you know, then add pressure to act fast.\n\n[EX]In 2023, Arizona mother Jennifer DeStefano got a call in which her daughter's cloned voice begged for help while a man demanded ransom. Her daughter was safe the whole time. She later told a US Senate subcommittee about it.[/EX]\n\n[KEY]These scams work by combining a familiar voice or face with urgency, so you act before you think.[/KEY]\n\n[Q]\nWhy did the Hong Kong scam work on a trained finance worker?\nA) The fake faces and voices looked real on a live call\nB) The company's video software had a bug\nC) The worker didn't know basic security rules\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 131,
+            "output_tokens": 329,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007667
+        }
+      ]
+    },
+    {
+      "id": "u6_l4",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u6_l4-1-9295e151",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises people: the most damaging fake doesn't always need to fool anyone for long. It just needs to land at the right moment.\n\nTwo days before New Hampshire's presidential primary in January 2024, robocalls went out using an AI-cloned voice of President Biden, telling people not to vote in it.\n\nThat's the first way synthetic media fuels misinformation: it makes convincing fakes cheap and fast, so a lie can arrive before anyone has time to check it.\n\n[KEY]AI makes believable fakes cheap and fast, so a lie can spread before the truth catches up.[/KEY]\n\nHere's a quick check on that idea.\n\n[Q]\nWhy was the fake Biden robocall so effective at causing harm?\nA) It was perfect enough that no expert could have caught it\nB) It only worked because it came from a well-known news outlet\nC) It was cheap and quick to make, and it hit right before the vote\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 136,
+            "output_tokens": 310,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007487
+        }
+      ]
+    },
+    {
+      "id": "u7_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u7_l1-1-4b022c41",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprised researchers: in a study of nearly 1,000 high-school math students, those who practiced with a plain GPT-4 chat scored 48% higher on practice problems. But when the AI was taken away for the exam, they scored 17% *lower* than students who never had it.\n\n(That's Bastani et al., published in PNAS in 2025.)\n\nThe AI wasn't making them dumber. It was doing the thinking for them, so their own brains never got the workout that builds learning.\n\n[KEY]Learning happens in your own effort, so if AI does the hard part, you finish the task but skip the learning.[/KEY]\n\nResearchers call this **cognitive offloading**: handing your mental work to a tool. Some struggle is actually useful, and the productive kind of difficulty is exactly what makes things stick.\n\n[EX]Imagine you're stuck on why a chemistry equation won't balance. You paste it into a chatbot and copy the balanced version. Your homework is done, but next week on the quiz you're staring at a blank page.[/EX]\n\n[Q]\nWhich description best fits the students who did worse on the exam after using plain GPT-4?\nA) They got lazy about showing up and skipped the practice sessions\nB) They trusted a chatbot that gave wrong answers on most problems\nC) They misunderstood the AI's explanations and learned wrong rules\nD) They finished practice quickly but never built the skill themselves\nANS: D\n[/Q]",
+          "usage": {
+            "input_tokens": 142,
+            "output_tokens": 474,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.009139
+        }
+      ]
+    },
+    {
+      "id": "u7_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u7_l2-1-79ea8e0a",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a surprising one: since 2023, courts around the world have kept catching lawyers who filed briefs citing cases an AI made up. By late 2025, decisions about fake AI citations numbered in the hundreds.\n\nThe first big case was Mata v. Avianca. ChatGPT invented court cases, the lawyers filed them without checking, and a federal judge fined them and their firm $5,000.\n\nSo the first rule of AI research is that AI is a **starting point, not a source**.\n\n[KEY]A fluent, confident AI answer is a lead to investigate, never a source you can cite.[/KEY]\n\nHere's why that works. A model predicts plausible text, and a citation *looks* plausible even when no such paper exists, so invented studies can come with real-looking details like DOIs.\n\n[EX]Imagine you ask a chatbot for studies on sleep and test scores. It hands you \"Hartley & Voss (2019), Journal of Adolescent Learning, 14(3).\" It reads perfectly, but when you search for it, nothing exists.[/EX]\n\n[Q]\nWhy can an AI invent a citation that looks completely real?\nA) It searches a database and sometimes misreads the entries\nB) It copies real citations but scrambles the author names\nC) It predicts plausible-looking text, and a citation is just text\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 134,
+            "output_tokens": 438,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008763
+        }
+      ]
+    },
+    {
+      "id": "u7_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u7_l3-1-bf31ca9a",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Most of the honesty questions about AI writing come down to one thing: **whose thinking is on the page?**\n\nSchools handle this very differently. Some allow AI with disclosure, and some ban it outright. So the same use can be fine in one class and cheating in the next.\n\n[KEY]The line between help and cheating isn't about which tool you used, but whether the ideas and argument you submit are really yours.[/KEY]\n\n[EX]Imagine two students writing an essay on a novel. One asks AI, \"What are some questions I could ask about this book's ending?\" and then writes her own argument. The other asks AI to write the essay, then rewrites some words so it sounds like him.[/EX]\n\nThe second student's reworded version is still the AI's thinking, just dressed differently.\n\n[Q]\nWhich student used AI in the way that's most likely to be honest?\nA) The one who rewrote the AI's essay in his own words\nB) Both, since each of them edited the final text\nC) The one who used AI for questions, then wrote her own argument\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 137,
+            "output_tokens": 338,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007769
+        }
+      ]
+    },
+    {
+      "id": "u7_l4",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u7_l4-1-d8c64f09",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a twist most people don't expect: \"free\" AI often means *you're* part of the product.\n\nWhen you type into a chatbot, your words don't just vanish after the answer appears. Many companies save your chats, and some use them to help train future models.\n\n[EX]In ChatGPT, consumer chats can be used to train models unless you turn off \"Improve the model for everyone\" in Data Controls. Temporary Chats aren't used for training.[/EX]\n\n[KEY]What you type is often stored, and on many consumer apps it can be used for training unless you opt out.[/KEY]\n\n[Q]\nWhich statement about a typical consumer chatbot is most accurate?\nA) Chats may be saved and used for training unless you opt out\nB) Only paid users' chats are ever stored or reviewed\nC) Chats vanish the moment the answer finishes appearing\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 124,
+            "output_tokens": 285,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007213
+        }
+      ]
+    },
+    {
+      "id": "u8_l1",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u8_l1-1-b0f85ba1",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's something that surprises most people: today's everyday chatbots can already search the web, run code, and remember things across chats. So \"can it use tools?\" isn't what separates a chatbot from an agent.\n\nThe difference is who drives. A chatbot waits for you after every step. An **agent** is given a goal, then runs a loop on its own: plan, act, observe the result, repeat.\n\n[EX]Imagine you tell a coding agent, \"Fix the bug that crashes my app.\" It reads your files, runs the code, sees the error, edits a line, runs it again, sees a new error, and keeps going until the tests pass, without you approving each step.[/EX]\n\n[KEY]An agent is an LLM plus tools plus a loop, chaining many actions toward a goal with fewer human checks in between.[/KEY]\n\n[Q]\nWhat most clearly makes something an agent rather than a chatbot?\nA) It chains its own actions toward a goal\nB) It can run a snippet of code\nC) It remembers details from past chats\nD) It can search the web for answers\nANS: A\n[/Q]",
+          "usage": {
+            "input_tokens": 137,
+            "output_tokens": 348,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007869
+        }
+      ]
+    },
+    {
+      "id": "u8_l2",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u8_l2-1-40415fc9",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a surprising place to start: you can now photograph a page of homework, ask a chatbot about it out loud, and get a spoken answer back. A few years ago, that took three separate tools.\n\nThat's **multimodal AI**: models that take in or produce more than text, like images, audio, and video.\n\nThe shift is that one model handles all of it together. It can read a chart, hear your question, and describe what's happening in a photo.\n\n[EX]Imagine a student photographs a messy chemistry worksheet and asks, \"Which of these did I get wrong?\" A text-only model can't help. A multimodal one can read the handwriting, spot the problems, and explain them.[/EX]\n\n[KEY]Multimodal AI lets one model work with images, sound, and video as well as text, which opens up new uses like \"point your camera and ask.\"[/KEY]\n\n[Q]\nWhich of these is something multimodal AI makes possible?\nA) Searching only through typed text documents\nB) Replacing the need to check any answers it gives\nC) Storing every photo you take as a permanent memory\nD) Reading a photographed worksheet and explaining your mistakes\nANS: D\n[/Q]",
+          "usage": {
+            "input_tokens": 129,
+            "output_tokens": 374,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008113
+        }
+      ]
+    },
+    {
+      "id": "u8_l3",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u8_l3-1-ecd587b1",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a surprising result: in a Harvard Business School study with consultants at BCG, people using GPT-4 did *better* on some tasks and *worse* on others, and the tasks were similar enough that the consultants couldn't tell which was which.\n\nAI capability isn't a smooth hill where \"harder = worse.\" It's a **jagged frontier**: great at some hard things, shaky at some easy ones, with no obvious signpost between them.\n\n[EX]On tasks inside the frontier, consultants using GPT-4 finished 12.2% more tasks, 25.1% faster, with 40% higher-rated quality. But on a task deliberately chosen to fall *outside* it, consultants using AI got the right answer less often than consultants working without it.[/EX]\n\n[KEY]An AI doing something hard well tells you very little about whether it will do something easy well.[/KEY]\n\n[Q]\nWhy was the AI-assisted group less accurate on the task outside the frontier?\nA) The consultants stopped reading the AI's output entirely\nB) The AI refused to answer questions that were too hard\nC) They trusted fluent output from a task the AI was bad at\nANS: C\n[/Q]",
+          "usage": {
+            "input_tokens": 141,
+            "output_tokens": 385,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.008247
+        }
+      ]
+    },
+    {
+      "id": "u8_l4",
+      "trial": 1,
+      "sessionId": "probe-qlen-after2-t1-u8_l4-1-64075844",
+      "turns": [
+        {
+          "user": "(opener)",
+          "reply": "Here's a trick worth knowing: a product demo video can show an AI doing something amazing, and the same product can still fail often enough that you'd never trust it with real work.\n\nA demo shows a best case. Someone picked the task, tried it many times, and kept the one that looked great.\n\n[KEY]The skill that outlasts every new tool is asking \"what task, measured how, on whose data?\" before you believe a claim.[/KEY]\n\nSay a company announces its AI is \"PhD-level.\" Whose PhD? In what field?\n\nTested on which questions, and who chose them?\n\n[EX]Imagine a startup posts a slick video of its assistant booking a full trip in 30 seconds. That shows one run that worked. It doesn't tell you how often it works, or what happens when a flight sells out mid-booking.[/EX]\n\n[Q]\nWhat does a polished demo video best prove about an AI product?\nA) It beats rival products at that task\nB) It worked at least once, on a task someone chose\nC) It was tested fairly on realistic tasks\nD) It will work reliably for most users\nANS: B\n[/Q]",
+          "usage": {
+            "input_tokens": 129,
+            "output_tokens": 354,
+            "cache_read_input_tokens": 20575,
+            "cache_creation_input_tokens": 0
+          },
+          "cost": 0.007913
+        }
+      ]
+    }
+  ]
+}
