@@ -29,6 +29,7 @@ const helmet = require('helmet');
 const { z } = require('zod');
 const db = require('./db');
 const logger = require('./lib/logger');
+const lessonPlayer = require('./lib/lessonPlayer');
 const {
   validate,
   ChatRequest,
@@ -3101,6 +3102,17 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
 // unauthenticated, one loaded every session row into memory to sort in JS,
 // and together they published a fragment of every minor's session id. The
 // operator view of the same numbers is the admin-only stats route.
+
+// ---------------------------------------------------------------------------
+// Interactive lesson player pilot — /api/lesson-player/* (additive; see
+// lib/lessonPlayer.js and docs/lesson-player-pilot/). The config probe is a
+// read-only flag the iOS app checks before starting a NEW player attempt.
+// No session, no storage, nothing per learner.
+// ---------------------------------------------------------------------------
+app.get('/api/lesson-player/config', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(lessonPlayer.lessonPlayerConfig());
+});
 
 // ---------------------------------------------------------------------------
 // Standby gamification (mascot: Mercury) — /api/progression/*

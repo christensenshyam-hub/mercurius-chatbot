@@ -55,7 +55,12 @@ public struct LessonContent: Sendable, Equatable {
 
     /// Steps the learner must finish (activities and teaching steps marked
     /// required). Progress through required work is what the player shows.
-    public var requiredSteps: [LessonStep] { steps.filter(\.required) }
+    public var requiredSteps: [LessonStep] {
+        steps.filter { step in
+            if case .finish = step.kind { return false }
+            return step.required
+        }
+    }
 }
 
 /// What has to be true for the lesson to complete. The player never completes

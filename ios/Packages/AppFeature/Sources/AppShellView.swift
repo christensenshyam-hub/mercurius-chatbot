@@ -8,6 +8,7 @@ import NetworkingKit
 import PersistenceKit
 import SettingsFeature
 import EngagementFeature
+import LessonPlayer
 
 /// The TabView host. Owns the selected-tab binding and, crucially, a
 /// single shared `ChatViewModel` so switching tabs doesn't wipe the
@@ -95,6 +96,14 @@ struct AppShellView: View {
     /// The lesson currently presented in its own full-screen curriculum window
     /// (separate from the chat tab and the three modes). nil when none is open.
     @State private var activeLesson: Lesson?
+
+    /// When `activeLesson` opened in the interactive lesson player (the pilot),
+    /// its running attempt. Decided once, on open (`handleStartLesson`), so the
+    /// experience can't change while the window is up.
+    @State private var activePlayer: PlayerLaunch?
+
+    /// "Ask Merc" from the player: the live tutor in a sheet over the lesson.
+    @State private var showAskMerc = false
 
     /// The unit whose cumulative unit test is presented full-screen. nil when
     /// none is open. Qualified because Foundation also exports a `Unit` type.
@@ -238,6 +247,12 @@ struct AppShellView: View {
         }
         // A reminder tapped while the shell is already up.
         .onChange(of: pendingLessonId) { _, _ in presentPendingLesson() }
+        // The lesson player pilot's switch: the server's answer, cached for
+        // the next lesson opened (UI tests stay network-free).
+        .task {
+            guard !Self.isUITesting else { return }
+            await env.lessonPlayerFlag.refresh { try await apiClient.lessonPlayerConfig() }
+        }
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT (and skips snapshots the server already holds).
         .onChange(of: progress.revision) { _, _ in progressSync.pushSoon() }
@@ -436,7 +451,7 @@ struct AppShellView: View {
             settingsPresenter: { [apiClient, sessionIdentity, themeStore, chatStore, chatModel,
                                   streakStore, achievementStore, progress, progressSync,
                                   reminderStore, scheduler, onConsentWithdrawn,
-                                  certificates = env.certificates] in
+                                  certificates = env.certificates, lessonAttempts = env.lessonAttempts] in
                 AnyView(
                     SettingsSheet(
                         sessionIdentity: sessionIdentity,
@@ -459,7 +474,8 @@ struct AppShellView: View {
                         sessionDeleter: apiClient,
                         onConsentWithdrawn: onConsentWithdrawn,
                         // The certificate name goes with the rest.
-                        certificates: certificates
+                        certificates: certificates,
+                        lessonAttempts: lessonAttempts
                     )
                 )
             },
@@ -585,7 +601,69 @@ struct AppShellView: View {
         // (`handleLessonComplete`, below).
         progress.markOpened(lesson.id)
         lastActivityStore.touch()
+        activePlayer = makePlayerLaunch(for: lesson)
         activeLesson = lesson
+    }
+
+    // MARK: - Lesson player (pilot)
+
+    /// Which experience the lesson opens in (`ExperienceResolver`): nil for the
+    /// legacy chat lesson. iPhone and iPad only; the Mac keeps legacy lessons.
+    private func makePlayerLaunch(for lesson: Lesson) -> PlayerLaunch? {
+#if os(iOS)
+        let library = LessonCatalog.library
+        let inputs = ExperienceInputs(
+            playerEnabled: env.lessonPlayerFlag.isEnabled(for: lesson.id),
+            playerAttempt: env.lessonAttempts.attempt(for: lesson.id),
+            hasLegacyConversation: progress.resumeConversationId(for: lesson.id) != nil,
+            lessonCompleted: progress.isCompleted(lesson.id)
+        )
+        let machine: LessonMachine?
+        let resumed: Bool
+        switch ExperienceResolver.decide(lessonId: lesson.id, inputs: inputs, library: library) {
+        case .legacy:
+            return nil
+        case .resumePlayer(let attempt):
+            machine = library.content(lessonId: attempt.lessonId, version: attempt.contentVersion)
+                .flatMap { LessonMachine(content: $0, attempt: attempt) }
+            resumed = true
+        case .startPlayer(let version):
+            machine = library.content(lessonId: lesson.id, version: version)
+                .flatMap { LessonMachine(content: $0, attempt: LessonAttempt(lesson: $0, now: Date())) }
+            resumed = false
+        }
+        guard let machine else { return nil }
+        let model = LessonPlayerModel(machine: machine, host: playerHost(for: lesson), resumed: resumed)
+        // The same session signals a started legacy lesson gives: Explorer
+        // (not in Basics) and the Lock Screen card.
+        if !BasicsCurriculum.isBasicsId(lesson.id) { achievementStore.award(AchievementCatalog.explorer) }
+        startLearningActivity(for: lesson.id)
+        return PlayerLaunch(lessonId: lesson.id, model: model)
+#else
+        return nil
+#endif
+    }
+
+    private func playerHost(for lesson: Lesson) -> LessonPlayerHost {
+        let attempts = env.lessonAttempts
+        return LessonPlayerHost(
+            saveAttempt: { attempts.save($0) },
+            evaluate: { [apiClient, sessionIdentity] request in
+                await LessonPlayerEvaluation.evaluate(request, apiClient: apiClient, sessionIdentity: sessionIdentity)
+            },
+            lessonCompleted: { content, _ in
+                // One-time rewards once per learner (the ledger); a replay of
+                // a lesson already complete grants nothing again. The existing
+                // completion path is idempotent too.
+                let first = attempts.grantOnce(RewardLedger.completionKey(lessonId: content.lessonId))
+                if first || !progress.isCompleted(content.lessonId) {
+                    handleLessonComplete(content.lessonId)
+                }
+            },
+            askMerc: { _ in showAskMerc = true },
+            exit: { _ in activeLesson = nil },
+            record: { LessonPlayerTelemetry.shared.record($0) }
+        )
     }
 
     /// The celebration's primary button: the next lesson swaps into this
@@ -614,6 +692,8 @@ struct AppShellView: View {
         // any way out (the certificate stays in Progress ▸ Certificates).
         env.certificates.justEarned = nil
         guard activeLesson == nil else { return }
+        activePlayer = nil
+        showAskMerc = false
 #if os(iOS)
         if !activityShowsWin {
             LearningActivityController.shared.endSession(immediately: true)
@@ -891,6 +971,37 @@ struct AppShellView: View {
     /// size; a Deep-dive lesson is unchanged.
     @ViewBuilder
     private func lessonCover(_ lesson: Lesson) -> some View {
+        if let launch = activePlayer, launch.lessonId == lesson.id {
+            playerCover(launch, lesson: lesson)
+        } else {
+            legacyLessonCover(lesson)
+        }
+    }
+
+    /// The pilot's interactive lesson, with "Ask Merc" opening the live tutor
+    /// (the chat, in its current mode, unchanged) in a sheet above it.
+    @ViewBuilder
+    private func playerCover(_ launch: PlayerLaunch, lesson: Lesson) -> some View {
+        let isBasics = BasicsCurriculum.isBasicsId(lesson.id)
+        LessonPlayerView(model: launch.model)
+            .id(launch.model.machine.attempt.attemptId)
+            .readingSizeFloor(isBasics ? trackStore.basicsReadingSize : .standard)
+            .certificateLessonSlot(env.certificates)
+            .achievementToasts(achievementStore)
+            .sheet(isPresented: $showAskMerc) {
+                AskMercSheet(onClose: { showAskMerc = false }) {
+                    ChatView(
+                        model: chatModel,
+                        apiClient: apiClient,
+                        sessionIdentity: sessionIdentity,
+                        achievementStore: achievementStore
+                    )
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func legacyLessonCover(_ lesson: Lesson) -> some View {
         // One resolved value for the celebration's label AND its action.
         let next = Self.resolvedNextStop(after: lesson.id, progress: progress)
         let parentUnit = parentUnit(of: lesson.id)

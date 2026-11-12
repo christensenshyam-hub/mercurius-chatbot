@@ -8,8 +8,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 | # | Milestone | Status |
 |---|---|---|
 | 0 | Ground truth | done (12c90e2) |
-| 1 | Lesson data and deterministic core | done |
-| 2 | Player and Lesson 3 (steps 1–5, 7) | not started |
+| 1 | Lesson data and deterministic core | done (c14bb04) |
+| 2 | Player and Lesson 3 (steps 1–5, 7) | done |
 | 3 | State and progress | not started |
 | 4 | Short response and model evaluation | not started |
 | 5 | Measurement | not started |
@@ -162,6 +162,60 @@ Surveyed by five read-only subagents. Paths are relative to the repo root; packa
 - **D8 (double advance):** `advance` carries the id of the step it was tapped on. A second Continue tap from a screen the lesson has already left is ignored, so it can't skip the next teaching step.
 - **D9 (misses):** after two wrong objective answers the right answer is shown with its explanation, and the learner may continue. That counts as assisted success, never independent. A short response has no such path: only a "meets" grade resolves it. After two "not yet" results the player shows an authored exemplar, and the learner still writes and submits their own answer.
 - **D10 (success levels):** completion, independent success, assisted success and "not demonstrated" are separate values on the attempt. A lesson never grants unit mastery; that stays with the unit check.
+
+## Separate fix commits (flag-independent, per the spec)
+
+- 3339ff6: lesson cards render inline Markdown (the cause of the literal `**`).
+  - `Text(String)` in `BlockCards.swift` was verbatim; it now goes through `InlineMarkdown`, with the same rules as the Mac's `nightInlineMarkdown`.
+  - Shared by legacy lessons and free chat's [KEY]/[EX] cards on iPhone and iPad. Plain text is unchanged (tested); the Mac is untouched.
+  - ChatFeatureTests: 464 passed.
+- 6a30eca: Unit 1 Lesson 3 server guide, new Grading note (an unlocated citation is unverified, not proven fake; a real paper must still support the claim).
+  - `CURRICULUM_PROMPT` only. Prompt tests: 139 passed.
+  - **Pending:** the CLAUDE.md eval gate (`scripts/eval-pacing.mjs --runs 3`, both flag states) needs API spend, so it waits for the founder's budget OK (D7).
+
+## Milestone 2 notes
+
+- Lesson 3 content is in `LessonPlayer/Sources/Content/Lesson_u1_l3.swift`; the catalog is in `Content/LessonCatalog.swift`.
+- Player:
+  - `Player/LessonPlayerModel.swift` drives the attempt, saves after every change, and runs evaluations with a 25 s timeout.
+  - `LessonPlayerView`, `ActivityViews`, `ActionBar`, `ShortResponseView` and `PlayerCopy` are the views and their words.
+- Flag (D3):
+  - Server: `lib/lessonPlayer.js` and `GET /api/lesson-player/config` (env `LESSON_PLAYER_ENABLED`, off by default; optional `LESSON_PLAYER_LESSONS`); tests in `tests/lessonPlayerConfig.test.js`.
+  - Client: `NetworkingKit/APIClient+LessonPlayer.swift` and `AppFeature/Sources/LessonPlayer/LessonPlayerFlag.swift` (compile-time allowance AND the cached server answer; DEBUG `-LessonPlayer YES|NO`).
+  - The flag is refreshed on shell appear, but never under UI tests.
+- Host:
+  - `AppShellView.makePlayerLaunch` decides the experience once, on open (`ExperienceResolver`).
+  - `playerCover` shows the player; `legacyLessonCover` is the old cover, unchanged.
+  - Completion goes through the existing `handleLessonComplete`, behind the reward ledger.
+  - Ask Merc opens the existing chat (`ChatView`, same model) in a sheet above the lesson.
+- Storage: `LessonAttemptStore` (same preferences suite as progress) is erased by Settings' reset on iPhone and Mac (`SettingsSheet.lessonAttempts`).
+- Measurement stub: `LessonPlayerTelemetry`, an OSLog debug sink (M5 documents it).
+- Short-response grading: a stub that returns "ungraded" until M4. DEBUG `-LessonPlayerStubGrade meets|not_yet|offline|timeout|invalid` drives the UI with no network.
+- **Verified in the iPhone 16 simulator (iOS 26.4), flag on, stubbed grading.** Walked all 7 steps of Lesson 3, including:
+  - a wrong answer: specific feedback, then a hint on Try again
+  - Go deeper staging
+  - the claim selection
+  - the excerpt
+  - typed transfer: Checking…, then graded
+  - the finish, then the path shows Lesson 3 "Completed" and Lesson 4 unlocked
+
+  With the flag off, the same link opens the legacy lesson.
+  Captures are in `captures/`: before = `before-*`; after = `after-l3-*`.
+- **Fixed during the walkthrough:**
+  - The progress line counted the finish step.
+  - Feedback didn't scroll into view on a second answer.
+  - Answered rows were dimmed below readable contrast (`.disabled` replaced by `.allowsHitTesting`).
+  - A new step opened part-way down.
+  - The primary button's old and new labels cross-faded.
+  - Content showed through the action bar.
+- **UI tests:** `ios/MercuriusUITests/LessonPlayerUITests.swift` has three tests (full Lesson 3; ungraded response, leave, resume with text kept; flag off opens legacy). They compile, but **could not run here:** every UI test run, including the existing `MercuriusUITests/testBootCompletes`, fails with "The test runner hung before establishing connection", even after a CoreSimulator reset. That is an environment fault on this Mac (macOS 27.2, Xcode 26.4), not these tests. They should run on CI or a working host.
+
+## Commands (M2)
+
+- `cd ios/Packages && swift test --filter "AppFeatureTests|LessonPlayerTests|ArchitectureTests"`: ✔ 308 tests in 47 suites passed.
+- `cd ios && xcodegen generate && xcodebuild build -project Mercurius.xcodeproj -scheme Mercurius -destination 'platform=iOS Simulator,id=C65EB7CC-2FE5-4AA3-90EE-DF4245B4444C' -derivedDataPath /private/tmp/merc-player-dd`: BUILD SUCCEEDED.
+  - Don't pass `CODE_SIGNING_ALLOWED=NO` for a build you run: unsigned simulator builds can't use the Keychain, and the app shows "Couldn't start".
+- `node --test tests/lessonPlayerConfig.test.js`: 4 passed.
 
 ## Known gaps
 

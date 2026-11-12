@@ -38,6 +38,9 @@ struct SettingsSheet: View {
     /// The certificates' name and dates (and a course-complete card still
     /// waiting): a reset erases them with the rest.
     var certificates: CertificateCenter? = nil
+    /// The lesson player's saved attempts (short-response text included) and
+    /// reward ledger: a reset erases them with lesson progress.
+    var lessonAttempts: LessonAttemptStore? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -52,7 +55,7 @@ struct SettingsSheet: View {
             sessionStorage: sessionIdentity,
             themeStore: themeStore,
             extraReset: { [chatStore, chatModel, streakStore, achievementStore, progress, progressSync,
-                           reminderStore, scheduler, afterReset, certificates] in
+                           reminderStore, scheduler, afterReset, certificates, lessonAttempts] in
                 // Order matters: wipe the disk store first so the
                 // new conversation `startNewConversation()` opens
                 // is the only record in the freshly-empty store.
@@ -81,6 +84,9 @@ struct SettingsSheet: View {
                 progressSync.cancelPending()
                 progress.reset()
                 progressSync.cancelPending()
+                // The lesson player's attempts (and any answer text in them)
+                // and its one-time reward ledger go with the progress.
+                lessonAttempts?.reset()
                 // The name typed for a certificate (and the certificates'
                 // dates) describe the old learner too.
                 certificates?.reset()
