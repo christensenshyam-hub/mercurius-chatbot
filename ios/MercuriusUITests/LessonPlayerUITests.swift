@@ -22,13 +22,18 @@ final class LessonPlayerUITests: XCTestCase {
             "-SeedCompleted", seeded,
             "-LessonPlayer", "YES",
             "-LessonPlayerStubGrade", grade,
+            // Opens the lesson through the route a tapped reminder takes.
+            // (`app.open(URL)` never reached the lesson on CI's runners.)
+            "-OpenLesson", "u1_l3",
         ] + extra
         app.launch()
         return app
     }
 
-    @MainActor private func open(_ app: XCUIApplication, lesson: String) {
-        app.open(URL(string: "mercurius://lesson/\(lesson)")!)
+    /// Reopens Unit 1 Lesson 3 from its stop on the learning path.
+    @MainActor private func reopenLesson3(_ app: XCUIApplication) {
+        let node = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Lesson 3:")).firstMatch
+        tap(node, "Lesson 3's stop on the path")
     }
 
     @MainActor private func tap(_ element: XCUIElement, _ what: String, file: StaticString = #filePath, line: UInt = #line) {
@@ -41,7 +46,6 @@ final class LessonPlayerUITests: XCTestCase {
     @MainActor
     func testLesson3RunsToCompletion() {
         let app = launch(grade: "meets")
-        open(app, lesson: "u1_l3")
 
         // 1. A decision on the first screen.
         tap(app.buttons["player.option.unverified"], "step 1's options")
@@ -85,7 +89,6 @@ final class LessonPlayerUITests: XCTestCase {
     @MainActor
     func testAnUngradedResponseNeverCompletesAndResumesWithTheTextKept() {
         let app = launch(grade: "offline")
-        open(app, lesson: "u1_l3")
         for (option, isTeach) in [("unverified", false), ("", true), ("claim:34-percent", false),
                                   ("original-study", false), ("still-unverified", false)] {
             if isTeach { tap(primary(app), "Continue"); continue }
@@ -107,7 +110,7 @@ final class LessonPlayerUITests: XCTestCase {
         // Leave, and come back: same step, same text, still not graded.
         tap(app.buttons["player.leave"], "Finish for now")
         XCTAssertFalse(primary(app).waitForExistence(timeout: 3))
-        open(app, lesson: "u1_l3")
+        reopenLesson3(app)
         XCTAssertTrue(app.textViews["player.response"].waitForExistence(timeout: 10), "didn't resume on the short response")
         XCTAssertEqual(app.textViews["player.response"].value as? String, "I'd look for the study first.")
         XCTAssertTrue(app.staticTexts["Not graded yet"].exists)
@@ -121,9 +124,9 @@ final class LessonPlayerUITests: XCTestCase {
             "-hasSeenChatInputHint", "YES", "-seenAllModeDescriptions", "YES",
             "-CurriculumTrack", "deepDive", "-EnterShellCurriculum", "YES",
             "-SeedCompleted", "u1_l1,u1_l2", "-LessonPlayer", "NO",
+            "-OpenLesson", "u1_l3",
         ]
         app.launch()
-        open(app, lesson: "u1_l3")
         // The legacy lesson's intro: "Continue. Start the lesson."
         XCTAssertTrue(app.buttons["Continue. Start the lesson."].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["player.primary"].exists)
