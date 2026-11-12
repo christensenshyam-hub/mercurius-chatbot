@@ -247,12 +247,7 @@ struct AppShellView: View {
         }
         // A reminder tapped while the shell is already up.
         .onChange(of: pendingLessonId) { _, _ in presentPendingLesson() }
-        // The lesson player pilot's switch: the server's answer, cached for
-        // the next lesson opened (UI tests stay network-free).
-        .task {
-            guard !Self.isUITesting else { return }
-            await env.lessonPlayerFlag.refresh { try await apiClient.lessonPlayerConfig() }
-        }
+
         // Completion, mastery and merges move `revision`; the sync debounces
         // them into one PUT (and skips snapshots the server already holds).
         .onChange(of: progress.revision) { _, _ in progressSync.pushSoon() }
@@ -1020,6 +1015,7 @@ struct AppShellView: View {
             streakStore: streakStore,
             achievementStore: achievementStore,
             onStarted: { lessonId, convoId in
+                LessonPlayerTelemetry.shared.recordLegacy("lesson_start", lessonId: lessonId)
                 progress.markInProgress(lessonId, conversationId: convoId)
                 // Explorer is "Started a structured curriculum lesson"
                 // (Achievement.swift) — award it at start, matching the
@@ -1037,8 +1033,12 @@ struct AppShellView: View {
             // A lesson picked up again (Home's Continue, a reminder, the
             // path) is a session too: the card closed with the window last
             // time, and without one here its unit's win never showed.
-            onResumed: { lessonId in startLearningActivity(for: lessonId) },
+            onResumed: { lessonId in
+                LessonPlayerTelemetry.shared.recordLegacy("lesson_resumed", lessonId: lessonId)
+                startLearningActivity(for: lessonId)
+            },
             onLessonComplete: { lessonId in
+                LessonPlayerTelemetry.shared.recordLegacy("lesson_completed", lessonId: lessonId)
                 handleLessonComplete(lessonId)
             },
             onExit: { activeLesson = nil },

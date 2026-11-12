@@ -199,3 +199,80 @@ struct LessonPlayerEvaluationMappingTests {
         #expect(LessonPlayerEvaluation.stubbedOutcome(arguments: ["-LessonPlayerStubGrade", "offline"]) == .failed(.offline))
     }
 }
+
+@Suite("Lesson player: events")
+@MainActor
+struct LessonPlayerTelemetryTests {
+    final class Sink: LessonEventSink {
+        var lines: [(String, [String: String])] = []
+        func write(name: String, fields: [String: String]) { lines.append((name, fields)) }
+    }
+
+    @Test("first_open is written once per install, with a pseudonymous id and the app version")
+    func firstOpenOnce() {
+        let prefs = InMemoryPreferenceStore()
+        let sink = Sink()
+        let t = LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "9.9 (1)")
+        t.recordFirstOpenIfNeeded(playerEligible: true)
+        t.recordFirstOpenIfNeeded(playerEligible: true)
+        LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "9.9 (1)").recordFirstOpenIfNeeded(playerEligible: false)
+        #expect(sink.lines.map(\.0) == ["first_open"])
+        let f = sink.lines[0].1
+        #expect(f["experience"] == "player")
+        #expect(f["app_version"] == "9.9 (1)")
+        #expect(UUID(uuidString: f["install_id"] ?? "") != nil)
+        // "Delete my data" makes a new learner with a new id.
+        let old = t.installId
+        t.reset()
+        t.recordFirstOpenIfNeeded(playerEligible: false)
+        #expect(sink.lines.count == 2)
+        #expect(t.installId != old)
+    }
+
+    @Test("A full Lesson 3 run logs the spec's events, with no answer text anywhere")
+    func eventsCarryNoText() async {
+        let prefs = InMemoryPreferenceStore()
+        let sink = Sink()
+        let t = LessonPlayerTelemetry(preferences: prefs, sink: sink, appVersion: "1")
+        let secret = "MY-PRIVATE-ANSWER rain study"
+        let lesson = LessonCatalog.u1_l3_v1
+        let machine = LessonMachine(content: lesson, attempt: LessonAttempt(lesson: lesson, now: Date()))!
+        let host = LessonPlayerHost(
+            saveAttempt: { _ in },
+            evaluate: { _ in .evaluated(ResponseEvaluation(status: .meets, feedback: "Yes.")) },
+            lessonCompleted: { _, _ in },
+            exit: { _ in },
+            record: { t.record($0) }
+        )
+        let m = LessonPlayerModel(machine: machine, host: host, resumed: false)
+        m.send(.openDepth("claim-state.why"))
+        m.send(.showHint)
+        m.send(.choose("unverified")); m.send(.submit); m.send(.advance(from: "claim-state"))
+        m.send(.advance(from: "principle"))
+        m.send(.toggleClaim("34-percent")); m.send(.submit); m.send(.advance(from: "testable-claim"))
+        m.send(.choose("original-study")); m.send(.submit); m.send(.advance(from: "best-check"))
+        m.send(.choose("still-unverified")); m.send(.submit); m.send(.advance(from: "excerpt"))
+        m.send(.editText(secret)); m.send(.submit)
+        for _ in 0..<200 where m.record.phase == .awaitingGrade { try? await Task.sleep(for: .milliseconds(10)) }
+        m.send(.advance(from: "transfer"))
+        m.send(.advance(from: "finish"))
+
+        let names = Set(sink.lines.map(\.0))
+        for name in ["lesson_start", "step_viewed", "answer_submitted", "feedback_shown",
+                     "explanation_expanded", "help_used", "lesson_completed"] {
+            #expect(names.contains(name), "missing \(name)")
+        }
+        for (name, fields) in sink.lines {
+            for value in fields.values {
+                #expect(!value.contains("MY-PRIVATE-ANSWER") && !value.contains("rain"), "\(name) leaked text")
+            }
+            #expect(fields["install_id"] != nil && fields["app_version"] == "1" && fields["lesson_id"] == "u1_l3")
+        }
+        let submitted = sink.lines.filter { $0.0 == "answer_submitted" }.map(\.1)
+        #expect(submitted.contains { $0["interaction"] == "short_response" && $0["attempt_index"] == "0" })
+        #expect(submitted.contains { $0["interaction"] == "claim_selection" })
+        #expect(submitted.contains { $0["interaction"] == "claim_vs_evidence" })
+        let feedback = sink.lines.filter { $0.0 == "feedback_shown" }.map(\.1)
+        #expect(feedback.contains { $0["grading_status"] == "graded_correct" && $0["step_id"] == "transfer" })
+    }
+}

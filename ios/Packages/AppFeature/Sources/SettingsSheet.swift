@@ -87,6 +87,9 @@ struct SettingsSheet: View {
                 // The lesson player's attempts (and any answer text in them)
                 // and its one-time reward ledger go with the progress.
                 lessonAttempts?.reset()
+                // A new learner: a new pseudonymous install id for the
+                // pilot's local event log.
+                LessonPlayerTelemetry.shared.reset()
                 // The name typed for a certificate (and the certificates'
                 // dates) describe the old learner too.
                 certificates?.reset()

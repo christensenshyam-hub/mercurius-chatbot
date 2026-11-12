@@ -1,4 +1,5 @@
 import SwiftUI
+import LessonPlayer
 import DesignSystem
 import NetworkingKit
 import ChatFeature
@@ -164,6 +165,18 @@ struct AppEntryView: View {
                 hasEnteredApp = true
             }
             .onChange(of: env.pendingLessonId) { _, _ in routePendingLesson() }
+            // The lesson player pilot: refresh the server's switch (cached for
+            // the lessons opened later; UI tests stay network-free), then log
+            // the activation denominator once per install, before any gate,
+            // with the experience this device would give a new learner
+            // (docs/lesson-player-pilot/METRICS.md).
+            .task {
+                if !AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments).contains(AppEnvironment.uiTestArgument) {
+                    await env.lessonPlayerFlag.refresh { try await env.apiClient.lessonPlayerConfig() }
+                }
+                LessonPlayerTelemetry.shared.recordFirstOpenIfNeeded(
+                    playerEligible: LessonCatalog.library.lessonIds.contains { env.lessonPlayerFlag.isEnabled(for: $0) })
+            }
             .onAppear {
                 // Every re-plan reads this week's lessons, so the weekly
                 // nudges skip a week whose goal is met (AUD-36). It counts

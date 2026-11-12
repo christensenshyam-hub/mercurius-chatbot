@@ -2,7 +2,6 @@ import SwiftUI
 import DesignSystem
 import LessonPlayer
 import NetworkingKit
-import OSLog
 
 /// A lesson opened in the player: its id and the model running its attempt.
 struct PlayerLaunch {
@@ -106,17 +105,5 @@ enum LessonPlayerEvaluation {
         case "invalid": return .failed(.invalidResult)
         default: return nil
         }
-    }
-}
-
-/// The player's event sink (milestone 5 documents it): a local debug log only.
-@MainActor
-final class LessonPlayerTelemetry {
-    static let shared = LessonPlayerTelemetry()
-    private let log = Logger(subsystem: "com.mayoailiteracy.mercurius", category: "lessonPlayer")
-
-    func record(_ event: LessonPlayerEvent) {
-        let fields = event.fields.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
-        log.debug("\(event.name, privacy: .public) \(fields, privacy: .public)")
     }
 }

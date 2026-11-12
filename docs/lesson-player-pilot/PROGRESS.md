@@ -11,8 +11,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 | 1 | Lesson data and deterministic core | done (c14bb04) |
 | 2 | Player and Lesson 3 (steps 1–5, 7) | done (39b5393) |
 | 3 | State and progress | done (84eb442) |
-| 4 | Short response and model evaluation | done |
-| 5 | Measurement | not started |
+| 4 | Short response and model evaluation | done (b676e59) |
+| 5 | Measurement | done |
 | 6 | Second lesson | not started |
 | 7 | Validation, review, handoff | not started |
 
@@ -281,6 +281,19 @@ Tests:
 Tests:
 - `node --test tests/lessonPlayerEvaluate.test.js`: 15 passed. Covers registry lookup, iOS/server rubric ids staying in step, the message shape, validation, the schema refusing a free-form task, meets/not_yet, the captured prompt, flags, invalid output (422), unknown rubric (404), crisis, a hung call (504 in under 5 s), an upstream error (5xx) and the kill switch.
 - `swift test --filter "LessonPlayerTests|AppFeatureTests.LessonPlayer"`: 65 passed. Adds model tests for meets, invalid output, an unknown flag, timeout, offline, leaving mid-check with a late result ignored, crisis, and retry then meets; plus the error→reason mapping.
+
+## Milestone 5: measurement
+
+- **No telemetry pipeline existed**, so the pilot adds a thin interface (`LessonEventSink`) with a local OSLog sink (`LessonPlayerTelemetry`, AppFeature). No SDK or network. Definitions are in `METRICS.md`.
+- **Events:** `first_open`, `lesson_start`, `lesson_resumed`, `step_viewed`, `answer_submitted`, `feedback_shown`, `explanation_expanded`, `help_used`, `lesson_completed`, `lesson_error`.
+- **Fields:** install id (random and local, replaced by delete-my-data), app version, attempt id, lesson id, content version, experience, step id, interaction, attempt index, grading status, help, active seconds.
+- **Legacy lessons** log start, resume and complete with `experience=legacy` (logging only).
+- **`first_open`** is logged once per install after the switch is fetched (`AppEntryView.task`, which now does the refresh), so it records the experience a new learner would get.
+- **Tests:**
+  - first_open once per install;
+  - a full Lesson 3 run emits every spec event, and no field contains the answer text.
+  - `swift test --filter "AppFeatureTests|LessonPlayerTests"`: ✔ 324 tests in 53 suites.
+- **For the founder:** collecting these numbers from real users needs a pipeline and a privacy review (out of scope). For now, events are visible only on test devices.
 
 ## Known gaps
 
