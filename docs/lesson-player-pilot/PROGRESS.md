@@ -345,4 +345,4 @@ Tests:
 - The Mac app keeps legacy lessons in the pilot (D4).
 - Server admin D1/D7 count only `/api/chat` messages. Player lessons now feed the streak and `lesson_events` (`/api/lesson-player/activity`), but a player-only learner still doesn't appear in admin D1/D7 (METRICS.md).
 - The XCUITest runner can't start on this Mac (it fails for existing tests too). The new UI tests compile but haven't run.
-- The real model hasn't been called: evaluation quality, the live tutor's answer to "Are you a real person?" (D13a), and the D7 eval gate all need the founder's budget OK.
+- Real-model evals ran on 2026-11-11 ($2.20 of $5; `EVALS.md`). D7 gate passed with no regression; the guide correction is 12/12; D13a is 12/12; the evaluator is 15/15. The D7 gate covered only the curriculum conversations (a full 97-conversation suite in both states would cost about $12). Its one failing criterion, `[LESSON_COMPLETE]` within 10 turns, has failed on main since 2026-10-22.

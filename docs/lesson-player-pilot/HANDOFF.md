@@ -110,10 +110,11 @@ Commands and full results are in PROGRESS.md.
 
 **Not verified here**
 - **UI tests can't run on this Mac:** every XCUITest run, including the existing `testBootCompletes`, fails with "The test runner hung before establishing connection", even after a CoreSimulator reset. The three new UI tests compile; they need CI or another Mac.
-- **The real model:** not called, because there was no budget approval. Specifically:
-  - Evaluation quality against the rubric (the prompt is written, and tested on the mock).
-  - Whether the live tutor answers "Are you a real person?" plainly in each mode (PROGRESS.md D13a).
-  - The eval gate for the Lesson 3 guide change (D7).
+- **The real model:** done on 2026-11-11 with the founder's $5 budget ($2.20 spent). Details in `EVALS.md`:
+  - The Lesson 3 guide gate passes in both flag states, with no regression.
+  - The guide now corrects "can't find it, so it's made up" (8/8) and confirms sound plans (4/4).
+  - The live tutor answers "Are you a real person?" plainly in every mode (12/12).
+  - The evaluator judges 15/15 labelled answers correctly, including an injection attempt.
 - **VoiceOver end to end:** labels, values, focus moves and the hint and status words are in the code, but a full screen-reader pass was not run. It is in the manual checklist below.
 - **iPad and other device sizes:** not run. Only one simulator is kept booted per the session's limits. The player caps its reading width at 640 pt and scrolls.
 - **The Mac app:** it keeps legacy lessons (D4).
@@ -192,8 +193,8 @@ Convert in this order, one unit at a time. Each lesson gets a content review, a 
 1. **D1, base branch:** `origin/main`, not the stale `feat/cost-cuts` HEAD.
 2. **D12, pending vs retry:** a lesson never completes with a short response that is pending or ungraded. The learner keeps the answer and can Retry, Edit, or Finish for now. Lesson 3 therefore can't complete in the player while grading is down. The legacy lesson needs the model for every turn anyway.
 3. **D11, legacy threads stay legacy:** a learner who already opened a pilot lesson in the chat keeps it there.
-4. **D13 and D13a, the practice step:** Basics 1.1's objective (a real first message) is met through the existing live tutor. It saves a chat in History, in the chat's current mode. **Before enabling, check that the free chat answers "Are you a real person?" plainly**; a small API budget is needed for that.
-5. **D7, the Lesson 3 guide's Grading note:** a prompt change to `CURRICULUM_PROMPT`. CLAUDE.md's eval gate (`scripts/eval-pacing.mjs --runs 3`, both flag states) needs your budget OK.
+4. **D13, the practice step:** Basics 1.1's objective (a real first message) is met through the existing live tutor. It saves a chat in History, in the chat's current mode. The D13a check passed: every mode answers "Are you a real person?" plainly (EVALS.md).
+5. **D7, the Lesson 3 guide's Grading note:** a prompt change to `CURRICULUM_PROMPT`. Its eval gate passed in both flag states, run on the curriculum conversations for budget reasons (EVALS.md).
 6. **D4, the Mac keeps legacy lessons** in the pilot.
 7. **Measurement:** there is no telemetry pipeline, so events stay on the device. Collecting real numbers needs a pipeline and a privacy review.
 8. **D5, feature mapping:**
