@@ -162,7 +162,7 @@ struct ActionPlanTests {
         #expect(ActionPlan(machine: m).primary == .init(title: PlayerCopy.check, enabled: false, busy: false, action: .check, playerAction: .submit))
         _ = m.send(.choose("b"))
         #expect(ActionPlan(machine: m).primary.enabled)
-        #expect(ActionPlan(machine: m).secondary?.action == .showHint)
+        #expect(ActionPlan(machine: m).secondary == nil, "the hint button lives in the step, not the bar")
         _ = m.send(.submit)
         #expect(ActionPlan(machine: m).primary.action == .continue)
     }

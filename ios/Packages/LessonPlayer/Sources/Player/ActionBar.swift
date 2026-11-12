@@ -80,8 +80,9 @@ struct ActionPlan: Equatable {
                 let isPractice: Bool = { if case .practice = activity.kind { return true }; return false }()
                 primary = Primary(title: isPractice ? PlayerCopy.send : PlayerCopy.check, enabled: machine.canSubmit,
                                   busy: false, action: .check, playerAction: .submit)
-                secondary = record.hintsShown < activity.hints.count
-                    ? Secondary(title: PlayerCopy.showHint, action: .showHint) : nil
+                // "Show a hint" sits in the step, under the options, so the
+                // pinned bar is one action tall at every text size.
+                secondary = nil
             case .awaitingGrade:
                 let isPractice: Bool = { if case .practice = activity.kind { return true }; return false }()
                 primary = Primary(title: isPractice ? PlayerCopy.waitingForMerc : PlayerCopy.checking,

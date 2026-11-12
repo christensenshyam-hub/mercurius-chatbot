@@ -33,6 +33,10 @@ struct ActivityStepView: View {
             if record.hintsShown > 0 {
                 HintList(hints: Array(activity.hints.prefix(record.hintsShown)))
             }
+            if record.phase == .viewing, record.hintsShown < activity.hints.count {
+                DepthButton(title: PlayerCopy.showHint, icon: "lightbulb") { model.send(.showHint) }
+                    .accessibilityIdentifier("player.hint")
+            }
             if record.phase == .feedback || record.phase == .done, let last = record.lastSubmission {
                 FeedbackPanel(activity: activity, submission: last, revealed: record.revealed)
             }

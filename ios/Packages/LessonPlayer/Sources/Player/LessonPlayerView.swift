@@ -73,6 +73,13 @@ struct PlayerHeader: View {
     let title: String
     let progress: (done: Int, total: Int)
     let onLeave: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// At accessibility text sizes the title and the "n of m done" line step
+    /// aside (as the legacy lesson's header does), so the step itself has
+    /// room. The progress bar keeps its spoken label, and each step's own
+    /// heading is first in reading order.
+    private var compact: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -90,21 +97,27 @@ struct PlayerHeader: View {
                 .accessibilityHint(PlayerCopy.finishForNowHint)
                 .accessibilityIdentifier("player.leave")
 
-                Text(title)
-                    .font(BrandFont.subheading)
-                    .foregroundStyle(BrandColor.text)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
+                if compact {
+                    Spacer()
+                } else {
+                    Text(title)
+                        .font(BrandFont.subheading)
+                        .foregroundStyle(BrandColor.text)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                }
             }
             ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
                 .tint(BrandColor.accent)
                 .accessibilityLabel(PlayerCopy.progress(progress.done, progress.total))
                 .accessibilityValue("")
-            Text(PlayerCopy.progress(progress.done, progress.total))
-                .font(BrandFont.caption)
-                .foregroundStyle(BrandColor.textSecondary)
-                .accessibilityHidden(true)
+            if !compact {
+                Text(PlayerCopy.progress(progress.done, progress.total))
+                    .font(BrandFont.caption)
+                    .foregroundStyle(BrandColor.textSecondary)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, BrandSpacing.lg)
         .padding(.top, BrandSpacing.sm)
