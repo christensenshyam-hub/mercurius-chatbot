@@ -6,6 +6,7 @@ import Foundation
 public enum LessonCatalog {
     public static let all: [LessonContent] = [
         u1_l3_v1,
+        b1_l1_v1,
     ]
 
     public static let library = LessonLibrary(all)

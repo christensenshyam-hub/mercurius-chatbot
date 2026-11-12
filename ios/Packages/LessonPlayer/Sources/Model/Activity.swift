@@ -29,8 +29,10 @@ public struct Activity: Sendable, Equatable {
 
     /// Graded on the device, instantly, with no model call.
     public var isDeterministic: Bool {
-        if case .shortResponse = kind { return false }
-        return true
+        switch kind {
+        case .shortResponse, .practice: return false
+        case .choice, .claimSelection: return true
+        }
     }
 }
 
@@ -44,6 +46,30 @@ public enum ActivityKind: Sendable, Equatable {
     /// A short original answer, evaluated against an explicit rubric by the
     /// server (the only model-graded kind).
     case shortResponse(ShortResponseActivity)
+    /// A real message to the live tutor (Merc, through the existing chat), and
+    /// its real reply. Not graded: done once Merc has answered. For a lesson
+    /// whose objective is to use a chatbot (Basics 1.1).
+    case practice(PracticeActivity)
+}
+
+public struct PracticeActivity: Sendable, Equatable {
+    /// A message the learner can send as is ("Are you a real person?").
+    public let suggestion: String
+    public let placeholder: String
+    public let maxCharacters: Int
+    /// Shown when the message can't reach Merc right now.
+    public let fallbackGuidance: String
+    /// One line after Merc's reply, pointing at what to notice.
+    public let notice: String
+
+    public init(suggestion: String, placeholder: String, maxCharacters: Int = 300,
+                fallbackGuidance: String, notice: String) {
+        self.suggestion = suggestion
+        self.placeholder = placeholder
+        self.maxCharacters = maxCharacters
+        self.fallbackGuidance = fallbackGuidance
+        self.notice = notice
+    }
 }
 
 // MARK: - Choice

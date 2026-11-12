@@ -25,6 +25,9 @@ public enum UngradedReason: String, Codable, Sendable {
 
 public enum GradingStatus: Codable, Equatable, Sendable {
     case graded(Verdict)
+    /// Done, and not graded by design (a practice message Merc answered).
+    /// Never counts as correct.
+    case notGraded
     /// Sent to the server; no result yet.
     case pending
     case ungraded(UngradedReason)
@@ -146,7 +149,9 @@ public struct LessonAttempt: Codable, Equatable, Sendable {
 public enum LessonAttemptCodec {
     public static func encode(_ attempt: LessonAttempt) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
+        // Full precision (seconds since 2001 as a Double): a record round-trips
+        // exactly.
+        encoder.dateEncodingStrategy = .deferredToDate
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(attempt)
     }
@@ -155,7 +160,7 @@ public enum LessonAttemptCodec {
     /// untouched by the caller, never overwritten with a guess).
     public static func decode(_ data: Data) -> LessonAttempt? {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
+        decoder.dateDecodingStrategy = .deferredToDate
         guard let attempt = try? decoder.decode(LessonAttempt.self, from: data) else { return nil }
         guard attempt.recordVersion <= LessonAttempt.currentRecordVersion else { return nil }
         return attempt

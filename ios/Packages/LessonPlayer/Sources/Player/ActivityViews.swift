@@ -25,7 +25,9 @@ struct ActivityStepView: View {
             case .claimSelection(let selection):
                 ClaimSelectionView(model: model, selection: selection)
             case .shortResponse(let response):
-                ShortResponseView(model: model, activity: response)
+                ShortResponseView(model: model, maxCharacters: response.maxCharacters, placeholder: response.placeholder)
+            case .practice(let practice):
+                PracticeView(model: model, practice: practice)
             }
 
             if record.hintsShown > 0 {
@@ -293,8 +295,15 @@ struct FeedbackPanel: View {
             }
             if verdict != .correct, let hint = submission.hint { out.append("\(PlayerCopy.hint): \(hint)") }
             if verdict != .correct, revealed { out.append(PlayerCopy.exemplar(sr.exemplar)) }
-        case (.shortResponse, .pending):
+        case (.shortResponse, .pending), (.practice, .pending):
             break
+        case (.practice(let p), .notGraded):
+            if let reply = submission.feedback { out.append(reply) }
+            out.append(p.notice)
+        case (.practice, .ungraded(.support)):
+            out.append(PlayerCopy.supportShown)
+        case (.practice(let p), .ungraded):
+            out.append(p.fallbackGuidance)
         default:
             if let f = submission.feedback, !f.isEmpty { out.append(f) }
             if revealed, submission.status.verdict != .correct, let answer = revealedAnswer {
@@ -308,11 +317,11 @@ struct FeedbackPanel: View {
         switch activity.kind {
         case .choice(let c):
             let texts = c.options.filter { c.correct.contains($0.id) }.map(\.text)
-            return PlayerCopy.revealed(texts.joined(separator: "; "), why: c.correctFeedback)
+            return PlayerCopy.revealed(texts.joined(separator: "; "))
         case .claimSelection(let s):
             let texts = s.claims.filter { s.correct.contains($0.claimId ?? "") }.map { "“\($0.text)”" }
-            return PlayerCopy.revealed(texts.joined(separator: "; "), why: s.correctFeedback)
-        case .shortResponse:
+            return PlayerCopy.revealed(texts.joined(separator: "; "))
+        case .shortResponse, .practice:
             return nil
         }
     }
@@ -331,6 +340,8 @@ struct FeedbackLook {
             title = PlayerCopy.partly; icon = "circle.lefthalf.filled"; tint = BrandColor.accentText
         case .graded(.incorrect):
             title = PlayerCopy.notQuite; icon = "arrow.uturn.backward.circle.fill"; tint = BrandColor.errorText
+        case .notGraded:
+            title = PlayerCopy.mercReplied; icon = "bubble.left.fill"; tint = BrandColor.accentText
         case .pending:
             title = PlayerCopy.checking; icon = "hourglass"; tint = BrandColor.textSecondary
         case .ungraded:

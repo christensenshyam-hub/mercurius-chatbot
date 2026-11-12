@@ -276,3 +276,24 @@ struct LessonPlayerTelemetryTests {
         #expect(feedback.contains { $0["grading_status"] == "graded_correct" && $0["step_id"] == "transfer" })
     }
 }
+
+@Suite("Lesson player: practice replies")
+struct LessonPlayerPracticeTests {
+    @Test("The chat's card markers, answer lines and Markdown are dropped from the reply")
+    func plainText() {
+        let raw = "No, I'm **Merc**, an AI.\n\n[KEY]A chatbot is a program.[/KEY]\n\n[Q]Which?\nA) x\nB) y\nANS: B\n[/Q]"
+        let text = LessonPlayerPractice.plainText(raw)
+        #expect(text.hasPrefix("No, I'm Merc, an AI."))
+        #expect(!text.contains("[KEY]") && !text.contains("**") && !text.contains("ANS:"))
+        #expect(text.contains("A chatbot is a program."))
+    }
+
+    @Test("The DEBUG stub answers practice without the network")
+    func stub() {
+        #expect(LessonPlayerPractice.stubbedOutcome(arguments: []) == nil)
+        #expect(LessonPlayerPractice.stubbedOutcome(arguments: ["-LessonPlayerStubGrade", "offline"]) == .failed(.offline))
+        if case .replied? = LessonPlayerPractice.stubbedOutcome(arguments: ["-LessonPlayerStubGrade", "meets"]) {} else {
+            Issue.record("expected a stubbed reply")
+        }
+    }
+}

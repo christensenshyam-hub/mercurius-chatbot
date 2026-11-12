@@ -23,6 +23,7 @@ public enum LessonPlayerEvent: Equatable, Sendable {
         case claimSelection = "claim_selection"
         case claimVersusEvidence = "claim_vs_evidence"
         case shortResponse = "short_response"
+        case practice
         case teach
     }
 
@@ -100,6 +101,7 @@ public enum LessonPlayerEvent: Equatable, Sendable {
     public static func describe(_ status: GradingStatus) -> String {
         switch status {
         case .graded(let v): return "graded_\(v.rawValue)"
+        case .notGraded: return "not_graded"
         case .pending: return "pending"
         case .ungraded(let r): return "ungraded_\(r.rawValue)"
         }

@@ -19,6 +19,8 @@ public enum PlayerAction: Equatable, Sendable {
     case advance(from: String)
     /// The server's evaluation for the request with this token.
     case evaluationArrived(token: Int, ResponseEvaluation)
+    /// Merc's reply to a practice message (the request with this token).
+    case practiceReplied(token: Int, reply: String)
     case evaluationFailed(token: Int, UngradedReason)
     /// Send an ungraded response for evaluation again.
     case retryEvaluation
@@ -30,6 +32,8 @@ public enum PlayerAction: Equatable, Sendable {
 public enum PlayerEffect: Equatable, Sendable {
     /// Ask the server to evaluate a short response.
     case requestEvaluation(stepId: String, token: Int, text: String)
+    /// Send a practice message to the live tutor.
+    case requestPractice(stepId: String, token: Int, text: String)
     case stepViewed(stepId: String)
     case answerSubmitted(stepId: String, submissionIndex: Int)
     case feedbackShown(stepId: String, status: GradingStatus)
@@ -102,6 +106,9 @@ public struct LessonMachine: Equatable, Sendable {
         if case .shortResponse(let sr) = activity.kind, case .text(let t) = draft {
             return t.count <= sr.maxCharacters
         }
+        if case .practice(let p) = activity.kind, case .text(let t) = draft {
+            return t.count <= p.maxCharacters
+        }
         return true
     }
 
@@ -147,10 +154,12 @@ public struct LessonMachine: Equatable, Sendable {
             return commit(record, [])
 
         case .editText(let text):
-            guard record.phase == .viewing, case .shortResponse(let sr)? = step.activity?.kind else {
-                return .ignored("not writing")
+            guard record.phase == .viewing else { return .ignored("not writing") }
+            switch step.activity?.kind {
+            case .shortResponse(let sr)?: record.draft = .text(String(text.prefix(sr.maxCharacters)))
+            case .practice(let p)?: record.draft = .text(String(text.prefix(p.maxCharacters)))
+            default: return .ignored("not writing")
             }
-            record.draft = .text(String(text.prefix(sr.maxCharacters)))
             return commit(record, [])
 
         case .submit:
@@ -170,6 +179,9 @@ public struct LessonMachine: Equatable, Sendable {
                 record.phase = .feedback
                 let misses = record.submissions.filter { $0.status.verdict != .correct }.count
                 if grade.verdict != .correct, misses >= Self.missesBeforeReveal { record.revealed = true }
+                // An answer-only check (Basics: a wrong pick still completes)
+                // shows the right answer straight away, kindly.
+                if grade.verdict != .correct, content.completion.mustBeAnswered.contains(step.id) { record.revealed = true }
                 return commit(record, [
                     .answerSubmitted(stepId: step.id, submissionIndex: index),
                     .feedbackShown(stepId: step.id, status: .graded(grade.verdict)),
@@ -184,7 +196,7 @@ public struct LessonMachine: Equatable, Sendable {
             record.phase = .awaitingGrade
             return commit(record, [
                 .answerSubmitted(stepId: step.id, submissionIndex: index),
-                .requestEvaluation(stepId: step.id, token: token, text: text),
+                request(for: activity, stepId: step.id, token: token, text: text),
             ])
 
         case .evaluationArrived(let token, let evaluation):
@@ -202,6 +214,17 @@ public struct LessonMachine: Equatable, Sendable {
             let notYet = record.submissions.filter { $0.status == .graded(.incorrect) }.count
             if verdict == .incorrect, notYet >= Self.notYetBeforeExemplar { record.revealed = true }
             return commit(record, [.feedbackShown(stepId: step.id, status: last.status)])
+
+        case .practiceReplied(let token, let reply):
+            guard record.phase == .awaitingGrade, var last = record.submissions.last,
+                  last.status == .pending, last.evaluationToken == token,
+                  case .practice? = step.activity?.kind
+            else { return .ignored("stale or unexpected reply") }
+            last.status = .notGraded
+            last.feedback = reply
+            record.submissions[record.submissions.count - 1] = last
+            record.phase = .feedback
+            return commit(record, [.feedbackShown(stepId: step.id, status: .notGraded)])
 
         case .evaluationFailed(let token, let reason):
             guard record.phase == .awaitingGrade, var last = record.submissions.last,
@@ -230,11 +253,12 @@ public struct LessonMachine: Equatable, Sendable {
             last.evaluationToken = token
             record.submissions[record.submissions.count - 1] = last
             record.phase = .awaitingGrade
-            return commit(record, [.requestEvaluation(stepId: step.id, token: token, text: text)])
+            guard let activity = step.activity else { return .ignored("no activity") }
+            return commit(record, [request(for: activity, stepId: step.id, token: token, text: text)])
 
         case .tryAgain:
             guard record.phase == .feedback, let last = record.submissions.last,
-                  last.status.verdict != .correct, let activity = step.activity
+                  last.status.verdict != .correct, last.status != .notGraded, let activity = step.activity
             else { return .ignored("nothing to try again") }
             if activity.isDeterministic {
                 guard !record.revealed else { return .ignored("answer already shown") }
@@ -302,7 +326,9 @@ public struct LessonMachine: Equatable, Sendable {
     private func isResolved(_ step: LessonStep, record: StepRecord? = nil) -> Bool {
         let record = record ?? attempt.record(step.id)
         guard let activity = step.activity else { return true }
-        guard let last = record.lastSubmission, let verdict = last.status.verdict else { return false }
+        guard let last = record.lastSubmission else { return false }
+        if case .practice = activity.kind { return last.status == .notGraded }
+        guard let verdict = last.status.verdict else { return false }
         if verdict == .correct { return true }
         if content.completion.mustBeAnswered.contains(step.id) { return true }
         // An objective answer shown after repeated misses lets the learner move
@@ -318,15 +344,20 @@ public struct LessonMachine: Equatable, Sendable {
             guard record.phase == .done, isResolved(step, record: record) else { return false }
         }
         for id in content.completion.mustBeAnswered {
-            guard attempt.record(id).phase == .done,
-                  attempt.record(id).lastSubmission?.status.verdict != nil else { return false }
+            guard let step = content.step(id: id) else { return false }
+            let record = attempt.record(id)
+            guard record.phase == .done, isResolved(step, record: record) else { return false }
         }
         return true
     }
 
     func successLevel() -> SuccessLevel {
         var assisted = false
-        let graded = content.completion.mustBeCorrect + content.completion.mustBeAnswered
+        let graded = (content.completion.mustBeCorrect + content.completion.mustBeAnswered).filter { id in
+            // A practice message isn't graded, so it says nothing about success.
+            if case .practice? = content.step(id: id)?.activity?.kind { return false }
+            return true
+        }
         for id in graded {
             let record = attempt.record(id)
             guard let last = record.lastSubmission else { return .notDemonstrated }
@@ -341,6 +372,11 @@ public struct LessonMachine: Equatable, Sendable {
     }
 
     // MARK: Helpers
+
+    private func request(for activity: Activity, stepId: String, token: Int, text: String) -> PlayerEffect {
+        if case .practice = activity.kind { return .requestPractice(stepId: stepId, token: token, text: text) }
+        return .requestEvaluation(stepId: stepId, token: token, text: text)
+    }
 
     private mutating func commit(_ record: StepRecord, _ effects: [PlayerEffect]) -> ActionResult {
         attempt.records[attempt.currentStepId] = record

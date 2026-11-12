@@ -77,11 +77,15 @@ struct ActionPlan: Equatable {
         case .activity(let activity):
             switch record.phase {
             case .viewing:
-                primary = Primary(title: PlayerCopy.check, enabled: machine.canSubmit, busy: false, action: .check, playerAction: .submit)
+                let isPractice: Bool = { if case .practice = activity.kind { return true }; return false }()
+                primary = Primary(title: isPractice ? PlayerCopy.send : PlayerCopy.check, enabled: machine.canSubmit,
+                                  busy: false, action: .check, playerAction: .submit)
                 secondary = record.hintsShown < activity.hints.count
                     ? Secondary(title: PlayerCopy.showHint, action: .showHint) : nil
             case .awaitingGrade:
-                primary = Primary(title: PlayerCopy.checking, enabled: false, busy: true, action: .checking, playerAction: nil)
+                let isPractice: Bool = { if case .practice = activity.kind { return true }; return false }()
+                primary = Primary(title: isPractice ? PlayerCopy.waitingForMerc : PlayerCopy.checking,
+                                  enabled: false, busy: true, action: .checking, playerAction: nil)
                 secondary = Secondary(title: PlayerCopy.cancel, action: .cancelEvaluation)
             case .feedback, .done:
                 if machine.isCurrentStepResolved {

@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import LessonPlayer
+import ChatFeature
 import NetworkingKit
 
 /// A lesson opened in the player: its id and the model running its attempt.
@@ -104,6 +105,66 @@ enum LessonPlayerEvaluation {
         case "timeout": return .failed(.timeout)
         case "invalid": return .failed(.invalidResult)
         default: return nil
+        }
+    }
+}
+
+/// The practice step's message (Basics 1.1: "send your first message to a
+/// chatbot"): sent through the app's existing live tutor, a fresh
+/// `ChatViewModel` on a new conversation, so it is the learner's real first
+/// chat, saved in History like any other, in the chat's own mode. No new
+/// mode, no prompt change. The reply comes back as plain text.
+enum LessonPlayerPractice {
+    @MainActor
+    static func send(_ request: PracticeRequest, makeModel: () -> ChatViewModel) async -> PracticeOutcome {
+        if let stub = stubbedOutcome(arguments: AppEnvironment.testHookArguments(ProcessInfo.processInfo.arguments)) {
+            try? await Task.sleep(for: .milliseconds(400))
+            return stub
+        }
+        let model = makeModel()
+        model.startNewConversation()
+        model.draft = request.text
+        model.send()
+        while !Task.isCancelled {
+            switch model.phase {
+            case .idle:
+                if let reply = model.messages.last(where: { $0.role == .assistant })?.content,
+                   !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return .replied(plainText(reply))
+                }
+                return .failed(.invalidResult)
+            case .failed:
+                return .failed(.unavailable)
+            case .sending, .streaming:
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+        return .failed(.interrupted)
+    }
+
+    /// The reply without the chat's card markers or Markdown, for the player's
+    /// plain-text panel.
+    static func plainText(_ reply: String) -> String {
+        let lines = reply.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("ANS:") }
+            .joined(separator: "\n")
+        let unmarked = lines.replacingOccurrences(of: #"\[/?[A-Z_]+(:[^\]]*)?\]"#, with: "", options: .regularExpression)
+        let parsed = (try? AttributedString(markdown: unmarked,
+                                            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+        let text = parsed.map { String($0.characters) } ?? unmarked
+        return text.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// DEBUG (UI tests, screenshots): the same `-LessonPlayerStubGrade`
+    /// argument answers practice messages without the network.
+    static func stubbedOutcome(arguments: [String]) -> PracticeOutcome? {
+        guard let i = arguments.firstIndex(of: "-LessonPlayerStubGrade"), i + 1 < arguments.count else { return nil }
+        switch arguments[i + 1] {
+        case "offline": return .failed(.offline)
+        case "timeout": return .failed(.timeout)
+        case "invalid": return .failed(.invalidResult)
+        default: return .replied("No, I’m not a person. I’m Merc, an AI: a computer program that writes answers. (Stubbed reply.)")
         }
     }
 }

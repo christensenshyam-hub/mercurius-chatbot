@@ -48,7 +48,7 @@ public enum GradingError: Error, Equatable, Sendable {
 public enum Grader {
     public static func grade(_ activity: Activity, response: LearnerResponse) -> Result<ObjectiveGrade, GradingError> {
         switch activity.kind {
-        case .shortResponse:
+        case .shortResponse, .practice:
             return .failure(.notDeterministic)
         case .choice(let choice):
             guard case .options(let ids) = response else { return .failure(.responseMismatch) }

@@ -656,6 +656,12 @@ struct AppShellView: View {
                 }
             },
             askMerc: { _ in showAskMerc = true },
+            practice: { [apiClient, sessionIdentity, chatStore, streakStore, achievementStore] request in
+                await LessonPlayerPractice.send(request) {
+                    ChatViewModel(apiClient: apiClient, sessionIdentity: sessionIdentity, store: chatStore,
+                                  streakStore: streakStore, achievementStore: achievementStore)
+                }
+            },
             exit: { _ in activeLesson = nil },
             record: { LessonPlayerTelemetry.shared.record($0) }
         )

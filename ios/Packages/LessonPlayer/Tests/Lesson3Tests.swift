@@ -75,6 +75,7 @@ struct Lesson3ContentTests {
                 case .choice(let c): text += c.options.map(\.feedback) + [c.correctFeedback]
                 case .claimSelection(let s): text += Array(s.claimFeedback.values) + [s.correctFeedback]
                 case .shortResponse(let r): text += [r.fallbackGuidance, r.exemplar] + r.rubric.flags.map(\.correction)
+                case .practice(let p): text += [p.fallbackGuidance, p.notice]
                 }
             }
             text += step.depth.map(\.body)

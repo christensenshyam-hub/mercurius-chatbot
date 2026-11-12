@@ -12,8 +12,8 @@ After a compaction, re-read SPEC.md, this file and `git log --oneline origin/mai
 | 2 | Player and Lesson 3 (steps 1–5, 7) | done (39b5393) |
 | 3 | State and progress | done (84eb442) |
 | 4 | Short response and model evaluation | done (b676e59) |
-| 5 | Measurement | done |
-| 6 | Second lesson | not started |
+| 5 | Measurement | done (c63bbe2) |
+| 6 | Second lesson | done |
 | 7 | Validation, review, handoff | not started |
 
 ## Session start (2026-11-11)
@@ -294,6 +294,36 @@ Tests:
   - a full Lesson 3 run emits every spec event, and no field contains the answer text.
   - `swift test --filter "AppFeatureTests|LessonPlayerTests"`: ✔ 324 tests in 53 suites.
 - **For the founder:** collecting these numbers from real users needs a pipeline and a privacy review (out of scope). For now, events are visible only on test devices.
+
+## Milestone 6: second lesson (`b1_l1`)
+
+- **Content:** `LessonPlayer/Sources/Content/Lesson_b1_l1.swift`, a DRAFT for the founder's review (copy listed in HANDOFF.md).
+- **Objective:** "You'll send your first message to a chatbot."
+- **Assessment preserved** (`lib/basicsGuide.js` COMPLETION): a practice message Merc answered, plus the check answered.
+  - A wrong pick still completes. The right answer is shown kindly, and success is recorded as `notDemonstrated`.
+  - The rule is `mustBeAnswered` for every activity, with no prerequisites.
+- **D13 (new primitive, `.practice`):** the lesson's objective is a real message to a chatbot, which no authored activity can stand in for.
+  - The step sends the learner's message through the **existing live tutor**: a fresh `ChatViewModel` on a new conversation, saved in History as their real first chat, in the chat's own mode. No new mode and no prompt change.
+  - It is not graded. Its status is `notGraded`, which never counts as correct and never feeds the success level.
+  - It resolves only once Merc has replied. Offline or failed sends keep the text and offer Retry, as for a short response.
+- **For review (D13a):** the free-chat prompt has no explicit rule for answering "Are you a real person?" plainly. Before turning the flag on, check with the real model that each mode answers it honestly and simply for a beginner (`lib/basicsGuide.js` HONESTY has the wording the Basics lesson uses). This needs a small API budget, so it was not run here.
+- **Verified in the simulator** (flag on, stubbed reply):
+  - Opened from the Basics track.
+  - A wrong first pick showed a kind correction and the right answer, then Continue.
+  - Practice: the "Use this" suggestion, Send, the reply, a notice line.
+  - The postcard step.
+  - The check.
+  - The finish showed no success line, correct after the miss.
+  - The Basics path now shows "1 lesson of 18" and the lesson "Completed".
+  - Captures: `after-b1-*`.
+- **Fixed during the walkthrough:**
+  - The reveal line repeated the right answer's own "Yes." feedback after a miss. It now reads "The right answer: …".
+  - The postcard step's made-up card number and password weren't labelled until the feedback. They now carry a fictional-material label up front.
+  - The practice notice no longer claims the reply said what it is (a live reply might not).
+- **Attempt dates** now encode at full precision (`.deferredToDate`). Whole seconds made the round-trip test time-dependent.
+- **Notes on adding lessons:** `ADDING_LESSONS.md`.
+- **Tests:** `BasicsLesson1Tests` (validity, no statistics, practice resolution and retry, wrong pick completes, all-right first time is independent, practice can't be in `mustBeCorrect`) and `LessonPlayerPracticeTests` (reply clean-up, stub).
+  - `swift test --filter "LessonPlayerTests|AppFeatureTests"`: ✔ 333 tests in 55 suites (three runs, all green).
 
 ## Known gaps
 

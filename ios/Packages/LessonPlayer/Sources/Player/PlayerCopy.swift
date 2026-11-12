@@ -26,6 +26,10 @@ enum PlayerCopy {
     static let partly = "Partly right"
     static let notQuite = "Not quite"
     static let notGradedYet = "Not graded yet"
+    static let mercReplied = "Merc replied"
+    static let send = "Send"
+    static let waitingForMerc = "Waiting for Merc…"
+    static func useSuggestion(_ text: String) -> String { "Use this: “\(text)”" }
 
     static let option = "Option"
     static let selected = "Selected"
@@ -48,7 +52,10 @@ enum PlayerCopy {
 
     static func characters(_ count: Int, of max: Int) -> String { "\(count) of \(max) characters" }
 
-    static func revealed(_ answer: String, why: String) -> String { "The answer: \(answer). \(why)" }
+    /// After a miss, the right answer, plainly. (The right answer's own
+    /// feedback starts "Right." or "Yes.", which reads wrong after a miss; the
+    /// missed option's feedback already explains.)
+    static func revealed(_ answer: String) -> String { "The right answer: \(answer)." }
 
     static func exemplar(_ text: String) -> String {
         "Here’s one sound answer, to compare with yours: “\(text)” Now write your own version."

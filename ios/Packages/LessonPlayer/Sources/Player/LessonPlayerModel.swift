@@ -10,6 +10,19 @@ public struct EvaluationRequest: Equatable, Sendable {
     public let text: String
 }
 
+/// A practice message for the live tutor.
+public struct PracticeRequest: Equatable, Sendable {
+    public let lessonId: String
+    public let stepId: String
+    public let text: String
+}
+
+public enum PracticeOutcome: Equatable, Sendable {
+    /// Merc's reply, as plain text.
+    case replied(String)
+    case failed(UngradedReason)
+}
+
 public enum EvaluationOutcome: Equatable, Sendable {
     case evaluated(ResponseEvaluation)
     case failed(UngradedReason)
@@ -37,6 +50,8 @@ public struct LessonPlayerHost {
     public var lessonCompleted: (LessonContent, CompletionRecord) -> Void
     /// Open the live tutor without leaving the lesson.
     public var askMerc: ((AskMercContext) -> Void)?
+    /// Send a practice message to the live tutor and return its reply.
+    public var practice: (PracticeRequest) async -> PracticeOutcome
     /// The learner left: `finished` is true from the finish step, false for
     /// "finish for now".
     public var exit: (_ finished: Bool) -> Void
@@ -48,6 +63,7 @@ public struct LessonPlayerHost {
         evaluate: @escaping (EvaluationRequest) async -> EvaluationOutcome,
         lessonCompleted: @escaping (LessonContent, CompletionRecord) -> Void,
         askMerc: ((AskMercContext) -> Void)? = nil,
+        practice: @escaping (PracticeRequest) async -> PracticeOutcome = { _ in .failed(.unavailable) },
         exit: @escaping (_ finished: Bool) -> Void,
         record: @escaping (LessonPlayerEvent) -> Void = { _ in }
     ) {
@@ -55,6 +71,7 @@ public struct LessonPlayerHost {
         self.evaluate = evaluate
         self.lessonCompleted = lessonCompleted
         self.askMerc = askMerc
+        self.practice = practice
         self.exit = exit
         self.record = record
     }
@@ -68,7 +85,7 @@ public struct LessonPlayerHost {
 public final class LessonPlayerModel {
     /// How long the player waits for an evaluation before showing the
     /// reviewed fallback and Retry. The server has its own, shorter limit.
-    public static let defaultEvaluationTimeout: Duration = .seconds(25)
+    public nonisolated static let defaultEvaluationTimeout: Duration = .seconds(25)
 
     public private(set) var machine: LessonMachine
     /// Bumped whenever feedback or optional depth appears, so the view can
@@ -156,6 +173,8 @@ public final class LessonPlayerModel {
         switch effect {
         case .requestEvaluation(let stepId, let token, let text):
             startEvaluation(stepId: stepId, token: token, text: text)
+        case .requestPractice(let stepId, let token, let text):
+            startPractice(stepId: stepId, token: token, text: text)
         case .stepViewed(let stepId):
             host.record(.stepViewed(context(), stepId: stepId))
         case .answerSubmitted(let stepId, let index):
@@ -210,6 +229,43 @@ public final class LessonPlayerModel {
         }
     }
 
+    private func startPractice(stepId: String, token: Int, text: String) {
+        let request = PracticeRequest(lessonId: content.lessonId, stepId: stepId, text: text)
+        evaluation?.cancel()
+        let practice = host.practice
+        let limit = evaluationTimeout
+        evaluation = Task { [weak self] in
+            let outcome = await withTaskGroup(of: PracticeOutcome.self) { group in
+                group.addTask { await practice(request) }
+                group.addTask {
+                    try? await Task.sleep(for: limit)
+                    return .failed(.timeout)
+                }
+                let first = await group.next() ?? .failed(.timeout)
+                group.cancelAll()
+                return first
+            }
+            guard !Task.isCancelled, let self else { return }
+            switch outcome {
+            case .replied(let reply):
+                let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    self.send(.evaluationFailed(token: token, .invalidResult))
+                } else {
+                    self.send(.practiceReplied(token: token, reply: trimmed))
+                }
+            case .failed(.support):
+                self.send(.evaluationFailed(token: token, .support))
+                self.showsCrisisSupport = true
+            case .failed(let reason):
+                self.send(.evaluationFailed(token: token, reason))
+                if reason != .interrupted {
+                    self.host.record(.lessonError(self.context(), stepId: stepId, kind: reason.rawValue))
+                }
+            }
+        }
+    }
+
     /// Runs `work`, or gives up with `.failed(.timeout)` after `limit`.
     nonisolated static func withTimeout(
         _ limit: Duration,
@@ -246,6 +302,7 @@ public final class LessonPlayerModel {
             return c.selection == .single ? .singleChoice : .multiSelect
         case .claimSelection?: return .claimSelection
         case .shortResponse?: return .shortResponse
+        case .practice?: return .practice
         case nil: return .teach
         }
     }

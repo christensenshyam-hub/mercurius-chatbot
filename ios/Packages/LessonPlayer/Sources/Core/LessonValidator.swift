@@ -68,6 +68,11 @@ public enum LessonValidator {
                 error(id, "a short response must be graded, not just answered")
             }
         }
+        for id in rule.mustBeCorrect {
+            if case .practice? = lesson.step(id: id)?.activity?.kind {
+                error(id, "a practice message isn't graded, so it can only be answered")
+            }
+        }
 
         var correctPositions: [Int] = []
         for step in lesson.steps {
@@ -141,6 +146,12 @@ public enum LessonValidator {
             }
             if a.scenario == nil { warn(stepId, "say where the passage comes from (scenario material)") }
             return nil
+        case .practice(let p):
+            if p.suggestion.isBlank || p.fallbackGuidance.isBlank || p.notice.isBlank {
+                error(stepId, "practice needs a suggestion, fallback guidance and a notice")
+            }
+            if p.suggestion.count > p.maxCharacters { error(stepId, "the suggestion is longer than the limit") }
+            return nil
         case .shortResponse(let r):
             if r.rubricId.range(of: stableIdPattern, options: .regularExpression) == nil { error(stepId, "bad rubric id") }
             if r.rubric.core.isEmpty { error(stepId, "a rubric needs a core requirement") }
@@ -183,7 +194,7 @@ public enum LessonValidator {
             switch a.kind {
             case .choice(let c): n += c.options.map { wordCount($0.text) }.reduce(0, +)
             case .claimSelection: break // the passage is the scenario's text
-            case .shortResponse: break
+            case .shortResponse, .practice: break
             }
             return n
         }

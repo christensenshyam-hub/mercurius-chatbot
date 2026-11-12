@@ -138,6 +138,12 @@ extension LessonMachine {
                 if case .requestEvaluation(_, let t, _) = e { return t }; return nil
             }.first!
             _ = send(.evaluationArrived(token: token, ResponseEvaluation(status: .meets, feedback: "That's the move.")))
+        case .practice(let p):
+            _ = send(.editText(p.suggestion))
+            let token = send(.submit).effects.compactMap { e -> Int? in
+                if case .requestPractice(_, let t, _) = e { return t }; return nil
+            }.first!
+            _ = send(.practiceReplied(token: token, reply: "No, I’m Merc, an AI."))
         }
         if activity.isDeterministic { _ = send(.submit) }
         _ = send(.advance(from: currentStep.id))
