@@ -40,7 +40,7 @@ enum ChatAnnouncement {
             return "Answer sent."
         }
         if index == answer { return "Correct." }
-        return "Not quite. The answer is \(letter(answer)): \(quiz.options[answer])."
+        return "Not quite. The answer is \(letter(answer)): \(InlineMarkdown.spoken(quiz.options[answer]))."
     }
 
     /// The reply's check question or [Q] stem, the last one if several.

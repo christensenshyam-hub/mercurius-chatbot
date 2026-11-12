@@ -23,7 +23,7 @@ struct KeyIdeaCard: View {
             }
             .foregroundStyle(BrandColor.accentText)
             .accessibilityHidden(true)
-            Text(text)
+            Text(InlineMarkdown.attributed(text))
                 .font(font)
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -34,7 +34,7 @@ struct KeyIdeaCard: View {
         .background(BrandColor.accent.opacity(0.08),
                     in: RoundedRectangle(cornerRadius: BrandRadius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Key idea: \(text)")
+        .accessibilityLabel("Key idea: \(InlineMarkdown.spoken(text))")
     }
 }
 
@@ -55,7 +55,7 @@ struct ExampleCard: View {
             }
             .foregroundStyle(BrandColor.textSecondary)
             .accessibilityHidden(true)
-            Text(text)
+            Text(InlineMarkdown.attributed(text))
                 .font(font)
                 .foregroundStyle(BrandColor.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -70,7 +70,7 @@ struct ExampleCard: View {
                 .stroke(BrandColor.border, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Example: \(text)")
+        .accessibilityLabel("Example: \(InlineMarkdown.spoken(text))")
     }
 }
 
@@ -101,7 +101,7 @@ struct CheckQuizCard: View {
                     .font(.system(size: bodySize * 0.9, weight: .semibold))
                     .foregroundStyle(BrandColor.accentText)
                     .accessibilityHidden(true)
-                Text(quiz.stem)
+                Text(InlineMarkdown.attributed(quiz.stem))
                     .font(stemFont)
                     .foregroundStyle(BrandColor.accentText)
                     .multilineTextAlignment(.leading)
@@ -122,14 +122,14 @@ struct CheckQuizCard: View {
             return pick == quiz.answerIndex ? .success : .error
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Question: \(quiz.stem)")
+        .accessibilityLabel("Question: \(InlineMarkdown.spoken(quiz.stem))")
     }
 
     /// How VoiceOver reads one option: "Option B: …", then once graded which
     /// was right and what became of the pick (AUD-23).
     static func optionAccessibility(index: Int, option: String, pick: Int?,
                                     answerIndex: Int?) -> (label: String, value: String?) {
-        let label = "Option \(ChatAnnouncement.letter(index)): \(option)"
+        let label = "Option \(ChatAnnouncement.letter(index)): \(InlineMarkdown.spoken(option))"
         guard let pick else { return (label, nil) }
         let isAnswer = answerIndex == index
         let isPick = pick == index
@@ -189,7 +189,7 @@ struct CheckQuizCard: View {
                 Text(String(UnicodeScalar(65 + index)!))
                     .font(.system(size: bodySize * 0.8, weight: .bold, design: .rounded))
                     .foregroundStyle(letterColor(isAnswer: isAnswer, isPick: isPick))
-                Text(option)
+                Text(InlineMarkdown.attributed(option))
                     .font(.system(size: bodySize * 0.85))
                     .foregroundStyle(BrandColor.text)
                     .multilineTextAlignment(.leading)
