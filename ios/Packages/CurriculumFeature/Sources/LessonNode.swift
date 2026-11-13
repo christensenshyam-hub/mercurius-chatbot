@@ -190,7 +190,7 @@ struct PathNodeCircle: View {
         }
         .onAppear {
             guard showsPulse, !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
+            withAnimation(Motion.ambientPulse) { pulse = true }
         }
         // LazyVStack preserves @State across scroll-out, but the repeatForever
         // animation dies with the view — reset so reappearing re-arms it
@@ -416,7 +416,7 @@ private struct StartCallout: View {
             .offset(y: bob ? -3 : 0)
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { bob = true }
+                withAnimation(Motion.ambientBob) { bob = true }
             }
             // Reset on scroll-out so a lazy-container reappearance re-arms
             // the bob instead of freezing at the lifted frame.

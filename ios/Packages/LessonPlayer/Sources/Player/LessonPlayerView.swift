@@ -28,9 +28,9 @@ public struct LessonPlayerView: View {
                         Color.clear.frame(height: 0).id("top")
                         StepBody(model: model, headingFocused: $headingFocused)
                             .id(model.step.id)
-                            .transition(reduceMotion ? .opacity : .asymmetric(
+                            .transition(Motion.transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .opacity))
+                                removal: .opacity), reduceMotion: reduceMotion))
                         Color.clear.frame(height: 1).id("bottom")
                     }
                     .frame(maxWidth: 640, alignment: .leading)
@@ -47,7 +47,8 @@ public struct LessonPlayerView: View {
                         AccessibilityNotification.Announcement(text).post()
                     }
                     // Bring the feedback into view without hiding the question.
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                    withAnimation(Motion.resolved(.easeOut(duration: Motion.Duration.standard),
+                                                  reduceMotion: reduceMotion, fallback: .none)) {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
@@ -57,7 +58,9 @@ public struct LessonPlayerView: View {
             ActionBar(model: model)
         }
         .background(BrandColor.background.ignoresSafeArea())
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.step.id)
+        .animation(Motion.resolved(.easeInOut(duration: Motion.Duration.standard),
+                                   reduceMotion: reduceMotion, fallback: .none),
+                   value: model.step.id)
         .onChange(of: model.step.id) { _, _ in headingFocused = true }
         .sheet(isPresented: Bindable(model).showsCrisisSupport) {
             CrisisSupportView(closeTitle: PlayerCopy.backToLesson) { model.showsCrisisSupport = false }
