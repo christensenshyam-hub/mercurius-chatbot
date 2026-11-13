@@ -46,6 +46,12 @@ struct MotionTests {
         #expect(Motion.resolved(a, reduceMotion: true, fallback: .none) == nil)
     }
 
+    @Test("A sequential Reduce Motion fade is two 0.1 s halves of the 0.2 s fade")
+    func fadeHalves() {
+        #expect(Motion.fadeHalfDuration == 0.1)
+        #expect(Motion.fadeHalf == .easeInOut(duration: 0.1))
+    }
+
     @Test("Each haptic maps to its SwiftUI feedback")
     func haptics() {
         #expect(Haptic.allCases.count == 4)

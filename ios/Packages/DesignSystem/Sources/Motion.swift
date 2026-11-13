@@ -56,6 +56,11 @@ public enum Motion {
     /// The Reduce Motion crossfade: movement and scale become a plain fade.
     public static let fade = Animation.easeInOut(duration: 0.2)
 
+    /// Each half of a sequential Reduce Motion fade (out, then in): together
+    /// they take `fade`'s 0.2 s.
+    public static let fadeHalfDuration: TimeInterval = 0.1
+    public static let fadeHalf = Animation.easeInOut(duration: fadeHalfDuration)
+
     /// `animation`, or the crossfade under Reduce Motion.
     /// Same shape as `Night.Motion.resolved(_:reduceMotion:)`.
     public static func resolved(_ animation: Animation, reduceMotion: Bool) -> Animation {

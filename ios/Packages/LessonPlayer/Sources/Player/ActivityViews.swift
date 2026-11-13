@@ -4,9 +4,10 @@ import DesignSystem
 struct ActivityStepView: View {
     let model: LessonPlayerModel
     let activity: Activity
+    /// This step's own record, not the model's current one: while a step
+    /// fades out, the model has already moved on (see `StepTransition`).
+    let record: StepRecord
     var headingFocused: AccessibilityFocusState<Bool>.Binding
-
-    private var record: StepRecord { model.record }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.lg) {
@@ -21,13 +22,13 @@ struct ActivityStepView: View {
 
             switch activity.kind {
             case .choice(let choice):
-                ChoiceList(model: model, choice: choice)
+                ChoiceList(model: model, choice: choice, record: record)
             case .claimSelection(let selection):
-                ClaimSelectionView(model: model, selection: selection)
+                ClaimSelectionView(model: model, selection: selection, record: record)
             case .shortResponse(let response):
-                ShortResponseView(model: model, maxCharacters: response.maxCharacters, placeholder: response.placeholder)
+                ShortResponseView(model: model, record: record, maxCharacters: response.maxCharacters, placeholder: response.placeholder)
             case .practice(let practice):
-                PracticeView(model: model, practice: practice)
+                PracticeView(model: model, practice: practice, record: record)
             }
 
             if record.hintsShown > 0 {
@@ -84,9 +85,9 @@ func rowState(id: String, draft: Set<String>, submitted: Set<String>?, correct: 
 struct ChoiceList: View {
     let model: LessonPlayerModel
     let choice: ChoiceActivity
+    let record: StepRecord
 
     var body: some View {
-        let record = model.record
         let draft: Set<String> = { if case .options(let s)? = record.draft { return s }; return [] }()
         let submitted: Set<String>? = { if case .options(let s)? = record.lastSubmission?.response { return s }; return nil }()
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -212,9 +213,9 @@ struct OptionRow: View {
 struct ClaimSelectionView: View {
     let model: LessonPlayerModel
     let selection: ClaimSelectionActivity
+    let record: StepRecord
 
     var body: some View {
-        let record = model.record
         let draft: Set<String> = { if case .claims(let s)? = record.draft { return s }; return [] }()
         let submitted: Set<String>? = { if case .claims(let s)? = record.lastSubmission?.response { return s }; return nil }()
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
@@ -370,6 +371,7 @@ struct FeedbackLook {
 struct DepthSection: View {
     let model: LessonPlayerModel
     let step: LessonStep
+    let record: StepRecord
 
     private var why: [DepthItem] { step.depth.filter { $0.kind == .why } }
     private var examples: [DepthItem] { step.depth.filter { $0.kind == .example } }
@@ -378,7 +380,7 @@ struct DepthSection: View {
     }
 
     var body: some View {
-        let opened = model.record.depthOpened
+        let opened = record.depthOpened
         VStack(alignment: .leading, spacing: BrandSpacing.sm) {
             // What the learner opened sits first, in the order it was
             // authored (Go deeper stages in sequence), above what's left.
