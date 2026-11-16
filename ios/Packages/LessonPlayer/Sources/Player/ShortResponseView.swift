@@ -11,7 +11,9 @@ struct ShortResponseView: View {
     let placeholder: String
     @FocusState private var focused: Bool
 
-    private var text: String {
+    private var text: String { Self.text(of: record) }
+
+    private static func text(of record: StepRecord) -> String {
         if case .text(let t)? = record.draft { return t }
         if case .text(let t)? = record.lastSubmission?.response { return t }
         return ""
@@ -30,7 +32,11 @@ struct ShortResponseView: View {
                         .accessibilityHidden(true)
                 }
                 TextEditor(text: Binding(
-                    get: { text },
+                    // While editable this is the model's current step, so read
+                    // its live record: the `record` this view was built with
+                    // is a snapshot, and with fast typing each keystroke would
+                    // land on stale text (only the last letter survives).
+                    get: { editable ? Self.text(of: model.record) : text },
                     set: { model.send(.editText($0)) }
                 ))
                 .font(BrandFont.body)
