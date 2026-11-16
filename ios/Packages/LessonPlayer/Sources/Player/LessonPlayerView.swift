@@ -7,30 +7,51 @@ import DesignSystem
 /// clipped to fit one screen.
 public struct LessonPlayerView: View {
     @State private var model: LessonPlayerModel
+    /// The step on screen trails `model.step` through a two-phase change.
+    @State private var transition: StepTransition
+    /// The header's progress, which moves when the incoming step starts.
+    @State private var shownProgress: Int
+    @State private var leaveTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AccessibilityFocusState private var headingFocused: Bool
 
     public init(model: LessonPlayerModel) {
         _model = State(initialValue: model)
+        _transition = State(initialValue: StepTransition(stepId: model.step.id))
+        _shownProgress = State(initialValue: model.machine.requiredProgress.done)
+    }
+
+    private var shownStep: LessonStep {
+        model.content.step(id: transition.displayedStepId) ?? model.step
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             PlayerHeader(
                 title: model.content.title,
-                progress: model.machine.requiredProgress,
+                progress: (shownProgress, model.machine.requiredProgress.total),
                 onLeave: model.leave
             )
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: BrandSpacing.lg) {
                         Color.clear.frame(height: 0).id("top")
-                        StepBody(model: model, headingFocused: $headingFocused)
-                            .id(model.step.id)
-                            .transition(reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .opacity))
+                        let step = shownStep
+                        StepBody(model: model, step: step, record: model.machine.attempt.record(step.id),
+                                 headingFocused: $headingFocused,
+                                 scrollToFeedback: { scrollToFeedback(proxy) })
+                            .opacity(transition.phase == .leaving ? 0 : 1)
+                            .offset(x: transition.phase == .leaving ? StepMotion.leaveOffset(reduceMotion) : 0)
+                            // The outgoing step's controls would act on the
+                            // model's new step.
+                            .allowsHitTesting(transition.phase == .shown)
+                            // The identity goes OUTSIDE the fade: each step
+                            // carries its own opacity, so the outgoing one,
+                            // kept briefly while the incoming one animates in,
+                            // stays at the zero opacity it left with.
+                            .id(step.id)
+                            .transition(StepMotion.insertion(reduceMotion))
                         Color.clear.frame(height: 1).id("bottom")
                     }
                     .frame(maxWidth: 640, alignment: .leading)
@@ -39,26 +60,31 @@ public struct LessonPlayerView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                // A new step starts at its top, not where the last one was
-                // scrolled to.
-                .onChange(of: model.step.id) { _, _ in proxy.scrollTo("top", anchor: .top) }
+                .onChange(of: model.step.id) { _, id in stepChanged(to: id, proxy: proxy) }
                 .onChange(of: model.revealRevision) { _, _ in
                     if let text = model.announcement {
                         AccessibilityNotification.Announcement(text).post()
                     }
-                    // Bring the feedback into view without hiding the question.
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
+                    // A choice or claim step's feedback scrolls as its panel
+                    // appears (`FeedbackChoreography`), not before.
+                    if model.lastRevealWasFeedback, model.step.activity?.isDeterministic == true { return }
+                    scrollToFeedback(proxy)
                 }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ActionBar(model: model)
+                // Unchanged: the button's label change keeps its own timing.
+                .animation(Motion.resolved(.easeInOut(duration: Motion.Duration.standard),
+                                           reduceMotion: reduceMotion, fallback: .none),
+                           value: model.step.id)
         }
         .background(BrandColor.background.ignoresSafeArea())
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.step.id)
-        .onChange(of: model.step.id) { _, _ in headingFocused = true }
+        .onChange(of: transition.displayedStepId) { _, _ in headingFocused = true }
+        .onChange(of: model.machine.requiredProgress.done) { _, done in
+            // Progress that moves without a step change shows at once.
+            if transition.phase == .shown, transition.displayedStepId == model.step.id { shownProgress = done }
+        }
         .sheet(isPresented: Bindable(model).showsCrisisSupport) {
             CrisisSupportView(closeTitle: PlayerCopy.backToLesson) { model.showsCrisisSupport = false }
         }
@@ -67,6 +93,73 @@ public struct LessonPlayerView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.sceneBecameActive() } else { model.sceneBecameInactive() }
         }
+    }
+
+    /// Bring the feedback into view without hiding the question.
+    private func scrollToFeedback(_ proxy: ScrollViewProxy) {
+        withAnimation(Motion.resolved(.easeOut(duration: Motion.Duration.standard),
+                                      reduceMotion: reduceMotion, fallback: .none)) {
+            proxy.scrollTo("bottom", anchor: .bottom)
+        }
+    }
+
+    // MARK: Step change
+
+    private func stepChanged(to id: String, proxy: ScrollViewProxy) {
+        var next = transition
+        switch next.stepChanged(to: id) {
+        case .none:
+            transition = next
+        case .startLeaving(let generation):
+            withAnimation(StepMotion.leave(reduceMotion)) { transition = next }
+            leaveTask?.cancel()
+            leaveTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(StepMotion.leaveDuration(reduceMotion)))
+                guard !Task.isCancelled else { return }
+                finishLeave(generation: generation, proxy: proxy)
+            }
+        case .returnToShown:
+            leaveTask?.cancel()
+            withAnimation(StepMotion.enter(reduceMotion)) { transition = next }
+        }
+    }
+
+    /// The outgoing step is fully gone: reset the scroll while nothing is
+    /// visible, then insert the incoming step and move the progress with it.
+    private func finishLeave(generation: Int, proxy: ScrollViewProxy) {
+        var next = transition
+        guard next.leaveFinished(generation: generation) != nil else { return }
+        proxy.scrollTo("top", anchor: .top)
+        withAnimation(StepMotion.enter(reduceMotion)) {
+            transition = next
+            shownProgress = model.machine.requiredProgress.done
+        }
+    }
+}
+
+/// The step change's timing and distances.
+enum StepMotion {
+    /// How far a step moves as it leaves (left) and arrives (from the right).
+    static let distance: CGFloat = 24
+
+    static func leaveDuration(_ reduceMotion: Bool) -> TimeInterval {
+        reduceMotion ? Motion.fadeHalfDuration : Motion.Duration.fast
+    }
+    static func leave(_ reduceMotion: Bool) -> Animation {
+        reduceMotion ? Motion.fadeHalf : .easeIn(duration: Motion.Duration.fast)
+    }
+    static func enter(_ reduceMotion: Bool) -> Animation {
+        reduceMotion ? Motion.fadeHalf : Motion.gentle
+    }
+    static func leaveOffset(_ reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : -distance
+    }
+    /// The incoming step arrives; the outgoing one, already invisible, is
+    /// removed at once.
+    static func insertion(_ reduceMotion: Bool) -> AnyTransition {
+        .asymmetric(
+            insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(x: distance)),
+            removal: .identity)
     }
 }
 
@@ -133,21 +226,25 @@ struct PlayerHeader: View {
 
 struct StepBody: View {
     let model: LessonPlayerModel
+    /// The step on screen, which during a step change trails `model.step`.
+    let step: LessonStep
+    let record: StepRecord
     var headingFocused: AccessibilityFocusState<Bool>.Binding
+    var scrollToFeedback: () -> Void = {}
 
     var body: some View {
-        let step = model.step
         VStack(alignment: .leading, spacing: BrandSpacing.lg) {
             switch step.kind {
             case .teach(let teach):
                 TeachStepView(teach: teach, headingFocused: headingFocused)
             case .activity(let activity):
-                ActivityStepView(model: model, activity: activity, headingFocused: headingFocused)
+                ActivityStepView(model: model, activity: activity, record: record, headingFocused: headingFocused,
+                                 scrollToFeedback: scrollToFeedback)
             case .finish(let finish):
                 FinishStepView(finish: finish, completion: model.machine.attempt.completion, headingFocused: headingFocused)
             }
             if !step.depth.isEmpty || model.canAskMerc {
-                DepthSection(model: model, step: step)
+                DepthSection(model: model, step: step, record: record)
             }
         }
     }

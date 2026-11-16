@@ -55,7 +55,20 @@ enum PlayerCopy {
     /// After a miss, the right answer, plainly. (The right answer's own
     /// feedback starts "Right." or "Yes.", which reads wrong after a miss; the
     /// missed option's feedback already explains.)
-    static func revealed(_ answer: String) -> String { "The right answer: \(answer)." }
+    /// No full stop is added after an answer that already ends a sentence
+    /// ("…for a cold day?" stays as it is, not "…day?.").
+    static func revealed(_ answer: String) -> String {
+        "The right answer: \(answer)\(endsSentence(answer) ? "" : ".")"
+    }
+
+    /// Whether `text` already ends in sentence punctuation, looking past any
+    /// closing quotes or brackets ("“Is it?”" does).
+    static func endsSentence(_ text: String) -> Bool {
+        let closers: Set<Character> = ["\"", "'", "”", "’", ")", "]", "»"]
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.reversed().first(where: { !closers.contains($0) }) else { return false }
+        return ".?!…".contains(last)
+    }
 
     static func exemplar(_ text: String) -> String {
         "Here’s one sound answer, to compare with yours: “\(text)” Now write your own version."

@@ -94,6 +94,9 @@ public final class LessonPlayerModel {
     /// What VoiceOver should hear when feedback appears (its title and first
     /// line), so a screen-reader user learns the result without hunting for it.
     public private(set) var announcement: String?
+    /// Whether the last `revealRevision` bump was an answer's feedback (not
+    /// optional depth opening).
+    public private(set) var lastRevealWasFeedback = false
 
     /// The last evaluation read as a crisis: the view shows support.
     public var showsCrisisSupport = false
@@ -196,6 +199,7 @@ public final class LessonPlayerModel {
         case .answerSubmitted(let stepId, let index):
             host.record(.answerSubmitted(context(), stepId: stepId, attemptIndex: index, interaction: interaction(stepId)))
         case .feedbackShown(let stepId, let status):
+            lastRevealWasFeedback = true
             revealRevision += 1
             let detail: String? = {
                 guard let feedback = record.lastSubmission?.feedback, !feedback.isEmpty else { return nil }
@@ -204,6 +208,7 @@ public final class LessonPlayerModel {
             announcement = [FeedbackLook.title(for: status), detail].compactMap { $0 }.joined(separator: ". ")
             host.record(.feedbackShown(context(), stepId: stepId, status: status))
         case .depthOpened(let stepId, let depthId):
+            lastRevealWasFeedback = false
             revealRevision += 1
             host.record(.explanationExpanded(context(), stepId: stepId, depthId: depthId))
         case .lessonCompleted(let completion):

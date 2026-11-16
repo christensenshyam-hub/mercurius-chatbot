@@ -90,6 +90,8 @@ struct LearningPathView: View {
                         case .top:
                             break
                         case .unitBanner(let id):
+                            // These two scrolls are not Motion tokens yet: SwiftUI's default ease-in-out (about 0.35 s).
+                            // Left as they are until the map's motion pass decides their token.
                             withAnimation(reduceMotion ? nil : .easeInOut) { proxy.scrollTo(id, anchor: .top) }
                         case .centered(let id):
                             withAnimation(reduceMotion ? nil : .easeInOut) { proxy.scrollTo(id, anchor: .center) }
@@ -338,6 +340,8 @@ struct LearningPathView: View {
             // node's near edge at the deepest sway, 91.5pt, on a 375pt screen —
             // and windows narrower than 360pt drop him entirely via mercFits.)
             .offset(y: -(LearningPathMetrics.nodeCellHeight - 76) / 2)
+            // Not a Motion token yet: 0.2 s sits between `fast` and `standard`.
+            // Left as it is until the map's motion pass decides its token.
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: mercLine)
             .accessibilityHidden(true)
         }
