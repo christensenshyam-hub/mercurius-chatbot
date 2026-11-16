@@ -39,7 +39,8 @@ public struct LessonPlayerView: View {
                         Color.clear.frame(height: 0).id("top")
                         let step = shownStep
                         StepBody(model: model, step: step, record: model.machine.attempt.record(step.id),
-                                 headingFocused: $headingFocused)
+                                 headingFocused: $headingFocused,
+                                 scrollToFeedback: { scrollToFeedback(proxy) })
                             .opacity(transition.phase == .leaving ? 0 : 1)
                             .offset(x: transition.phase == .leaving ? StepMotion.leaveOffset(reduceMotion) : 0)
                             // The outgoing step's controls would act on the
@@ -64,11 +65,10 @@ public struct LessonPlayerView: View {
                     if let text = model.announcement {
                         AccessibilityNotification.Announcement(text).post()
                     }
-                    // Bring the feedback into view without hiding the question.
-                    withAnimation(Motion.resolved(.easeOut(duration: Motion.Duration.standard),
-                                                  reduceMotion: reduceMotion, fallback: .none)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
+                    // A choice or claim step's feedback scrolls as its panel
+                    // appears (`FeedbackChoreography`), not before.
+                    if model.lastRevealWasFeedback, model.step.activity?.isDeterministic == true { return }
+                    scrollToFeedback(proxy)
                 }
             }
         }
@@ -92,6 +92,14 @@ public struct LessonPlayerView: View {
         .onDisappear { model.sceneBecameInactive() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.sceneBecameActive() } else { model.sceneBecameInactive() }
+        }
+    }
+
+    /// Bring the feedback into view without hiding the question.
+    private func scrollToFeedback(_ proxy: ScrollViewProxy) {
+        withAnimation(Motion.resolved(.easeOut(duration: Motion.Duration.standard),
+                                      reduceMotion: reduceMotion, fallback: .none)) {
+            proxy.scrollTo("bottom", anchor: .bottom)
         }
     }
 
@@ -222,6 +230,7 @@ struct StepBody: View {
     let step: LessonStep
     let record: StepRecord
     var headingFocused: AccessibilityFocusState<Bool>.Binding
+    var scrollToFeedback: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrandSpacing.lg) {
@@ -229,7 +238,8 @@ struct StepBody: View {
             case .teach(let teach):
                 TeachStepView(teach: teach, headingFocused: headingFocused)
             case .activity(let activity):
-                ActivityStepView(model: model, activity: activity, record: record, headingFocused: headingFocused)
+                ActivityStepView(model: model, activity: activity, record: record, headingFocused: headingFocused,
+                                 scrollToFeedback: scrollToFeedback)
             case .finish(let finish):
                 FinishStepView(finish: finish, completion: model.machine.attempt.completion, headingFocused: headingFocused)
             }
