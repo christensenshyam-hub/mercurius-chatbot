@@ -850,7 +850,9 @@ func settingsSheet(
         beforeErase: { shell.beforeSettingsErase() },
         afterReset: { shell.afterSettingsReset() },
         // The certificate name goes with the rest.
-        certificates: env.certificates
+        certificates: env.certificates,
+        // The Mac doesn't run the lesson player, but the store is shared.
+        lessonAttempts: env.lessonAttempts
     )
 }
 #endif

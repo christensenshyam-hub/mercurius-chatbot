@@ -29,6 +29,7 @@ const helmet = require('helmet');
 const { z } = require('zod');
 const db = require('./db');
 const logger = require('./lib/logger');
+const lessonPlayer = require('./lib/lessonPlayer');
 const {
   validate,
   ChatRequest,
@@ -37,6 +38,8 @@ const {
   ReportCardRequest,
   ConceptMapRequest,
   UnitTestGradeRequest,
+  LessonPlayerEvaluateRequest,
+  LessonPlayerActivityRequest,
   ResponseMode,
   ImageUploadRequest,
   ReportRequest,
@@ -52,6 +55,7 @@ const { reflowLimit } = require('./lib/airyReflow');
 const { createReplyPipeline, transformReply } = require('./lib/replyPipeline');
 const { hasBlocks, CURRICULUM_BLOCKS_APPENDIX, scrubBlockMarkers } = require('./lib/blockMarkup');
 const { UNIT_TEST_GRADER_PROMPT, buildGraderUserMessage, parseUnitTestGrade } = require('./lib/unitTestGrader');
+const lessonPlayerRubrics = require('./lib/lessonPlayerRubrics');
 const { pickModel } = require('./lib/modelAllowlist');
 const modelRequest = require('./lib/modelParams');
 const { modelNotesFor } = require('./lib/modelNotes');
@@ -637,6 +641,7 @@ Common mistake: Students think training = memorization. It's pattern compression
 Teach: Hallucination (generating plausible-sounding false info). Fluency ≠ accuracy. Calibration problems. Why next-token prediction optimizes for plausibility, not truth.
 Key examples: Mata v. Avianca (2023): lawyers filed a brief citing court cases ChatGPT had invented, and a federal judge fined them and their firm $5,000. AI confidently generating fake citations. Calibration: OpenAI's GPT-4 Technical Report (2023) found the pre-trained model's confidence matched its accuracy well, and that post-training (including RLHF) made that calibration worse — so a polished assistant can sound sure when it isn't.
 Exercise: Write a short, authoritative-sounding paragraph about a made-up topic, using invented names and sources (never real journals or people), and ask: identify 2 claims that could be hallucinated. What would you check? How would you verify? All three parts must come from the student.
+Grading note: a claim is supported, unverified, or contradicted, three different things. A citation the student can't find leaves the claim unverified, not proven fake (a real source can be hard to find or cited wrongly), so if their plan says "if I can't find it, it's made up", credit the search but correct that step plainly. Finding a real paper isn't the end either: the check is whether it actually says what the claim says (the same number, the same thing measured). Credit a plan that does both.
 Common mistake: "If it sounds confident, it must be right."
 
 **Lesson 4 — Unit Review**
@@ -1167,6 +1172,7 @@ const QUIZ_SYSTEM = helperSystem(QUIZ_PROMPT);
 const REPORT_CARD_SYSTEM = helperSystem(REPORT_CARD_PROMPT);
 const CONCEPT_MAP_SYSTEM = helperSystem(CONCEPT_MAP_PROMPT);
 const UNIT_TEST_GRADER_SYSTEM = helperSystem(UNIT_TEST_GRADER_PROMPT);
+const LESSON_PLAYER_EVALUATOR_SYSTEM = helperSystem(lessonPlayerRubrics.EVALUATOR_PROMPT);
 const FACTCHECK_SYSTEM = helperSystem(FACTCHECK_PROMPT);
 const ANALYZE_SYSTEM = helperSystem(ANALYZE_PROMPT);
 // What a JSON helper route (quiz, report card, concept map, fact-check,
@@ -1190,7 +1196,12 @@ function firstTextOf(response) {
 // ---------------------------------------------------------------------------
 // Helper — generate JSON from conversation history (used by quiz, report, map)
 // ---------------------------------------------------------------------------
-async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req }) {
+// `turn` is one tap's turn when the route may ask more than once ({ counted:
+// false } to start): an ask after one that counted it is a follow-up
+// (lib/claudeCall: it uses no daily turn of its own), and an ask that gave
+// an answer counts it. An ask that was refused or came back empty used no
+// turn, so the next one is not a follow-up and counts it if it answers.
+async function generateFromHistory(sessionId, { historyLimit, minMessages, systemPrompt, userMessage, maxTokens, errorLabel, route, req, turn = null }) {
   // Prefer free-chat turns (lesson turns are their own threads); when the
   // session has no chat yet — a widget student who went straight into a
   // lesson and hit "Quiz me" — fall back to everything, which is what the
@@ -1211,6 +1222,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
     sessionId,
     ip: req && req.ip,
     traceId: req && req.traceId,
+    followUp: Boolean(turn && turn.counted),
     params: {
       model: HELPER_MODEL,
       max_tokens: maxTokens,
@@ -1218,6 +1230,7 @@ async function generateFromHistory(sessionId, { historyLimit, minMessages, syste
       messages: [...history, { role: 'user', content: userMessage }],
     },
   });
+  if (turn && response && typeof response.accounting === 'function' && response.accounting().answered) turn.counted = true;
   const raw = firstTextOf(response);
   if (isCrisisReply(raw)) return { ...CRISIS_RESULT };
   let parsed;
@@ -1353,8 +1366,9 @@ function noteAdminAuthFailure() {
 }
 
 // `isRateLimited(sessionId)` is async (the limiter interface is). Callers
-// `await` it. 10/min is above any human typing rate — a lesson turn takes
-// 5–15 s to stream — and below what a script needs to be worth running.
+// `await` it through refuseIfRateLimited. 10/min is above any human typing
+// rate — a lesson turn takes 5–15 s to stream — and below what a script
+// needs to be worth running.
 const isRateLimited = sessionLimiter(60 * 1000, envInt('SESSION_PER_MIN', 10));
 
 // Per-turn budget for every user message the model sees in /api/chat.
@@ -1535,11 +1549,14 @@ const STREAM_MAX_MS = envInt('STREAM_WATCHDOG_MS', envInt('STREAM_MAX_MS', 15000
 // Wire contract (stable — clients key off `error`):
 //   503 restarting | service_disabled | spend_cap | busy
 //   429 daily_limit  { scope: 'session' | 'ip', retryAfterSec }
+//   429 rate_limited { retryAfterSec }  (the per-minute session limiter,
+//                    refuseIfRateLimited below; not part of the gate)
 // Every refusal also carries `retryable` (and `scope` / `retryAfterSec` when
 // known) in both shapes, the JSON body and the SSE error frame. Those are
-// additive: 2.0.0, 2.3.0 and the widget decode `error`/`code` and the copy
-// and ignore the rest; PR #43's iOS client reads `scope` and `retryAfterSec`
-// from both. A daily allowance and the spend cap come back at the next
+// additive: 2.0.0 and the widget decode `error`/`code` and the copy and
+// ignore the rest; 2.3.0 (17), which carries PR #43, also reads `scope` and
+// `retryAfterSec` from both, and they change only a daily_limit's copy and
+// Retry (ServerRefusal.swift). A daily allowance and the spend cap come back at the next
 // product-day midnight (lib/productDay, STREAK_TZ), and `retryAfterSec`
 // counts down to it.
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -1619,12 +1636,14 @@ function gate(req, res, { kind = 'chat', sessionId = null } = {}) {
     // Not retryable (AUD-30): the budget opens again at the product-day
     // midnight, which `retryAfterSec` (and the Retry-After header) count
     // down to, so "tomorrow" is true.
+    // Every client shows `message` (the SSE frame's `error` is `message`),
+    // so it says whose limit this is: Mercurius's, for every student, not
+    // the student's own ("You've reached today's usage limit.").
     return sendRefusal(req, res, {
       status: 503,
       error: 'spend_cap',
       scope: 'global',
-      reply: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
-      message: "Daily usage limit reached — please try again tomorrow.",
+      message: "Mercurius has reached today's usage limit and is resting. Please try again tomorrow.",
       retryAfterSec: spendCap.secondsUntilReset(),
     });
   }
@@ -1650,6 +1669,24 @@ function refuseWithVerdict(req, res, verdict) {
   });
 }
 
+// The per-minute session limiter (SESSION_PER_MIN), on every model route:
+// 429 rate_limited, as an SSE error frame for a streaming chat like every
+// refusal. Its window is a minute, but it lets the session through again as
+// soon as the oldest request in it turns a minute old, and it knows when
+// that is: the copy says so, and `retryAfterSec` (and Retry-After) carry
+// the same number. Shipped iOS builds (2.0.0, 2.3.0) and the Mac app show a
+// chat frame's text as written, with a Retry button, and read no
+// retryAfterSec for this code (it is not one of their refusal codes); on
+// the JSON routes they show their own "give it a moment" copy for any 429
+// but daily_limit. The widget shows the text everywhere. `copy` gets the
+// wait in words ("42 seconds"). Returns true when the request was refused.
+async function refuseIfRateLimited(req, res, sessionId, copy) {
+  if (!(await isRateLimited(sessionId))) return false;
+  const retryAfterSec = Math.max(1, isRateLimited.retryAfterSec(sessionId));
+  const wait = retryAfterSec === 1 ? '1 second' : `${retryAfterSec} seconds`;
+  return sendRefusal(req, res, { status: 429, error: 'rate_limited', message: copy(wait), retryAfterSec });
+}
+
 // claudeCall re-checks quotas atomically at call time (the gate above ran
 // before the route's DB awaits). When it refuses, answer with the same
 // envelope. Returns true when the error was a refusal and has been answered.
@@ -1663,8 +1700,15 @@ function quotaErrorHandled(err, req, res) {
 // new-session quota BEFORE its row is created, so rotating ids can neither
 // sidestep the per-session limits nor fill the sessions table. Every model
 // route calls this; returns true when the request has been refused.
+//
+// The network's count is read back from the ledger first (once per network
+// per product day), and each session it creates leaves a $0 ledger row with
+// the hashed address, no session id and only the day (not the moment): a
+// deploy used to give every network a fresh IP_DAILY_NEW_SESSIONS, and an
+// erasure doesn't take the row away. The row goes after two days.
 async function refuseUnseenSession(req, res, sessionId) {
   if (await db.sessionExists(sessionId)) return false;
+  await hydrateNetworkQuota(req.ip);
   // Count it in the same tick as the check (released below if this request
   // did not create the row): a burst of first contacts must not all pass the
   // check during the INSERT awaits before any of them is counted.
@@ -1685,6 +1729,7 @@ async function refuseUnseenSession(req, res, sessionId) {
   } finally {
     if (!created) quotas.forgetNewSession(req.ip);
   }
+  if (created) claudeCall.recordNetworkEvent('session', { route: 'new-session', ip: req.ip });
   return false;
 }
 
@@ -1809,23 +1854,60 @@ function recordLessonProgress(sessionId, meta) {
     .catch((e) => logger.warn({ err: e && e.message, lessonId: id }, 'lesson progress upsert failed (row dropped)'));
 }
 
-// Per-session quota counters live in memory; the first time a session is
-// seen each product day (lib/productDay), seed them from the usage ledger so
-// a mid-day redeploy doesn't hand every session a fresh allowance.
-const hydratedSessions = new Set();
-let hydratedDay = productDay.dayKey();
-async function hydrateSessionQuota(sessionId) {
-  const now = Date.now();
-  const today = productDay.dayKey(now);
-  if (today !== hydratedDay) { hydratedSessions.clear(); hydratedDay = today; }
-  if (hydratedSessions.has(sessionId)) return;
-  hydratedSessions.add(sessionId);
-  try {
-    const rows = await db.sessionUsageSince(sessionId, productDay.startOfDayMs(now));
-    if (rows && rows.length) quotas.hydrateSession(sessionId, rows);
-  } catch (e) {
-    logger.warn({ err: e.message }, 'session quota hydrate failed');
-  }
+// The daily quota counters live in memory (lib/quotas); the first time a
+// session or a network is seen each product day (lib/productDay), seed them
+// from the usage ledger so a mid-day redeploy doesn't hand out a fresh
+// allowance. A network is looked up by the ledger's salted hash of its
+// address, never the address. Its allowances used to start again on every
+// deploy: a school that had spent its IP_DAILY_USD or its photo uploads by
+// lunch got a whole new day after an afternoon deploy.
+//
+// A read that fails lets that request through on the in-memory counters and
+// is tried again on the next request. It used to be marked done anyway, so
+// one database blip on a session's first request after a deploy gave it a
+// second full day's allowance. Requests that arrive while the read is
+// pending wait for the same read rather than skip it. `.forget(key)` drops
+// a key's read (an erased session: its rows are gone, so the next request
+// reads the ledger again).
+//
+// `read(key, since, day)` gets the product day it reads for and hands it
+// to quotas, which drop a read that began before midnight and finished
+// after it: it used to seed the new day with the old day's counts for the
+// rest of that day (a whole school network refused, for one). The new
+// day's first request reads the ledger again.
+function dailyLedgerRead(what, read) {
+  const reads = new Map(); // key → today's read (never rejects)
+  let readsDay = productDay.dayKey();
+  const readBack = (key) => {
+    if (!key) return Promise.resolve();
+    const now = Date.now();
+    const today = productDay.dayKey(now);
+    if (today !== readsDay) { reads.clear(); readsDay = today; }
+    let pending = reads.get(key);
+    if (!pending) {
+      pending = Promise.resolve()
+        .then(() => read(key, productDay.startOfDayMs(now), today))
+        .catch((e) => {
+          if (reads.get(key) === pending) reads.delete(key);
+          logger.warn({ err: e.message }, `${what} quota hydrate failed; trying again on its next request`);
+        });
+      reads.set(key, pending);
+    }
+    return pending;
+  };
+  readBack.forget = (key) => { reads.delete(key); };
+  return readBack;
+}
+const hydrateSessionQuota = dailyLedgerRead('session', async (sessionId, since, day) => {
+  const [rows, reports] = await Promise.all([db.sessionUsageSince(sessionId, since), db.sessionReportsSince(sessionId, since)]);
+  if ((rows && rows.length) || reports > 0) quotas.hydrateSession(sessionId, rows || [], { reports, day });
+});
+const hydrateNetworkQuota = dailyLedgerRead('network', async (ip, since, day) => {
+  quotas.hydrateIp(ip, await db.networkUsageSince(claudeCall.hashIp(ip), since), { day });
+});
+// Every route that checks the daily quotas awaits this before its check.
+function readQuotasBack(req, sessionId) {
+  return Promise.all([hydrateSessionQuota(sessionId), hydrateNetworkQuota(req.ip)]);
 }
 
 app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat' }), asyncRoute(async (req, res) => {
@@ -1855,13 +1937,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   const chosenModel = picked.model;
 
   // Rate limit (an SSE error frame for streaming clients, like every refusal)
-  if (await isRateLimited(sessionId)) {
-    return sendRefusal(req, res, {
-      status: 429,
-      error: 'rate_limited',
-      message: "You're moving fast! Take 60 seconds to think about what we've discussed so far, then come back.",
-    });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `You're moving fast! Take a moment to think about what we've discussed so far. You can send again in ${wait}.`)) return;
 
   // Lessons stay in curriculum mode for the WHOLE conversation: the iOS client
   // re-sends the [CURRICULUM: …] opener as a hidden first wire message on every
@@ -1888,7 +1964,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
   // Kill switch, dollar budget, daily quotas, in-flight caps — covers both the
   // streaming and JSON model calls below (this handler is the only entry).
   if (await refuseUnseenSession(req, res, sessionId)) return;
-  await hydrateSessionQuota(sessionId);
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: callKind, sessionId })) return;
 
   // Every user turn gets the same budget, the latest AND the replayed ones,
@@ -2299,6 +2375,15 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
     // claude-sonnet-5-5, no crisis message in the thread, not a safety topic,
     // and never in safety text.
     const tidyWriting = (t) => homeworkGuard.stripMenu(homeworkGuard.stripPreamble(homeworkGuard.oneQuestion(t), { refusals: cutRefusals && quoteTurn, writing: true }), { asides: cutRefusals });
+    // The student going away (Stop, the app closed, the connection dropped)
+    // stops the guard's second call. That call runs after the reply's stream
+    // has ended, so the stream's own abort can't reach it: it used to run to
+    // the end for nobody and be billed in full. (Checked on the socket too:
+    // a client gone during the DB awaits above has already closed it.)
+    const clientGone = new AbortController();
+    const noteClientGone = () => { if (!res.writableFinished) clientGone.abort(); };
+    if (res.destroyed || !req.socket || req.socket.destroyed) noteClientGone();
+    else res.once('close', noteClientGone);
     const guardDraft = async (draft) => {
       // A reply that hands off to a crisis line or to emergency help is sent
       // as the model wrote it, whatever the turn looked like.
@@ -2309,6 +2394,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!quoteTurn || homeworkGuard.quotesStudent(text, clientMessages) || homeworkGuard.safetyText(text)) return text;
         // Final run 2026-10-22: "is that good? can u make it better" met with a
         // new question instead of their own words. One more try, then keep it.
+        // The draft's call counted this turn; the retry is a follow-up.
         try {
           const retry = await claudeCall.createMessage({
             route: '/api/chat',
@@ -2316,6 +2402,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
             sessionId,
             ip: req.ip,
             traceId: req.traceId,
+            followUp: true,
+            signal: clientGone.signal,
             params: {
               ...modelParams,
               system: systemBlocks.buildSystem({
@@ -2328,7 +2416,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           const retryText = tidyWriting(transformReply(firstTextOf(retry), replyTransforms));
           if (retryText.trim() && !isRefusedReply(retry.stop_reason, retryText) && homeworkGuard.quotesStudent(retryText, clientMessages)) return retryText;
         } catch (err) {
-          logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
+          if (clientGone.signal.aborted) logger.forRequest(req).info('writing quote retry stopped: the student left');
+          else logger.forRequest(req).warn({ err: err.message }, 'writing quote retry failed');
         }
         return text;
       }
@@ -2353,6 +2442,9 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           ? `a result worked out from the student's own numbers (${leak.value}), which is their answer or gives it away. Write the reply again with the same coaching move, without working their numbers through to any result: name the step, run a number THEY gave backwards, or use a worked example on new numbers.`
           : `the corrected value (${leak.value}) that the student still has to find. Write the reply again: point at the term where it breaks and ask what it is, without writing its value or the corrected line.`;
       const note = `## ANSWER GUARD (this reply only)\nYour draft reply gave away ${what}`;
+      // The student sent one message: the draft's call counted the turn, so
+      // the rewrite is a follow-up (it uses no second turn, and the turn
+      // allowance doesn't refuse it on their last one).
       try {
         const retry = await claudeCall.createMessage({
           route: '/api/chat',
@@ -2360,6 +2452,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           sessionId,
           ip: req.ip,
           traceId: req.traceId,
+          followUp: true,
+          signal: clientGone.signal,
           params: {
             ...modelParams,
             system: systemBlocks.buildSystem({
@@ -2374,7 +2468,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           return findGuardLeak(retryText) ? redactGuardLeaks(retryText) : retryText;
         }
       } catch (err) {
-        logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
+        if (clientGone.signal.aborted) logger.forRequest(req).info('homework answer guard: retry stopped, the student left; redacting');
+        else logger.forRequest(req).warn({ err: err.message }, 'homework answer guard: retry failed, redacting');
       }
       return redactGuardLeaks(text);
     };
@@ -2502,13 +2597,18 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       };
       touch();
       const hardCap = setTimeout(() => { timedOut = true; streamAbort.abort(); }, STREAM_MAX_MS);
+      // The watchdogs time the model's stream; the keepalive runs until the
+      // final frames are written (see the 'end' handler).
+      const stopWatchdogs = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        clearTimeout(hardCap);
+      };
       let timersStopped = false;
       const stopTimers = () => {
         if (timersStopped) return;
         timersStopped = true;
         clearInterval(keepalive);
-        if (idleTimer) clearTimeout(idleTimer);
-        clearTimeout(hardCap);
+        stopWatchdogs();
       };
 
       let fullText = '';
@@ -2554,12 +2654,22 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         if (!holdBack) safeWrite(`data: ${JSON.stringify({ type: 'delta', text: out })}\n\n`);
       });
 
-      stream.on('end', async () => {
-        stopTimers();
+      // Run by the stream's 'end' (registered below, where a throw in it is
+      // caught).
+      const finishTurn = async () => {
+        // The model's stream is over, and so are its watchdogs. The keepalive
+        // pings on until the 'complete' frame: a held-back turn's answer
+        // guard asks the model again after this point, and that rewrite can
+        // take as long as the first reply while the socket carries nothing
+        // else (a held-back turn streams no text at all). A quiet socket that
+        // long is what school proxies, cellular NATs and the app's 60 s idle
+        // timeout drop.
+        stopWatchdogs();
         // The SDK (0.39) emits 'end' after 'error' AND 'abort' too — a failed
         // or aborted stream must never persist its truncated partial (or the
         // fabricated fallback line) as a completed turn, nor emit 'complete'.
         if (stream.errored || stream.aborted) {
+          stopTimers();
           // The API took the photo and began answering: a Stop or a dropped
           // stream mid-reply still leaves that turn in the student's thread.
           if (modelSpoke) linkPhoto(fullText);
@@ -2622,6 +2732,7 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
         const exposedUsage = process.env.EVAL_EXPOSE_USAGE === '1' && typeof stream.accounting === 'function' && stream.accounting()
           ? { usage: stream.accounting().usage }
           : {};
+        stopTimers();
         safeWrite(`data: ${JSON.stringify({
           type: 'complete',
           reply,
@@ -2637,6 +2748,21 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
           try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
         }
         releaseSse();
+      };
+      // A throw in finishTurn (a bug in a reply transform, say) still ends the
+      // turn, with the stream-error frame. Otherwise the keepalive, which runs
+      // until the final frames, would ping on: the app would wait out its
+      // 240 s whole-reply cap, and the widget would wait for good.
+      stream.on('end', () => {
+        finishTurn().catch((err) => {
+          stopTimers();
+          logger.forRequest(req).error({ err: err && err.message }, 'SSE end handler failed');
+          if (!res.writableEnded) {
+            safeWrite(`data: ${JSON.stringify({ type: 'error', code: 'upstream_error', error: 'Mercurius hit a snag. Try again in a moment.' })}\n\n`);
+            try { res.end(); } catch (e) { logger.warn({ err: e.message }, 'SSE end failed'); }
+          }
+          releaseSse();
+        });
       });
 
       stream.on('error', (err) => {
@@ -2676,6 +2802,8 @@ app.post('/api/chat', chatLimiter, validate(ChatRequest, { endpoint: '/api/chat'
       // end, writableFinished is true and this is a no-op.
       res.on('close', () => {
         if (!res.writableFinished) stream.abort();
+        // Nobody is left to ping (a client gone during the answer guard).
+        stopTimers();
       });
 
     } else {
@@ -2789,15 +2917,19 @@ app.post('/api/quiz', chatLimiter, validate(QuizRequest, { endpoint: '/api/quiz'
   const { sessionId } = req.validated;
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
+    // One tap is one helper turn: the first ask that gets an answer counts
+    // it, and every ask after that is a follow-up. (Marking every second ask
+    // a follow-up let a quiz whose first ask was refused cost no turn.)
+    const turn = { counted: false };
     const quizOnce = (userMessage) => generateFromHistory(sessionId, {
       route: '/api/quiz',
       req,
+      turn,
       historyLimit: HISTORY_LIMITS.QUIZ,
       minMessages: 4,
       systemPrompt: QUIZ_SYSTEM,
@@ -2857,10 +2989,9 @@ app.post('/api/report-card', chatLimiter, validate(ReportCardRequest, { endpoint
   const { sessionId } = req.validated;
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
@@ -2901,10 +3032,9 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
   if (crisisSignal(answer)) return res.json({ ...CRISIS_GRADE });
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try grading again.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try grading again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -2939,16 +3069,90 @@ app.post('/api/unit-test/grade', chatLimiter, validate(UnitTestGradeRequest, { e
 }));
 
 // ---------------------------------------------------------------------------
+// POST /api/lesson-player/evaluate — the lesson player pilot's short-response
+// check (additive). The client sends ids and the answer; the task, evidence
+// and rubric come from lib/lessonPlayerRubrics.js, so this grades the
+// pilot's authored tasks and nothing else. Same rails as the unit-test grader
+// (crisis check, session rate limit, gate as a helper call: kill switch,
+// spend cap, quotas), plus a hard time limit. Responses:
+//   200 { status: 'meets'|'not_yet', feedback, hint, flags }
+//   200 { crisis: true, message }       (never graded)
+//   404 unknown rubric · 422 invalid model output · 504 timeout · 5xx/429 rails
+// Nothing is stored: the answer is not saved and is never logged.
+// ---------------------------------------------------------------------------
+// POST /api/lesson-player/activity — the pilot's study-activity ping (additive,
+// no model call, no text). A chat lesson updates the learner's streak and the
+// lesson funnel on every /api/chat turn; a player lesson mostly runs on the
+// device, so it reports here instead: 'start' (a new attempt), 'resume' (an
+// attempt reopened), 'complete'. Each counts today toward the streak exactly
+// as a chat turn does (db.updateStreak), and start/complete write the same
+// lesson_events rows a chat lesson writes. Returns { streak }.
+app.post('/api/lesson-player/activity', chatLimiter, validate(LessonPlayerActivityRequest, { endpoint: '/api/lesson-player/activity' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, event } = req.validated;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  const streak = await db.updateStreak(sessionId);
+  const m = /^([ub])(\d+)_l(\d+)$/.exec(lessonId);
+  const meta = { lessonId, unit: Number(m[2]), lesson: Number(m[3]), turnIndex: event === 'start' ? 1 : null };
+  if (event === 'start') writeLessonEvent(sessionId, meta, 'start');
+  if (event === 'complete') writeLessonEvent(sessionId, meta, 'complete');
+  return res.json({ streak });
+}));
+
+const LESSON_PLAYER_EVALUATE_TIMEOUT_MS = Number(process.env.LESSON_PLAYER_EVALUATE_TIMEOUT_MS) || 15000;
+
+app.post('/api/lesson-player/evaluate', chatLimiter, validate(LessonPlayerEvaluateRequest, { endpoint: '/api/lesson-player/evaluate' }), asyncRoute(async (req, res) => {
+  const { sessionId, lessonId, contentVersion, stepId, rubricId, answer } = req.validated;
+  const rubric = lessonPlayerRubrics.rubricFor({ lessonId, contentVersion, stepId, rubricId });
+  if (!rubric) return res.status(404).json({ error: 'unknown_rubric', message: 'This activity can’t be checked here.' });
+  if (crisisSignal(answer)) return res.json({ crisis: true, message: CRISIS_COPY });
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
+  if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
+  if (gate(req, res, { kind: 'helper', sessionId })) return;
+  const signal = AbortSignal.timeout(LESSON_PLAYER_EVALUATE_TIMEOUT_MS);
+  try {
+    const response = await claudeCall.createMessage({
+      route: '/api/lesson-player/evaluate',
+      kind: 'helper',
+      sessionId,
+      ip: req.ip,
+      traceId: req.traceId,
+      signal,
+      params: {
+        model: MODEL,
+        max_tokens: modelRequest.maxTokensFor(MODEL, 'grader', 300),
+        ...modelRequest.requestFields(MODEL, 'grader', { temperature: 0.2, effort: TUTOR_EFFORT }),
+        system: LESSON_PLAYER_EVALUATOR_SYSTEM,
+        messages: [{ role: 'user', content: lessonPlayerRubrics.buildEvaluationMessage(rubric, answer) }],
+      },
+    });
+    const raw = firstTextOf(response);
+    if (isCrisisReply(raw)) return res.json({ crisis: true, message: CRISIS_COPY });
+    const result = lessonPlayerRubrics.parseEvaluation(raw, rubric);
+    if (!result) {
+      return res.status(422).json({ error: 'invalid_result', message: 'Couldn’t check your answer this time.' });
+    }
+    return res.json(result);
+  } catch (err) {
+    if (signal.aborted) {
+      return res.status(504).json({ error: 'timeout', message: 'Checking took too long.' });
+    }
+    if (quotaErrorHandled(err, req, res)) return;
+    logger.forRequest(req).error({ err: err.message }, 'Lesson player evaluate error');
+    return res.status(502).json({ error: 'api_error', message: 'Couldn’t check your answer right now.' });
+  }
+}));
+
+// ---------------------------------------------------------------------------
 // POST /api/concept-map
 // ---------------------------------------------------------------------------
 app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint: '/api/concept-map' }), asyncRoute(async (req, res) => {
   const { sessionId } = req.validated;
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const result = await generateFromHistory(sessionId, {
@@ -2979,6 +3183,17 @@ app.post('/api/concept-map', chatLimiter, validate(ConceptMapRequest, { endpoint
 // unauthenticated, one loaded every session row into memory to sort in JS,
 // and together they published a fragment of every minor's session id. The
 // operator view of the same numbers is the admin-only stats route.
+
+// ---------------------------------------------------------------------------
+// Interactive lesson player pilot — /api/lesson-player/* (additive; see
+// lib/lessonPlayer.js and docs/lesson-player-pilot/). The config probe is a
+// read-only flag the iOS app checks before starting a NEW player attempt.
+// No session, no storage, nothing per learner.
+// ---------------------------------------------------------------------------
+app.get('/api/lesson-player/config', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(lessonPlayer.lessonPlayerConfig());
+});
 
 // ---------------------------------------------------------------------------
 // Standby gamification (mascot: Mercury) — /api/progression/*
@@ -3262,10 +3477,9 @@ app.post('/api/factcheck', chatLimiter, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and claim (max 1000 chars).' });
   }
   if (crisisSignal(claim)) return sendCrisisResult(res);
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down — try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -3302,10 +3516,9 @@ app.post('/api/analyze', chatLimiter, asyncRoute(async (req, res) => {
   if (!isValidSessionId(sessionId) || !aiOutput || typeof aiOutput !== 'string' || aiOutput.length > 3000) {
     return res.status(400).json({ error: 'invalid_request', message: 'Provide valid sessionId and aiOutput (max 3000 chars).' });
   }
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down — try again in a moment.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down — try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const response = await claudeCall.createMessage({
@@ -3342,10 +3555,9 @@ app.get('/api/pre-briefing', chatLimiter, asyncRoute(async (req, res) => {
   if (!isValidSessionId(sessionId)) return res.status(400).json({ error: 'invalid_request', message: 'Session ID missing or invalid.' });
   // Per-session rate limit — this is an Anthropic-backed route, so it gets the
   // same session bucket as /api/chat (survives IP rotation on mobile).
-  if (await isRateLimited(sessionId)) {
-    return res.status(429).json({ error: 'rate_limited', message: 'Slow down a moment, then try again.' });
-  }
+  if (await refuseIfRateLimited(req, res, sessionId, (wait) => `Slow down a moment, then try again in ${wait}.`)) return;
   if (await refuseUnseenSession(req, res, sessionId)) return;
+  await readQuotasBack(req, sessionId);
   if (gate(req, res, { kind: 'helper', sessionId })) return;
   try {
     const [eventsData, blogPosts] = await Promise.all([getEventsData(), getBlogContent()]);
@@ -3491,6 +3703,10 @@ function imageBodyBudget(req, res, next) {
 
 app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequest, { endpoint: '/api/images' }), asyncRoute(async (req, res) => {
   const { sessionId, contentType, data, fileName } = req.validated;
+  // Taken before the session is looked up: the store compares it with the
+  // time of an erasure of this session that lands while the upload is under
+  // way, and keeps no photo for a session erased after it began.
+  const createdAt = Date.now();
 
   const validated = decodeAndValidateImage({ data, contentType });
   if (!validated.ok) {
@@ -3502,9 +3718,14 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // Uploads cost no model tokens but each one becomes a vision turn later and
   // bytes land in the database, so they have their own daily caps — per
   // session AND per network (count + bytes), and an unseen session id counts
-  // against the per-IP new-session quota like any model route.
+  // against the per-IP new-session quota like any model route. The upload is
+  // counted when it is admitted (reserveImage: the check and the count in
+  // one step) and given back if the store fails. It used to be counted after
+  // the write, so every upload still writing had already passed the check
+  // and a burst got past the caps.
   if (await refuseUnseenSession(req, res, sessionId)) return;
-  const imageVerdict = quotas.check({ sessionId, ip: req.ip, kind: 'image' });
+  await readQuotasBack(req, sessionId);
+  const imageVerdict = quotas.reserveImage({ sessionId, ip: req.ip, bytes: buffer.length });
   if (!imageVerdict.ok) {
     metrics.quotaRejectionsTotal.inc({ scope: `${imageVerdict.scope}:${imageVerdict.error}` });
     if (imageVerdict.retryAfterSec) res.setHeader('Retry-After', String(imageVerdict.retryAfterSec));
@@ -3521,10 +3742,10 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
   // — consistent with the app's bearer-style session model — and is the stable
   // handle future v3 features key off.
   const id = crypto.randomBytes(24).toString('base64url');
-  const createdAt = Date.now();
 
+  let stored;
   try {
-    await imageStore.put({
+    stored = await imageStore.put({
       id,
       sessionId,
       contentType,
@@ -3534,10 +3755,19 @@ app.post('/api/images', uploadLimiter, imageBodyBudget, validate(ImageUploadRequ
       createdAt,
     });
   } catch (err) {
+    quotas.forgetImage(imageVerdict.reservation);
     logger.forRequest(req).error({ err: err.message }, 'image upload storage failure');
     return res.status(500).json({ error: 'storage_error', message: 'Could not store the image. Please try again.' });
   }
-  quotas.record({ sessionId, ip: req.ip, kind: 'image', usd: 0, bytes: buffer.length });
+  if (stored === false) {
+    // The student erased this session while the photo was on its way: it is
+    // not kept, and costs no photo upload.
+    quotas.forgetImage(imageVerdict.reservation);
+    logger.forRequest(req).info({ contentType, sizeBytes: buffer.length }, 'image upload dropped: its session was erased meanwhile');
+    return res.status(410).json({ error: 'session_erased', message: 'This chat was deleted, so the photo was not saved.' });
+  }
+  // The ledger row a restart counts the day's photos from (session and network).
+  claudeCall.recordImageUpload({ sessionId, ip: req.ip, traceId: req.traceId, bytes: buffer.length });
 
   // Log metadata only — never the image bytes or the (possibly personal) file name.
   logger.forRequest(req).info({ imageId: id, contentType, sizeBytes: buffer.length }, 'image uploaded');
@@ -3596,6 +3826,10 @@ app.get('/api/images/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api/report' }), async (req, res) => {
   const { sessionId, content, reason, userMessage, context } = req.validated;
+  // Taken before the session is looked up, for the same reason as a photo's
+  // (POST /api/images): no report is kept for a session erased after the
+  // request began.
+  const createdAt = Date.now();
   try {
     // A session this server has never seen has no reply to report; acknowledge
     // and drop. Not refuseUnseenSession — that creates the row and spends the
@@ -3606,7 +3840,9 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
     }
     // Past its daily allowance a session's (or a network's) reports are
     // acknowledged the same way and dropped, so one client cannot bury the
-    // review queue.
+    // review queue. Both counts are read back after a restart: the
+    // session's from the reports table, the network's from its ledger rows.
+    await readQuotasBack(req, sessionId);
     const reportVerdict = quotas.noteReport(sessionId, req.ip);
     if (!reportVerdict.ok) {
       metrics.quotaRejectionsTotal.inc({ scope: `${reportVerdict.scope}:reports` });
@@ -3616,7 +3852,6 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       }
       return res.json({ ok: true });
     }
-    const createdAt = Date.now();
     const { id } = await db.saveReport({
       sessionId,
       content,
@@ -3625,6 +3860,13 @@ app.post('/api/report', reportLimiter, validate(ReportRequest, { endpoint: '/api
       context: context ?? null,
       createdAt,
     });
+    if (id == null) {
+      // The student erased this session while the report was on its way:
+      // acknowledged and dropped, like a report for an unknown session.
+      logger.forRequest(req).info({ reason: reason || null }, 'content report dropped: its session was erased meanwhile');
+      return res.json({ ok: true });
+    }
+    claudeCall.recordNetworkEvent('report', { route: '/api/report', ip: req.ip });
     // Log the signal (reason only) so reports surface in observability; the
     // full reported text lives in the DB for review. The Discord alert is the
     // only channel the founder actually sees between club meetings.
@@ -3692,6 +3934,13 @@ app.delete('/api/session/:sessionId', sessionDeleteLimiter, asyncRoute(async (re
   }
   try {
     const result = await db.deleteSession(sessionId);
+    // Memory too: today's turns, photos, dollars and reports for the id, and
+    // the note that they were read back. The ledger rows they came from are
+    // gone, so a restart would forget them anyway ("from the server's point
+    // of view you have never been here before"). The network's counters
+    // stay: they are the network's, not the student's.
+    quotas.forgetSession(sessionId);
+    hydrateSessionQuota.forget(sessionId);
     // Log a hash, never the id itself — the logs are not the place a
     // student's bearer capability should live.
     logger.forRequest(req).warn({ sessionHash: claudeCall.hashIp(sessionId), deleted: result.deleted }, 'session erased on request');
@@ -3880,6 +4129,7 @@ db.initSchema().then(async () => {
           imagesBefore: (ts) => db.purgeImagesBefore(ts),
           reportsBefore: (ts, o) => db.purgeReportsBefore(ts, o),
           usageBefore: (ts) => db.purgeUsageBefore(ts),
+          networkCountsBefore: (ts) => db.purgeNetworkCountsBefore(ts),
           lessonEventsBefore: (ts) => db.purgeLessonEventsBefore(ts),
           inactiveSessionIds: (before, limit) => db.inactiveSessionIds(before, limit),
           deleteSession: (id) => db.deleteSession(id),
