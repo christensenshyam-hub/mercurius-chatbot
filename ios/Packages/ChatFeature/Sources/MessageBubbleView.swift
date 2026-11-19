@@ -459,7 +459,7 @@ struct MessageBubbleView: View {
                 .font(.system(size: bodyFontSize * 0.9, weight: .semibold))
                 .foregroundStyle(BrandColor.accentText)
                 .accessibilityHidden(true)
-            Text(text)
+            Text(InlineMarkdown.attributed(text))
                 .font(readingFont(size: bodyFontSize, weight: .semibold))
                 .foregroundStyle(BrandColor.accentText)
                 .multilineTextAlignment(.leading)
