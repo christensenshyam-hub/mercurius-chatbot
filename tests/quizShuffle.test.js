@@ -142,6 +142,28 @@ describe('quizShuffle: the order (AUD-18)', () => {
     for (const l of ['A', 'B', 'C', 'D']) assert.ok(counts4[l] > 110 && counts4[l] < 190, `4-option ${l}: ${JSON.stringify(counts4)}`);
   });
 
+  test('spread: with the answer always written at A (the Deep-dive [Q] rule: right option first), it lands on every letter about equally often', () => {
+    // lib/blockMarkup CURRICULUM_BLOCKS_APPENDIX has the model write the right
+    // option first, as A), so it can size the wrong ones against it. That is
+    // only safe because this shuffle runs on every Deep-dive [Q].
+    const counts = { A: 0, B: 0, C: 0, D: 0 };
+    const counts4 = { A: 0, B: 0, C: 0, D: 0 };
+    for (let i = 0; i < 600; i += 1) {
+      const stem = `Practice question ${i}: which statement about model ${i % 7} is accurate?`;
+      const three = `[Q]\n${stem}\nA) Right idea ${i}\nB) Wrong idea ${i}\nC) Other wrong idea ${i}\nANS: A\n[/Q]`;
+      const four = `[Q]\n${stem}\nA) Right ${i}\nB) Wrong ${i}\nC) Other ${i}\nD) Fourth ${i}\nANS: A\n[/Q]`;
+      const q3 = quizzes(shuffleQuizzes(three))[0];
+      const q4 = quizzes(shuffleQuizzes(four))[0];
+      assert.equal(answerText(q3), `Right idea ${i}`);
+      assert.equal(answerText(q4), `Right ${i}`);
+      counts[String.fromCharCode(65 + q3.answerIndex)] += 1;
+      counts4[String.fromCharCode(65 + q4.answerIndex)] += 1;
+    }
+    for (const l of ['A', 'B', 'C']) assert.ok(counts[l] > 160 && counts[l] < 240, `3-option ${l}: ${JSON.stringify(counts)}`);
+    assert.equal(counts.D, 0);
+    for (const l of ['A', 'B', 'C', 'D']) assert.ok(counts4[l] > 110 && counts4[l] < 190, `4-option ${l}: ${JSON.stringify(counts4)}`);
+  });
+
   test('2- and 4-option checks are reordered too', () => {
     const two = '[Q]\nIs a confident answer always right?\nA) Yes, confidence tracks accuracy\nB) No, fluency is not accuracy\nANS: B\n[/Q]';
     const out = shuffleQuizzes(two);
