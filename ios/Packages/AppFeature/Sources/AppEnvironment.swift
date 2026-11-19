@@ -52,6 +52,10 @@ public final class AppEnvironment: ObservableObject {
     /// Which course the learner follows (Basics or the Deep dive) and the
     /// Basics reading size. Device-local; never synced.
     public let trackStore: CurriculumTrackStore
+    /// The lesson player pilot: its switch, and its saved attempts and reward
+    /// ledger (same preferences suite as lesson progress; erased with it).
+    public let lessonPlayerFlag: LessonPlayerFlag
+    public let lessonAttempts: LessonAttemptStore
     /// When the student last did something, for the cold-launch resume.
     public let lastActivityStore: LastActivityStore
     /// The per-device App Store review prompt budget. Never reset.
@@ -156,6 +160,8 @@ public final class AppEnvironment: ObservableObject {
         let tracks = CurriculumTrackStore(preferences: Self.curriculumProgressPreferences)
         Self.applyDebugTrack(tracks, arguments: arguments)
         self.trackStore = tracks
+        self.lessonPlayerFlag = LessonPlayerFlag(preferences: Self.curriculumProgressPreferences, arguments: arguments)
+        self.lessonAttempts = LessonAttemptStore(preferences: Self.curriculumProgressPreferences)
         self.progressSync = CurriculumProgressSync(
             progress: progress,
             remote: apiClient,
