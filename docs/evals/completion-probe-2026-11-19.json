@@ -1,0 +1,282 @@
+{
+  "base": "http://localhost:3730",
+  "maxReplies": 12,
+  "wrongAt": 0,
+  "studentModel": "claude-haiku-5-5",
+  "results": [
+    {
+      "lessonId": "u1_l1",
+      "profile": "solid",
+      "trial": 1,
+      "completedAt": 7,
+      "replies": [
+        {
+          "raw": "Here's something that surprises most people: an LLM never sees your words. It only ever sees numbers.\n\nBefore your prompt reaches the model, a tokenizer chops it into chunks called **tokens**, which can be whole words, pieces of words, or even punctuation. Each token is then swapped for an ID number from a fixed vocabulary (GPT-4's has about 100,000 entries).\n\n[EX]Imagine a tokenizer splits \"Unbelievable!\" into three pieces: \"Un\", \"believ\", \"able\", plus \"!\". The model receives something like [4821, 9077, 562, 0], and those ID numbers are made up for illustration. Different tokenizers use different IDs.[/EX]\n\n[KEY]The model works on numbered chunks of text, not on letters or whole words the way you read them.[/KEY]\n\n[Q]\nWhy does an LLM convert your prompt into tokens and numbers first?\nA) Because it looks each word up in a database of stored answers\nB) Because the model can only do math on numbers, not raw text\nC) Because it translates your words into another language first\nANS: B\n[/Q]",
+          "usd": 0.0080604,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Right, B. Everything the model does is arithmetic on numbers, so your text has to become numbers before anything else can happen.\n\nNow for the next idea: what do those numbers *mean*? Each token ID gets swapped for a long list of numbers called an **embedding**, and tokens with similar meanings end up with similar lists, like neighbors on a map of meaning.\n\nBut a word's meaning depends on its neighbors, and that's where **attention** comes in. Each word can look back at the words before it and adjust its meaning accordingly.\n\n[EX]Take \"We walked along the river and sat down on the bank.\" The word \"river\" comes before \"bank\", so attention pulls \"bank\" toward riverside meaning. In \"I put cash in the bank\", \"cash\" pulls it toward money instead. Same token, different meaning.[/EX]\n\n[KEY]Attention lets each word adjust its meaning based on the words that came before it.[/KEY]\n\n[Q]\nIn \"I put cash in the bank\", what makes the model treat \"bank\" as a money bank?\nA) Attention to the earlier word \"cash\" shifts its meaning\nB) The tokenizer gives \"bank\" a different ID each time\nC) The model looks up \"bank\" in a dictionary of definitions\nANS: A\n[/Q]",
+          "usd": 0.0096304,
+          "user": "I picked B) Because the model can only do math on numbers, not raw text"
+        },
+        {
+          "raw": "Exactly, A. \"Cash\" comes before \"bank\", so attention can use it to settle which meaning applies.\n\nLet's keep going, because all that machinery serves one job: **next-token prediction**. After processing your prompt, the model produces a probability for every token in its vocabulary, picks one, adds it to the text, and repeats. That's how a whole answer gets written, one token at a time.\n\nIt isn't looking up an answer like a search engine. It's asking, over and over, \"given everything so far, what usually comes next?\"\n\n[EX]Take \"The cat sat on the ___\". Words like \"mat\" or \"floor\" would get most of the probability, so the model is confident. For \"My favorite thing to do on weekends is ___\", thousands of continuations fit, so the probability spreads thin and the model is much less sure.[/EX]\n\n[KEY]When one continuation dominates, the model is confident in it; when many fit, its confidence is spread out.[/KEY]\n\n[Q]\nWhich blank would an LLM predict with the MOST confidence in its top choice?\nA) \"I put cash in the ___\"\nB) \"She opened the door and said ___\"\nC) \"The best name for a pet is ___\"\nANS: A\n[/Q]",
+          "usd": 0.0093965,
+          "user": "I picked A) Attention to the earlier word \"cash\" shifts its meaning"
+        },
+        {
+          "raw": "Correct, A. After \"put cash in the\", one word (\"bank\") dominates, while the other two blanks leave thousands of words open.\n\nNow let's put this to work. Here's your exercise.\n\nBelow are four sentences, each ending in a blank that an LLM must fill with its next token:\n\n1. \"The sun rises in the ___\"\n2. \"My neighbor's new dog is named ___\"\n3. \"She turned the key and opened the ___\"\n4. \"Our class trip this year should go to ___\"\n\nFor each blank:\n- Say whether the model would have **high** or **low** confidence in its top prediction.\n- Explain why, in your own words.\n- For the one you rated most confident, name the token you expect it to predict.",
+          "usd": 0.0077489,
+          "user": "I picked A) \"I put cash in the ___\""
+        },
+        {
+          "raw": "Part 1 is spot on: one continuation (\"east\") dominates, so the model's confidence is high, and you said why in your own words.\n\nFor part 2, \"low\" is the right call, but I need your reasoning before it counts. Why would the model be unsure about \"My neighbor's new dog is named ___\"? Think about what the preceding words tell it, and how many tokens could plausibly fit.\n\nI'm also still waiting on parts 3 and 4, plus the token you'd predict for your most confident blank. Go ahead with those, and add the reason for part 2.",
+          "usd": 0.0069902,
+          "user": "1. High confidence. \"The sun rises in the\" is almost always followed by \"east,\" so one continuation dominates.\n2. Low confidence."
+        },
+        {
+          "raw": "Part 2 is right, and your reasoning is exactly the idea: many names fit, and nothing earlier in the sentence points to one. That spreads the probability across lots of tokens, so confidence in any single one stays low.\n\nYour message was cut off after that, and parts 3 and 4 are still open. Here's what I'm waiting for:\n\n3. \"She turned the key and opened the ___\": high or low confidence, and why?\n4. \"Our class trip this year should go to ___\": high or low confidence, and why?\n5. Which blank was your most confident, and what token do you expect it to predict?\n\nGo ahead with those.",
+          "usd": 0.0071601,
+          "user": "2. Many different names fit there, like Max, Bella, or Charlie, and nothing in the s"
+        },
+        {
+          "raw": "All five parts are in your own words and all of them are right.\n\n- **Blank 1: high.** One continuation (\"east\") dominates.\n- **Blank 2: low.** Many names fit and nothing earlier points to one.\n- **Blank 3: high.** \"Turned the key and opened the\" makes \"door\" the clear favorite.\n- **Blank 4: low.** Paris, the beach, a museum and more all fit, so probability spreads thin.\n- **Part 5: \"east\" for blank 1.** A sound pick. \"Door\" in blank 3 would also have been defensible.\n\nYour reasoning stayed consistent throughout: confidence tracks how many continuations plausibly fit, and the earlier words are what narrow the field. You'll find that this idea makes it much easier to see why a model can sound sure of itself even when it's wrong.\n\nNice work, you've nailed this one.",
+          "usd": 0.008378100000000001,
+          "user": "3. High confidence. After \"turned the key and opened the,\" the word \"door\" almost always comes next, so one continuation dominates.\n4. Low confidence. Paris, the beach, a museum, and many other places all fit, so the probability spreads across many tokens.\n5. Blank 1 was my most confident, and I expect the token \"east.\""
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l1",
+      "profile": "solid",
+      "trial": 2,
+      "completedAt": 5,
+      "replies": [
+        {
+          "raw": "Here's something that surprises most people: an AI never sees your words. It sees numbers.\n\nBefore anything else happens, your prompt gets chopped into pieces called **tokens**, chunks that are often whole words but sometimes parts of words or punctuation. Each token is then swapped for an ID number, and that list of numbers is all the model actually receives.\n\n[KEY]An LLM doesn't read text; it reads a list of numbers that stand in for chunks of text.[/KEY]\n\n[EX]Imagine a prompt like \"Unbelievable!\" Instead of one word, a tokenizer might split it into pieces like \"Un\", \"believ\", \"able\", and \"!\", and then give each piece an ID number (these numbers would be made up for illustration, since every tokenizer uses its own).[/EX]\n\n[Q]\nWhy does a language model break your text into tokens and turn them into numbers?\nA) Because it looks up each word in a giant answer database\nB) Because numbers make the text easier for humans to read\nC) Because the model can only process numbers, not raw text\nANS: C\n[/Q]",
+          "usd": 0.0079504,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Exactly right. The model is just math on numbers, so everything has to be converted first.\n\nNow for the part that makes it an AI rather than a converter: what does it do with those numbers?\n\nIt plays one game, over and over: **next-token prediction**. Given all the tokens so far, it scores every token in its vocabulary (GPT-4's tokenizer has about 100,000 of them) by how likely each is to come next.\n\nIt picks one, adds it to the text, and repeats. That loop, one token at a time, is how a whole answer gets written.\n\n[KEY]An LLM writes by repeatedly predicting a likely next token, not by looking up a stored answer.[/KEY]\n\n[EX]Take \"The cat sat on the ___\". The model might rate \"mat\" and \"floor\" as very likely, \"couch\" as fairly likely, and \"refrigerator\" as very unlikely. It samples from those odds, so the same prompt can produce different words on different tries.[/EX]\n\n[Q]\nWhen you ask an LLM a question, how does it produce its answer?\nA) It searches its stored text for the best matching answer and copies it\nB) It writes the whole answer at once, then checks it for mistakes\nC) It predicts one token at a time, each based on the tokens before it\nANS: C\n[/Q]",
+          "usd": 0.009598900000000002,
+          "user": "I picked C) Because the model can only process numbers, not raw text"
+        },
+        {
+          "raw": "Right again: one token at a time, each one conditioned on everything before it.\n\nLet's keep going, because there's a puzzle hiding in this. The token for \"bank\" is the same whether you mean money or a river. So how does the model tell which one you mean?\n\nTwo steps handle it. First, each token ID is turned into an **embedding**: a long list of numbers that places the token in a kind of map of meaning, where similar meanings sit close together.\n\nSecond, **attention** lets each token look back at the words before it and adjust its meaning based on what it finds. That's how \"bank\" gets pulled toward \"river\" or toward \"cash\".\n\n[KEY]Attention lets each word adjust its meaning using the words that came before it.[/KEY]\n\n[EX]In \"We walked along the river and sat down on the bank\", attention connects \"bank\" to \"river\", so it's read as a riverbank. In \"I put cash in the bank\", it connects to \"cash\" and becomes the money kind. The same token gets two different meanings from its context.[/EX]\n\n[Q]\nWhat does attention do when the model processes the word \"bank\"?\nA) It uses the surrounding words to help settle which meaning fits\nB) It always picks the most common meaning of the word\nC) It swaps the word for a synonym before reading on\nANS: A\n[/Q]",
+          "usd": 0.009617299999999999,
+          "user": "I picked C) It predicts one token at a time, each based on the tokens before it"
+        },
+        {
+          "raw": "Correct. Context is what resolves the ambiguity, not a lookup of the word's \"usual\" meaning.\n\nNow let's put all of this to work. Here's your exercise.\n\nTake this sentence, which an LLM is about to continue:\n\n\"The cat sat on the ___\"\n\nand these two other sentence-starters:\n\n1. \"The capital of France is ___\"\n2. \"My favorite thing to do on a weekend is ___\"\n\nFor each of the two starters above, answer in your own words:\n\n- **a)** Would an LLM be HIGH confidence or LOW confidence in its top predicted token?\n- **b)** Explain why, in terms of how many plausible continuations there are.\n- **c)** Name one word you'd expect it to rate as likely for that slot.\n\nThen add a short third part:\n\n3. Explain in one or two sentences why this shows the model is predicting likely tokens rather than \"looking up\" the answer like a search engine.",
+          "usd": 0.008519299999999999,
+          "user": "I picked A) It uses the surrounding words to help settle which meaning fits"
+        },
+        {
+          "raw": "You nailed all three parts, and your reasoning is what matters most here.\n\n- **Starter 1:** HIGH, because nearly all the probability piles onto one token. \"Paris\" is exactly the word to expect.\n- **Starter 2:** LOW, because many plausible continuations split the probability. Your justification was right: it's the number of fitting options that makes the model uncertain, not how hard the topic is.\n- **Part 3:** You made the key point. The model scores likely next tokens from context, and the shape of that spread (sharp or flat) shifts with the sentence. A search engine has no such spread to show you, because it retrieves rather than predicts.\n\nOne nuance worth keeping: a sharp prediction means the model is confident, not that it's correct. A confident, sharp guess can still be wrong, which is exactly where hallucinations come from, and we'll dig into that soon.\n\nNice work. You now understand what physically happens when you hit send: text becomes tokens, tokens become numbers, attention shapes meaning from context, and the model predicts one token at a time.",
+          "usd": 0.0093555,
+          "user": "1. Starter 1, \"The capital of France is ___\": a) HIGH confidence. b) There's basically one correct answer, so almost all the probability lands on it. c) \"Paris.\"\n\n2. Starter 2, \"My favorite thing to do on a weekend is ___\": a) LOW confidence. b) Thousands of answers fit (sleeping, hiking, gaming, reading), so the probability is spread thin across many options. c) \"relaxing\" or \"sleeping.\"\n\n3. The model doesn't search for a stored answer. It scores how likely each next token is given the words so far, and the spread of those scores changes with the context, which is why a factual slot gets a sharp prediction and an open-ended one doesn't."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l1",
+      "profile": "partial",
+      "trial": 1,
+      "completedAt": 5,
+      "replies": [
+        {
+          "raw": "Here's something that surprises most people: an LLM never sees your words. It never reads the letter \"c\" or the word \"cat.\"\n\nBefore your prompt goes anywhere, it gets chopped into pieces called **tokens**, chunks that are often whole words, sometimes parts of words, sometimes just punctuation.\n\nEach token is then swapped for a number, because numbers are all the model can actually work with. GPT-4's tokenizer has a vocabulary of about 100,000 tokens.\n\n[EX]Take the sentence \"I love pizza.\" A tokenizer might split it into \"I\", \" love\", \" pizza\", and \".\", then turn each piece into an ID number. (Real ID numbers differ between tokenizers, so any numbers I showed you here would be made up for illustration.)[/EX]\n\n[KEY]Your prompt becomes a list of numbers before the model does anything with it.[/KEY]\n\n[Q]\nWhy does a language model convert your words into tokens and numbers?\nA) It looks each word up in a database of stored answers\nB) It translates your words into another human language first\nC) The model can only do math on numbers, not on raw text\nANS: C\n[/Q]",
+          "usd": 0.008200400000000002,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Right, C is the one. Everything the model does is arithmetic, so text has to become numbers first.\n\nNow for the next piece. Each token's ID gets turned into a long list of numbers called an **embedding**, and these lists work like coordinates: words with similar meanings end up near each other.\n\nBut a word's meaning often depends on its neighbors. That's where **attention** comes in: each token looks back at the words before it and adjusts its meaning based on what it finds.\n\n[EX]Take \"We walked along the river and sat down on the bank.\" The token \"bank\" starts out identical in every sentence, but attention to \"river\" pulls it toward the riverside meaning. In \"I put cash in the bank,\" attention to \"cash\" pulls it toward money instead.[/EX]\n\n[KEY]Embeddings give each token a meaning-position, and attention adjusts that meaning using the words around it.[/KEY]\n\n[Q]\nIn \"I put cash in the bank,\" what tells the model that \"bank\" means a money bank?\nA) Attention to the nearby word \"cash\" adjusts its meaning\nB) The model memorized this exact sentence during training\nC) The token for \"bank\" is different in money sentences\nANS: A\n[/Q]",
+          "usd": 0.009423400000000002,
+          "user": "I picked C) The model can only do math on numbers, not on raw text"
+        },
+        {
+          "raw": "Yes, that's it. The token for \"bank\" is identical in both sentences, and attention to the surrounding words is what sorts out the meaning.\n\nNow the part that ties it all together: **next-token prediction**. After your prompt has been tokenized, embedded, and run through attention, the model does one thing: it scores every token in its vocabulary by how likely it is to come next.\n\nThen it picks one, adds it to the text, and repeats. That loop, one token at a time, is how every reply gets written.\n\n[EX]Take \"The cat sat on the ___.\" The model might put most of its probability on \"mat\" or \"floor\", with a long tail of unlikely options like \"volcano\". That's a sentence where the next token is fairly predictable. \"My favorite thing to do on weekends is ___\" has far more plausible continuations, so the probability is spread thin.[/EX]\n\n[KEY]An LLM doesn't look up answers; it repeatedly predicts the next token, and its confidence depends on how many continuations fit.[/KEY]\n\n[Q]\nWhich blank would a model most likely fill with high confidence in one top token?\nA) \"Peanut butter and ___\"\nB) \"My favorite thing to do on weekends is ___\"\nC) \"Yesterday I saw a very strange ___\"\nANS: A\n[/Q]",
+          "usd": 0.0096288,
+          "user": "I picked A) Attention to the nearby word \"cash\" adjusts its meaning"
+        },
+        {
+          "raw": "Correct. \"Peanut butter and ___\" has one dominant continuation (\"jelly\"), so the model puts most of its probability on a single token. B and C both leave the door open to many words, so the probability gets spread out.\n\nNow let's put this to work. Here's your exercise.\n\nBelow are three sentences, each with a blank at the end. For each one, say whether an LLM would predict the next token with **HIGH** or **LOW** confidence, and explain why in your own words.\n\n1. \"The capital of France is ___\"\n2. \"After the movie ended, we decided to ___\"\n3. \"Twinkle, twinkle, little ___\"\n\nNumber your answers 1 to 3, and for each give your confidence call plus a reason. Think about how many different words could plausibly fill each blank.",
+          "usd": 0.008043699999999999,
+          "user": "I picked A) \"Peanut butter and ___\""
+        },
+        {
+          "raw": "All three calls are right, and your reasons are the right kind: you judged confidence by how many continuations fit, not by how impressive the sentence sounds.\n\n- **1. HIGH.** \"Paris\" dominates, so nearly all the probability sits on one token.\n- **2. LOW.** Your examples (\"go home,\" \"get dinner,\" \"talk about it\") show why: lots of plausible options means the probability is spread thin.\n- **3. HIGH.** A famous rhyme the model has seen countless times leaves almost no competition for \"star.\" That's pattern-learning at work, not looking anything up.\n\nYou've got the core idea of this lesson: the model turns text into tokens and numbers, uses attention to settle meaning, then predicts one token at a time, and its confidence depends on how many continuations fit. Nice work on this one.",
+          "usd": 0.0081875,
+          "user": "1. HIGH: \"Paris\" is almost the only word that fits, so most of the probability lands on one token.\n2. LOW: Many things could follow, like \"go home,\" \"get dinner,\" or \"talk about it,\" so the probability is spread thin.\n3. HIGH: \"star\" is the famous continuation from the nursery rhyme, so the model is very confident."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l1",
+      "profile": "partial",
+      "trial": 2,
+      "completedAt": 6,
+      "replies": [
+        {
+          "raw": "Here's something that surprises most people: an LLM never sees your words. It only ever sees numbers.\n\nBefore your prompt reaches the model, a tokenizer chops it into chunks called **tokens**. Some are whole words, some are word fragments, some are punctuation. GPT-4's tokenizer has a vocabulary of about 100,000 of these chunks, and each one gets swapped for a number.\n\n[EX]\nTake the made-up sentence \"Unbelievably, cats nap.\" A tokenizer might split it like this: \"Un\", \"believ\", \"ably\", \",\", \" cats\", \" nap\", \".\", and then turn each piece into an ID number, say 4821, 17093, 2250, 11, 6431, 9087, 13. (Those numbers are invented for illustration. Every tokenizer uses its own.)\n[/EX]\n\n[KEY]An LLM doesn't read words; it reads a sequence of numbers that stand for chunks of text.[/KEY]\n\n[Q]\nWhy does a tokenizer turn text into numbers before the model processes it?\nA) Numbers are shorter than words, so it saves memory\nB) The numbers are the model's encrypted version of your privacy\nC) Each word's number is its definition in a dictionary\nD) The model can only do math on numbers, not letters\nANS: D\n[/Q]",
+          "usd": 0.008760400000000002,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Right. The model is a giant pile of arithmetic, so text has to become numbers before any of it can happen.\n\nNow for what the model does with those numbers. Its whole job is to **predict the next token**: given everything so far, it scores every token in its vocabulary by how likely it is to come next.\n\nTake \"The cat sat on the ___\". One continuation dominates (\"mat\" or \"floor\" or \"couch\" will take most of the probability), so the model is highly confident about the top choices. Compare \"My favorite thing to do on a weekend is ___\".\n\nHundreds of tokens are plausible, so the probability spreads thin and no single choice stands out.\n\n[KEY]An LLM writes by scoring every possible next token and picking from the likely ones, over and over, one token at a time.[/KEY]\n\n[Q]\nWhen you type \"The capital of France is ___\", what does the model do?\nA) Looks up \"France\" in a database and returns its capital city\nB) Searches the internet for the answer and copies it\nC) Picks randomly from all words that relate to France\nD) Scores tokens by likelihood, with \"Paris\" far ahead of the rest\nANS: D\n[/Q]",
+          "usd": 0.009399400000000002,
+          "user": "I picked D) The model can only do math on numbers, not letters"
+        },
+        {
+          "raw": "Yes. Nothing gets looked up or searched. \"Paris\" simply gets a much higher score than anything else, because that pattern showed up constantly in the text the model learned from.\n\nHere's a puzzle. The word \"bank\" turns into the same token whether it means money or a river edge. So how does the model tell which one you mean?\n\nThe answer is in two steps. First, each token becomes a long list of numbers called an **embedding**, which places it in a kind of \"meaning space\" where similar meanings sit close together. Second, a mechanism called **attention** lets each token look back at the words before it and adjust its own meaning based on them.\n\n[EX]\nCompare \"We walked along the river and sat down on the bank\" with \"I put cash in the bank\". The same token appears in both. In the first sentence, attention to \"river\" pulls \"bank\" toward the shoreline meaning. In the second, attention to \"cash\" pulls it toward the money meaning.\n[/EX]\n\n[KEY]Attention lets each token adjust its meaning using the words before it, which is how one token can mean different things in different sentences.[/KEY]\n\n[Q]\nIn \"I put cash in the bank\", what settles the meaning of \"bank\"?\nA) The token ID number for \"bank\" changes\nB) The model guesses and hopes the user clarifies later\nC) A dictionary entry that lists only the money meaning\nD) Attention to the earlier word \"cash\"\nANS: D\n[/Q]",
+          "usd": 0.0100275,
+          "user": "I picked D) Scores tokens by likelihood, with \"Paris\" far ahead of the rest"
+        },
+        {
+          "raw": "Correct. \"Cash\" comes earlier in the sentence, and attention uses it to settle which \"bank\" is meant.\n\nNow let's put this to work. Here's your exercise.\n\nBelow is a sentence with three blanks. For each blank, decide whether an LLM's next-token prediction would be **high confidence** (one continuation dominates) or **low confidence** (many continuations are plausible), and explain why in your own words.\n\n1. \"Twinkle, twinkle, little ___\"\n2. \"After school, I'm going to ___\"\n3. \"To make a sandwich, first take two slices of ___\"\n\nAnswer all three parts, giving your confidence call and your reasoning for each.",
+          "usd": 0.007873,
+          "user": "I picked D) Attention to the earlier word \"cash\""
+        },
+        {
+          "raw": "Parts 1 and 2 are right. Part 3 is where the reasoning slips.\n\n**Part 1 (high):** Spot on. A famous lyric that appears constantly in training text leaves \"star\" far ahead of everything else.\n\n**Part 2 (low):** Also right, and you reasoned it correctly: many activities fit, so the probability spreads thin.\n\n**Part 3:** You named \"bread\" as the likely pick, which is the right instinct. But your reasoning mixes two things. \"Chicken\" and \"cheese\" are fillings, and the sentence says \"two slices of ___\".\n\nA slice of chicken is possible, but \"slices of bread\" is so overwhelmingly the common phrase that \"bread\" would take most of the probability, with the others trailing far behind. The question is how strongly the words before the blank point to one continuation, not whether other words exist in the world. By that test this is a high-confidence slot.\n\nRedo part 3 in your own words: is it high or low confidence, and what in the sentence makes it so?",
+          "usd": 0.0086607,
+          "user": "1. High confidence: \"star\" dominates because the lyric is so familiar and shows up constantly in the training text.\n2. Low confidence: after school there are endless plausible activities like homework, playing outside, or eating a snack, so the probability spreads thin.\n3. Low confidence: \"bread\" is the likely pick, but \"chicken\" or \"cheese\" or other fillings are also plausible, so no single choice clearly wins."
+        },
+        {
+          "raw": "That's the corrected call, and your reasoning is exactly right. \"Two slices of\" points so strongly at \"bread\" that it takes most of the probability, and fillings like cheese or chicken trail far behind. The words before the blank are what make one continuation dominate.\n\nAcross all three parts you now have the lesson's core skill. You can predict where a model will be confident (a famous lyric, a near-fixed phrase) and where it will spread its probability thin (open-ended prompts like \"After school, I'm going to ___\"), and you can say why. That ties straight back to tokens and next-token prediction: the model never looks anything up, it scores every possible next token from the context before it.\n\nNice work, you've nailed this one.",
+          "usd": 0.0082621,
+          "user": "3. High confidence: \"slices of ___\" right after \"two slices\" points so strongly to \"bread\" that it takes most of the probability, and the other fillings are far behind."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l2",
+      "profile": "solid",
+      "trial": 1,
+      "completedAt": 5,
+      "replies": [
+        {
+          "raw": "Here's something surprising: Common Crawl, a free archive of over 300 billion web pages, is a major source of the text that chatbots learn from.\n\nSo where does an LLM's knowledge come from? It starts with **pre-training**: the model reads a gigantic pile of text (web pages, books, code) and practices predicting the next token, over and over.\n\nIt doesn't memorize pages like a filing cabinet. It compresses patterns from all that text into its numbers, which is why it can write about things it never saw word for word.\n\n[KEY]Pre-training is where a model's raw knowledge comes from: pattern-learning on huge amounts of text, not memorizing or looking up documents.[/KEY]\n\n[EX]Imagine a model whose training text was collected up to a certain date. Ask it about something that happened after that date, and its built-in knowledge simply has nothing there. That date is called the training cutoff.[/EX]\n\n[Q]\nWhat best describes what a model does with its training text?\nA) It stores every page and looks the answer up later\nB) It saves the text and searches it like a search engine\nC) It copies a similar page word for word when asked\nD) It compresses patterns from the text into its numbers\nANS: D\n[/Q]",
+          "usd": 0.0083764,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Correct. The model keeps patterns, not pages, which is why it can write fluently about things it never saw word for word.\n\nBut a model that has only done pre-training is a strange creature. It's trained to continue text, so if you type a question, it might continue with *more questions*, as if your message were the start of a quiz.\n\nThat's where **fine-tuning** and **RLHF** (reinforcement learning from human feedback) come in. People compare different answers the model writes and say which one they prefer. The model is then nudged toward the kind of answers people rate higher.\n\n[KEY]RLHF turns a text-continuer into a helpful assistant by training it on human preferences about which answers are better.[/KEY]\n\n[EX]In OpenAI's InstructGPT study (2022), people preferred answers from a 1.3-billion-parameter model trained with RLHF over answers from the 175-billion-parameter GPT-3, a model more than 100 times larger.[/EX]\n\n[Q]\nWhat did the InstructGPT result show about RLHF?\nA) Bigger models are always preferred, whatever their training\nB) A much smaller model with RLHF could beat a far larger one\nC) RLHF taught the model new facts about the world\nD) RLHF made the model 100 times larger overnight\nANS: B\n[/Q]",
+          "usd": 0.009771400000000001,
+          "user": "I picked D) It compresses patterns from the text into its numbers"
+        },
+        {
+          "raw": "Exactly. RLHF didn't make the model bigger or teach it new facts. It changed how the model *behaves*, and people preferred that behavior.\n\nNow the third idea. What a model knows comes from its training data, but that data has an edge.\n\nA model's built-in knowledge stops at its training cutoff. Many popular chatbots can also search the web, so they can talk about recent news. But that's a separate tool bolted on: the model's own knowledge still ends at the cutoff, and what it finds online can be wrong.\n\n[KEY]A model's own knowledge ends at its training cutoff; web search can add fresh information, but it doesn't change what the model learned.[/KEY]\n\n[EX]Imagine a chatbot with a cutoff in early 2024, asked about a product that launched in late 2024. With search off, it has no knowledge to draw on and may guess. With search on, it can find pages about the product, but it might pick up an unreliable one.[/EX]\n\n[Q]\nA chatbot with web search gives a confident answer about last week's news. What's the best way to think about it?\nA) The model's own knowledge still stops at its cutoff\nB) Search turned the model's cutoff date into today's date\nC) The answer came from search, so it can't be wrong\nD) The model's training now includes last week's news\nANS: A\n[/Q]",
+          "usd": 0.009803,
+          "user": "I picked B) A much smaller model with RLHF could beat a far larger one"
+        },
+        {
+          "raw": "Right. Search is a tool the model uses; it doesn't rewrite what the model learned, and the pages it finds can still be wrong.\n\nNow let's put all three ideas to work.\n\n**Your exercise.** Below are two made-up replies to the same question, from two versions of the same model: one that has only done pre-training, and one that has also been through RLHF and fine-tuning.\n\nThe question: *\"What is photosynthesis?\"*\n\n**Reply 1:** \"What is photosynthesis used for in agriculture? What is photosynthesis in plants versus algae? What is photosynthesis?\n\nExplain in 200 words. Photosynthesis is a topic often covered in biology textbooks, and...\"\n\n**Reply 2:** \"Photosynthesis is how plants, algae, and some bacteria turn sunlight, water, and carbon dioxide into sugar and oxygen. Want me to go into the light reactions or the Calvin cycle?\"\n\nAnswer these in your own words:\n\n1. Which reply came from the model that went through RLHF and fine-tuning, and which from pre-training only?\n2. Point to two specific things in the replies that give it away.\n3. Explain *why* the pre-training-only model behaves the way it does, using what you know about how pre-training works.",
+          "usd": 0.009664900000000002,
+          "user": "I picked A) The model's own knowledge still stops at its cutoff"
+        },
+        {
+          "raw": "All three parts are right, and your reasoning holds up.\n\n1. **Which is which:** Reply 2 is the RLHF model, Reply 1 is pre-training only. ✓\n2. **The giveaways:** You named the right two. Reply 1 keeps generating more questions and an instruction-style line, as if your message were the start of a document. Reply 2 answers directly and offers a follow-up. ✓\n3. **The why:** Pre-training only teaches next-token prediction, so the model continues your text like any other document. Without human preference training, nothing pushes it to answer you. ✓\n\nYour point in part 3 is the heart of the lesson. Pre-training gives the model its raw knowledge, and RLHF and fine-tuning shape how it uses that knowledge to talk to you.\n\nNice work, you've nailed this one.",
+          "usd": 0.0088448,
+          "user": "1. Reply 2 came from the model that went through RLHF and fine-tuning, and Reply 1 came from the pre-training-only model.\n2. Reply 1 just keeps generating more questions and an instruction-like line (\"Explain in 200 words\"), as if your question were the start of a quiz. Reply 2 answers the question directly and then offers a follow-up, which is how a helpful assistant talks.\n3. Pre-training only teaches the model to predict the next token in text it has seen, so it continues the question like a document it's reading. It was never trained on what people prefer, so nothing pushes it to answer you directly."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l2",
+      "profile": "solid",
+      "trial": 2,
+      "completedAt": 4,
+      "replies": [
+        {
+          "raw": "Here's a surprising place to start: a chatbot has never \"read\" the internet the way you read a page. Before it ever answers a question, it's trained on a giant pile of text, and one major source is **Common Crawl**, a free archive of over 300 billion web pages.\n\nThat first stage is called pre-training. The model reads that text (plus books and code) and learns patterns: which words follow which, how facts tend to be phrased, how arguments are structured. It isn't memorizing pages; it's compressing patterns.\n\n[KEY]A model's built-in knowledge is compressed patterns from its training text, and it stops at a cutoff date.[/KEY]\n\n[EX]Imagine a model whose training text ends in March. If you ask about a game that was played in June, its built-in knowledge has nothing on it, so it may guess or say it doesn't know.[/EX]\n\n[Q]\nWhy can't a model's built-in knowledge cover last week's news?\nA) Its training text stops at a cutoff date.\nB) It looks answers up live in a search index.\nC) It stores each web page and deletes the old ones.\nANS: A\n[/Q]",
+          "usd": 0.0080964,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Right, the cutoff is why built-in knowledge goes stale. One twist: many popular chatbots can now also search the web, so they can talk about recent news. But that comes from a search tool, not from the model's own memory, and what it finds online can be wrong.\n\nLet's keep going. Pre-training alone produces a model that is very good at continuing text, but not at being a helpful assistant.\n\nIf you typed \"What is the capital of France?\" into a raw pre-trained model, it might continue with more quiz questions, because that's a common pattern in its training text. It has absorbed a lot, but nobody has taught it to answer you.\n\nThat's where **fine-tuning** and **RLHF** (reinforcement learning from human feedback) come in. In RLHF, people compare pairs of model answers and pick the one they prefer. Those preferences train a reward model, and the chatbot is then adjusted to produce the kind of answers people rated highly.\n\n[KEY]Pre-training gives a model knowledge, while fine-tuning and RLHF shape how it behaves, steering it toward answers people prefer.[/KEY]\n\n[EX]In OpenAI's InstructGPT study (2022), people preferred answers from a 1.3-billion-parameter model trained with RLHF over answers from the 175-billion-parameter GPT-3, a model more than 100 times larger.[/EX]\n\n[Q]\nWhat did RLHF mainly change in the InstructGPT study?\nA) How helpful the answers were to people.\nB) How recent the model's built-in knowledge was.\nC) How many web pages the model had read.\nANS: A\n[/Q]",
+          "usd": 0.010769400000000002,
+          "user": "I picked A) Its training text stops at a cutoff date."
+        },
+        {
+          "raw": "Yes. RLHF didn't add knowledge or update the cutoff; it changed how well the answers matched what people wanted. That's why a model more than 100 times smaller could win.\n\nNow let's put this to work. Here's your exercise.\n\nImagine a company releases a chatbot. Its training text ends in March, and then it goes through fine-tuning and RLHF before launch. A student uses it and notices two things:\n\n- When asked \"How do I boil an egg?\", it gives a clear, friendly, step-by-step answer.\n- When asked who won a championship game played in June, it either guesses confidently or gives an outdated answer.\n\nAnswer these in your own words:\n\n1. Which stage of training (pre-training, fine-tuning, or RLHF) most likely produced the clear, friendly style of the egg answer, and why?\n2. Which stage supplied the model's underlying knowledge about eggs, and why does that same stage explain the June problem?\n3. If the chatbot added a web-search tool, which of the two problems would that help with, and what risk would still remain?",
+          "usd": 0.009136400000000001,
+          "user": "I picked A) How helpful the answers were to people."
+        },
+        {
+          "raw": "You've got all three parts, and each one is in your own words.\n\n- **Part 1:** Correct. Fine-tuning and RLHF shape behavior, and your point about answers people rated highly is exactly how RLHF works.\n- **Part 2:** Correct. Pre-training builds the knowledge, and the March cutoff explains why June is a blank. Your phrase \"compresses patterns\" is the right way to think about it, as opposed to memorizing pages.\n- **Part 3:** Correct. Search gives the model access to recent information, but the model's own knowledge still stops at its cutoff, and what it finds online can be wrong. Your point about overconfidence is a good one, since a fluent answer built on a bad source still sounds sure of itself.\n\nNice work, you've nailed this one.",
+          "usd": 0.008415,
+          "user": "1. Fine-tuning and RLHF most likely produced the friendly, step-by-step style, because they shape how the model behaves and steer it toward answers people rated highly.\n2. Pre-training supplied the knowledge about eggs, since it compresses patterns from the training text. That same stage explains the June problem because the training text ends in March, so the model has no built-in information about June.\n3. A web-search tool would help with the June problem, since the model could look up recent results. The remaining risk is that the search results could be wrong or outdated, and the model might still present them with too much confidence."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l2",
+      "profile": "partial",
+      "trial": 1,
+      "completedAt": 5,
+      "replies": [
+        {
+          "raw": "Here's a fact that surprises people: in OpenAI's InstructGPT study (2022), people preferred answers from a model with 1.3 billion parameters over answers from GPT-3, which had 175 billion. That's over 100 times bigger, and it lost.\n\nThe smaller model had been tuned using human feedback, and that mattered more than raw size. We'll get to how. First, where does a model's knowledge come from at all?\n\nIt starts with **pre-training**: the model reads a huge pile of text (web pages, books, code) and learns to predict the next token. One major source is Common Crawl, a free archive of over 300 billion web pages.\n\n[KEY]Pre-training doesn't store documents; it compresses patterns from enormous amounts of text into the model's numbers.[/KEY]\n\n[EX]Imagine a model trained on millions of recipe pages. It doesn't keep a copy of each recipe. It absorbs patterns, like \"cookies usually involve flour, sugar, and an oven,\" which is why it can write a recipe it never saw.[/EX]\n\nTraining data also stops at a cutoff date, so the model's built-in knowledge stops there too.\n\n[Q]\nWhich best describes what a model keeps from its pre-training data?\nA) Compressed patterns learned from the text\nB) A list of verified facts checked by humans\nC) A searchable copy of every page it read\nANS: A\n[/Q]",
+          "usd": 0.009006400000000001,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Right: the model keeps patterns, not pages. That's why it can write a recipe it never saw, and also why it can get details wrong. It isn't looking anything up.\n\nPre-training gives a model a lot of knowledge, but it doesn't make it a good assistant. A model that only predicts the next token will happily continue your question with more questions, like a web page would.\n\n**Fine-tuning** fixes this by training the model further on a smaller, carefully chosen set of examples, such as questions paired with good answers. The model's general knowledge stays, but its behavior shifts toward being helpful.\n\n[KEY]Pre-training builds the knowledge; fine-tuning shapes how the model uses it.[/KEY]\n\n[EX]Imagine a model that has read the whole internet. If you type \"What is the capital of France?\", a raw pre-trained model might continue with \"What is the capital of Spain? What is the capital of Italy?\", because quiz lists look like that online. After fine-tuning on question-and-answer examples, it replies \"Paris.\"[/EX]\n\n[Q]\nWhat is the main job of fine-tuning?\nA) Steering a pre-trained model toward useful behavior\nB) Updating the model with this morning's news\nC) Teaching the model to read the whole internet\nANS: A\n[/Q]",
+          "usd": 0.009932900000000001,
+          "user": "I picked A) Compressed patterns learned from the text"
+        },
+        {
+          "raw": "Yes, fine-tuning steers the model; it doesn't add the internet or this morning's news.\n\nFine-tuning on examples has a limit, though: it's hard to write down a perfect answer for every possible question. **RLHF** (reinforcement learning from human feedback) gets around this by asking people to do something easier: compare answers instead of writing them.\n\nHere's how it works. The model produces several answers to the same prompt, and people rank them from best to worst. Those rankings train a separate **reward model** that learns to predict which answers people prefer.\n\nThen the main model is trained to produce answers that score well with the reward model.\n\n[KEY]RLHF teaches a model what people prefer, which is why it's the step that made models feel like assistants.[/KEY]\n\n[EX]Imagine a model gives two answers to \"Explain photosynthesis.\" One is a rambling paragraph full of jargon, and the other is clear and organized. A person ranks the clear one higher, and after thousands of rankings like this, the model learns to favor answers in that style.[/EX]\n\nThis is the step behind the InstructGPT result I mentioned: RLHF made a much smaller model beat GPT-3 in people's eyes.\n\n[Q]\nWhat does a human do in RLHF?\nA) Rewrite the model's training data by hand\nB) Rank the model's answers to show which they prefer\nC) Check each answer for factual accuracy before release\nANS: B\n[/Q]",
+          "usd": 0.0101666,
+          "user": "I picked A) Steering a pre-trained model toward useful behavior"
+        },
+        {
+          "raw": "That's it: people rank answers, and those rankings train a reward model that steers the main one.\n\nNow let's put this to work. Here's your exercise.\n\nImagine two AI responses to the same question: \"My friend says she's feeling really down lately. What should I do?\"\n\n**Response 1:**\n\"My friend says she's feeling really down lately. What should I do if my friend is sad? What are signs of depression in teenagers?\n\nHow can I help a sad friend at school?\"\n\n**Response 2:**\n\"I'm sorry you're worried about her. A good first step is to check in privately and listen without trying to fix everything. Ask how she's doing and let her know you're there.\n\nIf she seems to be struggling a lot, encourage her to talk to a trusted adult like a parent or school counselor. Would you like help thinking of what to say?\"\n\nAnswer these three parts in your own words:\n\n1. Which response came from a model that was fine-tuned (and had RLHF)? Which looks like a raw pre-trained model?\n2. How can you tell? Point to specific features of each response.\n3. Explain what training step changed the model's behavior between the two. What did people actually do in that step?",
+          "usd": 0.0093506,
+          "user": "I picked B) Rank the model's answers to show which they prefer"
+        },
+        {
+          "raw": "Your answers hold up on every part, so here's the part-by-part feedback.\n\n**1. ✓** Response 2 is the tuned model and Response 1 the raw one. Spot on.\n\n**2. ✓** You caught the key feature of Response 1: it continues the prompt the way a web page or quiz list would, with more questions and no answer. You also noticed that Response 2 engages with the actual situation and offers more help.\n\nResponse 2 also points toward a trusted adult, which is the kind of judgment human raters tend to reward.\n\n**3. ✓** Your account of RLHF is accurate: people ranked candidate answers, those rankings trained a reward model, and the reward model pushed the main model toward preferred answers. You also separated that from fine-tuning on example answers.\n\nOne nuance for the road: neither step gave the model its knowledge. That came from pre-training. The later steps changed how the model uses what it already has, which is why a much smaller RLHF model could beat a far bigger raw one.\n\nNice work, you've got this lesson down.",
+          "usd": 0.009393,
+          "user": "1. Response 2 came from the fine-tuned model with RLHF, and Response 1 looks like the raw pre-trained model.\n2. Response 1 just keeps generating more questions, like a web page or quiz list would, and never actually answers. Response 2 responds directly to the friend situation, gives practical steps, and ends by offering further help.\n3. Fine-tuning on good question-and-answer examples and then RLHF changed the behavior. In RLHF, people ranked several candidate answers from best to worst, and those rankings trained a reward model that pushed the main model toward the kind of answer people preferred."
+        }
+      ]
+    },
+    {
+      "lessonId": "u1_l2",
+      "profile": "partial",
+      "trial": 2,
+      "completedAt": 5,
+      "replies": [
+        {
+          "raw": "Here's a surprising place to start: a huge chunk of what a chatbot \"knows\" comes from **Common Crawl**, a free archive of over 300 billion web pages.\n\nBefore a model ever talks to anyone, it reads text like that, plus books and code, and learns the patterns in it. This first stage is called **pre-training**.\n\n[KEY]Pre-training doesn't store pages to look up later; it compresses patterns from huge amounts of text into the model's numbers.[/KEY]\n\n[EX]Imagine a model whose training text was collected up to a certain date. Ask it about something that happened after that date, and it has no built-in knowledge of it. Its knowledge stops at that cutoff.[/EX]\n\n[Q]\nWhich statement best describes what a model gains from pre-training?\nA) It learns patterns from text, not stored pages\nB) It memorizes each training page word for word\nC) It checks facts against the live internet\nD) It keeps a searchable copy of every page it read\nANS: A\n[/Q]",
+          "usd": 0.0077464000000000005,
+          "user": "(opener)"
+        },
+        {
+          "raw": "Yes, that's the key distinction. Training is pattern compression, not memorization, and the model isn't a search engine over its training pages.\n\nA model fresh out of pre-training is good at continuing text, but that's not the same as being a helpful assistant. That gap gets closed by **RLHF**, short for reinforcement learning from human feedback.\n\nPeople compare pairs of answers and say which one is better. Those preferences train a reward model, which then steers the main model toward answers people prefer.\n\n[KEY]RLHF turns a text-continuer into an assistant by rewarding the kinds of answers humans prefer.[/KEY]\n\n[EX]In OpenAI's InstructGPT study (2022), people preferred answers from a 1.3-billion-parameter model trained with RLHF over answers from the 175-billion-parameter GPT-3. A much smaller model won because it was tuned to what people actually wanted.[/EX]\n\n[Q]\nWhat did the InstructGPT result show about RLHF?\nA) RLHF adds new facts to the model's knowledge\nB) RLHF only works on the very largest models\nC) Bigger models always win without any tuning\nD) A far smaller RLHF-tuned model beat a much larger one\nANS: D\n[/Q]",
+          "usd": 0.0095019,
+          "user": "I picked A) It learns patterns from text, not stored pages"
+        },
+        {
+          "raw": "Right. A much smaller model that was tuned on human preferences beat the giant one, so tuning matters as much as raw size.\n\nSo far you've seen pre-training (learning patterns from huge piles of text) and RLHF (steering the model toward answers people prefer). The third piece is **fine-tuning**: taking an already pre-trained model and training it further on a narrower set of examples, such as customer-support conversations or medical question-and-answer pairs. RLHF is one kind of fine-tuning, and it uses human preference judgments as its training signal.\n\n[KEY]Fine-tuning reshapes how an already-trained model behaves for a specific job; it adjusts the model's habits rather than building its knowledge from scratch.[/KEY]\n\n[EX]Imagine a company that takes a general pre-trained model and fine-tunes it on thousands of its own past support chats. Afterward the model answers in the company's tone and format, but most of what it knows about the world still came from pre-training.[/EX]\n\n[Q]\nWhat does fine-tuning mainly do to a pre-trained model?\nA) It erases the model's pre-training knowledge\nB) It trains the model further for a specific purpose\nC) It gives the model live access to the internet\nD) It rebuilds the model's knowledge from scratch\nANS: B\n[/Q]",
+          "usd": 0.009754400000000002,
+          "user": "I picked D) A far smaller RLHF-tuned model beat a much larger one"
+        },
+        {
+          "raw": "Exactly. Fine-tuning builds on what pre-training already put in place and points it at a specific job.\n\nNow let's put this to work. Here's your exercise.\n\nImagine you ask two different AI systems the same question: *\"I have a big exam tomorrow and I'm really nervous. What should I do?\"*\n\n**Response X:** \"Nervous about an exam and what to do about it and how to feel better and where to study and when to sleep and how to calm down and what to eat...\"\n\n**Response Y:** \"That's a stressful spot, but you can make tomorrow go better. Spend an hour on a quick review of the topics you find hardest, then stop and get a full night's sleep. Would you like help making a short study plan?\"\n\nAnswer these in your own words:\n\n1. Which response came from a model that went through RLHF, and which looks like a model from pre-training alone? How can you tell?\n2. What did RLHF change about how the model behaves? What kind of feedback does it learn from?\n3. Suppose the model behind Response Y has a training cutoff, and a major event happened last month. What would it be missing, and why does RLHF not fix that?",
+          "usd": 0.009204400000000001,
+          "user": "I picked B) It trains the model further for a specific purpose"
+        },
+        {
+          "raw": "You nailed all three parts.\n\n1. **Spotting the two models:** Right on both counts. Response X just keeps spinning out related phrases, which is exactly what a pre-trained model does when it's continuing text. Response Y answers the actual question and offers a next step, which is the assistant behavior RLHF produces.\n\n2. **What RLHF changed:** Spot on. You named the change (helpful, focused answers) and the source (people comparing pairs of answers and picking the better one). That's the whole mechanism in one sentence.\n\n3. **The cutoff:** This was the sharpest part. You separated *how the model responds* from *what it knows*: RLHF shapes behavior, while the facts come from pre-training, so an event after the cutoff is simply absent. One extra note for real life: many chatbots can now search the web, so they can talk about recent news, but that's a separate tool added on top, and what it finds can still be wrong.\n\nNice work, you've got a clear picture of where an LLM's knowledge and habits come from.",
+          "usd": 0.0092615,
+          "user": "1. Response X came from the model trained only on pre-training, and Y came from the RLHF model. X looks like plain text continuation with a list of related words, and Y answers the question and offers help.\n2. RLHF changed the model's habits so it gives helpful, focused answers that people prefer. It learns from human preference comparisons, where people pick which of two answers is better.\n3. It would be missing the event, because the event came after the training cutoff and the model never saw text about it. RLHF doesn't fix that because it shapes how the model responds, not what facts it learned"
+        }
+      ]
+    }
+  ]
+}
