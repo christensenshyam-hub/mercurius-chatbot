@@ -86,6 +86,31 @@ describe('the 18 lessons', () => {
     }
   });
 
+  test('option length gives no check away: always tapping the longest (or the shortest) option does no better than a guess', () => {
+    // The guide's checks are copied word for word and keep the guide's order
+    // (no server shuffle), so their lengths are the guide's. Before
+    // 2026-10-28 the right answer was the longest option in 11 of 18 checks
+    // (12 of 18 counting ties), so a learner who always tapped the longest
+    // one passed two checks in three without reading them.
+    let longestHits = 0;
+    let shortestHits = 0;
+    for (const [id] of LESSONS) {
+      const [, letter, body] = /^- Check \(right answer: ([ABC])\): (.+)$/m.exec(entry(id));
+      const options = /A\) (.*) B\) (.*) C\) (.*)$/.exec(body).slice(1);
+      const lens = options.map((o) => o.length);
+      const right = lens['ABC'.indexOf(letter)];
+      const max = Math.max(...lens);
+      const min = Math.min(...lens);
+      if (right === max) longestHits += 1 / lens.filter((l) => l === max).length;
+      if (right === min) shortestHits += 1 / lens.filter((l) => l === min).length;
+      if (SAFETY_LESSONS.includes(id)) {
+        assert.ok(right < max, `${id} (a safety lesson, where the pick must be right): the right answer is not the longest option (${lens.join('/')})`);
+      }
+    }
+    assert.ok(longestHits <= LESSONS.length / 3, `always tap the longest: ${longestHits} of ${LESSONS.length} right`);
+    assert.ok(shortestHits <= LESSONS.length / 3, `always tap the shortest: ${shortestHits} of ${LESSONS.length} right`);
+  });
+
   test('the four safety lessons are marked and named in the COMPLETION rule', () => {
     for (const [id] of LESSONS) {
       const marked = /\(b\d_l\d\) SAFETY LESSON$/m.test(entry(id).split('\n')[0]);
