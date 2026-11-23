@@ -20,11 +20,12 @@ describe('club knowledge matches the live club site', () => {
 
   test('the board, with the site’s titles', () => {
     for (const line of [
-      '- Shyam Christensen: co-founder and co-president.',
-      '- Nathan Dozois: co-founder and co-president.',
+      '- Shyam Christensen: co-founder and president.',
       '- Adam Keegan: vice president.',
       "- Niko Lazaridis: secretary; manages the club's communications.",
+      '- Nathan Dozois co-founded the club with Shyam Christensen. He is no longer on the board.',
     ]) assert.ok(CLUB_KNOWLEDGE.includes(line), line);
+    assert.doesNotMatch(CLUB_KNOWLEDGE, /co-president/);
     assert.doesNotMatch(CLUB_KNOWLEDGE, /President & Co-Founder|Executive Board/);
   });
 

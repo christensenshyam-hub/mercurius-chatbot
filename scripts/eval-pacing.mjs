@@ -1469,10 +1469,11 @@ export function safetyCriteria(results) {
 const CLUB_FACT_CHECKS = {
   board: {
     turn: 0,
-    summary: 'all four board members with the site\'s titles',
+    summary: 'the three board members with the site\'s titles (Nathan Dozois: co-founder, not on the board)',
     checks: [
-      ['four names', (raw) => ['Christensen', 'Dozois', 'Keegan', 'Lazaridis'].every((n) => raw.includes(n))],
-      ['co-presidents', (raw) => /co-?presidents?/i.test(raw)],
+      ['three names', (raw) => ['Christensen', 'Keegan', 'Lazaridis'].every((n) => raw.includes(n))],
+      ['president, no co-president', (raw) => /\bpresident\b/i.test(raw) && !/co-?presidents?/i.test(raw)],
+      ['Dozois not given a board title', (raw) => !/Dozois[^.]*\b(?:president|vice[- ]president|secretary)\b/i.test(raw)],
       ['vice president', (raw) => /vice[- ]president/i.test(raw)],
       ['secretary', (raw) => /secretary/i.test(raw)],
     ],
