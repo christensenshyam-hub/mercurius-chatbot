@@ -27,6 +27,10 @@ struct ActionBar: View {
             // titles half-drawn). The button keeps its identity, so VoiceOver
             // focus stays on it when "Check answer" becomes "Continue".
             .transaction { $0.animation = nil }
+            // The button style animates its press, and the label swap rode
+            // that animation as a cross-fade (both titles visible). The old
+            // title now leaves in the frame the new one arrives.
+            .contentTransition(.identity)
             .accessibilityIdentifier("player.primary")
             .overlay(alignment: .leading) {
                 if plan.primary.busy { ProgressView().padding(.leading, BrandSpacing.lg).accessibilityHidden(true) }
