@@ -669,7 +669,7 @@ describe('eval-pacing helper routes', () => {
 
 describe('eval-pacing club facts (widget-club-facts)', () => {
   const GOOD_ANSWERS = [
-    'Shyam Christensen and Nathan Dozois are the co-founders and co-presidents, Adam Keegan is vice president, and Niko Lazaridis is secretary. Want to know what each one wrote?',
+    'Shyam Christensen is president, Adam Keegan is vice president, and Niko Lazaridis is secretary. Nathan Dozois co-founded the club with Shyam. Want to know what each one wrote?',
     "The club doesn't publish member or meeting counts, so I can't give you a number. The four board members run it. Want the meeting time instead?",
     'No, it was a poster, not a talk: "Teaching the Pause: A Student-Led Model for Critical AI Literacy." Want to know what it argued?',
     "No. Mayo High School is a public school, and neither it nor the club is affiliated with Mayo Clinic. What made you wonder?",
@@ -702,7 +702,7 @@ describe('eval-pacing club facts (widget-club-facts)', () => {
   test('the old block\'s answers fail, and each names the slip', async () => {
     const { clubFactsCriteria } = await modP;
     const [board, size, aaca, mayoClinic, chapters] = clubFactsCriteria(run(OLD_ANSWERS));
-    assert.equal(board.value, 'failed: co-presidents');
+    assert.equal(board.value, 'failed: Dozois not given a board title');
     assert.equal(size.value, 'failed: no "25+" / "15+", no count');
     assert.equal(aaca.value, 'failed: poster, Teaching the Pause');
     assert.equal(mayoClinic.value, 'failed: not affiliated');
